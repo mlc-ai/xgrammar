@@ -862,6 +862,48 @@ std::optional<SerializationError> DeserializeJSONValue(
   return std::nullopt;
 }
 
+struct CompactFSMWithStartEndWithSizeSerializeHelper {
+  CompactFSMWithStartEnd fsm;
+  size_t edge_num;
+  size_t node_num;
+
+  CompactFSMWithStartEndWithSizeSerializeHelper(
+      const CompactFSMWithStartEndWithSize& compact_fsm_with_size
+  )
+      : fsm(compact_fsm_with_size.fsm_),
+        edge_num(compact_fsm_with_size.edge_num_),
+        node_num(compact_fsm_with_size.node_num_) {}
+
+  CompactFSMWithStartEndWithSizeSerializeHelper() = default;
+};
+
+XGRAMMAR_MEMBER_ARRAY(
+    CompactFSMWithStartEndWithSizeSerializeHelper,
+    &CompactFSMWithStartEndWithSizeSerializeHelper::fsm,
+    &CompactFSMWithStartEndWithSizeSerializeHelper::edge_num,
+    &CompactFSMWithStartEndWithSizeSerializeHelper::node_num
+);
+
+picojson::value SerializeJSONValue(const CompactFSMWithStartEndWithSize& value) {
+  return AutoSerializeJSONValue(CompactFSMWithStartEndWithSizeSerializeHelper(value));
+}
+
+std::optional<SerializationError> DeserializeJSONValue(
+    CompactFSMWithStartEndWithSize* result,
+    const picojson::value& value,
+    const std::string& type_name
+) {
+  CompactFSMWithStartEndWithSizeSerializeHelper tmp;
+  auto err = AutoDeserializeJSONValue(&tmp, value, type_name);
+  if (err.has_value()) {
+    return err;
+  }
+  result->fsm_ = std::move(tmp.fsm);
+  result->edge_num_ = tmp.edge_num;
+  result->node_num_ = tmp.node_num;
+  return std::nullopt;
+}
+
 /****************** FSMWithStartEnd ******************/
 
 std::string FSMWithStartEnd::ToString() const {
@@ -917,7 +959,7 @@ CompactFSMWithStartEnd FSMWithStartEnd::ToCompact() {
   return CompactFSMWithStartEnd(fsm_.ToCompact(), start_, ends_);
 }
 
-FSMWithStartEnd FSMWithStartEnd::AddToCompleteFSM(
+FSMWithStartEndWithSize FSMWithStartEnd::AddToCompleteFSM(
     FSM* complete_fsm, std::vector<int>* state_mapping
 ) {
   XGRAMMAR_DCHECK(state_mapping != nullptr) << "state_mapping cannot be nullptr";
@@ -929,7 +971,17 @@ FSMWithStartEnd FSMWithStartEnd::AddToCompleteFSM(
       new_ends[(*state_mapping)[end]] = true;
     }
   }
-  return FSMWithStartEnd(*complete_fsm, new_start, new_ends, is_dfa_);
+
+  int num_edges = 0;
+  for (int i = 0; i < fsm_.NumStates(); ++i) {
+    num_edges += fsm_.GetEdges(i).size();
+  }
+
+  int num_nodes = fsm_.NumStates();
+
+  auto fsm_with_se = FSMWithStartEnd(*complete_fsm, new_start, new_ends);
+
+  return FSMWithStartEndWithSize(fsm_with_se, num_edges, num_nodes);
 }
 
 FSMWithStartEnd FSMWithStartEnd::Star() const {
@@ -1823,7 +1875,5 @@ std::size_t MemorySize(const CompactFSMWithStartEnd& self) {
 FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
   return FSMWithStartEnd(fsm_.ToFSM(), start_, ends_);
 }
-
-size_t CompactFSMWithStartEnd::GetNumEdges() const { return edge_num_; }
 
 }  // namespace xgrammar

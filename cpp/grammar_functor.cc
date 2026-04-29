@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "compiled_grammar_impl.h"
+#include "fsm.h"
 #include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
@@ -1082,7 +1083,7 @@ class GrammarFSMBuilderImpl {
 
   void Apply(Grammar* grammar) {
     FSM complete_fsm;
-    std::vector<std::optional<FSMWithStartEnd>> per_rule_fsms((*grammar)->NumRules());
+    std::vector<std::optional<FSMWithStartEndWithSize>> per_rule_fsms((*grammar)->NumRules());
     std::vector<int> state_mapping;
 
     for (int i = 0; i < (*grammar)->NumRules(); ++i) {
@@ -1114,12 +1115,18 @@ class GrammarFSMBuilderImpl {
 
     // Compress to compact fsm
     CompactFSM compact_complete_fsm = complete_fsm.ToCompact();
-    std::vector<std::optional<CompactFSMWithStartEnd>> compact_per_rule_fsms((*grammar)->NumRules()
+    std::vector<std::optional<CompactFSMWithStartEndWithSize>> compact_per_rule_fsms(
+        (*grammar)->NumRules()
     );
     for (int i = 0; i < (*grammar)->NumRules(); ++i) {
       if (per_rule_fsms[i]) {
-        compact_per_rule_fsms[i] = CompactFSMWithStartEnd(
-            compact_complete_fsm, per_rule_fsms[i]->GetStart(), per_rule_fsms[i]->GetEnds()
+        auto compact_fsm_with_se = CompactFSMWithStartEnd(
+            compact_complete_fsm,
+            per_rule_fsms[i]->GetFsm().GetStart(),
+            per_rule_fsms[i]->GetFsm().GetEnds()
+        );
+        compact_per_rule_fsms[i] = CompactFSMWithStartEndWithSize(
+            compact_fsm_with_se, per_rule_fsms[i]->GetEdgeNum(), per_rule_fsms[i]->GetNodeNum()
         );
       }
     }
@@ -2228,7 +2235,7 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
     if (!grammar->ImplPtr()->per_rule_fsms[i].has_value()) {
       continue;
     }
-    if (has_inward_edges_[grammar->ImplPtr()->per_rule_fsms[i]->GetStart()]) {
+    if (has_inward_edges_[grammar->ImplPtr()->per_rule_fsms[i]->GetFsm().GetStart()]) {
       continue;
     }
     const auto& [can_be_hashed, hash_value] = IsPartialHashable(i);
@@ -2245,22 +2252,22 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
   uint64_t hash_result = 0;
   XGRAMMAR_DCHECK(fsm_index >= 0 && fsm_index < (*grammar_)->NumRules())
       << "Invalid fsm index: " << fsm_index << " num_rules: " << (*grammar_)->NumRules();
-  const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[fsm_index];
-  XGRAMMAR_DCHECK(fsm.has_value());
+  XGRAMMAR_DCHECK(grammar_->ImplPtr()->per_rule_fsms[fsm_index].has_value());
+  const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[fsm_index].value().GetFsm();
   std::map<int32_t, int32_t> original_state_id_to_new_id;
-  original_state_id_to_new_id[fsm->GetStart()] = 0;
+  original_state_id_to_new_id[fsm.GetStart()] = 0;
   std::queue<int32_t> bfs_queue;
   std::set<std::pair<uint64_t, int32_t>> hash_and_target;
-  bfs_queue.push(fsm->GetStart());
+  bfs_queue.push(fsm.GetStart());
   // Perform a bfs to hash all the edges.
   while (!bfs_queue.empty()) {
     int current_old_state_id = bfs_queue.front();
-    bool is_start = current_old_state_id == fsm->GetStart();
+    bool is_start = current_old_state_id == fsm.GetStart();
     int current_new_state_id = original_state_id_to_new_id[current_old_state_id];
     bfs_queue.pop();
 
     // Check if the current state is an end state.
-    if (fsm->IsEndState(current_old_state_id)) {
+    if (fsm.IsEndState(current_old_state_id)) {
       hash_result = HashCombine(
           hash_result, current_new_state_id, kEndStateFlag, kEndStateFlag, current_new_state_id
       );
@@ -2358,13 +2365,13 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
   uint64_t hash_result = 0;
   XGRAMMAR_DCHECK(fsm_index >= 0 && fsm_index < (*grammar_)->NumRules())
       << "Invalid fsm index: " << fsm_index << " num_rules: " << (*grammar_)->NumRules();
-  const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[fsm_index];
-  XGRAMMAR_DCHECK(fsm.has_value());
+  XGRAMMAR_DCHECK(grammar_->ImplPtr()->per_rule_fsms[fsm_index].has_value());
+  const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[fsm_index].value().GetFsm();
   std::map<int32_t, int32_t> original_state_id_to_new_id;
-  original_state_id_to_new_id[fsm->GetStart()] = 0;
+  original_state_id_to_new_id[fsm.GetStart()] = 0;
   std::queue<int32_t> bfs_queue;
   std::set<std::pair<int32_t, int32_t>> hash_and_target;
-  bfs_queue.push(fsm->GetStart());
+  bfs_queue.push(fsm.GetStart());
 
   // Perform a bfs to hash all the edges.
   while (!bfs_queue.empty()) {
@@ -2373,7 +2380,7 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
     bfs_queue.pop();
 
     // Check if the current state is an end state.
-    if (fsm->IsEndState(current_old_state_id)) {
+    if (fsm.IsEndState(current_old_state_id)) {
       hash_result = HashCombine(
           hash_result, current_new_state_id, kEndStateFlag, kEndStateFlag, current_new_state_id
       );

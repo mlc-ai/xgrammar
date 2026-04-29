@@ -112,7 +112,7 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print) {
     // Check if the parent_state sits on a kRepeatRef edge
     bool handled_as_repeat = false;
     const auto& parent_fsm = grammar_->per_rule_fsms[parent_state.rule_id].value();
-    for (const auto& edge : parent_fsm.GetFsm().GetEdges(parent_state.element_id)) {
+    for (const auto& edge : parent_fsm.GetFsm().GetFsm().GetEdges(parent_state.element_id)) {
       // Because of invariance, a state with a kRepeatRef edge has exactly one outgoing edge.
       if (!edge.IsRepeatRef()) continue;
       auto info = grammar_->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
@@ -156,7 +156,9 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
     // Try to expand the fsm.
     ExpandNextRuleRefElementOnFSM(state, debug_print);
     const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
-    return std::make_pair(fsm.IsScanableState(state.element_id), fsm.IsEndState(state.element_id));
+    return std::make_pair(
+        fsm.GetFsm().IsScanableState(state.element_id), fsm.GetFsm().IsEndState(state.element_id)
+    );
   }
   const GrammarExpr& grammar_expr = grammar_->GetGrammarExpr(state.sequence_id);
   XGRAMMAR_DCHECK(
@@ -374,7 +376,7 @@ bool EarleyParser::ExpandAndEnqueueUnexpandedState(const ParserState& state) {
   Enqueue(ParserState{
       cur_rule_id,
       cur_rule_body_id,
-      grammar_->per_rule_fsms[state.rule_id]->GetStart(),
+      grammar_->per_rule_fsms[state.rule_id]->GetFsm().GetStart(),
       ParserState::kNoPrevInputPos,
       0
   });
@@ -462,7 +464,7 @@ void EarleyParser::ExpandNextRuleRefElement(
   Enqueue(ParserState{
       ref_rule_id,
       ref_grammar_expr_id,
-      ref_fsm.GetStart(),
+      ref_fsm.GetFsm().GetStart(),
       right_recursion_to_root ? ParserState::kNoPrevInputPos
                               : int32_t(rule_id_to_completable_states_.size() - 1),
       0
@@ -474,7 +476,7 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
   const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
 
   // Add the rule reference pairs, and enqueue the epsilon edges.
-  for (const auto& edge : fsm.GetFsm().GetEdges(state.element_id)) {
+  for (const auto& edge : fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
     if (edge.IsEpsilon()) {
       Enqueue(ParserState{state.rule_id, state.sequence_id, edge.target, state.rule_start_pos, 0});
       continue;
@@ -509,7 +511,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                          << grammar_->GetRule(state.rule_id).name << " predict the new rule "
                          << ref_rule_id << ": " << grammar_->GetRule(ref_rule_id).name << ".";
     }
-    if (!is_repeat && (fsm.GetFsm().GetEdges(target).size() == 0) && fsm.IsEndState(target) &&
+    if (!is_repeat && (fsm.GetFsm().GetFsm().GetEdges(target).size() == 0) &&
+        fsm.GetFsm().IsEndState(target) &&
         state.rule_start_pos != static_cast<int32_t>(rule_id_to_completable_states_.size() - 1)) {
       // It's a right recursion. We can optimize it.
       // If it's the right recursion, we need to add the ancestors of the parent state.
@@ -587,7 +590,7 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
     Enqueue(ParserState{
         ref_rule_id,
         ref_grammar_expr_id,
-        ref_fsm.GetStart(),
+        ref_fsm.GetFsm().GetStart(),
         right_recursion_to_root ? ParserState::kNoPrevInputPos
                                 : int32_t(rule_id_to_completable_states_.size() - 1),
         0
@@ -880,14 +883,15 @@ void EarleyParser::AdvanceCharacterClassStar(
 void EarleyParser::AdvanceFsm(const ParserState& state, const uint8_t ch) {
   XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
   const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
-  for (const auto& edge : current_fsm.GetFsm().GetEdges(state.element_id)) {
+  for (const auto& edge : current_fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
     if ((!edge.IsCharRange()) || ch < edge.min || ch > edge.max) {
       continue;
     }
     auto new_state = state;
     new_state.element_id = edge.target;
-    if ((!current_fsm.IsNonTerminalState(edge.target)) &&
-        (!current_fsm.IsEndState(edge.target) && current_fsm.IsScanableState(edge.target))) {
+    if ((!current_fsm.GetFsm().IsNonTerminalState(edge.target)) &&
+        (!current_fsm.GetFsm().IsEndState(edge.target) &&
+         current_fsm.GetFsm().IsScanableState(edge.target))) {
       EnqueueWithoutProcessing(std::move(new_state));
     } else {
       Enqueue(std::move(new_state));
@@ -899,20 +903,21 @@ void EarleyParser::ScanAtomicToken(const ParserState& state, int32_t token_id) {
   if (state.rule_id == -1) return;
   XGRAMMAR_DCHECK(grammar_->per_rule_fsms[state.rule_id].has_value());
   const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
-  for (const auto& edge : current_fsm.GetFsm().GetEdges(state.element_id)) {
+  for (const auto& edge : current_fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
     bool matched = false;
     if (edge.IsToken()) {
-      auto info = current_fsm.GetFsm().GetTokenEdgeInfo(edge.GetAuxIndex());
+      auto info = current_fsm.GetFsm().GetFsm().GetTokenEdgeInfo(edge.GetAuxIndex());
       matched = info.Contains(token_id);
     } else if (edge.IsExcludeToken()) {
-      auto info = current_fsm.GetFsm().GetExcludeTokenEdgeInfo(edge.GetAuxIndex());
+      auto info = current_fsm.GetFsm().GetFsm().GetExcludeTokenEdgeInfo(edge.GetAuxIndex());
       matched = info.Accepts(token_id);
     }
     if (!matched) continue;
     auto new_state = state;
     new_state.element_id = edge.target;
-    if ((!current_fsm.IsNonTerminalState(edge.target)) &&
-        (!current_fsm.IsEndState(edge.target) && current_fsm.IsScanableState(edge.target))) {
+    if ((!current_fsm.GetFsm().IsNonTerminalState(edge.target)) &&
+        (!current_fsm.GetFsm().IsEndState(edge.target) &&
+         current_fsm.GetFsm().IsScanableState(edge.target))) {
       EnqueueWithoutProcessing(std::move(new_state));
     } else {
       Enqueue(std::move(new_state));

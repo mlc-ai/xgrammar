@@ -570,7 +570,11 @@ std::optional<SerializationError> DeserializeJSONValue(
     CompactFSM* result, const picojson::value& value, const std::string& type_name = ""
 );
 
+class FSMWithStartEnd;
+class FSMWithStartEndWithSize;
 class CompactFSMWithStartEnd;
+class CompactFSMWithStartEndWithSize;
+struct CompactFSMWithStartEndWithSizeSerializeHelper;
 
 /*!
  * \brief The base class for FSMWithStartEnd and CompactFSMWithStartEnd. It defines the
@@ -755,7 +759,7 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * cleared at the beginning. Should not be nullptr.
    * \return The FSMWithStartEnd that points to the complete FSM.
    */
-  FSMWithStartEnd AddToCompleteFSM(FSM* complete_fsm, std::vector<int>* state_mapping);
+  FSMWithStartEndWithSize AddToCompleteFSM(FSM* complete_fsm, std::vector<int>* state_mapping);
 
   /*!
    * \brief Transform the FSMWithStartEnd to a CompactFSMWithStartEnd.
@@ -850,6 +854,27 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
 };
 
 /*!
+ * \brief Wrapper that bundles an FSMWithStartEnd with explicit size metadata.
+ */
+class FSMWithStartEndWithSize {
+ public:
+  // For serialization only
+  FSMWithStartEndWithSize() = default;
+
+  explicit FSMWithStartEndWithSize(FSMWithStartEnd fsm, size_t edge_num, size_t node_num)
+      : fsm_(std::move(fsm)), edge_num_(edge_num), node_num_(node_num) {}
+
+  const FSMWithStartEnd& GetFsm() const { return fsm_; }
+  size_t GetEdgeNum() const { return edge_num_; }
+  size_t GetNodeNum() const { return node_num_; }
+
+ private:
+  FSMWithStartEnd fsm_;
+  size_t edge_num_;
+  size_t node_num_;
+};
+
+/*!
  * \brief A class that represents a compact-form FSM with a start state and a set of end states.
  * \details CompactFSMWithStartEnd stores a pointer to a CompactFSM, a start state, and a set of end
  * states. Multiple CompactFSMWithStartEnd can share the same CompactFSM. It share the same set of
@@ -883,12 +908,6 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
    */
   FSMWithStartEnd ToFSM() const;
 
-  /*!
-   * \brief Get the number of edges in the CompactFSMWithStartEnd.
-   * \return The number of edges in the CompactFSMWithStartEnd.
-   */
-  size_t GetNumEdges() const;
-
  private:
   size_t edge_num_ = 0;
 
@@ -916,6 +935,48 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
       CompactFSMWithStartEnd* result, const picojson::value& value, const std::string& type_name
   );
 };
+
+/*!
+ * \brief Wrapper that bundles a CompactFSMWithStartEnd with explicit size metadata.
+ */
+class CompactFSMWithStartEndWithSize {
+ public:
+  // For serialization only
+  CompactFSMWithStartEndWithSize() = default;
+
+  explicit CompactFSMWithStartEndWithSize(
+      CompactFSMWithStartEnd fsm, size_t edge_num, size_t node_num
+  )
+      : fsm_(std::move(fsm)), edge_num_(edge_num), node_num_(node_num) {}
+
+  const CompactFSMWithStartEnd& GetFsm() const { return fsm_; }
+  size_t GetEdgeNum() const { return edge_num_; }
+  size_t GetNodeNum() const { return node_num_; }
+
+  friend picojson::value SerializeJSONValue(const CompactFSMWithStartEndWithSize& value);
+  friend std::optional<SerializationError> DeserializeJSONValue(
+      CompactFSMWithStartEndWithSize* result,
+      const picojson::value& value,
+      const std::string& type_name
+  );
+
+ private:
+  CompactFSMWithStartEnd fsm_;
+  size_t edge_num_;
+  size_t node_num_;
+
+  friend std::size_t MemorySize(const CompactFSMWithStartEndWithSize& self) {
+    return MemorySize(self.fsm_) + sizeof(self.edge_num_) + sizeof(self.node_num_);
+  }
+
+  friend struct CompactFSMWithStartEndWithSizeSerializeHelper;
+};
+
+std::optional<SerializationError> DeserializeJSONValue(
+    CompactFSMWithStartEndWithSize* result,
+    const picojson::value& value,
+    const std::string& type_name = ""
+);
 
 /****************** FSMWithStartEndBase Template Implementation ******************/
 
