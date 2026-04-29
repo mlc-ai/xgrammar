@@ -544,7 +544,7 @@ def test_specific_functions_cases(structural_tag_fn, case: Dict[str, Any]):
         ),
         (
             "deepseek_r1",
-            'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>t1\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+            'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>t1<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
             True,
         ),
         (
@@ -574,7 +574,7 @@ def test_specific_functions_cases(structural_tag_fn, case: Dict[str, Any]):
         ),
         (
             "minimax",
-            '<minimax:tool_call>\n<invoke name="t1">\n<q>{"type": "string"}</q>\n</invoke>\n</minimax:tool_call>\n',
+            '\n</think>\n\n\n\n<minimax:tool_call>\n<invoke name="t1">\n<q>{"type": "string"}</q>\n</invoke>\n</minimax:tool_call>\n',
             True,
         ),
         (
@@ -628,11 +628,6 @@ def test_strict_or_missing_parameters(
     format_type: str, instance: str, is_accepted: bool, tool: Dict[str, Any]
 ):
     """strict=False or missing 'parameters' should still accept/reject instances correctly."""
-    if is_accepted and format_type == "kimi":
-        instance = "<think></think>" + instance
-    elif is_accepted and format_type == "qwen_3_5":
-        instance = "<think>\n\n</think>" + instance
-
     if format_type == "harmony":
         tools = [tool]
         stag = get_model_structural_tag(format_type, tools=tools, reasoning=False)
@@ -731,7 +726,7 @@ kimi_instance_cases: List[InstanceCase] = [
         {"tools": _tools_kimi},
         _kimi_instances_with_tools,
         False,
-        [False, False, False, False, True, True],
+        [True, False, False, False, False, False],
     ),
     # with tools, reasoning=True
     (
@@ -741,9 +736,9 @@ kimi_instance_cases: List[InstanceCase] = [
         [False, False, True, False, True, True],
     ),
     # no tools, reasoning=False
-    ({}, _kimi_instances_no_tools, False, [False, False, False, False, True, False]),
+    ({}, _kimi_instances_no_tools, False, [True, True, False, False, False, False]),
     # no tools, reasoning=True
-    ({}, _kimi_instances_no_tools, True, [False, False, True, False, True, False]),
+    ({}, _kimi_instances_no_tools, True, [False, False, True, False, True, True]),
 ]
 
 
@@ -756,11 +751,11 @@ def test_kimi_instances(case: InstanceCase):
 # ----- deepseek_r1
 
 _deepseek_r1_instances_with_tools = [
-    'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
-    '123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
-    'thinking</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+    'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+    '123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+    'thinking</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
     "</think>text<think>123</think>",
-    '</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+    '</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
 ]
 _deepseek_r1_instances_no_tools = ["", "text", "123</think>123", "</think></think>", "</think>text"]
 
@@ -905,19 +900,19 @@ minimax_instance_cases: List[InstanceCase] = [
         {"tools": _tools_minimax},
         _minimax_instances_with_tools,
         False,
-        [True, False, False, False, False],
+        [False, False, False, False, False],
     ),
     # with tools, reasoning=True
     (
         {"tools": _tools_minimax},
         _minimax_instances_with_tools,
         True,
-        [False, True, True, False, True],
+        [False, False, False, False, False],
     ),
     # no tools, reasoning=False
-    ({}, _minimax_instances_no_tools, False, [True, True, False, False, False]),
+    ({}, _minimax_instances_no_tools, False, [False, False, False, False, False]),
     # no tools, reasoning=True
-    ({}, _minimax_instances_no_tools, True, [False, False, True, False, True]),
+    ({}, _minimax_instances_no_tools, True, [False, False, False, False, False]),
 ]
 
 
@@ -1009,11 +1004,11 @@ qwen_instance_cases: List[InstanceCase] = [
     # with tools, reasoning=False
     ({"tools": _tools_qwen_3}, _qwen_instances_with_tools, False, [True, False, False, False]),
     # with tools, reasoning=True
-    ({"tools": _tools_qwen_3}, _qwen_instances_with_tools, True, [False, True, False, True]),
+    ({"tools": _tools_qwen_3}, _qwen_instances_with_tools, True, [False, False, False, False]),
     # no tools, reasoning=False
     ({}, _qwen_instances_no_tools, False, [True, True, False, False, False]),
     # no tools, reasoning=True
-    ({}, _qwen_instances_no_tools, True, [False, False, True, False, True]),
+    ({}, _qwen_instances_no_tools, True, [False, False, False, False, False]),
 ]
 
 
@@ -1100,7 +1095,7 @@ _tool_choice_instance_cases = [
             {"tools": _tools_kimi_pair, "tool_choice": "required"},
             [
                 "",
-                '<think></think><|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+                '<|tool_calls_section_begin|><|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|><|tool_calls_section_end|>',
             ],
             False,
             [False, True],
@@ -1112,8 +1107,8 @@ _tool_choice_instance_cases = [
         (
             {"tools": _tools_kimi_pair, "tool_choice": "forced", "forced_function_name": "t1"},
             [
-                '<think></think><|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
-                '<think></think><|tool_call_begin|>functions.t2:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+                '<|tool_calls_section_begin|><|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|><|tool_calls_section_end|>',
+                '<|tool_calls_section_begin|><|tool_call_begin|>functions.t2:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|><|tool_calls_section_end|>',
             ],
             False,
             [True, False],
@@ -1126,7 +1121,7 @@ _tool_choice_instance_cases = [
             {"tools": _tools_deepseek_pair, "tool_choice": "required"},
             [
                 "",
-                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
             ],
             False,
             [False, True],
@@ -1142,8 +1137,8 @@ _tool_choice_instance_cases = [
                 "forced_function_name": "search",
             },
             [
-                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
-                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>alt\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>search<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+                '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>alt<｜tool▁sep｜>{"q": "v"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
             ],
             False,
             [True, False],
@@ -1156,7 +1151,7 @@ _tool_choice_instance_cases = [
             {"tools": _tools_deepseek_v3_2_pair, "tool_choice": "required"},
             [
                 "",
-                '<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+                '\n\n<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>',
             ],
             False,
             [False, True],
@@ -1169,7 +1164,7 @@ _tool_choice_instance_cases = [
             {"tools": _tools_deepseek_v4_pair, "tool_choice": "required"},
             [
                 "",
-                '<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+                '\n\n<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>',
             ],
             False,
             [False, True],
@@ -1185,8 +1180,8 @@ _tool_choice_instance_cases = [
                 "forced_function_name": "search",
             },
             [
-                '<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
-                '<｜DSML｜function_calls>\n<｜DSML｜invoke name="alt">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+                '\n\n<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>',
+                '\n\n<｜DSML｜function_calls>\n<｜DSML｜invoke name="alt">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>',
             ],
             False,
             [True, False],
@@ -1202,8 +1197,8 @@ _tool_choice_instance_cases = [
                 "forced_function_name": "search",
             },
             [
-                '<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
-                '<｜DSML｜tool_calls>\n<｜DSML｜invoke name="alt">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+                '\n\n<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>',
+                '\n\n<｜DSML｜tool_calls>\n<｜DSML｜invoke name="alt">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>',
             ],
             False,
             [True, False],
@@ -1219,7 +1214,7 @@ _tool_choice_instance_cases = [
                 '<minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
             ],
             False,
-            [False, True],
+            [False, False],
         ),
         id="minimax-required",
     ),
@@ -1236,7 +1231,7 @@ _tool_choice_instance_cases = [
                 '<minimax:tool_call>\n<invoke name="alt">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
             ],
             False,
-            [True, False],
+            [False, False],
         ),
         id="minimax-forced",
     ),
