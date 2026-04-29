@@ -318,6 +318,12 @@ class JSONSchemaConverter {
   /*! \brief Get the basic string rule name. Override for different formats. */
   virtual std::string GetKeyPattern() const;
 
+  /*! \brief Get a key pattern that excludes specific property names. */
+  std::string GetKeyPatternExcluding(
+      const std::vector<ObjectSpec::Property>& properties,
+      const std::string& rule_name
+  );
+
   /*! \brief Get the basic any rule name. Override for different formats. */
   virtual std::string GetBasicAnyRuleName() const;
 
