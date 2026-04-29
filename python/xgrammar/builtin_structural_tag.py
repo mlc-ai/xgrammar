@@ -178,8 +178,7 @@ def get_model_structural_tag(
         and DeepSeek V4, support both reasoning and non-reasoning modes. If
         ``False``, use the non-reasoning mode. For models that do not support
         reasoning, this has no effect. For models that only support reasoning,
-        ``False`` removes the reasoning part and constrains only the following
-        part.
+        ``False`` means reasoning with empty content.
 
     Notes
     -----
@@ -480,8 +479,8 @@ def get_kimi_structural_tag(
 
     - ``tools``: a list of function tools. Each tool should have a ``function``
       object containing ``name`` and ``parameters`` fields.
-    - ``reasoning``: whether to enable reasoning mode. If ``False``, constrain
-      the empty reasoning part.
+    - ``reasoning``: whether to enable reasoning mode. If ``False``, remove
+      the reasoning part and constrain only the following part.
 
     Supported models:
 
@@ -499,9 +498,7 @@ def get_kimi_structural_tag(
     TOOL_CALL_ARGUMENT_BEGIN = "<|tool_call_argument_begin|>"
     TOOL_CALL_END = "<|tool_call_end|>"
     TOOL_CALL_TRIGGER = "<|tool_call_begin|>"
-    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
-    EMPTY_THINK_CONTENT = "<think></think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
 
     tools = tools or []
@@ -570,11 +567,10 @@ def get_kimi_structural_tag(
         assert len(tags) > 0
         suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
 
-    if reasoning:
-        prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
-    else:
-        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
 
+    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
@@ -1224,6 +1220,12 @@ def get_minimax_structural_tag(
     Supported models:
 
     - MiniMax-M2.5
+    - MiniMax-M2.7
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for MiniMax function calling format.
     """
     INVOKE_BEGIN_PREFIX = '<invoke name="'
     INVOKE_BEGIN_SUFFIX = '">\n'
@@ -1231,8 +1233,9 @@ def get_minimax_structural_tag(
     TOOL_CALL_BEGIN = "<minimax:tool_call>\n"
     TOOL_CALL_END = "</minimax:tool_call>\n"
     TOOL_CALL_TRIGGER = "<minimax:tool_call>"
-    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
+    THINK_SUFFIX = "\n\n"
+    EMPTY_THINK_CONTENT = "\n</think>\n\n"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
     XML_STYLE = "minimax_xml"
 
@@ -1309,13 +1312,15 @@ def get_minimax_structural_tag(
             ]
         )
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
-
-    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
-    return StructuralTag(format=sequence_format)
+    if reasoning:
+        think_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
+    else:
+        think_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
+    return StructuralTag(
+        format=SequenceFormat(
+            elements=[think_tag, ConstStringFormat(value=THINK_SUFFIX), suffix_tag]
+        )
+    )
 
 
 @register_model_structural_tag("glm_4_7")
