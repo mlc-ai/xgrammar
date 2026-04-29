@@ -26,9 +26,11 @@ The following model-specific APIs are registered via
 
 .. autofunction:: get_deepseek_structural_tag
 
-.. autofunction:: get_qwen_coder_structural_tag
+.. autofunction:: get_qwen_3_coder_structural_tag
 
-.. autofunction:: get_qwen_structural_tag
+.. autofunction:: get_qwen_3_5_structural_tag
+
+.. autofunction:: get_qwen_3_structural_tag
 
 .. autofunction:: get_harmony_structural_tag
 
@@ -36,6 +38,6 @@ The following model-specific APIs are registered via
 
 .. autofunction:: get_minimax_structural_tag
 
-.. autofunction:: get_glm47_structural_tag
+.. autofunction:: get_glm_4_7_structural_tag
 
-.. autofunction:: get_gemma4_structural_tag
+.. autofunction:: get_gemma_4_structural_tag
