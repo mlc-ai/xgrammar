@@ -1682,8 +1682,8 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">        and other models that follow the same style.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">COMMENTARY_CHANNEL_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;&lt;|channel|&gt;commentary to=&quot;</span>
-    <span class="n">ANALYSIS_CHANNEL_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;&lt;|channel|&gt;analysis to=&quot;</span>
     <span class="n">JSON_CONSTRAIN_SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;&lt;|constrain|&gt;json&lt;|message|&gt;&quot;</span>
+    <span class="n">FUNCTION_NAME_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;functions.&quot;</span>
     <span class="n">ANALYSIS_MESSAGE_SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;&lt;|message|&gt;&quot;</span>
     <span class="n">CALL_END</span> <span class="o">=</span> <span class="s2">&quot;&lt;|call|&gt;&quot;</span>
     <span class="n">FINAL_BEGIN</span> <span class="o">=</span> <span class="s2">&quot;&lt;|channel|&gt;final&lt;|message|&gt;&quot;</span>
@@ -1703,7 +1703,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
-                    <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">COMMENTARY_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">JSON_CONSTRAIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">COMMENTARY_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">FUNCTION_NAME_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">JSON_CONSTRAIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                     <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
@@ -1714,7 +1714,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">name</span> <span class="o">=</span> <span class="n">_get_builtin_tool_name</span><span class="p">(</span><span class="n">tool</span><span class="p">)</span>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
-                    <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ANALYSIS_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">ANALYSIS_MESSAGE_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">COMMENTARY_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">ANALYSIS_MESSAGE_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                     <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
@@ -1726,14 +1726,14 @@ window.runMermaid = runMermaid;</script>
         <span class="k">if</span> <span class="n">builtin_tools</span><span class="p">:</span>
             <span class="n">forced_tool</span> <span class="o">=</span> <span class="n">builtin_tools</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
             <span class="n">forced_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
-                <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ANALYSIS_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">_get_builtin_tool_name</span><span class="p">(</span><span class="n">forced_tool</span><span class="p">)</span><span class="si">}{</span><span class="n">ANALYSIS_MESSAGE_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">COMMENTARY_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">_get_builtin_tool_name</span><span class="p">(</span><span class="n">forced_tool</span><span class="p">)</span><span class="si">}{</span><span class="n">ANALYSIS_MESSAGE_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                 <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">forced_tool</span><span class="p">)),</span>
                 <span class="n">end</span><span class="o">=</span><span class="n">CALL_END</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">elif</span> <span class="n">tools</span><span class="p">:</span>
             <span class="n">function</span> <span class="o">=</span> <span class="n">tools</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">function</span>
             <span class="n">forced_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
-                <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">COMMENTARY_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="si">}{</span><span class="n">JSON_CONSTRAIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">COMMENTARY_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">FUNCTION_NAME_PREFIX</span><span class="si">}{</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="si">}{</span><span class="n">JSON_CONSTRAIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                 <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)),</span>
                 <span class="n">end</span><span class="o">=</span><span class="n">CALL_END</span><span class="p">,</span>
             <span class="p">)</span>
@@ -1748,7 +1748,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">name</span> <span class="o">=</span> <span class="n">_get_builtin_tool_name</span><span class="p">(</span><span class="n">tool</span><span class="p">)</span>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
-                    <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">ANALYSIS_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">ANALYSIS_MESSAGE_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">COMMENTARY_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">ANALYSIS_MESSAGE_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                     <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
@@ -1759,7 +1759,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
-                    <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">COMMENTARY_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">JSON_CONSTRAIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">COMMENTARY_CHANNEL_PREFIX</span><span class="si">}{</span><span class="n">FUNCTION_NAME_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">JSON_CONSTRAIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                     <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
