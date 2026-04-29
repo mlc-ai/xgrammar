@@ -1003,8 +1003,8 @@ def get_harmony_structural_tag(
         and other models that follow the same style.
     """
     COMMENTARY_CHANNEL_PREFIX = "<|channel|>commentary to="
-    ANALYSIS_CHANNEL_PREFIX = "<|channel|>analysis to="
     JSON_CONSTRAIN_SUFFIX = "<|constrain|>json<|message|>"
+    FUNCTION_NAME_PREFIX = "functions."
     ANALYSIS_MESSAGE_SUFFIX = "<|message|>"
     CALL_END = "<|call|>"
     FINAL_BEGIN = "<|channel|>final<|message|>"
@@ -1024,7 +1024,7 @@ def get_harmony_structural_tag(
             name = function.name
             tags.append(
                 TagFormat(
-                    begin=f"{COMMENTARY_CHANNEL_PREFIX}{name}{JSON_CONSTRAIN_SUFFIX}",
+                    begin=f"{COMMENTARY_CHANNEL_PREFIX}{FUNCTION_NAME_PREFIX}{name}{JSON_CONSTRAIN_SUFFIX}",
                     content=JSONSchemaFormat(json_schema=parameters),
                     end=CALL_END,
                 )
@@ -1035,7 +1035,7 @@ def get_harmony_structural_tag(
             name = _get_builtin_tool_name(tool)
             tags.append(
                 TagFormat(
-                    begin=f"{ANALYSIS_CHANNEL_PREFIX}{name}{ANALYSIS_MESSAGE_SUFFIX}",
+                    begin=f"{COMMENTARY_CHANNEL_PREFIX}{name}{ANALYSIS_MESSAGE_SUFFIX}",
                     content=JSONSchemaFormat(json_schema=parameters),
                     end=CALL_END,
                 )
@@ -1047,14 +1047,14 @@ def get_harmony_structural_tag(
         if builtin_tools:
             forced_tool = builtin_tools[0]
             forced_tag = TagFormat(
-                begin=f"{ANALYSIS_CHANNEL_PREFIX}{_get_builtin_tool_name(forced_tool)}{ANALYSIS_MESSAGE_SUFFIX}",
+                begin=f"{COMMENTARY_CHANNEL_PREFIX}{_get_builtin_tool_name(forced_tool)}{ANALYSIS_MESSAGE_SUFFIX}",
                 content=JSONSchemaFormat(json_schema=_get_function_parameters(forced_tool)),
                 end=CALL_END,
             )
         elif tools:
             function = tools[0].function
             forced_tag = TagFormat(
-                begin=f"{COMMENTARY_CHANNEL_PREFIX}{function.name}{JSON_CONSTRAIN_SUFFIX}",
+                begin=f"{COMMENTARY_CHANNEL_PREFIX}{FUNCTION_NAME_PREFIX}{function.name}{JSON_CONSTRAIN_SUFFIX}",
                 content=JSONSchemaFormat(json_schema=_get_function_parameters(function)),
                 end=CALL_END,
             )
@@ -1069,7 +1069,7 @@ def get_harmony_structural_tag(
             name = _get_builtin_tool_name(tool)
             tags.append(
                 TagFormat(
-                    begin=f"{ANALYSIS_CHANNEL_PREFIX}{name}{ANALYSIS_MESSAGE_SUFFIX}",
+                    begin=f"{COMMENTARY_CHANNEL_PREFIX}{name}{ANALYSIS_MESSAGE_SUFFIX}",
                     content=JSONSchemaFormat(json_schema=parameters),
                     end=CALL_END,
                 )
@@ -1080,7 +1080,7 @@ def get_harmony_structural_tag(
             name = function.name
             tags.append(
                 TagFormat(
-                    begin=f"{COMMENTARY_CHANNEL_PREFIX}{name}{JSON_CONSTRAIN_SUFFIX}",
+                    begin=f"{COMMENTARY_CHANNEL_PREFIX}{FUNCTION_NAME_PREFIX}{name}{JSON_CONSTRAIN_SUFFIX}",
                     content=JSONSchemaFormat(json_schema=parameters),
                     end=CALL_END,
                 )
