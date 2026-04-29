@@ -13,7 +13,7 @@ The `tool_choice` parameter controls how tool calls and text are mixed:
 - **Forced** (named choice): exactly one specified tool must be called.
 - **None** (`"none"`): tool calls are disabled; only text and reasoning are allowed.
 
-The `reasoning` parameter independently controls whether the reasoning section is present, and `force_empty_reasoning` can force it to be empty.
+The `reasoning` parameter controls whether the model-specific reasoning section is enabled.
 
 ## Basic API: `get_model_structural_tag`
 
@@ -23,7 +23,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 ### Parameters
 
-- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen"`, `"qwen_coder"`, `"kimi"`, `"deepseek_r1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm47"`, `"gemma4"`, `"deepseek_v4"`, `"qwen3_6"`.
+- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"deepseek_r1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm_4_7"`, `"gemma_4"`, `"deepseek_v4"`.
 - **tools** (`List[ToolParam | dict]`, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:
   - **Function tools** use the OpenAI Chat Completions shape:
     ```json
@@ -48,7 +48,6 @@ Use it when you need to constrain the model to output in a fixed pattern such as
   - `{"type": <builtin_type>}`: forces one builtin tool (matched by `type`).
   - `{"type": "allowed_tools", "allowed_tools": {"mode": ..., "tools": [...]}}`: limits available tools before applying its `mode`. The `tools` list may contain both function refs and builtin refs (matched by `type`).
 - **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags or model-specific equivalents). Default `True`.
-- **force_empty_reasoning** (`bool`, optional): When reasoning is on, whether to force empty thinking content at the beginning. Default `False`.
 
 Passing an unsupported `model` or an invalid `tool_choice` will raise `ValueError`.
 
@@ -121,11 +120,11 @@ grammar = Grammar.from_structural_tag(structural_tag)
 For formats that support reasoning (like Qwen3, DeepSeek-R1, Kimi-K2), pass `reasoning` to enable/disable:
 
 ```python
-structural_tag = get_model_structural_tag("qwen", tools=tools, reasoning=True)
+structural_tag = get_model_structural_tag("qwen_3", tools=tools, reasoning=True)
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
-If `reasoning` is not passed, reasoning mode is enabled by default. When `reasoning` is `True`, you can also set `force_empty_reasoning` to constrain the reasoning content.
+If `reasoning` is not passed, reasoning mode is enabled by default.
 
 ### Tool choice
 
@@ -177,17 +176,17 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `model` (style) | Supported models |
 |-----------------|-------------------|
 | `"llama"` | Meta-Llama-3, Llama-3.1, Llama-3.2, Llama-4 |
-| `"qwen"` | Qwen3 |
-| `"qwen_coder"` | Qwen3-Coder, Qwen3-Coder-Next |
+| `"qwen_3"` | Qwen3, Qwen3-Next |
+| `"qwen_3_5"` | Qwen3.5, Qwen3.6 |
+| `"qwen_3_coder"` | Qwen3-Coder, Qwen3-Coder-Next |
 | `"kimi"` | Kimi-K2, Kimi-K2.5 |
 | `"deepseek_r1"` | DeepSeek-V3.1, DeepSeek-R1, DeepSeek-V3.2-exp |
 | `"harmony"` | gpt-oss |
 | `"deepseek_v3_2"` | DeepSeek-V3.2 |
 | `"minimax"` | MiniMax-M2.5 |
-| `"glm47"` | GLM-5, GLM-4.7 |
-| `"gemma4"` | Gemma-4, gemma-4-12b-it, gemma-4-26b-a4b-it, gemma-4-31b-it, gemma-4-e2b-it |
+| `"glm_4_7"` | GLM-5, GLM-4.7 |
+| `"gemma_4"` | Gemma-4, gemma-4-12b-it, gemma-4-26b-a4b-it, gemma-4-31b-it, gemma-4-e2b-it |
 | `"deepseek_v4"` | DeepSeek-V4 |
-| `"qwen3_6"` | Qwen3.6 |
 
 ## Extending with custom models
 
