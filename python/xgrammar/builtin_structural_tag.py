@@ -498,6 +498,8 @@ def get_kimi_structural_tag(
     TOOL_CALL_ARGUMENT_BEGIN = "<|tool_call_argument_begin|>"
     TOOL_CALL_END = "<|tool_call_end|>"
     TOOL_CALL_TRIGGER = "<|tool_call_begin|>"
+    TOOL_CALLS_SECTION_BEGIN = "<|tool_calls_section_begin|>"
+    TOOL_CALLS_SECTION_END = "<|tool_calls_section_end|>"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
 
@@ -534,16 +536,22 @@ def get_kimi_structural_tag(
         if not tools:
             raise ValueError("Forced tool choice must resolve to exactly one tool.")
         function = tools[0].function
-        suffix_tag = TagFormat(
-            begin=f"{TOOL_CALL_BEGIN_PREFIX}{function.name}{TOOL_CALL_SUFFIX}",
-            content=SequenceFormat(
-                elements=[
-                    RegexFormat(pattern=r"\d+"),
-                    ConstStringFormat(value=TOOL_CALL_ARGUMENT_BEGIN),
-                    JSONSchemaFormat(json_schema=_get_function_parameters(function)),
-                ]
-            ),
-            end=TOOL_CALL_END,
+        suffix_tag = SequenceFormat(
+            elements=[
+                ConstStringFormat(value=TOOL_CALLS_SECTION_BEGIN),
+                TagFormat(
+                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{function.name}{TOOL_CALL_SUFFIX}",
+                    content=SequenceFormat(
+                        elements=[
+                            RegexFormat(pattern=r"\d+"),
+                            ConstStringFormat(value=TOOL_CALL_ARGUMENT_BEGIN),
+                            JSONSchemaFormat(json_schema=_get_function_parameters(function)),
+                        ]
+                    ),
+                    end=TOOL_CALL_END,
+                ),
+                ConstStringFormat(value=TOOL_CALLS_SECTION_END),
+            ]
         )
     elif tool_choice == "required":
         tags = []
@@ -565,7 +573,13 @@ def get_kimi_structural_tag(
                 )
             )
         assert len(tags) > 0
-        suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        suffix_tag = SequenceFormat(
+            elements=[
+                ConstStringFormat(value=TOOL_CALLS_SECTION_BEGIN),
+                TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True),
+                ConstStringFormat(value=TOOL_CALLS_SECTION_END),
+            ]
+        )
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
@@ -614,8 +628,6 @@ def get_deepseek_structural_tag(
     TOOL_CALL_BEGIN = "<｜tool▁call▁begin｜>"
     TOOL_CALL_END = "<｜tool▁call▁end｜>"
     TOOL_SEP = "<｜tool▁sep｜>"
-    JSON_RENDER_BEGIN = "\n```json\n"
-    JSON_RENDER_END = "\n```\n"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
 
@@ -629,14 +641,14 @@ def get_deepseek_structural_tag(
             name = function.name
             tags.append(
                 TagFormat(
-                    begin=f"{TOOL_CALL_BEGIN}{tool.type}{TOOL_SEP}{name}{JSON_RENDER_BEGIN}",
+                    begin=f"{TOOL_CALL_BEGIN}{name}{TOOL_SEP}",
                     content=JSONSchemaFormat(json_schema=parameters),
-                    end=f"{JSON_RENDER_END}{TOOL_CALL_END}",
+                    end=TOOL_CALL_END,
                 )
             )
 
         if len(tags) > 0:
-            inner_tool_calls = TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True)
+            inner_tool_calls = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
             tool_calls = TagFormat(
                 begin=TOOL_CALLS_BEGIN, content=inner_tool_calls, end=TOOL_CALLS_END
             )
@@ -652,9 +664,9 @@ def get_deepseek_structural_tag(
         function = tools[0].function
         parameters = _get_function_parameters(function)
         suffix_tag = TagFormat(
-            begin=f"{TOOL_CALLS_BEGIN}{TOOL_CALL_BEGIN}{tools[0].type}{TOOL_SEP}{function.name}{JSON_RENDER_BEGIN}",
+            begin=f"{TOOL_CALLS_BEGIN}{TOOL_CALL_BEGIN}{function.name}{TOOL_SEP}",
             content=JSONSchemaFormat(json_schema=parameters),
-            end=f"{JSON_RENDER_END}{TOOL_CALL_END}{TOOL_CALLS_END}",
+            end=f"{TOOL_CALL_END}{TOOL_CALLS_END}",
         )
 
     elif tool_choice == "required":
@@ -665,14 +677,14 @@ def get_deepseek_structural_tag(
             name = function.name
             tags.append(
                 TagFormat(
-                    begin=f"{TOOL_CALL_BEGIN}{tool.type}{TOOL_SEP}{name}{JSON_RENDER_BEGIN}",
+                    begin=f"{TOOL_CALL_BEGIN}{name}{TOOL_SEP}",
                     content=JSONSchemaFormat(json_schema=parameters),
-                    end=f"{JSON_RENDER_END}{TOOL_CALL_END}",
+                    end=TOOL_CALL_END,
                 )
             )
 
         assert len(tags) > 0
-        inner_tool_calls = TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True)
+        inner_tool_calls = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
         suffix_tag = TagFormat(begin=TOOL_CALLS_BEGIN, content=inner_tool_calls, end=TOOL_CALLS_END)
 
     if not reasoning:
@@ -807,9 +819,8 @@ def get_qwen_3_5_structural_tag(
     TOOL_CALL_BEGIN_SUFFIX = ">\n"
     TOOL_CALL_END = "\n</function>\n</tool_call>"
     TOOL_CALL_TRIGGER = "<tool_call>\n<function="
-    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
-    EMPTY_THINK_CONTENT = "<think>\n\n</think>"
+    THINK_SUFFIX = "\n\n"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
     tools = tools or []
     builtin_tools = builtin_tools or []
@@ -861,11 +872,15 @@ def get_qwen_3_5_structural_tag(
         assert len(tags) > 0
         suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
 
-    if reasoning:
-        prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
-    else:
-        prefix_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
 
+    prefix_tag = SequenceFormat(
+        elements=[
+            TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END),
+            ConstStringFormat(value=THINK_SUFFIX),
+        ]
+    )
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
@@ -906,8 +921,8 @@ def get_qwen_3_structural_tag(
     ARGUMENTS_FIELD_PREFIX = '", "arguments": '
     TOOL_CALL_END = "}\n</tool_call>"
     TOOL_CALL_TRIGGER = "<tool_call>"
-    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
+    THINK_SUFFIX = "\n\n"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
 
     tools = tools or []
@@ -962,9 +977,13 @@ def get_qwen_3_structural_tag(
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
-    prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
-    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
-    return StructuralTag(format=sequence_format)
+    prefix_tag = SequenceFormat(
+        elements=[
+            TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END),
+            ConstStringFormat(value=THINK_SUFFIX),
+        ]
+    )
+    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
 @register_model_structural_tag("harmony")
@@ -1008,7 +1027,7 @@ def get_harmony_structural_tag(
     ANALYSIS_MESSAGE_SUFFIX = "<|message|>"
     CALL_END = "<|call|>"
     FINAL_BEGIN = "<|channel|>final<|message|>"
-    FINAL_END = "<|end|>"
+    FINAL_END = ["<|end|>", "<|return|>"]
     ANALYSIS_BEGIN = "<|channel|>analysis<|message|>"
     TAG_SEPARATOR = "<|start|>assistant"
 
@@ -1114,8 +1133,9 @@ def get_deepseek_v3_2_structural_tag(
     INVOKE_BEGIN_PREFIX = '<｜DSML｜invoke name="'
     INVOKE_BEGIN_SUFFIX = '">\n'
     INVOKE_END = "</｜DSML｜invoke>\n"
+    TOOL_CALLS_PREFIX = "\n\n"
     FUNCTION_CALLS_BEGIN = "<｜DSML｜function_calls>\n"
-    FUNCTION_CALLS_END = "</｜DSML｜function_calls>\n"
+    FUNCTION_CALLS_END = "</｜DSML｜function_calls>"
     FUNCTION_CALLS_TRIGGER = "<｜DSML｜function_calls>"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
@@ -1163,7 +1183,7 @@ def get_deepseek_v3_2_structural_tag(
         function = tools[0].function
         suffix_tag = SequenceFormat(
             elements=[
-                ConstStringFormat(value=FUNCTION_CALLS_BEGIN),
+                ConstStringFormat(value=TOOL_CALLS_PREFIX + FUNCTION_CALLS_BEGIN),
                 TagFormat(
                     begin=(INVOKE_BEGIN_PREFIX + function.name + INVOKE_BEGIN_SUFFIX),
                     content=JSONSchemaFormat(
@@ -1190,7 +1210,7 @@ def get_deepseek_v3_2_structural_tag(
         assert len(tags) > 0
         suffix_tag = SequenceFormat(
             elements=[
-                ConstStringFormat(value=FUNCTION_CALLS_BEGIN),
+                ConstStringFormat(value=TOOL_CALLS_PREFIX + FUNCTION_CALLS_BEGIN),
                 TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True),
                 ConstStringFormat(value=FUNCTION_CALLS_END),
             ]
@@ -1231,7 +1251,7 @@ def get_minimax_structural_tag(
     INVOKE_BEGIN_SUFFIX = '">\n'
     INVOKE_END = "</invoke>\n"
     TOOL_CALL_BEGIN = "<minimax:tool_call>\n"
-    TOOL_CALL_END = "</minimax:tool_call>\n"
+    TOOL_CALL_END = "</minimax:tool_call>"
     TOOL_CALL_TRIGGER = "<minimax:tool_call>"
     THINK_TAG_END = "</think>"
     THINK_SUFFIX = "\n\n"
@@ -1279,7 +1299,7 @@ def get_minimax_structural_tag(
         function = tools[0].function
         suffix_tag = SequenceFormat(
             elements=[
-                ConstStringFormat(value=TOOL_CALL_BEGIN),
+                ConstStringFormat(value="\n" + TOOL_CALL_BEGIN),
                 TagFormat(
                     begin=(INVOKE_BEGIN_PREFIX + function.name + INVOKE_BEGIN_SUFFIX),
                     content=JSONSchemaFormat(
@@ -1306,7 +1326,7 @@ def get_minimax_structural_tag(
         assert len(tags) > 0
         suffix_tag = SequenceFormat(
             elements=[
-                ConstStringFormat(value=TOOL_CALL_BEGIN),
+                ConstStringFormat(value="\n" + TOOL_CALL_BEGIN),
                 TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True),
                 ConstStringFormat(value=TOOL_CALL_END),
             ]
@@ -1549,8 +1569,9 @@ def get_deepseek_v4_structural_tag(
     INVOKE_BEGIN_PREFIX = '<｜DSML｜invoke name="'
     INVOKE_BEGIN_SUFFIX = '">\n'
     INVOKE_END = "</｜DSML｜invoke>\n"
+    TOOL_CALLS_PREFIX = "\n\n"
     FUNCTION_CALLS_BEGIN = "<｜DSML｜tool_calls>\n"
-    FUNCTION_CALLS_END = "</｜DSML｜tool_calls>\n"
+    FUNCTION_CALLS_END = "</｜DSML｜tool_calls>"
     FUNCTION_CALLS_TRIGGER = "<｜DSML｜tool_calls>"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
@@ -1598,7 +1619,7 @@ def get_deepseek_v4_structural_tag(
         function = tools[0].function
         suffix_tag = SequenceFormat(
             elements=[
-                ConstStringFormat(value=FUNCTION_CALLS_BEGIN),
+                ConstStringFormat(value=TOOL_CALLS_PREFIX + FUNCTION_CALLS_BEGIN),
                 TagFormat(
                     begin=(INVOKE_BEGIN_PREFIX + function.name + INVOKE_BEGIN_SUFFIX),
                     content=JSONSchemaFormat(
@@ -1625,7 +1646,7 @@ def get_deepseek_v4_structural_tag(
         assert len(tags) > 0
         suffix_tag = SequenceFormat(
             elements=[
-                ConstStringFormat(value=FUNCTION_CALLS_BEGIN),
+                ConstStringFormat(value=TOOL_CALLS_PREFIX + FUNCTION_CALLS_BEGIN),
                 TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True),
                 ConstStringFormat(value=FUNCTION_CALLS_END),
             ]
