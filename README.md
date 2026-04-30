@@ -81,6 +81,8 @@ XGrammar has been widely adopted in industry, open-source projects, and academia
 &emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/google.svg" height=50/>](https://about.google/)
 &emsp;
+[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/perplexity.png" height=50/>](https://www.perplexity.ai/)
+&emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/xai.png" height=50/>](https://github.com/NVIDIA/TensorRT-LLM)
 &emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/deepseek.png" height=50/>](https://github.com/NVIDIA/TensorRT-LLM)
