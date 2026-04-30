@@ -15,7 +15,7 @@ classifiers = [
 keywords = ["machine learning", "inference"]
 requires-python = ">=3.8, <4"
 dependencies = [
-  "apache-tvm-ffi==0.1.10rc2",
+  "apache-tvm-ffi==0.1.11rc2",
   "pydantic",
   "torch>=1.10.0",
   "transformers>=4.38.0",
@@ -42,7 +42,7 @@ test = [
 metal = ["mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'"]
 
 [build-system]
-requires = ["scikit-build-core>=0.10.0", "apache-tvm-ffi==0.1.10rc2"]
+requires = ["scikit-build-core>=0.10.0", "apache-tvm-ffi==0.1.11rc2"]
 build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
