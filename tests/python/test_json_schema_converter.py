@@ -2308,5 +2308,92 @@ def test_utf8_array_const():
     assert _is_grammar_accept_string(grammar, '["こんにちは","😊","你好","hello","\\n"]')
 
 
+def test_pattern_properties_with_properties():
+    """Regression test for #487: patternProperties + properties should not ignore properties."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "grade": {"type": "string"}},
+        "required": ["name", "grade"],
+        "patternProperties": {"^grade$": {"type": "string"}},
+    }
+
+    check_schema_with_instance(schema, {"name": "John", "grade": "B"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"grade": "B"}, is_accepted=False, any_whitespace=False)
+
+
+def test_pattern_properties_extra_key():
+    """Regression test for #487: patternProperties type constraints must be enforced."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "patternProperties": {"^extra_.*$": {"type": "integer"}},
+    }
+
+    check_schema_with_instance(schema, {"name": "John", "extra_1": 42}, any_whitespace=False)
+    check_schema_with_instance(
+        schema, {"name": "John", "extra_1": "not_a_number"}, is_accepted=False, any_whitespace=False
+    )
+
+
+def test_pattern_properties_additional_false():
+    """Regression test for #487: additionalProperties=false with both properties and patternProperties."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "patternProperties": {"^grade$": {"type": "string"}},
+        "additionalProperties": False,
+    }
+
+    check_schema_with_instance(schema, {"name": "John"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"name": "John", "grade": "A"}, any_whitespace=False)
+    check_schema_with_instance(
+        schema, {"name": "John", "other": "x"}, is_accepted=False, any_whitespace=False
+    )
+
+
+def test_property_names_no_trailing_content():
+    """Regression test for #487: propertyNames with generic pattern must not allow trailing content."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "grade": {"type": "string"}},
+        "required": ["name", "grade"],
+        "propertyNames": {"pattern": "^.*$"},
+    }
+
+    check_schema_with_instance(schema, {"name": "John", "grade": "B"}, any_whitespace=False)
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema), any_whitespace=False)
+    assert not _is_grammar_accept_string(grammar, '{"name":"John","grade":"B"} extra')
+    assert not _is_grammar_accept_string(grammar, '{"name":"John","grade":"B"}{}')
+
+
+def test_property_names_with_properties():
+    """Regression test for #487: propertyNames pattern should constrain key names."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "propertyNames": {"pattern": "^[a-z]+$"},
+    }
+
+    check_schema_with_instance(schema, {"name": "John"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"Name": "John"}, is_accepted=False, any_whitespace=False)
+
+
+def test_multiple_pattern_properties_with_properties():
+    """Regression test for #487: multiple patternProperties + properties coexistence."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "patternProperties": {"^extra_.*$": {"type": "integer"}, "^meta_.*$": {"type": "string"}},
+    }
+
+    check_schema_with_instance(
+        schema, {"name": "John", "extra_1": 42, "meta_tag": "info"}, any_whitespace=False
+    )
+    check_schema_with_instance(schema, {"name": "John"}, any_whitespace=False)
+    check_schema_with_instance(
+        schema, {"name": "John", "extra_1": "not_int"}, is_accepted=False, any_whitespace=False
+    )
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
