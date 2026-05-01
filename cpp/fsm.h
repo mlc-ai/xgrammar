@@ -533,6 +533,12 @@ class CompactFSM {
    */
   void GetReachableStates(const std::vector<int>& from, std::unordered_set<int>* result) const;
 
+  /*!
+   * \brief Get the number of edges in the compact FSM.
+   * \return The number of edges.
+   */
+  size_t GetNumEdges() const;
+
   /****************** CompactFSM Auxiliary Data ******************/
 
   /*! \brief Get the edge auxiliary data. */
@@ -861,12 +867,7 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   CompactFSMWithStartEnd() = default;
 
   explicit CompactFSMWithStartEnd(const CompactFSM& fsm, int start, const std::vector<bool>& ends)
-      : FSMWithStartEndBase<CompactFSM>(fsm, start, ends) {
-    edge_num_ = 0;
-    for (int i = 0; i < fsm.NumStates(); i++) {
-      edge_num_ += fsm.GetEdges(i).size();
-    }
-  }
+      : FSMWithStartEndBase<CompactFSM>(fsm, start, ends), edge_num_(fsm.GetNumEdges()) {}
 
   using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
 
