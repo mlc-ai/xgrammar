@@ -208,6 +208,8 @@ class GrammarBuilder {
   std::shared_ptr<Grammar::Impl> grammar_;
   // Map from rule name to rule id.
   std::unordered_map<std::string, int32_t> rule_name_to_id_;
+  // Cache of next suffix index per name_hint for GetNewRuleName.
+  std::unordered_map<std::string, int> next_cnt_per_hint_;
 };
 
 }  // namespace xgrammar

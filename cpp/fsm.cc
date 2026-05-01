@@ -569,7 +569,15 @@ class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
   using EdgeType = FSMEdge::EdgeType;
 
  public:
-  using FSMImplBase<Compact2DArray<FSMEdge>>::FSMImplBase;
+  Impl() = default;
+
+  Impl(const Compact2DArray<FSMEdge>& edges, std::vector<int32_t> edge_aux_data = {})
+      : FSMImplBase<Compact2DArray<FSMEdge>>(edges, std::move(edge_aux_data)),
+        edge_num_(ComputeEdgeNum(edges_)) {}
+
+  Impl(Compact2DArray<FSMEdge>&& edges, std::vector<int32_t> edge_aux_data = {})
+      : FSMImplBase<Compact2DArray<FSMEdge>>(std::move(edges), std::move(edge_aux_data)),
+        edge_num_(ComputeEdgeNum(edges_)) {}
 
   void GetNextStates(int from, int value, EdgeType edge_type, std::vector<int>* target) const;
 
@@ -583,8 +591,21 @@ class CompactFSM::Impl : public FSMImplBase<Compact2DArray<FSMEdge>> {
 
   FSM ToFSM() const;
 
+  size_t GetNumEdges() const { return edge_num_; }
+
+  size_t edge_num_ = 0;
+
   friend std::size_t MemorySize(const Impl& impl) {
-    return MemorySize(impl.edges_) + MemorySize(impl.edge_aux_data_);
+    return MemorySize(impl.edges_) + MemorySize(impl.edge_aux_data_) + sizeof(impl.edge_num_);
+  }
+
+ private:
+  static size_t ComputeEdgeNum(const Compact2DArray<FSMEdge>& edges) {
+    size_t edge_num = 0;
+    for (int i = 0; i < edges.size(); ++i) {
+      edge_num += edges[i].size();
+    }
+    return edge_num;
   }
 };
 
@@ -593,7 +614,9 @@ XGRAMMAR_MEMBER_TABLE(
     "edges",
     &CompactFSM::Impl::edges_,
     "edge_aux_data",
-    &CompactFSM::Impl::edge_aux_data_
+    &CompactFSM::Impl::edge_aux_data_,
+    "edge_num",
+    &CompactFSM::Impl::edge_num_
 );
 
 void CompactFSM::Impl::GetNextStates(
@@ -776,6 +799,8 @@ void CompactFSM::GetReachableStates(const std::vector<int>& from, std::unordered
     const {
   pimpl_->GetReachableStates(from, result);
 }
+
+size_t CompactFSM::GetNumEdges() const { return pimpl_->GetNumEdges(); }
 
 FSM CompactFSM::ToFSM() const { return pimpl_->ToFSM(); }
 
@@ -1282,57 +1307,154 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_st
   if (max_result_num_states < NumStates()) {
     return *this;
   }
+  // No merge is possible with fewer than 4 states (need >=2 sources sharing a target,
+  // or >=2 sinks sharing a source).
+  if (NumStates() < 4) {
+    return Copy();
+  }
   bool changed = true;
   FSMWithStartEnd result = Copy();
   result.GetFsm()->SortEdges();
   UnionFindSet<int> union_find_set;
+
+  // A compact edge view used for incoming/outgoing CSR rows. `peer` means source state in
+  // incoming_edges and target state in outgoing_edges.
+  struct EndpointEdge {
+    int peer;  // source in incoming_edges, target in outgoing_edges
+    int16_t min;
+    int16_t max;
+
+    bool operator<(const EndpointEdge& other) const {
+      return std::tie(peer, min, max) < std::tie(other.peer, other.min, other.max);
+    }
+  };
+
+  // Scratch buffers reused across iterations to avoid repeated vector allocation.
+  // Number of incoming edges for each state, used to size the incoming CSR rows.
+  std::vector<int32_t> incoming_row_sizes;
+  // Number of outgoing edges for each state, used to size the outgoing CSR rows.
+  std::vector<int32_t> outgoing_row_sizes;
+  // Write positions while filling incoming_edges rows.
+  std::vector<int32_t> incoming_write_positions;
+  // Write positions while filling outgoing_edges rows.
+  std::vector<int32_t> outgoing_write_positions;
+  // Incoming edges grouped by target state.
+  Compact2DArray<EndpointEdge> incoming_edges;
+  // Outgoing edges grouped by source state.
+  Compact2DArray<EndpointEdge> outgoing_edges;
+  // Number of distinct predecessor states for each state.
+  std::vector<int> incoming_distinct_count;
+  // Number of distinct successor states for each state.
+  std::vector<int> outgoing_distinct_count;
+  // The only predecessor state when incoming_distinct_count[state] == 1.
+  std::vector<int> single_incoming_source;
+  // The only successor state when outgoing_distinct_count[state] == 1.
+  std::vector<int> single_outgoing_target;
+  // Terminal end states collected for leaf-state merging.
+  std::vector<int32_t> no_successor_end_states;
+  // Terminal non-end states collected for leaf-state merging.
+  std::vector<int32_t> no_successor_non_end_states;
+
   while (changed) {
+    int n = result.NumStates();
     union_find_set.Clear();
-    std::vector<std::unordered_map<int, std::vector<FSMEdge>>> previous_states(result.NumStates());
-    std::vector<std::unordered_map<int, std::vector<FSMEdge>>> next_states(result.NumStates());
-    // Initialize the previous states.
-    for (int i = 0; i < result.NumStates(); i++) {
-      const auto& edges = result.GetFsm().GetEdges(i);
+
+    // First pass: count row sizes for the incoming/outgoing CSR arrays.
+    incoming_row_sizes.assign(n, 0);
+    outgoing_row_sizes.assign(n, 0);
+    for (int source = 0; source < n; ++source) {
+      const auto& edges = result.GetFsm().GetEdges(source);
+      outgoing_row_sizes[source] = static_cast<int32_t>(edges.size());
       for (const auto& edge : edges) {
-        if (previous_states[edge.target].find(i) == previous_states[edge.target].end()) {
-          previous_states[edge.target][i] = std::vector<FSMEdge>();
-        }
-        previous_states[edge.target][i].push_back(edge);
-        if (next_states[i].find(edge.target) == next_states[i].end()) {
-          next_states[i][edge.target] = std::vector<FSMEdge>();
-        }
-        next_states[i][edge.target].push_back(edge);
+        ++incoming_row_sizes[edge.target];
       }
     }
+
+    // Allocate CSR rows. The underlying storage is reset and reused across iterations.
+    incoming_edges.ResetWithRowSizes(incoming_row_sizes);
+    outgoing_edges.ResetWithRowSizes(outgoing_row_sizes);
+    incoming_write_positions.assign(n, 0);
+    outgoing_write_positions.assign(n, 0);
+
+    // Second pass: fill incoming and outgoing rows. Incoming rows are naturally grouped by
+    // source because we scan source states in order; outgoing rows are sorted by target below.
+    for (int source = 0; source < n; ++source) {
+      const auto& edges = result.GetFsm().GetEdges(source);
+      auto outgoing_row = outgoing_edges.MutableRowAt(source);
+      for (const auto& edge : edges) {
+        incoming_edges.MutableRowAt(edge.target
+        )[incoming_write_positions[edge.target]++] = {source, edge.min, edge.max};
+        outgoing_row[outgoing_write_positions[source]++] = {edge.target, edge.min, edge.max};
+      }
+      std::sort(outgoing_row.begin(), outgoing_row.end());
+    }
+
+    // Identify states with exactly one distinct predecessor/successor. These states are the
+    // candidates for the two local merge rules below.
+    incoming_distinct_count.assign(n, 0);
+    outgoing_distinct_count.assign(n, 0);
+    single_incoming_source.assign(n, -1);
+    single_outgoing_target.assign(n, -1);
+    for (int state = 0; state < n; ++state) {
+      auto incoming_row = incoming_edges[state];
+      if (incoming_row.size() > 0) {
+        incoming_distinct_count[state] = 1;
+        single_incoming_source[state] = incoming_row[0].peer;
+        for (int32_t i = 1; i < incoming_row.size(); ++i) {
+          if (incoming_row[i].peer != incoming_row[i - 1].peer) {
+            ++incoming_distinct_count[state];
+            single_incoming_source[state] = -1;
+          }
+        }
+      }
+      auto outgoing_row = outgoing_edges[state];
+      if (outgoing_row.size() > 0) {
+        outgoing_distinct_count[state] = 1;
+        single_outgoing_target[state] = outgoing_row[0].peer;
+        for (int32_t i = 1; i < outgoing_row.size(); ++i) {
+          if (outgoing_row[i].peer != outgoing_row[i - 1].peer) {
+            ++outgoing_distinct_count[state];
+            single_outgoing_target[state] = -1;
+          }
+        }
+      }
+    }
+
     // Case 1: Like ab | ac | ad, then they can be merged into a(b | c | d).
     bool is_equiv_successor = false;
-    for (int i = 0; i < static_cast<int>(previous_states.size()); i++) {
-      if (previous_states[i].size() != 1 || union_find_set.Count(i)) {
+    for (int i = 0; i < n; i++) {
+      if (incoming_distinct_count[i] != 1 || union_find_set.Count(i)) {
         continue;
       }
-      const auto& previous_state = previous_states[i].begin()->first;
-      const auto& edges_to_i = previous_states[i].begin()->second;
-      const auto& siblings = next_states[previous_state];
-      for (const auto& [sibling, edges_to_sibling] : siblings) {
-        if (sibling <= i || previous_states[sibling].size() != 1 ||
+      int previous_state = single_incoming_source[i];
+      auto edges_to_i = incoming_edges[i];
+      auto siblings = outgoing_edges[previous_state];
+      int32_t group_begin = 0;
+      while (group_begin < siblings.size()) {
+        int sibling = siblings[group_begin].peer;
+        int32_t group_end = group_begin + 1;
+        while (group_end < siblings.size() && siblings[group_end].peer == sibling) {
+          ++group_end;
+        }
+        auto edges_to_sibling = siblings.Slice(group_begin, group_end);
+        group_begin = group_end;
+        if (sibling <= i || incoming_distinct_count[sibling] != 1 ||
             result.IsEndState(sibling) != result.IsEndState(i)) {
           continue;
         }
-        bool is_equiv = true;
-
-        // Check if the edges are the same.
+        // Check if the edges from previous_state to i and sibling are the same.
         if (edges_to_i.size() != edges_to_sibling.size()) {
-          break;  // Different edges, not equivalent.
+          continue;  // Different edges, not equivalent.
         }
-        for (int i = 0; i < static_cast<int>(edges_to_i.size()); i++) {
-          if (edges_to_i[i].min != edges_to_sibling[i].min ||
-              edges_to_i[i].max != edges_to_sibling[i].max) {
+        bool is_equiv = true;
+        for (int32_t j = 0; j < edges_to_i.size(); ++j) {
+          if (edges_to_i[j].min != edges_to_sibling[j].min ||
+              edges_to_i[j].max != edges_to_sibling[j].max) {
             is_equiv = false;
             break;  // Different edge ranges, not equivalent.
           }
         }
-
-        // Merge the nodes.
+        // Merge the equivalent successor states.
         if (is_equiv) {
           union_find_set.Add(i);
           union_find_set.Add(sibling);
@@ -1344,11 +1466,12 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_st
 
     // Case 2: Like ba | ca | da, then they can be merged into (b | c | d)a.
     bool is_equiv_precursor = false;
-    std::vector<int32_t> no_successor_end_states;
-    std::vector<int32_t> no_successor_non_end_states;
+    no_successor_end_states.clear();
+    no_successor_non_end_states.clear();
 
-    for (int i = 0; i < static_cast<int>(next_states.size()); i++) {
-      if (next_states[i].empty()) {
+    for (int i = 0; i < n; i++) {
+      int outgoing_count = outgoing_distinct_count[i];
+      if (outgoing_count == 0) {
         if (result.IsEndState(i)) {
           no_successor_end_states.push_back(i);
         } else {
@@ -1356,30 +1479,36 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_st
         }
         continue;  // Skip states with no successors.
       }
-      if (next_states[i].size() != 1 || union_find_set.Count(i)) {
+      if (outgoing_count != 1 || union_find_set.Count(i)) {
         continue;  // Skip states with multiple successors.
       }
-      const auto& next_state = next_states[i].begin()->first;
-      const auto& node_edges = result.GetFsm().GetEdges(i);
-      const auto& siblings = previous_states[next_state];
-      for (const auto& [sibling, edges_to_sibling] : siblings) {
-        if (sibling <= i || next_states[sibling].size() != 1 ||
+      int next_state = single_outgoing_target[i];
+      auto node_edges = outgoing_edges[i];
+      auto siblings = incoming_edges[next_state];
+      int32_t group_begin = 0;
+      while (group_begin < siblings.size()) {
+        int sibling = siblings[group_begin].peer;
+        while (group_begin < siblings.size() && siblings[group_begin].peer == sibling) {
+          ++group_begin;
+        }
+        if (sibling <= i || outgoing_distinct_count[sibling] != 1 ||
             result.IsEndState(i) != result.IsEndState(sibling)) {
           continue;
         }
-        const auto& sibling_node_edges = result.GetFsm().GetEdges(sibling);
+        auto sibling_node_edges = outgoing_edges[sibling];
         if (sibling_node_edges.size() != node_edges.size()) {
           continue;  // Different number of edges, not equivalent.
         }
+        // Check if the sibling state has the same outgoing edges as i.
         bool is_equiv = true;
-        for (int i = 0; i < static_cast<int>(sibling_node_edges.size()); i++) {
-          if (sibling_node_edges[i].min != node_edges[i].min ||
-              sibling_node_edges[i].max != node_edges[i].max) {
+        for (int32_t j = 0; j < node_edges.size(); ++j) {
+          if (sibling_node_edges[j].min != node_edges[j].min ||
+              sibling_node_edges[j].max != node_edges[j].max) {
             is_equiv = false;
             break;
           }
         }
-
+        // Merge the equivalent precursor states.
         if (is_equiv) {
           union_find_set.Add(i);
           union_find_set.Add(sibling);
@@ -1411,6 +1540,8 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_st
 
     changed = is_equiv_successor || is_equiv_precursor;
     if (changed) {
+      // Rebuild the FSM with the equivalent states merged, then repeat until no local merge
+      // rule applies.
       auto eq_classes = union_find_set.GetAllSets();
       std::vector<int> old_to_new(result.NumStates(), -1);
       for (size_t i = 0; i < eq_classes.size(); i++) {
