@@ -1107,7 +1107,6 @@ def get_harmony_structural_tag(
     FINAL_BEGIN = "<|channel|>final<|message|>"
     FINAL_END = ["<|end|>", "<|return|>"]
     ANALYSIS_BEGIN = "<|channel|>analysis<|message|>"
-    ANALYSIS_MESSAGE_SUFFIX = "<|message|>"
     TAG_SEPARATOR = "<|start|>assistant"
 
     def _function_tool_tags(name, parameters):
@@ -1115,7 +1114,7 @@ def get_harmony_structural_tag(
         content = JSONSchemaFormat(json_schema=parameters)
         return [
             TagFormat(
-                begin=f"<|channel|>commentary to={name}<|constrain|>json<|message|>",
+                begin=f"<|channel|>commentary to=functions.{name}<|constrain|>json<|message|>",
                 content=content,
                 end=CALL_END,
             ),
@@ -1131,12 +1130,21 @@ def get_harmony_structural_tag(
             ),
         ]
 
-    def _builtin_tool_tag(name, parameters):
-        return TagFormat(
-            begin=f"<|channel|>analysis to={name}{ANALYSIS_MESSAGE_SUFFIX}",
-            content=JSONSchemaFormat(json_schema=parameters),
-            end=CALL_END,
-        )
+    def _builtin_tool_tags(name, parameters):
+        """Generate tags for supported harmony builtin tool call formats."""
+        content = JSONSchemaFormat(json_schema=parameters)
+        return [
+            TagFormat(
+                begin=f"<|channel|>commentary to={name} code<|message|>",
+                content=content,
+                end=CALL_END,
+            ),
+            TagFormat(
+                begin=f" to={name}<|channel|>commentary code<|message|>",
+                content=content,
+                end=CALL_END,
+            ),
+        ]
 
     tools = tools or []
     builtin_tools = builtin_tools or []
@@ -1152,15 +1160,15 @@ def get_harmony_structural_tag(
         for tool in builtin_tools:
             parameters = _get_function_parameters(tool)
             name = _get_builtin_tool_name(tool)
-            tags.append(_builtin_tool_tag(name, parameters))
+            tags.extend(_builtin_tool_tags(name, parameters))
 
         final_tag = TagFormat(begin=FINAL_BEGIN, content=AnyTextFormat(), end=FINAL_END)
         tags.append(final_tag)
 
     elif tool_choice == "forced":
         if builtin_tools:
-            tags.append(
-                _builtin_tool_tag(
+            tags.extend(
+                _builtin_tool_tags(
                     _get_builtin_tool_name(builtin_tools[0]),
                     _get_function_parameters(builtin_tools[0]),
                 )
@@ -1175,7 +1183,7 @@ def get_harmony_structural_tag(
         for tool in builtin_tools:
             parameters = _get_function_parameters(tool)
             name = _get_builtin_tool_name(tool)
-            tags.append(_builtin_tool_tag(name, parameters))
+            tags.extend(_builtin_tool_tags(name, parameters))
         for tool in tools:
             function = tool.function
             parameters = _get_function_parameters(function)

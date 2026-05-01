@@ -437,6 +437,37 @@ def test_none_parameters_unconstrained():
     assert None not in json_schema_values
 
 
+def test_harmony_builtin_tool_instance():
+    """Harmony builtin tools follow the browser sample shape from harmony examples."""
+
+    structural_tag = get_model_structural_tag(
+        "harmony",
+        tools=[
+            {
+                "type": "web_search_preview",
+                "name": "browser.search",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+            }
+        ],
+        reasoning=False,
+    )
+
+    check_stag_with_instance(
+        structural_tag,
+        '<|channel|>commentary to=browser.search code<|message|>{"query": "weather"}<|call|>',
+        True,
+    )
+    check_stag_with_instance(
+        structural_tag,
+        '<|channel|>analysis to=browser.search<|message|>{"query": "weather"}<|call|>',
+        False,
+    )
+
+
 @pytest.mark.parametrize(
     "structural_tag_fn",
     [
@@ -596,12 +627,12 @@ def test_specific_functions_cases(structural_tag_fn, case: Dict[str, Any]):
         ("qwen_3", 'text<tool_call>\n{"name": "t2", "arguments": {"q": "v"}}\n</tool_call>', False),
         (
             "harmony",
-            '<|channel|>commentary to=t1<|constrain|>json<|message|>{"q": "v"}<|call|>',
+            '<|channel|>commentary to=functions.t1<|constrain|>json<|message|>{"q": "v"}<|call|>',
             True,
         ),
         (
             "harmony",
-            '<|channel|>commentary to=t2<|constrain|>json<|message|>{"q": "v"}<|call|>',
+            '<|channel|>commentary to=functions.t2<|constrain|>json<|message|>{"q": "v"}<|call|>',
             False,
         ),
     ],
@@ -884,7 +915,7 @@ _tool_choice_instance_cases = [
             {"tools": _tools_harmony_pair, "tool_choice": "required"},
             [
                 "plain text without channels",
-                '<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
+                '<|channel|>commentary to=functions.comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
             ],
             False,
             [False, True],
@@ -900,8 +931,8 @@ _tool_choice_instance_cases = [
                 "forced_function_name": "comment_tool",
             },
             [
-                '<|channel|>commentary to=comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
-                '<|channel|>commentary to=other_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
+                '<|channel|>commentary to=functions.comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
+                '<|channel|>commentary to=functions.other_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
             ],
             False,
             [True, False],
