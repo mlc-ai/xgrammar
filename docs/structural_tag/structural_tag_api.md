@@ -791,17 +791,12 @@ Combine `tag`, `any_tokens`, and `token_triggered_tags` for that case:
 }
 ```
 
-### Built-in Model Styles
+## Built-in Model Styles
 
 If you only need a standard tool-calling layout for a supported model family, prefer the built-in
-helper instead of hand-writing every wrapper:
+helper instead of hand-writing every wrapper.
 
-- Llama / Gemma-style text wrappers
-- Qwen and Qwen Coder variants
-- Kimi
-- DeepSeek variants
-- Harmony
-- MiniMax
+Common examples include OpenAI Harmony response format, Llama, Qwen, Kimi, DeepSeek, and others.
 
 See [Tool Calling and Reasoning](tool_calling_and_reasoning) for `get_model_structural_tag` and the list of supported models.
 
