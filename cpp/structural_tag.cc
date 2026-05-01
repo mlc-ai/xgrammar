@@ -1771,7 +1771,7 @@ bool StructuralTagGrammarConverter::IsPrefix(
 
 Result<Grammar, ISTError> StructuralTagGrammarConverter::Convert(const StructuralTag& structural_tag
 ) {
-  auto converter = StructuralTagGrammarConverter();
+  StructuralTagGrammarConverter converter;
   auto result = converter.Visit(structural_tag.format);
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
@@ -1845,7 +1845,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
   if (converter == style_to_grammar_converter.end()) {
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
-  auto sub_grammar = Grammar::FromEBNF(converter->second(format.json_schema));
+  std::string ebnf = converter->second(format.json_schema);
+  auto sub_grammar = Grammar::FromEBNF(ebnf);
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }
@@ -2409,12 +2410,12 @@ Result<Grammar, StructuralTagError> StructuralTagToGrammar(
   if (err.has_value()) {
     return ResultErr(std::move(err).value());
   }
-  auto result = StructuralTagGrammarConverter().Convert(structural_tag);
+
+  auto result = StructuralTagGrammarConverter::Convert(structural_tag);
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
   }
-  auto unwrapped_result = std::move(result).Unwrap();
-  return ResultOk(GrammarNormalizer::Apply(std::move(unwrapped_result)));
+  return ResultOk(GrammarNormalizer::Apply(std::move(result).Unwrap()));
 }
 
 }  // namespace xgrammar
