@@ -59,7 +59,7 @@ tool_output_template: str = "\n<result>{content}</result>"
 def to_json(value: Any) -> str:
     try:
         return json.dumps(value, ensure_ascii=False)
-    except:
+    except Exception:
         return json.dumps(value, ensure_ascii=True)
 
 
@@ -118,7 +118,7 @@ def decode_dsml_to_arguments(
         + ", ".join([_decode_value(k, v, string=is_str) for k, (v, is_str) in tool_args.items()])
         + "}"
     )
-    return dict(name=tool_name, arguments=tool_args_json)
+    return {"name": tool_name, "arguments": tool_args_json}
 
 
 def render_tools(tools: List[Dict[str, Union[str, Dict[str, Any]]]]) -> str:
