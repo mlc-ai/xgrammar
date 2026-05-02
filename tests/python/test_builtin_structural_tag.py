@@ -468,6 +468,24 @@ def test_harmony_builtin_tool_instance():
     )
 
 
+def test_kimi_auto_requires_tool_calls_section():
+    """Kimi auto tool calls must use the official section wrapper."""
+
+    structural_tag = get_model_structural_tag("kimi", tools=_tools_kimi, reasoning=False)
+
+    assert "<|tool_calls_section_begin|>" in structural_tag.model_dump_json()
+    check_stag_with_instance(
+        structural_tag,
+        '<|tool_calls_section_begin|><|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|><|tool_calls_section_end|>',
+        True,
+    )
+    check_stag_with_instance(
+        structural_tag,
+        '<|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+        False,
+    )
+
+
 @pytest.mark.parametrize(
     "structural_tag_fn",
     [
@@ -563,12 +581,17 @@ def test_specific_functions_cases(structural_tag_fn, case: Dict[str, Any]):
         ("llama", '{"name": "t1", "parameters": {"q": "v"}}', True),
         (
             "kimi",
-            '123<|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+            '123<|tool_calls_section_begin|><|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|><|tool_calls_section_end|>',
             True,
         ),
         (
             "kimi",
-            '123<|tool_call_begin|>functions.t2:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+            '<|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+            False,
+        ),
+        (
+            "kimi",
+            '123<|tool_calls_section_begin|><|tool_call_begin|>functions.t2:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|><|tool_calls_section_end|>',
             False,
         ),
         (

@@ -498,11 +498,11 @@ def get_kimi_structural_tag(
         A structural tag template.
         This format is used by Kimi-K2 and other models that follow the same style.
     """
-    TOOL_CALL_BEGIN_PREFIX = "<|tool_call_begin|>functions."
+    TOOL_CALL_BEGIN = "<|tool_call_begin|>"
+    TOOL_CALL_BEGIN_PREFIX = f"{TOOL_CALL_BEGIN}functions."
     TOOL_CALL_SUFFIX = ":"
     TOOL_CALL_ARGUMENT_BEGIN = "<|tool_call_argument_begin|>"
     TOOL_CALL_END = "<|tool_call_end|>"
-    TOOL_CALL_TRIGGER = "<|tool_call_begin|>"
     TOOL_CALLS_SECTION_BEGIN = "<|tool_calls_section_begin|>"
     TOOL_CALLS_SECTION_END = "<|tool_calls_section_end|>"
     THINK_TAG_END = "</think>"
@@ -531,8 +531,14 @@ def get_kimi_structural_tag(
             )
 
         if len(tags) > 0:
+            inner_tool_calls = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+            tool_calls = TagFormat(
+                begin=TOOL_CALLS_SECTION_BEGIN, content=inner_tool_calls, end=TOOL_CALLS_SECTION_END
+            )
             suffix_tag = TriggeredTagsFormat(
-                triggers=[TOOL_CALL_TRIGGER], tags=tags, excludes=THINK_EXCLUDE_TOKENS
+                triggers=[TOOL_CALLS_SECTION_BEGIN],
+                tags=[tool_calls],
+                excludes=[*THINK_EXCLUDE_TOKENS, TOOL_CALL_BEGIN],
             )
         else:
             suffix_tag = AnyTextFormat(excludes=THINK_EXCLUDE_TOKENS)
