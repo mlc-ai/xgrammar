@@ -366,7 +366,7 @@ if __name__ == "__main__":
         device_count = torch.cuda.device_count()
         device_name = torch.cuda.get_device_name(0) if device_count > 0 else "No GPU"
         print(f"Running benchmark with: {device_name} (Device count: {device_count})")
-    except:
+    except Exception:
         print("Could not detect GPU information")
 
     results = []
