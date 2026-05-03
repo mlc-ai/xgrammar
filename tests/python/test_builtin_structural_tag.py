@@ -22,6 +22,7 @@ from xgrammar.builtin_structural_tag import (
     get_qwen_3_5_structural_tag,
     get_qwen_3_coder_structural_tag,
     get_qwen_3_structural_tag,
+    normalize_tool_choice,
 )
 from xgrammar.openai_tool_call_schema import BuiltinToolParam, FunctionToolParam
 from xgrammar.structural_tag import JSONSchemaFormat, StructuralTag, TagFormat
@@ -204,6 +205,16 @@ def test_unknown_format():
     assert "unknown_format" in str(exc_info.value)
 
 
+def test_unknown_format_is_checked_before_tool_inputs():
+    """Unknown model names are rejected before validating tool inputs."""
+
+    with pytest.raises(ValueError) as exc_info:
+        get_model_structural_tag("unknown_format", tools="not_a_list")
+
+    assert "Unknown format type" in str(exc_info.value)
+    assert "unknown_format" in str(exc_info.value)
+
+
 # ---------- Test: input validation errors ----------
 
 # (format_type, input_dict, substring that must appear in the error message)
@@ -314,6 +325,61 @@ def test_public_api_validation_errors(kwargs: Dict[str, Any], error_substring: s
     with pytest.raises(ValueError) as exc_info:
         get_model_structural_tag("harmony", **kwargs)
     assert error_substring in str(exc_info.value)
+
+
+def test_normalize_tool_choice_named_function():
+    """normalize_tool_choice returns one forced function for named choices."""
+
+    function_tools, builtin_tools, simplified_tool_choice = normalize_tool_choice(
+        tools=make_tools(["get_weather", "get_time"]),
+        tool_choice={"type": "function", "function": {"name": "get_weather"}},
+    )
+
+    assert [tool.function.name for tool in function_tools] == ["get_weather"]
+    assert builtin_tools == []
+    assert simplified_tool_choice == "forced"
+
+
+def test_normalize_tool_choice_allowed_tools():
+    """normalize_tool_choice filters function and builtin tools for allowed_tools."""
+
+    function_tools, builtin_tools, simplified_tool_choice = normalize_tool_choice(
+        tools=[
+            *make_tools(["get_weather", "get_time"]),
+            {"type": "web_search_preview", "name": "browser.search", "parameters": SIMPLE_SCHEMA},
+            {"type": "code_interpreter", "name": "browser.open", "parameters": SIMPLE_SCHEMA},
+        ],
+        tool_choice={
+            "type": "allowed_tools",
+            "allowed_tools": {
+                "mode": "required",
+                "tools": [
+                    {"type": "function", "function": {"name": "get_weather"}},
+                    {"type": "web_search_preview"},
+                ],
+            },
+        },
+    )
+
+    assert [tool.function.name for tool in function_tools] == ["get_weather"]
+    assert [tool.name for tool in builtin_tools] == ["browser.search"]
+    assert simplified_tool_choice == "required"
+
+
+def test_normalize_tool_choice_none_clears_tools():
+    """normalize_tool_choice maps public none to text-only auto."""
+
+    function_tools, builtin_tools, simplified_tool_choice = normalize_tool_choice(
+        tools=[
+            *make_tools(["get_weather"]),
+            {"type": "web_search_preview", "name": "browser.search", "parameters": SIMPLE_SCHEMA},
+        ],
+        tool_choice="none",
+    )
+
+    assert function_tools == []
+    assert builtin_tools == []
+    assert simplified_tool_choice == "auto"
 
 
 def test_public_tool_shapes():

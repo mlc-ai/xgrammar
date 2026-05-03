@@ -16,7 +16,6 @@ from .structural_tag import (
     AnyTextFormat,
     ConstStringFormat,
     JSONSchemaFormat,
-    QwenXMLParameterFormat,
     RegexFormat,
     SequenceFormat,
     StructuralTag,
@@ -202,6 +201,123 @@ def get_model_structural_tag(
     ValueError
         If tool lists, tool choices, or required tool availability are invalid.
     """
+
+    func = _structural_tag_registry.get(model)
+    if func is None:
+        supported = list(_structural_tag_registry.keys())
+        raise ValueError(f"Unknown format type: {model}, supported types: {supported}")
+
+    function_tools, builtin_tools, simplified_tool_choice = normalize_tool_choice(
+        tools, tool_choice
+    )
+
+    return func(function_tools, builtin_tools, simplified_tool_choice, reasoning)
+
+
+# ---------- Helper Functions And Constants ----------
+
+
+SimplifiedToolChoice = Literal["auto", "required", "forced"]
+BuiltinStructuralTagFn = Callable[..., StructuralTag]
+_TOOL_ADAPTER = TypeAdapter(ToolParam)
+_TOOL_CHOICE_ADAPTER = TypeAdapter(ToolChoiceOptionParam)
+
+_structural_tag_registry: Dict[str, BuiltinStructuralTagFn] = {}
+
+
+def normalize_tool_choice(
+    tools: Optional[List[Union[ToolParam, dict]]] = None,
+    tool_choice: Union[ToolChoiceOptionParam, dict, None] = "auto",
+) -> Tuple[List[FunctionToolParam], List[BuiltinToolParam], SimplifiedToolChoice]:
+    r"""Normalize tools and tool choice for structural tag builders.
+
+    This helper exposes the model-independent part of
+    :func:`get_model_structural_tag`. It is intended for serving engines that
+    want to own their model-specific structural tag templates while reusing
+    OpenAI-style tool and tool-choice handling.
+
+    The return value is not a new public tool-calling protocol. It is a compact
+    prepared form for structural tag builder functions:
+
+    - ordinary function tools are returned as ``FunctionToolParam`` objects;
+    - builtin/server tools are returned as ``BuiltinToolParam`` objects;
+    - public tool-choice values are simplified to ``"auto"``, ``"required"``,
+      or ``"forced"``.
+
+    Parameters
+    ----------
+    tools : Optional[List[Union[ToolParam, dict]]]
+        Function and builtin tools available to the model. Function tools use
+        the OpenAI Chat Completions shape,
+        ``{"type": "function", "function": {...}}``. Builtin tools use
+        ``type`` plus optional ``name`` and ``parameters`` fields. ``None`` is
+        treated as an empty list.
+    tool_choice : Union[ToolChoiceOptionParam, dict, None]
+        Controls whether the model may or must call tools. This accepts the
+        same values as :func:`get_model_structural_tag`:
+
+        - ``"auto"`` keeps all available tools and lets the builder allow text
+          or tool calls.
+        - ``None`` is treated as ``"auto"``.
+        - ``"none"`` clears all tools and returns simplified choice
+          ``"auto"``. Builders already interpret auto with no tools as
+          text-only.
+        - ``"required"`` keeps all available tools and requires at least one
+          function or builtin tool to remain available.
+        - ``{"type": "function", "function": {"name": ...}}`` filters to the
+          named function tool and returns simplified choice ``"forced"``.
+        - ``{"type": <builtin_type>}`` filters to exactly one builtin tool
+          whose ``type`` matches and returns simplified choice ``"forced"``.
+        - ``{"type": "allowed_tools", "allowed_tools": ...}`` filters to the
+          referenced tools and returns the nested allowed-tools ``mode`` as the
+          simplified choice.
+
+    Returns
+    -------
+    Tuple[List[FunctionToolParam], List[BuiltinToolParam], SimplifiedToolChoice]
+        A tuple of ``(function_tools, builtin_tools, simplified_tool_choice)``
+        ready to pass to a model-specific structural tag builder.
+
+    Raises
+    ------
+    ValueError
+        If ``tools`` is not a list, a referenced tool is missing, a builtin
+        tool choice does not match exactly one builtin tool, ``required`` leaves
+        no available tools, or ``forced`` does not resolve to exactly one tool.
+
+    Examples
+    --------
+    Build tool-choice handling with an external model-specific builder:
+
+    .. code-block:: python
+
+        function_tools, builtin_tools, tool_choice = normalize_tool_choice(
+            tools=[
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"location": {"type": "string"}},
+                        },
+                    },
+                }
+            ],
+            tool_choice={
+                "type": "function",
+                "function": {"name": "get_weather"},
+            },
+        )
+
+        structural_tag = build_my_model_structural_tag(
+            function_tools,
+            builtin_tools,
+            tool_choice,
+            reasoning=True,
+        )
+    """
+
     if tools is None:
         tools = []
     if not isinstance(tools, list):
@@ -263,22 +379,7 @@ def get_model_structural_tag(
     if simplified_tool_choice == "forced" and len(function_tools) + len(builtin_tools) != 1:
         raise ValueError("Forced tool choice must resolve to exactly one tool.")
 
-    func = _structural_tag_registry.get(model)
-    if func is None:
-        supported = list(_structural_tag_registry.keys())
-        raise ValueError(f"Unknown format type: {model}, supported types: {supported}")
-    return func(function_tools, builtin_tools, simplified_tool_choice, reasoning)
-
-
-# ---------- Helper Functions And Constants ----------
-
-
-SimplifiedToolChoice = Literal["auto", "required", "forced"]
-BuiltinStructuralTagFn = Callable[..., StructuralTag]
-_TOOL_ADAPTER = TypeAdapter(ToolParam)
-_TOOL_CHOICE_ADAPTER = TypeAdapter(ToolChoiceOptionParam)
-
-_structural_tag_registry: Dict[str, BuiltinStructuralTagFn] = {}
+    return function_tools, builtin_tools, simplified_tool_choice
 
 
 def _get_function_parameters(
@@ -777,17 +878,18 @@ def get_deepseek_v3_1_structural_tag(
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
+@register_model_structural_tag("qwen_3_5")
 @register_model_structural_tag("qwen_3_coder")
-def get_qwen_3_coder_structural_tag(
+def get_qwen_3_5_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
-    """Get Qwen3-Coder style structural tag format.
+    """Get Qwen XML tool-call structural tag format.
 
-    Corresponding model key: ``"qwen_3_coder"``.
+    Corresponding model keys: ``"qwen_3_5"`` and ``"qwen_3_coder"``.
 
     Reference: https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/blob/main/chat_template.jinja
 
@@ -796,106 +898,20 @@ def get_qwen_3_coder_structural_tag(
 
     - ``tools``: a list of function tools. Each tool should have a ``function``
       object containing ``name`` and ``parameters`` fields.
-    - ``reasoning``: ignored because this format has no reasoning part.
+    - ``reasoning``: whether to add the ``</think>`` reasoning prefix before
+      the tool/text suffix.
 
     Supported models:
 
+    - Qwen3.5
+    - Qwen3.6
     - Qwen3-Coder
     - Qwen3-Coder-Next
 
     Returns
     -------
     StructuralTag
-        A structural tag for function calling format.
-        This format is used by Qwen3-Coder and other models that follow the same style.
-    """
-    TOOL_CALL_BEGIN_PREFIX = "<tool_call>\n<function="
-    TOOL_CALL_BEGIN_SUFFIX = ">\n"
-    TOOL_CALL_END = "\n</function>\n</tool_call>"
-    TOOL_CALL_TRIGGER = "<tool_call>\n<function="
-    THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
-    tools = tools or []
-    builtin_tools = builtin_tools or []
-    if tool_choice == "auto":
-        tags = []
-        for tool in tools:
-            function = tool.function
-            parameters = _get_function_parameters(function)
-            name = function.name
-            tags.append(
-                TagFormat(
-                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
-                    content=QwenXMLParameterFormat(json_schema=parameters),
-                    end=TOOL_CALL_END,
-                )
-            )
-
-        if len(tags) > 0:
-            suffix_tag = TriggeredTagsFormat(
-                triggers=[TOOL_CALL_TRIGGER], tags=tags, excludes=THINK_EXCLUDE_TOKENS
-            )
-        else:
-            suffix_tag = AnyTextFormat(excludes=THINK_EXCLUDE_TOKENS)
-
-    elif tool_choice == "forced":
-        if not tools:
-            raise ValueError("Forced tool choice must resolve to exactly one tool.")
-        function = tools[0].function
-        suffix_tag = TagFormat(
-            begin=f"{TOOL_CALL_BEGIN_PREFIX}{function.name}{TOOL_CALL_BEGIN_SUFFIX}",
-            content=QwenXMLParameterFormat(json_schema=_get_function_parameters(function)),
-            end=TOOL_CALL_END,
-        )
-
-    elif tool_choice == "required":
-        tags = []
-        for tool in tools:
-            function = tool.function
-            parameters = _get_function_parameters(function)
-            name = function.name
-            tags.append(
-                TagFormat(
-                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
-                    content=QwenXMLParameterFormat(json_schema=parameters),
-                    end=TOOL_CALL_END,
-                )
-            )
-
-        assert len(tags) > 0
-        suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
-
-    return StructuralTag(format=suffix_tag)
-
-
-@register_model_structural_tag("qwen_3_5")
-def get_qwen_3_5_structural_tag(
-    tools: Optional[List[FunctionToolParam]] = None,
-    builtin_tools: Optional[List[BuiltinToolParam]] = None,
-    tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
-    **kwargs: Any,
-) -> StructuralTag:
-    """Get Qwen XML tool-call structural tag format with reasoning.
-
-    Corresponding model key: ``"qwen_3_5"``.
-
-    Parameters are normalized by :func:`get_model_structural_tag` before this
-    function is called:
-
-    - ``tools``: a list of function tools. Each tool should have a ``function``
-      object containing ``name`` and ``parameters`` fields.
-    - ``reasoning``: whether to enable reasoning mode. If ``False``, constrain
-      the empty reasoning part.
-
-    Supported models:
-
-    - Qwen3.5
-    - Qwen3.6
-
-    Returns
-    -------
-    StructuralTag
-        A structural tag for Qwen XML function calling format with thinking.
+        A structural tag for Qwen XML function calling format.
     """
     TOOL_CALL_BEGIN_PREFIX = "<tool_call>\n<function="
     TOOL_CALL_BEGIN_SUFFIX = ">\n"
@@ -915,7 +931,7 @@ def get_qwen_3_5_structural_tag(
             tags.append(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
-                    content=QwenXMLParameterFormat(json_schema=parameters),
+                    content=JSONSchemaFormat(json_schema=parameters, style="qwen_xml"),
                     end=TOOL_CALL_END,
                 )
             )
@@ -933,7 +949,9 @@ def get_qwen_3_5_structural_tag(
         function = tools[0].function
         suffix_tag = TagFormat(
             begin=f"{TOOL_CALL_BEGIN_PREFIX}{function.name}{TOOL_CALL_BEGIN_SUFFIX}",
-            content=QwenXMLParameterFormat(json_schema=_get_function_parameters(function)),
+            content=JSONSchemaFormat(
+                json_schema=_get_function_parameters(function), style="qwen_xml"
+            ),
             end=TOOL_CALL_END,
         )
 
@@ -946,7 +964,7 @@ def get_qwen_3_5_structural_tag(
             tags.append(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
-                    content=QwenXMLParameterFormat(json_schema=parameters),
+                    content=JSONSchemaFormat(json_schema=parameters, style="qwen_xml"),
                     end=TOOL_CALL_END,
                 )
             )
@@ -964,6 +982,10 @@ def get_qwen_3_5_structural_tag(
         ]
     )
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+
+
+get_qwen_3_coder_structural_tag = get_qwen_3_5_structural_tag
+"""Deprecated alias for :func:`get_qwen_3_5_structural_tag`."""
 
 
 @register_model_structural_tag("qwen_3")

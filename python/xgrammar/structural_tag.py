@@ -38,38 +38,6 @@ class JSONSchemaFormat(BaseModel):
     \"glm_xml\" (GLM XML: <arg_key>key</arg_key><arg_value>value</arg_value>)."""
 
 
-class QwenXMLParameterFormat(BaseModel):
-    """A format that matches Qwen XML function calls.
-
-    Examples
-    --------
-    .. code-block:: python
-
-        structural_tag = QwenXMLParameterFormat(
-            json_schema={
-                "type": "qwen_xml_parameter",
-                "json_schema": {
-                    "type": "object",
-                    "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
-                    "required": ["name", "age"],
-                },
-            }
-        )
-
-    The above structural tag can accept the following outputs::
-
-        <parameter=name>Bob</parameter><parameter=age>100</parameter>
-        <parameter=name>"Bob&lt;"</parameter><parameter=age>100</parameter>
-
-    """
-
-    type: Literal["qwen_xml_parameter"] = "qwen_xml_parameter"
-    """The type of the format."""
-
-    json_schema: Union[bool, Dict[str, Any]]
-    """The JSON schema for the parameters of the function calling."""
-
-
 class AnyTextFormat(BaseModel):
     """A format that matches any text."""
 
@@ -411,6 +379,43 @@ class TokenDispatchFormat(BaseModel):
     first dispatched format."""
     exclude_tokens: List[Union[int, str]] = []
     """List of tokens that must not appear in the free-form text."""
+
+
+# ---------- Deprecated Formats ----------
+
+
+class QwenXMLParameterFormat(BaseModel):
+    """Deprecated. Use :class:`JSONSchemaFormat` with ``style="qwen_xml"`` instead.
+
+    This format remains available so existing serialized structural tags with
+    ``{"type": "qwen_xml_parameter"}`` can still be loaded.
+
+    Examples
+    --------
+    Use the replacement format for new structural tags:
+
+    .. code-block:: python
+
+        structural_tag = JSONSchemaFormat(
+            json_schema={
+                "type": "object",
+                "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+                "required": ["name", "age"],
+            },
+            style="qwen_xml",
+        )
+
+    The above structural tag can accept the following outputs::
+
+        <parameter=name>Bob</parameter><parameter=age>100</parameter>
+        <parameter=name>"Bob&lt;"</parameter><parameter=age>100</parameter>
+    """
+
+    type: Literal["qwen_xml_parameter"] = "qwen_xml_parameter"
+    """The type of the deprecated format."""
+
+    json_schema: Union[bool, Dict[str, Any]]
+    """The JSON schema for the parameters of the function calling."""
 
 
 # ---------- Discriminated Union ----------
