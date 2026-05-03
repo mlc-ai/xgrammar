@@ -96,7 +96,7 @@ def to_json(value: Any) -> str:
     """Serialize a value to JSON string."""
     try:
         return json.dumps(value, ensure_ascii=False)
-    except:
+    except Exception:
         return json.dumps(value, ensure_ascii=True)
 
 
@@ -141,7 +141,7 @@ def encode_arguments_to_dsml(tool_call: Dict[str, str]) -> str:
 
     try:
         arguments = json.loads(tool_call["arguments"])
-    except Exception as err:
+    except Exception:
         arguments = {"arguments": tool_call["arguments"]}
 
     for k, v in arguments.items():
@@ -180,7 +180,7 @@ def decode_dsml_to_arguments(
         + ", ".join([_decode_value(k, v, string=is_str) for k, (v, is_str) in tool_args.items()])
         + "}"
     )
-    return dict(name=tool_name, arguments=tool_args_json)
+    return {"name": tool_name, "arguments": tool_args_json}
 
 
 def render_tools(tools: List[Dict[str, Union[str, Dict[str, Any]]]]) -> str:

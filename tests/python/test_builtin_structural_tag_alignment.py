@@ -319,6 +319,7 @@ def case_id(case):
 TEST_CASES = generate_test_cases()
 
 
+@pytest.mark.hf_token_required
 @pytest.mark.parametrize("case", TEST_CASES, ids=[case_id(c) for c in TEST_CASES])
 def test_reasoning_stag(case):
     (
