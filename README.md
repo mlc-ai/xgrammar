@@ -72,6 +72,7 @@ Please visit our [documentation](https://xgrammar.mlc.ai/docs/) to get started w
 XGrammar has been widely adopted in industry, open-source projects, and academia. Our collaborators include:
 
 <div align="center">
+
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/xai.png" height=50/>](https://x.ai/)
 &emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/deepseek.png" height=50/>](https://www.deepseek.com/en/)
