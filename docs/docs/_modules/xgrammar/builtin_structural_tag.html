@@ -695,7 +695,6 @@ window.runMermaid = runMermaid;</script>
     <span class="n">AnyTextFormat</span><span class="p">,</span>
     <span class="n">ConstStringFormat</span><span class="p">,</span>
     <span class="n">JSONSchemaFormat</span><span class="p">,</span>
-    <span class="n">QwenXMLParameterFormat</span><span class="p">,</span>
     <span class="n">RegexFormat</span><span class="p">,</span>
     <span class="n">SequenceFormat</span><span class="p">,</span>
     <span class="n">StructuralTag</span><span class="p">,</span>
@@ -881,6 +880,123 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">    ValueError</span>
 <span class="sd">        If tool lists, tool choices, or required tool availability are invalid.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">func</span> <span class="o">=</span> <span class="n">_structural_tag_registry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">func</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">supported</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">_structural_tag_registry</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown format type: </span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2">, supported types: </span><span class="si">{</span><span class="n">supported</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="n">function_tools</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="p">,</span> <span class="n">simplified_tool_choice</span> <span class="o">=</span> <span class="n">normalize_tool_choice</span><span class="p">(</span>
+        <span class="n">tools</span><span class="p">,</span> <span class="n">tool_choice</span>
+    <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="n">function_tools</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="p">,</span> <span class="n">simplified_tool_choice</span><span class="p">,</span> <span class="n">reasoning</span><span class="p">)</span></div>
+
+
+<span class="c1"># ---------- Helper Functions And Constants ----------</span>
+
+
+<span class="n">SimplifiedToolChoice</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span>
+<span class="n">BuiltinStructuralTagFn</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">StructuralTag</span><span class="p">]</span>
+<span class="n">_TOOL_ADAPTER</span> <span class="o">=</span> <span class="n">TypeAdapter</span><span class="p">(</span><span class="n">ToolParam</span><span class="p">)</span>
+<span class="n">_TOOL_CHOICE_ADAPTER</span> <span class="o">=</span> <span class="n">TypeAdapter</span><span class="p">(</span><span class="n">ToolChoiceOptionParam</span><span class="p">)</span>
+
+<span class="n">_structural_tag_registry</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">BuiltinStructuralTagFn</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+
+
+<div class="viewcode-block" id="normalize_tool_choice"><a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.normalize_tool_choice">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">normalize_tool_choice</span><span class="p">(</span>
+    <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">ToolParam</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">ToolChoiceOptionParam</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">],</span> <span class="n">SimplifiedToolChoice</span><span class="p">]:</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Normalize tools and tool choice for structural tag builders.</span>
+
+<span class="sd">    This helper exposes the model-independent part of</span>
+<span class="sd">    :func:`get_model_structural_tag`. It is intended for serving engines that</span>
+<span class="sd">    want to own their model-specific structural tag templates while reusing</span>
+<span class="sd">    OpenAI-style tool and tool-choice handling.</span>
+
+<span class="sd">    The return value is not a new public tool-calling protocol. It is a compact</span>
+<span class="sd">    prepared form for structural tag builder functions:</span>
+
+<span class="sd">    - ordinary function tools are returned as ``FunctionToolParam`` objects;</span>
+<span class="sd">    - builtin/server tools are returned as ``BuiltinToolParam`` objects;</span>
+<span class="sd">    - public tool-choice values are simplified to ``&quot;auto&quot;``, ``&quot;required&quot;``,</span>
+<span class="sd">      or ``&quot;forced&quot;``.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    tools : Optional[List[Union[ToolParam, dict]]]</span>
+<span class="sd">        Function and builtin tools available to the model. Function tools use</span>
+<span class="sd">        the OpenAI Chat Completions shape,</span>
+<span class="sd">        ``{&quot;type&quot;: &quot;function&quot;, &quot;function&quot;: {...}}``. Builtin tools use</span>
+<span class="sd">        ``type`` plus optional ``name`` and ``parameters`` fields. ``None`` is</span>
+<span class="sd">        treated as an empty list.</span>
+<span class="sd">    tool_choice : Union[ToolChoiceOptionParam, dict, None]</span>
+<span class="sd">        Controls whether the model may or must call tools. This accepts the</span>
+<span class="sd">        same values as :func:`get_model_structural_tag`:</span>
+
+<span class="sd">        - ``&quot;auto&quot;`` keeps all available tools and lets the builder allow text</span>
+<span class="sd">          or tool calls.</span>
+<span class="sd">        - ``None`` is treated as ``&quot;auto&quot;``.</span>
+<span class="sd">        - ``&quot;none&quot;`` clears all tools and returns simplified choice</span>
+<span class="sd">          ``&quot;auto&quot;``. Builders already interpret auto with no tools as</span>
+<span class="sd">          text-only.</span>
+<span class="sd">        - ``&quot;required&quot;`` keeps all available tools and requires at least one</span>
+<span class="sd">          function or builtin tool to remain available.</span>
+<span class="sd">        - ``{&quot;type&quot;: &quot;function&quot;, &quot;function&quot;: {&quot;name&quot;: ...}}`` filters to the</span>
+<span class="sd">          named function tool and returns simplified choice ``&quot;forced&quot;``.</span>
+<span class="sd">        - ``{&quot;type&quot;: &lt;builtin_type&gt;}`` filters to exactly one builtin tool</span>
+<span class="sd">          whose ``type`` matches and returns simplified choice ``&quot;forced&quot;``.</span>
+<span class="sd">        - ``{&quot;type&quot;: &quot;allowed_tools&quot;, &quot;allowed_tools&quot;: ...}`` filters to the</span>
+<span class="sd">          referenced tools and returns the nested allowed-tools ``mode`` as the</span>
+<span class="sd">          simplified choice.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple[List[FunctionToolParam], List[BuiltinToolParam], SimplifiedToolChoice]</span>
+<span class="sd">        A tuple of ``(function_tools, builtin_tools, simplified_tool_choice)``</span>
+<span class="sd">        ready to pass to a model-specific structural tag builder.</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError</span>
+<span class="sd">        If ``tools`` is not a list, a referenced tool is missing, a builtin</span>
+<span class="sd">        tool choice does not match exactly one builtin tool, ``required`` leaves</span>
+<span class="sd">        no available tools, or ``forced`` does not resolve to exactly one tool.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    Build tool-choice handling with an external model-specific builder:</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        function_tools, builtin_tools, tool_choice = normalize_tool_choice(</span>
+<span class="sd">            tools=[</span>
+<span class="sd">                {</span>
+<span class="sd">                    &quot;type&quot;: &quot;function&quot;,</span>
+<span class="sd">                    &quot;function&quot;: {</span>
+<span class="sd">                        &quot;name&quot;: &quot;get_weather&quot;,</span>
+<span class="sd">                        &quot;parameters&quot;: {</span>
+<span class="sd">                            &quot;type&quot;: &quot;object&quot;,</span>
+<span class="sd">                            &quot;properties&quot;: {&quot;location&quot;: {&quot;type&quot;: &quot;string&quot;}},</span>
+<span class="sd">                        },</span>
+<span class="sd">                    },</span>
+<span class="sd">                }</span>
+<span class="sd">            ],</span>
+<span class="sd">            tool_choice={</span>
+<span class="sd">                &quot;type&quot;: &quot;function&quot;,</span>
+<span class="sd">                &quot;function&quot;: {&quot;name&quot;: &quot;get_weather&quot;},</span>
+<span class="sd">            },</span>
+<span class="sd">        )</span>
+
+<span class="sd">        structural_tag = build_my_model_structural_tag(</span>
+<span class="sd">            function_tools,</span>
+<span class="sd">            builtin_tools,</span>
+<span class="sd">            tool_choice,</span>
+<span class="sd">            reasoning=True,</span>
+<span class="sd">        )</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
     <span class="k">if</span> <span class="n">tools</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">tools</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tools</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
@@ -942,22 +1058,7 @@ window.runMermaid = runMermaid;</script>
     <span class="k">if</span> <span class="n">simplified_tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">function_tools</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">builtin_tools</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Forced tool choice must resolve to exactly one tool.&quot;</span><span class="p">)</span>
 
-    <span class="n">func</span> <span class="o">=</span> <span class="n">_structural_tag_registry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">func</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">supported</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">_structural_tag_registry</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unknown format type: </span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2">, supported types: </span><span class="si">{</span><span class="n">supported</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="n">function_tools</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="p">,</span> <span class="n">simplified_tool_choice</span><span class="p">,</span> <span class="n">reasoning</span><span class="p">)</span></div>
-
-
-<span class="c1"># ---------- Helper Functions And Constants ----------</span>
-
-
-<span class="n">SimplifiedToolChoice</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span>
-<span class="n">BuiltinStructuralTagFn</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">StructuralTag</span><span class="p">]</span>
-<span class="n">_TOOL_ADAPTER</span> <span class="o">=</span> <span class="n">TypeAdapter</span><span class="p">(</span><span class="n">ToolParam</span><span class="p">)</span>
-<span class="n">_TOOL_CHOICE_ADAPTER</span> <span class="o">=</span> <span class="n">TypeAdapter</span><span class="p">(</span><span class="n">ToolChoiceOptionParam</span><span class="p">)</span>
-
-<span class="n">_structural_tag_registry</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">BuiltinStructuralTagFn</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">return</span> <span class="n">function_tools</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="p">,</span> <span class="n">simplified_tool_choice</span></div>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_function_parameters</span><span class="p">(</span>
@@ -1462,17 +1563,18 @@ window.runMermaid = runMermaid;</script>
     <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
 
 
-<div class="viewcode-block" id="get_qwen_3_coder_structural_tag"><a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_qwen_3_coder_structural_tag">[docs]</a><span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;qwen_3_coder&quot;</span><span class="p">)</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_qwen_3_coder_structural_tag</span><span class="p">(</span>
+<div class="viewcode-block" id="get_qwen_3_5_structural_tag"><a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag">[docs]</a><span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;qwen_3_5&quot;</span><span class="p">)</span>
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;qwen_3_coder&quot;</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_qwen_3_5_structural_tag</span><span class="p">(</span>
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Qwen3-Coder style structural tag format.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Qwen XML tool-call structural tag format.</span>
 
-<span class="sd">    Corresponding model key: ``&quot;qwen_3_coder&quot;``.</span>
+<span class="sd">    Corresponding model keys: ``&quot;qwen_3_5&quot;`` and ``&quot;qwen_3_coder&quot;``.</span>
 
 <span class="sd">    Reference: https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/blob/main/chat_template.jinja</span>
 
@@ -1481,106 +1583,20 @@ window.runMermaid = runMermaid;</script>
 
 <span class="sd">    - ``tools``: a list of function tools. Each tool should have a ``function``</span>
 <span class="sd">      object containing ``name`` and ``parameters`` fields.</span>
-<span class="sd">    - ``reasoning``: ignored because this format has no reasoning part.</span>
+<span class="sd">    - ``reasoning``: whether to add the ``&lt;/think&gt;`` reasoning prefix before</span>
+<span class="sd">      the tool/text suffix.</span>
 
 <span class="sd">    Supported models:</span>
 
+<span class="sd">    - Qwen3.5</span>
+<span class="sd">    - Qwen3.6</span>
 <span class="sd">    - Qwen3-Coder</span>
 <span class="sd">    - Qwen3-Coder-Next</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    StructuralTag</span>
-<span class="sd">        A structural tag for function calling format.</span>
-<span class="sd">        This format is used by Qwen3-Coder and other models that follow the same style.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;&lt;tool_call&gt;</span><span class="se">\n</span><span class="s2">&lt;function=&quot;</span>
-    <span class="n">TOOL_CALL_BEGIN_SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;&gt;</span><span class="se">\n</span><span class="s2">&quot;</span>
-    <span class="n">TOOL_CALL_END</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&lt;/function&gt;</span><span class="se">\n</span><span class="s2">&lt;/tool_call&gt;&quot;</span>
-    <span class="n">TOOL_CALL_TRIGGER</span> <span class="o">=</span> <span class="s2">&quot;&lt;tool_call&gt;</span><span class="se">\n</span><span class="s2">&lt;function=&quot;</span>
-    <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&lt;think&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;/think&gt;&quot;</span><span class="p">]</span>
-    <span class="n">tools</span> <span class="o">=</span> <span class="n">tools</span> <span class="ow">or</span> <span class="p">[]</span>
-    <span class="n">builtin_tools</span> <span class="o">=</span> <span class="n">builtin_tools</span> <span class="ow">or</span> <span class="p">[]</span>
-    <span class="k">if</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
-        <span class="n">tags</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">:</span>
-            <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="o">.</span><span class="n">function</span>
-            <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
-            <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span>
-            <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                <span class="n">TagFormat</span><span class="p">(</span>
-                    <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_CALL_BEGIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
-                    <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
-                <span class="p">)</span>
-            <span class="p">)</span>
-
-        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
-                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span> <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span>
-            <span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
-
-    <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Forced tool choice must resolve to exactly one tool.&quot;</span><span class="p">)</span>
-        <span class="n">function</span> <span class="o">=</span> <span class="n">tools</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">function</span>
-        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
-            <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_CALL_BEGIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-            <span class="n">content</span><span class="o">=</span><span class="n">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)),</span>
-            <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
-        <span class="p">)</span>
-
-    <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;required&quot;</span><span class="p">:</span>
-        <span class="n">tags</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">:</span>
-            <span class="n">function</span> <span class="o">=</span> <span class="n">tool</span><span class="o">.</span><span class="n">function</span>
-            <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
-            <span class="n">name</span> <span class="o">=</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span>
-            <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                <span class="n">TagFormat</span><span class="p">(</span>
-                    <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_CALL_BEGIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
-                    <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
-                <span class="p">)</span>
-            <span class="p">)</span>
-
-        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
-        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span></div>
-
-
-<div class="viewcode-block" id="get_qwen_3_5_structural_tag"><a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag">[docs]</a><span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;qwen_3_5&quot;</span><span class="p">)</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">get_qwen_3_5_structural_tag</span><span class="p">(</span>
-    <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Qwen XML tool-call structural tag format with reasoning.</span>
-
-<span class="sd">    Corresponding model key: ``&quot;qwen_3_5&quot;``.</span>
-
-<span class="sd">    Parameters are normalized by :func:`get_model_structural_tag` before this</span>
-<span class="sd">    function is called:</span>
-
-<span class="sd">    - ``tools``: a list of function tools. Each tool should have a ``function``</span>
-<span class="sd">      object containing ``name`` and ``parameters`` fields.</span>
-<span class="sd">    - ``reasoning``: whether to enable reasoning mode. If ``False``, constrain</span>
-<span class="sd">      the empty reasoning part.</span>
-
-<span class="sd">    Supported models:</span>
-
-<span class="sd">    - Qwen3.5</span>
-<span class="sd">    - Qwen3.6</span>
-
-<span class="sd">    Returns</span>
-<span class="sd">    -------</span>
-<span class="sd">    StructuralTag</span>
-<span class="sd">        A structural tag for Qwen XML function calling format with thinking.</span>
+<span class="sd">        A structural tag for Qwen XML function calling format.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;&lt;tool_call&gt;</span><span class="se">\n</span><span class="s2">&lt;function=&quot;</span>
     <span class="n">TOOL_CALL_BEGIN_SUFFIX</span> <span class="o">=</span> <span class="s2">&quot;&gt;</span><span class="se">\n</span><span class="s2">&quot;</span>
@@ -1600,7 +1616,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_CALL_BEGIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;qwen_xml&quot;</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1618,7 +1634,9 @@ window.runMermaid = runMermaid;</script>
         <span class="n">function</span> <span class="o">=</span> <span class="n">tools</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">function</span>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
             <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_CALL_BEGIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-            <span class="n">content</span><span class="o">=</span><span class="n">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)),</span>
+            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;qwen_xml&quot;</span>
+            <span class="p">),</span>
             <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
         <span class="p">)</span>
 
@@ -1631,7 +1649,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_CALL_BEGIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;qwen_xml&quot;</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1649,6 +1667,10 @@ window.runMermaid = runMermaid;</script>
         <span class="p">]</span>
     <span class="p">)</span>
     <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
+
+
+<span class="n">get_qwen_3_coder_structural_tag</span> <span class="o">=</span> <span class="n">get_qwen_3_5_structural_tag</span>
+<span class="sd">&quot;&quot;&quot;Deprecated alias for :func:`get_qwen_3_5_structural_tag`.&quot;&quot;&quot;</span>
 
 
 <div class="viewcode-block" id="get_qwen_3_structural_tag"><a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_qwen_3_structural_tag">[docs]</a><span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;qwen_3&quot;</span><span class="p">)</span>
