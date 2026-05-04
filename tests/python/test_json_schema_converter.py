@@ -2308,5 +2308,24 @@ def test_utf8_array_const():
     assert _is_grammar_accept_string(grammar, '["こんにちは","😊","你好","hello","\\n"]')
 
 
+def test_forward_slash_in_const():
+    # Regression: picojson used to serialize const/enum strings with "\/"
+    # for every "/", which the EBNF lexer then rejected as an invalid
+    # escape sequence (or, in lenient builds, only accepted the escaped
+    # literal form, never the plain JSON the model actually emits).
+    schema = {"const": "http://example.com/path"}
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '"http://example.com/path"')
+    assert not _is_grammar_accept_string(grammar, '"http:\\/\\/example.com\\/path"')
+
+
+def test_forward_slash_in_enum():
+    schema = {"enum": ["a/b", "c/d/e"]}
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '"a/b"')
+    assert _is_grammar_accept_string(grammar, '"c/d/e"')
+    assert not _is_grammar_accept_string(grammar, '"a\\/b"')
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

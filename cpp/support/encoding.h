@@ -393,9 +393,9 @@ std::pair<TCodepoint, int32_t> ParseNextEscaped(
   // C escape characters
   static const std::unordered_map<char, TCodepoint> kEscapeToCodepoint = {
       // clang-format off
-      {'\'', '\''}, {'\"', '\"'}, {'?', '\?'}, {'\\', '\\'}, {'a', '\a'}, {'b', '\b'}, {'f', '\f'},
-      {'n', '\n'}, {'r', '\r'}, {'t', '\t'}, {'v', '\v'}, {'0', '\0'},
-      {'e', '\x1B'}  // clang-format on
+      {'\'', '\''}, {'\"', '\"'}, {'?', '\?'}, {'\\', '\\'}, {'/', '/'}, {'a', '\a'},
+      {'b', '\b'}, {'f', '\f'}, {'n', '\n'}, {'r', '\r'}, {'t', '\t'}, {'v', '\v'},
+      {'0', '\0'}, {'e', '\x1B'}  // clang-format on
   };
   if (data[0] != '\\') {
     return {CharHandlingError::kInvalidEscape, 0};
