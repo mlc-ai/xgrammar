@@ -245,7 +245,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   test_str = "abc";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   fsm_wse = fsm_wse.SimplifyEpsilon();
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
+  fsm_wse = fsm_wse.MergeEquivalentStates();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
@@ -255,7 +255,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   test_str = "acd";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   fsm_wse = fsm_wse.SimplifyEpsilon();
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
+  fsm_wse = fsm_wse.MergeEquivalentStates();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
@@ -400,7 +400,7 @@ TEST(XGrammarFSMTest, EfficiencyTest) {
   std::cout << "Time taken to simplify epsilon: " << duration.count() << " ms" << std::endl;
   std::cout << "After SimplifyEpsilon Node Numbers:" << fsm_wse.GetFsm().NumStates() << std::endl;
   time_start = std::chrono::high_resolution_clock::now();
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
+  fsm_wse = fsm_wse.MergeEquivalentStates();
   time_end = std::chrono::high_resolution_clock::now();
   duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start);
   std::cout << "Time taken to simplify transition: " << duration.count() << " ms" << std::endl;
@@ -481,7 +481,7 @@ TEST(XGrammarFSMTest, MergingNodesTest) {
   fsm_wse.GetFsm().AddEdge(6, 8, 'd', 'd');
   fsm_wse.GetFsm().AddEdge(7, 9, 'e', 'e');
   fsm_wse.GetFsm().AddEdge(8, 9, 'e', 'e');
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
+  fsm_wse = fsm_wse.MergeEquivalentStates();
   std::string expected_fsm = R"(FSM(num_states=5, start=3, end=[4], edges=[
 0: ['d'->2]
 1: ['b'->0, 'c'->0]
@@ -513,7 +513,7 @@ TEST(XGrammarFSMTest, MergeEquivalentSuccessorsNoCrossRuleChaining) {
   fsm_wse.GetFsm().AddEdge(4, 6, 'm', 'm');
   fsm_wse.GetFsm().AddEdge(5, 6, 'n', 'n');
 
-  auto merged = fsm_wse.MergeEquivalentSuccessors();
+  auto merged = fsm_wse.MergeEquivalentStates();
 
   // Still accepts original strings.
   EXPECT_TRUE(merged.AcceptString("xam"));

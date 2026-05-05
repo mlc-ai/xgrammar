@@ -1303,7 +1303,7 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   return RebuildWithMapping(new_to_old, cnt);
 }
 
-FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_states) const {
+FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states) const {
   if (max_result_num_states < NumStates()) {
     return *this;
   }
