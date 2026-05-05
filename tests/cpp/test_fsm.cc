@@ -493,6 +493,36 @@ TEST(XGrammarFSMTest, MergingNodesTest) {
   EXPECT_EQ(fsm_wse.GetFsm().NumStates(), 5);
 }
 
+TEST(XGrammarFSMTest, MergeEquivalentSuccessorsNoCrossRuleChaining) {
+  FSMWithStartEnd fsm_wse;
+  for (int i = 0; i < 7; ++i) {
+    fsm_wse.AddState();
+  }
+  fsm_wse.SetStartState(0);
+  fsm_wse.AddEndState(6);
+
+  // 2 and 3 are equivalent successors of 0 under 'x' (Case 1).
+  fsm_wse.GetFsm().AddEdge(0, 2, 'x', 'x');
+  fsm_wse.GetFsm().AddEdge(0, 3, 'x', 'x');
+  // 1 is another predecessor of 4 under 'a' (Case 2 candidate with 2).
+  fsm_wse.GetFsm().AddEdge(0, 1, 'y', 'y');
+
+  fsm_wse.GetFsm().AddEdge(1, 4, 'a', 'a');
+  fsm_wse.GetFsm().AddEdge(2, 4, 'a', 'a');
+  fsm_wse.GetFsm().AddEdge(3, 5, 'b', 'b');
+  fsm_wse.GetFsm().AddEdge(4, 6, 'm', 'm');
+  fsm_wse.GetFsm().AddEdge(5, 6, 'n', 'n');
+
+  auto merged = fsm_wse.MergeEquivalentSuccessors();
+
+  // Still accepts original strings.
+  EXPECT_TRUE(merged.AcceptString("xam"));
+  EXPECT_TRUE(merged.AcceptString("xbn"));
+  EXPECT_TRUE(merged.AcceptString("yam"));
+  // Should not over-merge and introduce this path.
+  EXPECT_FALSE(merged.AcceptString("ybn"));
+}
+
 TEST(XGrammarFSMTest, EpsilonSimplificationTest) {
   FSMWithStartEnd fsm_wse;
   for (int i = 0; i < 10; i++) {
