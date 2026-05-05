@@ -493,7 +493,7 @@ TEST(XGrammarFSMTest, MergingNodesTest) {
   EXPECT_EQ(fsm_wse.GetFsm().NumStates(), 5);
 }
 
-TEST(XGrammarFSMTest, MergeEquivalentSuccessorsNoCrossRuleChaining) {
+TEST(XGrammarFSMTest, MergeEquivalentStatesNoCrossRuleChaining) {
   FSMWithStartEnd fsm_wse;
   for (int i = 0; i < 7; ++i) {
     fsm_wse.AddState();
