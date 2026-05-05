@@ -16,6 +16,7 @@
 </div>
 
 ## News
+- [2026/5] XGrammar-2 has been released! Check out our [blog](https://blog.mlc.ai/2026/05/04/xgrammar-2-fast-customizable-structured-generation) for more information.
 - [2025/12] XGrammar has been officially integrated into [Mirai](https://github.com/trymirai/uzu)
 - [2025/09] XGrammar has been officially integrated into [OpenVINO GenAI](https://github.com/openvinotoolkit/openvino.genai)
 - [2025/02] XGrammar has been officially integrated into [Modular's MAX](https://docs.modular.com/max/serve/structured-output)
