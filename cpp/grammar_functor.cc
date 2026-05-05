@@ -1806,7 +1806,7 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   // Now, we transform {lower, upper} into {max{threshold, lower}, upper}.
   // Case 2.2 upper is unbounded. We will transform it into {lower} {0, inf}.
   if (upper == -1) {
-    const auto& rule_expr = base_grammar_->GetGrammarExpr(grammar_expr_id);
+    const auto& rule_expr = builder_->GetGrammarExpr(grammar_expr_id);
     if (rule_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass) {
       std::vector<GrammarBuilder::CharacterClassElement> character_ranges;
       bool is_negative = rule_expr[0];
