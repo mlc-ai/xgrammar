@@ -13,13 +13,19 @@ The mission of this project is to bring flexible zero-overhead structure generat
 
 .. toctree::
    :maxdepth: 1
+   :caption: Structural Tag
+
+   structural_tag/structural_tag_api
+   structural_tag/tool_calling_and_reasoning
+   structural_tag/advanced_usage
+
+.. toctree::
+   :maxdepth: 1
    :caption: Tutorials
 
    tutorials/constrained_decoding
    tutorials/workflow_of_xgrammar
    tutorials/advanced_topics
-   tutorials/structural_tag
-   tutorials/advanced_structural_tag
    tutorials/engine_integration
    tutorials/json_generation
    tutorials/ebnf_guided_generation

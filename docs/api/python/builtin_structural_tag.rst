@@ -4,10 +4,31 @@ Builtin Structural Tag
 .. currentmodule:: xgrammar.builtin_structural_tag
 
 This page contains the API reference for the structural tag template function. For its usage, see
-:doc:`Builtin Structural Tag Usage <../../tutorials/advanced_structural_tag>`.
+:doc:`Tool Calling and Reasoning <../../structural_tag/tool_calling_and_reasoning>`.
 
-.. autofunction::  get_builtin_structural_tag_supported_models
+Global Functions
+----------------
 
-.. autofunction::  get_builtin_structural_tag
+The main public entry points are:
 
-.. autodata:: BuiltinSupportedModels
+.. autosummary::
+
+   get_model_structural_tag
+   normalize_tool_choice
+   register_model_structural_tag
+
+.. data:: get_builtin_structural_tag
+   :noindex:
+
+   Deprecated alias for :func:`get_model_structural_tag`.
+
+All APIs
+--------
+
+The remaining model-specific structural tag builders are generated from
+``xgrammar.builtin_structural_tag`` automatically.
+
+.. automodule:: xgrammar.builtin_structural_tag
+   :members:
+   :undoc-members:
+   :autosummary:

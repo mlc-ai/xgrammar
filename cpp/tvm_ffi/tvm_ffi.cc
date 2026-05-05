@@ -640,6 +640,27 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           }
       )
       .def(
+          "traverse_draft_tree",
+          [](GrammarMatcherObj* o,
+             ffi::AnyView retrieve_next_token,
+             ffi::AnyView retrieve_next_sibling,
+             ffi::AnyView draft_tokens,
+             ffi::AnyView token_bitmask,
+             double time_threshold) {
+            DLTensor* retrieve_next_token_ptr = retrieve_next_token.cast<DLTensor*>();
+            DLTensor* retrieve_next_sibling_ptr = retrieve_next_sibling.cast<DLTensor*>();
+            DLTensor* draft_tokens_ptr = draft_tokens.cast<DLTensor*>();
+            DLTensor* token_bitmask_ptr = token_bitmask.cast<DLTensor*>();
+            return o->value.TraverseDraftTree(
+                retrieve_next_token_ptr,
+                retrieve_next_sibling_ptr,
+                draft_tokens_ptr,
+                token_bitmask_ptr,
+                time_threshold
+            );
+          }
+      )
+      .def(
           "find_jump_forward_string",
           [](GrammarMatcherObj* o) { return ffi::String(o->value.FindJumpForwardString()); }
       )
@@ -919,11 +940,10 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 time_threshold_opt == nullptr ? -1.0 : time_threshold_opt.cast<double>();
             GrammarMatcher& matcher =
                 const_cast<GrammarMatcher&>(matcher_ref.as<GrammarMatcherObj>()->value);
-            return TraverseDraftTree(
+            return matcher.TraverseDraftTree(
                 retrieve_next_token_ptr,
                 retrieve_next_sibling_ptr,
                 draft_tokens_ptr,
-                matcher,
                 bitmask_ptr,
                 time_threshold
             );

@@ -1,7 +1,9 @@
 from . import exception, load_binding, structural_tag, testing
 from .builtin_structural_tag import (
     get_builtin_structural_tag,
-    get_builtin_structural_tag_supported_models,
+    get_model_structural_tag,
+    normalize_tool_choice,
+    register_model_structural_tag,
 )
 from .compiler import CompiledGrammar, GrammarCompiler
 from .config import (
@@ -57,6 +59,8 @@ __all__ = [
     "StructuralTag",
     "TokenizerInfo",
     "VocabType",
+    "get_model_structural_tag",
+    "normalize_tool_choice",
+    "register_model_structural_tag",
     "get_builtin_structural_tag",
-    "get_builtin_structural_tag_supported_models",
 ]

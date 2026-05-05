@@ -342,6 +342,42 @@ class GrammarMatcher(XGRObject):
         """
         return self._handle.fill_next_token_bitmask(bitmask, index, debug_print)
 
+    def traverse_draft_tree(
+        self,
+        retrieve_next_token: torch.Tensor,
+        retrieve_next_sibling: torch.Tensor,
+        draft_tokens: torch.Tensor,
+        token_bitmask: torch.Tensor,
+        time_threshold: float = -1.0,
+    ) -> bool:
+        """Traverse a draft token tree and fill the token bitmask for each node.
+
+        Parameters
+        ----------
+        retrieve_next_token : torch.Tensor
+            1D int64 tensor where retrieve_next_token[i] gives the index of the child node
+            of node i, or -1 if no child exists.
+        retrieve_next_sibling : torch.Tensor
+            1D int64 tensor where retrieve_next_sibling[i] gives the index of the sibling node
+            of node i, or -1 if no sibling exists.
+        draft_tokens : torch.Tensor
+            1D int64 tensor of draft token ids at each node.
+        token_bitmask : torch.Tensor
+            2D int32 tensor (num_nodes x bitmask_size) to store the generated bitmasks.
+        time_threshold : float
+            Maximum allowed time in seconds for the traversal. If the traversal
+            exceeds this threshold, it returns False. A value <= 0 disables the timeout
+            (default: -1.0).
+
+        Returns
+        -------
+        completed : bool
+            True if the traversal completed successfully, False if it timed out.
+        """
+        return self._handle.traverse_draft_tree(
+            retrieve_next_token, retrieve_next_sibling, draft_tokens, token_bitmask, time_threshold
+        )
+
     def find_jump_forward_string(self) -> str:
         """Find the jump-forward string for jump-forward decoding. This is the longest string that
         certainly conforms with the current grammar from the current matcher state. This string

@@ -245,6 +245,19 @@ def test_unicode_escape():
     assert after == expected
 
 
+def test_forward_slash_escape_in_string_literal():
+    # Regression: the EBNF lexer used to reject "\/" in string literals
+    # with "Invalid escape sequence", because the C-style escape table did
+    # not include "/". JSON allows "\/" as an alias for "/", so xgrammar
+    # should accept it consistently.
+    before = r"""root ::= "a\/b"
+"""
+    expected = r"""root ::= (("a/b"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    assert str(grammar) == expected
+
+
 def test_complex_grammar():
     """Test a more complex grammar with multiple features."""
     before = """root ::= expr

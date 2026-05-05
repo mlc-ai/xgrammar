@@ -92,7 +92,7 @@ class LogitsProcessor(transformers.LogitsProcessor):
         else:
             for i in range(self.batch_size):
                 if not self.matchers[i].is_terminated():
-                    sampled_token = input_ids[i][-1]
+                    sampled_token = input_ids[i][-1].item()
                     assert self.matchers[i].accept_token(sampled_token)
 
         for i in range(self.batch_size):

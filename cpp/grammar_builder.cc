@@ -262,13 +262,15 @@ void GrammarBuilder::UpdateLookaheadAssertion(
 std::string GrammarBuilder::GetNewRuleName(const std::string& name_hint) {
   if (rule_name_to_id_.count(name_hint) == 0) {
     return name_hint;
-  } else {
-    int cnt = 1;
-    while (rule_name_to_id_.count(name_hint + "_" + std::to_string(cnt)) != 0) {
-      ++cnt;
-    }
-    return name_hint + "_" + std::to_string(cnt);
   }
+  int* cnt = &next_cnt_per_hint_[name_hint];
+  if (*cnt == 0) {
+    *cnt = 1;
+  }
+  while (rule_name_to_id_.count(name_hint + "_" + std::to_string(*cnt)) != 0) {
+    ++(*cnt);
+  }
+  return name_hint + "_" + std::to_string(*cnt);
 }
 
 int32_t GrammarBuilder::GetRuleId(const std::string& name) const {

@@ -16,6 +16,7 @@
 </div>
 
 ## News
+- [2026/5] XGrammar-2 has been released! Check out our [blog](https://blog.mlc.ai/2026/05/04/xgrammar-2-fast-customizable-structured-generation) for more information.
 - [2025/12] XGrammar has been officially integrated into [Mirai](https://github.com/trymirai/uzu)
 - [2025/09] XGrammar has been officially integrated into [OpenVINO GenAI](https://github.com/openvinotoolkit/openvino.genai)
 - [2025/02] XGrammar has been officially integrated into [Modular's MAX](https://docs.modular.com/max/serve/structured-output)
@@ -73,6 +74,10 @@ XGrammar has been widely adopted in industry, open-source projects, and academia
 
 <div align="center">
 
+[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/xai.png" height=50/>](https://x.ai/)
+&emsp;
+[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/deepseek.png" height=50/>](https://www.deepseek.com/en/)
+&emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/nvidia.svg" height=50/>](https://github.com/NVIDIA/TensorRT-LLM)
 &emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/databricks.svg" height=50/>](https://www.databricks.com/)
@@ -81,9 +86,7 @@ XGrammar has been widely adopted in industry, open-source projects, and academia
 &emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/google.svg" height=50/>](https://about.google/)
 &emsp;
-[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/xai.png" height=50/>](https://github.com/NVIDIA/TensorRT-LLM)
-&emsp;
-[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/deepseek.png" height=50/>](https://github.com/NVIDIA/TensorRT-LLM)
+[<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/perplexity.png" height=50/>](https://www.perplexity.ai/)
 &emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/modular.svg" height=50/>](https://www.modular.com/)
 &emsp;
