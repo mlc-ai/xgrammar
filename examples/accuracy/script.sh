@@ -9,6 +9,7 @@ export ACC_RAW="./data/accuracy_raw"
 export ACC_SUM="./data/accuracy_summary"
 export DATASET="BFCL_v3_simple"
 export REQUEST_NUM=100
+export N_GPU=1
 
 python -m sglang.launch_server --model-path $MODEL_PATH \
   --host $SERVER_ADDR --port $SERVER_PORT &
