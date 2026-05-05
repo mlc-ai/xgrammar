@@ -1,4 +1,5 @@
-/**
+/*!
+ *  Copyright (c) 2026 by Contributors
  * \file tests/cpp/test_repetition_range.cc
  * \brief Regression test for RepetitionRangeExpander segfault when
  *        grammar_expr_id (a builder ID) is looked up in base_grammar_.
