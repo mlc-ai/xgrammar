@@ -245,7 +245,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   test_str = "abc";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   fsm_wse = fsm_wse.SimplifyEpsilon();
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
+  fsm_wse = fsm_wse.MergeEquivalentStates();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
@@ -255,7 +255,7 @@ TEST(XGrammarFSMTest, FunctionTest) {
   test_str = "acd";
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   fsm_wse = fsm_wse.SimplifyEpsilon();
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
+  fsm_wse = fsm_wse.MergeEquivalentStates();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
   test_str = "abcd";
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
@@ -400,7 +400,7 @@ TEST(XGrammarFSMTest, EfficiencyTest) {
   std::cout << "Time taken to simplify epsilon: " << duration.count() << " ms" << std::endl;
   std::cout << "After SimplifyEpsilon Node Numbers:" << fsm_wse.GetFsm().NumStates() << std::endl;
   time_start = std::chrono::high_resolution_clock::now();
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
+  fsm_wse = fsm_wse.MergeEquivalentStates();
   time_end = std::chrono::high_resolution_clock::now();
   duration = std::chrono::duration_cast<std::chrono::milliseconds>(time_end - time_start);
   std::cout << "Time taken to simplify transition: " << duration.count() << " ms" << std::endl;
@@ -481,7 +481,7 @@ TEST(XGrammarFSMTest, MergingNodesTest) {
   fsm_wse.GetFsm().AddEdge(6, 8, 'd', 'd');
   fsm_wse.GetFsm().AddEdge(7, 9, 'e', 'e');
   fsm_wse.GetFsm().AddEdge(8, 9, 'e', 'e');
-  fsm_wse = fsm_wse.MergeEquivalentSuccessors();
+  fsm_wse = fsm_wse.MergeEquivalentStates();
   std::string expected_fsm = R"(FSM(num_states=5, start=3, end=[4], edges=[
 0: ['d'->2]
 1: ['b'->0, 'c'->0]
@@ -491,6 +491,36 @@ TEST(XGrammarFSMTest, MergingNodesTest) {
 ]))";
   EXPECT_EQ(fsm_wse.ToString(), expected_fsm);
   EXPECT_EQ(fsm_wse.GetFsm().NumStates(), 5);
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesNoCrossRuleChaining) {
+  FSMWithStartEnd fsm_wse;
+  for (int i = 0; i < 7; ++i) {
+    fsm_wse.AddState();
+  }
+  fsm_wse.SetStartState(0);
+  fsm_wse.AddEndState(6);
+
+  // 2 and 3 are equivalent successors of 0 under 'x' (Case 1).
+  fsm_wse.GetFsm().AddEdge(0, 2, 'x', 'x');
+  fsm_wse.GetFsm().AddEdge(0, 3, 'x', 'x');
+  // 1 is another predecessor of 4 under 'a' (Case 2 candidate with 2).
+  fsm_wse.GetFsm().AddEdge(0, 1, 'y', 'y');
+
+  fsm_wse.GetFsm().AddEdge(1, 4, 'a', 'a');
+  fsm_wse.GetFsm().AddEdge(2, 4, 'a', 'a');
+  fsm_wse.GetFsm().AddEdge(3, 5, 'b', 'b');
+  fsm_wse.GetFsm().AddEdge(4, 6, 'm', 'm');
+  fsm_wse.GetFsm().AddEdge(5, 6, 'n', 'n');
+
+  auto merged = fsm_wse.MergeEquivalentStates();
+
+  // Still accepts original strings.
+  EXPECT_TRUE(merged.AcceptString("xam"));
+  EXPECT_TRUE(merged.AcceptString("xbn"));
+  EXPECT_TRUE(merged.AcceptString("yam"));
+  // Should not over-merge and introduce this path.
+  EXPECT_FALSE(merged.AcceptString("ybn"));
 }
 
 TEST(XGrammarFSMTest, EpsilonSimplificationTest) {

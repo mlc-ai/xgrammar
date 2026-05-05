@@ -17,7 +17,6 @@
 #include <stack>
 #include <string>
 #include <tuple>
-#include <variant>
 #include <vector>
 
 #include "compiled_grammar_impl.h"
@@ -1592,7 +1591,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Choices(
 
   auto result = FSMWithStartEnd::Union(fsm_list);
   result = result.SimplifyEpsilon();
-  result = result.MergeEquivalentSuccessors();
+  result = result.MergeEquivalentStates();
   return result;
 }
 

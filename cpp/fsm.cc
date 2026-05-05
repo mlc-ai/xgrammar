@@ -1303,7 +1303,7 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   return RebuildWithMapping(new_to_old, cnt);
 }
 
-FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_states) const {
+FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states) const {
   if (max_result_num_states < NumStates()) {
     return *this;
   }
@@ -1491,7 +1491,10 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_st
         while (group_begin < siblings.size() && siblings[group_begin].peer == sibling) {
           ++group_begin;
         }
-        if (sibling <= i || outgoing_distinct_count[sibling] != 1 ||
+        // Avoid chaining a Case 2 merge onto a state already merged earlier in this iteration
+        // (typically by Case 1), which can over-merge via transitive closure.
+        if (sibling <= i || union_find_set.Count(sibling) ||
+            outgoing_distinct_count[sibling] != 1 ||
             result.IsEndState(i) != result.IsEndState(sibling)) {
           continue;
         }
@@ -1513,7 +1516,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentSuccessors(int max_result_num_st
           union_find_set.Add(i);
           union_find_set.Add(sibling);
           union_find_set.Union(i, sibling);
-          is_equiv_successor = true;
+          is_equiv_precursor = true;
         }
       }
     }
