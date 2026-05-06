@@ -860,24 +860,26 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
 };
 
 /*!
- * \brief Wrapper that bundles an FSMWithStartEnd with explicit size metadata.
+ * \brief Wrapper that bundles an FSMWithStartEnd with explicit size metadata. It is
+ * used when we want to store the number of edges and nodes in the part of the FSM, instead
+ * of the completed FSMWithStartEnd.
  */
 class FSMWithStartEndWithSize {
  public:
   // For serialization only
   FSMWithStartEndWithSize() = default;
 
-  explicit FSMWithStartEndWithSize(FSMWithStartEnd fsm, size_t edge_num, size_t node_num)
+  explicit FSMWithStartEndWithSize(FSMWithStartEnd fsm, int edge_num, int node_num)
       : fsm_(std::move(fsm)), edge_num_(edge_num), node_num_(node_num) {}
 
   const FSMWithStartEnd& GetFsm() const { return fsm_; }
-  size_t GetEdgeNum() const { return edge_num_; }
-  size_t GetNodeNum() const { return node_num_; }
+  int GetEdgeNum() const { return edge_num_; }
+  int GetNodeNum() const { return node_num_; }
 
  private:
   FSMWithStartEnd fsm_;
-  size_t edge_num_;
-  size_t node_num_;
+  int edge_num_;
+  int node_num_;
 };
 
 /*!
@@ -938,21 +940,21 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
 };
 
 /*!
- * \brief Wrapper that bundles a CompactFSMWithStartEnd with explicit size metadata.
+ * \brief Wrapper that bundles a CompactFSMWithStartEnd with explicit size metadata. It is
+ * used when we want to store the number of edges and nodes in the part of the
+ * CompactFSMWithStartEnd, instead of the completed CompactFSMWithStartEnd.
  */
 class CompactFSMWithStartEndWithSize {
  public:
   // For serialization only
   CompactFSMWithStartEndWithSize() = default;
 
-  explicit CompactFSMWithStartEndWithSize(
-      CompactFSMWithStartEnd fsm, size_t edge_num, size_t node_num
-  )
+  explicit CompactFSMWithStartEndWithSize(CompactFSMWithStartEnd fsm, int edge_num, int node_num)
       : fsm_(std::move(fsm)), edge_num_(edge_num), node_num_(node_num) {}
 
   const CompactFSMWithStartEnd& GetFsm() const { return fsm_; }
-  size_t GetEdgeNum() const { return edge_num_; }
-  size_t GetNodeNum() const { return node_num_; }
+  int GetEdgeNum() const { return edge_num_; }
+  int GetNodeNum() const { return node_num_; }
 
   friend picojson::value SerializeJSONValue(const CompactFSMWithStartEndWithSize& value);
   friend std::optional<SerializationError> DeserializeJSONValue(
@@ -963,8 +965,8 @@ class CompactFSMWithStartEndWithSize {
 
  private:
   CompactFSMWithStartEnd fsm_;
-  size_t edge_num_;
-  size_t node_num_;
+  int edge_num_;
+  int node_num_;
 
   friend std::size_t MemorySize(const CompactFSMWithStartEndWithSize& self) {
     return MemorySize(self.fsm_) + sizeof(self.edge_num_) + sizeof(self.node_num_);
