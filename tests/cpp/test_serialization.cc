@@ -596,7 +596,6 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
     ASSERT_EQ(deserialized.GetFsm().NumStates(), compact_fsm.NumStates());
     ASSERT_EQ(deserialized.GetStart(), 0);
     ASSERT_EQ(deserialized.GetEnds(), std::vector<bool>({false, false, true}));
-    ASSERT_EQ(deserialized.GetNumEdges(), 3);
 
     // Test roundtrip
     auto json_value2 = AutoSerializeJSONValue(deserialized);
@@ -628,7 +627,6 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
     ASSERT_EQ(deserialized.GetFsm().NumStates(), compact_fsm.NumStates());
     ASSERT_EQ(deserialized.GetStart(), 0);
     ASSERT_EQ(deserialized.GetEnds(), std::vector<bool>({false, false, true}));
-    ASSERT_EQ(deserialized.GetNumEdges(), 3);
 
     // Test roundtrip
     auto json_value2 = AutoSerializeJSONValue(deserialized);

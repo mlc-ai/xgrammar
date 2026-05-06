@@ -291,7 +291,7 @@ class Grammar::Impl {
    * \details The FSM will be used in matching if it exists. If it does not exist (std::nullopt),
    * the rule will be used in matching, and the rule's body must be a kChoices expr.
    */
-  std::vector<std::optional<CompactFSMWithStartEnd>> per_rule_fsms;
+  std::vector<std::optional<CompactFSMWithStartEndWithSize>> per_rule_fsms;
 
   /*!
    * \brief The hash value for each rule's FSM.
