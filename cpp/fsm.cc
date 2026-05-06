@@ -1004,7 +1004,7 @@ FSMWithStartEndWithSize FSMWithStartEnd::AddToCompleteFSM(
 
   int num_nodes = fsm_.NumStates();
 
-  auto fsm_with_se = FSMWithStartEnd(*complete_fsm, new_start, new_ends);
+  auto fsm_with_se = FSMWithStartEnd(*complete_fsm, new_start, new_ends, is_dfa_);
 
   return FSMWithStartEndWithSize(fsm_with_se, num_edges, num_nodes);
 }
