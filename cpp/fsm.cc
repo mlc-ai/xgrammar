@@ -981,7 +981,7 @@ FSMWithStartEnd FSMWithStartEnd::RebuildWithMapping(
 }
 
 CompactFSMWithStartEnd FSMWithStartEnd::ToCompact() {
-  return CompactFSMWithStartEnd(fsm_.ToCompact(), start_, ends_);
+  return CompactFSMWithStartEnd(fsm_.ToCompact(), start_, ends_, is_dfa_);
 }
 
 FSMWithStartEndWithSize FSMWithStartEnd::AddToCompleteFSM(
