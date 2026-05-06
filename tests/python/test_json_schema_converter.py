@@ -2394,6 +2394,7 @@ def test_multiple_pattern_properties_with_properties():
         schema, {"name": "John", "extra_1": "not_int"}, is_accepted=False, any_whitespace=False
     )
 
+
 def test_forward_slash_in_const():
     # Regression: picojson used to serialize const/enum strings with "\/"
     # for every "/", which the EBNF lexer then rejected as an invalid
