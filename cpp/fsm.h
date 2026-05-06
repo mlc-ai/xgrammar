@@ -878,8 +878,8 @@ class FSMWithStartEndWithSize {
 
  private:
   FSMWithStartEnd fsm_;
-  int edge_num_;
-  int node_num_;
+  int edge_num_ = 0;
+  int node_num_ = 0;
 };
 
 /*!
@@ -965,8 +965,8 @@ class CompactFSMWithStartEndWithSize {
 
  private:
   CompactFSMWithStartEnd fsm_;
-  int edge_num_;
-  int node_num_;
+  int edge_num_ = 0;
+  int node_num_ = 0;
 
   friend std::size_t MemorySize(const CompactFSMWithStartEndWithSize& self) {
     return MemorySize(self.fsm_) + sizeof(self.edge_num_) + sizeof(self.node_num_);
