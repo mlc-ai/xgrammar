@@ -16,6 +16,7 @@ from xgrammar.builtin_structural_tag import (
     get_glm_4_7_structural_tag,
     get_harmony_structural_tag,
     get_kimi_structural_tag,
+    get_llama_custom_structural_tag,
     get_llama_structural_tag,
     get_minimax_structural_tag,
     get_model_structural_tag,
@@ -556,6 +557,7 @@ def test_kimi_auto_requires_tool_calls_section():
     "structural_tag_fn",
     [
         get_llama_structural_tag,
+        get_llama_custom_structural_tag,
         get_kimi_structural_tag,
         get_deepseek_r1_structural_tag,
         get_deepseek_v3_1_structural_tag,
@@ -645,6 +647,7 @@ def test_specific_functions_cases(structural_tag_fn, case: Dict[str, Any]):
     "format_type, instance, is_accepted",
     [
         ("llama", '{"name": "t1", "parameters": {"q": "v"}}', True),
+        ("llama_custom", '<function=t1>"anything"</function>', True),
         (
             "kimi",
             '123<|tool_calls_section_begin|><|tool_call_begin|>functions.t1:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|><|tool_calls_section_end|>',
@@ -772,6 +775,459 @@ def run_instance_case(format_type: str, case: InstanceCase):
     stag = get_model_structural_tag(**kwargs)
     for j, instance in enumerate(instances):
         check_stag_with_instance(stag, instance, expected_accept_per_instance[j])
+
+
+# ----- llama
+
+_llama_instances_with_tools = [
+    '{"name": "t1", "parameters": {"q": "v"}}',
+    'text{"name": "t1", "parameters": {}}',
+    '<think>123</think>text{"name": "t1", "parameters": {"q": ""}}',
+    "<think>\n\n</think></think>",
+    '<think>\n\n</think>text{"name": "t1", "parameters": {"q": "v"}}',
+]
+_llama_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>text",
+    "<think>\n\n</think></think>",
+    "<think>\n\n</think>text",
+]
+
+llama_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False
+    (
+        {"tools": _tools_llama},
+        _llama_instances_with_tools,
+        False,
+        [True, True, False, False, False],
+    ),
+    # with tools, reasoning=True
+    ({"tools": _tools_llama}, _llama_instances_with_tools, True, [True, True, False, False, False]),
+    # no tools, reasoning=False
+    ({}, _llama_instances_no_tools, False, [True, True, False, False, False]),
+    # no tools, reasoning=True
+    ({}, _llama_instances_no_tools, True, [True, True, False, False, False]),
+]
+
+
+@pytest.mark.parametrize("case", llama_instance_cases)
+def test_llama_instances(case: InstanceCase):
+    """get_model_structural_tag(llama) accepts/rejects instance as expected."""
+    run_instance_case("llama", case)
+
+
+# ----- llama_custom
+
+_llama_custom_instances_with_tools = [
+    '<function=t1>{"q": "v"}</function>',
+    "text<function=t1>{}</function>",
+    '<think>123</think>text<function=t1>{"q": ""}</function>',
+    "<think>\n\n</think></think>",
+    '<think>\n\n</think>text<function=t1>{"q": "v"}</function>',
+]
+_llama_custom_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>text",
+    "<think>\n\n</think></think>",
+    "<think>\n\n</think>text",
+]
+
+llama_custom_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False
+    (
+        {"tools": _tools_llama},
+        _llama_custom_instances_with_tools,
+        False,
+        [True, True, False, False, False],
+    ),
+    # with tools, reasoning=True (llama_custom has no reasoning part)
+    (
+        {"tools": _tools_llama},
+        _llama_custom_instances_with_tools,
+        True,
+        [True, True, False, False, False],
+    ),
+    # no tools, reasoning=False
+    ({}, _llama_custom_instances_no_tools, False, [True, True, False, False, False]),
+    # no tools, reasoning=True (llama_custom has no reasoning part)
+    ({}, _llama_custom_instances_no_tools, True, [True, True, False, False, False]),
+]
+
+
+@pytest.mark.parametrize("case", llama_custom_instance_cases)
+def test_llama_custom_instances(case: InstanceCase):
+    """get_model_structural_tag(llama_custom) accepts/rejects instance as expected."""
+    run_instance_case("llama_custom", case)
+
+
+# ----- kimi
+
+_kimi_instances_with_tools = [
+    '123<|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>',
+    "123<|tool_call_begin|>123<|tool_call_argument_begin|>{}<|tool_call_end|>",
+    "<think>123</think>",
+    "<think></think></think>",
+    "<think></think>123<|tool_calls_section_begin|>\n"
+    + '<|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"q": "v"}<|tool_call_end|>'
+    + "\n<|tool_calls_section_end|>",
+    "<think></think>123<|tool_calls_section_begin|>"
+    + '<|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"q": "v0"}<|tool_call_end|>'
+    + '<|tool_call_begin|>functions.get_weather:1<|tool_call_argument_begin|>{"q": "v1"}<|tool_call_end|>'
+    + "<|tool_calls_section_end|>",
+]
+_kimi_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>",
+    "<think>\n\n</think></think>",
+    "<think></think>text",
+    "</think>123",
+]
+
+kimi_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False
+    (
+        {"tools": _tools_kimi},
+        _kimi_instances_with_tools,
+        False,
+        [False, False, False, False, True, True],
+    ),
+    # with tools, reasoning=True
+    (
+        {"tools": _tools_kimi},
+        _kimi_instances_with_tools,
+        True,
+        [False, False, True, False, True, True],
+    ),
+    # no tools, reasoning=False
+    ({}, _kimi_instances_no_tools, False, [False, False, False, False, True, False]),
+    # no tools, reasoning=True
+    ({}, _kimi_instances_no_tools, True, [False, False, True, False, True, False]),
+]
+
+
+@pytest.mark.parametrize("case", kimi_instance_cases)
+def test_kimi_instances(case: InstanceCase):
+    """get_model_structural_tag(kimi) accepts/rejects instance as expected."""
+    run_instance_case("kimi", case)
+
+
+# ----- deepseek_r1
+
+_deepseek_r1_instances_with_tools = [
+    'text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+    '123</think><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+    'thinking</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+    "</think>text<think>123</think>",
+    '</think>text<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>search\n```json\n{"q": "v"}\n```\n<｜tool▁call▁end｜><｜tool▁calls▁end｜>',
+]
+_deepseek_r1_instances_no_tools = ["", "text", "123</think>123", "</think></think>", "</think>text"]
+
+deepseek_r1_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False
+    (
+        {"tools": _tools_deepseek},
+        _deepseek_r1_instances_with_tools,
+        False,
+        [True, False, False, False, False],
+    ),
+    # with tools, reasoning=True
+    (
+        {"tools": _tools_deepseek},
+        _deepseek_r1_instances_with_tools,
+        True,
+        [False, True, True, False, True],
+    ),
+    # no tools, reasoning=False
+    ({}, _deepseek_r1_instances_no_tools, False, [True, True, False, False, False]),
+    # no tools, reasoning=True
+    ({}, _deepseek_r1_instances_no_tools, True, [False, False, True, False, True]),
+]
+
+
+@pytest.mark.parametrize("case", deepseek_r1_instance_cases)
+def test_deepseek_r1_instances(case: InstanceCase):
+    """get_model_structural_tag(deepseek_r1) accepts/rejects instance as expected."""
+    run_instance_case("deepseek_r1", case)
+
+
+# ----- deepseek_v3_2
+
+_deepseek_v3_2_instances_with_tools = [
+    'text<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+    '<think>123</think><｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+    '<think>123</think>text<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+    "<think>\n\n</think>text<think>123</think>",
+    '<think>\n\n</think>text<｜DSML｜function_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜function_calls>\n',
+]
+_deepseek_v3_2_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>123",
+    "<think></think></think>",
+    "<think>\n\n</think>text",
+]
+
+deepseek_v3_2_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False
+    (
+        {"tools": _tools_deepseek_v3_2},
+        _deepseek_v3_2_instances_with_tools,
+        False,
+        [True, False, False, False, False],
+    ),
+    # with tools, reasoning=True
+    (
+        {"tools": _tools_deepseek_v3_2},
+        _deepseek_v3_2_instances_with_tools,
+        True,
+        [False, True, True, False, True],
+    ),
+    # no tools, reasoning=False
+    ({}, _deepseek_v3_2_instances_no_tools, False, [True, True, False, False, False]),
+    # no tools, reasoning=True
+    ({}, _deepseek_v3_2_instances_no_tools, True, [False, False, True, False, True]),
+]
+
+
+@pytest.mark.parametrize("case", deepseek_v3_2_instance_cases)
+def test_deepseek_v3_2_instances(case: InstanceCase):
+    """get_model_structural_tag(deepseek_v3_2) accepts/rejects instance as expected."""
+    run_instance_case("deepseek_v3_2", case)
+
+
+# ----- deepseek_v4
+
+_deepseek_v4_instances_with_tools = [
+    'text<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+    '<think>123</think><｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+    '<think>123</think>text<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+    "<think>\n\n</think>text<think>123</think>",
+    '<think>\n\n</think>text<｜DSML｜tool_calls>\n<｜DSML｜invoke name="search">\n<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter></｜DSML｜invoke>\n</｜DSML｜tool_calls>\n',
+]
+_deepseek_v4_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>123",
+    "<think></think></think>",
+    "<think>\n\n</think>text",
+]
+
+deepseek_v4_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False
+    (
+        {"tools": _tools_deepseek_v4},
+        _deepseek_v4_instances_with_tools,
+        False,
+        [True, False, False, False, False],
+    ),
+    # with tools, reasoning=True
+    (
+        {"tools": _tools_deepseek_v4},
+        _deepseek_v4_instances_with_tools,
+        True,
+        [False, True, True, False, True],
+    ),
+    # no tools, reasoning=False
+    ({}, _deepseek_v4_instances_no_tools, False, [True, True, False, False, False]),
+    # no tools, reasoning=True
+    ({}, _deepseek_v4_instances_no_tools, True, [False, False, True, False, True]),
+]
+
+
+@pytest.mark.parametrize("case", deepseek_v4_instance_cases)
+def test_deepseek_v4_instances(case: InstanceCase):
+    """get_model_structural_tag(deepseek_v4) accepts/rejects instance as expected."""
+    run_instance_case("deepseek_v4", case)
+
+
+# ----- minimax
+
+_minimax_instances_with_tools = [
+    'text<minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
+    '<think>123</think><minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
+    '<think>123</think>text<minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
+    "<think>\n\n</think>text<think>123</think>",
+    '<think>\n\n</think>text<minimax:tool_call>\n<invoke name="search">\n<parameter name="q">v</parameter></invoke>\n</minimax:tool_call>\n',
+]
+_minimax_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>123",
+    "<think></think></think>",
+    "<think>\n\n</think>text",
+]
+
+minimax_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False
+    (
+        {"tools": _tools_minimax},
+        _minimax_instances_with_tools,
+        False,
+        [True, False, False, False, False],
+    ),
+    # with tools, reasoning=True
+    (
+        {"tools": _tools_minimax},
+        _minimax_instances_with_tools,
+        True,
+        [False, True, True, False, True],
+    ),
+    # no tools, reasoning=False
+    ({}, _minimax_instances_no_tools, False, [True, True, False, False, False]),
+    # no tools, reasoning=True
+    ({}, _minimax_instances_no_tools, True, [False, False, True, False, True]),
+]
+
+
+@pytest.mark.parametrize("case", minimax_instance_cases)
+def test_minimax_instances(case: InstanceCase):
+    """get_model_structural_tag(minimax) accepts/rejects instance as expected."""
+    run_instance_case("minimax", case)
+
+
+def test_glm47_instances():
+    """get_model_structural_tag(glm47) accepts/rejects instance as expected."""
+    stag = get_model_structural_tag("glm_4_7", tools=_tools_glm_4_7, reasoning=False)
+    grammar_str = str(xgr.Grammar.from_structural_tag(stag))
+    assert "<tool_call>" in grammar_str
+    assert "<arg_key>" in grammar_str
+    assert "<arg_value>" in grammar_str
+
+    check_stag_with_instance(
+        stag, "<tool_call>search<arg_key>q</arg_key><arg_value>v</arg_value></tool_call>", True
+    )
+    check_stag_with_instance(stag, "<tool_call>search<parameter=q>v</parameter></tool_call>", False)
+    check_stag_with_instance(
+        stag, '<tool_call>search<parameter name="q">v</parameter></tool_call>', False
+    )
+
+
+# ----- qwen_coder
+
+_qwen_coder_instances_with_tools = [
+    "<tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+    "<tool_call>\n<function=other>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+    "<think>123</think><tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+    "<think>\n\n</think><think></think>",
+    "<think>\n\n</think>text<tool_call>\n<function=run_sql>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+]
+_qwen_coder_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>123",
+    "<think>\n\n</think></think>",
+    "<think>\n\n</think>text",
+]
+
+qwen_coder_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False
+    (
+        {"tools": _tools_qwen_3_coder},
+        _qwen_coder_instances_with_tools,
+        False,
+        [True, False, False, False, False],
+    ),
+    # with tools, reasoning=True
+    (
+        {"tools": _tools_qwen_3_coder},
+        _qwen_coder_instances_with_tools,
+        True,
+        [True, False, False, False, False],
+    ),
+    # no tools, reasoning=False
+    ({}, _qwen_coder_instances_no_tools, False, [True, True, False, False, False]),
+    # no tools, reasoning=True
+    ({}, _qwen_coder_instances_no_tools, True, [True, True, False, False, False]),
+]
+
+
+@pytest.mark.parametrize("case", qwen_coder_instance_cases)
+def test_qwen_coder_instances(case: InstanceCase):
+    """get_model_structural_tag(qwen_coder) accepts/rejects instance as expected."""
+    run_instance_case("qwen_3_coder", case)
+
+
+# ----- qwen
+
+_qwen_instances_with_tools = [
+    'text<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+    '<think>123</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+    "<think>\n\n</think></think>",
+    '<think>\n\n</think><tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+]
+_qwen_instances_no_tools = [
+    "",
+    "text",
+    "<think>123</think>123",
+    "<think>\n\n</think></think>",
+    "<think>\n\n</think>text",
+]
+
+qwen_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False
+    ({"tools": _tools_qwen_3}, _qwen_instances_with_tools, False, [True, False, False, False]),
+    # with tools, reasoning=True
+    ({"tools": _tools_qwen_3}, _qwen_instances_with_tools, True, [False, True, False, True]),
+    # no tools, reasoning=False
+    ({}, _qwen_instances_no_tools, False, [True, True, False, False, False]),
+    # no tools, reasoning=True
+    ({}, _qwen_instances_no_tools, True, [False, False, True, False, True]),
+]
+
+
+@pytest.mark.parametrize("case", qwen_instance_cases)
+def test_qwen_instances(case: InstanceCase):
+    """get_model_structural_tag(qwen) accepts/rejects instance as expected."""
+    run_instance_case("qwen_3", case)
+
+
+# ----- harmony
+
+_harmony_instances_with_tools = [
+    "<|channel|>analysis<|message|><|end|>",
+    '<|channel|>commentary to=functions.comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
+    '<|channel|>commentary to=analysis_tool<|message|>{"q": "v"}<|call|>',
+    "<|channel|>commentary to=functions.wrong_tool<|constrain|>json<|message|>{}<|call|>",
+    "<|channel|>analysis<|message|>think<|end|><|start|>assistant<|channel|>final<|message|>123<|end|>",
+    '<|channel|>commentary to=functions.comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
+]
+_harmony_instances_no_tools = [
+    "",
+    "<|channel|>final<|message|>123<|end|>",
+    "<|channel|>analysis<|message|>123<|end|><|start|>assistant<|channel|>final<|message|>123<|end|>",
+    "<|channel|>analysis<|message|><|end|>",
+    "<think>\n\n</think>text",
+]
+
+harmony_instance_cases: List[InstanceCase] = [
+    # with tools, reasoning=False
+    (
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony},
+        _harmony_instances_with_tools,
+        False,
+        [False, True, True, False, False, True],
+    ),
+    # with tools, reasoning=True
+    (
+        {"tools": _tools_harmony, "builtin_tools": _builtin_harmony},
+        _harmony_instances_with_tools,
+        True,
+        [True, True, True, False, True, True],
+    ),
+    # no tools, reasoning=False
+    ({}, _harmony_instances_no_tools, False, [True, True, False, False, False]),
+    # no tools, reasoning=True
+    ({}, _harmony_instances_no_tools, True, [True, True, True, True, False]),
+]
+
+
+@pytest.mark.parametrize("case", harmony_instance_cases)
+def test_harmony_instances(case: InstanceCase):
+    """get_model_structural_tag(harmony) accepts/rejects instance as expected."""
+    run_instance_case("harmony", case)
 
 
 # tool_choice=required / forced: expected_grammar_ebnf left "" for manual completion.
@@ -1064,6 +1520,90 @@ def test_tool_choice_instances(format_type: str, case: InstanceCase):
     run_instance_case(format_type, case)
 
 
+LlamaCustomToolChoiceCase = Tuple[Dict[str, Any], List[str], bool, str, List[bool]]
+
+_llama_custom_tool_choice_cases: List[LlamaCustomToolChoiceCase] = [
+    (
+        {"tools": _tools_llama_pair, "tool_choice": "required"},
+        ["", '<function=t1>{"q": "v"}</function>'],
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+tag ::= (("<function=t1>" root_0 "</function>"))
+tag_1 ::= (("<function=t2>" root_0 "</function>"))
+tags_with_separator_tags ::= ((tag) | (tag_1))
+tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
+tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
+root ::= ((tags_with_separator))
+""",
+        [False, True],
+    ),
+    (
+        {"tools": _tools_llama_pair, "tool_choice": "forced", "forced_function_name": "t1"},
+        ['<function=t1>{"q": "v"}</function>', '<function=t2>{"q": "v"}</function>'],
+        False,
+        r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+root_0 ::= (("{" [ \n\t]* "\"q\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
+basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
+basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
+basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
+basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
+basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+tag ::= (("<function=t1>" root_0 "</function>"))
+root ::= ((tag))
+""",
+        [True, False],
+    ),
+]
+
+
+@pytest.mark.parametrize("case", _llama_custom_tool_choice_cases)
+def test_llama_custom_tool_choice_instances(case: LlamaCustomToolChoiceCase):
+    """llama_custom required/forced instance checks; expected_grammar left blank for manual fill."""
+    input_dict, instances, reasoning, expected_grammar, expected_accept_per_instance = case
+    kwargs = _input_dict_to_get_stag_kwargs("llama_custom", input_dict)
+    kwargs["reasoning"] = reasoning
+    stag = get_model_structural_tag(**kwargs)
+    assert (
+        str(xgr.Grammar.from_structural_tag(stag)) == expected_grammar
+    ), f"expected:\n{expected_grammar}\nactual:\n{str(xgr.Grammar.from_structural_tag(stag))}"
+    for i, instance in enumerate(instances):
+        check_stag_with_instance(stag, instance, expected_accept_per_instance[i])
+
+
 _TOOLS: List[Dict[str, Any]] = [
     {"function": {"name": "get_time", "parameters": {"type": "object", "properties": {}}}}
 ]
@@ -1073,6 +1613,7 @@ _TOOLS: List[Dict[str, Any]] = [
     "format_type, kwargs",
     [
         ("llama", {"tools": _TOOLS}),
+        ("llama_custom", {"tools": _TOOLS}),
         ("kimi", {"tools": _TOOLS}),
         ("deepseek_r1", {"tools": _TOOLS}),
         ("qwen_3_coder", {"tools": _TOOLS}),

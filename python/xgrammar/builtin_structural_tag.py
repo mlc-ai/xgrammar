@@ -1775,6 +1775,98 @@ def get_deepseek_v4_structural_tag(
     return StructuralTag(format=sequence_format)
 
 
+@register_model_structural_tag("llama_custom")
+def get_llama_custom_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: bool = True,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get Llama custom style structural tag format.
+
+    Corresponding model key: ``"llama_custom"``.
+
+    Reference: https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/#user-defined-custom-tool-calling
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: ignored because this format has no reasoning part.
+
+    Supported models:
+
+    - Meta-Llama-3
+    - Llama-3.1
+    - Llama-3.2
+    - Llama-4
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for function calling format.
+        This format is used by Llama 3 and other models that follow the same style.
+    """
+    FUNCTION_CALL_BEGIN_PREFIX = "<function="
+    FUNCTION_CALL_BEGIN_SUFFIX = ">"
+    FUNCTION_CALL_END = "</function>"
+
+    THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
+
+    tools = tools or []
+    builtin_tools = builtin_tools or []
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            function = tool.function
+            parameters = _get_function_parameters(function)
+            name = function.name
+            tags.append(
+                TagFormat(
+                    begin=(FUNCTION_CALL_BEGIN_PREFIX + name + FUNCTION_CALL_BEGIN_SUFFIX),
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=FUNCTION_CALL_END,
+                )
+            )
+
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[FUNCTION_CALL_BEGIN_PREFIX], tags=tags, excludes=THINK_EXCLUDE_TOKENS
+            )
+        else:
+            suffix_tag = AnyTextFormat(excludes=THINK_EXCLUDE_TOKENS)
+
+    elif tool_choice == "forced":
+        if not tools:
+            raise ValueError("Forced tool choice must resolve to exactly one tool.")
+        function = tools[0].function
+        suffix_tag = TagFormat(
+            begin=(FUNCTION_CALL_BEGIN_PREFIX + function.name + FUNCTION_CALL_BEGIN_SUFFIX),
+            content=JSONSchemaFormat(json_schema=_get_function_parameters(function)),
+            end=FUNCTION_CALL_END,
+        )
+
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            function = tool.function
+            parameters = _get_function_parameters(function)
+            name = function.name
+            tags.append(
+                TagFormat(
+                    begin=(FUNCTION_CALL_BEGIN_PREFIX + name + FUNCTION_CALL_BEGIN_SUFFIX),
+                    content=JSONSchemaFormat(json_schema=parameters),
+                    end=FUNCTION_CALL_END,
+                )
+            )
+        assert len(tags) > 0
+        suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+
+    return StructuralTag(format=suffix_tag)
+
+
 # Backward-compatible alias
 get_builtin_structural_tag = get_model_structural_tag
 """Alias for :func:`get_model_structural_tag`. Deprecated."""
