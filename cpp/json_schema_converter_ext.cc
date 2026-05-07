@@ -163,6 +163,15 @@ std::string XMLToolCallingConverter::GenerateAny(
   return JSONSchemaConverter::GenerateAny(spec, rule_name);
 }
 
+std::string XMLToolCallingConverter::GenerateTrue(
+    const TrueSpec& spec, const std::string& rule_name
+) {
+  if (nested_object_level_ >= 1) {
+    return GenerateAny(AnySpec{}, rule_name);
+  }
+  return GenerateObject(ObjectSpec{}, rule_name);
+}
+
 std::string XMLToolCallingConverter::GenerateArray(
     const ArraySpec& spec, const std::string& rule_name
 ) {

@@ -1302,5 +1302,27 @@ def test_glm_reject_wrong_parameter_format(input_str: str, accepted: bool):
     _check_glm_grammar(schema, input_str, accepted)
 
 
+def test_nested_true_schema():
+    schema = {"type": "object", "properties": {"name": True}, "required": ["name"]}
+    ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
+    assert _is_grammar_accept_string(ebnf_grammar, "<parameter=name>\nvalue\n</parameter>")
+    assert _is_grammar_accept_string(ebnf_grammar, "<parameter=name>\n[1, 2, 3]\n</parameter>")
+    assert _is_grammar_accept_string(
+        ebnf_grammar, '<parameter=name>\n{"name": "Tom"}\n</parameter>'
+    )
+    assert not _is_grammar_accept_string(ebnf_grammar, "anything")
+
+
+def test_true_schema():
+    schema = "true"
+    ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
+    assert _is_grammar_accept_string(ebnf_grammar, "<parameter=name>\nvalue\n</parameter>")
+    assert _is_grammar_accept_string(ebnf_grammar, "<parameter=abc>\n[1, 2, 3]\n</parameter>")
+    assert _is_grammar_accept_string(
+        ebnf_grammar, '<parameter=cdef>\n{"name": "Tom"}\n</parameter>'
+    )
+    assert not _is_grammar_accept_string(ebnf_grammar, "anything")
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
