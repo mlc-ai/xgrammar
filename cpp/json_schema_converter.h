@@ -352,7 +352,11 @@ class JSONSchemaConverter {
       int already_repeated_times = 0
   );
 
-  /*! \brief Generate partial rule for object properties. */
+  /*! \brief Generate partial rule for object properties.
+   *  \param additional_prop_pattern_override When non-empty, used as the additional property
+   *         pattern instead of the default GetKeyPattern() : value. This supports patternProperties
+   *         and propertyNames constraints on additional keys.
+   */
   std::string GetPartialRuleForProperties(
       const std::vector<ObjectSpec::Property>& properties,
       const std::unordered_set<std::string>& required,
@@ -360,7 +364,8 @@ class JSONSchemaConverter {
       const std::string& rule_name,
       const std::string& additional_suffix,
       int min_properties,
-      int max_properties
+      int max_properties,
+      const std::string& additional_prop_pattern_override = ""
   );
 
   // ==================== Protected members ====================

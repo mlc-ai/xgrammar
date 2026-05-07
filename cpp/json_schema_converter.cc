@@ -1570,7 +1570,8 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     const std::string& rule_name,
     const std::string& additional_suffix,
     int min_properties,
-    int max_properties
+    int max_properties,
+    const std::string& additional_prop_pattern_override
 ) {
   if (max_properties == 0) {
     return "";
@@ -1598,9 +1599,13 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     // Construct the last rule
     std::string additional_prop_pattern;
     if (allow_additional) {
-      std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-      additional_prop_pattern =
-          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+      if (!additional_prop_pattern_override.empty()) {
+        additional_prop_pattern = additional_prop_pattern_override;
+      } else {
+        std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
+        additional_prop_pattern =
+            FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+      }
       std::string last_rule_body = "(" + mid_sep + " " + additional_prop_pattern + ")*";
       std::string last_rule_name =
           rule_name + "_part_" + std::to_string(static_cast<int>(properties.size()) - 1);
@@ -1654,9 +1659,13 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
 
     std::string additional_prop_pattern;
     if (allow_additional) {
-      std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-      additional_prop_pattern =
-          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+      if (!additional_prop_pattern_override.empty()) {
+        additional_prop_pattern = additional_prop_pattern_override;
+      } else {
+        std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
+        additional_prop_pattern =
+            FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+      }
     }
 
     // Get the range of matched properties for each rule
@@ -1765,9 +1774,13 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
 
     std::string additional_prop_pattern;
     if (allow_additional) {
-      std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-      additional_prop_pattern =
-          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+      if (!additional_prop_pattern_override.empty()) {
+        additional_prop_pattern = additional_prop_pattern_override;
+      } else {
+        std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
+        additional_prop_pattern =
+            FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+      }
     }
 
     // Get the range of matched properties for each rule
@@ -1910,8 +1923,62 @@ std::string JSONSchemaConverter::GenerateObject(
 
   indent_manager_.StartIndent();
 
-  if (!spec.pattern_properties.empty() || spec.property_names) {
-    // Case 1: patternProperties or propertyNames defined
+  if (!spec.properties.empty() && (!spec.pattern_properties.empty() || spec.property_names)) {
+    // Case 1a: properties coexist with patternProperties and/or propertyNames.
+    // Use GetPartialRuleForProperties for named properties, and build
+    // patternProperties/propertyNames as the additional property pattern override.
+    SchemaSpecPtr effective_additional = additional_property;
+    std::string effective_suffix = additional_suffix;
+    std::string pp_override = "";
+
+    if (!spec.pattern_properties.empty()) {
+      // Build patternProperties as additional property alternatives
+      std::string pp_body = "";
+      for (size_t i = 0; i < spec.pattern_properties.size(); ++i) {
+        const auto& pp = spec.pattern_properties[i];
+        std::string value = CreateRule(pp.schema, rule_name + "_pp_" + std::to_string(i));
+        std::string pp_single = "\"\\\"\"" + RegexToEBNF(pp.pattern, false) + "\"\\\"\" " +
+                                colon_pattern_ + " " + value;
+        if (i != 0) pp_body += " | ";
+        pp_body += pp_single;
+      }
+      // Merge with existing additionalProperties if present
+      if (effective_additional) {
+        std::string add_value_rule =
+            CreateRule(effective_additional, rule_name + "_" + effective_suffix);
+        std::string add_prop =
+            FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, effective_suffix);
+        pp_body += " | " + add_prop;
+      }
+      // Wrap in parentheses to ensure correct EBNF precedence when | is present
+      pp_override = "(" + pp_body + ")";
+      if (!effective_additional) {
+        effective_additional = SchemaSpec::Make(AnySpec{}, "", "any");
+      }
+      effective_suffix = "pp";
+    } else if (spec.property_names && effective_additional) {
+      // propertyNames constrains keys of additional properties.
+      // Only apply when additional properties are allowed — when additionalProperties
+      // is false, no extra keys beyond named properties should be permitted.
+      auto key_pattern = CreateRule(spec.property_names, rule_name + "_name");
+      std::string val_rule = CreateRule(effective_additional, rule_name + "_" + effective_suffix);
+      pp_override = key_pattern + " " + colon_pattern_ + " " + val_rule;
+      effective_suffix = "pn";
+    }
+
+    result += " " + GetPartialRuleForProperties(
+                        spec.properties,
+                        spec.required,
+                        effective_additional,
+                        rule_name,
+                        effective_suffix,
+                        spec.min_properties,
+                        spec.max_properties,
+                        pp_override
+                    );
+    could_be_empty = spec.required.empty() && spec.min_properties == 0;
+  } else if (!spec.pattern_properties.empty() || spec.property_names) {
+    // Case 1b: patternProperties or propertyNames without named properties (original logic)
     std::string beg_seq = NextSeparator();
 
     std::string property_rule_body = "(";
@@ -1946,7 +2013,7 @@ std::string JSONSchemaConverter::GenerateObject(
       could_be_empty = spec.min_properties == 0;
     }
   } else if (!spec.properties.empty()) {
-    // Case 2: properties defined
+    // Case 2: properties defined (no patternProperties/propertyNames)
     result += " " + GetPartialRuleForProperties(
                         spec.properties,
                         spec.required,
