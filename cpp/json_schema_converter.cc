@@ -272,9 +272,19 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
           SchemaErrorType::kUnsatisfiableSchema, "Schema 'false' cannot accept any value"
       );
     }
-    auto spec = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
-    schema_cache_[cache_key] = spec;
-    return ResultOk(spec);
+    if (config_.json_format == JSONFormat::kJSON) {
+      auto spec = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
+      schema_cache_[cache_key] = spec;
+      return ResultOk(spec);
+    } else {
+      // Otherwise, we are in XML mode. In XML mode, we need to follow the general XML tool-calling
+      // format. For example, we in QwenXML mode, we cannot accept the tool calling's like
+      // "<function=A>\nstring\n</function>", The correct format should be
+      // "<function=A>\n<parameter=name>\nstring\n</parameter>\n</function>".
+      auto spec = SchemaSpec::Make(ObjectSpec{}, cache_key, rule_name_hint);
+      schema_cache_[cache_key] = spec;
+      return ResultOk(spec);
+    }
   }
 
   if (!schema.is<picojson::object>()) {
