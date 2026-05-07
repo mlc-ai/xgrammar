@@ -69,11 +69,6 @@ struct AnySpec {
   std::string ToString() const;
 };
 
-/*! \brief JSON Schema boolean true (accepts any instance); generation depends on format/nesting. */
-struct TrueSpec {
-  std::string ToString() const;
-};
-
 // Complex Type Specs
 struct ArraySpec {
   std::vector<SchemaSpecPtr> prefix_items;
@@ -160,7 +155,6 @@ using SchemaSpecVariant = std::variant<
     ArraySpec,
     ObjectSpec,
     AnySpec,
-    TrueSpec,
     ConstSpec,
     EnumSpec,
     RefSpec,
@@ -293,7 +287,6 @@ class JSONSchemaConverter {
       const ObjectSpec& spec, const std::string& rule_name, bool need_brace = true
   );
   virtual std::string GenerateAny(const AnySpec& spec, const std::string& rule_name);
-  virtual std::string GenerateTrue(const TrueSpec& spec, const std::string& rule_name);
   virtual std::string GenerateConst(const ConstSpec& spec, const std::string& rule_name);
   virtual std::string GenerateEnum(const EnumSpec& spec, const std::string& rule_name);
   virtual std::string GenerateRef(const RefSpec& spec, const std::string& rule_name);

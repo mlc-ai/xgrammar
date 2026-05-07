@@ -61,8 +61,6 @@ std::string NullSpec::ToString() const { return "NullSpec{}"; }
 
 std::string AnySpec::ToString() const { return "AnySpec{}"; }
 
-std::string TrueSpec::ToString() const { return "TrueSpec{}"; }
-
 std::string ArraySpec::ToString() const {
   return "ArraySpec{prefix_items.size()=" + std::to_string(prefix_items.size()) +
          ", allow_additional_items=" + (allow_additional_items ? "true" : "false") +
@@ -274,7 +272,7 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
           SchemaErrorType::kUnsatisfiableSchema, "Schema 'false' cannot accept any value"
       );
     }
-    auto spec = SchemaSpec::Make(TrueSpec{}, cache_key, rule_name_hint);
+    auto spec = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
     schema_cache_[cache_key] = spec;
     return ResultOk(spec);
   }
@@ -1303,8 +1301,6 @@ std::string JSONSchemaConverter::GenerateFromSpec(
           return GenerateObject(s, rule_name_hint);
         } else if constexpr (std::is_same_v<T, AnySpec>) {
           return GenerateAny(s, rule_name_hint);
-        } else if constexpr (std::is_same_v<T, TrueSpec>) {
-          return GenerateTrue(s, rule_name_hint);
         } else if constexpr (std::is_same_v<T, ConstSpec>) {
           return GenerateConst(s, rule_name_hint);
         } else if constexpr (std::is_same_v<T, EnumSpec>) {
@@ -2077,10 +2073,6 @@ std::string JSONSchemaConverter::GenerateObject(
 std::string JSONSchemaConverter::GenerateAny(const AnySpec& spec, const std::string& rule_name) {
   return kBasicNumber + " | " + kBasicString + " | " + kBasicBoolean + " | " + kBasicNull + " | " +
          kBasicArray + " | " + kBasicObject;
-}
-
-std::string JSONSchemaConverter::GenerateTrue(const TrueSpec& spec, const std::string& rule_name) {
-  return GenerateAny(AnySpec{}, rule_name);
 }
 
 std::string JSONSchemaConverter::GenerateConst(
