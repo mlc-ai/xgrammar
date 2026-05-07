@@ -1801,7 +1801,6 @@ def get_llama_custom_structural_tag(
     - Meta-Llama-3
     - Llama-3.1
     - Llama-3.2
-    - Llama-4
 
     Returns
     -------
