@@ -163,7 +163,7 @@ std::string XMLToolCallingConverter::GenerateAny(
     const AnySpec& spec, const std::string& rule_name
 ) {
   if (nested_object_level_ == 0) {
-    return GenerateObject(ObjectSpec{}, rule_name);
+    return kXMLObject;
   }
   if (nested_object_level_ == 1) {
     return kXMLString + " | " + kBasicArray + " | " + kBasicObject;
