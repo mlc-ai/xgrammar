@@ -55,9 +55,11 @@ std::string XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
 void XMLToolCallingConverter::AddBasicRules() {
   // First add JSON basic rules. These should be in the inner layer of the XML format.
   XGRAMMAR_DCHECK(nested_object_level_ == 0);
+  // The nested part, true json format, is at level 2.
   nested_object_level_ = 2;
   JSONSchemaConverter::AddBasicRules();
-  nested_object_level_ = 0;
+  nested_object_level_ = 1;
+  // The outer part, xml format, is at level 1.
   // Add XML string rule
   ebnf_script_creator_.AddRule(
       kXMLString,
@@ -76,6 +78,9 @@ void XMLToolCallingConverter::AddBasicRules() {
   std::string any_body = GenerateAny(std::get<AnySpec>(any_spec->spec), kXMLAny);
   ebnf_script_creator_.AddRule(kXMLAny, any_body);
   AddCache("{}", kXMLAny);
+
+  // Reset the nested object level to 0, which is the root level.
+  nested_object_level_ = 0;
 
   // Add XML object rule
   constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
@@ -157,7 +162,10 @@ std::string XMLToolCallingConverter::GenerateString(
 std::string XMLToolCallingConverter::GenerateAny(
     const AnySpec& spec, const std::string& rule_name
 ) {
-  if (nested_object_level_ <= 1) {
+  if (nested_object_level_ == 0) {
+    return kXMLObject;
+  }
+  if (nested_object_level_ == 1) {
     return kXMLString + " | " + kBasicArray + " | " + kBasicObject;
   }
   return JSONSchemaConverter::GenerateAny(spec, rule_name);
