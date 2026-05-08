@@ -43,8 +43,8 @@ git clone --recursive https://github.com/mlc-ai/xgrammar.git && cd xgrammar
 pre-commit install
 # Copy cmake config. You can update the config if needed.
 cp cmake/config.cmake .
-# Install scikit-build-core as a build dependency.
-python3 -m pip install scikit-build-core
+# Install scikit-build-core  and apache-tvm-ffi as build dependencies.
+python3 -m pip install scikit-build-core apache-tvm-ffi
 python3 -m pip install --no-build-isolation -e .
 ```
 
