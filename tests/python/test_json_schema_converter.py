@@ -243,6 +243,21 @@ root ::= "{" "" (("\"bars\"" ": " root_prop_0 root_part_0)) "" "}"
     check_schema_with_instance(schema, instance, any_whitespace=False)
 
 
+def test_empty_enum_rejected():
+    """Empty enum [] should raise error, not produce invalid grammar."""
+    schema_obj = '{"type":"object","properties":{"x":{"type":"string","enum":[]}},"required":["x"]}'
+    with pytest.raises(RuntimeError):
+        xgr.Grammar.from_json_schema(schema_obj)
+
+    schema_str = '{"type":"string","enum":[]}'
+    with pytest.raises(RuntimeError):
+        xgr.Grammar.from_json_schema(schema_str)
+
+    schema_int = '{"type":"integer","enum":[]}'
+    with pytest.raises(RuntimeError):
+        xgr.Grammar.from_json_schema(schema_int)
+
+
 def test_optional():
     class MainModel(BaseModel):
         num: int = 0

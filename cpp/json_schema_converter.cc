@@ -825,6 +825,11 @@ Result<EnumSpec, SchemaError> SchemaParser::ParseEnum(const picojson::object& sc
   for (const auto& value : schema.at("enum").get<picojson::array>()) {
     spec.json_values.push_back(value.serialize());
   }
+  if (spec.json_values.empty()) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kInvalidSchema, "enum array must not be empty"
+    );
+  }
   return ResultOk(std::move(spec));
 }
 
@@ -2082,15 +2087,13 @@ std::string JSONSchemaConverter::GenerateConst(
 }
 
 std::string JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::string& rule_name) {
+  XGRAMMAR_CHECK(!spec.json_values.empty()) << "GenerateEnum called with empty enum spec";
   std::string result = "";
   for (size_t i = 0; i < spec.json_values.size(); ++i) {
     if (i != 0) {
       result += " | ";
     }
     result += "(\"" + JSONStrToPrintableStr(spec.json_values[i]) + "\")";
-  }
-  if (result.empty()) {
-    return "\"\"";
   }
   return result;
 }
