@@ -1244,7 +1244,13 @@ def get_deepseek_v3_2_structural_tag(
     """
     INVOKE_BEGIN_PREFIX = '<｜DSML｜invoke name="'
     INVOKE_BEGIN_SUFFIX = '">\n'
+    # INVOKE_END keeps a trailing "\n" so the final invoke is followed by a
+    # single "\n" before </｜DSML｜function_calls>, matching the official
+    # DeepSeek-V3.2 chat template. The separator between consecutive invokes
+    # is intentionally empty: the chat template joins tool calls with a single
+    # "\n" and that "\n" is already supplied by INVOKE_END.
     INVOKE_END = "</｜DSML｜invoke>\n"
+    INVOKE_SEPARATOR = ""
     TOOL_CALLS_PREFIX = "\n\n"
     FUNCTION_CALLS_BEGIN = "<｜DSML｜function_calls>\n"
     FUNCTION_CALLS_END = "</｜DSML｜function_calls>"
@@ -1272,7 +1278,7 @@ def get_deepseek_v3_2_structural_tag(
         # generate function calling triggered tag
         if len(tags) > 0:
             function_calling_tags = TagsWithSeparatorFormat(
-                tags=tags, separator="\n", at_least_one=True
+                tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True
             )
 
             suffix_tag = TriggeredTagsFormat(
@@ -1323,7 +1329,9 @@ def get_deepseek_v3_2_structural_tag(
         suffix_tag = SequenceFormat(
             elements=[
                 ConstStringFormat(value=TOOL_CALLS_PREFIX + FUNCTION_CALLS_BEGIN),
-                TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True),
+                TagsWithSeparatorFormat(
+                    tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True
+                ),
                 ConstStringFormat(value=FUNCTION_CALLS_END),
             ]
         )
@@ -1682,7 +1690,11 @@ def get_deepseek_v4_structural_tag(
     """
     INVOKE_BEGIN_PREFIX = '<｜DSML｜invoke name="'
     INVOKE_BEGIN_SUFFIX = '">\n'
+    # See get_deepseek_v3_2_structural_tag for the rationale on INVOKE_END +
+    # INVOKE_SEPARATOR splitting the single "\n" join that the chat template
+    # uses between consecutive <｜DSML｜invoke> blocks.
     INVOKE_END = "</｜DSML｜invoke>\n"
+    INVOKE_SEPARATOR = ""
     TOOL_CALLS_PREFIX = "\n\n"
     FUNCTION_CALLS_BEGIN = "<｜DSML｜tool_calls>\n"
     FUNCTION_CALLS_END = "</｜DSML｜tool_calls>"
@@ -1710,7 +1722,7 @@ def get_deepseek_v4_structural_tag(
         # generate function calling triggered tag
         if len(tags) > 0:
             function_calling_tags = TagsWithSeparatorFormat(
-                tags=tags, separator="\n", at_least_one=True
+                tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True
             )
 
             suffix_tag = TriggeredTagsFormat(
@@ -1761,7 +1773,9 @@ def get_deepseek_v4_structural_tag(
         suffix_tag = SequenceFormat(
             elements=[
                 ConstStringFormat(value=TOOL_CALLS_PREFIX + FUNCTION_CALLS_BEGIN),
-                TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True),
+                TagsWithSeparatorFormat(
+                    tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True
+                ),
                 ConstStringFormat(value=FUNCTION_CALLS_END),
             ]
         )

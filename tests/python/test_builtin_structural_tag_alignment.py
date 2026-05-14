@@ -56,6 +56,15 @@ TOOL_SCENARIOS = [
     (2, "required"),
 ]
 
+# Scenarios where we render multiple parallel tool calls in the assistant
+# message. Used in addition to TOOL_SCENARIOS to exercise the join/separator
+# between consecutive invoke blocks (regression for the DeepSeek-V3.2
+# double-newline grammar mismatch).
+PARALLEL_TOOL_SCENARIOS = [
+    (2, "auto", 2),
+    (2, "required", 2),
+]
+
 # (stag_key, model_id, reasoning, template_kwargs)
 # Excluded:
 #   - Llama-4: pythonic tool call format, needs separate structural tag
@@ -278,7 +287,9 @@ def validate_output(stag_key, tools, tool_choice, reasoning, model_output):
 def generate_test_cases():
     cases = []
     for stag_key, model_id, reasoning, template_kwargs in MODEL_CONFIGS:
-        for num_tools, tool_choice_str in TOOL_SCENARIOS:
+        scenarios = [(n, c, 1 if n > 0 else 0) for n, c in TOOL_SCENARIOS]
+        scenarios.extend(PARALLEL_TOOL_SCENARIOS)
+        for num_tools, tool_choice_str, num_tool_calls in scenarios:
             if num_tools > 0 and model_id in SKIP_TOOLS:
                 continue
             if reasoning:
@@ -291,21 +302,49 @@ def generate_test_cases():
                         num_tools,
                         tool_choice_str,
                         template_kwargs,
+                        num_tool_calls,
                     )
                 )
                 if model_id not in SKIP_EMPTY_REASONING:
                     cases.append(
-                        (stag_key, model_id, True, "", num_tools, tool_choice_str, template_kwargs)
+                        (
+                            stag_key,
+                            model_id,
+                            True,
+                            "",
+                            num_tools,
+                            tool_choice_str,
+                            template_kwargs,
+                            num_tool_calls,
+                        )
                     )
             else:
                 cases.append(
-                    (stag_key, model_id, False, None, num_tools, tool_choice_str, template_kwargs)
+                    (
+                        stag_key,
+                        model_id,
+                        False,
+                        None,
+                        num_tools,
+                        tool_choice_str,
+                        template_kwargs,
+                        num_tool_calls,
+                    )
                 )
     return cases
 
 
 def case_id(case):
-    stag_key, model_id, reasoning, reasoning_content, num_tools, tool_choice_str, _ = case
+    (
+        stag_key,
+        model_id,
+        reasoning,
+        reasoning_content,
+        num_tools,
+        tool_choice_str,
+        _,
+        num_tool_calls,
+    ) = case
     model_short = model_id.split("/")[-1] if "/" in model_id else model_id.replace("ENCODER:", "")
     if not reasoning:
         r_tag = "off"
@@ -313,7 +352,9 @@ def case_id(case):
         r_tag = "on"
     else:
         r_tag = "empty"
-    return f"{stag_key}-{model_short}-r{r_tag}-{num_tools}t-{tool_choice_str}"
+    return (
+        f"{stag_key}-{model_short}-r{r_tag}-{num_tools}t-{tool_choice_str}-{num_tool_calls}calls"
+    )
 
 
 TEST_CASES = generate_test_cases()
@@ -330,10 +371,10 @@ def test_reasoning_stag(case):
         num_tools,
         tool_choice_str,
         template_kwargs,
+        num_tool_calls,
     ) = case
     tools = make_tools(num_tools)
     tool_choice = make_tool_choice(tool_choice_str, tools or [])
-    num_tool_calls = 1 if num_tools > 0 else 0
     assistant_msg = make_assistant_msg(stag_key, reasoning_content, num_tool_calls)
     model_output = extract_model_output(stag_key, model_id, assistant_msg, tools, template_kwargs)
     validate_output(stag_key, tools, tool_choice, reasoning, model_output)
