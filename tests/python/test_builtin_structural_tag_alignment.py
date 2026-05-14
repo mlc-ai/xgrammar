@@ -60,10 +60,7 @@ TOOL_SCENARIOS = [
 # message. Used in addition to TOOL_SCENARIOS to exercise the join/separator
 # between consecutive invoke blocks (regression for the DeepSeek-V3.2
 # double-newline grammar mismatch).
-PARALLEL_TOOL_SCENARIOS = [
-    (2, "auto", 2),
-    (2, "required", 2),
-]
+PARALLEL_TOOL_SCENARIOS = [(2, "auto", 2), (2, "required", 2)]
 
 # (stag_key, model_id, reasoning, template_kwargs)
 # Excluded:
@@ -352,9 +349,7 @@ def case_id(case):
         r_tag = "on"
     else:
         r_tag = "empty"
-    return (
-        f"{stag_key}-{model_short}-r{r_tag}-{num_tools}t-{tool_choice_str}-{num_tool_calls}calls"
-    )
+    return f"{stag_key}-{model_short}-r{r_tag}-{num_tools}t-{tool_choice_str}-{num_tool_calls}calls"
 
 
 TEST_CASES = generate_test_cases()

@@ -1200,9 +1200,7 @@ def test_deepseek_dsml_parallel_invokes_double_newline_rejected(
     grammar = xgr.Grammar.from_structural_tag(structural_tag)
     chat_template_output = prefix + _dsml_two_call_output(block_name)
     double_newline_output = chat_template_output.replace(
-        "</｜DSML｜invoke>\n<｜DSML｜invoke",
-        "</｜DSML｜invoke>\n\n<｜DSML｜invoke",
-        1,
+        "</｜DSML｜invoke>\n<｜DSML｜invoke", "</｜DSML｜invoke>\n\n<｜DSML｜invoke", 1
     )
     assert not _is_grammar_accept_string(grammar, double_newline_output), (
         f"Grammar wrongly accepted double-newline join for {model}/{tool_choice}:\n"

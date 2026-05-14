@@ -1329,9 +1329,7 @@ def get_deepseek_v3_2_structural_tag(
         suffix_tag = SequenceFormat(
             elements=[
                 ConstStringFormat(value=TOOL_CALLS_PREFIX + FUNCTION_CALLS_BEGIN),
-                TagsWithSeparatorFormat(
-                    tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True
-                ),
+                TagsWithSeparatorFormat(tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True),
                 ConstStringFormat(value=FUNCTION_CALLS_END),
             ]
         )
@@ -1773,9 +1771,7 @@ def get_deepseek_v4_structural_tag(
         suffix_tag = SequenceFormat(
             elements=[
                 ConstStringFormat(value=TOOL_CALLS_PREFIX + FUNCTION_CALLS_BEGIN),
-                TagsWithSeparatorFormat(
-                    tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True
-                ),
+                TagsWithSeparatorFormat(tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True),
                 ConstStringFormat(value=FUNCTION_CALLS_END),
             ]
         )
