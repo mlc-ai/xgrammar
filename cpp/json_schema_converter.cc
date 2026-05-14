@@ -822,13 +822,14 @@ Result<EnumSpec, SchemaError> SchemaParser::ParseEnum(const picojson::object& sc
   if (!schema.at("enum").is<picojson::array>()) {
     return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "enum must be an array");
   }
-  for (const auto& value : schema.at("enum").get<picojson::array>()) {
-    spec.json_values.push_back(value.serialize());
-  }
-  if (spec.json_values.empty()) {
+  const auto& enum_array = schema.at("enum").get<picojson::array>();
+  if (enum_array.empty()) {
     return ResultErr<SchemaError>(
         SchemaErrorType::kInvalidSchema, "enum array must not be empty"
     );
+  }
+  for (const auto& value : enum_array) {
+    spec.json_values.push_back(value.serialize());
   }
   return ResultOk(std::move(spec));
 }
