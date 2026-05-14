@@ -196,7 +196,8 @@ std::string XMLToolCallingConverter::GenerateConst(
 std::string XMLToolCallingConverter::GenerateEnum(
     const EnumSpec& spec, const std::string& rule_name
 ) {
-  XGRAMMAR_CHECK(!spec.json_values.empty()) << "GenerateEnum called with empty enum spec";
+  XGRAMMAR_CHECK(!spec.json_values.empty())
+      << "GenerateEnum called with empty enum spec for rule: " << rule_name;
   if (nested_object_level_ <= 1) {
     std::string result;
     for (size_t i = 0; i < spec.json_values.size(); ++i) {
