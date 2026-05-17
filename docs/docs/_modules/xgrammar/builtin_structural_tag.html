@@ -1923,7 +1923,13 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">=</span> <span class="s1">&#39;&lt;｜DSML｜invoke name=&quot;&#39;</span>
     <span class="n">INVOKE_BEGIN_SUFFIX</span> <span class="o">=</span> <span class="s1">&#39;&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="c1"># INVOKE_END keeps a trailing &quot;\n&quot; so the final invoke is followed by a</span>
+    <span class="c1"># single &quot;\n&quot; before &lt;/｜DSML｜function_calls&gt;, matching the official</span>
+    <span class="c1"># DeepSeek-V3.2 chat template. The separator between consecutive invokes</span>
+    <span class="c1"># is intentionally empty: the chat template joins tool calls with a single</span>
+    <span class="c1"># &quot;\n&quot; and that &quot;\n&quot; is already supplied by INVOKE_END.</span>
     <span class="n">INVOKE_END</span> <span class="o">=</span> <span class="s2">&quot;&lt;/｜DSML｜invoke&gt;</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">INVOKE_SEPARATOR</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">TOOL_CALLS_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">&quot;</span>
     <span class="n">FUNCTION_CALLS_BEGIN</span> <span class="o">=</span> <span class="s2">&quot;&lt;｜DSML｜function_calls&gt;</span><span class="se">\n</span><span class="s2">&quot;</span>
     <span class="n">FUNCTION_CALLS_END</span> <span class="o">=</span> <span class="s2">&quot;&lt;/｜DSML｜function_calls&gt;&quot;</span>
@@ -1951,7 +1957,7 @@ window.runMermaid = runMermaid;</script>
         <span class="c1"># generate function calling triggered tag</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">function_calling_tags</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
-                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span>
             <span class="p">)</span>
 
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
@@ -2002,7 +2008,7 @@ window.runMermaid = runMermaid;</script>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
             <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALLS_PREFIX</span> <span class="o">+</span> <span class="n">FUNCTION_CALLS_BEGIN</span><span class="p">),</span>
-                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">FUNCTION_CALLS_END</span><span class="p">),</span>
             <span class="p">]</span>
         <span class="p">)</span>
@@ -2361,7 +2367,11 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">=</span> <span class="s1">&#39;&lt;｜DSML｜invoke name=&quot;&#39;</span>
     <span class="n">INVOKE_BEGIN_SUFFIX</span> <span class="o">=</span> <span class="s1">&#39;&quot;&gt;</span><span class="se">\n</span><span class="s1">&#39;</span>
+    <span class="c1"># See get_deepseek_v3_2_structural_tag for the rationale on INVOKE_END +</span>
+    <span class="c1"># INVOKE_SEPARATOR splitting the single &quot;\n&quot; join that the chat template</span>
+    <span class="c1"># uses between consecutive &lt;｜DSML｜invoke&gt; blocks.</span>
     <span class="n">INVOKE_END</span> <span class="o">=</span> <span class="s2">&quot;&lt;/｜DSML｜invoke&gt;</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="n">INVOKE_SEPARATOR</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
     <span class="n">TOOL_CALLS_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n\n</span><span class="s2">&quot;</span>
     <span class="n">FUNCTION_CALLS_BEGIN</span> <span class="o">=</span> <span class="s2">&quot;&lt;｜DSML｜tool_calls&gt;</span><span class="se">\n</span><span class="s2">&quot;</span>
     <span class="n">FUNCTION_CALLS_END</span> <span class="o">=</span> <span class="s2">&quot;&lt;/｜DSML｜tool_calls&gt;&quot;</span>
@@ -2389,7 +2399,7 @@ window.runMermaid = runMermaid;</script>
         <span class="c1"># generate function calling triggered tag</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">function_calling_tags</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
-                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span>
             <span class="p">)</span>
 
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
@@ -2440,7 +2450,7 @@ window.runMermaid = runMermaid;</script>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
             <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALLS_PREFIX</span> <span class="o">+</span> <span class="n">FUNCTION_CALLS_BEGIN</span><span class="p">),</span>
-                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">FUNCTION_CALLS_END</span><span class="p">),</span>
             <span class="p">]</span>
         <span class="p">)</span>
