@@ -1100,3 +1100,109 @@ def test_no_parameter_tools_build_grammar(format_type: str, kwargs: Dict[str, An
     structural_tag = get_model_structural_tag(format_type, **kwargs)
     grammar = xgr.Grammar.from_structural_tag(structural_tag)
     assert grammar is not None
+
+
+# ---------- Regression: deepseek_v3_2 / deepseek_v4 parallel invoke separator ----------
+#
+# The DeepSeek-V3.2 and DeepSeek-V4 chat templates render multiple tool calls
+# inside a single <｜DSML｜function_calls>...</｜DSML｜function_calls> (or
+# <｜DSML｜tool_calls>...) wrapper, joined by a single "\n" between
+# </｜DSML｜invoke> and the next <｜DSML｜invoke>. Prior to this regression
+# guard, the built-in structural tag forced a double "\n" between consecutive
+# invokes (INVOKE_END's trailing "\n" plus a "\n" separator on
+# TagsWithSeparatorFormat), preventing the model from emitting the
+# in-distribution single-newline join under constrained decoding.
+
+_DSML_TOOLS_PAIR = [
+    {
+        "function": {
+            "name": "search",
+            "parameters": {"type": "object", "properties": {"q": {"type": "string"}}},
+        }
+    },
+    {
+        "function": {
+            "name": "alt",
+            "parameters": {"type": "object", "properties": {"q": {"type": "string"}}},
+        }
+    },
+]
+
+
+def _dsml_two_call_output(block_name: str) -> str:
+    """Render exactly what the official chat template emits for 2 parallel calls."""
+    invoke_a = (
+        '<｜DSML｜invoke name="search">\n'
+        '<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter>'
+        "</｜DSML｜invoke>"
+    )
+    invoke_b = (
+        '<｜DSML｜invoke name="alt">\n'
+        '<｜DSML｜parameter name="q" string="true">v</｜DSML｜parameter>'
+        "</｜DSML｜invoke>"
+    )
+    tool_calls = "\n".join([invoke_a, invoke_b])
+    return f"<｜DSML｜{block_name}>\n{tool_calls}\n</｜DSML｜{block_name}>"
+
+
+@pytest.mark.parametrize(
+    "model,block_name,tool_choice,prefix",
+    [
+        ("deepseek_v3_2", "function_calls", "auto", ""),
+        ("deepseek_v3_2", "function_calls", "required", "\n\n"),
+        ("deepseek_v4", "tool_calls", "auto", ""),
+        ("deepseek_v4", "tool_calls", "required", "\n\n"),
+    ],
+    ids=[
+        "deepseek_v3_2-auto-parallel",
+        "deepseek_v3_2-required-parallel",
+        "deepseek_v4-auto-parallel",
+        "deepseek_v4-required-parallel",
+    ],
+)
+def test_deepseek_dsml_parallel_invokes_single_newline_accepted(
+    model: str, block_name: str, tool_choice: str, prefix: str
+):
+    """Regression: grammar must accept the chat-template's single-\\n invoke join."""
+    structural_tag = get_model_structural_tag(
+        model, tools=_DSML_TOOLS_PAIR, tool_choice=tool_choice, reasoning=False
+    )
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    chat_template_output = prefix + _dsml_two_call_output(block_name)
+    assert _is_grammar_accept_string(grammar, chat_template_output), (
+        f"Grammar rejected chat-template output for {model}/{tool_choice}:\n"
+        f"{chat_template_output!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "model,block_name,tool_choice,prefix",
+    [
+        ("deepseek_v3_2", "function_calls", "auto", ""),
+        ("deepseek_v3_2", "function_calls", "required", "\n\n"),
+        ("deepseek_v4", "tool_calls", "auto", ""),
+        ("deepseek_v4", "tool_calls", "required", "\n\n"),
+    ],
+    ids=[
+        "deepseek_v3_2-auto-parallel",
+        "deepseek_v3_2-required-parallel",
+        "deepseek_v4-auto-parallel",
+        "deepseek_v4-required-parallel",
+    ],
+)
+def test_deepseek_dsml_parallel_invokes_double_newline_rejected(
+    model: str, block_name: str, tool_choice: str, prefix: str
+):
+    """Regression: grammar must NOT accept the out-of-distribution double-\\n join."""
+    structural_tag = get_model_structural_tag(
+        model, tools=_DSML_TOOLS_PAIR, tool_choice=tool_choice, reasoning=False
+    )
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    chat_template_output = prefix + _dsml_two_call_output(block_name)
+    double_newline_output = chat_template_output.replace(
+        "</｜DSML｜invoke>\n<｜DSML｜invoke", "</｜DSML｜invoke>\n\n<｜DSML｜invoke", 1
+    )
+    assert not _is_grammar_accept_string(grammar, double_newline_output), (
+        f"Grammar wrongly accepted double-newline join for {model}/{tool_choice}:\n"
+        f"{double_newline_output!r}"
+    )
