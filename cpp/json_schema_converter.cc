@@ -824,9 +824,7 @@ Result<EnumSpec, SchemaError> SchemaParser::ParseEnum(const picojson::object& sc
   }
   const auto& enum_array = schema.at("enum").get<picojson::array>();
   if (enum_array.empty()) {
-    return ResultErr<SchemaError>(
-        SchemaErrorType::kInvalidSchema, "enum array must not be empty"
-    );
+    return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "enum array must not be empty");
   }
   for (const auto& value : enum_array) {
     spec.json_values.push_back(value.serialize());
