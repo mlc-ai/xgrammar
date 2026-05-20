@@ -2684,6 +2684,19 @@ std::string JSONSchemaConverter::FormatFloat(double value, int precision) {
   return result;
 }
 
+static std::string EscapeDotForRegex(const std::string& s) {
+  std::string result;
+  result.reserve(s.size() + 2);
+  for (char c : s) {
+    if (c == '.') {
+      result += "\\.";
+    } else {
+      result += c;
+    }
+  }
+  return result;
+}
+
 std::string JSONSchemaConverter::GenerateFloatRangeRegex(
     std::optional<double> start, std::optional<double> end, int precision
 ) {
@@ -2718,7 +2731,7 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
 
   if (start && !end) {
     std::string startIntStr = FormatFloat(start.value(), precision);
-    parts.push_back(startIntStr);
+    parts.push_back(EscapeDotForRegex(startIntStr));
 
     if (startFrac > 0.0) {
       size_t dotPos = startIntStr.find('.');
@@ -2774,7 +2787,7 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
     }
   } else if (!start && end) {
     std::string endIntStr = FormatFloat(end.value(), precision);
-    parts.push_back(endIntStr);
+    parts.push_back(EscapeDotForRegex(endIntStr));
 
     if (endFrac > 0.0) {
       size_t dotPos = endIntStr.find('.');
@@ -2833,20 +2846,20 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
         parts.push_back(std::to_string(startInt));
       } else {
         std::string startStr = FormatFloat(start.value(), precision);
-        parts.push_back(startStr);
+        parts.push_back(EscapeDotForRegex(startStr));
 
         std::string endStr = FormatFloat(end.value(), precision);
         if (startStr != endStr) {
-          parts.push_back(endStr);
+          parts.push_back(EscapeDotForRegex(endStr));
         }
       }
     } else {
       std::string startStr = FormatFloat(start.value(), precision);
-      parts.push_back(startStr);
+      parts.push_back(EscapeDotForRegex(startStr));
 
       std::string endStr = FormatFloat(end.value(), precision);
       if (startStr != endStr) {
-        parts.push_back(endStr);
+        parts.push_back(EscapeDotForRegex(endStr));
       }
 
       if (endInt > startInt + 1) {
