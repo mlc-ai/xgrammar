@@ -96,7 +96,7 @@ XGrammar has been widely adopted in industry, open-source projects, and academia
 &emsp;
 [<img src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/repo/mlc.jpeg" height=50/>](https://github.com/mlc-ai/mlc-llm)
 &emsp;
-[<span style="font-size:50px">WebLLM</span>](https://github.com/mlc-ai/web-llm)
+[<svg width="160" height="40"><text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" font-size="40" font-weight="bold" fill="currentColor">WebLLM</text></svg>](https://github.com/mlc-ai/web-llm)
 &emsp;
 [<img src="https://artifacts.trymirai.com/social/github/mirai.png" height=50/>](https://github.com/trymirai/uzu)
 
