@@ -107,7 +107,10 @@ std::string FSMImplBase<ContainerType>::EdgesToString(std::optional<std::vector<
         std::string char_str = EscapeString(static_cast<TCodepoint>(edge.min));
         result += "'" + char_str + "'->" + std::to_string(edge.target);
       } else if (edge.min == FSMEdge::EdgeType::kRuleRef) {
-        result += "Rule(" + std::to_string(edge.max) + ")->" + std::to_string(edge.target);
+        // Print the unsigned rule_id (GetRefRuleId), not the raw signed `max`,
+        // so rule_ids > 32767 are shown correctly instead of as negatives.
+        result +=
+            "Rule(" + std::to_string(edge.GetRefRuleId()) + ")->" + std::to_string(edge.target);
       } else if (edge.min == FSMEdge::EdgeType::kEpsilon) {
         result += "Eps->" + std::to_string(edge.target);
       } else if (edge.min == FSMEdge::EdgeType::kEOS) {
@@ -246,8 +249,21 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
     edges_[from].push_back({min, max, to});
   }
 
-  void AddRuleEdge(int from, int to, int16_t rule_id) {
-    AddEdge(from, to, FSMEdge::EdgeType::kRuleRef, rule_id);
+  void AddRuleEdge(int from, int to, int32_t rule_id) {
+    // rule_id is stored in the int16_t `max` field of FSMEdge, but interpreted
+    // as an unsigned 16-bit value by FSMEdge::GetRefRuleId(). That gives a
+    // valid range of [0, 65535]. Reject anything outside the range with a
+    // clear error message instead of silently truncating (which previously
+    // wrapped rule_ids > 32767 to negatives and caused per_rule_fsms[i]
+    // out-of-range crashes in EarleyParser at compile time).
+    XGRAMMAR_CHECK(rule_id >= 0 && rule_id <= 0xFFFF)
+        << "AddRuleEdge: rule_id " << rule_id
+        << " is out of range [0, 65535]. The xgrammar FSM stores rule_ids in "
+           "a 16-bit field; grammars with more than 65536 rules are not "
+           "supported by this build.";
+    AddEdge(
+        from, to, FSMEdge::EdgeType::kRuleRef, static_cast<int16_t>(static_cast<uint16_t>(rule_id))
+    );
   }
 
   void AddEpsilonEdge(int from, int to) { AddEdge(from, to, FSMEdge::EdgeType::kEpsilon, 0); }
@@ -313,7 +329,10 @@ int FSM::Impl::GetNextState(int from, int value, EdgeType edge_type) const {
     return FSM::kNoNextState;
   } else if (edge_type == EdgeType::kRuleRef) {
     for (const auto& edge : edges_[from]) {
-      if (edge.min == EdgeType::kRuleRef && edge.max == value) {
+      // Compare via GetRefRuleId() (unsigned 16-bit read) rather than the raw
+      // signed int16_t `max`, otherwise rule_ids > 32767 sign-extend to negative
+      // and never match the (non-negative) `value`. See FSMEdge::GetRefRuleId.
+      if (edge.min == EdgeType::kRuleRef && edge.GetRefRuleId() == value) {
         return edge.target;
       }
     }
@@ -483,7 +502,7 @@ void FSM::AddEdge(int from, int to, FSMEdge::EdgeType type, int16_t value) {
 
 void FSM::AddEpsilonEdge(int from, int to) { pimpl_->AddEpsilonEdge(from, to); }
 
-void FSM::AddRuleEdge(int from, int to, int16_t rule_id) { pimpl_->AddRuleEdge(from, to, rule_id); }
+void FSM::AddRuleEdge(int from, int to, int32_t rule_id) { pimpl_->AddRuleEdge(from, to, rule_id); }
 
 void FSM::AddEOSEdge(int from, int to) { pimpl_->AddEOSEdge(from, to); }
 
@@ -641,7 +660,10 @@ void CompactFSM::Impl::GetNextStates(
         continue;
       } else if (edge.min > EdgeType::kRuleRef) {
         break;
-      } else if (edge.max == value) {
+      } else if (edge.GetRefRuleId() == value) {
+        // GetRefRuleId() reads `max` as unsigned 16-bit; comparing the raw signed
+        // `max` would fail for rule_ids > 32767 (sign extension). The break above
+        // still holds because all kRuleRef edges share min == kRuleRef.
         targets->push_back(edge.target);
       }
     }
@@ -707,7 +729,10 @@ void CompactFSM::Impl::Advance(
           continue;
         } else if (edge.min > EdgeType::kRuleRef) {
           break;
-        } else if (edge.max == value) {
+        } else if (edge.GetRefRuleId() == value) {
+          // GetRefRuleId() reads `max` as unsigned 16-bit; comparing the raw signed
+          // `max` would fail for rule_ids > 32767 (sign extension). The break above
+          // still holds because all kRuleRef edges share min == kRuleRef.
           result->insert(edge.target);
         }
       }

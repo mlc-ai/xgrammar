@@ -124,8 +124,16 @@ struct alignas(8) FSMEdge {
   /*!
    * \brief Get the rule id of the edge.
    * \return The rule id of the edge. -1 if the edge is not a rule reference.
+   *
+   * NOTE: the rule_id is stored in the int16_t `max` field but is interpreted
+   * as an unsigned 16-bit value, giving a rule_id range of [0, 65535]. Treating
+   * `max` as signed would cause rule_ids > 32767 to wrap to negative values and
+   * crash downstream consumers (e.g. EarleyParser::ExpandNextRuleRefElementOnFSM
+   * indexing into per_rule_fsms). See also AddRuleEdge which enforces the range.
    */
-  int32_t GetRefRuleId() const { return IsRuleRef() ? max : -1; }
+  int32_t GetRefRuleId() const {
+    return IsRuleRef() ? static_cast<int32_t>(static_cast<uint16_t>(max)) : -1;
+  }
 
   /*!
    * \brief Get the auxiliary data index for repeat reference edges.
@@ -144,7 +152,10 @@ struct alignas(8) FSMEdge {
 /*! \brief View into edge_aux_data for a repeat edge (layout: [rule_id, lower, upper]). */
 struct RepeatEdgeRef {
   const int32_t* data;
-  int16_t RuleId() const { return static_cast<int16_t>(data[0]); }
+  // The aux storage is int32_t; previously this getter truncated to int16_t,
+  // which silently wrapped rule_ids > 32767 to negative values. Return the
+  // full int32_t to match how the rule_id is written in AddRepeatEdge.
+  int32_t RuleId() const { return data[0]; }
   int32_t Lower() const { return data[1]; }
   int32_t Upper() const { return data[2]; }
 };
@@ -342,9 +353,10 @@ class FSM {
    * \brief Add a rule reference edge between states.
    * \param from The source state.
    * \param to The target state.
-   * \param rule_id The rule id to reference.
+   * \param rule_id The rule id to reference. Must be in [0, 65535]; the value
+   *               is stored in an int16_t field but interpreted as unsigned.
    */
-  void AddRuleEdge(int from, int to, int16_t rule_id);
+  void AddRuleEdge(int from, int to, int32_t rule_id);
 
   /*!
    * \brief Add an EOS transition between two states.
