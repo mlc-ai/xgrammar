@@ -30,14 +30,14 @@ namespace xgrammar {
 /*!
  * \brief The edge of a FSM.
  */
-struct alignas(8) FSMEdge {
+struct FSMEdge {
   /*!
    * \brief Edge type is encoded in the `min` field. When min >= 0, the edge is a character range
    * [min, max]. When min < 0, it is a special edge type identified by the enum values below.
    *
    * For each type, `max` has a type-specific meaning (see comments on each enumerator).
    */
-  enum EdgeType : int16_t {
+  enum EdgeType : int32_t {
     //! Character range [min, max]. min >= 0.
     kCharRange = 0,
     //! Epsilon transition. max is unused.
@@ -60,7 +60,7 @@ struct alignas(8) FSMEdge {
 
   inline static constexpr int kMaxChar = 255;
 
-  int16_t min, max;
+  int32_t min, max;
 
   /*!
    * \brief The target state id of the edge.
@@ -70,7 +70,7 @@ struct alignas(8) FSMEdge {
   // for serialization only
   FSMEdge() = default;
 
-  FSMEdge(int16_t min, int16_t max, int32_t target) : min(min), max(max), target(target) {
+  FSMEdge(int32_t min, int32_t max, int32_t target) : min(min), max(max), target(target) {
     XGRAMMAR_DCHECK(!IsCharRange() || min <= max)
         << "Invalid FSMEdge: min > max. min=" << min << ", max=" << max;
   }
@@ -131,7 +131,7 @@ struct alignas(8) FSMEdge {
    * \brief Get the auxiliary data index for repeat reference edges.
    * \return The index into the owning FSM's edge_aux_data. -1 if not a repeat reference.
    */
-  int16_t GetAuxIndex() const {
+  int32_t GetAuxIndex() const {
     return (IsRepeatRef() || IsToken() || IsExcludeToken()) ? max : -1;
   }
 
@@ -144,7 +144,7 @@ struct alignas(8) FSMEdge {
 /*! \brief View into edge_aux_data for a repeat edge (layout: [rule_id, lower, upper]). */
 struct RepeatEdgeRef {
   const int32_t* data;
-  int16_t RuleId() const { return static_cast<int16_t>(data[0]); }
+  int32_t RuleId() const { return data[0]; }
   int32_t Lower() const { return data[1]; }
   int32_t Upper() const { return data[2]; }
 };
@@ -270,8 +270,9 @@ class FSM {
    * \param character The input character.
    * \return The target state if a valid transition exists, kNoNextState otherwise.
    */
-  int GetNextState(int from, int value, FSMEdge::EdgeType edge_type = FSMEdge::EdgeType::kCharRange)
-      const;
+  int GetNextState(
+      int from, int value, FSMEdge::EdgeType edge_type = FSMEdge::EdgeType::kCharRange
+  ) const;
 
   /*!
    * \brief Advance the FSM to the next state.
@@ -326,10 +327,10 @@ class FSM {
    * \param min The min value of the range.
    * \param max The max value of the range.
    */
-  void AddEdge(int from, int to, int16_t min, int16_t max);
+  void AddEdge(int from, int to, int32_t min, int32_t max);
 
   /*! \brief Add a raw edge with explicit type and value. */
-  void AddEdge(int from, int to, FSMEdge::EdgeType type, int16_t value);
+  void AddEdge(int from, int to, FSMEdge::EdgeType type, int32_t value);
 
   /*!
    * \brief Add an epsilon transition between two states.
@@ -344,7 +345,7 @@ class FSM {
    * \param to The target state.
    * \param rule_id The rule id to reference.
    */
-  void AddRuleEdge(int from, int to, int16_t rule_id);
+  void AddRuleEdge(int from, int to, int32_t rule_id);
 
   /*!
    * \brief Add an EOS transition between two states.
@@ -374,13 +375,13 @@ class FSM {
   void SetEdgeAuxData(std::vector<int32_t> data);
 
   /*! \brief Get repeat edge info by aux index. */
-  RepeatEdgeRef GetRepeatEdgeInfo(int16_t idx) const;
+  RepeatEdgeRef GetRepeatEdgeInfo(int32_t idx) const;
 
   /*! \brief Get token edge info by aux index. */
-  TokenEdgeRef GetTokenEdgeInfo(int16_t idx) const;
+  TokenEdgeRef GetTokenEdgeInfo(int32_t idx) const;
 
   /*! \brief Get exclude-token edge info by aux index. */
-  ExcludeTokenEdgeRef GetExcludeTokenEdgeInfo(int16_t idx) const;
+  ExcludeTokenEdgeRef GetExcludeTokenEdgeInfo(int32_t idx) const;
 
   /*!
    * \brief Add a whole FSM to the current FSM.
@@ -548,13 +549,13 @@ class CompactFSM {
   void SetEdgeAuxData(std::vector<int32_t> data);
 
   /*! \brief Get repeat edge info by aux index. */
-  RepeatEdgeRef GetRepeatEdgeInfo(int16_t idx) const;
+  RepeatEdgeRef GetRepeatEdgeInfo(int32_t idx) const;
 
   /*! \brief Get token edge info by aux index. */
-  TokenEdgeRef GetTokenEdgeInfo(int16_t idx) const;
+  TokenEdgeRef GetTokenEdgeInfo(int32_t idx) const;
 
   /*! \brief Get exclude-token edge info by aux index. */
-  ExcludeTokenEdgeRef GetExcludeTokenEdgeInfo(int16_t idx) const;
+  ExcludeTokenEdgeRef GetExcludeTokenEdgeInfo(int32_t idx) const;
 
   /****************** CompactFSM Construction Methods ******************/
 
@@ -753,8 +754,9 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \param state_mapping The mapping from old state ids to new state ids.
    * \param new_num_states The new number of states.
    */
-  FSMWithStartEnd RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states)
-      const;
+  FSMWithStartEnd RebuildWithMapping(
+      const std::vector<int>& state_mapping, int new_num_states
+  ) const;
 
   /*!
    * \brief Add the underlying FSM to another complete FSM that could contain multiple FSMs.
@@ -1008,7 +1010,8 @@ inline bool FSMWithStartEndBase<FSMType>::AcceptString(const std::string& str) c
 }
 
 template <typename FSMType>
-inline void FSMWithStartEndBase<FSMType>::GetReachableStates(std::unordered_set<int>* result
+inline void FSMWithStartEndBase<FSMType>::GetReachableStates(
+    std::unordered_set<int>* result
 ) const {
   return fsm_.GetReachableStates({start_}, result);
 }

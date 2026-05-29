@@ -812,11 +812,11 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
 
     int current_state = 0;
     for (const auto& ch : pattern) {
-      int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
-      int next_state = fsm.GetNextState(current_state, ch_int16);
+      int32_t ch_int32 = static_cast<int32_t>(static_cast<uint8_t>(ch));
+      int next_state = fsm.GetNextState(current_state, ch_int32);
       if (next_state == FSM::kNoNextState) {
         next_state = fsm.AddState();
-        fsm.AddEdge(current_state, next_state, ch_int16, ch_int16);
+        fsm.AddEdge(current_state, next_state, ch_int32, ch_int32);
       }
       current_state = next_state;
       if (!allow_overlap && ends.count(current_state) > 0) {
@@ -843,11 +843,11 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
 
       int current_state = 0;
       for (const auto& ch : excluded_pattern) {
-        int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
-        int next_state = fsm.GetNextState(current_state, ch_int16);
+        int32_t ch_int32 = static_cast<int32_t>(static_cast<uint8_t>(ch));
+        int next_state = fsm.GetNextState(current_state, ch_int32);
         if (next_state == FSM::kNoNextState) {
           next_state = fsm.AddState();
-          fsm.AddEdge(current_state, next_state, ch_int16, ch_int16);
+          fsm.AddEdge(current_state, next_state, ch_int32, ch_int32);
         }
         current_state = next_state;
         if (!allow_overlap && ends.count(current_state) > 0) {
