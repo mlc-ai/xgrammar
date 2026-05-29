@@ -2365,8 +2365,13 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
         int32_t ref_rule_id = edge.GetRefRuleId();
         if (ref_rule_id == fsm_index) {
           hash_and_target.insert({kSelfRecursionFlag, edge.target});
+        } else if (!grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value()) {
+          // Cross-rule BFS (e.g. after MergeEquivalentStates merges states between
+          // per-rule FSMs) may reach an edge whose referee hasn't been hashed yet.
+          // Fall back to a sentinel so the hash is still well-defined; the cache
+          // will simply not hit for this rule, but we won't crash the host process.
+          hash_and_target.insert({kUnKnownFlag, edge.target});
         } else {
-          XGRAMMAR_CHECK(grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value());
           hash_and_target.insert(
               {grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value(), edge.target}
           );
@@ -2378,8 +2383,12 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
           uint64_t base_hash = kSelfRecursionFlag;
           uint64_t repeat_hash = HashCombine(base_hash, info.Lower(), info.Upper());
           hash_and_target.insert({repeat_hash, edge.target});
+        } else if (!grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value()) {
+          // See note above; same fallback for repeat-ref edges.
+          uint64_t base_hash = kUnKnownFlag;
+          uint64_t repeat_hash = HashCombine(base_hash, info.Lower(), info.Upper());
+          hash_and_target.insert({static_cast<int32_t>(repeat_hash), edge.target});
         } else {
-          XGRAMMAR_CHECK(grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value());
           uint64_t base_hash = grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value();
           uint64_t repeat_hash = HashCombine(base_hash, info.Lower(), info.Upper());
           hash_and_target.insert({static_cast<int32_t>(repeat_hash), edge.target});
