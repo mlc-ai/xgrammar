@@ -2086,7 +2086,7 @@ std::string JSONSchemaConverter::GenerateConst(
 }
 
 std::string JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::string& rule_name) {
-  XGRAMMAR_CHECK(!spec.json_values.empty())
+  XGRAMMAR_DCHECK(!spec.json_values.empty())
       << "GenerateEnum called with empty enum spec for rule: " << rule_name;
   std::string result = "";
   for (size_t i = 0; i < spec.json_values.size(); ++i) {
