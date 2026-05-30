@@ -296,6 +296,8 @@
 pre-commit<span class="w"> </span>install
 <span class="c1"># Copy cmake config. You can update the config if needed.</span>
 cp<span class="w"> </span>cmake/config.cmake<span class="w"> </span>.
+<span class="c1"># Install scikit-build-core and apache-tvm-ffi as build dependencies.</span>
+python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>scikit-build-core<span class="w"> </span>apache-tvm-ffi
 python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--no-build-isolation<span class="w"> </span>-e<span class="w"> </span>.
 </pre></div>
 </div>
@@ -318,8 +320,8 @@ python3<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> 
 </section>
 <section id="method-3-build-xgrammar-c-library-only">
 <h2>Method 3: Build XGrammar C++ Library Only<a class="headerlink" href="#method-3-build-xgrammar-c-library-only" title="Permalink to this heading">¶</a></h2>
-<p>XGrammar can also be build as a C++ library. This is useful for using XGrammar in C++ or Rust projects.</p>
-<p>XGrammar uses CMake and Ninja to build the C++ library.</p>
+<p>XGrammar can also be built as a C++ library. This is useful for using XGrammar in C++ or Rust projects.</p>
+<p>XGrammar uses CMake and Ninja to build the C++ library. To build only the C++ library, you can set -DXGRAMMAR_BUILD_PYTHON_BINDINGS=OFF when running CMake, or modify cmake/config.cmake manually.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--recursive<span class="w"> </span>https://github.com/mlc-ai/xgrammar.git<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>xgrammar
 <span class="c1"># Copy cmake config. You can update the config if needed.</span>
 cp<span class="w"> </span>cmake/config.cmake<span class="w"> </span>.

@@ -43,6 +43,8 @@ git clone --recursive https://github.com/mlc-ai/xgrammar.git && cd xgrammar
 pre-commit install
 # Copy cmake config. You can update the config if needed.
 cp cmake/config.cmake .
+# Install scikit-build-core and apache-tvm-ffi as build dependencies.
+python3 -m pip install scikit-build-core apache-tvm-ffi
 python3 -m pip install --no-build-isolation -e .
 ```
 
@@ -65,9 +67,9 @@ python3 -m pytest -m "not hf_token_required"
 
 ## Method 3: Build XGrammar C++ Library Only
 
-XGrammar can also be build as a C++ library. This is useful for using XGrammar in C++ or Rust projects.
+XGrammar can also be built as a C++ library. This is useful for using XGrammar in C++ or Rust projects.
 
-XGrammar uses CMake and Ninja to build the C++ library.
+XGrammar uses CMake and Ninja to build the C++ library. To build only the C++ library, you can set -DXGRAMMAR_BUILD_PYTHON_BINDINGS=OFF when running CMake, or modify cmake/config.cmake manually.
 
 ```bash
 git clone --recursive https://github.com/mlc-ai/xgrammar.git && cd xgrammar
