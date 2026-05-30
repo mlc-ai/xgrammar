@@ -67,7 +67,7 @@ python3 -m pytest -m "not hf_token_required"
 
 ## Method 3: Build XGrammar C++ Library Only
 
-XGrammar can also be build as a C++ library. This is useful for using XGrammar in C++ or Rust projects.
+XGrammar can also be built as a C++ library. This is useful for using XGrammar in C++ or Rust projects.
 
 XGrammar uses CMake and Ninja to build the C++ library. To build only the C++ library, please modify `cmake/config.cmake` and set `XGRAMMAR_BUILD_PYTHON_BINDINGS` to `OFF` manually.
 
