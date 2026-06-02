@@ -6,7 +6,7 @@
 // C++ source directly via SwiftPM, without a separate CMake build step.
 //
 // Usage in a consumer's Package.swift:
-//   .package(url: "https://github.com/mlc-ai/xgrammar", from: "0.1.30"),
+//   .package(url: "https://github.com/mlc-ai/xgrammar", from: "0.2.1"),
 //   .product(name: "XGrammar", package: "xgrammar")
 
 import PackageDescription
@@ -22,6 +22,9 @@ let package = Package(
             name: "XGrammar",
             path: ".",
             exclude: [
+                // Build configuration files
+                "CMakeLists.txt",
+                "cpp/CMakeLists.txt",
                 // Non-source top-level directories
                 "cmake",
                 "docs",
@@ -36,15 +39,11 @@ let package = Package(
                 "web",
                 // Python / TVM bindings inside cpp/
                 "cpp/tvm_ffi",
-                // 3rdparty non-source
+                // 3rdparty non-source / header-only dependencies
                 "3rdparty/cpptrace",
                 "3rdparty/googletest",
-                "3rdparty/dlpack/apps",
-                "3rdparty/dlpack/cmake",
-                "3rdparty/dlpack/contrib",
-                "3rdparty/dlpack/docs",
-                "3rdparty/dlpack/tests",
-                "3rdparty/picojson/test_picojson.cpp",
+                "3rdparty/dlpack",
+                "3rdparty/picojson",
             ],
             publicHeadersPath: "include",
             cxxSettings: [

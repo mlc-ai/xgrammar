@@ -1,4 +1,4 @@
 module XGrammar {
-    header "xgrammar/xgrammar.h"
+    umbrella header "xgrammar/xgrammar.h"
     export *
 }
