@@ -194,6 +194,7 @@ basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
   loop_after_dispatch=false,
+  lock_excluded_prefixes=true,
   excludes=("</parameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))
@@ -306,6 +307,7 @@ basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
   loop_after_dispatch=false,
+  lock_excluded_prefixes=true,
   excludes=("</parameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))
@@ -389,6 +391,7 @@ basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n
 basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
 xml_string ::= TagDispatch(
   loop_after_dispatch=false,
+  lock_excluded_prefixes=true,
   excludes=("</\uff5cDSML\uff5cparameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))

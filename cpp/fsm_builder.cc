@@ -784,9 +784,15 @@ class TrieFSMBuilderImpl {
       const std::vector<std::string>& excluded_patterns,
       std::vector<int32_t>* end_states,
       bool allow_overlap,
-      bool add_back_edges
+      bool add_back_edges,
+      bool lock_excluded_prefixes
   );
-  void AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends);
+  void AddBackEdges(
+      FSM* fsm,
+      int start,
+      const std::unordered_set<int>& ends,
+      const std::unordered_set<int>& locked_states
+  );
 };
 
 std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
@@ -794,11 +800,16 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
     const std::vector<std::string>& excluded_patterns,
     std::vector<int32_t>* end_states,
     bool allow_overlap,
-    bool add_back_edges
+    bool add_back_edges,
+    bool lock_excluded_prefixes
 ) {
   FSM fsm(1);
   int start = 0;
   std::unordered_set<int> ends;
+  // The longest proper prefix state of each excluded pattern. When lock_excluded_prefixes is set,
+  // these states get no back edges so the prefix can only be completed into the full excluded
+  // pattern (see header doc).
+  std::unordered_set<int> locked_states;
 
   if (end_states) {
     end_states->clear();
@@ -842,6 +853,7 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
       }
 
       int current_state = 0;
+      int penultimate_state = start;
       for (const auto& ch : excluded_pattern) {
         int16_t ch_int16 = static_cast<int16_t>(static_cast<uint8_t>(ch));
         int next_state = fsm.GetNextState(current_state, ch_int16);
@@ -849,6 +861,7 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
           next_state = fsm.AddState();
           fsm.AddEdge(current_state, next_state, ch_int16, ch_int16);
         }
+        penultimate_state = current_state;
         current_state = next_state;
         if (!allow_overlap && ends.count(current_state) > 0) {
           return std::nullopt;
@@ -860,10 +873,16 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
 
       ends.insert(current_state);
       dead_state_set.insert(current_state);
+      // The longest proper prefix (e.g. "</parameter" of "</parameter>"). Locking it forces
+      // completion of the excluded pattern; the start state is never locked since it must keep
+      // matching ordinary content.
+      if (lock_excluded_prefixes && penultimate_state != start) {
+        locked_states.insert(penultimate_state);
+      }
     }
 
-    // Add back edges.
-    AddBackEdges(&fsm, start, ends);
+    // Add back edges. Locked prefixes are excluded so they cannot fall back to ordinary content.
+    AddBackEdges(&fsm, start, ends, locked_states);
 
     // Remove the edges to excluded end states.
     if (dead_state_set.size() != 0) {
@@ -890,7 +909,12 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
   return FSMWithStartEnd(fsm, start, is_end_state);
 }
 
-void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends) {
+void TrieFSMBuilderImpl::AddBackEdges(
+    FSM* fsm,
+    int start,
+    const std::unordered_set<int>& ends,
+    const std::unordered_set<int>& locked_states
+) {
   // Build an Aho-Corasick automaton by adding back edges.
   // When matching on the trie fails, we should go back to the start state and
   // find the next match. Back edges represent such state transitions.
@@ -939,7 +963,13 @@ void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_
     }
 
     // Step 2. Add i--(c)-->start for c not in the edge set of i.
-    f_add_range_edges(i, cur_edges_set);
+    // Skipped for the longest prefix of an excluded pattern: such a state must complete the
+    // excluded pattern (its only forward char) or restart on a pattern-initial char (kept by
+    // Step 1), but it must not absorb an arbitrary char back into ordinary content. This is what
+    // forbids drifting "</parameter" into a malformed end marker like "</parameter1>".
+    if (locked_states.count(i) == 0) {
+      f_add_range_edges(i, cur_edges_set);
+    }
 
     // Step 3. Update the edges of i.
     cur_edges.clear();
@@ -959,10 +989,11 @@ std::optional<FSMWithStartEnd> TrieFSMBuilder::Build(
     const std::vector<std::string>& exclude_patterns,
     std::vector<int32_t>* end_states,
     bool allow_overlap,
-    bool add_back_edges
+    bool add_back_edges,
+    bool lock_excluded_prefixes
 ) {
   return TrieFSMBuilderImpl().Build(
-      patterns, exclude_patterns, end_states, allow_overlap, add_back_edges
+      patterns, exclude_patterns, end_states, allow_overlap, add_back_edges, lock_excluded_prefixes
   );
 }
 

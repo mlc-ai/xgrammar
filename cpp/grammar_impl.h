@@ -197,7 +197,15 @@ class Grammar::Impl {
     bool loop_after_dispatch;
     /*! \brief The strings that are excluded by the tag dispatch. */
     std::vector<std::string> excludes;
-    static const int kTagDispatchExtraParameter = 2;
+    /*!
+     * \brief If true, once the matched content reaches the longest proper prefix of an excluded
+     * string (e.g. "</parameter" of "</parameter>"), it must complete that excluded string instead
+     * of falling back to ordinary content. This prevents constrained decoding from drifting into a
+     * malformed end marker such as "</parameter1>". Defaults to false to preserve the plain
+     * "any content until the excluded string" semantics used by e.g. reasoning sections.
+     */
+    bool lock_excluded_prefixes = false;
+    static const int kTagDispatchExtraParameter = 3;
   };
 
   /*! \brief Get the tag dispatch from the grammar expr. */
@@ -221,8 +229,12 @@ class Grammar::Impl {
         grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter]
     );
 
-    auto exclude_str_expr = GetGrammarExpr(
+    result.lock_excluded_prefixes = static_cast<bool>(
         grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 1]
+    );
+
+    auto exclude_str_expr = GetGrammarExpr(
+        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 2]
     );
     XGRAMMAR_DCHECK(exclude_str_expr.type == GrammarExprType::kChoices);
     result.excludes.reserve(exclude_str_expr.size());
