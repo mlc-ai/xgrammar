@@ -270,9 +270,8 @@ class FSM {
    * \param character The input character.
    * \return The target state if a valid transition exists, kNoNextState otherwise.
    */
-  int GetNextState(
-      int from, int value, FSMEdge::EdgeType edge_type = FSMEdge::EdgeType::kCharRange
-  ) const;
+  int GetNextState(int from, int value, FSMEdge::EdgeType edge_type = FSMEdge::EdgeType::kCharRange)
+      const;
 
   /*!
    * \brief Advance the FSM to the next state.
@@ -754,9 +753,8 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * \param state_mapping The mapping from old state ids to new state ids.
    * \param new_num_states The new number of states.
    */
-  FSMWithStartEnd RebuildWithMapping(
-      const std::vector<int>& state_mapping, int new_num_states
-  ) const;
+  FSMWithStartEnd RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states)
+      const;
 
   /*!
    * \brief Add the underlying FSM to another complete FSM that could contain multiple FSMs.
@@ -1010,8 +1008,7 @@ inline bool FSMWithStartEndBase<FSMType>::AcceptString(const std::string& str) c
 }
 
 template <typename FSMType>
-inline void FSMWithStartEndBase<FSMType>::GetReachableStates(
-    std::unordered_set<int>* result
+inline void FSMWithStartEndBase<FSMType>::GetReachableStates(std::unordered_set<int>* result
 ) const {
   return fsm_.GetReachableStates({start_}, result);
 }
