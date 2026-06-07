@@ -1476,7 +1476,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TokenTagDispatch(
     auto [token_id, rule_id] = ttd.trigger_rule_pairs[i];
     fsm.AddTokenEdge(start, dispatch_state, {token_id});
     int target = loop ? start : end_state;
-    fsm.AddRuleEdge(dispatch_state, target, static_cast<int16_t>(rule_id));
+    fsm.AddRuleEdge(dispatch_state, target, static_cast<int32_t>(rule_id));
   }
   fsm.AddExcludeTokenEdge(start, start, self_loop_exclude);
   return FSMWithStartEnd(fsm, start, ends);
