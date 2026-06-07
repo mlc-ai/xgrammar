@@ -76,11 +76,11 @@ class FSMImplBase {
 
   void SetEdgeAuxData(std::vector<int32_t> data) { edge_aux_data_ = std::move(data); }
 
-  RepeatEdgeRef GetRepeatEdgeInfo(int16_t idx) const { return {edge_aux_data_.data() + idx}; }
+  RepeatEdgeRef GetRepeatEdgeInfo(int32_t idx) const { return {edge_aux_data_.data() + idx}; }
 
-  TokenEdgeRef GetTokenEdgeInfo(int16_t idx) const { return {edge_aux_data_.data() + idx}; }
+  TokenEdgeRef GetTokenEdgeInfo(int32_t idx) const { return {edge_aux_data_.data() + idx}; }
 
-  ExcludeTokenEdgeRef GetExcludeTokenEdgeInfo(int16_t idx) const {
+  ExcludeTokenEdgeRef GetExcludeTokenEdgeInfo(int32_t idx) const {
     return {edge_aux_data_.data() + idx};
   }
 
@@ -241,12 +241,12 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
     return edges_.size() - 1;
   }
 
-  void AddEdge(int from, int to, int16_t min, int16_t max) {
+  void AddEdge(int from, int to, int32_t min, int32_t max) {
     XGRAMMAR_DCHECK(from < static_cast<int>(edges_.size()));
     edges_[from].push_back({min, max, to});
   }
 
-  void AddRuleEdge(int from, int to, int16_t rule_id) {
+  void AddRuleEdge(int from, int to, int32_t rule_id) {
     AddEdge(from, to, FSMEdge::EdgeType::kRuleRef, rule_id);
   }
 
@@ -257,8 +257,8 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
   void AddRepeatEdge(int from, int to, int32_t rule_id, int32_t lower, int32_t upper) {
     XGRAMMAR_DCHECK(edges_[from].empty())
         << "A state with a kRepeatRef edge must have no other outgoing edges.";
-    XGRAMMAR_DCHECK(edge_aux_data_.size() <= INT16_MAX);
-    int16_t aux_index = static_cast<int16_t>(edge_aux_data_.size());
+    XGRAMMAR_DCHECK(edge_aux_data_.size() <= INT32_MAX);
+    int32_t aux_index = static_cast<int32_t>(edge_aux_data_.size());
     edge_aux_data_.reserve(edge_aux_data_.size() + 3);
     edge_aux_data_.emplace_back(rule_id);
     edge_aux_data_.emplace_back(lower);
@@ -268,9 +268,9 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
 
   void AddTokenEdge(int from, int to, const std::vector<int32_t>& token_ids) {
     XGRAMMAR_DCHECK(!token_ids.empty()) << "Token set must not be empty";
-    XGRAMMAR_CHECK(edge_aux_data_.size() <= INT16_MAX)
+    XGRAMMAR_CHECK(edge_aux_data_.size() <= INT32_MAX)
         << "edge_aux_data_ overflow: too many auxiliary data entries";
-    int16_t aux_index = static_cast<int16_t>(edge_aux_data_.size());
+    int32_t aux_index = static_cast<int32_t>(edge_aux_data_.size());
     edge_aux_data_.push_back(static_cast<int32_t>(token_ids.size()));
     for (int32_t id : token_ids) {
       edge_aux_data_.push_back(id);
@@ -280,9 +280,9 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
 
   void AddExcludeTokenEdge(int from, int to, const std::vector<int32_t>& token_ids) {
     XGRAMMAR_DCHECK(!token_ids.empty()) << "Token exclude set must not be empty";
-    XGRAMMAR_CHECK(edge_aux_data_.size() <= INT16_MAX)
+    XGRAMMAR_CHECK(edge_aux_data_.size() <= INT32_MAX)
         << "edge_aux_data_ overflow: too many auxiliary data entries";
-    int16_t aux_index = static_cast<int16_t>(edge_aux_data_.size());
+    int32_t aux_index = static_cast<int32_t>(edge_aux_data_.size());
     edge_aux_data_.push_back(static_cast<int32_t>(token_ids.size()));
     for (int32_t id : token_ids) {
       edge_aux_data_.push_back(id);
@@ -313,7 +313,7 @@ int FSM::Impl::GetNextState(int from, int value, EdgeType edge_type) const {
     return FSM::kNoNextState;
   } else if (edge_type == EdgeType::kRuleRef) {
     for (const auto& edge : edges_[from]) {
-      if (edge.min == EdgeType::kRuleRef && edge.max == value) {
+      if (edge.min == EdgeType::kRuleRef && edge.GetRefRuleId() == value) {
         return edge.target;
       }
     }
@@ -399,7 +399,7 @@ void FSM::Impl::Advance(
 
 void FSM::Impl::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
   int old_num_states = NumStates();
-  int16_t aux_offset = static_cast<int16_t>(edge_aux_data_.size());
+  int32_t aux_offset = static_cast<int32_t>(edge_aux_data_.size());
 
   const auto& other_aux = fsm.GetEdgeAuxData();
   edge_aux_data_.insert(edge_aux_data_.end(), other_aux.begin(), other_aux.end());
@@ -416,9 +416,9 @@ void FSM::Impl::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
 
   for (int i = 0; i < fsm.NumStates(); ++i) {
     for (const auto& edge : fsm.GetEdges()[i]) {
-      int16_t max_val = edge.max;
+      int32_t max_val = edge.max;
       if (edge.IsAuxEdge() && aux_offset > 0) {
-        max_val = static_cast<int16_t>(edge.max + aux_offset);
+        max_val = static_cast<int32_t>(edge.max + aux_offset);
       }
       AddEdge(i + old_num_states, edge.target + old_num_states, edge.min, max_val);
     }
@@ -473,17 +473,17 @@ int FSM::NumStates() const { return pimpl_->NumStates(); }
 
 int FSM::AddState() { return pimpl_->AddState(); }
 
-void FSM::AddEdge(int from, int to, int16_t min, int16_t max) {
+void FSM::AddEdge(int from, int to, int32_t min, int32_t max) {
   pimpl_->AddEdge(from, to, min, max);
 }
 
-void FSM::AddEdge(int from, int to, FSMEdge::EdgeType type, int16_t value) {
+void FSM::AddEdge(int from, int to, FSMEdge::EdgeType type, int32_t value) {
   pimpl_->AddEdge(from, to, type, value);
 }
 
 void FSM::AddEpsilonEdge(int from, int to) { pimpl_->AddEpsilonEdge(from, to); }
 
-void FSM::AddRuleEdge(int from, int to, int16_t rule_id) { pimpl_->AddRuleEdge(from, to, rule_id); }
+void FSM::AddRuleEdge(int from, int to, int32_t rule_id) { pimpl_->AddRuleEdge(from, to, rule_id); }
 
 void FSM::AddEOSEdge(int from, int to) { pimpl_->AddEOSEdge(from, to); }
 
@@ -503,11 +503,11 @@ const std::vector<int32_t>& FSM::GetEdgeAuxData() const { return pimpl_->GetEdge
 
 void FSM::SetEdgeAuxData(std::vector<int32_t> data) { pimpl_->SetEdgeAuxData(std::move(data)); }
 
-RepeatEdgeRef FSM::GetRepeatEdgeInfo(int16_t idx) const { return pimpl_->GetRepeatEdgeInfo(idx); }
+RepeatEdgeRef FSM::GetRepeatEdgeInfo(int32_t idx) const { return pimpl_->GetRepeatEdgeInfo(idx); }
 
-TokenEdgeRef FSM::GetTokenEdgeInfo(int16_t idx) const { return pimpl_->GetTokenEdgeInfo(idx); }
+TokenEdgeRef FSM::GetTokenEdgeInfo(int32_t idx) const { return pimpl_->GetTokenEdgeInfo(idx); }
 
-ExcludeTokenEdgeRef FSM::GetExcludeTokenEdgeInfo(int16_t idx) const {
+ExcludeTokenEdgeRef FSM::GetExcludeTokenEdgeInfo(int32_t idx) const {
   return pimpl_->GetExcludeTokenEdgeInfo(idx);
 }
 
@@ -641,7 +641,7 @@ void CompactFSM::Impl::GetNextStates(
         continue;
       } else if (edge.min > EdgeType::kRuleRef) {
         break;
-      } else if (edge.max == value) {
+      } else if (edge.GetRefRuleId() == value) {
         targets->push_back(edge.target);
       }
     }
@@ -707,7 +707,7 @@ void CompactFSM::Impl::Advance(
           continue;
         } else if (edge.min > EdgeType::kRuleRef) {
           break;
-        } else if (edge.max == value) {
+        } else if (edge.GetRefRuleId() == value) {
           result->insert(edge.target);
         }
       }
@@ -810,15 +810,15 @@ void CompactFSM::SetEdgeAuxData(std::vector<int32_t> data) {
   pimpl_->SetEdgeAuxData(std::move(data));
 }
 
-RepeatEdgeRef CompactFSM::GetRepeatEdgeInfo(int16_t idx) const {
+RepeatEdgeRef CompactFSM::GetRepeatEdgeInfo(int32_t idx) const {
   return pimpl_->GetRepeatEdgeInfo(idx);
 }
 
-TokenEdgeRef CompactFSM::GetTokenEdgeInfo(int16_t idx) const {
+TokenEdgeRef CompactFSM::GetTokenEdgeInfo(int32_t idx) const {
   return pimpl_->GetTokenEdgeInfo(idx);
 }
 
-ExcludeTokenEdgeRef CompactFSM::GetExcludeTokenEdgeInfo(int16_t idx) const {
+ExcludeTokenEdgeRef CompactFSM::GetExcludeTokenEdgeInfo(int32_t idx) const {
   return pimpl_->GetExcludeTokenEdgeInfo(idx);
 }
 
@@ -1373,8 +1373,8 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
   // incoming_edges and target state in outgoing_edges.
   struct EndpointEdge {
     int peer;  // source in incoming_edges, target in outgoing_edges
-    int16_t min;
-    int16_t max;
+    int32_t min;
+    int32_t max;
 
     bool operator<(const EndpointEdge& other) const {
       return std::tie(peer, min, max) < std::tie(other.peer, other.min, other.max);
@@ -1636,7 +1636,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_num_states) const {
   }
 
   // Initialize the precursors of nodes.
-  std::vector<std::vector<std::pair<std::pair<int16_t, int16_t>, int>>> precursors;
+  std::vector<std::vector<std::pair<std::pair<int32_t, int32_t>, int>>> precursors;
   precursors.resize(now_fsm.NumStates());
   for (int i = 0; i < now_fsm.NumStates(); ++i) {
     const auto& edges = now_fsm.GetFsm().GetEdges(i);
@@ -1664,7 +1664,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_num_states) const {
   working_set.push_back(std::move(non_final_states));
 
   while (!working_set.empty()) {
-    std::map<std::pair<int16_t, int16_t>, std::unordered_set<int>> possible_transitions;
+    std::map<std::pair<int32_t, int32_t>, std::unordered_set<int>> possible_transitions;
     auto current_partition = std::move(working_set.back());
     working_set.pop_back();
 
@@ -1750,7 +1750,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
   FSMWithStartEnd dfa(FSM(0), 0, std::vector<bool>(), true);
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
-  std::unordered_set<int16_t> repeat_aux_indices;
+  std::unordered_set<int32_t> repeat_aux_indices;
   int now_process = 0;
   std::unordered_set<int> closure;
   closure.insert(start_);
@@ -1759,8 +1759,8 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
   while (now_process < static_cast<int>(closures.size())) {
     rules.clear();
     repeat_aux_indices.clear();
-    std::unordered_set<int16_t> token_aux_indices;
-    std::unordered_set<int16_t> exclude_token_aux_indices;
+    std::unordered_set<int32_t> token_aux_indices;
+    std::unordered_set<int32_t> exclude_token_aux_indices;
     std::set<int> interval_ends;
     std::bitset<256> allowed_characters;
     dfa.AddState();
