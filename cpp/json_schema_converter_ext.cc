@@ -111,6 +111,15 @@ std::string XMLToolCallingConverter::GetBasicAnyRuleName() const {
   return kBasicAny;
 }
 
+std::string XMLToolCallingConverter::GetKeyPatternExcluding(
+    const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+) {
+  if (nested_object_level_ <= 1) {
+    return GetKeyPattern();
+  }
+  return JSONSchemaConverter::GetKeyPatternExcluding(properties, rule_name);
+}
+
 std::string XMLToolCallingConverter::NextSeparator(bool is_end) {
   if (nested_object_level_ <= 1) {
     return GetWhitespacePattern();

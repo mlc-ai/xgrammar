@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <iomanip>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -1250,6 +1251,86 @@ std::string JSONSchemaConverter::NextSeparator(bool is_end) {
 
 std::string JSONSchemaConverter::GetKeyPattern() const { return kBasicString; }
 
+namespace {
+
+struct TrieNode {
+  bool is_terminal = false;
+  std::map<char, TrieNode> children;
+};
+
+std::string BuildTrieBody(const TrieNode& node) {
+  std::string result;
+  bool first = true;
+  auto add = [&](const std::string& s) {
+    if (!first) result += " | ";
+    first = false;
+    result += s;
+  };
+
+  // 1. Close quote - only if no excluded key ends here
+  if (!node.is_terminal) {
+    add("\"\\\"\"");
+  }
+
+  // 2. Negated char class - excludes edge chars + JSON specials
+  std::string neg = "[^";
+  for (const auto& [c, _] : node.children) {
+    if (c == ']' || c == '\\' || c == '^' || c == '-') {
+      neg += "\\";
+    }
+    neg += c;
+  }
+  neg += "\\0-\\x1f\\\"\\\\\\r\\n]";
+  add(neg + " " + JSONSchemaConverter::kBasicStringSub);
+
+  // 3. Escape sequence
+  add("\"\\\\\" " + JSONSchemaConverter::kBasicEscape + " " + JSONSchemaConverter::kBasicStringSub);
+
+  // 4. Trie edges - recurse
+  for (const auto& [c, child] : node.children) {
+    std::string child_body = BuildTrieBody(child);
+    std::string char_lit = "\"";
+    if (c == '"') {
+      char_lit += "\\\"";
+    } else if (c == '\\') {
+      char_lit += "\\\\";
+    } else {
+      char_lit += c;
+    }
+    char_lit += "\"";
+    add(char_lit + " " + child_body);
+  }
+
+  return "(" + result + ")";
+}
+
+}  // namespace
+
+std::string JSONSchemaConverter::GetKeyPatternExcluding(
+    const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+) {
+  if (properties.empty()) {
+    return GetKeyPattern();
+  }
+
+  // Build trie from property names
+  TrieNode root;
+  for (const auto& prop : properties) {
+    TrieNode* cur = &root;
+    for (char c : prop.name) {
+      cur = &cur->children[c];
+    }
+    cur->is_terminal = true;
+  }
+
+  // Generate EBNF body
+  std::string inner = BuildTrieBody(root);
+  std::string ws = GetWhitespacePattern();
+  std::string body = "[\"] (" + inner + ") (= " + ws + " [,}\\]:])";
+
+  return ebnf_script_creator_.AddRule(rule_name + "_addl_key", body);
+}
+
 std::string JSONSchemaConverter::GetBasicAnyRuleName() const { return kBasicAny; }
 
 void JSONSchemaConverter::AddCache(const std::string& key, const std::string& value) {
@@ -1607,8 +1688,12 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
         additional_prop_pattern = additional_prop_pattern_override;
       } else {
         std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-        additional_prop_pattern =
-            FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+        additional_prop_pattern = FormatOtherProperty(
+            GetKeyPatternExcluding(properties, rule_name),
+            add_value_rule,
+            rule_name,
+            additional_suffix
+        );
       }
       std::string last_rule_body = "(" + mid_sep + " " + additional_prop_pattern + ")*";
       std::string last_rule_name =
@@ -1667,8 +1752,12 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
         additional_prop_pattern = additional_prop_pattern_override;
       } else {
         std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-        additional_prop_pattern =
-            FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+        additional_prop_pattern = FormatOtherProperty(
+            GetKeyPatternExcluding(properties, rule_name),
+            add_value_rule,
+            rule_name,
+            additional_suffix
+        );
       }
     }
 
@@ -1782,8 +1871,12 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
         additional_prop_pattern = additional_prop_pattern_override;
       } else {
         std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-        additional_prop_pattern =
-            FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
+        additional_prop_pattern = FormatOtherProperty(
+            GetKeyPatternExcluding(properties, rule_name),
+            add_value_rule,
+            rule_name,
+            additional_suffix
+        );
       }
     }
 
@@ -3044,6 +3137,7 @@ std::string JSONSchemaToEBNF(
     default:
       XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);
   }
+  XGRAMMAR_UNREACHABLE();
 }
 
 // Wrapper functions for testing
