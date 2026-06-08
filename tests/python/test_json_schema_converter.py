@@ -543,15 +543,31 @@ def test_reference_schema():
     }
     instance_circular_complex = {
         # fmt: off
-        "value": {"name": "root", "next": {
-            "id": 1, "child": {"name": "level1", "next": {
-                "id": 2, "child": {"name": "level2", "next": {
-                    "id": 3, "child": {"name": "level3", "next": {
-                        "id": 4, "child": {"name": "level4", "next": {"id": 5}}
-                    }}
-                }}
-            }}
-        }}
+        "value": {
+            "name": "root",
+            "next": {
+                "id": 1,
+                "child": {
+                    "name": "level1",
+                    "next": {
+                        "id": 2,
+                        "child": {
+                            "name": "level2",
+                            "next": {
+                                "id": 3,
+                                "child": {
+                                    "name": "level3",
+                                    "next": {
+                                        "id": 4,
+                                        "child": {"name": "level4", "next": {"id": 5}},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        }
         # fmt: on
     }
     instance_circular_rejected = {
@@ -1501,6 +1517,70 @@ def test_object_error_handle():
     assert (
         "minProperties is greater than the number of properties, but additional properties aren't allowed"
         in str(e.value)
+    )
+
+
+def test_additional_properties_type_enforcement():
+    """Regression test for #208: additionalProperties: true must still
+    enforce declared types for defined (non-required) properties."""
+
+    # Case 1: additionalProperties: true + empty required + wrong type -> REJECT
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}},
+        "additionalProperties": True,
+        "required": [],
+    }
+    check_schema_with_instance(
+        schema, '{"a": "wrong"}', is_accepted=False, any_whitespace=False, strict_mode=False
+    )
+
+    # Case 2: Same schema + correct type -> ACCEPT
+    check_schema_with_instance(
+        schema, '{"a": 42}', is_accepted=True, any_whitespace=False, strict_mode=False
+    )
+
+    # Case 3: Same schema + truly additional property (unknown key) -> ACCEPT
+    check_schema_with_instance(
+        schema, '{"b": "anything"}', is_accepted=True, any_whitespace=False, strict_mode=False
+    )
+
+    # Case 4: Defined prop correct type + additional prop -> ACCEPT
+    check_schema_with_instance(
+        schema,
+        '{"a": 42, "extra": "val"}',
+        is_accepted=True,
+        any_whitespace=False,
+        strict_mode=False,
+    )
+
+    # Case 5: Multiple defined properties, partial required, wrong type on non-required -> REJECT
+    schema2 = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+        "additionalProperties": True,
+        "required": ["name"],
+    }
+    check_schema_with_instance(
+        schema2,
+        '{"name": "Alice", "age": "twenty"}',
+        is_accepted=False,
+        any_whitespace=False,
+        strict_mode=False,
+    )
+
+    # Case 6: Same schema + correct types -> ACCEPT
+    check_schema_with_instance(
+        schema2,
+        '{"name": "Alice", "age": 30}',
+        is_accepted=True,
+        any_whitespace=False,
+        strict_mode=False,
+    )
+
+    # Case 7: Empty object should be accepted (no required properties in schema 1)
+    check_schema_with_instance(
+        schema, "{}", is_accepted=True, any_whitespace=False, strict_mode=False
     )
 
 
