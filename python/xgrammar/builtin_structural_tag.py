@@ -976,7 +976,7 @@ def get_qwen_3_5_structural_tag(
             )
 
         assert len(tags) > 0
-        suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
@@ -1082,7 +1082,7 @@ def get_qwen_3_structural_tag(
             )
 
         assert len(tags) > 0
-        suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True)
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
@@ -1396,7 +1396,7 @@ def get_minimax_structural_tag(
         # generate function calling triggered tag
         if len(tags) > 0:
             function_calling_tags = TagsWithSeparatorFormat(
-                tags=tags, separator="\n", at_least_one=True
+                tags=tags, separator="", at_least_one=True
             )
 
             suffix_tag = TriggeredTagsFormat(
@@ -1445,7 +1445,7 @@ def get_minimax_structural_tag(
         suffix_tag = SequenceFormat(
             elements=[
                 ConstStringFormat(value="\n" + TOOL_CALL_BEGIN),
-                TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True),
+                TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True),
                 ConstStringFormat(value=TOOL_CALL_END),
             ]
         )
