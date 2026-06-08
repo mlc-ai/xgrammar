@@ -1655,7 +1655,7 @@ window.runMermaid = runMermaid;</script>
             <span class="p">)</span>
 
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
-        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
@@ -1761,7 +1761,7 @@ window.runMermaid = runMermaid;</script>
             <span class="p">)</span>
 
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
-        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
@@ -2075,7 +2075,7 @@ window.runMermaid = runMermaid;</script>
         <span class="c1"># generate function calling triggered tag</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">function_calling_tags</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
-                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span>
             <span class="p">)</span>
 
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
@@ -2124,7 +2124,7 @@ window.runMermaid = runMermaid;</script>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
             <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="n">TOOL_CALL_BEGIN</span><span class="p">),</span>
-                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">),</span>
             <span class="p">]</span>
         <span class="p">)</span>
