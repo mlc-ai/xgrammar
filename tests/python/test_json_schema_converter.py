@@ -183,7 +183,8 @@ root ::= ("[" [ \n\t]* (basic_integer [ \n\t]* "," [ \n\t]* basic_integer) ([ \n
         },
         basic_json_rules_ebnf
         + r"""root_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* root_addl)*
+root_addl_key ::= ["] (("\"" | [^bf\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "b" ("\"" | [^a\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "a" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub))) | "f" ("\"" | [^o\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "o" ("\"" | [^o\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "o" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub))))) (= [ \n\t]* [,}\]:])
+root_part_1 ::= ([ \n\t]* "," [ \n\t]* root_addl_key [ \n\t]* ":" [ \n\t]* root_addl)*
 root_part_0 ::= [ \n\t]* "," [ \n\t]* "\"bar\"" [ \n\t]* ":" [ \n\t]* basic_integer root_part_1
 root ::= "{" [ \n\t]* (("\"foo\"" [ \n\t]* ":" [ \n\t]* basic_integer root_part_0)) [ \n\t]* "}"
 """,
@@ -322,10 +323,11 @@ def test_all_optional_non_strict():
 
     ebnf_grammar_non_strict = basic_json_rules_ebnf_no_space + (
         r"""root_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-root_part_2 ::= (", " basic_string ": " root_addl)*
+root_addl_key ::= ["] (("\"" | [^ns\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "n" ("\"" | [^u\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "u" ("\"" | [^m\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "m" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub))) | "s" ("\"" | [^it\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "i" ("\"" | [^z\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "z" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub))) | "t" ("\"" | [^a\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "a" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub))))))) (= [ \n\t]* [,}\]:])
+root_part_2 ::= (", " root_addl_key ": " root_addl)*
 root_part_1 ::= root_part_2 | ", " "\"num\"" ": " basic_number root_part_2
 root_part_0 ::= root_part_1 | ", " "\"state\"" ": " basic_boolean root_part_1
-root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": " basic_boolean root_part_1) | ("\"num\"" ": " basic_number root_part_2) | basic_string ": " root_addl root_part_2) "" "}") | "{" "}"
+root ::= ("{" "" (("\"size\"" ": " basic_integer root_part_0) | ("\"state\"" ": " basic_boolean root_part_1) | ("\"num\"" ": " basic_number root_part_2) | root_addl_key ": " root_addl root_part_2) "" "}") | "{" "}"
 """
     )
 
@@ -788,7 +790,8 @@ root ::= "{" [ \n\t]* (("\"value\"" [ \n\t]* ":" [ \n\t]* basic_string root_part
         r"""root_prop_1 ::= (("[" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_integer)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 root_prop_2 ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_integer)* [ \n\t]* "}") | "{" [ \n\t]* "}"
 root_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-root_part_2 ::= ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* root_addl)*
+root_addl_key ::= ["] (("\"" | [^aov\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "a" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub))) | "o" ("\"" | [^b\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "b" ("\"" | [^j\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "j" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub))) | "v" ("\"" | [^a\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "a" ("\"" | [^l\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "l" ("\"" | [^u\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "u" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub))))))) (= [ \n\t]* [,}\]:])
+root_part_2 ::= ([ \n\t]* "," [ \n\t]* root_addl_key [ \n\t]* ":" [ \n\t]* root_addl)*
 root_part_1 ::= [ \n\t]* "," [ \n\t]* "\"obj\"" [ \n\t]* ":" [ \n\t]* root_prop_2 root_part_2
 root_part_0 ::= [ \n\t]* "," [ \n\t]* "\"arr\"" [ \n\t]* ":" [ \n\t]* root_prop_1 root_part_1
 root ::= "{" [ \n\t]* (("\"value\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0)) [ \n\t]* "}"

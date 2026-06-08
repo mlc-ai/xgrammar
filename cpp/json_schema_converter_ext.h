@@ -64,6 +64,9 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
 
   std::string GetKeyPattern() const override;
   std::string GetBasicAnyRuleName() const override;
+  std::string GetKeyPatternExcluding(
+      const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+  ) override;
 
   std::string NextSeparator(bool is_end = false) override;
 

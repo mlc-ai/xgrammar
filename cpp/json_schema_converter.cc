@@ -3137,6 +3137,7 @@ std::string JSONSchemaToEBNF(
     default:
       XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);
   }
+  XGRAMMAR_UNREACHABLE();
 }
 
 // Wrapper functions for testing
