@@ -104,6 +104,11 @@ SKIP_EMPTY_REASONING = {"ENCODER:dsv32", "MiniMaxAI/MiniMax-M2.5"}
 # Models where tool call format in template doesn't match structural tag.
 SKIP_TOOLS = set()
 
+# Models whose chat template rejects rendering more than one tool call at once
+# (e.g. Llama-3.1 raises "This model only supports single tool-calls at once!").
+# Parallel tool-call scenarios are skipped for these.
+SKIP_PARALLEL_TOOLS = {"meta-llama/Llama-3.1-8B-Instruct"}
+
 # Models whose template strips or skips <think> for empty reasoning_content,
 # requiring "strip base + prepend reasoning_content" to reconstruct model output.
 # Includes: R1/V3.1 (content.split('</think>')), GLM/MiniMax/Qwen3.5 (falsy branch).
@@ -288,6 +293,8 @@ def generate_test_cases():
         scenarios.extend(PARALLEL_TOOL_SCENARIOS)
         for num_tools, tool_choice_str, num_tool_calls in scenarios:
             if num_tools > 0 and model_id in SKIP_TOOLS:
+                continue
+            if num_tool_calls > 1 and model_id in SKIP_PARALLEL_TOOLS:
                 continue
             if reasoning:
                 cases.append(
