@@ -1610,7 +1610,7 @@ std::string JSONSchemaConverter::GenerateArray(
 }
 
 std::string JSONSchemaConverter::FormatPropertyKey(const std::string& key) {
-  return "\"\\\"" + key + "\\\"\"";
+  return "\"" + JSONStrToPrintableStr(picojson::value(key).serialize()) + "\"";
 }
 
 std::string JSONSchemaConverter::FormatProperty(
