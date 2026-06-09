@@ -113,13 +113,16 @@ If you find XGrammar useful in your research, please consider citing our papers:
   journal={Proceedings of Machine Learning and Systems 7},
   year={2024}
 }
-@misc{li2026xgrammar2efficientdynamicstructured,
-  title={XGrammar-2: Efficient Dynamic Structured Generation Engine for Agentic LLMs},
-  author={Linzhang Li and Yixin Dong and Guanjie Wang and Ziyi Xu and Alexander Jiang and Tianqi Chen},
-  year={2026},
-  eprint={2601.04426},
-  archivePrefix={arXiv},
-  primaryClass={cs.AI},
-  url={https://arxiv.org/abs/2601.04426},
+@inproceedings{10.1145/3786335.3813124,
+  author = {Li, Linzhang and Dong, Yixin and Wang, Guanjie and Xu, Ziyi and Jiang, Alexander and Chen, Tianqi},
+  title = {XGrammar-2: Dynamic and Efficient Structured Generation Engine for Agentic LLMs},
+  year = {2026},
+  isbn = {9798400724152},
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  url = {https://doi.org/10.1145/3786335.3813124},
+  booktitle = {Proceedings of the ACM Conference on AI and Agentic Systems},
+  pages = {1009--1022},
+  numpages = {14}
 }
 ```
