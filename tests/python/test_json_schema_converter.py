@@ -2396,6 +2396,38 @@ def test_utf8_string_in_const():
     assert _is_grammar_accept_string(grammar, '"常数constじょうすう\\n\\r\\t"')
 
 
+def test_control_char_in_property_key():
+    vocab = [bytes([i]) for i in range(256)]
+    metadata = json.dumps(
+        {
+            "vocab_type": 0,
+            "vocab_size": 256,
+            "prepend_space_in_tokenization": False,
+            "add_prefix_space": False,
+            "stop_token_ids": [0],
+        }
+    )
+    tokenizer_info = xgr.TokenizerInfo.from_vocab_and_metadata(vocab, metadata)
+    schema = {
+        "type": "object",
+        "properties": {"key\x01ctrl": {"type": "string"}},
+        "required": ["key\x01ctrl"],
+    }
+
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    grammar = compiler.compile_json_schema(json.dumps(schema))
+
+    matcher = xgr.GrammarMatcher(grammar)
+    for token_id in b'{"key':
+        assert matcher.accept_token(token_id)
+    assert not matcher.accept_token(1)
+
+    matcher = xgr.GrammarMatcher(grammar)
+    for token_id in b'{"key':
+        assert matcher.accept_token(token_id)
+    assert matcher.accept_token(ord("\\"))
+
+
 def test_utf8_object_array_in_enum():
     schema = {
         "type": "object",

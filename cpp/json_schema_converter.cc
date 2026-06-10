@@ -1314,6 +1314,7 @@ std::string JSONSchemaConverter::GetKeyPatternExcluding(
   }
 
   // Build trie from property names
+  // TODO(linzhang): The trie only excludes the literal unescaped spelling of each property name.
   TrieNode root;
   for (const auto& prop : properties) {
     TrieNode* cur = &root;
@@ -1610,7 +1611,7 @@ std::string JSONSchemaConverter::GenerateArray(
 }
 
 std::string JSONSchemaConverter::FormatPropertyKey(const std::string& key) {
-  return "\"\\\"" + key + "\\\"\"";
+  return "\"" + JSONStrToPrintableStr(picojson::value(key).serialize()) + "\"";
 }
 
 std::string JSONSchemaConverter::FormatProperty(
