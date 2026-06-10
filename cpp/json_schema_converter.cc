@@ -1314,6 +1314,7 @@ std::string JSONSchemaConverter::GetKeyPatternExcluding(
   }
 
   // Build trie from property names
+  // TODO(linzhang): The trie only excludes the literal unescaped spelling of each property name.
   TrieNode root;
   for (const auto& prop : properties) {
     TrieNode* cur = &root;
