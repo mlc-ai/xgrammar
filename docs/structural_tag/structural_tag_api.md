@@ -152,7 +152,7 @@ Matches content that conforms to a JSON Schema.
 | Field | Type | Default |
 | --- | --- | --- |
 | `json_schema` | `object` | (required) |
-| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"deepseek_xml"` | `"json"` |
+| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"deepseek_xml"` \| `"glm_xml"` | `"json"` |
 
 - **Use it when**: the structured part is naturally expressed as schema-constrained data
 
@@ -162,6 +162,7 @@ Matches content that conforms to a JSON Schema.
 - `"qwen_xml"`: Qwen-style XML parameters, such as `<parameter=name>value</parameter>`
 - `"minimax_xml"`: MiniMax-style XML parameters, such as `<parameter name="name">value</parameter>`
 - `"deepseek_xml"`: DeepSeek-v3.2 XML parameter format
+- `"glm_xml"`: GLM-style XML parameter format, such as `<arg_key>name</arg_key><arg_value>value</arg_value>`
 
 ```json
 {

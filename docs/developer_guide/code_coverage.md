@@ -9,6 +9,10 @@ To run the coverage test, please follow these steps:
 2. Compile the XGrammar library with the configured settings.
 3. Run the script `run_coverage.sh` in the root directory of the XGrammar library.
 
+Note that the script invokes `lcov` with `--gcov-tool /usr/bin/gcov-13`, so it expects the
+library to be compiled with GCC 13 and `gcov-13` to be installed. If you use a different
+compiler version, update the `--gcov-tool` path in the script accordingly.
+
 After running the script, you will find the coverage report in the
 `coverage_report` directory.
 

@@ -47,6 +47,12 @@ tokenizer = AutoTokenizer.from_pretrained(...)
 tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
 ```
 
+If the `vocab_size` parameter is not provided, it defaults to the tokenizer's vocabulary size.
+Note that the model's vocabulary size (`config.vocab_size`, i.e. the size of its logits) can differ
+from the tokenizer's due to padding. In that case, pass the model's vocabulary size explicitly:
+`xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=config.vocab_size)`. See
+[integration with LLM engine](engine_integration.md) for details.
+
 ## Grammar Compiler
 
 To accelerate mask generation, XGrammar performs preprocessing on the grammar using the vocabulary of the model. This process is called **Grammar Compilation**. During grammar compilation, we:
@@ -140,8 +146,12 @@ grammar_matcher.reset()
 print(tokenizer.decode(input_ids))
 ```
 
-[`xgr.GrammarMatcher.is_terminated`](xgrammar.GrammarMatcher.is_terminated) will require the LLM generate
-an EOS token after completing the structure. It is equivalent to the EOS-terminated generation.
+By default, [`xgr.GrammarMatcher.is_terminated`](xgrammar.GrammarMatcher.is_terminated) returns True
+after the matcher accepts a stop token following the completion of the structure. The stop tokens
+default to the ones detected from the tokenizer (e.g. the EOS token), and can be customized with the
+`override_stop_tokens` parameter of [`xgr.GrammarMatcher`](xgrammar.GrammarMatcher). Alternatively,
+if the matcher is constructed with `terminate_without_stop_token=True`, it terminates as soon as the
+structure is completed, without requiring a stop token.
 
 Congratulations! You have successfully generated a structured output using XGrammar.
 

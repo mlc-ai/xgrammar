@@ -26,7 +26,7 @@ This will build the website and the docs, and host them locally at `http://local
 ## Deploying Docs on GitHub Pages
 
 The documentation is built and deployed automatically when you merge your changes into the `main` branch.
-The workflow is defined in [`.github/workflows/documentation.yaml`](https://github.com/mlc-ai/xgrammar/tree/v0.1.19/.github/workflows/documentation.yaml).
+The workflow is defined in [`.github/workflows/documentation.yaml`](https://github.com/mlc-ai/xgrammar/tree/v0.2.1/.github/workflows/documentation.yaml).
 
 The docs will be build locally, uploaded to [`xgrammar/gh-pages`](https://github.com/mlc-ai/xgrammar/tree/gh-pages) and then deployed to GitHub Pages.
 

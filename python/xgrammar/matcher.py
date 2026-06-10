@@ -44,7 +44,7 @@ def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
     Returns
     -------
     bitmask : torch.Tensor
-        The shape of the bitmask.
+        The allocated bitmask.
     """
     # In CUDA, use pinned memory to speed up data transfer from CPU to GPU
     return torch.full(get_bitmask_shape(batch_size, vocab_size), _FULL_MASK, dtype=bitmask_dtype)

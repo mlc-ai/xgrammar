@@ -47,7 +47,7 @@ compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
 ```
 
 For JSON generation, there are generally three options for compiling the grammar: using a built-in
-JSON grammar, specify JSON schema with a Pydantic model, or from a JSON schema string. Pick one
+JSON grammar, specify JSON schema with a Pydantic model, or from a JSON schema string. Pick
 one of the three below to run.
 
 ```python
@@ -134,7 +134,7 @@ matcher.reset()
 
 ## Try out via HF Transformers
 
-XGrammar can be easily integrate with HF transformers using a `LogitsProcessor`. Note that
+XGrammar can be easily integrated with HF transformers using a `LogitsProcessor`. Note that
 this integration mainly aims for accessibility and may contain extra overhead.
 
 First, instantiate a model, a tokenizer, and inputs.

@@ -181,7 +181,7 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `"qwen_3_coder"` | Qwen3-Coder, Qwen3-Coder-Next |
 | `"kimi"` | Kimi-K2, Kimi-K2.5 |
 | `"deepseek_r1"` | DeepSeek-R1, DeepSeek-R1-0528 |
-| `"deepseek_v3_1"` | DeepSeek-V3.1, DeepSeek-V3.2-exp |
+| `"deepseek_v3_1"` | DeepSeek-V3.1, DeepSeek-V3.2-Exp |
 | `"harmony"` | gpt-oss |
 | `"deepseek_v3_2"` | DeepSeek-V3.2 |
 | `"minimax"` | MiniMax-M2.5 |
