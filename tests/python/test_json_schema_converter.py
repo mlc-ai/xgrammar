@@ -1611,8 +1611,10 @@ def test_generate_range_regex():
 
     # Unbounded ranges (None cases)
     assert _generate_range_regex(None, None) == r"^-?\d+$"
-    assert _generate_range_regex(5, None) == r"^([5-9]|[1-9]\d*)$"
+    assert _generate_range_regex(5, None) == r"^([5-9]|[1-9]\d{1,})$"
     assert _generate_range_regex(None, 0) == r"^(-[1-9]\d*|0)$"
+    assert _generate_range_regex(-5, None) == r"^(-([1-5])|0|[1-9]\d*)$"
+    assert _generate_range_regex(None, -2) == r"^(-[2-9]|-[1-9]\d{1,})$"
 
     # Medium range
     assert (
@@ -2252,40 +2254,50 @@ def test_primitive_type_object():
 
 
 def test_generate_float_regex():
-    assert _generate_float_regex(1.0, 5.0) == r"^(1|5|(([2-4]))(\.\d{1,6})?|1\.\d{1,6}|5\.\d{1,6})$"
+    assert (
+        _generate_float_regex(1.0, 5.0)
+        == r"^(1\.[1-9]\d{0,5}|1\.0[1-9]\d{0,4}|1\.00[1-9]\d{0,3}|1\.000[1-9]\d{0,2}|1\.0000[1-9]\d{0,1}|1\.00000[1-9]|1\.0{1,6}|1|(([2-4]))(\.\d{1,6})?|5\.0{1,6}|5)$"
+    )
 
     assert (
         _generate_float_regex(1.5, 5.75)
-        == r"^(1\.5|5\.75|(([2-4]))(\.\d{1,6})?|1\.6\d{0,5}|1\.7\d{0,5}|1\.8\d{0,5}|1\.9\d{0,5}|5\.0\d{0,5}|5\.1\d{0,5}|5\.2\d{0,5}|5\.3\d{0,5}|5\.4\d{0,5}|5\.5\d{0,5}|5\.6\d{0,5}|5\.70\d{0,4}|5\.71\d{0,4}|5\.72\d{0,4}|5\.73\d{0,4}|5\.74\d{0,4})$"
+        == r"^(1\.[6-9]\d{0,5}|1\.5[1-9]\d{0,4}|1\.50[1-9]\d{0,3}|1\.500[1-9]\d{0,2}|1\.5000[1-9]\d{0,1}|1\.50000[1-9]|1\.50{0,5}|(([2-4]))(\.\d{1,6})?|5\.[0-6]\d{0,5}|5\.7[0-4]\d{0,4}|5\.0{1,6}|5\.70{0,5}|5\.750{0,4}|5)$"
     )
 
     assert (
         _generate_float_regex(-3.14, 2.71828)
-        == r"^(-3\.14|2\.71828|(-([1-3])|0|(1))(\.\d{1,6})?|-3\.0\d{0,5}|-3\.10\d{0,4}|-3\.11\d{0,4}|-3\.12\d{0,4}|-3\.13\d{0,4}|2\.0\d{0,5}|2\.1\d{0,5}|2\.2\d{0,5}|2\.3\d{0,5}|2\.4\d{0,5}|2\.5\d{0,5}|2\.6\d{0,5}|2\.70\d{0,4}|2\.710\d{0,3}|2\.711\d{0,3}|2\.712\d{0,3}|2\.713\d{0,3}|2\.714\d{0,3}|2\.715\d{0,3}|2\.716\d{0,3}|2\.717\d{0,3}|2\.7180\d{0,2}|2\.7181\d{0,2}|2\.71820\d{0,1}|2\.71821\d{0,1}|2\.71822\d{0,1}|2\.71823\d{0,1}|2\.71824\d{0,1}|2\.71825\d{0,1}|2\.71826\d{0,1}|2\.71827\d{0,1})$"
+        == r"^(-0\.[1-9]\d{0,5}|-0\.0[1-9]\d{0,4}|-0\.00[1-9]\d{0,3}|-0\.000[1-9]\d{0,2}|-0\.0000[1-9]\d{0,1}|-0\.00000[1-9]|-(([1-2]))(\.\d{1,6})?|-3\.0\d{0,5}|-3\.1[0-3]\d{0,4}|-3\.0{1,6}|-3\.10{0,5}|-3\.140{0,4}|-3|0(\.0{1,6})?|0\.[1-9]\d{0,5}|0\.0[1-9]\d{0,4}|0\.00[1-9]\d{0,3}|0\.000[1-9]\d{0,2}|0\.0000[1-9]\d{0,1}|0\.00000[1-9]|((1))(\.\d{1,6})?|2\.[0-6]\d{0,5}|2\.70\d{0,4}|2\.71[0-7]\d{0,3}|2\.718[0-1]\d{0,2}|2\.7182[0-7]\d{0,1}|2\.0{1,6}|2\.70{0,5}|2\.710{0,4}|2\.7180{0,3}|2\.71820{0,2}|2\.718280{0,1}|2)$"
     )
 
     assert (
         _generate_float_regex(0.5, None)
-        == r"^(0\.5|0\.6\d{0,5}|0\.7\d{0,5}|0\.8\d{0,5}|0\.9\d{0,5}|([1-9]|[1-9]\d*)(\.\d{1,6})?)$"
+        == r"^(0\.[6-9]\d{0,5}|0\.5[1-9]\d{0,4}|0\.50[1-9]\d{0,3}|0\.500[1-9]\d{0,2}|0\.5000[1-9]\d{0,1}|0\.50000[1-9]|0\.50{0,5}|([1-9]|[1-9]\d{1,})(\.\d{1,6})?)$"
     )
 
     assert (
         _generate_float_regex(None, -1.5)
-        == r"^(-1\.5|-1\.6\d{0,5}|-1\.7\d{0,5}|-1\.8\d{0,5}|-1\.9\d{0,5}|(-[3-9]|-[1-9]\d*)(\.\d{1,6})?)$"
+        == r"^(-1\.[6-9]\d{0,5}|-1\.5[1-9]\d{0,4}|-1\.50[1-9]\d{0,3}|-1\.500[1-9]\d{0,2}|-1\.5000[1-9]\d{0,1}|-1\.50000[1-9]|-1\.50{0,5}|-([2-9]|[1-9]\d{1,})(\.\d{1,6})?)$"
     )
 
     assert _generate_float_regex(None, None) == r"^-?\d+(\.\d{1,6})?$"
 
-    assert _generate_float_regex(3.14159, 3.14159) == r"^(3\.14159)$"
+    assert _generate_float_regex(3.14159, 3.14159) == r"^(3\.141590{0,1})$"
 
     assert _generate_float_regex(10.5, 2.5) == r"^()$"
 
     assert _generate_float_regex(5.123456, 5.123457) == r"^(5\.123456|5\.123457)$"
 
+    assert _generate_float_regex(-0.000001, 0.000001) == r"^(-0\.000001|0(\.0{1,6})?|0\.000001)$"
+
+    # exclusive bounds drop the boundary value itself
     assert (
-        _generate_float_regex(-0.000001, 0.000001)
-        == r"^(-0\.000001|0\.000001|-0\.000000\d{0,0}|0\.000000\d{0,0})$"
+        _generate_float_regex(0, None, exclusive_start=True)
+        == r"^(0\.[1-9]\d{0,5}|0\.0[1-9]\d{0,4}|0\.00[1-9]\d{0,3}|0\.000[1-9]\d{0,2}|0\.0000[1-9]\d{0,1}|0\.00000[1-9]|([1-9]|[1-9]\d{1,})(\.\d{1,6})?)$"
     )
+    assert _generate_float_regex(0, None) == (
+        r"^(0(\.0{1,6})?|0\.[1-9]\d{0,5}|0\.0[1-9]\d{0,4}|0\.00[1-9]\d{0,3}|0\.000[1-9]\d{0,2}|0\.0000[1-9]\d{0,1}|0\.00000[1-9]|([1-9]|[1-9]\d{1,})(\.\d{1,6})?)$"
+    )
+    assert _generate_float_regex(2.5, 2.5, exclusive_end=True) == r"^()$"
 
 
 def test_float_minimum_no_wildcard_in_grammar():
@@ -2309,6 +2321,154 @@ def test_float_minimum_no_wildcard_in_grammar():
     for line in str(grammar3).split("\n"):
         if line.startswith("root"):
             assert "[\\0-\\U0010ffff]" not in line, f"Wildcard found in: {line}"
+
+
+number_range_instances = [
+    # exclusiveMinimum with an integer-valued bound: values in (0, 1) must be
+    # representable and the bound itself must be rejected.
+    ({"type": "number", "exclusiveMinimum": 0}, "0.1", True),
+    ({"type": "number", "exclusiveMinimum": 0}, "0.99", True),
+    ({"type": "number", "exclusiveMinimum": 0}, "0.000001", True),
+    ({"type": "number", "exclusiveMinimum": 0}, "0", False),
+    ({"type": "number", "exclusiveMinimum": 0}, "0.0", False),
+    ({"type": "number", "exclusiveMinimum": 0}, "-1", False),
+    ({"type": "number", "exclusiveMinimum": 0}, "1", True),
+    ({"type": "number", "exclusiveMinimum": 0}, "1.5", True),
+    ({"type": "number", "exclusiveMinimum": 0}, "25", True),
+    # inclusive minimum 0
+    ({"type": "number", "minimum": 0}, "0", True),
+    ({"type": "number", "minimum": 0}, "0.0", True),
+    ({"type": "number", "minimum": 0}, "0.5", True),
+    ({"type": "number", "minimum": 0}, "-0.5", False),
+    # minimum above 1: single-digit integers below the bound must be rejected
+    ({"type": "number", "minimum": 2}, "1", False),
+    ({"type": "number", "minimum": 2}, "1.5", False),
+    ({"type": "number", "minimum": 2}, "2", True),
+    ({"type": "number", "minimum": 2}, "2.0", True),
+    ({"type": "number", "minimum": 2}, "2.5", True),
+    ({"type": "number", "minimum": 2}, "10", True),
+    ({"type": "number", "exclusiveMinimum": 2}, "2", False),
+    ({"type": "number", "exclusiveMinimum": 2}, "2.000001", True),
+    # upper bounds
+    ({"type": "number", "exclusiveMaximum": 1}, "0.99", True),
+    ({"type": "number", "exclusiveMaximum": 1}, "1", False),
+    ({"type": "number", "exclusiveMaximum": 1}, "1.0", False),
+    ({"type": "number", "exclusiveMaximum": 1}, "0", True),
+    ({"type": "number", "exclusiveMaximum": 1}, "-5.5", True),
+    ({"type": "number", "maximum": -2}, "-2", True),
+    ({"type": "number", "maximum": -2}, "-1", False),
+    ({"type": "number", "maximum": -2}, "-1.5", False),
+    ({"type": "number", "maximum": -2}, "-2.5", True),
+    ({"type": "number", "maximum": -2}, "-12", True),
+    # both bounds: values above the maximum must be rejected
+    ({"type": "number", "minimum": 1, "maximum": 5}, "5.7", False),
+    ({"type": "number", "minimum": 1, "maximum": 5}, "1.001", True),
+    ({"type": "number", "minimum": 1, "maximum": 5}, "0.5", False),
+    ({"type": "number", "minimum": 1, "maximum": 5}, "1.5", True),
+    ({"type": "number", "minimum": 1, "maximum": 5}, "5", True),
+    ({"type": "number", "minimum": 1, "maximum": 5}, "5.0", True),
+    ({"type": "number", "exclusiveMinimum": 1, "exclusiveMaximum": 5}, "1", False),
+    ({"type": "number", "exclusiveMinimum": 1, "exclusiveMaximum": 5}, "5", False),
+    ({"type": "number", "exclusiveMinimum": 1, "exclusiveMaximum": 5}, "4.999", True),
+    ({"type": "number", "minimum": -1.5, "maximum": 1.5}, "-1.6", False),
+    ({"type": "number", "minimum": -1.5, "maximum": 1.5}, "-1.5", True),
+    ({"type": "number", "minimum": -1.5, "maximum": 1.5}, "0", True),
+    ({"type": "number", "minimum": -1.5, "maximum": 1.5}, "1.6", False),
+    ({"type": "number", "minimum": 0.1, "maximum": 0.3}, "0.2", True),
+    ({"type": "number", "minimum": 0.1, "maximum": 0.3}, "0.05", False),
+    ({"type": "number", "minimum": 0.1, "maximum": 0.3}, "0.35", False),
+]
+
+
+@pytest.mark.parametrize("schema, instance, accepted", number_range_instances)
+def test_number_range_value_acceptance(schema, instance, accepted):
+    check_schema_with_instance(schema, instance, is_accepted=accepted)
+
+
+integer_range_instances = [
+    ({"type": "integer", "minimum": 2}, "1", False),
+    ({"type": "integer", "minimum": 2}, "2", True),
+    ({"type": "integer", "minimum": 2}, "9", True),
+    ({"type": "integer", "minimum": 2}, "10", True),
+    ({"type": "integer", "minimum": 2}, "0", False),
+    ({"type": "integer", "exclusiveMinimum": 2}, "2", False),
+    ({"type": "integer", "exclusiveMinimum": 2}, "3", True),
+    ({"type": "integer", "maximum": -2}, "-1", False),
+    ({"type": "integer", "maximum": -2}, "-2", True),
+    ({"type": "integer", "maximum": -2}, "-12", True),
+    ({"type": "integer", "minimum": -5}, "-5", True),
+    ({"type": "integer", "minimum": -5}, "-3", True),
+    ({"type": "integer", "minimum": -5}, "-6", False),
+    ({"type": "integer", "minimum": -5}, "0", True),
+    ({"type": "integer", "minimum": -5}, "7", True),
+]
+
+
+@pytest.mark.parametrize("schema, instance, accepted", integer_range_instances)
+def test_integer_range_value_acceptance(schema, instance, accepted):
+    check_schema_with_instance(schema, instance, is_accepted=accepted)
+
+
+number_range_sweep_bounds = [
+    {"minimum": 0},
+    {"exclusiveMinimum": 0},
+    {"maximum": 0},
+    {"exclusiveMaximum": 0},
+    {"minimum": 2},
+    {"exclusiveMinimum": 2},
+    {"minimum": -2},
+    {"maximum": 5},
+    {"minimum": 0.5},
+    {"exclusiveMinimum": 0.5},
+    {"maximum": 0.5},
+    {"exclusiveMaximum": 0.5},
+    {"minimum": 99.5},
+    {"maximum": -2.25},
+    {"minimum": 1, "maximum": 5},
+    {"exclusiveMinimum": 1, "exclusiveMaximum": 5},
+    {"minimum": -1.5, "maximum": 1.5},
+    {"minimum": 0.1, "maximum": 0.3},
+    {"minimum": -5.5, "maximum": -2.25},
+    {"minimum": 9, "maximum": 31},
+    {"minimum": 5.123456, "maximum": 5.123457},
+]
+
+
+@pytest.mark.parametrize("bounds", number_range_sweep_bounds)
+def test_number_range_acceptance_sweep(bounds):
+    """The grammar for a range-constrained number must agree with plain float
+    comparison for every candidate value around the bounds (limited to 6
+    fractional digits, the converter's precision)."""
+
+    def in_range(value: float) -> bool:
+        if "minimum" in bounds and not value >= bounds["minimum"]:
+            return False
+        if "exclusiveMinimum" in bounds and not value > bounds["exclusiveMinimum"]:
+            return False
+        if "maximum" in bounds and not value <= bounds["maximum"]:
+            return False
+        if "exclusiveMaximum" in bounds and not value < bounds["exclusiveMaximum"]:
+            return False
+        return True
+
+    candidates = {0.0, 1.0, -1.0, 0.5, -0.5, 10.0, -10.0, 100.0, -100.0}
+    for bound in bounds.values():
+        for delta in (0.0, 0.000001, 0.1, 0.5, 1.0, 2.0, 10.0):
+            candidates.add(bound + delta)
+            candidates.add(bound - delta)
+
+    grammar = xgr.Grammar.from_json_schema(json.dumps({"type": "number", **bounds}))
+    for value in sorted(candidates):
+        text = f"{value:.6f}".rstrip("0").rstrip(".")
+        if text in ("", "-0"):
+            text = "0"
+        value = float(text)
+        accepted = _is_grammar_accept_string(grammar, text)
+        assert accepted == in_range(value), (
+            f"bounds={bounds} value={text}: grammar "
+            f"{'accepted' if accepted else 'rejected'}, float comparison says "
+            f"{'in range' if in_range(value) else 'out of range'}"
+        )
 
 
 def test_limited_whitespace_cnt():

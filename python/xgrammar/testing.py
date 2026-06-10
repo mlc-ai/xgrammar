@@ -337,8 +337,13 @@ def _generate_range_regex(start: Optional[int] = None, end: Optional[int] = None
     return _core.testing._generate_range_regex(start, end)
 
 
-def _generate_float_regex(start: Optional[float] = None, end: Optional[float] = None) -> str:
-    return _core.testing._generate_float_regex(start, end)
+def _generate_float_regex(
+    start: Optional[float] = None,
+    end: Optional[float] = None,
+    exclusive_start: bool = False,
+    exclusive_end: bool = False,
+) -> str:
+    return _core.testing._generate_float_regex(start, end, exclusive_start, exclusive_end)
 
 
 def _print_grammar_fsms(grammar: Grammar) -> str:
