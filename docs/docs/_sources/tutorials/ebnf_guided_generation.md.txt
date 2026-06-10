@@ -16,7 +16,7 @@ It is always recommended to install it in an isolated conda virtual environment.
 ## EBNF-Guided Generation in LLM Engines
 
 In this section, we see how to use XGrammar in an LLM engine to ensure that the output follows
-ane EBNF grammar.
+an EBNF grammar.
 
 All code snippets below are actual runnable code as we simulate the LLM generation.
 
@@ -106,7 +106,7 @@ matcher.reset()
 
 ## Try out via HF Transformers
 
-XGrammar can be easily integrate with HF transformers using a `LogitsProcessor`. Note that
+XGrammar can be easily integrated with HF transformers using a `LogitsProcessor`. Note that
 this integration mainly aims for accessibility and may contain extra overhead.
 
 First, instantiate a model, a tokenizer, and inputs.

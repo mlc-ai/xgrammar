@@ -727,34 +727,34 @@ window.runMermaid = runMermaid;</script>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that should not appear in the matched text.&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">TokenFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="TokenFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TokenFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TokenFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a single token by ID or string representation.&quot;&quot;&quot;</span>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;token&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
 
     <span class="n">token</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The token ID (int) or token string (str).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The token ID (int) or token string (str).&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">ExcludeTokenFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="ExcludeTokenFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.ExcludeTokenFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">ExcludeTokenFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a single token, excluding those in the given set.&quot;&quot;&quot;</span>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;exclude_token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;exclude_token&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
 
     <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">AnyTokensFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="AnyTokensFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.AnyTokensFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AnyTokensFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches zero or more tokens, excluding those in the given set.&quot;&quot;&quot;</span>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;any_tokens&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;any_tokens&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
 
     <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span></div>
 
 
 <div class="viewcode-block" id="GrammarFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.GrammarFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GrammarFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
@@ -888,7 +888,7 @@ window.runMermaid = runMermaid;</script>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that should not appear in the matched text.&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">TokenTriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="TokenTriggeredTagsFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TokenTriggeredTagsFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TokenTriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that dispatches to tags based on token-level triggers.</span>
 
 <span class="sd">    Similar to TriggeredTagsFormat but uses token IDs instead of string triggers.</span>
@@ -907,7 +907,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">at_least_one</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether at least one tag must be generated.&quot;&quot;&quot;</span>
     <span class="n">stop_after_first</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is generated.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is generated.&quot;&quot;&quot;</span></div>
 
 
 <div class="viewcode-block" id="TagsWithSeparatorFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TagsWithSeparatorFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
@@ -948,7 +948,7 @@ window.runMermaid = runMermaid;</script>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is matched.&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">OptionalFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="OptionalFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.OptionalFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">OptionalFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 0 or 1 time (EBNF optional).</span>
 
 <span class="sd">    Semantics: the inner format may appear once or not at all.</span>
@@ -957,10 +957,10 @@ window.runMermaid = runMermaid;</script>
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;optional&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;optional&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
     <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that may appear 0 or 1 time.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that may appear 0 or 1 time.&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">PlusFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="PlusFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.PlusFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">PlusFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 1 or more times (EBNF plus).</span>
 
 <span class="sd">    Semantics: the inner format must appear at least once.</span>
@@ -969,10 +969,10 @@ window.runMermaid = runMermaid;</script>
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;plus&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;plus&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
     <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that must appear at least once.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that must appear at least once.&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">StarFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="StarFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StarFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StarFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 0 or more times (EBNF star).</span>
 
 <span class="sd">    Semantics: the inner format may appear any number of times.</span>
@@ -981,10 +981,10 @@ window.runMermaid = runMermaid;</script>
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;star&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;star&quot;</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
     <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that may appear 0 or more times.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that may appear 0 or more times.&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">RepeatFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="RepeatFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.RepeatFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">RepeatFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content between min and max times (inclusive).</span>
 
 <span class="sd">    Use max=-1 for unbounded upper limit (e.g. &quot;at least min times&quot;).</span>
@@ -997,10 +997,10 @@ window.runMermaid = runMermaid;</script>
     <span class="nb">max</span><span class="p">:</span> <span class="nb">int</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Maximum number of occurrences (inclusive). Use -1 for unbounded.&quot;&quot;&quot;</span>
     <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that is repeated.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that is repeated.&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">DispatchFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="DispatchFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.DispatchFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">DispatchFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Matches certain patterns in free-form text.</span>
 <span class="sd">    When certain strings are generated, the following content must follow the corresponding format.</span>
 <span class="sd">    Certain strings can be excluded from being generated in the free-form part.</span>
@@ -1027,10 +1027,10 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">    and match the next pattern. Otherwise, the matching of this format ends after handling the</span>
 <span class="sd">    first dispatched format.&quot;&quot;&quot;</span>
     <span class="n">excludes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that must not appear in the free-form text.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that must not appear in the free-form text.&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">TokenDispatchFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="TokenDispatchFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TokenDispatchFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TokenDispatchFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Matches certain patterns in free-form text.</span>
 <span class="sd">    When certain tokens are generated, the following content must follow the corresponding format.</span>
 <span class="sd">    Certain tokens can be excluded from being generated in the free-form part.</span>
@@ -1057,7 +1057,7 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">    and match the next pattern. Otherwise, the matching of this format ends after handling the</span>
 <span class="sd">    first dispatched format.&quot;&quot;&quot;</span>
     <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of tokens that must not appear in the free-form text.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of tokens that must not appear in the free-form text.&quot;&quot;&quot;</span></div>
 
 
 <span class="c1"># ---------- Deprecated Formats ----------</span>

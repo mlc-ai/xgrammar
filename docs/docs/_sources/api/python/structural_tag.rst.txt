@@ -38,6 +38,18 @@ Basic Formats
    :show-inheritance:
    :exclude-members: model_config
 
+.. autopydantic_model:: TokenFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
+.. autopydantic_model:: ExcludeTokenFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
+.. autopydantic_model:: AnyTokensFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
 .. autopydantic_model:: GrammarFormat
    :show-inheritance:
    :exclude-members: model_config
@@ -69,6 +81,34 @@ Combinatorial Formats
    :show-inheritance:
    :exclude-members: model_config
 
+.. autopydantic_model:: TokenTriggeredTagsFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
 .. autopydantic_model:: TagsWithSeparatorFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
+.. autopydantic_model:: OptionalFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
+.. autopydantic_model:: PlusFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
+.. autopydantic_model:: StarFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
+.. autopydantic_model:: RepeatFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
+.. autopydantic_model:: DispatchFormat
+   :show-inheritance:
+   :exclude-members: model_config
+
+.. autopydantic_model:: TokenDispatchFormat
    :show-inheritance:
    :exclude-members: model_config

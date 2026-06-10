@@ -259,6 +259,9 @@ of the XGrammar library.</p>
 <li><p>Compile the XGrammar library with the configured settings.</p></li>
 <li><p>Run the script <code class="docutils literal notranslate"><span class="pre">run_coverage.sh</span></code> in the root directory of the XGrammar library.</p></li>
 </ol>
+<p>Note that the script invokes <code class="docutils literal notranslate"><span class="pre">lcov</span></code> with <code class="docutils literal notranslate"><span class="pre">--gcov-tool</span> <span class="pre">/usr/bin/gcov-13</span></code>, so it expects the
+library to be compiled with GCC 13 and <code class="docutils literal notranslate"><span class="pre">gcov-13</span></code> to be installed. If you use a different
+compiler version, update the <code class="docutils literal notranslate"><span class="pre">--gcov-tool</span></code> path in the script accordingly.</p>
 <p>After running the script, you will find the coverage report in the
 <code class="docutils literal notranslate"><span class="pre">coverage_report</span></code> directory.</p>
 <p>Please note that code coverage tools are merely aids to help identify which parts of the code have not been tested. However, pursuing 100% code coverage is not advisable. It can actually have <a class="reference external" href="https://neatstack.substack.com/p/stop-using-code-coverage-as-a-quality">negative consequences</a>.</p>

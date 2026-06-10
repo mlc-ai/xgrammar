@@ -793,7 +793,7 @@ window.runMermaid = runMermaid;</script>
 <span class="c1"># ============================================================</span>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">NamedToolChoiceFunction</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="NamedToolChoiceFunction"><a class="viewcode-back" href="../../api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">NamedToolChoiceFunction</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The nested function reference used by Chat Completions named tool choice.</span>
 
 <span class="sd">    Corresponds to</span>
@@ -805,7 +805,7 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The name of the function to call.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The name of the function to call.&quot;&quot;&quot;</span></div>
 
 
 <div class="viewcode-block" id="NamedToolChoiceParam"><a class="viewcode-back" href="../../api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceParam">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">NamedToolChoiceParam</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
@@ -845,7 +845,7 @@ window.runMermaid = runMermaid;</script>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Optional model-output tool name. Builtin choices are matched by ``type``.&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">AllowedToolRef</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="AllowedToolRef"><a class="viewcode-back" href="../../api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolRef">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AllowedToolRef</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;A reference to a function or builtin tool allowed in this turn.</span>
 
 <span class="sd">    Corresponds to one item in</span>
@@ -863,10 +863,10 @@ window.runMermaid = runMermaid;</script>
     <span class="n">function</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">NamedToolChoiceFunction</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;The function reference when ``type`` is ``&quot;function&quot;``.&quot;&quot;&quot;</span>
     <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Optional model-output builtin tool name. Builtin refs are matched by ``type``.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Optional model-output builtin tool name. Builtin refs are matched by ``type``.&quot;&quot;&quot;</span></div>
 
 
-<span class="k">class</span><span class="w"> </span><span class="nc">AllowedToolsParam</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<div class="viewcode-block" id="AllowedToolsParam"><a class="viewcode-back" href="../../api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolsParam">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AllowedToolsParam</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Constrains the tools available to the model to a pre-defined set.</span>
 
 <span class="sd">    Corresponds to ``openai.types.chat.ChatCompletionAllowedToolsParam``.</span>
@@ -895,7 +895,7 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">          { &quot;type&quot;: &quot;function&quot;, &quot;function&quot;: { &quot;name&quot;: &quot;get_weather&quot; } },</span>
 <span class="sd">          { &quot;type&quot;: &quot;function&quot;, &quot;function&quot;: { &quot;name&quot;: &quot;get_time&quot; } }</span>
 <span class="sd">        ]</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    &quot;&quot;&quot;</span></div>
 
 
 <div class="viewcode-block" id="AllowedToolChoiceParam"><a class="viewcode-back" href="../../api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AllowedToolChoiceParam</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>

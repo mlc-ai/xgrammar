@@ -17,7 +17,7 @@ The main public entry points are:
    normalize_tool_choice
    register_model_structural_tag
 
-.. data:: get_builtin_structural_tag
+.. function:: get_builtin_structural_tag
    :noindex:
 
    Deprecated alias for :func:`get_model_structural_tag`.

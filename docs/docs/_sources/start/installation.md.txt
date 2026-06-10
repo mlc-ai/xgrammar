@@ -7,7 +7,7 @@ XGrammar Python Package can be installed directly from a prebuilt package or bui
 XGrammar supports various platforms:
 * Operating Systems: Linux, macOS, and Windows
 * Hardware: CPU, NVIDIA GPUs, AMD GPUs, Apple Silicon, TPU, etc.
-* Python: 3.9 and later
+* Python: 3.9 and later.
 
 We provide Python wheels for XGrammar via pip.
 

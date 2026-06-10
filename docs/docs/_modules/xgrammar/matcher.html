@@ -723,7 +723,7 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    bitmask : torch.Tensor</span>
-<span class="sd">        The shape of the bitmask.</span>
+<span class="sd">        The allocated bitmask.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># In CUDA, use pinned memory to speed up data transfer from CPU to GPU</span>
     <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">get_bitmask_shape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">),</span> <span class="n">_FULL_MASK</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">bitmask_dtype</span><span class="p">)</span></div>

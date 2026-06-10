@@ -771,17 +771,23 @@ window.runMermaid = runMermaid;</script>
 </li>
       <li><a href="api/python/bitmask_ops.html#xgrammar.allocate_token_bitmask">allocate_token_bitmask() (in module xgrammar)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.allowed_tools">allowed_tools (xgrammar.openai_tool_call_schema.AllowedToolChoiceParam attribute)</a>
 </li>
       <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam">AllowedToolChoiceParam (class in xgrammar.openai_tool_call_schema)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolRef">AllowedToolRef (class in xgrammar.openai_tool_call_schema)</a>
+</li>
+      <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolsParam">AllowedToolsParam (class in xgrammar.openai_tool_call_schema)</a>
 </li>
       <li><a href="api/python/bitmask_ops.html#xgrammar.apply_token_bitmask_inplace">apply_token_bitmask_inplace() (in module xgrammar)</a>
 </li>
       <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TagsWithSeparatorFormat.at_least_one">at_least_one (xgrammar.structural_tag.TagsWithSeparatorFormat attribute)</a>
 
       <ul>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenTriggeredTagsFormat.at_least_one">(xgrammar.structural_tag.TokenTriggeredTagsFormat attribute)</a>
+</li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TriggeredTagsFormat.at_least_one">(xgrammar.structural_tag.TriggeredTagsFormat attribute)</a>
 </li>
       </ul></li>
@@ -843,18 +849,28 @@ window.runMermaid = runMermaid;</script>
 </li>
       <li><a href="api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_json_schema">compile_json_schema() (xgrammar.GrammarCompiler method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_regex">compile_regex() (xgrammar.GrammarCompiler method)</a>
 </li>
       <li><a href="api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_structural_tag">compile_structural_tag() (xgrammar.GrammarCompiler method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/compiled_grammar.html#xgrammar.CompiledGrammar">CompiledGrammar (class in xgrammar)</a>
 </li>
       <li><a href="api/python/grammar.html#xgrammar.Grammar.concat">concat() (xgrammar.Grammar static method)</a>
 </li>
-      <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TagFormat.content">content (xgrammar.structural_tag.TagFormat attribute)</a>
+      <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.OptionalFormat.content">content (xgrammar.structural_tag.OptionalFormat attribute)</a>
+
+      <ul>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.PlusFormat.content">(xgrammar.structural_tag.PlusFormat attribute)</a>
 </li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.RepeatFormat.content">(xgrammar.structural_tag.RepeatFormat attribute)</a>
+</li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.StarFormat.content">(xgrammar.structural_tag.StarFormat attribute)</a>
+</li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TagFormat.content">(xgrammar.structural_tag.TagFormat attribute)</a>
+</li>
+      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -901,11 +917,23 @@ window.runMermaid = runMermaid;</script>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TagFormat.end">(xgrammar.structural_tag.TagFormat attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.AnyTokensFormat.exclude_tokens">exclude_tokens (xgrammar.structural_tag.AnyTokensFormat attribute)</a>
+
+      <ul>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.ExcludeTokenFormat.exclude_tokens">(xgrammar.structural_tag.ExcludeTokenFormat attribute)</a>
+</li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenDispatchFormat.exclude_tokens">(xgrammar.structural_tag.TokenDispatchFormat attribute)</a>
+</li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenTriggeredTagsFormat.exclude_tokens">(xgrammar.structural_tag.TokenTriggeredTagsFormat attribute)</a>
+</li>
+      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.AnyTextFormat.excludes">excludes (xgrammar.structural_tag.AnyTextFormat attribute)</a>
 
       <ul>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.DispatchFormat.excludes">(xgrammar.structural_tag.DispatchFormat attribute)</a>
+</li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TriggeredTagsFormat.excludes">(xgrammar.structural_tag.TriggeredTagsFormat attribute)</a>
 </li>
       </ul></li>
@@ -931,10 +959,10 @@ window.runMermaid = runMermaid;</script>
 </li>
       <li><a href="api/python/structural_tag.html#xgrammar.StructuralTag.from_json">from_json() (xgrammar.StructuralTag static method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/grammar.html#xgrammar.Grammar.from_json_schema">from_json_schema() (xgrammar.Grammar static method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/structural_tag.html#xgrammar.StructuralTag.from_legacy_structural_tag">from_legacy_structural_tag() (xgrammar.StructuralTag static method)</a>
 </li>
       <li><a href="api/python/grammar.html#xgrammar.Grammar.from_regex">from_regex() (xgrammar.Grammar static method)</a>
@@ -943,9 +971,11 @@ window.runMermaid = runMermaid;</script>
 </li>
       <li><a href="api/python/tokenizer_info.html#xgrammar.TokenizerInfo.from_vocab_and_metadata">from_vocab_and_metadata() (xgrammar.TokenizerInfo static method)</a>
 </li>
-      <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam.function">function (xgrammar.openai_tool_call_schema.FunctionToolParam attribute)</a>
+      <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolRef.function">function (xgrammar.openai_tool_call_schema.AllowedToolRef attribute)</a>
 
       <ul>
+        <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam.function">(xgrammar.openai_tool_call_schema.FunctionToolParam attribute)</a>
+</li>
         <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.function">(xgrammar.openai_tool_call_schema.NamedToolChoiceParam attribute)</a>
 </li>
       </ul></li>
@@ -1050,20 +1080,38 @@ window.runMermaid = runMermaid;</script>
       <li><a href="api/python/testing.html#xgrammar.testing.GrammarFunctor.lookahead_assertion_analyzer">lookahead_assertion_analyzer() (xgrammar.testing.GrammarFunctor static method)</a>
 </li>
   </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.DispatchFormat.loop">loop (xgrammar.structural_tag.DispatchFormat attribute)</a>
+
+      <ul>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenDispatchFormat.loop">(xgrammar.structural_tag.TokenDispatchFormat attribute)</a>
+</li>
+      </ul></li>
+  </ul></td>
 </tr></table>
 
 <h2 id="M">M</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.RepeatFormat.max">max (xgrammar.structural_tag.RepeatFormat attribute)</a>
+</li>
       <li><a href="api/python/config.html#xgrammar.max_recursion_depth">max_recursion_depth() (in module xgrammar)</a>
 </li>
       <li><a href="api/python/grammar_matcher.html#xgrammar.GrammarMatcher.max_rollback_tokens">max_rollback_tokens (xgrammar.GrammarMatcher property)</a>
 </li>
       <li><a href="api/python/compiled_grammar.html#xgrammar.CompiledGrammar.memory_size_bytes">memory_size_bytes (xgrammar.CompiledGrammar property)</a>
 </li>
+      <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.RepeatFormat.min">min (xgrammar.structural_tag.RepeatFormat attribute)</a>
+</li>
+      <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolsParam.mode">mode (xgrammar.openai_tool_call_schema.AllowedToolsParam attribute)</a>
+</li>
       <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.model_config">model_config (xgrammar.openai_tool_call_schema.AllowedToolChoiceParam attribute)</a>
 
       <ul>
+        <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolRef.model_config">(xgrammar.openai_tool_call_schema.AllowedToolRef attribute)</a>
+</li>
+        <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolsParam.model_config">(xgrammar.openai_tool_call_schema.AllowedToolsParam attribute)</a>
+</li>
         <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.model_config">(xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam attribute)</a>
 </li>
         <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam.model_config">(xgrammar.openai_tool_call_schema.BuiltinToolParam attribute)</a>
@@ -1071,6 +1119,8 @@ window.runMermaid = runMermaid;</script>
         <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionDefinition.model_config">(xgrammar.openai_tool_call_schema.FunctionDefinition attribute)</a>
 </li>
         <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam.model_config">(xgrammar.openai_tool_call_schema.FunctionToolParam attribute)</a>
+</li>
+        <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.model_config">(xgrammar.openai_tool_call_schema.NamedToolChoiceFunction attribute)</a>
 </li>
         <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.model_config">(xgrammar.openai_tool_call_schema.NamedToolChoiceParam attribute)</a>
 </li>
@@ -1092,16 +1142,22 @@ window.runMermaid = runMermaid;</script>
 <h2 id="N">N</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.name">name (xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam attribute)</a>
+      <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolRef.name">name (xgrammar.openai_tool_call_schema.AllowedToolRef attribute)</a>
 
       <ul>
+        <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.name">(xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam attribute)</a>
+</li>
         <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam.name">(xgrammar.openai_tool_call_schema.BuiltinToolParam attribute)</a>
 </li>
         <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionDefinition.name">(xgrammar.openai_tool_call_schema.FunctionDefinition attribute)</a>
 </li>
+        <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.name">(xgrammar.openai_tool_call_schema.NamedToolChoiceFunction attribute)</a>
+</li>
       </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction">NamedToolChoiceFunction (class in xgrammar.openai_tool_call_schema)</a>
+</li>
       <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceParam">NamedToolChoiceParam (class in xgrammar.openai_tool_call_schema)</a>
 </li>
       <li><a href="api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.normalize_tool_choice">normalize_tool_choice() (in module xgrammar.builtin_structural_tag)</a>
@@ -1136,16 +1192,22 @@ window.runMermaid = runMermaid;</script>
 </li>
       <li><a href="api/python/testing.html#xgrammar.testing.GrammarFunctor.repetition_normalizer">repetition_normalizer() (xgrammar.testing.GrammarFunctor static method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/grammar_matcher.html#xgrammar.GrammarMatcher.reset">reset() (xgrammar.GrammarMatcher method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/python/bitmask_ops.html#xgrammar.reset_token_bitmask">reset_token_bitmask() (in module xgrammar)</a>
 </li>
       <li><a href="api/python/grammar_matcher.html#xgrammar.GrammarMatcher.rollback">rollback() (xgrammar.GrammarMatcher method)</a>
 </li>
       <li><a href="api/python/testing.html#xgrammar.testing.GrammarFunctor.rule_inliner">rule_inliner() (xgrammar.testing.GrammarFunctor static method)</a>
 </li>
+      <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.DispatchFormat.rules">rules (xgrammar.structural_tag.DispatchFormat attribute)</a>
+
+      <ul>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenDispatchFormat.rules">(xgrammar.structural_tag.TokenDispatchFormat attribute)</a>
+</li>
+      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -1171,6 +1233,8 @@ window.runMermaid = runMermaid;</script>
       <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TagsWithSeparatorFormat.stop_after_first">stop_after_first (xgrammar.structural_tag.TagsWithSeparatorFormat attribute)</a>
 
       <ul>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenTriggeredTagsFormat.stop_after_first">(xgrammar.structural_tag.TokenTriggeredTagsFormat attribute)</a>
+</li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TriggeredTagsFormat.stop_after_first">(xgrammar.structural_tag.TriggeredTagsFormat attribute)</a>
 </li>
       </ul></li>
@@ -1201,9 +1265,13 @@ window.runMermaid = runMermaid;</script>
       <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TagsWithSeparatorFormat.tags">tags (xgrammar.structural_tag.TagsWithSeparatorFormat attribute)</a>
 
       <ul>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenTriggeredTagsFormat.tags">(xgrammar.structural_tag.TokenTriggeredTagsFormat attribute)</a>
+</li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TriggeredTagsFormat.tags">(xgrammar.structural_tag.TriggeredTagsFormat attribute)</a>
 </li>
       </ul></li>
+      <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenFormat.token">token (xgrammar.structural_tag.TokenFormat attribute)</a>
+</li>
       <li><a href="api/python/compiled_grammar.html#xgrammar.CompiledGrammar.tokenizer_info">tokenizer_info (xgrammar.CompiledGrammar property)</a>
 </li>
       <li><a href="api/python/tokenizer_info.html#xgrammar.TokenizerInfo">TokenizerInfo (class in xgrammar)</a>
@@ -1212,13 +1280,19 @@ window.runMermaid = runMermaid;</script>
 </li>
       <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.ToolParam">ToolParam (in module xgrammar.openai_tool_call_schema)</a>
 </li>
+      <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolsParam.tools">tools (xgrammar.openai_tool_call_schema.AllowedToolsParam attribute)</a>
+</li>
       <li><a href="api/python/grammar_matcher.html#xgrammar.GrammarMatcher.traverse_draft_tree">traverse_draft_tree() (xgrammar.GrammarMatcher method)</a>
+</li>
+      <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenTriggeredTagsFormat.trigger_tokens">trigger_tokens (xgrammar.structural_tag.TokenTriggeredTagsFormat attribute)</a>
 </li>
       <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TriggeredTagsFormat.triggers">triggers (xgrammar.structural_tag.TriggeredTagsFormat attribute)</a>
 </li>
       <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.type">type (xgrammar.openai_tool_call_schema.AllowedToolChoiceParam attribute)</a>
 
       <ul>
+        <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolRef.type">(xgrammar.openai_tool_call_schema.AllowedToolRef attribute)</a>
+</li>
         <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.type">(xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam attribute)</a>
 </li>
         <li><a href="api/python/openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam.type">(xgrammar.openai_tool_call_schema.BuiltinToolParam attribute)</a>
@@ -1229,23 +1303,43 @@ window.runMermaid = runMermaid;</script>
 </li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.AnyTextFormat.type">(xgrammar.structural_tag.AnyTextFormat attribute)</a>
 </li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.AnyTokensFormat.type">(xgrammar.structural_tag.AnyTokensFormat attribute)</a>
+</li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.ConstStringFormat.type">(xgrammar.structural_tag.ConstStringFormat attribute)</a>
+</li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.DispatchFormat.type">(xgrammar.structural_tag.DispatchFormat attribute)</a>
+</li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.ExcludeTokenFormat.type">(xgrammar.structural_tag.ExcludeTokenFormat attribute)</a>
 </li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.GrammarFormat.type">(xgrammar.structural_tag.GrammarFormat attribute)</a>
 </li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.JSONSchemaFormat.type">(xgrammar.structural_tag.JSONSchemaFormat attribute)</a>
 </li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.OptionalFormat.type">(xgrammar.structural_tag.OptionalFormat attribute)</a>
+</li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.OrFormat.type">(xgrammar.structural_tag.OrFormat attribute)</a>
+</li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.PlusFormat.type">(xgrammar.structural_tag.PlusFormat attribute)</a>
 </li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.QwenXMLParameterFormat.type">(xgrammar.structural_tag.QwenXMLParameterFormat attribute)</a>
 </li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.RegexFormat.type">(xgrammar.structural_tag.RegexFormat attribute)</a>
 </li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.RepeatFormat.type">(xgrammar.structural_tag.RepeatFormat attribute)</a>
+</li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.SequenceFormat.type">(xgrammar.structural_tag.SequenceFormat attribute)</a>
+</li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.StarFormat.type">(xgrammar.structural_tag.StarFormat attribute)</a>
 </li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TagFormat.type">(xgrammar.structural_tag.TagFormat attribute)</a>
 </li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TagsWithSeparatorFormat.type">(xgrammar.structural_tag.TagsWithSeparatorFormat attribute)</a>
+</li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenDispatchFormat.type">(xgrammar.structural_tag.TokenDispatchFormat attribute)</a>
+</li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenFormat.type">(xgrammar.structural_tag.TokenFormat attribute)</a>
+</li>
+        <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TokenTriggeredTagsFormat.type">(xgrammar.structural_tag.TokenTriggeredTagsFormat attribute)</a>
 </li>
         <li><a href="api/python/structural_tag.html#xgrammar.structural_tag.TriggeredTagsFormat.type">(xgrammar.structural_tag.TriggeredTagsFormat attribute)</a>
 </li>

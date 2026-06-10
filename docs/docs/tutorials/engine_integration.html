@@ -308,8 +308,8 @@ logits. To be safe, always pass in the former when instantiating <code class="do
 that compiles a grammar according to the model’s tokenizer info. Therefore, for each model, you
 can use the same <code class="docutils literal notranslate"><span class="pre">xgr.GrammarCompiler</span></code> persistently, as it can compile different grammars for
 the same <code class="docutils literal notranslate"><span class="pre">xgr.TokenizerInfo</span></code>. Note that the <code class="docutils literal notranslate"><span class="pre">compiler</span></code> behavior can be configured with
-<code class="docutils literal notranslate"><span class="pre">max_threads</span></code> for multithreading, and <code class="docutils literal notranslate"><span class="pre">enable_cache</span></code> (defaults to true) for caching
-compiled grammars.</p>
+<code class="docutils literal notranslate"><span class="pre">max_threads</span></code> for multithreading, <code class="docutils literal notranslate"><span class="pre">cache_enabled</span></code> (defaults to true) for caching
+compiled grammars, and <code class="docutils literal notranslate"><span class="pre">cache_limit_bytes</span></code> for limiting the cache size.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">compiler</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">,</span> <span class="n">max_threads</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -339,9 +339,10 @@ as we will see in <a class="reference internal" href="#structured-generation-for
 <h3>Bitmasking Logits in Auto-regressive Generation<a class="headerlink" href="#bitmasking-logits-in-auto-regressive-generation" title="Permalink to this heading">¶</a></h3>
 <p>Now we simulate a single-request auto-regressive generation. See later section for
 <a class="reference internal" href="#structured-generation-for-batched-inference"><span class="std std-ref">Structured Generation for Batched Inference</span></a>.</p>
-<p>First, we pre-allocate a token bitmask with <code class="docutils literal notranslate"><span class="pre">xgr.allocate_token_bitmask()</span></code>,
-which is essentially a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> of shape <code class="docutils literal notranslate"><span class="pre">(batch_size,</span> <span class="pre">vocab_size)</span></code>. You can also
-use your own implementation for allocating a bitmask.</p>
+<p>First, we pre-allocate a token bitmask with <code class="docutils literal notranslate"><span class="pre">xgr.allocate_token_bitmask()</span></code>. The bitmask
+compresses one bit per token into int32 storage, so it is a <code class="docutils literal notranslate"><span class="pre">torch.Tensor</span></code> of dtype <code class="docutils literal notranslate"><span class="pre">int32</span></code>
+and shape <code class="docutils literal notranslate"><span class="pre">(batch_size,</span> <span class="pre">ceil(vocab_size</span> <span class="pre">/</span> <span class="pre">32))</span></code>. You can also use your own implementation
+for allocating a bitmask.</p>
 <p>In each auto-regressive step, we fill the token bitmask according to the current state
 of the matcher with <code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.fill_next_token_bitmask()</span></code>. Then, we apply the bitmask
 into the model’s logits with <code class="docutils literal notranslate"><span class="pre">xgr.apply_token_bitmask_inplace()</span></code>, which calls a CUDA kernel

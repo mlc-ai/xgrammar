@@ -52,8 +52,8 @@ With an `xgr.TokenizerInfo`, we can instantiate an `xgr.GrammarCompiler`. This i
 that compiles a grammar according to the model's tokenizer info. Therefore, for each model, you
 can use the same `xgr.GrammarCompiler` persistently, as it can compile different grammars for
 the same `xgr.TokenizerInfo`. Note that the `compiler` behavior can be configured with
-`max_threads` for multithreading, and `enable_cache` (defaults to true) for caching
-compiled grammars.
+`max_threads` for multithreading, `cache_enabled` (defaults to true) for caching
+compiled grammars, and `cache_limit_bytes` for limiting the cache size.
 
 ```python
 compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
@@ -87,9 +87,10 @@ matcher = xgr.GrammarMatcher(compiled_grammar)
 Now we simulate a single-request auto-regressive generation. See later section for
 [Structured Generation for Batched Inference](#structured-generation-for-batched-inference).
 
-First, we pre-allocate a token bitmask with `xgr.allocate_token_bitmask()`,
-which is essentially a `torch.Tensor` of shape `(batch_size, vocab_size)`. You can also
-use your own implementation for allocating a bitmask.
+First, we pre-allocate a token bitmask with `xgr.allocate_token_bitmask()`. The bitmask
+compresses one bit per token into int32 storage, so it is a `torch.Tensor` of dtype `int32`
+and shape `(batch_size, ceil(vocab_size / 32))`. You can also use your own implementation
+for allocating a bitmask.
 
 In each auto-regressive step, we fill the token bitmask according to the current state
 of the matcher with `xgr.GrammarMatcher.fill_next_token_bitmask()`. Then, we apply the bitmask

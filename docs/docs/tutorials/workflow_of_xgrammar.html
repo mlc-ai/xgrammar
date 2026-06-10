@@ -303,6 +303,11 @@ tokenizers as the backend.</p>
 <span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">from_huggingface</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>If the <code class="docutils literal notranslate"><span class="pre">vocab_size</span></code> parameter is not provided, it defaults to the tokenizer’s vocabulary size.
+Note that the model’s vocabulary size (<code class="docutils literal notranslate"><span class="pre">config.vocab_size</span></code>, i.e. the size of its logits) can differ
+from the tokenizer’s due to padding. In that case, pass the model’s vocabulary size explicitly:
+<code class="docutils literal notranslate"><span class="pre">xgr.TokenizerInfo.from_huggingface(tokenizer,</span> <span class="pre">vocab_size=config.vocab_size)</span></code>. See
+<a class="reference internal" href="engine_integration.html"><span class="std std-doc">integration with LLM engine</span></a> for details.</p>
 </section>
 <section id="grammar-compiler">
 <h2>Grammar Compiler<a class="headerlink" href="#grammar-compiler" title="Permalink to this heading">¶</a></h2>
@@ -389,8 +394,12 @@ tokenizers as the backend.</p>
 <span class="nb">print</span><span class="p">(</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">input_ids</span><span class="p">))</span>
 </pre></div>
 </div>
-<p><a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.is_terminated</span></code></span></a> will require the LLM generate
-an EOS token after completing the structure. It is equivalent to the EOS-terminated generation.</p>
+<p>By default, <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.is_terminated</span></code></span></a> returns True
+after the matcher accepts a stop token following the completion of the structure. The stop tokens
+default to the ones detected from the tokenizer (e.g. the EOS token), and can be customized with the
+<code class="docutils literal notranslate"><span class="pre">override_stop_tokens</span></code> parameter of <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher</span></code></span></a>. Alternatively,
+if the matcher is constructed with <code class="docutils literal notranslate"><span class="pre">terminate_without_stop_token=True</span></code>, it terminates as soon as the
+structure is completed, without requiring a stop token.</p>
 <p>Congratulations! You have successfully generated a structured output using XGrammar.</p>
 </section>
 <section id="next-steps">

@@ -295,7 +295,7 @@ your choice.</p>
 </pre></div>
 </div>
 <p>For JSON generation, there are generally three options for compiling the grammar: using a built-in
-JSON grammar, specify JSON schema with a Pydantic model, or from a JSON schema string. Pick one
+JSON grammar, specify JSON schema with a Pydantic model, or from a JSON schema string. Pick
 one of the three below to run.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Option 1: Compile with a built-in JSON grammar</span>
 <span class="n">compiled_grammar</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">CompiledGrammar</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_builtin_json_grammar</span><span class="p">()</span>
@@ -375,7 +375,7 @@ for batched inference.</p>
 </section>
 <section id="try-out-via-hf-transformers">
 <h2>Try out via HF Transformers<a class="headerlink" href="#try-out-via-hf-transformers" title="Permalink to this heading">¶</a></h2>
-<p>XGrammar can be easily integrate with HF transformers using a <code class="docutils literal notranslate"><span class="pre">LogitsProcessor</span></code>. Note that
+<p>XGrammar can be easily integrated with HF transformers using a <code class="docutils literal notranslate"><span class="pre">LogitsProcessor</span></code>. Note that
 this integration mainly aims for accessibility and may contain extra overhead.</p>
 <p>First, instantiate a model, a tokenizer, and inputs.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xgr</span>

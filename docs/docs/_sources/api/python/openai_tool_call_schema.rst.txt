@@ -14,9 +14,15 @@ structural tag APIs.
 
 .. autodata:: ToolParam
 
+.. autoclass:: NamedToolChoiceFunction
+
 .. autoclass:: NamedToolChoiceParam
 
 .. autoclass:: BuiltinToolChoiceParam
+
+.. autoclass:: AllowedToolRef
+
+.. autoclass:: AllowedToolsParam
 
 .. autoclass:: AllowedToolChoiceParam
 
