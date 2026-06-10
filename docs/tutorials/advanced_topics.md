@@ -33,7 +33,7 @@ The EBNF string, JSON Schema string, regex pattern are used as the cache key for
 ```python
 grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=True, cache_limit_bytes=128 * 1024 * 1024)
 compiled_grammar1 = grammar_compiler.compile_grammar(grammar)
-# return immidiately
+# return immediately
 compiled_grammar2 = grammar_compiler.compile_grammar(grammar)
 grammar_compiler.clear_cache()
 ```
@@ -64,7 +64,7 @@ XGrammar provides a new class [`xgr.BatchGrammarMatcher`](xgrammar.BatchGrammarM
 batch_grammar_matcher = xgr.BatchGrammarMatcher(max_threads=8)
 ```
 
-`BatchGrammarMatcher` needs a parameter `max_threads` to initialize. It represents the maximum threads in `fill_next_token_mask`. If not set, it will use std::thread::hardware_concurrency() / 2 as the default value.
+`BatchGrammarMatcher` needs a parameter `max_threads` to initialize. It represents the maximum threads in `batch_fill_next_token_bitmask`. If not set, it will use std::thread::hardware_concurrency() / 2 as the default value.
 
 `BatchGrammarMatcher` has three methods: `batch_fill_next_token_bitmask`, `batch_accept_token`, and `batch_accept_string` to handle the mask generation tasks. Here is an example to use `batch_fill_next_token_bitmask`:
 

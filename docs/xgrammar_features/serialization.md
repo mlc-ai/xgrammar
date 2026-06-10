@@ -11,7 +11,7 @@ Each serialized result have a `__VERSION__` field to indicate the serialization 
 internal data structure is changed in XGrammar, the serialization version will be updated. Use
 [`xgr.get_serialization_version`](xgrammar.get_serialization_version) to get the current serialization
 version. In deserialization, if the version in the JSON string does not match the current version,
-the deserialization will fail and raise a [`xgr.exception.DeserializeVersionError`](xgrammar.exception. DeserializeVersionError).
+the deserialization will fail and raise a [`xgr.exception.DeserializeVersionError`](xgrammar.exception.DeserializeVersionError).
 
 > **Note:**<br>
 > After upgrading XGrammar, the serialization format may change. If you have cached serialization
@@ -71,7 +71,7 @@ A `CompiledGrammar` contains a tokenizer info, and multiple `CompiledGrammar`s c
 include the complete `TokenizerInfo`, but only the metadata of it. During deserialization, we will
 require a `TokenizerInfo` object and check if it matches the metadata in the serialized JSON string.
 If so, the deserialization will use the provided `TokenizerInfo` object in the result. If not, the
-deserialization will raise a `RuntimeError`.
+deserialization will raise a [`xgr.exception.DeserializeFormatError`](xgrammar.exception.DeserializeFormatError).
 
 ```python
 # Construct CompiledGrammar
