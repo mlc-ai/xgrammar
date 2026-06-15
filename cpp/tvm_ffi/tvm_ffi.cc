@@ -818,25 +818,33 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def(
           "xgrammar.tvm_ffi_binding.testing._qwen_xml_tool_calling_to_ebnf",
           [](ffi::String schema, bool any_order) {
-            return ffi::String(QwenXMLToolCallingToEBNF(schema, any_order));
+            return ffi::String(QwenXMLToolCallingToEBNF(
+                schema, any_order, /*any_whitespace=*/true, /*max_whitespace_cnt=*/std::nullopt
+            ));
           }
       )
       .def(
           "xgrammar.tvm_ffi_binding.testing._minimax_xml_tool_calling_to_ebnf",
           [](ffi::String schema, bool any_order) {
-            return ffi::String(MiniMaxXMLToolCallingToEBNF(schema, any_order));
+            return ffi::String(MiniMaxXMLToolCallingToEBNF(
+                schema, any_order, /*any_whitespace=*/true, /*max_whitespace_cnt=*/std::nullopt
+            ));
           }
       )
       .def(
           "xgrammar.tvm_ffi_binding.testing._deepseek_xml_tool_calling_to_ebnf",
           [](ffi::String schema, bool any_order) {
-            return ffi::String(DeepSeekXMLToolCallingToEBNF(schema, any_order));
+            return ffi::String(DeepSeekXMLToolCallingToEBNF(
+                schema, any_order, /*any_whitespace=*/true, /*max_whitespace_cnt=*/std::nullopt
+            ));
           }
       )
       .def(
           "xgrammar.tvm_ffi_binding.testing._glm_xml_tool_calling_to_ebnf",
           [](ffi::String schema, bool any_order) {
-            return ffi::String(GlmXMLToolCallingToEBNF(schema, any_order));
+            return ffi::String(GlmXMLToolCallingToEBNF(
+                schema, any_order, /*any_whitespace=*/true, /*max_whitespace_cnt=*/std::nullopt
+            ));
           }
       )
       .def(

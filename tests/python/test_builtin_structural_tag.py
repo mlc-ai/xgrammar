@@ -167,6 +167,16 @@ def _collect_excludes(structural_tag: StructuralTag) -> List[List[str]]:
     ]
 
 
+def _collect_json_schema_nodes(structural_tag: StructuralTag) -> List[JSONSchemaFormat]:
+    """Collect nested JSONSchemaFormat nodes."""
+
+    return [
+        format_obj
+        for format_obj in _walk_structural_format(structural_tag.format)
+        if isinstance(format_obj, JSONSchemaFormat)
+    ]
+
+
 # ---------- Shared tool definitions ----------
 
 SIMPLE_SCHEMA = {"type": "object", "properties": {"q": {"type": "string"}}}
@@ -1375,3 +1385,40 @@ def test_any_order_reordered_arguments_accepted_only_when_enabled():
     )
     check_stag_with_instance(st_any_order, ordered, True)
     check_stag_with_instance(st_any_order, reordered, True)
+
+
+# ---------- Test: max_whitespace_cnt propagation ----------
+
+
+def test_get_model_structural_tag_max_whitespace_cnt_propagates():
+    """get_model_structural_tag applies max_whitespace_cnt to every JSONSchemaFormat node."""
+    tools = make_tools(["f", "g"])
+
+    nodes_default = _collect_json_schema_nodes(
+        get_model_structural_tag("qwen_3", tools=tools, reasoning=False)
+    )
+    assert nodes_default  # the generated tag actually contains JSON-schema nodes
+    assert all(n.max_whitespace_cnt is None for n in nodes_default)
+
+    nodes_bounded = _collect_json_schema_nodes(
+        get_model_structural_tag("qwen_3", tools=tools, reasoning=False, max_whitespace_cnt=2)
+    )
+    assert nodes_bounded
+    assert all(n.max_whitespace_cnt == 2 for n in nodes_bounded)
+
+
+def test_get_model_structural_tag_any_whitespace_propagates():
+    """get_model_structural_tag applies any_whitespace to every JSONSchemaFormat node."""
+    tools = make_tools(["f", "g"])
+
+    nodes_default = _collect_json_schema_nodes(
+        get_model_structural_tag("qwen_3", tools=tools, reasoning=False)
+    )
+    assert nodes_default  # the generated tag actually contains JSON-schema nodes
+    assert all(n.any_whitespace is True for n in nodes_default)
+
+    nodes_fixed = _collect_json_schema_nodes(
+        get_model_structural_tag("qwen_3", tools=tools, reasoning=False, any_whitespace=False)
+    )
+    assert nodes_fixed
+    assert all(n.any_whitespace is False for n in nodes_fixed)

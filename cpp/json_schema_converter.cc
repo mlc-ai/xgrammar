@@ -1158,7 +1158,7 @@ void JSONSchemaConverter::AddBasicRules() {
   // Create basic rules with a temporary indent manager for compact format
   auto saved_indent_manager = indent_manager_;
   if (any_whitespace_) {
-    indent_manager_ = IndentManager(std::nullopt, ",", true, std::nullopt);
+    indent_manager_ = IndentManager(std::nullopt, ",", true, max_whitespace_cnt_);
   } else {
     indent_manager_ = IndentManager(std::nullopt, ", ", false, std::nullopt);
   }
@@ -3235,7 +3235,12 @@ std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<d
   return JSONSchemaConverter::GenerateFloatRangeRegex(start, end, 6);
 }
 
-std::string QwenXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
+std::string QwenXMLToolCallingToEBNF(
+    const std::string& schema,
+    bool any_order,
+    bool any_whitespace,
+    std::optional<int> max_whitespace_cnt
+) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
   if (!err.empty()) {
@@ -3243,17 +3248,22 @@ std::string QwenXMLToolCallingToEBNF(const std::string& schema, bool any_order) 
   }
   return JSONSchemaToEBNF(
       json_value,
-      true,
+      any_whitespace,
       std::nullopt,
       std::nullopt,
       true,
-      std::nullopt,
+      max_whitespace_cnt,
       JSONFormat::kQwenXML,
       any_order
   );
 }
 
-std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
+std::string MiniMaxXMLToolCallingToEBNF(
+    const std::string& schema,
+    bool any_order,
+    bool any_whitespace,
+    std::optional<int> max_whitespace_cnt
+) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
   if (!err.empty()) {
@@ -3261,17 +3271,22 @@ std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema, bool any_orde
   }
   return JSONSchemaToEBNF(
       json_value,
-      true,
+      any_whitespace,
       std::nullopt,
       std::nullopt,
       true,
-      std::nullopt,
+      max_whitespace_cnt,
       JSONFormat::kMiniMaxXML,
       any_order
   );
 }
 
-std::string DeepSeekXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
+std::string DeepSeekXMLToolCallingToEBNF(
+    const std::string& schema,
+    bool any_order,
+    bool any_whitespace,
+    std::optional<int> max_whitespace_cnt
+) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
   if (!err.empty()) {
@@ -3279,17 +3294,22 @@ std::string DeepSeekXMLToolCallingToEBNF(const std::string& schema, bool any_ord
   }
   return JSONSchemaToEBNF(
       json_value,
-      true,
+      any_whitespace,
       std::nullopt,
       std::nullopt,
       true,
-      std::nullopt,
+      max_whitespace_cnt,
       JSONFormat::kDeepSeekXML,
       any_order
   );
 }
 
-std::string GlmXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
+std::string GlmXMLToolCallingToEBNF(
+    const std::string& schema,
+    bool any_order,
+    bool any_whitespace,
+    std::optional<int> max_whitespace_cnt
+) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
   if (!err.empty()) {
@@ -3297,11 +3317,11 @@ std::string GlmXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
   }
   return JSONSchemaToEBNF(
       json_value,
-      true,
+      any_whitespace,
       std::nullopt,
       std::nullopt,
       true,
-      std::nullopt,
+      max_whitespace_cnt,
       JSONFormat::kGlmXML,
       any_order
   );

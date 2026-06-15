@@ -1,7 +1,7 @@
 """Defines all structural tag formats."""
 
 import json
-from typing import Any, Dict, List, Literal, Tuple, Type, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
 try:
     # Python 3.9+
@@ -47,6 +47,10 @@ class JSONSchemaFormat(BaseModel):
       maxProperties]`` (unbounded when maxProperties is unset).
 
     Applies to every object, nested included."""
+    any_whitespace: bool = True
+    """Whether to allow arbitrary whitespace in this content. If False, use fixed formatting."""
+    max_whitespace_cnt: Optional[int] = None
+    """Max consecutive whitespace characters in this content. None means no limit."""
 
 
 class AnyTextFormat(BaseModel):

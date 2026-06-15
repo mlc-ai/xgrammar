@@ -35,6 +35,8 @@ def get_model_structural_tag(
     force_reasoning: bool = False,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
 ) -> StructuralTag:
     r"""Get a structural tag for a model's reasoning and tool-call output format.
 
@@ -202,6 +204,12 @@ def get_model_structural_tag(
         free-text spans constrained to exclude those tokens. Set to ``False``
         to allow them to appear as plain text. For models that have no special
         tokens to exclude (such as ``"harmony"``), this has no effect.
+    any_whitespace : bool
+        Applied to every tool-argument :class:`JSONSchemaFormat`. When ``True``
+        (default), arbitrary whitespace is allowed in the JSON content; when
+        ``False``, the fixed compact formatting is enforced. Default: ``True``.
+    max_whitespace_cnt : Optional[int]
+        Applied to every tool-argument :class:`JSONSchemaFormat`. Default: ``None``.
 
     Notes
     -----
@@ -236,6 +244,8 @@ def get_model_structural_tag(
         reasoning,
         any_order=any_order,
         exclude_special_tokens=exclude_special_tokens,
+        any_whitespace=any_whitespace,
+        max_whitespace_cnt=max_whitespace_cnt,
     )
 
 
@@ -522,6 +532,8 @@ def get_llama_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Llama style structural tag format.
@@ -567,7 +579,12 @@ def get_llama_structural_tag(
             tags.append(
                 TagFormat(
                     begin=(TOOL_OBJECT_BEGIN_PREFIX + name + TOOL_OBJECT_PARAMETERS_PREFIX),
-                    content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
                     end="}",
                 )
             )
@@ -590,7 +607,10 @@ def get_llama_structural_tag(
         suffix_tag = TagFormat(
             begin=(TOOL_NAME_PREFIX + function.name + PARAMETERS_FIELD_PREFIX),
             content=JSONSchemaFormat(
-                json_schema=_get_function_parameters(function), any_order=any_order
+                json_schema=_get_function_parameters(function),
+                any_order=any_order,
+                any_whitespace=any_whitespace,
+                max_whitespace_cnt=max_whitespace_cnt,
             ),
             end="}",
         )
@@ -604,7 +624,12 @@ def get_llama_structural_tag(
             tags.append(
                 TagFormat(
                     begin=(TOOL_OBJECT_BEGIN_PREFIX + name + TOOL_OBJECT_PARAMETERS_PREFIX),
-                    content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
                     end="}",
                 )
             )
@@ -622,6 +647,8 @@ def get_kimi_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Kimi-K2 style structural tag format.
@@ -674,7 +701,12 @@ def get_kimi_structural_tag(
                         elements=[
                             RegexFormat(pattern=r"\d+"),
                             ConstStringFormat(value=TOOL_CALL_ARGUMENT_BEGIN),
-                            JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                            JSONSchemaFormat(
+                                json_schema=parameters,
+                                any_order=any_order,
+                                any_whitespace=any_whitespace,
+                                max_whitespace_cnt=max_whitespace_cnt,
+                            ),
                         ]
                     ),
                     end=TOOL_CALL_END,
@@ -712,7 +744,10 @@ def get_kimi_structural_tag(
                             RegexFormat(pattern=r"\d+"),
                             ConstStringFormat(value=TOOL_CALL_ARGUMENT_BEGIN),
                             JSONSchemaFormat(
-                                json_schema=_get_function_parameters(function), any_order=any_order
+                                json_schema=_get_function_parameters(function),
+                                any_order=any_order,
+                                any_whitespace=any_whitespace,
+                                max_whitespace_cnt=max_whitespace_cnt,
                             ),
                         ]
                     ),
@@ -734,7 +769,12 @@ def get_kimi_structural_tag(
                         elements=[
                             RegexFormat(pattern=r"\d+"),
                             ConstStringFormat(value=TOOL_CALL_ARGUMENT_BEGIN),
-                            JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                            JSONSchemaFormat(
+                                json_schema=parameters,
+                                any_order=any_order,
+                                any_whitespace=any_whitespace,
+                                max_whitespace_cnt=max_whitespace_cnt,
+                            ),
                         ]
                     ),
                     end=TOOL_CALL_END,
@@ -764,6 +804,8 @@ def get_deepseek_r1_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-R1 style structural tag format.
@@ -798,7 +840,12 @@ def get_deepseek_r1_structural_tag(
             tags.append(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN}function{TOOL_SEP}{name}{JSON_RENDER_BEGIN}",
-                    content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
                     end=f"{JSON_RENDER_END}{TOOL_CALL_END}",
                 )
             )
@@ -825,7 +872,12 @@ def get_deepseek_r1_structural_tag(
         parameters = _get_function_parameters(function)
         suffix_tag = TagFormat(
             begin=f"{TOOL_CALLS_BEGIN}{TOOL_CALL_BEGIN}function{TOOL_SEP}{function.name}{JSON_RENDER_BEGIN}",
-            content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+            content=JSONSchemaFormat(
+                json_schema=parameters,
+                any_order=any_order,
+                any_whitespace=any_whitespace,
+                max_whitespace_cnt=max_whitespace_cnt,
+            ),
             end=f"{JSON_RENDER_END}{TOOL_CALL_END}{TOOL_CALLS_END}",
         )
 
@@ -838,7 +890,12 @@ def get_deepseek_r1_structural_tag(
             tags.append(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN}function{TOOL_SEP}{name}{JSON_RENDER_BEGIN}",
-                    content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
                     end=f"{JSON_RENDER_END}{TOOL_CALL_END}",
                 )
             )
@@ -863,6 +920,8 @@ def get_deepseek_v3_1_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V3.1 style structural tag format.
@@ -895,7 +954,12 @@ def get_deepseek_v3_1_structural_tag(
             tags.append(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN}{name}{TOOL_SEP}",
-                    content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
                     end=TOOL_CALL_END,
                 )
             )
@@ -922,7 +986,12 @@ def get_deepseek_v3_1_structural_tag(
         parameters = _get_function_parameters(function)
         suffix_tag = TagFormat(
             begin=f"{TOOL_CALLS_BEGIN}{TOOL_CALL_BEGIN}{function.name}{TOOL_SEP}",
-            content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+            content=JSONSchemaFormat(
+                json_schema=parameters,
+                any_order=any_order,
+                any_whitespace=any_whitespace,
+                max_whitespace_cnt=max_whitespace_cnt,
+            ),
             end=f"{TOOL_CALL_END}{TOOL_CALLS_END}",
         )
 
@@ -935,7 +1004,12 @@ def get_deepseek_v3_1_structural_tag(
             tags.append(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN}{name}{TOOL_SEP}",
-                    content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
                     end=TOOL_CALL_END,
                 )
             )
@@ -961,6 +1035,8 @@ def get_qwen_3_5_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Qwen XML tool-call structural tag format.
@@ -1008,7 +1084,11 @@ def get_qwen_3_5_structural_tag(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
                     content=JSONSchemaFormat(
-                        json_schema=parameters, style="qwen_xml", any_order=any_order
+                        json_schema=parameters,
+                        style="qwen_xml",
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=TOOL_CALL_END,
                 )
@@ -1035,6 +1115,8 @@ def get_qwen_3_5_structural_tag(
                 json_schema=_get_function_parameters(function),
                 style="qwen_xml",
                 any_order=any_order,
+                any_whitespace=any_whitespace,
+                max_whitespace_cnt=max_whitespace_cnt,
             ),
             end=TOOL_CALL_END,
         )
@@ -1049,7 +1131,11 @@ def get_qwen_3_5_structural_tag(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
                     content=JSONSchemaFormat(
-                        json_schema=parameters, style="qwen_xml", any_order=any_order
+                        json_schema=parameters,
+                        style="qwen_xml",
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=TOOL_CALL_END,
                 )
@@ -1082,6 +1168,8 @@ def get_qwen_3_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Qwen3 style structural tag format.
@@ -1128,7 +1216,12 @@ def get_qwen_3_structural_tag(
             tags.append(
                 TagFormat(
                     begin=(TOOL_CALL_BEGIN_PREFIX + name + ARGUMENTS_FIELD_PREFIX),
-                    content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
                     end=TOOL_CALL_END,
                 )
             )
@@ -1150,7 +1243,10 @@ def get_qwen_3_structural_tag(
         suffix_tag = TagFormat(
             begin=(TOOL_CALL_BEGIN_PREFIX + function.name + ARGUMENTS_FIELD_PREFIX),
             content=JSONSchemaFormat(
-                json_schema=_get_function_parameters(function), any_order=any_order
+                json_schema=_get_function_parameters(function),
+                any_order=any_order,
+                any_whitespace=any_whitespace,
+                max_whitespace_cnt=max_whitespace_cnt,
             ),
             end=TOOL_CALL_END,
         )
@@ -1164,7 +1260,12 @@ def get_qwen_3_structural_tag(
             tags.append(
                 TagFormat(
                     begin=(TOOL_CALL_BEGIN_PREFIX + name + ARGUMENTS_FIELD_PREFIX),
-                    content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
                     end=TOOL_CALL_END,
                 )
             )
@@ -1192,6 +1293,8 @@ def get_harmony_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get harmony(gpt-oss) style structural tag format.
@@ -1229,7 +1332,12 @@ def get_harmony_structural_tag(
 
     def _function_tool_tags(name, parameters):
         """Generate tags for all supported harmony function tool call formats."""
-        content = JSONSchemaFormat(json_schema=parameters, any_order=any_order)
+        content = JSONSchemaFormat(
+            json_schema=parameters,
+            any_order=any_order,
+            any_whitespace=any_whitespace,
+            max_whitespace_cnt=max_whitespace_cnt,
+        )
         return [
             TagFormat(
                 begin=f"<|channel|>commentary to=functions.{name}<|constrain|>json<|message|>",
@@ -1250,7 +1358,12 @@ def get_harmony_structural_tag(
 
     def _builtin_tool_tags(name, parameters):
         """Generate tags for supported harmony builtin tool call formats."""
-        content = JSONSchemaFormat(json_schema=parameters, any_order=any_order)
+        content = JSONSchemaFormat(
+            json_schema=parameters,
+            any_order=any_order,
+            any_whitespace=any_whitespace,
+            max_whitespace_cnt=max_whitespace_cnt,
+        )
         return [
             TagFormat(
                 begin=f"<|channel|>commentary to={name} code<|message|>",
@@ -1324,6 +1437,8 @@ def get_deepseek_v3_2_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V3.2 style structural tag format.
@@ -1363,7 +1478,11 @@ def get_deepseek_v3_2_structural_tag(
                 TagFormat(
                     begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
                     content=JSONSchemaFormat(
-                        json_schema=parameters, style=XML_STYLE, any_order=any_order
+                        json_schema=parameters,
+                        style=XML_STYLE,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=INVOKE_END,
                 )
@@ -1404,6 +1523,8 @@ def get_deepseek_v3_2_structural_tag(
                         json_schema=_get_function_parameters(function),
                         style=XML_STYLE,
                         any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=INVOKE_END,
                 ),
@@ -1420,7 +1541,11 @@ def get_deepseek_v3_2_structural_tag(
                 TagFormat(
                     begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
                     content=JSONSchemaFormat(
-                        json_schema=parameters, style=XML_STYLE, any_order=any_order
+                        json_schema=parameters,
+                        style=XML_STYLE,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=INVOKE_END,
                 )
@@ -1451,6 +1576,8 @@ def get_minimax_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get MiniMax-M2.5 style structural tag format.
@@ -1491,7 +1618,11 @@ def get_minimax_structural_tag(
                 TagFormat(
                     begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
                     content=JSONSchemaFormat(
-                        json_schema=parameters, style=XML_STYLE, any_order=any_order
+                        json_schema=parameters,
+                        style=XML_STYLE,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=INVOKE_END,
                 )
@@ -1530,6 +1661,8 @@ def get_minimax_structural_tag(
                         json_schema=_get_function_parameters(function),
                         style=XML_STYLE,
                         any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=INVOKE_END,
                 ),
@@ -1546,7 +1679,11 @@ def get_minimax_structural_tag(
                 TagFormat(
                     begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
                     content=JSONSchemaFormat(
-                        json_schema=parameters, style=XML_STYLE, any_order=any_order
+                        json_schema=parameters,
+                        style=XML_STYLE,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=INVOKE_END,
                 )
@@ -1579,6 +1716,8 @@ def get_glm_4_7_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get GLM-4.7/GLM-5 style structural tag format.
@@ -1638,7 +1777,11 @@ def get_glm_4_7_structural_tag(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}",
                     content=JSONSchemaFormat(
-                        json_schema=parameters, style=XML_STYLE, any_order=any_order
+                        json_schema=parameters,
+                        style=XML_STYLE,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=TOOL_CALL_END,
                 )
@@ -1662,7 +1805,11 @@ def get_glm_4_7_structural_tag(
         suffix_tag = TagFormat(
             begin=f"{TOOL_CALL_BEGIN_PREFIX}{function.name}",
             content=JSONSchemaFormat(
-                json_schema=_get_function_parameters(function), style=XML_STYLE, any_order=any_order
+                json_schema=_get_function_parameters(function),
+                style=XML_STYLE,
+                any_order=any_order,
+                any_whitespace=any_whitespace,
+                max_whitespace_cnt=max_whitespace_cnt,
             ),
             end=TOOL_CALL_END,
         )
@@ -1676,7 +1823,11 @@ def get_glm_4_7_structural_tag(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}",
                     content=JSONSchemaFormat(
-                        json_schema=parameters, style=XML_STYLE, any_order=any_order
+                        json_schema=parameters,
+                        style=XML_STYLE,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=TOOL_CALL_END,
                 )
@@ -1706,6 +1857,8 @@ def _get_gemma_4_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Gemma 4 style structural tag format.
@@ -1762,7 +1915,12 @@ def _get_gemma_4_structural_tag(
             tags.append(
                 TagFormat(
                     begin=TOOL_CALL_BEGIN_PREFIX + name,
-                    content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
                     end=TOOL_CALL_END,
                 )
             )
@@ -1785,7 +1943,10 @@ def _get_gemma_4_structural_tag(
         suffix_tag = TagFormat(
             begin=TOOL_CALL_BEGIN_PREFIX + function.name,
             content=JSONSchemaFormat(
-                json_schema=_get_function_parameters(function), any_order=any_order
+                json_schema=_get_function_parameters(function),
+                any_order=any_order,
+                any_whitespace=any_whitespace,
+                max_whitespace_cnt=max_whitespace_cnt,
             ),
             end=TOOL_CALL_END,
         )
@@ -1799,7 +1960,12 @@ def _get_gemma_4_structural_tag(
             tags.append(
                 TagFormat(
                     begin=TOOL_CALL_BEGIN_PREFIX + name,
-                    content=JSONSchemaFormat(json_schema=parameters, any_order=any_order),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
                     end=TOOL_CALL_END,
                 )
             )
@@ -1821,6 +1987,8 @@ def get_deepseek_v4_structural_tag(
     reasoning: bool = True,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
+    any_whitespace: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V4 style structural tag format.
@@ -1858,7 +2026,11 @@ def get_deepseek_v4_structural_tag(
                 TagFormat(
                     begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
                     content=JSONSchemaFormat(
-                        json_schema=parameters, style=XML_STYLE, any_order=any_order
+                        json_schema=parameters,
+                        style=XML_STYLE,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=INVOKE_END,
                 )
@@ -1899,6 +2071,8 @@ def get_deepseek_v4_structural_tag(
                         json_schema=_get_function_parameters(function),
                         style=XML_STYLE,
                         any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=INVOKE_END,
                 ),
@@ -1915,7 +2089,11 @@ def get_deepseek_v4_structural_tag(
                 TagFormat(
                     begin=(INVOKE_BEGIN_PREFIX + name + INVOKE_BEGIN_SUFFIX),
                     content=JSONSchemaFormat(
-                        json_schema=parameters, style=XML_STYLE, any_order=any_order
+                        json_schema=parameters,
+                        style=XML_STYLE,
+                        any_order=any_order,
+                        any_whitespace=any_whitespace,
+                        max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=INVOKE_END,
                 )

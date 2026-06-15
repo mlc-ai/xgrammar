@@ -87,8 +87,21 @@ struct JSONSchemaFormat {
   // Whether to allow object properties to appear in any order. See
   // Grammar::FromJSONSchema / JSONSchemaToEBNF for the semantics.
   bool any_order = false;
-  JSONSchemaFormat(std::string json_schema, std::string style = "json", bool any_order = false)
-      : json_schema(std::move(json_schema)), style(std::move(style)), any_order(any_order) {}
+  // Per-tag whitespace control for the JSON-schema content.
+  bool any_whitespace = true;
+  std::optional<int> max_whitespace_cnt = std::nullopt;
+  JSONSchemaFormat(
+      std::string json_schema,
+      std::string style = "json",
+      bool any_order = false,
+      bool any_whitespace = true,
+      std::optional<int> max_whitespace_cnt = std::nullopt
+  )
+      : json_schema(std::move(json_schema)),
+        style(std::move(style)),
+        any_order(any_order),
+        any_whitespace(any_whitespace),
+        max_whitespace_cnt(max_whitespace_cnt) {}
   picojson::value ToJSON() const;
 };
 
