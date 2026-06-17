@@ -90,6 +90,11 @@ class AnyTokensFormat(BaseModel):
     exclude_tokens: List[Union[int, str]] = []
     """List of token IDs or strings to exclude."""
 
+    max_tokens: Optional[int] = Field(default=None, ge=0)
+    """Maximum number of tokens to match. If None, there is no limit. If set, at most
+    max_tokens tokens are matched (each excluding the tokens in exclude_tokens), giving an
+    exact token-count budget. It must be a non-negative integer."""
+
 
 class GrammarFormat(BaseModel):
     """A format that matches an ebnf grammar."""

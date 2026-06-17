@@ -640,6 +640,7 @@ Matches zero or more tokens, excluding those in `exclude_tokens`.
 | Field | Type | Default |
 | --- | --- | --- |
 | `exclude_tokens` | `(int \| string)[]` | `[]` |
+| `max_tokens` | `int \| null` | `null` |
 
 - **Use it when**: content should remain unconstrained until a token-level boundary is reached
 
@@ -648,6 +649,18 @@ Matches zero or more tokens, excluding those in `exclude_tokens`.
 ```
 
 Semantically, `any_tokens` is equivalent to `star(exclude_token(...))`.
+
+`max_tokens` (default `null`) caps how many tokens this format may consume. When set to a
+non-negative integer `N`, the region matches **at most** `N` tokens (each of which still excludes
+the values in `exclude_tokens`), giving an exact token-count budget; when `null`, there is no
+limit. This is useful for bounding an otherwise-unlimited region, e.g. a token budget on a
+think/reasoning section:
+
+```json
+{"type": "any_tokens", "exclude_tokens": ["<|eos|>"], "max_tokens": 256}
+```
+
+With `max_tokens` set, `any_tokens` is equivalent to `repeat(exclude_token(...), min=0, max=N)`.
 
 #### `token_triggered_tags`
 

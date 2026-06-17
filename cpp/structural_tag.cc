@@ -199,6 +199,9 @@ picojson::value AnyTokensFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
   obj["exclude_tokens"] = IntOrStringVectorToJSONArray(exclude_tokens);
+  if (max_tokens.has_value()) {
+    obj["max_tokens"] = picojson::value(static_cast<double>(max_tokens.value()));
+  }
   return picojson::value(std::move(obj));
 }
 
@@ -994,7 +997,26 @@ Result<AnyTokensFormat, ISTError> StructuralTagParser::ParseAnyTokensFormat(
     }
     exclude_tokens = std::move(parsed).Unwrap();
   }
-  return ResultOk<AnyTokensFormat>(std::move(exclude_tokens));
+  std::optional<int> max_tokens = std::nullopt;
+  auto mt_it = obj.find("max_tokens");
+  if (mt_it != obj.end() && !mt_it->second.is<picojson::null>()) {
+    // A present-but-non-numeric / out-of-range max_tokens is an error rather than being silently
+    // ignored (which would degrade the budget to "unbounded"). Range-check the double before
+    // casting to int to avoid the UB of static_cast<int> on an out-of-range value.
+    if (!mt_it->second.is<double>()) {
+      return ResultErr<ISTError>("max_tokens in any_tokens must be a non-negative integer or null."
+      );
+    }
+    double raw = mt_it->second.get<double>();
+    if (raw < 0 || raw > static_cast<double>(std::numeric_limits<int>::max()) ||
+        raw != std::floor(raw)) {
+      return ResultErr<ISTError>(
+          "max_tokens in any_tokens must be a non-negative integer in [0, INT_MAX]."
+      );
+    }
+    max_tokens = static_cast<int>(raw);
+  }
+  return ResultOk<AnyTokensFormat>(std::move(exclude_tokens), max_tokens);
 }
 
 Result<TokenTriggeredTagsFormat, ISTError> StructuralTagParser::ParseTokenTriggeredTagsFormat(
@@ -2251,6 +2273,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTokensFor
   int exclude_seq = grammar_builder_.AddSequence({exclude_expr});
   int exclude_choices = grammar_builder_.AddChoices({exclude_seq});
   int inner_rule = grammar_builder_.AddRuleWithHint("any_tokens_inner", exclude_choices);
+  // Each `inner_rule` matches exactly one token, so when max_tokens is set we bound the
+  // repetition to at most max_tokens, giving an exact token-count budget.
+  if (format.max_tokens.has_value()) {
+    int repeat_expr = grammar_builder_.AddRepeat(inner_rule, 0, format.max_tokens.value());
+    return ResultOk(grammar_builder_.AddRuleWithHint("any_tokens", repeat_expr));
+  }
   auto inner_ref = grammar_builder_.AddRuleRef(inner_rule);
   auto star_rule_id = grammar_builder_.AddEmptyRuleWithHint("any_tokens");
   auto star_ref = grammar_builder_.AddRuleRef(star_rule_id);

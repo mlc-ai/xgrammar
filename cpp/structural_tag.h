@@ -163,8 +163,14 @@ struct ExcludeTokenFormat {
 struct AnyTokensFormat {
   static constexpr const char* type = "any_tokens";
   std::vector<std::variant<int32_t, std::string>> exclude_tokens;
-  AnyTokensFormat(std::vector<std::variant<int32_t, std::string>> exclude_tokens)
-      : exclude_tokens(std::move(exclude_tokens)) {}
+  // If set, match at most max_tokens tokens (each excluding exclude_tokens), giving an exact
+  // token-count budget. If std::nullopt, the number of tokens is unbounded.
+  std::optional<int> max_tokens = std::nullopt;
+  AnyTokensFormat(
+      std::vector<std::variant<int32_t, std::string>> exclude_tokens,
+      std::optional<int> max_tokens = std::nullopt
+  )
+      : exclude_tokens(std::move(exclude_tokens)), max_tokens(max_tokens) {}
   picojson::value ToJSON() const;
 
  private:
