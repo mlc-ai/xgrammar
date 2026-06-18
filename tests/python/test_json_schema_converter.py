@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
@@ -2252,7 +2253,7 @@ def test_primitive_type_object():
 
 
 def test_generate_float_regex():
-    assert _generate_float_regex(1.0, 5.0) == r"^(1|5|(([2-4]))(\.\d{1,6})?|1\.\d{1,6}|5\.\d{1,6})$"
+    assert _generate_float_regex(1.0, 5.0) == r"^(1|5|(([2-4]))(\.\d{1,6})?|1\.\d{1,6}|5\.0{1,6})$"
 
     assert (
         _generate_float_regex(1.5, 5.75)
@@ -2261,7 +2262,7 @@ def test_generate_float_regex():
 
     assert (
         _generate_float_regex(-3.14, 2.71828)
-        == r"^(-3\.14|2\.71828|(-([1-3])|0|(1))(\.\d{1,6})?|-3\.0\d{0,5}|-3\.10\d{0,4}|-3\.11\d{0,4}|-3\.12\d{0,4}|-3\.13\d{0,4}|2\.0\d{0,5}|2\.1\d{0,5}|2\.2\d{0,5}|2\.3\d{0,5}|2\.4\d{0,5}|2\.5\d{0,5}|2\.6\d{0,5}|2\.70\d{0,4}|2\.710\d{0,3}|2\.711\d{0,3}|2\.712\d{0,3}|2\.713\d{0,3}|2\.714\d{0,3}|2\.715\d{0,3}|2\.716\d{0,3}|2\.717\d{0,3}|2\.7180\d{0,2}|2\.7181\d{0,2}|2\.71820\d{0,1}|2\.71821\d{0,1}|2\.71822\d{0,1}|2\.71823\d{0,1}|2\.71824\d{0,1}|2\.71825\d{0,1}|2\.71826\d{0,1}|2\.71827\d{0,1})$"
+        == r"^(-3\.14|2\.71828|(-([1-3])|0|(1))(\.\d{1,6})?|-0\.\d{1,6}|-3\.0\d{0,5}|-3\.10\d{0,4}|-3\.11\d{0,4}|-3\.12\d{0,4}|-3\.13\d{0,4}|2\.0\d{0,5}|2\.1\d{0,5}|2\.2\d{0,5}|2\.3\d{0,5}|2\.4\d{0,5}|2\.5\d{0,5}|2\.6\d{0,5}|2\.70\d{0,4}|2\.710\d{0,3}|2\.711\d{0,3}|2\.712\d{0,3}|2\.713\d{0,3}|2\.714\d{0,3}|2\.715\d{0,3}|2\.716\d{0,3}|2\.717\d{0,3}|2\.7180\d{0,2}|2\.7181\d{0,2}|2\.71820\d{0,1}|2\.71821\d{0,1}|2\.71822\d{0,1}|2\.71823\d{0,1}|2\.71824\d{0,1}|2\.71825\d{0,1}|2\.71826\d{0,1}|2\.71827\d{0,1})$"
     )
 
     assert (
@@ -2284,8 +2285,23 @@ def test_generate_float_regex():
 
     assert (
         _generate_float_regex(-0.000001, 0.000001)
-        == r"^(-0\.000001|0\.000001|-0\.000000\d{0,0}|0\.000000\d{0,0})$"
+        == r"^(-0\.000001|0\.000001|-0\.\d{1,6}|-0\.000000\d{0,0}|0\.000000\d{0,0})$"
     )
+
+
+def test_generate_float_regex_cross_zero_accepts_negative_zero_decimal():
+    regex = re.compile(_generate_float_regex(-4.0, 4.0))
+    for value in ("-0.1", "-0.5", "-0.999999"):
+        assert regex.fullmatch(value) is not None
+    assert regex.fullmatch("-0") is None
+    assert regex.fullmatch("-4.1") is None
+    assert regex.fullmatch("4.1") is None
+
+    schema = {"type": "number", "minimum": -4.0, "maximum": 4.0}
+    check_schema_with_instance(schema, "-0.5")
+    check_schema_with_instance(schema, "-0.1")
+    check_schema_with_instance(schema, "-4.1", is_accepted=False)
+    check_schema_with_instance(schema, "4.1", is_accepted=False)
 
 
 def test_float_minimum_no_wildcard_in_grammar():
