@@ -36,9 +36,12 @@ XMLToolCallingConverter::XMLToolCallingConverter(
     bool any_whitespace,
     std::optional<int> max_whitespace_cnt,
     RefResolver ref_resolver,
-    JSONFormat json_format
+    JSONFormat json_format,
+    bool any_order
 )
-    : JSONSchemaConverter(indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver),
+    : JSONSchemaConverter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
+      ),
       nested_object_level_(0),
       xml_wrapper_(kKeyWrapperMap.at(json_format)) {}
 

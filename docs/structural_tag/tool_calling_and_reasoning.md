@@ -48,6 +48,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
   - `{"type": <builtin_type>}`: forces one builtin tool (matched by `type`).
   - `{"type": "allowed_tools", "allowed_tools": {"mode": ..., "tools": [...]}}`: limits available tools before applying its `mode`. The `tools` list may contain both function refs and builtin refs (matched by `type`).
 - **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags or model-specific equivalents). Default `True`.
+- **any_order** (`bool`, optional): When `True`, applies `any_order=True` to every `JSONSchemaFormat` in the generated structural tag, so each tool's arguments may be emitted in any property order (see [`JSONSchemaFormat`](structural_tag_api) for the exact semantics). Default `False`, which keeps the declared property order with full validation.
 
 Passing an unsupported `model` or an invalid `tool_choice` will raise `ValueError`.
 

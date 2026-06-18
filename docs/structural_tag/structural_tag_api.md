@@ -153,6 +153,7 @@ Matches content that conforms to a JSON Schema.
 | --- | --- | --- |
 | `json_schema` | `object` | (required) |
 | `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"deepseek_xml"` \| `"glm_xml"` | `"json"` |
+| `any_order` | `bool` | `false` |
 
 - **Use it when**: the structured part is naturally expressed as schema-constrained data
 
@@ -163,6 +164,9 @@ Matches content that conforms to a JSON Schema.
 - `"minimax_xml"`: MiniMax-style XML parameters, such as `<parameter name="name">value</parameter>`
 - `"deepseek_xml"`: DeepSeek-v3.2 XML parameter format
 - `"glm_xml"`: GLM-style XML parameter format, such as `<arg_key>name</arg_key><arg_value>value</arg_value>`
+
+`any_order` relaxes object property ordering (see [below](#property-ordering-with-any_order)). It
+works with every `style`.
 
 ```json
 {
@@ -193,6 +197,26 @@ Use a non-JSON style only when the surrounding model format expects it:
     "style": "qwen_xml"
 }
 ```
+
+##### Property ordering with `any_order`
+
+By default (`"any_order": false`) properties must appear in their declared order and are fully validated (no duplicate keys, all required keys present). With `"any_order": true`, any property (**required**, **optional**, or **additional** / **pattern**) may appear in any position. The grammar only bounds the **total number of entries** to between `max(minProperties, number of required properties)` and `maxProperties` — it does not check which keys appear (required keys need not all be present, and duplicates are allowed). For example, with `required: ["a", "b"]` any object with at least two entries is accepted, even `{"a": .., "a": ..}`. It applies to every object, including nested ones.
+
+```json
+{
+    "type": "json_schema",
+    "json_schema": {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["name", "age"]
+    },
+    "any_order": true
+}
+```
+
+The same flag is the `any_order` argument of
+[`Grammar.from_json_schema`](xgrammar.Grammar.from_json_schema) and
+[`GrammarCompiler.compile_json_schema`](xgrammar.GrammarCompiler.compile_json_schema).
 
 #### `grammar`
 

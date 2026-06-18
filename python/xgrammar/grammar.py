@@ -181,6 +181,7 @@ class Grammar(XGRObject):
         strict_mode: bool = True,
         max_whitespace_cnt: Optional[int] = None,
         print_converted_ebnf: bool = False,
+        any_order: bool = False,
     ) -> "Grammar":
         """Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
         used to specify the schema.
@@ -232,6 +233,13 @@ class Grammar(XGRObject):
         print_converted_ebnf : bool, default: False
             If True, the converted EBNF string will be printed. For debugging purposes.
 
+        any_order : bool, default: False
+            Relax object property ordering. When True, any property may appear in any position and
+            only the total entry count is bounded, to ``[max(minProperties, n_required),
+            maxProperties]``, without checking which keys appear. When False (default), properties
+            keep their declared order with full validation. Applies to every object, nested
+            included.
+
         Returns
         -------
         grammar : Grammar
@@ -252,6 +260,7 @@ class Grammar(XGRObject):
                 strict_mode,
                 max_whitespace_cnt,
                 print_converted_ebnf,
+                any_order,
             )
         )
 

@@ -69,6 +69,7 @@ export class Testings {
    * @param {number} [maxWhitespaceCnt] Maximum number of whitespace characters allowed between
    * JSON elements when anyWhitespace is true. Undefined means unlimited.
    * @param {"json" | "xml"} [jsonFormat="json"] The JSON schema output format.
+   * @param {boolean} [anyOrder=false] Whether to allow object properties to appear in any order.
    * @returns {string} The EBNF grammar string.
    */
   static async _jsonSchemaToEBNF(
@@ -78,7 +79,8 @@ export class Testings {
     separators?: [string, string],
     strictMode = true,
     maxWhitespaceCnt?: number,
-    jsonFormat: "json" | "xml" = "json"
+    jsonFormat: "json" | "xml" = "json",
+    anyOrder: boolean = false
   ): Promise<string> {
     const separatorsPair = toSeparatorPair(separators);
     await asyncInitBinding();
@@ -96,7 +98,8 @@ export class Testings {
       separatorsPair,
       strictMode,
       maxWhitespaceCnt,
-      formatEnum
+      formatEnum,
+      anyOrder
     );
   }
 
@@ -243,6 +246,7 @@ export class Grammar {
    * equivalent to setting unevaluatedProperties and unevaluatedItems to false.
    * @param {number} [maxWhitespaceCnt] Maximum number of whitespace characters allowed between
    * JSON elements when anyWhitespace is true. Undefined means unlimited.
+   * @param {boolean} [anyOrder=false] Whether to allow object properties to appear in any order.
    * @returns {Grammar} The generated BNF grammar.
    */
   static async fromJSONSchema(
@@ -251,7 +255,8 @@ export class Grammar {
     indent = 2,
     separators?: [string, string],
     strictMode = true,
-    maxWhitespaceCnt?: number
+    maxWhitespaceCnt?: number,
+    anyOrder: boolean = false
   ): Promise<Grammar> {
     const separatorsPair = toSeparatorPair(separators);
     await asyncInitBinding();
@@ -269,7 +274,8 @@ export class Grammar {
         separatorsPair,
         strictMode,
         maxWhitespaceCnt,
-        printConvertedEBNF
+        printConvertedEBNF,
+        anyOrder
       ));
   }
 
@@ -510,6 +516,7 @@ export class GrammarCompiler {
    * equivalent to setting unevaluatedProperties and unevaluatedItems to false.
    * @param {number} [maxWhitespaceCnt] Maximum number of whitespace characters allowed between
    * JSON elements when anyWhitespace is true. Undefined means unlimited.
+   * @param {boolean} [anyOrder=false] Whether to allow object properties to appear in any order.
    * @returns {CompiledGrammar} The compiled grammar for the specified JSON schema.
    */
   async compileJSONSchema(
@@ -518,7 +525,8 @@ export class GrammarCompiler {
     indent = 2,
     separators?: [string, string],
     strictMode = true,
-    maxWhitespaceCnt?: number
+    maxWhitespaceCnt?: number,
+    anyOrder: boolean = false
   ): Promise<CompiledGrammar> {
     const separatorsPair = toSeparatorPair(separators);
     await asyncInitBinding();
@@ -533,7 +541,8 @@ export class GrammarCompiler {
         optionalIndent,
         separatorsPair,
         strictMode,
-        maxWhitespaceCnt));
+        maxWhitespaceCnt,
+        anyOrder));
   }
 
   /**

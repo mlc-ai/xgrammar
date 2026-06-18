@@ -29,7 +29,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       bool any_whitespace,
       std::optional<int> max_whitespace_cnt,
       RefResolver ref_resolver = nullptr,
-      JSONFormat json_format = JSONFormat::kQwenXML
+      JSONFormat json_format = JSONFormat::kQwenXML,
+      bool any_order = false
   );
 
   /*! \brief Convert SchemaSpec to EBNF with XML format for root object. Note that this function is
