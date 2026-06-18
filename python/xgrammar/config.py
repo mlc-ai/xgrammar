@@ -61,4 +61,4 @@ def get_serialization_version() -> str:
     serialization_version : str
         The serialization version number.
     """
-    return _core.config.get_serialization_version()
+    return str(_core.config.get_serialization_version())

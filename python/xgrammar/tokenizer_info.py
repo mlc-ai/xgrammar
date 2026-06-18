@@ -388,7 +388,7 @@ class TokenizerInfo(XGRObject):
     def dump_metadata(self) -> str:
         """Dump the metadata of the tokenizer to a json string. It can be used to construct the
         tokenizer info from the vocabulary and the metadata string."""
-        return self._handle.dump_metadata()
+        return str(self._handle.dump_metadata())
 
     @staticmethod
     def from_vocab_and_metadata(
@@ -432,7 +432,7 @@ class TokenizerInfo(XGRObject):
         json_string : str
             The JSON string.
         """
-        return self._handle.serialize_json()
+        return str(self._handle.serialize_json())
 
     @staticmethod
     def deserialize_json(json_string: str) -> "TokenizerInfo":

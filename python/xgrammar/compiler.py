@@ -57,7 +57,7 @@ class CompiledGrammar(XGRObject):
         json_string : str
             The JSON string.
         """
-        return self._handle.serialize_json()
+        return str(self._handle.serialize_json())
 
     @staticmethod
     def deserialize_json(json_str: str, tokenizer_info: TokenizerInfo) -> "CompiledGrammar":

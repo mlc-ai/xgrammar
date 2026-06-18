@@ -149,7 +149,7 @@ class Grammar(XGRObject):
         grammar_string : str
             The BNF grammar string.
         """
-        return self._handle.to_string()
+        return str(self._handle.to_string())
 
     @staticmethod
     def from_ebnf(ebnf_string: str, *, root_rule_name: str = "root") -> "Grammar":
@@ -405,7 +405,7 @@ class Grammar(XGRObject):
         json_string : str
             The JSON string.
         """
-        return self._handle.serialize_json()
+        return str(self._handle.serialize_json())
 
     @staticmethod
     def deserialize_json(json_string: str) -> "Grammar":
