@@ -1509,9 +1509,7 @@ def get_glm_4_7_structural_tag(
     # parsers mis-interpret. Exclude them from every free-text region.
     ARG_TOKENS = ["<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"]
     # Reasoning contains no tool calls at all -> exclude every control token.
-    REASONING_EXCLUDES = (
-        THINK_EXCLUDE_TOKENS + [TOOL_CALL_BEGIN_PREFIX, TOOL_CALL_END] + ARG_TOKENS
-    )
+    REASONING_EXCLUDES = THINK_EXCLUDE_TOKENS + [TOOL_CALL_BEGIN_PREFIX, TOOL_CALL_END] + ARG_TOKENS
     # Free text after </think> may *start* a tool call via the <tool_call>
     # trigger, so that trigger stays allowed; every other control token is not.
     TEXT_EXCLUDES = THINK_EXCLUDE_TOKENS + [TOOL_CALL_END] + ARG_TOKENS
