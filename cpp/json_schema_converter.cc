@@ -2969,7 +2969,7 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
         parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
       }
 
-      if (start.value() < 0.0 && end.value() > 0.0) {
+      if (start.value() <= -1.0 && end.value() > 0.0) {
         parts.push_back("-0\\.\\d{1," + std::to_string(precision) + "}");
       }
 
@@ -3070,6 +3070,11 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
         parts.push_back(std::to_string(endInt) + "\\.0{1," + std::to_string(precision) + "}");
       }
     }
+  }
+
+  if (start && startInt == -1 && startFrac > 0.0) {
+    const std::string negative_zero_wildcard = "-0\\.\\d{1," + std::to_string(precision) + "}";
+    parts.erase(std::remove(parts.begin(), parts.end(), negative_zero_wildcard), parts.end());
   }
 
   std::ostringstream result;

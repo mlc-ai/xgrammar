@@ -2285,7 +2285,7 @@ def test_generate_float_regex():
 
     assert (
         _generate_float_regex(-0.000001, 0.000001)
-        == r"^(-0\.000001|0\.000001|-0\.\d{1,6}|-0\.000000\d{0,0}|0\.000000\d{0,0})$"
+        == r"^(-0\.000001|0\.000001|-0\.000000\d{0,0}|0\.000000\d{0,0})$"
     )
 
 
@@ -2297,11 +2297,21 @@ def test_generate_float_regex_cross_zero_accepts_negative_zero_decimal():
     assert regex.fullmatch("-4.1") is None
     assert regex.fullmatch("4.1") is None
 
+    near_zero_regex = re.compile(_generate_float_regex(-0.5, 0.5))
+    assert near_zero_regex.fullmatch("-0.1") is not None
+    assert near_zero_regex.fullmatch("-0.5") is not None
+    assert near_zero_regex.fullmatch("-0.9") is None
+
     schema = {"type": "number", "minimum": -4.0, "maximum": 4.0}
     check_schema_with_instance(schema, "-0.5")
     check_schema_with_instance(schema, "-0.1")
     check_schema_with_instance(schema, "-4.1", is_accepted=False)
     check_schema_with_instance(schema, "4.1", is_accepted=False)
+
+    near_zero_schema = {"type": "number", "minimum": -0.5, "maximum": 0.5}
+    check_schema_with_instance(near_zero_schema, "-0.1")
+    check_schema_with_instance(near_zero_schema, "-0.5")
+    check_schema_with_instance(near_zero_schema, "-0.9", is_accepted=False)
 
 
 def test_float_minimum_no_wildcard_in_grammar():
