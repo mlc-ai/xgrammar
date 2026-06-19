@@ -1612,7 +1612,7 @@ def test_generate_range_regex():
 
     # Unbounded ranges (None cases)
     assert _generate_range_regex(None, None) == r"^-?\d+$"
-    assert _generate_range_regex(5, None) == r"^([5-9]|[1-9]\d*)$"
+    assert _generate_range_regex(5, None) == r"^([5-9]|[1-9]\d+)$"
     assert _generate_range_regex(None, 0) == r"^(-[1-9]\d*|0)$"
 
     # Medium range
@@ -2267,12 +2267,12 @@ def test_generate_float_regex():
 
     assert (
         _generate_float_regex(0.5, None)
-        == r"^(0\.5|0\.6\d{0,5}|0\.7\d{0,5}|0\.8\d{0,5}|0\.9\d{0,5}|([1-9]|[1-9]\d*)(\.\d{1,6})?)$"
+        == r"^(0\.5|0\.6\d{0,5}|0\.7\d{0,5}|0\.8\d{0,5}|0\.9\d{0,5}|([1-9]|[1-9]\d+)(\.\d{1,6})?)$"
     )
 
     assert (
         _generate_float_regex(None, -1.5)
-        == r"^(-1\.5|-1\.6\d{0,5}|-1\.7\d{0,5}|-1\.8\d{0,5}|-1\.9\d{0,5}|(-[3-9]|-[1-9]\d*)(\.\d{1,6})?)$"
+        == r"^(-1\.5|-1\.6\d{0,5}|-1\.7\d{0,5}|-1\.8\d{0,5}|-1\.9\d{0,5}|(-[3-9]|-[1-9]\d+)(\.\d{1,6})?)$"
     )
 
     assert _generate_float_regex(None, None) == r"^-?\d+(\.\d{1,6})?$"
@@ -2312,6 +2312,23 @@ def test_generate_float_regex_cross_zero_accepts_negative_zero_decimal():
     check_schema_with_instance(near_zero_schema, "-0.1")
     check_schema_with_instance(near_zero_schema, "-0.5")
     check_schema_with_instance(near_zero_schema, "-0.9", is_accepted=False)
+
+
+def test_generate_float_regex_one_sided_integer_boundaries():
+    minimum_regex = re.compile(_generate_float_regex(4.0, None))
+    assert minimum_regex.fullmatch("4.1") is not None
+    assert minimum_regex.fullmatch("4.999999") is not None
+    assert minimum_regex.fullmatch("3.999999") is None
+
+    maximum_regex = re.compile(_generate_float_regex(None, -4.0))
+    assert maximum_regex.fullmatch("-4.1") is not None
+    assert maximum_regex.fullmatch("-4.999999") is not None
+    assert maximum_regex.fullmatch("-3.999999") is None
+
+    check_schema_with_instance({"type": "number", "minimum": 4.0}, "4.1")
+    check_schema_with_instance({"type": "number", "minimum": 4.0}, "3.9", is_accepted=False)
+    check_schema_with_instance({"type": "number", "maximum": -4.0}, "-4.1")
+    check_schema_with_instance({"type": "number", "maximum": -4.0}, "-3.9", is_accepted=False)
 
 
 def test_float_minimum_no_wildcard_in_grammar():
