@@ -2940,10 +2940,14 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
       parts.push_back(std::to_string(endInt) + "\\.\\d{1," + std::to_string(precision) + "}");
     }
 
-    if (endInt > INT64_MIN + 1) {
-      std::string intRangeRegex = GenerateRangeRegex(std::nullopt, endInt - 1);
+    int64_t intRangeEnd = endFrac > 0.0 && endInt < 0 ? endInt : endInt - 1;
+    if (intRangeEnd > INT64_MIN) {
+      std::string intRangeRegex = GenerateRangeRegex(std::nullopt, intRangeEnd);
       intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
       parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
+    }
+    if (endFrac > 0.0 && endInt >= 0) {
+      parts.push_back(std::to_string(endInt));
     }
   } else if (start && end) {
     if (startInt == endInt) {
@@ -2957,6 +2961,9 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
         if (startStr != endStr) {
           parts.push_back(EscapeDotForRegex(endStr));
         }
+        if (start.value() <= 0.0 && end.value() >= 0.0) {
+          parts.push_back("0\\.0{1," + std::to_string(precision) + "}");
+        }
       }
     } else {
       std::string startStr = FormatFloat(start.value(), precision);
@@ -2967,10 +2974,17 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
         parts.push_back(EscapeDotForRegex(endStr));
       }
 
-      if (endInt > startInt + 1) {
-        std::string intRangeRegex = GenerateRangeRegex(startInt + 1, endInt - 1);
+      int64_t intRangeEnd = endFrac > 0.0 && endInt < 0 ? endInt : endInt - 1;
+      if (intRangeEnd > startInt) {
+        std::string intRangeRegex = GenerateRangeRegex(startInt + 1, intRangeEnd);
         intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
         parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
+      }
+      if ((startInt + 1 > 0 || intRangeEnd < 0) && start.value() <= 0.0 && end.value() >= 0.0) {
+        parts.push_back("0\\.0{1," + std::to_string(precision) + "}");
+      }
+      if (endFrac > 0.0 && endInt >= 0 && static_cast<double>(endInt) >= start.value()) {
+        parts.push_back(std::to_string(endInt));
       }
 
       if (start.value() <= -1.0 && end.value() > 0.0) {
