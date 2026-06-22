@@ -2182,6 +2182,17 @@ window.runMermaid = runMermaid;</script>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&lt;think&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;/think&gt;&quot;</span><span class="p">]</span>
     <span class="n">XML_STYLE</span> <span class="o">=</span> <span class="s2">&quot;glm_xml&quot;</span>
 
+    <span class="c1"># GLM tool-call control tokens are reserved special tokens that are only</span>
+    <span class="c1"># valid inside a tool call. They must never appear in reasoning or free-form</span>
+    <span class="c1"># text, otherwise the model can emit a stray control token that downstream</span>
+    <span class="c1"># parsers mis-interpret. Exclude them from every free-text region.</span>
+    <span class="n">ARG_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&lt;arg_key&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;/arg_key&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;arg_value&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;/arg_value&gt;&quot;</span><span class="p">]</span>
+    <span class="c1"># Reasoning contains no tool calls at all -&gt; exclude every control token.</span>
+    <span class="n">REASONING_EXCLUDES</span> <span class="o">=</span> <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">+</span> <span class="p">[</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="p">,</span> <span class="n">TOOL_CALL_END</span><span class="p">]</span> <span class="o">+</span> <span class="n">ARG_TOKENS</span>
+    <span class="c1"># Free text after &lt;/think&gt; may *start* a tool call via the &lt;tool_call&gt;</span>
+    <span class="c1"># trigger, so that trigger stays allowed; every other control token is not.</span>
+    <span class="n">TEXT_EXCLUDES</span> <span class="o">=</span> <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">+</span> <span class="p">[</span><span class="n">TOOL_CALL_END</span><span class="p">]</span> <span class="o">+</span> <span class="n">ARG_TOKENS</span>
+
     <span class="n">tools</span> <span class="o">=</span> <span class="n">tools</span> <span class="ow">or</span> <span class="p">[]</span>
     <span class="n">builtin_tools</span> <span class="o">=</span> <span class="n">builtin_tools</span> <span class="ow">or</span> <span class="p">[]</span>
     <span class="k">if</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
@@ -2200,10 +2211,10 @@ window.runMermaid = runMermaid;</script>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
-                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span> <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span> <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">excludes</span><span class="o">=</span><span class="n">TEXT_EXCLUDES</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">REASONING_EXCLUDES</span><span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -2235,7 +2246,9 @@ window.runMermaid = runMermaid;</script>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
 
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">)</span>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
+        <span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">REASONING_EXCLUDES</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span>
+    <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
 
