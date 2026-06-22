@@ -390,7 +390,7 @@ class GrammarMatcher(XGRObject):
         jump_forward_string : str
             The jump-forward string.
         """
-        return self._handle.find_jump_forward_string()
+        return str(self._handle.find_jump_forward_string())
 
     def rollback(self, num_tokens: int = 1) -> None:
         """Rollback the matcher to a previous state by several tokens.
@@ -476,7 +476,7 @@ class GrammarMatcher(XGRObject):
         internal_state : str
             The internal state of the matcher.
         """
-        return self._handle._debug_print_internal_state()
+        return str(self._handle._debug_print_internal_state())
 
 
 class BatchGrammarMatcher(XGRObject):

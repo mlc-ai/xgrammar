@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import json
+import subprocess
 import sys
+import textwrap
 from typing import Any, List, Tuple
 
 import pytest
@@ -368,6 +370,41 @@ def test_serialize_grammar_utf8():
     assert _is_grammar_accept_string(recovered_grammar, "你好")
     assert _is_grammar_accept_string(recovered_grammar, "hello")
     assert _is_grammar_accept_string(recovered_grammar, "\n")
+
+
+def test_serialized_output_survives_pickle():
+    """Pickling serialized output must not crash (regression for the diskcache segfault).
+
+    Run in a subprocess so a regression shows up as a non-zero return code instead of
+    segfaulting the whole pytest session.
+    """
+    script = textwrap.dedent(
+        """
+        import pickle
+        import xgrammar as xgr
+
+        grammar = xgr.Grammar.from_ebnf('root ::= "a"')
+        tokenizer_info = xgr.TokenizerInfo(
+            ["a", "b"], vocab_type=xgr.VocabType.BYTE_FALLBACK, vocab_size=2
+        )
+        compiled_grammar = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+
+        values = [
+            xgr.get_serialization_version(),
+            grammar.serialize_json(),
+            tokenizer_info.serialize_json(),
+            compiled_grammar.serialize_json(),
+        ]
+        for value in values:
+            assert pickle.loads(pickle.dumps(value)) == value
+        print("PICKLE_OK")
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=300
+    )
+    assert result.returncode == 0, f"returncode={result.returncode}\n{result.stderr[-2000:]}"
+    assert "PICKLE_OK" in result.stdout
 
 
 if __name__ == "__main__":
