@@ -1067,7 +1067,7 @@ window.runMermaid = runMermaid;</script>
 <div class="viewcode-block" id="TokenizerInfo.dump_metadata"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.TokenizerInfo.dump_metadata">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">dump_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Dump the metadata of the tokenizer to a json string. It can be used to construct the</span>
 <span class="sd">        tokenizer info from the vocabulary and the metadata string.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">dump_metadata</span><span class="p">()</span></div>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">dump_metadata</span><span class="p">())</span></div>
 
 <div class="viewcode-block" id="TokenizerInfo.from_vocab_and_metadata"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.TokenizerInfo.from_vocab_and_metadata">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_vocab_and_metadata</span><span class="p">(</span>
@@ -1111,7 +1111,7 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">        json_string : str</span>
 <span class="sd">            The JSON string.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">()</span></div>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">())</span></div>
 
 <div class="viewcode-block" id="TokenizerInfo.deserialize_json"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.TokenizerInfo.deserialize_json">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">deserialize_json</span><span class="p">(</span><span class="n">json_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TokenizerInfo&quot;</span><span class="p">:</span>

@@ -828,7 +828,7 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">        grammar_string : str</span>
 <span class="sd">            The BNF grammar string.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span></div>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">to_string</span><span class="p">())</span></div>
 
 <div class="viewcode-block" id="Grammar.from_ebnf"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.from_ebnf">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_ebnf</span><span class="p">(</span><span class="n">ebnf_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;root&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
@@ -1084,7 +1084,7 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">        json_string : str</span>
 <span class="sd">            The JSON string.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">()</span></div>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">())</span></div>
 
 <div class="viewcode-block" id="Grammar.deserialize_json"><a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.deserialize_json">[docs]</a>    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">deserialize_json</span><span class="p">(</span><span class="n">json_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>

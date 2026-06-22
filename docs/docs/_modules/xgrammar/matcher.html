@@ -1069,7 +1069,7 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">        jump_forward_string : str</span>
 <span class="sd">            The jump-forward string.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">find_jump_forward_string</span><span class="p">()</span></div>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">find_jump_forward_string</span><span class="p">())</span></div>
 
 <div class="viewcode-block" id="GrammarMatcher.rollback"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.rollback">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Rollback the matcher to a previous state by several tokens.</span>
@@ -1155,7 +1155,7 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">        internal_state : str</span>
 <span class="sd">            The internal state of the matcher.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">_debug_print_internal_state</span><span class="p">()</span></div>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">_debug_print_internal_state</span><span class="p">())</span></div>
 
 
 <div class="viewcode-block" id="BatchGrammarMatcher"><a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">BatchGrammarMatcher</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
