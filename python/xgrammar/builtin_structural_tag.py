@@ -1503,6 +1503,17 @@ def get_glm_4_7_structural_tag(
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
     XML_STYLE = "glm_xml"
 
+    # GLM tool-call control tokens are reserved special tokens that are only
+    # valid inside a tool call. They must never appear in reasoning or free-form
+    # text, otherwise the model can emit a stray control token that downstream
+    # parsers mis-interpret. Exclude them from every free-text region.
+    ARG_TOKENS = ["<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"]
+    # Reasoning contains no tool calls at all -> exclude every control token.
+    REASONING_EXCLUDES = THINK_EXCLUDE_TOKENS + [TOOL_CALL_BEGIN_PREFIX, TOOL_CALL_END] + ARG_TOKENS
+    # Free text after </think> may *start* a tool call via the <tool_call>
+    # trigger, so that trigger stays allowed; every other control token is not.
+    TEXT_EXCLUDES = THINK_EXCLUDE_TOKENS + [TOOL_CALL_END] + ARG_TOKENS
+
     tools = tools or []
     builtin_tools = builtin_tools or []
     if tool_choice == "auto":
@@ -1521,10 +1532,10 @@ def get_glm_4_7_structural_tag(
 
         if len(tags) > 0:
             suffix_tag = TriggeredTagsFormat(
-                triggers=[TOOL_CALL_TRIGGER], tags=tags, excludes=THINK_EXCLUDE_TOKENS
+                triggers=[TOOL_CALL_TRIGGER], tags=tags, excludes=TEXT_EXCLUDES
             )
         else:
-            suffix_tag = AnyTextFormat(excludes=THINK_EXCLUDE_TOKENS)
+            suffix_tag = AnyTextFormat(excludes=REASONING_EXCLUDES)
 
     elif tool_choice == "forced":
         if not tools:
@@ -1556,7 +1567,9 @@ def get_glm_4_7_structural_tag(
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
+    prefix_tag = TagFormat(
+        begin="", content=AnyTextFormat(excludes=REASONING_EXCLUDES), end=THINK_TAG_END
+    )
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
