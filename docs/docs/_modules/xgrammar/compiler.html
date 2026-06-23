@@ -829,6 +829,7 @@ window.runMermaid = runMermaid;</script>
         <span class="n">separators</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">strict_mode</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Get CompiledGrammar from the specified JSON schema and format. The indent</span>
 <span class="sd">        and separators parameters follow the same convention as in json.dumps().</span>
@@ -860,6 +861,19 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">            If specified, it will limit the number of whitespace characters to at most max_whitespace_cnt.</span>
 <span class="sd">            It should be a positive integer.</span>
 
+<span class="sd">        any_order : bool, default: False</span>
+<span class="sd">            Whether object properties may appear in any order.</span>
+
+<span class="sd">            - False: properties follow the schema&#39;s declared order, fully validated (required</span>
+<span class="sd">              keys present, no duplicates).</span>
+<span class="sd">            - True: properties may appear in any order; only key validity and each key&#39;s value</span>
+<span class="sd">              schema are enforced. Key presence and uniqueness are not checked, so required keys</span>
+<span class="sd">              may be missing and keys may repeat. The entry count is bounded to</span>
+<span class="sd">              ``[max(minProperties, n_required), maxProperties]`` (unbounded when maxProperties</span>
+<span class="sd">              is unset).</span>
+
+<span class="sd">            Applies to every object, nested included.</span>
+
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        compiled_grammar : CompiledGrammar</span>
@@ -868,7 +882,13 @@ window.runMermaid = runMermaid;</script>
         <span class="n">schema_str</span> <span class="o">=</span> <span class="n">_convert_schema_to_str</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_json_schema</span><span class="p">(</span>
-                <span class="n">schema_str</span><span class="p">,</span> <span class="n">any_whitespace</span><span class="p">,</span> <span class="n">indent</span><span class="p">,</span> <span class="n">separators</span><span class="p">,</span> <span class="n">strict_mode</span><span class="p">,</span> <span class="n">max_whitespace_cnt</span>
+                <span class="n">schema_str</span><span class="p">,</span>
+                <span class="n">any_whitespace</span><span class="p">,</span>
+                <span class="n">indent</span><span class="p">,</span>
+                <span class="n">separators</span><span class="p">,</span>
+                <span class="n">strict_mode</span><span class="p">,</span>
+                <span class="n">max_whitespace_cnt</span><span class="p">,</span>
+                <span class="n">any_order</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="p">)</span></div>
 

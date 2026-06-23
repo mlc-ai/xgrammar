@@ -714,7 +714,18 @@ window.runMermaid = runMermaid;</script>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;How to parse the content. Valid values: \&quot;json\&quot; (standard JSON), \&quot;qwen_xml\&quot; (Qwen XML:</span>
 <span class="sd">    &lt;parameter=key&gt;value&lt;/parameter&gt;), \&quot;minimax_xml\&quot; (MiniMax XML: &lt;parameter name=\&quot;key\&quot;&gt;value&lt;/parameter&gt;),</span>
 <span class="sd">    \&quot;deepseek_xml\&quot; (DeepSeek XML(DeepSeek-v3.2): &lt;{dsml_token}parameter name=\&quot;key\&quot; string=\&quot;true|false\&quot;&gt;value&lt;/{dsml_token}parameter&gt;),</span>
-<span class="sd">    \&quot;glm_xml\&quot; (GLM XML: &lt;arg_key&gt;key&lt;/arg_key&gt;&lt;arg_value&gt;value&lt;/arg_value&gt;).&quot;&quot;&quot;</span></div>
+<span class="sd">    \&quot;glm_xml\&quot; (GLM XML: &lt;arg_key&gt;key&lt;/arg_key&gt;&lt;arg_value&gt;value&lt;/arg_value&gt;).&quot;&quot;&quot;</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether object properties may appear in any order.</span>
+
+<span class="sd">    - False (default): properties follow the schema&#39;s declared order, fully validated (required</span>
+<span class="sd">      keys present, no duplicates).</span>
+<span class="sd">    - True: properties may appear in any order; only key validity and each key&#39;s value schema are</span>
+<span class="sd">      enforced. Key presence and uniqueness are not checked, so required keys may be missing and</span>
+<span class="sd">      keys may repeat. The entry count is bounded to ``[max(minProperties, n_required),</span>
+<span class="sd">      maxProperties]`` (unbounded when maxProperties is unset).</span>
+
+<span class="sd">    Applies to every object, nested included.&quot;&quot;&quot;</span></div>
 
 
 <div class="viewcode-block" id="AnyTextFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.AnyTextFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AnyTextFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>

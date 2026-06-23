@@ -496,6 +496,10 @@ structured region after seeing a trigger.</p>
 <td><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;qwen_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;minimax_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;glm_xml&quot;</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code></p></td>
 </tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">any_order</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
+</tr>
 </tbody>
 </table>
 <ul class="simple">
@@ -509,6 +513,8 @@ structured region after seeing a trigger.</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">&quot;deepseek_xml&quot;</span></code>: DeepSeek-v3.2 XML parameter format</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">&quot;glm_xml&quot;</span></code>: GLM-style XML parameter format, such as <code class="docutils literal notranslate"><span class="pre">&lt;arg_key&gt;name&lt;/arg_key&gt;&lt;arg_value&gt;value&lt;/arg_value&gt;</span></code></p></li>
 </ul>
+<p><code class="docutils literal notranslate"><span class="pre">any_order</span></code> relaxes object property ordering (see below). It
+works with every <code class="docutils literal notranslate"><span class="pre">style</span></code>.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;json_schema&quot;</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
@@ -536,6 +542,24 @@ structured region after seeing a trigger.</p>
 <span class="p">}</span>
 </pre></div>
 </div>
+<section id="property-ordering-with-any-order">
+<h5>Property ordering with <code class="docutils literal notranslate"><span class="pre">any_order</span></code><a class="headerlink" href="#property-ordering-with-any-order" title="Permalink to this heading">¶</a></h5>
+<p>By default (<code class="docutils literal notranslate"><span class="pre">&quot;any_order&quot;:</span> <span class="pre">false</span></code>) properties must appear in their declared order and are fully validated (no duplicate keys, all required keys present). With <code class="docutils literal notranslate"><span class="pre">&quot;any_order&quot;:</span> <span class="pre">true</span></code>, any property (<strong>required</strong>, <strong>optional</strong>, or <strong>additional</strong> / <strong>pattern</strong>) may appear in any position. Each entry must still be a valid property — a permitted key with a value matching that key’s schema (so <code class="docutils literal notranslate"><span class="pre">additionalProperties:</span> <span class="pre">false</span></code> still rejects undeclared keys) — but the grammar no longer tracks <em>which</em> keys appear: required keys need not all be present, and duplicates are allowed. The only remaining bound is on the <strong>total number of entries</strong>, which must be between <code class="docutils literal notranslate"><span class="pre">max(minProperties,</span> <span class="pre">number</span> <span class="pre">of</span> <span class="pre">required</span> <span class="pre">properties)</span></code> and <code class="docutils literal notranslate"><span class="pre">maxProperties</span></code>. For example, with <code class="docutils literal notranslate"><span class="pre">required:</span> <span class="pre">[&quot;a&quot;,</span> <span class="pre">&quot;b&quot;]</span></code> and <code class="docutils literal notranslate"><span class="pre">additionalProperties:</span> <span class="pre">false</span></code>, any object holding at least two valid <code class="docutils literal notranslate"><span class="pre">a</span></code>/<code class="docutils literal notranslate"><span class="pre">b</span></code> entries is accepted, even <code class="docutils literal notranslate"><span class="pre">{&quot;a&quot;:</span> <span class="pre">..,</span> <span class="pre">&quot;a&quot;:</span> <span class="pre">..}</span></code> (<code class="docutils literal notranslate"><span class="pre">a</span></code> duplicated and <code class="docutils literal notranslate"><span class="pre">b</span></code> absent). It applies to every object, including nested ones.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;json_schema&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;json_schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;age&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integer&quot;</span><span class="p">}},</span>
+<span class="w">        </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;age&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;any_order&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The same flag is the <code class="docutils literal notranslate"><span class="pre">any_order</span></code> argument of
+<a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar.from_json_schema" title="xgrammar.Grammar.from_json_schema"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">Grammar.from_json_schema</span></code></span></a> and
+<a class="reference internal" href="../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_json_schema" title="xgrammar.GrammarCompiler.compile_json_schema"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_json_schema</span></code></span></a>.</p>
+</section>
 </section>
 <section id="grammar">
 <h4><code class="docutils literal notranslate"><span class="pre">grammar</span></code><a class="headerlink" href="#grammar" title="Permalink to this heading">¶</a></h4>

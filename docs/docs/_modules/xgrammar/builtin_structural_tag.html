@@ -712,6 +712,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">ToolChoiceOptionParam</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">force_reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Get a structural tag for a model&#39;s reasoning and tool-call output format.</span>
 
@@ -864,6 +865,14 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">        Now we will embed the model&#39;s specific behavior into the structural tag function, so</span>
 <span class="sd">        only controlling ``reasoning`` is enough.</span>
 
+<span class="sd">    any_order : bool</span>
+<span class="sd">        Relax object property ordering for every tool-argument schema. When</span>
+<span class="sd">        ``True``, ``any_order=True`` is applied to every :class:`JSONSchemaFormat`</span>
+<span class="sd">        in the generated structural tag, so each tool&#39;s arguments may be emitted</span>
+<span class="sd">        in any property order (see :class:`JSONSchemaFormat` for the exact</span>
+<span class="sd">        semantics). When ``False`` (default), the declared property order is kept</span>
+<span class="sd">        with full validation. Default: ``False``.</span>
+
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
 <span class="sd">    If a tool&#39;s ``parameters`` field is omitted or ``None``, its generated</span>
@@ -890,7 +899,9 @@ window.runMermaid = runMermaid;</script>
         <span class="n">tools</span><span class="p">,</span> <span class="n">tool_choice</span>
     <span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">func</span><span class="p">(</span><span class="n">function_tools</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="p">,</span> <span class="n">simplified_tool_choice</span><span class="p">,</span> <span class="n">reasoning</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">func</span><span class="p">(</span>
+        <span class="n">function_tools</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="p">,</span> <span class="n">simplified_tool_choice</span><span class="p">,</span> <span class="n">reasoning</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+    <span class="p">)</span></div>
 
 
 <span class="c1"># ---------- Helper Functions And Constants ----------</span>
@@ -1159,6 +1170,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Llama style structural tag format.</span>
@@ -1204,7 +1216,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">TOOL_OBJECT_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">TOOL_OBJECT_PARAMETERS_PREFIX</span><span class="p">),</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="s2">&quot;}&quot;</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1222,7 +1234,9 @@ window.runMermaid = runMermaid;</script>
         <span class="n">function</span> <span class="o">=</span> <span class="n">tools</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">function</span>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
             <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">TOOL_NAME_PREFIX</span> <span class="o">+</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">PARAMETERS_FIELD_PREFIX</span><span class="p">),</span>
-            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)),</span>
+            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+            <span class="p">),</span>
             <span class="n">end</span><span class="o">=</span><span class="s2">&quot;}&quot;</span><span class="p">,</span>
         <span class="p">)</span>
 
@@ -1235,7 +1249,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">TOOL_OBJECT_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">TOOL_OBJECT_PARAMETERS_PREFIX</span><span class="p">),</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="s2">&quot;}&quot;</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1251,6 +1265,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Kimi-K2 style structural tag format.</span>
@@ -1303,7 +1318,7 @@ window.runMermaid = runMermaid;</script>
                         <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                             <span class="n">RegexFormat</span><span class="p">(</span><span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;\d+&quot;</span><span class="p">),</span>
                             <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALL_ARGUMENT_BEGIN</span><span class="p">),</span>
-                            <span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                            <span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                         <span class="p">]</span>
                     <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
@@ -1336,7 +1351,9 @@ window.runMermaid = runMermaid;</script>
                         <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                             <span class="n">RegexFormat</span><span class="p">(</span><span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;\d+&quot;</span><span class="p">),</span>
                             <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALL_ARGUMENT_BEGIN</span><span class="p">),</span>
-                            <span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)),</span>
+                            <span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                                <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+                            <span class="p">),</span>
                         <span class="p">]</span>
                     <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
@@ -1357,7 +1374,7 @@ window.runMermaid = runMermaid;</script>
                         <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                             <span class="n">RegexFormat</span><span class="p">(</span><span class="n">pattern</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;\d+&quot;</span><span class="p">),</span>
                             <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALL_ARGUMENT_BEGIN</span><span class="p">),</span>
-                            <span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                            <span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                         <span class="p">]</span>
                     <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
@@ -1385,6 +1402,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get DeepSeek-R1 style structural tag format.</span>
@@ -1419,7 +1437,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN</span><span class="si">}</span><span class="s2">function</span><span class="si">{</span><span class="n">TOOL_SEP</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">JSON_RENDER_BEGIN</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">JSON_RENDER_END</span><span class="si">}{</span><span class="n">TOOL_CALL_END</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1442,7 +1460,7 @@ window.runMermaid = runMermaid;</script>
         <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
             <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALLS_BEGIN</span><span class="si">}{</span><span class="n">TOOL_CALL_BEGIN</span><span class="si">}</span><span class="s2">function</span><span class="si">{</span><span class="n">TOOL_SEP</span><span class="si">}{</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="si">}{</span><span class="n">JSON_RENDER_BEGIN</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
             <span class="n">end</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">JSON_RENDER_END</span><span class="si">}{</span><span class="n">TOOL_CALL_END</span><span class="si">}{</span><span class="n">TOOL_CALLS_END</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
         <span class="p">)</span>
 
@@ -1455,7 +1473,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN</span><span class="si">}</span><span class="s2">function</span><span class="si">{</span><span class="n">TOOL_SEP</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">JSON_RENDER_BEGIN</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">JSON_RENDER_END</span><span class="si">}{</span><span class="n">TOOL_CALL_END</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1478,6 +1496,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get DeepSeek-V3.1 style structural tag format.</span>
@@ -1510,7 +1529,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_SEP</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1533,7 +1552,7 @@ window.runMermaid = runMermaid;</script>
         <span class="n">parameters</span> <span class="o">=</span> <span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)</span>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
             <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALLS_BEGIN</span><span class="si">}{</span><span class="n">TOOL_CALL_BEGIN</span><span class="si">}{</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_SEP</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
             <span class="n">end</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_END</span><span class="si">}{</span><span class="n">TOOL_CALLS_END</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
         <span class="p">)</span>
 
@@ -1546,7 +1565,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_SEP</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1570,6 +1589,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Qwen XML tool-call structural tag format.</span>
@@ -1616,7 +1636,9 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_CALL_BEGIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;qwen_xml&quot;</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;qwen_xml&quot;</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+                    <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1635,7 +1657,9 @@ window.runMermaid = runMermaid;</script>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
             <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_CALL_BEGIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
             <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
-                <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;qwen_xml&quot;</span>
+                <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span>
+                <span class="n">style</span><span class="o">=</span><span class="s2">&quot;qwen_xml&quot;</span><span class="p">,</span>
+                <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
             <span class="p">),</span>
             <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
         <span class="p">)</span>
@@ -1649,7 +1673,9 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}{</span><span class="n">TOOL_CALL_BEGIN_SUFFIX</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;qwen_xml&quot;</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="s2">&quot;qwen_xml&quot;</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+                    <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1679,6 +1705,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Qwen3 style structural tag format.</span>
@@ -1725,7 +1752,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">ARGUMENTS_FIELD_PREFIX</span><span class="p">),</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1742,7 +1769,9 @@ window.runMermaid = runMermaid;</script>
         <span class="n">function</span> <span class="o">=</span> <span class="n">tools</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">function</span>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
             <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">ARGUMENTS_FIELD_PREFIX</span><span class="p">),</span>
-            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)),</span>
+            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+            <span class="p">),</span>
             <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
         <span class="p">)</span>
 
@@ -1755,7 +1784,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">ARGUMENTS_FIELD_PREFIX</span><span class="p">),</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1781,6 +1810,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get harmony(gpt-oss) style structural tag format.</span>
@@ -1818,7 +1848,7 @@ window.runMermaid = runMermaid;</script>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_function_tool_tags</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">parameters</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate tags for all supported harmony function tool call formats.&quot;&quot;&quot;</span>
-        <span class="n">content</span> <span class="o">=</span> <span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">)</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">[</span>
             <span class="n">TagFormat</span><span class="p">(</span>
                 <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;&lt;|channel|&gt;commentary to=functions.</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&lt;|constrain|&gt;json&lt;|message|&gt;&quot;</span><span class="p">,</span>
@@ -1839,7 +1869,7 @@ window.runMermaid = runMermaid;</script>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_builtin_tool_tags</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">parameters</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate tags for supported harmony builtin tool call formats.&quot;&quot;&quot;</span>
-        <span class="n">content</span> <span class="o">=</span> <span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">)</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">[</span>
             <span class="n">TagFormat</span><span class="p">(</span>
                 <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;&lt;|channel|&gt;commentary to=</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> code&lt;|message|&gt;&quot;</span><span class="p">,</span>
@@ -1911,6 +1941,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get DeepSeek-V3.2 style structural tag format.</span>
@@ -1949,7 +1980,9 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+                    <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1984,7 +2017,9 @@ window.runMermaid = runMermaid;</script>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
                     <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
-                        <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span>
+                        <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span>
+                        <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
                     <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
                 <span class="p">),</span>
@@ -2000,7 +2035,9 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+                    <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -2028,6 +2065,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get MiniMax-M2.5 style structural tag format.</span>
@@ -2067,7 +2105,9 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+                    <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -2100,7 +2140,9 @@ window.runMermaid = runMermaid;</script>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
                     <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
-                        <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span>
+                        <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span>
+                        <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
                     <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
                 <span class="p">),</span>
@@ -2116,7 +2158,9 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+                    <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -2146,6 +2190,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get GLM-4.7/GLM-5 style structural tag format.</span>
@@ -2204,7 +2249,9 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+                    <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -2223,7 +2270,7 @@ window.runMermaid = runMermaid;</script>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
             <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
             <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
-                <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span>
+                <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
             <span class="p">),</span>
             <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
         <span class="p">)</span>
@@ -2236,7 +2283,9 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span><span class="si">}{</span><span class="n">name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+                    <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -2261,6 +2310,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Gemma 4 style structural tag format.</span>
@@ -2317,7 +2367,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -2335,7 +2385,9 @@ window.runMermaid = runMermaid;</script>
         <span class="n">function</span> <span class="o">=</span> <span class="n">tools</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">function</span>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
             <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">)),</span>
+            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+            <span class="p">),</span>
             <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
         <span class="p">)</span>
 
@@ -2348,7 +2400,7 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -2368,6 +2420,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get DeepSeek-V4 style structural tag format.</span>
@@ -2404,7 +2457,9 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+                    <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -2439,7 +2494,9 @@ window.runMermaid = runMermaid;</script>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
                     <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
-                        <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span>
+                        <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span>
+                        <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
                     <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
                 <span class="p">),</span>
@@ -2455,7 +2512,9 @@ window.runMermaid = runMermaid;</script>
             <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                 <span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="p">(</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">),</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span><span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                        <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span> <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+                    <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
