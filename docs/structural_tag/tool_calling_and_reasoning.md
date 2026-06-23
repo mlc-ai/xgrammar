@@ -170,17 +170,17 @@ structural_tag = get_model_structural_tag(
 
 ### Special tokens in text
 
-By default, special tokens like `<think>` / `</think>` are not allowed in free text. Pass `exclude_special_tokens_in_text=False` to allow them:
+By default, special tokens like `<think>` / `</think>` are not allowed in free text. Pass `exclude_special_tokens=False` to allow them:
 
 ```python
 structural_tag = get_model_structural_tag(
     "qwen_3",
     tools=tools,
-    exclude_special_tokens_in_text=False,
+    exclude_special_tokens=False,
 )
 ```
 
-Defaults to `True`. No effect for models without special tokens (e.g. `harmony`).
+Defaults to `False`. No effect for models without special tokens (e.g. `harmony`).
 
 ---
 

@@ -34,7 +34,7 @@ def get_model_structural_tag(
     reasoning: bool = True,
     force_reasoning: bool = False,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
 ) -> StructuralTag:
     r"""Get a structural tag for a model's reasoning and tool-call output format.
 
@@ -195,7 +195,7 @@ def get_model_structural_tag(
         semantics). When ``False`` (default), the declared property order is kept
         with full validation. Default: ``False``.
 
-    exclude_special_tokens_in_text : bool
+    exclude_special_tokens : bool
         Whether to forbid model special tokens (such as ``<think>`` and
         ``</think>``) from appearing inside the free-text and triggered-text
         spans of the structural tag. Defaults to ``True``, which keeps the
@@ -235,7 +235,7 @@ def get_model_structural_tag(
         simplified_tool_choice,
         reasoning,
         any_order=any_order,
-        exclude_special_tokens_in_text=exclude_special_tokens_in_text,
+        exclude_special_tokens=exclude_special_tokens,
     )
 
 
@@ -430,19 +430,19 @@ def _get_builtin_tool_name(tool: BuiltinToolParam) -> str:
     return tool.name or tool.type
 
 
-def _text_excludes(exclude_special_tokens_in_text: bool, tokens: List[str]) -> List[str]:
+def _text_excludes(exclude_special_tokens: bool, tokens: List[str]) -> List[str]:
     """Resolve the tokens to forbid inside a structural tag's free-text spans.
 
     Built-in structural tags normally forbid model special tokens (such as
     ``<think>`` and ``</think>``) from appearing inside the free-text and
     triggered-text spans, so the model cannot emit them as plain text. Some
     downstream setups do not want this restriction. When
-    ``exclude_special_tokens_in_text`` is ``True`` (the default), this returns
+    ``exclude_special_tokens`` is ``True`` (the default), this returns
     *tokens* unchanged; when ``False``, it returns an empty list so nothing is
     excluded.
     """
 
-    return list(tokens) if exclude_special_tokens_in_text else []
+    return list(tokens) if exclude_special_tokens else []
 
 
 def _filter_allowed_tools(
@@ -521,7 +521,7 @@ def get_llama_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Llama style structural tag format.
@@ -576,11 +576,11 @@ def get_llama_structural_tag(
             suffix_tag = TriggeredTagsFormat(
                 triggers=[TOOLS_TRIGGER],
                 tags=tags,
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS),
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
             )
 
     elif tool_choice == "forced":
@@ -621,7 +621,7 @@ def get_kimi_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Kimi-K2 style structural tag format.
@@ -690,12 +690,12 @@ def get_kimi_structural_tag(
                 triggers=[TOOL_CALLS_SECTION_BEGIN],
                 tags=[tool_calls],
                 excludes=_text_excludes(
-                    exclude_special_tokens_in_text, [*THINK_EXCLUDE_TOKENS, TOOL_CALL_BEGIN]
+                    exclude_special_tokens, [*THINK_EXCLUDE_TOKENS, TOOL_CALL_BEGIN]
                 ),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
             )
 
     elif tool_choice == "forced":
@@ -763,7 +763,7 @@ def get_deepseek_r1_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-R1 style structural tag format.
@@ -811,11 +811,11 @@ def get_deepseek_r1_structural_tag(
             suffix_tag = TriggeredTagsFormat(
                 triggers=[TOOL_CALLS_BEGIN],
                 tags=[tool_calls],
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS),
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
             )
 
     elif tool_choice == "forced":
@@ -862,7 +862,7 @@ def get_deepseek_v3_1_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V3.1 style structural tag format.
@@ -908,11 +908,11 @@ def get_deepseek_v3_1_structural_tag(
             suffix_tag = TriggeredTagsFormat(
                 triggers=[TOOL_CALLS_BEGIN],
                 tags=[tool_calls],
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS),
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
             )
 
     elif tool_choice == "forced":
@@ -960,7 +960,7 @@ def get_qwen_3_5_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Qwen XML tool-call structural tag format.
@@ -1018,11 +1018,11 @@ def get_qwen_3_5_structural_tag(
             suffix_tag = TriggeredTagsFormat(
                 triggers=[TOOL_CALL_TRIGGER],
                 tags=tags,
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS),
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
             )
 
     elif tool_choice == "forced":
@@ -1081,7 +1081,7 @@ def get_qwen_3_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Qwen3 style structural tag format.
@@ -1136,11 +1136,11 @@ def get_qwen_3_structural_tag(
             suffix_tag = TriggeredTagsFormat(
                 triggers=[TOOL_CALL_TRIGGER],
                 tags=tags,
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS),
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
             )
 
     elif tool_choice == "forced":
@@ -1191,7 +1191,7 @@ def get_harmony_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get harmony(gpt-oss) style structural tag format.
@@ -1323,7 +1323,7 @@ def get_deepseek_v3_2_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V3.2 style structural tag format.
@@ -1384,11 +1384,11 @@ def get_deepseek_v3_2_structural_tag(
                         end=FUNCTION_CALLS_END,
                     )
                 ],
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS),
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
             )
 
     elif tool_choice == "forced":
@@ -1450,7 +1450,7 @@ def get_minimax_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get MiniMax-M2.5 style structural tag format.
@@ -1510,11 +1510,11 @@ def get_minimax_structural_tag(
                         begin=TOOL_CALL_BEGIN, content=function_calling_tags, end=TOOL_CALL_END
                     )
                 ],
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS),
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
             )
 
     elif tool_choice == "forced":
@@ -1578,7 +1578,7 @@ def get_glm_4_7_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get GLM-4.7/GLM-5 style structural tag format.
@@ -1648,11 +1648,11 @@ def get_glm_4_7_structural_tag(
             suffix_tag = TriggeredTagsFormat(
                 triggers=[TOOL_CALL_TRIGGER],
                 tags=tags,
-                excludes=_text_excludes(exclude_special_tokens_in_text, TEXT_EXCLUDES),
+                excludes=_text_excludes(exclude_special_tokens, TEXT_EXCLUDES),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens_in_text, REASONING_EXCLUDES)
+                excludes=_text_excludes(exclude_special_tokens, REASONING_EXCLUDES)
             )
 
     elif tool_choice == "forced":
@@ -1689,9 +1689,7 @@ def get_glm_4_7_structural_tag(
 
     prefix_tag = TagFormat(
         begin="",
-        content=AnyTextFormat(
-            excludes=_text_excludes(exclude_special_tokens_in_text, REASONING_EXCLUDES)
-        ),
+        content=AnyTextFormat(excludes=_text_excludes(exclude_special_tokens, REASONING_EXCLUDES)),
         end=THINK_TAG_END,
     )
 
@@ -1707,7 +1705,7 @@ def _get_gemma_4_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Gemma 4 style structural tag format.
@@ -1773,11 +1771,11 @@ def _get_gemma_4_structural_tag(
             suffix_tag = TriggeredTagsFormat(
                 triggers=[TOOL_CALL_TRIGGER],
                 tags=tags,
-                excludes=_text_excludes(exclude_special_tokens_in_text, GEMMA4_EXCLUDE_TOKENS),
+                excludes=_text_excludes(exclude_special_tokens, GEMMA4_EXCLUDE_TOKENS),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens_in_text, GEMMA4_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, GEMMA4_EXCLUDE_TOKENS)
             )
 
     elif tool_choice == "forced":
@@ -1822,7 +1820,7 @@ def get_deepseek_v4_structural_tag(
     tool_choice: Literal["auto", "required", "forced"] = "auto",
     reasoning: bool = True,
     any_order: bool = False,
-    exclude_special_tokens_in_text: bool = True,
+    exclude_special_tokens: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V4 style structural tag format.
@@ -1881,11 +1879,11 @@ def get_deepseek_v4_structural_tag(
                         end=FUNCTION_CALLS_END,
                     )
                 ],
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS),
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens_in_text, THINK_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
             )
 
     elif tool_choice == "forced":
