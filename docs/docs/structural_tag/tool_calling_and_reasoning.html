@@ -154,6 +154,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#builtin-tools">Builtin tools</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#reasoning-mode">Reasoning mode</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#tool-choice">Tool choice</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#special-tokens-in-text">Special tokens in text</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#supported-models">Supported models</a></li>
@@ -435,6 +436,18 @@
 <span class="p">)</span>
 </pre></div>
 </div>
+</section>
+<section id="special-tokens-in-text">
+<h3>Special tokens in text<a class="headerlink" href="#special-tokens-in-text" title="Permalink to this heading">¶</a></h3>
+<p>By default, special tokens like <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;</span></code> / <code class="docutils literal notranslate"><span class="pre">&lt;/think&gt;</span></code> are not allowed in free text. Pass <code class="docutils literal notranslate"><span class="pre">exclude_special_tokens=False</span></code> to allow them:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
+    <span class="s2">&quot;qwen_3&quot;</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>. No effect for models without special tokens (e.g. <code class="docutils literal notranslate"><span class="pre">harmony</span></code>).</p>
 </section>
 </section>
 <hr class="docutils" />

@@ -713,6 +713,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">force_reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Get a structural tag for a model&#39;s reasoning and tool-call output format.</span>
 
@@ -873,6 +874,14 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">        semantics). When ``False`` (default), the declared property order is kept</span>
 <span class="sd">        with full validation. Default: ``False``.</span>
 
+<span class="sd">    exclude_special_tokens : bool</span>
+<span class="sd">        Whether to forbid model special tokens (such as ``&lt;think&gt;`` and</span>
+<span class="sd">        ``&lt;/think&gt;``) from appearing inside the free-text and triggered-text</span>
+<span class="sd">        spans of the structural tag. Defaults to ``True``, which keeps the</span>
+<span class="sd">        free-text spans constrained to exclude those tokens. Set to ``False``</span>
+<span class="sd">        to allow them to appear as plain text. For models that have no special</span>
+<span class="sd">        tokens to exclude (such as ``&quot;harmony&quot;``), this has no effect.</span>
+
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
 <span class="sd">    If a tool&#39;s ``parameters`` field is omitted or ``None``, its generated</span>
@@ -900,7 +909,12 @@ window.runMermaid = runMermaid;</script>
     <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">func</span><span class="p">(</span>
-        <span class="n">function_tools</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="p">,</span> <span class="n">simplified_tool_choice</span><span class="p">,</span> <span class="n">reasoning</span><span class="p">,</span> <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span>
+        <span class="n">function_tools</span><span class="p">,</span>
+        <span class="n">builtin_tools</span><span class="p">,</span>
+        <span class="n">simplified_tool_choice</span><span class="p">,</span>
+        <span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
@@ -1095,6 +1109,21 @@ window.runMermaid = runMermaid;</script>
     <span class="k">return</span> <span class="n">tool</span><span class="o">.</span><span class="n">name</span> <span class="ow">or</span> <span class="n">tool</span><span class="o">.</span><span class="n">type</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve the tokens to forbid inside a structural tag&#39;s free-text spans.</span>
+
+<span class="sd">    Built-in structural tags normally forbid model special tokens (such as</span>
+<span class="sd">    ``&lt;think&gt;`` and ``&lt;/think&gt;``) from appearing inside the free-text and</span>
+<span class="sd">    triggered-text spans, so the model cannot emit them as plain text. Some</span>
+<span class="sd">    downstream setups do not want this restriction. When</span>
+<span class="sd">    ``exclude_special_tokens`` is ``True`` (the default), this returns</span>
+<span class="sd">    *tokens* unchanged; when ``False``, it returns an empty list so nothing is</span>
+<span class="sd">    excluded.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">tokens</span><span class="p">)</span> <span class="k">if</span> <span class="n">exclude_special_tokens</span> <span class="k">else</span> <span class="p">[]</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_filter_allowed_tools</span><span class="p">(</span>
     <span class="n">tools</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">],</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">],</span>
@@ -1171,6 +1200,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Llama style structural tag format.</span>
@@ -1223,10 +1253,14 @@ window.runMermaid = runMermaid;</script>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
-                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOLS_TRIGGER</span><span class="p">],</span> <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOLS_TRIGGER</span><span class="p">],</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -1266,6 +1300,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Kimi-K2 style structural tag format.</span>
@@ -1333,10 +1368,14 @@ window.runMermaid = runMermaid;</script>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
                 <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALLS_SECTION_BEGIN</span><span class="p">],</span>
                 <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">tool_calls</span><span class="p">],</span>
-                <span class="n">excludes</span><span class="o">=</span><span class="p">[</span><span class="o">*</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span> <span class="n">TOOL_CALL_BEGIN</span><span class="p">],</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span>
+                    <span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="p">[</span><span class="o">*</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span> <span class="n">TOOL_CALL_BEGIN</span><span class="p">]</span>
+                <span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -1403,6 +1442,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get DeepSeek-R1 style structural tag format.</span>
@@ -1448,10 +1488,14 @@ window.runMermaid = runMermaid;</script>
                 <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">inner_tool_calls</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALLS_END</span>
             <span class="p">)</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
-                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">],</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">tool_calls</span><span class="p">],</span> <span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">],</span>
+                <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">tool_calls</span><span class="p">],</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -1497,6 +1541,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get DeepSeek-V3.1 style structural tag format.</span>
@@ -1540,10 +1585,14 @@ window.runMermaid = runMermaid;</script>
                 <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">inner_tool_calls</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALLS_END</span>
             <span class="p">)</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
-                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">],</span> <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">tool_calls</span><span class="p">],</span> <span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">],</span>
+                <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">tool_calls</span><span class="p">],</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -1590,6 +1639,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Qwen XML tool-call structural tag format.</span>
@@ -1645,10 +1695,14 @@ window.runMermaid = runMermaid;</script>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
-                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span> <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -1706,6 +1760,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Qwen3 style structural tag format.</span>
@@ -1758,10 +1813,14 @@ window.runMermaid = runMermaid;</script>
             <span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
-                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span> <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -1811,6 +1870,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get harmony(gpt-oss) style structural tag format.</span>
@@ -1942,6 +2002,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get DeepSeek-V3.2 style structural tag format.</span>
@@ -2002,10 +2063,12 @@ window.runMermaid = runMermaid;</script>
                         <span class="n">end</span><span class="o">=</span><span class="n">FUNCTION_CALLS_END</span><span class="p">,</span>
                     <span class="p">)</span>
                 <span class="p">],</span>
-                <span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -2066,6 +2129,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get MiniMax-M2.5 style structural tag format.</span>
@@ -2125,10 +2189,12 @@ window.runMermaid = runMermaid;</script>
                         <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALL_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">function_calling_tags</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span>
                     <span class="p">)</span>
                 <span class="p">],</span>
-                <span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -2191,6 +2257,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get GLM-4.7/GLM-5 style structural tag format.</span>
@@ -2258,10 +2325,14 @@ window.runMermaid = runMermaid;</script>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
-                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span> <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">excludes</span><span class="o">=</span><span class="n">TEXT_EXCLUDES</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">TEXT_EXCLUDES</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">REASONING_EXCLUDES</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">REASONING_EXCLUDES</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -2296,7 +2367,9 @@ window.runMermaid = runMermaid;</script>
         <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
 
     <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
-        <span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">REASONING_EXCLUDES</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span>
+        <span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">REASONING_EXCLUDES</span><span class="p">)),</span>
+        <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
     <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
@@ -2311,6 +2384,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get Gemma 4 style structural tag format.</span>
@@ -2374,10 +2448,14 @@ window.runMermaid = runMermaid;</script>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
-                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span> <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">excludes</span><span class="o">=</span><span class="n">GEMMA4_EXCLUDE_TOKENS</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">GEMMA4_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">GEMMA4_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">GEMMA4_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -2421,6 +2499,7 @@ window.runMermaid = runMermaid;</script>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;required&quot;</span><span class="p">,</span> <span class="s2">&quot;forced&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Get DeepSeek-V4 style structural tag format.</span>
@@ -2479,10 +2558,12 @@ window.runMermaid = runMermaid;</script>
                         <span class="n">end</span><span class="o">=</span><span class="n">FUNCTION_CALLS_END</span><span class="p">,</span>
                     <span class="p">)</span>
                 <span class="p">],</span>
-                <span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">&quot;forced&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
