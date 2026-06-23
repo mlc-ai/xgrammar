@@ -150,6 +150,7 @@ class GrammarCompiler(XGRObject):
         separators: Optional[Tuple[str, str]] = None,
         strict_mode: bool = True,
         max_whitespace_cnt: Optional[int] = None,
+        any_order: bool = False,
     ) -> CompiledGrammar:
         """Get CompiledGrammar from the specified JSON schema and format. The indent
         and separators parameters follow the same convention as in json.dumps().
@@ -181,6 +182,19 @@ class GrammarCompiler(XGRObject):
             If specified, it will limit the number of whitespace characters to at most max_whitespace_cnt.
             It should be a positive integer.
 
+        any_order : bool, default: False
+            Whether object properties may appear in any order.
+
+            - False: properties follow the schema's declared order, fully validated (required
+              keys present, no duplicates).
+            - True: properties may appear in any order; only key validity and each key's value
+              schema are enforced. Key presence and uniqueness are not checked, so required keys
+              may be missing and keys may repeat. The entry count is bounded to
+              ``[max(minProperties, n_required), maxProperties]`` (unbounded when maxProperties
+              is unset).
+
+            Applies to every object, nested included.
+
         Returns
         -------
         compiled_grammar : CompiledGrammar
@@ -189,7 +203,13 @@ class GrammarCompiler(XGRObject):
         schema_str = _convert_schema_to_str(schema)
         return CompiledGrammar._create_from_handle(
             self._handle.compile_json_schema(
-                schema_str, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt
+                schema_str,
+                any_whitespace,
+                indent,
+                separators,
+                strict_mode,
+                max_whitespace_cnt,
+                any_order,
             )
         )
 

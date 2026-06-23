@@ -1206,3 +1206,86 @@ def test_deepseek_dsml_parallel_invokes_double_newline_rejected(
         f"Grammar wrongly accepted double-newline join for {model}/{tool_choice}:\n"
         f"{double_newline_output!r}"
     )
+
+
+# ---------- Test: any_order propagation ----------
+
+
+def _collect_any_order_flags(structural_tag: StructuralTag) -> List[bool]:
+    """Collect the ``any_order`` flag of every nested JSONSchemaFormat node."""
+
+    return [
+        format_obj.any_order
+        for format_obj in _walk_structural_format(structural_tag.format)
+        if isinstance(format_obj, JSONSchemaFormat)
+    ]
+
+
+_ANY_ORDER_MODELS = [
+    "llama",
+    "kimi",
+    "qwen_3",
+    "qwen_3_5",
+    "deepseek_r1",
+    "deepseek_v3_1",
+    "deepseek_v3_2",
+    "deepseek_v4",
+    "minimax",
+    "glm_4_7",
+    "harmony",
+]
+
+
+@pytest.mark.parametrize("model", _ANY_ORDER_MODELS)
+@pytest.mark.parametrize("tool_choice", ["auto", "required", "forced"])
+@pytest.mark.parametrize("any_order", [True, False])
+def test_any_order_applies_to_every_json_schema(model: str, tool_choice: str, any_order: bool):
+    """``any_order`` is applied to every (possibly nested) JSONSchemaFormat, for all models."""
+    tools = make_tools(["fn"])
+    choice = (
+        {"type": "function", "function": {"name": "fn"}} if tool_choice == "forced" else tool_choice
+    )
+    structural_tag = get_model_structural_tag(
+        model, tools=tools, tool_choice=choice, any_order=any_order
+    )
+    flags = _collect_any_order_flags(structural_tag)
+    assert flags, f"no JSONSchemaFormat found for {model}/{tool_choice}"
+    assert all(flag is any_order for flag in flags)
+
+
+def test_any_order_default_is_false():
+    """Omitting ``any_order`` keeps the JSONSchemaFormat default (ordered)."""
+    structural_tag = get_model_structural_tag("qwen_3", tools=make_tools(["fn"]))
+    assert _collect_any_order_flags(structural_tag) == [False]
+
+
+def test_any_order_reordered_arguments_accepted_only_when_enabled():
+    """End-to-end: reordered tool-call arguments are accepted only when any_order=True."""
+    tools = [
+        {
+            "function": {
+                "name": "fn",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"a": {"type": "integer"}, "b": {"type": "string"}},
+                    "required": ["a", "b"],
+                    "additionalProperties": False,
+                },
+            }
+        }
+    ]
+    forced = {"type": "function", "function": {"name": "fn"}}
+    ordered = '<tool_call>\n{"name": "fn", "arguments": {"a": 1, "b": "x"}}\n</tool_call>'
+    reordered = '<tool_call>\n{"name": "fn", "arguments": {"b": "x", "a": 1}}\n</tool_call>'
+
+    st_ordered = get_model_structural_tag(
+        "qwen_3", tools=tools, tool_choice=forced, reasoning=False
+    )
+    check_stag_with_instance(st_ordered, ordered, True)
+    check_stag_with_instance(st_ordered, reordered, False)
+
+    st_any_order = get_model_structural_tag(
+        "qwen_3", tools=tools, tool_choice=forced, reasoning=False, any_order=True
+    )
+    check_stag_with_instance(st_any_order, ordered, True)
+    check_stag_with_instance(st_any_order, reordered, True)

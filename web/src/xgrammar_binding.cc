@@ -193,7 +193,8 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
           std::optional<std::pair<std::string, std::string>>,
           bool,
           std::optional<int>,
-          JSONFormat
+          JSONFormat,
+          bool
       )>(&JSONSchemaToEBNF)
   );
   function("DebugGetMaskedTokensFromBitmask", &Testing_DebugGetMaskedTokensFromBitmask);

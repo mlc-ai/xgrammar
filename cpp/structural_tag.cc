@@ -100,6 +100,7 @@ picojson::value JSONSchemaFormat::ToJSON() const {
     obj["json_schema"] = picojson::value(json_schema);
   }
   obj["style"] = picojson::value(style);
+  obj["any_order"] = picojson::value(any_order);
   return picojson::value(std::move(obj));
 }
 
@@ -539,8 +540,17 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
       }
     }
   }
+  bool any_order = false;
+  auto any_order_it = obj.find("any_order");
+  if (any_order_it != obj.end()) {
+    if (!any_order_it->second.is<bool>()) {
+      return ResultErr<ISTError>("any_order must be a boolean");
+    }
+    any_order = any_order_it->second.get<bool>();
+  }
+
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
-  return ResultOk<JSONSchemaFormat>(json_schema_it->second.serialize(false), style);
+  return ResultOk<JSONSchemaFormat>(json_schema_it->second.serialize(false), style, any_order);
 }
 
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
@@ -1818,34 +1828,43 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringF
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFormat& format) {
-  const static std::unordered_map<std::string, std::function<std::string(const std::string&)>>
+  const static std::unordered_map<std::string, std::function<std::string(const std::string&, bool)>>
       style_to_grammar_converter = {
           {"json",
-           [&](const std::string& json_schema) -> std::string {
-             return JSONSchemaToEBNF(json_schema);
+           [](const std::string& json_schema, bool any_order) -> std::string {
+             return JSONSchemaToEBNF(
+                 json_schema,
+                 /*any_whitespace=*/true,
+                 /*indent=*/std::nullopt,
+                 /*separators=*/std::nullopt,
+                 /*strict_mode=*/true,
+                 /*max_whitespace_cnt=*/std::nullopt,
+                 /*json_format=*/JSONFormat::kJSON,
+                 any_order
+             );
            }},
           {"qwen_xml",
-           [&](const std::string& json_schema) -> std::string {
-             return QwenXMLToolCallingToEBNF(json_schema);
+           [](const std::string& json_schema, bool any_order) -> std::string {
+             return QwenXMLToolCallingToEBNF(json_schema, any_order);
            }},
           {"minimax_xml",
-           [&](const std::string& json_schema) -> std::string {
-             return MiniMaxXMLToolCallingToEBNF(json_schema);
+           [](const std::string& json_schema, bool any_order) -> std::string {
+             return MiniMaxXMLToolCallingToEBNF(json_schema, any_order);
            }},
           {"deepseek_xml",
-           [&](const std::string& json_schema) -> std::string {
-             return DeepSeekXMLToolCallingToEBNF(json_schema);
+           [](const std::string& json_schema, bool any_order) -> std::string {
+             return DeepSeekXMLToolCallingToEBNF(json_schema, any_order);
            }},
           {"glm_xml",
-           [&](const std::string& json_schema) -> std::string {
-             return GlmXMLToolCallingToEBNF(json_schema);
+           [](const std::string& json_schema, bool any_order) -> std::string {
+             return GlmXMLToolCallingToEBNF(json_schema, any_order);
            }},
       };
   auto converter = style_to_grammar_converter.find(format.style);
   if (converter == style_to_grammar_converter.end()) {
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
-  std::string ebnf = converter->second(format.json_schema);
+  std::string ebnf = converter->second(format.json_schema, format.any_order);
   auto sub_grammar = Grammar::FromEBNF(ebnf);
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);

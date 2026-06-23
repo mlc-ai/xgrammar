@@ -2567,5 +2567,253 @@ def test_forward_slash_in_enum():
     assert not _is_grammar_accept_string(grammar, '"a\\/b"')
 
 
+def _accept_any_order(
+    schema: Dict[str, Any],
+    instance: str,
+    expect: bool,
+    *,
+    any_order: bool = True,
+    any_whitespace: bool = False,
+):
+    grammar = xgr.Grammar.from_json_schema(
+        json.dumps(schema), any_whitespace=any_whitespace, any_order=any_order
+    )
+    assert _is_grammar_accept_string(grammar, instance) == expect
+
+
+def test_any_order_ebnf():
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}, "b": {"type": "string"}, "c": {"type": "boolean"}},
+        "required": ["a", "b"],
+        "additionalProperties": False,
+    }
+    ebnf = _json_schema_to_ebnf(schema, any_whitespace=False, any_order=True)
+    # One "item" alternation repeated [n=#required=2, m=unbounded] times.
+    assert ebnf == basic_json_rules_ebnf_no_space + (
+        r"""root_item ::= "\"a\"" ": " basic_integer | "\"b\"" ": " basic_string | "\"c\"" ": " basic_boolean
+root ::= "{" "" (root_item (", " root_item){1,} ) "" "}"
+"""
+    )
+
+
+@pytest.mark.parametrize(
+    "instance, expect",
+    [
+        ('{"a": 1, "b": "x"}', True),  # declared order
+        ('{"b": "x", "a": 1}', True),  # reordered required
+        (
+            '{"a": 1, "a": 2}',
+            True,
+        ),  # duplicate required, b missing -> only the count (2) is enforced
+        ('{"a": 1, "b": "x", "c": true}', True),  # with optional
+        ('{"b": "x", "a": 1, "c": true}', True),  # reordered required + optional
+        ('{"c": true, "a": 1, "b": "x"}', True),  # optional fully interleaved before required
+        ('{"a": 1, "c": true, "b": "x"}', True),  # optional between the two required entries
+        ('{"a": 1}', False),  # only one required entry
+        ('{"a": 1, "b": "x", "c": true, "c": false}', True),  # other entries are not count-limited
+        ('{"a": 1, "b": "x", "d": 5}', False),  # additionalProperties false
+        ("{}", False),  # required present -> not empty
+    ],
+)
+def test_any_order_acceptance(instance: str, expect: bool):
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}, "b": {"type": "string"}, "c": {"type": "boolean"}},
+        "required": ["a", "b"],
+        "additionalProperties": False,
+    }
+    _accept_any_order(schema, instance, expect)
+
+
+def test_any_order_additional_properties_unbounded():
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}, "b": {"type": "string"}},
+        "required": ["a"],
+        "additionalProperties": True,
+    }
+    _accept_any_order(schema, '{"a": 1}', True)
+    _accept_any_order(schema, '{"a": 1, "b": "x"}', True)
+    _accept_any_order(
+        schema, '{"a": 1, "z": 5, "y": "q", "w": true}', True
+    )  # extra keys, unbounded
+
+
+def test_any_order_pattern_properties_unbounded():
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}},
+        "required": ["a"],
+        "patternProperties": {"^x_": {"type": "integer"}},
+        "additionalProperties": False,
+    }
+    _accept_any_order(schema, '{"a": 1}', True)
+    _accept_any_order(schema, '{"a": 1, "x_": 5, "x_": 9}', True)  # pattern keys, unbounded
+
+
+def test_any_order_applies_to_nested_objects():
+    schema = {
+        "type": "object",
+        "properties": {
+            "outer_a": {"type": "integer"},
+            "nested": {
+                "type": "object",
+                "properties": {"x": {"type": "integer"}, "y": {"type": "integer"}},
+                "required": ["x", "y"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["outer_a", "nested"],
+        "additionalProperties": False,
+    }
+    # any_order applies to every object: both the top-level and the nested object are reorderable.
+    _accept_any_order(schema, '{"nested": {"x": 1, "y": 2}, "outer_a": 5}', True)
+    _accept_any_order(schema, '{"outer_a": 5, "nested": {"y": 2, "x": 1}}', True)
+    _accept_any_order(schema, '{"nested": {"y": 2, "x": 1}, "outer_a": 5}', True)
+
+
+def test_any_order_no_required_fields():
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}, "b": {"type": "string"}},
+        "additionalProperties": False,
+    }
+    _accept_any_order(schema, "{}", True)  # empty allowed
+    _accept_any_order(schema, '{"b": "x"}', True)
+    _accept_any_order(schema, '{"b": "x", "a": 1}', True)
+    _accept_any_order(schema, '{"a": 1, "a": 2, "b": "x"}', True)  # unbounded, no count limit
+
+
+def test_any_order_min_max_properties():
+    # required {a}, optional {b, c}; total properties must be in [2, 3].
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}, "b": {"type": "string"}, "c": {"type": "boolean"}},
+        "required": ["a"],
+        "additionalProperties": False,
+        "minProperties": 2,
+        "maxProperties": 3,
+    }
+    _accept_any_order(schema, '{"a": 1, "b": "x"}', True)  # 2 props
+    _accept_any_order(schema, '{"a": 1, "c": true}', True)  # 2 props
+    _accept_any_order(schema, '{"a": 1, "b": "x", "c": true}', True)  # 3 props
+    _accept_any_order(schema, '{"a": 1, "c": true, "b": "x"}', True)  # 3 props, optional reordered
+    _accept_any_order(schema, '{"a": 1}', False)  # 1 prop < minProperties=2
+
+
+def test_any_order_max_properties_equals_required_count():
+    # maxProperties == #required (2): no room for the optional field.
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}, "b": {"type": "string"}, "c": {"type": "boolean"}},
+        "required": ["a", "b"],
+        "additionalProperties": False,
+        "maxProperties": 2,
+    }
+    _accept_any_order(schema, '{"a": 1, "b": "x"}', True)  # exactly the 2 required
+    _accept_any_order(schema, '{"b": "x", "a": 1}', True)  # reordered required
+    _accept_any_order(
+        schema, '{"a": 1, "b": "x", "c": true}', False
+    )  # 3 props > max=2, no optional allowed
+
+
+def test_any_order_min_properties_with_additional():
+    # required {a}; additionalProperties allowed; minProperties=3 => >= 2 optional/extra entries.
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}, "b": {"type": "string"}},
+        "required": ["a"],
+        "additionalProperties": True,
+        "minProperties": 3,
+    }
+    _accept_any_order(schema, '{"a": 1, "b": "x"}', False)  # 2 props < min=3
+    _accept_any_order(schema, '{"a": 1, "b": "x", "z": 5}', True)  # 3 props (extra key)
+    _accept_any_order(schema, '{"a": 1, "z": 5, "y": 6, "w": 7}', True)  # 4 props, unbounded above
+
+
+def test_any_order_backward_compatible():
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}, "b": {"type": "string"}},
+        "required": ["a", "b"],
+        "additionalProperties": False,
+    }
+    # any_order=False (the default) must produce the exact same grammar as before.
+    default = _json_schema_to_ebnf(schema, any_whitespace=False)
+    explicit_false = _json_schema_to_ebnf(schema, any_whitespace=False, any_order=False)
+    assert default == explicit_false
+    # The any_order-only "item" alternation rule must not appear in the fixed-order grammar.
+    assert "root_item" not in default
+    assert "root_item" in _json_schema_to_ebnf(schema, any_whitespace=False, any_order=True)
+
+
+def test_any_order_qwen_xml():
+    from xgrammar.testing import _qwen_xml_tool_calling_to_ebnf
+
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}, "b": {"type": "string"}},
+        "required": ["a", "b"],
+        "additionalProperties": False,
+    }
+    ordered = _qwen_xml_tool_calling_to_ebnf(json.dumps(schema), False)
+    any_order = _qwen_xml_tool_calling_to_ebnf(json.dumps(schema), True)
+
+    # Both grammars share the same basic_*/xml_* prefix; only the root rules differ.
+    prefix = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
+basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= ["] basic_string_sub
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
+xml_any ::= xml_string | basic_array | basic_object
+xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
+root_prop_0 ::= ("0" | "-"? [1-9] [0-9]*)
+"""
+
+    # Ordered: the required props are emitted in fixed declared order (a, then b).
+    assert ordered == prefix + (
+        r"""root_part_0 ::= [ \n\t]* "<parameter=b>" [ \n\t]* xml_string [ \n\t]* "</parameter>" ""
+root ::=  [ \n\t]* (("<parameter=a>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
+"""
+    )
+
+    # any_order: one "item" alternation repeated [n=#required=2, m=unbounded] times.
+    assert any_order == prefix + (
+        r"""root_item ::= "<parameter=a>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" | "<parameter=b>" [ \n\t]* xml_string [ \n\t]* "</parameter>"
+root ::=  [ \n\t]* (root_item ([ \n\t]* root_item){1,} ) [ \n\t]*
+"""
+    )
+
+
+@pytest.mark.parametrize("cache_enabled", [True, False])
+def test_compile_json_schema_any_order(cache_enabled: bool):
+    # Regression: compile_json_schema once dropped any_order on the value-producing path, silently
+    # returning a fixed-order grammar. Both cache states route through that call.
+    tokenizer_info = xgr.TokenizerInfo([f"<{i}>" for i in range(16)])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=cache_enabled)
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}, "b": {"type": "string"}},
+        "required": ["a", "b"],
+        "additionalProperties": False,
+    }
+    ordered = str(compiler.compile_json_schema(schema, any_whitespace=False).grammar)
+    any_order = str(
+        compiler.compile_json_schema(schema, any_whitespace=False, any_order=True).grammar
+    )
+    # any_order=True relaxes ordering via the flat "item" alternation; the default does not.
+    assert "root_item" not in ordered
+    assert "root_item" in any_order
+    assert ordered != any_order
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

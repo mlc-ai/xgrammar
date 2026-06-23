@@ -1098,7 +1098,8 @@ JSONSchemaConverter::JSONSchemaConverter(
     std::optional<std::pair<std::string, std::string>> separators,
     bool any_whitespace,
     std::optional<int> max_whitespace_cnt,
-    RefResolver ref_resolver
+    RefResolver ref_resolver,
+    bool any_order
 )
     : indent_manager_(
           indent,
@@ -1109,6 +1110,7 @@ JSONSchemaConverter::JSONSchemaConverter(
       ),
       any_whitespace_(any_whitespace),
       max_whitespace_cnt_(max_whitespace_cnt),
+      any_order_(any_order),
       ref_resolver_(std::move(ref_resolver)) {
   std::string colon_sep =
       separators.has_value() ? separators->second : (any_whitespace ? ":" : ": ");
@@ -1649,6 +1651,61 @@ std::string JSONSchemaConverter::GetPropertyWithNumberConstraints(
   }
 }
 
+std::string JSONSchemaConverter::GetAnyOrderRuleForProperties(
+    const std::vector<ObjectSpec::Property>& properties,
+    const std::unordered_set<std::string>& required,
+    const SchemaSpecPtr& additional,
+    const std::string& rule_name,
+    const std::string& additional_suffix,
+    int min_properties,
+    int max_properties,
+    const std::string& additional_prop_pattern_override
+) {
+  std::string first_sep = NextSeparator();
+  std::string mid_sep = NextSeparator();
+  std::string last_sep = NextSeparator(true);
+
+  // Build one "item" alternation over every property (any required/optional key) plus any
+  // additional/pattern key; any_order does not care which key goes where.
+  std::vector<std::string> item_patterns;
+  for (size_t idx = 0; idx < properties.size(); ++idx) {
+    const auto& prop = properties[idx];
+    std::string value_rule = CreateRule(prop.schema, rule_name + "_prop_" + std::to_string(idx));
+    item_patterns.push_back(FormatProperty(prop.name, value_rule, rule_name, idx));
+  }
+  if (additional != nullptr) {
+    if (!additional_prop_pattern_override.empty()) {
+      item_patterns.push_back(additional_prop_pattern_override);
+    } else {
+      std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
+      item_patterns.push_back(FormatOtherProperty(
+          GetKeyPatternExcluding(properties, rule_name),
+          add_value_rule,
+          rule_name,
+          additional_suffix
+      ));
+    }
+  }
+
+  std::string item_body;
+  for (size_t i = 0; i < item_patterns.size(); ++i) {
+    if (i != 0) {
+      item_body += " | ";
+    }
+    item_body += item_patterns[i];
+  }
+  std::string item_rule = ebnf_script_creator_.AddRule(rule_name + "_item", item_body);
+
+  // Repeat `item` between n = max(minProperties, #required) and m = maxProperties times; only the
+  // count is constrained, not which keys appear.
+  int min_count = std::max(min_properties, static_cast<int>(required.size()));
+  std::string content =
+      item_rule + " " +
+      GetPropertyWithNumberConstraints(mid_sep + " " + item_rule, min_count, max_properties, 1);
+
+  return first_sep + " (" + content + ") " + last_sep;
+}
+
 std::string JSONSchemaConverter::GetPartialRuleForProperties(
     const std::vector<ObjectSpec::Property>& properties,
     const std::unordered_set<std::string>& required,
@@ -1661,6 +1718,19 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
 ) {
   if (max_properties == 0) {
     return "";
+  }
+
+  if (any_order_) {
+    return GetAnyOrderRuleForProperties(
+        properties,
+        required,
+        additional,
+        rule_name,
+        additional_suffix,
+        min_properties,
+        max_properties,
+        additional_prop_pattern_override
+    );
   }
 
   std::string first_sep = NextSeparator();
@@ -3082,14 +3152,22 @@ std::string JSONSchemaToEBNF(
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
-    JSONFormat json_format
+    JSONFormat json_format,
+    bool any_order
 ) {
   picojson::value schema_value;
   std::string err = picojson::parse(schema_value, schema);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
                               << ". The JSON string is:" << schema;
   return JSONSchemaToEBNF(
-      schema_value, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, json_format
+      schema_value,
+      any_whitespace,
+      indent,
+      separators,
+      strict_mode,
+      max_whitespace_cnt,
+      json_format,
+      any_order
   );
 }
 
@@ -3100,7 +3178,8 @@ std::string JSONSchemaToEBNF(
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
-    JSONFormat json_format
+    JSONFormat json_format,
+    bool any_order
 ) {
   // Parse JSON Schema to SchemaSpec
   SchemaParser parser(schema, {strict_mode, json_format});
@@ -3122,7 +3201,7 @@ std::string JSONSchemaToEBNF(
   switch (json_format) {
     case JSONFormat::kJSON: {
       JSONSchemaConverter converter(
-          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
       return converter.Convert(spec);
     }
@@ -3131,7 +3210,13 @@ std::string JSONSchemaToEBNF(
     case JSONFormat::kDeepSeekXML:
     case JSONFormat::kGlmXML: {
       XMLToolCallingConverter converter(
-          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, json_format
+          indent,
+          separators,
+          any_whitespace,
+          max_whitespace_cnt,
+          ref_resolver,
+          json_format,
+          any_order
       );
       return converter.Convert(spec);
     }
@@ -3150,47 +3235,75 @@ std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<d
   return JSONSchemaConverter::GenerateFloatRangeRegex(start, end, 6);
 }
 
-std::string QwenXMLToolCallingToEBNF(const std::string& schema) {
+std::string QwenXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
   if (!err.empty()) {
     XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
   }
   return JSONSchemaToEBNF(
-      json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kQwenXML
+      json_value,
+      true,
+      std::nullopt,
+      std::nullopt,
+      true,
+      std::nullopt,
+      JSONFormat::kQwenXML,
+      any_order
   );
 }
 
-std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema) {
+std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
   if (!err.empty()) {
     XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
   }
   return JSONSchemaToEBNF(
-      json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kMiniMaxXML
+      json_value,
+      true,
+      std::nullopt,
+      std::nullopt,
+      true,
+      std::nullopt,
+      JSONFormat::kMiniMaxXML,
+      any_order
   );
 }
 
-std::string DeepSeekXMLToolCallingToEBNF(const std::string& schema) {
+std::string DeepSeekXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
   if (!err.empty()) {
     XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
   }
   return JSONSchemaToEBNF(
-      json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kDeepSeekXML
+      json_value,
+      true,
+      std::nullopt,
+      std::nullopt,
+      true,
+      std::nullopt,
+      JSONFormat::kDeepSeekXML,
+      any_order
   );
 }
 
-std::string GlmXMLToolCallingToEBNF(const std::string& schema) {
+std::string GlmXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
   if (!err.empty()) {
     XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
   }
   return JSONSchemaToEBNF(
-      json_value, true, std::nullopt, std::nullopt, true, std::nullopt, JSONFormat::kGlmXML
+      json_value,
+      true,
+      std::nullopt,
+      std::nullopt,
+      true,
+      std::nullopt,
+      JSONFormat::kGlmXML,
+      any_order
   );
 }
 
