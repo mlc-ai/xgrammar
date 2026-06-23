@@ -37,10 +37,16 @@ class JSONSchemaFormat(BaseModel):
     \"deepseek_xml\" (DeepSeek XML(DeepSeek-v3.2): <{dsml_token}parameter name=\"key\" string=\"true|false\">value</{dsml_token}parameter>),
     \"glm_xml\" (GLM XML: <arg_key>key</arg_key><arg_value>value</arg_value>)."""
     any_order: bool = False
-    """Relax object property ordering. When True, any property may appear in any position and only
-    the total entry count is bounded, to ``[max(minProperties, n_required), maxProperties]``,
-    without checking which keys appear. When False (default), properties keep their declared order
-    with full validation. Applies to every object, nested included. Default: False."""
+    """Whether object properties may appear in any order.
+
+    - False (default): properties follow the schema's declared order, fully validated (required
+      keys present, no duplicates).
+    - True: properties may appear in any order; only key validity and each key's value schema are
+      enforced. Key presence and uniqueness are not checked, so required keys may be missing and
+      keys may repeat. The entry count is bounded to ``[max(minProperties, n_required),
+      maxProperties]`` (unbounded when maxProperties is unset).
+
+    Applies to every object, nested included."""
 
 
 class AnyTextFormat(BaseModel):

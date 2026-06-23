@@ -183,11 +183,17 @@ class GrammarCompiler(XGRObject):
             It should be a positive integer.
 
         any_order : bool, default: False
-            Relax object property ordering. When True, any property may appear in any position and
-            only the total entry count is bounded, to ``[max(minProperties, n_required),
-            maxProperties]``, without checking which keys appear. When False (default), properties
-            keep their declared order with full validation. Applies to every object, nested
-            included.
+            Whether object properties may appear in any order.
+
+            - False: properties follow the schema's declared order, fully validated (required
+              keys present, no duplicates).
+            - True: properties may appear in any order; only key validity and each key's value
+              schema are enforced. Key presence and uniqueness are not checked, so required keys
+              may be missing and keys may repeat. The entry count is bounded to
+              ``[max(minProperties, n_required), maxProperties]`` (unbounded when maxProperties
+              is unset).
+
+            Applies to every object, nested included.
 
         Returns
         -------
