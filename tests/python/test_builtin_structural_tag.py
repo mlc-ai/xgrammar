@@ -157,6 +157,16 @@ def _collect_json_schema_values(structural_tag: StructuralTag) -> List[Any]:
     ]
 
 
+def _collect_excludes(structural_tag: StructuralTag) -> List[List[str]]:
+    """Collect every ``excludes`` list from nested AnyText / TriggeredTags nodes."""
+
+    return [
+        list(format_obj.excludes)
+        for format_obj in _walk_structural_format(structural_tag.format)
+        if getattr(format_obj, "excludes", None) is not None
+    ]
+
+
 # ---------- Shared tool definitions ----------
 
 SIMPLE_SCHEMA = {"type": "object", "properties": {"q": {"type": "string"}}}
@@ -537,7 +547,12 @@ def test_harmony_builtin_tool_instance():
 def test_kimi_auto_requires_tool_calls_section():
     """Kimi auto tool calls must use the official section wrapper."""
 
-    structural_tag = get_model_structural_tag("kimi", tools=_tools_kimi, reasoning=False)
+    # Excluding special tokens in free text is what forbids a bare
+    # <|tool_call_begin|> outside the <|tool_calls_section_begin|> wrapper. It is
+    # on by default; passed explicitly here to make the dependency clear.
+    structural_tag = get_model_structural_tag(
+        "kimi", tools=_tools_kimi, reasoning=False, exclude_special_tokens=True
+    )
 
     assert "<|tool_calls_section_begin|>" in structural_tag.model_dump_json()
     check_stag_with_instance(
@@ -639,6 +654,75 @@ def test_specific_functions_cases(structural_tag_fn, case: Dict[str, Any]):
     assert isinstance(structural_tag, StructuralTag)
     xgr.Grammar.from_structural_tag(structural_tag)
     assert None not in _collect_json_schema_values(structural_tag)
+
+
+# ---------- Test: exclude_special_tokens ----------
+
+# Model keys whose built-in structural tags forbid special tokens (e.g. <think>)
+# from appearing in free-text spans when the exclusion is enabled. Harmony has no
+# such excludes and is covered separately.
+_EXCLUDE_TOKEN_MODELS = [
+    "llama",
+    "kimi",
+    "deepseek_r1",
+    "deepseek_v3_1",
+    "deepseek_v3_2",
+    "deepseek_v4",
+    "qwen_3",
+    "qwen_3_5",
+    "minimax",
+    "glm_4_7",
+]
+
+
+@pytest.mark.parametrize("model", _EXCLUDE_TOKEN_MODELS)
+# Tools present -> TriggeredTagsFormat excludes; no tools -> AnyTextFormat excludes.
+@pytest.mark.parametrize("tools", [make_tools(["search"]), []])
+def test_exclude_special_tokens_default_excludes_think_tokens(model, tools):
+    """By default the built-in structural tag excludes the special tokens from free text."""
+
+    structural_tag = get_model_structural_tag(model, tools=tools, reasoning=True)
+    flat = [token for excludes in _collect_excludes(structural_tag) for token in excludes]
+    assert "<think>" in flat
+    assert "</think>" in flat
+    xgr.Grammar.from_structural_tag(structural_tag)
+
+
+@pytest.mark.parametrize("model", _EXCLUDE_TOKEN_MODELS)
+@pytest.mark.parametrize("tools", [make_tools(["search"]), []])
+def test_exclude_special_tokens_false_excludes_nothing(model, tools):
+    """Opting out with ``exclude_special_tokens=False`` excludes nothing from free text."""
+
+    structural_tag = get_model_structural_tag(
+        model, tools=tools, reasoning=True, exclude_special_tokens=False
+    )
+    assert all(excludes == [] for excludes in _collect_excludes(structural_tag))
+    # The less-restrictive grammar must still build.
+    xgr.Grammar.from_structural_tag(structural_tag)
+
+
+@pytest.mark.parametrize("flag", [False, True])
+def test_exclude_special_tokens_harmony_is_no_op(flag):
+    """Harmony has no special tokens to exclude, so the flag never adds excludes."""
+
+    structural_tag = get_model_structural_tag(
+        "harmony", tools=make_tools(["search"]), exclude_special_tokens=flag
+    )
+    assert all(excludes == [] for excludes in _collect_excludes(structural_tag))
+
+
+def test_exclude_special_tokens_passed_to_specific_function():
+    """The flag also reaches the model-specific builders directly via kwargs."""
+
+    tools = [FunctionToolParam(function={"name": "search", "parameters": SIMPLE_SCHEMA})]
+
+    off = get_qwen_3_structural_tag(tools=tools, exclude_special_tokens=False)
+    assert all(excludes == [] for excludes in _collect_excludes(off))
+
+    on = get_qwen_3_structural_tag(tools=tools, exclude_special_tokens=True)
+    flat = [token for excludes in _collect_excludes(on) for token in excludes]
+    assert "<think>" in flat
+    assert "</think>" in flat
 
 
 @pytest.mark.parametrize(
@@ -746,12 +830,14 @@ def test_strict_or_missing_parameters(
     format_type: str, instance: str, is_accepted: bool, tool: Dict[str, Any]
 ):
     """strict=False or missing 'parameters' should still accept/reject instances correctly."""
-    if format_type == "harmony":
-        tools = [tool]
-        stag = get_model_structural_tag(format_type, tools=tools, reasoning=False)
-    else:
-        tools = [tool]
-        stag = get_model_structural_tag(format_type, tools=tools, reasoning=False)
+    tools = [tool]
+    # Special-token exclusion (on by default) is what makes markers appearing
+    # outside their required wrapper (e.g. a bare Kimi <|tool_call_begin|>
+    # without the tool-calls section) get rejected; passed explicitly here to
+    # make the dependency clear.
+    stag = get_model_structural_tag(
+        format_type, tools=tools, reasoning=False, exclude_special_tokens=True
+    )
 
     check_stag_with_instance(stag, instance, is_accepted)
 
