@@ -180,7 +180,7 @@ structural_tag = get_model_structural_tag(
 )
 ```
 
-Defaults to `False`. No effect for models without special tokens (e.g. `harmony`).
+Defaults to `True`. No effect for models without special tokens (e.g. `harmony`).
 
 ---
 
