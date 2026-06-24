@@ -19,8 +19,6 @@ The `reasoning` parameter controls whether the model-specific reasoning section 
 
 `get_model_structural_tag` generates a `StructuralTag` for the given model type with the specified tools and options. The returned `StructuralTag` can be used with `Grammar.from_structural_tag` or `GrammarCompiler.compile_structural_tag` to obtain the corresponding grammar.
 
-`get_model_structural_tag` accepts an optional `max_whitespace_cnt` that it applies to every tool-argument schema in the generated structural tag:
-
 Use it when you need to constrain the model to output in a fixed pattern such as "tool name + parameter JSON", e.g. for Llama, Qwen, Kimi, DeepSeek, OpenAI Harmony, etc.
 
 ### Parameters

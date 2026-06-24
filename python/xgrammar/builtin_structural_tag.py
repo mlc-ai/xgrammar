@@ -183,12 +183,10 @@ def get_model_structural_tag(
         ``False``, use the non-reasoning mode. For models that do not support
         reasoning, this has no effect. For models that only support reasoning,
         ``False`` means reasoning with empty content.
-
     force_reasoning : bool
         Deprecated. Control whether to keep the reasoning part but leave its content empty.
         Now we will embed the model's specific behavior into the structural tag function, so
         only controlling ``reasoning`` is enough.
-
     any_order : bool
         Relax object property ordering for every tool-argument schema. When
         ``True``, ``any_order=True`` is applied to every :class:`JSONSchemaFormat`
@@ -196,7 +194,6 @@ def get_model_structural_tag(
         in any property order (see :class:`JSONSchemaFormat` for the exact
         semantics). When ``False`` (default), the declared property order is kept
         with full validation. Default: ``False``.
-
     exclude_special_tokens : bool
         Whether to forbid model special tokens (such as ``<think>`` and
         ``</think>``) from appearing inside the free-text and triggered-text
@@ -209,7 +206,10 @@ def get_model_structural_tag(
         (default), arbitrary whitespace is allowed in the JSON content; when
         ``False``, the fixed compact formatting is enforced. Default: ``True``.
     max_whitespace_cnt : Optional[int]
-        Applied to every tool-argument :class:`JSONSchemaFormat`. Default: ``None``.
+        Caps the number of consecutive whitespace characters. Setting it (e.g.
+        ``2``) bounds runs of whitespace, which avoids the unbounded-whitespace
+        outputs some models emit in bad cases that would otherwise blow up grammar
+        compilation/matching. Default: ``None``.
 
     Notes
     -----
