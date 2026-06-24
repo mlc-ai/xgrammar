@@ -326,10 +326,7 @@ std::string RegexConverter::Convert() {
       if (parenthesis_level_ == 0) {
         RaiseError("Unmatched ')'");
       }
-      // Special case: if the alternative right before ')' is empty (e.g. "(a|)"), emit an empty
-      // string so the group does not end with a bare '|'. We check the last emitted segment
-      // rather than the raw previous character so an all-anchor alternative like "(a|$)" is also
-      // covered. Note: an empty group "()" (last segment '(') is intentionally left as "( )".
+      // Empty alternative before ')' (e.g. "(a|)" or "(a|$)"): emit "" so it isn't a bare '|'.
       if (!result_ebnf_.empty() && result_ebnf_.back() == '|') {
         AddEBNFSegment("\"\"");
       }
@@ -362,10 +359,8 @@ std::string RegexConverter::Convert() {
       }
     } else if (*current_ == '|') {
       is_empty = false;
-      // If the alternative ending here is empty, emit an empty string so the result never
-      // contains a bare '|' with nothing on its left. This covers a leading empty alternative
-      // (result is empty, e.g. "^$|abc" after anchors are dropped), consecutive '|' ("a||b"),
-      // and an empty first alternative inside a group ("(|a)").
+      // Empty alternative before '|': emit "" so there's no bare '|' on the left.
+      // Covers leading ("^$|abc"), consecutive ("a||b") and group-start ("(|a)") cases.
       if (result_ebnf_.empty() || result_ebnf_.back() == '|' || result_ebnf_.back() == '(') {
         AddEBNFSegment("\"\"");
       }
@@ -388,7 +383,7 @@ std::string RegexConverter::Convert() {
   if (parenthesis_level_ != 0) {
     RaiseError("The parenthesis is not closed.");
   }
-  // Handle a trailing empty alternative, e.g. "abc|", so the result never ends with a bare '|'.
+  // Trailing empty alternative, e.g. "abc|": emit "" so it doesn't end with a bare '|'.
   if (!result_ebnf_.empty() && result_ebnf_.back() == '|') {
     AddEBNFSegment("\"\"");
   }
