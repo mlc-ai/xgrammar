@@ -935,6 +935,31 @@ root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "f
     _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
 
 
+deepseek_pattern_empty_leading_alternative_input_str_accepted = (
+    ('<｜DSML｜parameter name="url" string="true">https://x.com/</｜DSML｜parameter>', True),
+    # The "^$" branch allows an empty value.
+    ('<｜DSML｜parameter name="url" string="true"></｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="url" string="true">http://x.com/</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="url" string="true">https://y.com/</｜DSML｜parameter>', False),
+)
+
+
+@pytest.mark.parametrize(
+    "input_str, accepted", deepseek_pattern_empty_leading_alternative_input_str_accepted
+)
+def test_deepseek_pattern_empty_leading_alternative(input_str: str, accepted: bool):
+    # Regression: a pattern whose first alternative is empty ("^$|...") used to emit a bare
+    # leading '|' in the EBNF and crash the grammar parser on the deepseek_xml path.
+    schema = {
+        "type": "object",
+        "properties": {"url": {"type": "string", "pattern": "^$|^https://x\\.com/"}},
+        "required": ["url"],
+    }
+    ebnf_grammar = _deepseek_xml_tool_calling_to_ebnf(schema)
+    assert "root_prop_0 ::= |" not in str(ebnf_grammar)
+    check_grammar_with_instance(ebnf_grammar, input_str, accepted)
+
+
 deepseek_test_additional_properties_schema_input_str_accepted = (
     (
         '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">\t100\n</｜DSML｜parameter><｜DSML｜parameter name="location" string="true">New York</｜DSML｜parameter>',

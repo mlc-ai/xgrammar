@@ -366,6 +366,53 @@ def test_empty_alternative():
     assert not _is_grammar_accept_string(grammar_str, "abd")
 
 
+def test_empty_alternative_positions():
+    # Leading empty alternative must not produce a bare leading '|'.
+    regex = "|a"
+    grammar_str = _regex_to_ebnf(regex)
+    assert grammar_str == 'root ::= "" | "a"\n'
+    assert _is_grammar_accept_string(grammar_str, "")
+    assert _is_grammar_accept_string(grammar_str, "a")
+    assert not _is_grammar_accept_string(grammar_str, "b")
+
+    # Trailing empty alternative must not produce a bare trailing '|'.
+    regex = "a|"
+    grammar_str = _regex_to_ebnf(regex)
+    assert grammar_str == 'root ::= "a" | ""\n'
+    assert _is_grammar_accept_string(grammar_str, "a")
+    assert _is_grammar_accept_string(grammar_str, "")
+
+    # Consecutive '|' (empty middle alternative).
+    regex = "a||b"
+    grammar_str = _regex_to_ebnf(regex)
+    assert grammar_str == 'root ::= "a" | "" | "b"\n'
+    assert _is_grammar_accept_string(grammar_str, "a")
+    assert _is_grammar_accept_string(grammar_str, "b")
+    assert _is_grammar_accept_string(grammar_str, "")
+
+    # Empty first alternative inside a group.
+    regex = "(|a)"
+    grammar_str = _regex_to_ebnf(regex)
+    assert grammar_str == 'root ::= ( "" | "a" )\n'
+    assert _is_grammar_accept_string(grammar_str, "")
+    assert _is_grammar_accept_string(grammar_str, "a")
+
+    # An all-anchor alternative collapses to empty; the dropped anchors must not leave a bare '|'.
+    # This is the deepseek_xml tool-calling crash from the bug report ("^$|^https://...").
+    regex = r"^$|^https://x\.com/"
+    grammar_str = _regex_to_ebnf(regex)
+    assert grammar_str.startswith('root ::= "" |')
+    assert _is_grammar_accept_string(grammar_str, "")
+    assert _is_grammar_accept_string(grammar_str, "https://x.com/")
+
+    # An empty alternative produced by an anchor right before ')'.
+    regex = r"(a|$)"
+    grammar_str = _regex_to_ebnf(regex)
+    assert grammar_str == 'root ::= ( "a" | "" )\n'
+    assert _is_grammar_accept_string(grammar_str, "a")
+    assert _is_grammar_accept_string(grammar_str, "")
+
+
 def test_non_greedy_quantifier():
     regex = "a{1,3}?"
     grammar_str = _regex_to_ebnf(regex)
