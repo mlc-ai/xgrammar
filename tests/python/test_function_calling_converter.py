@@ -935,6 +935,46 @@ root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "f
     _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
 
 
+deepseek_pattern_empty_leading_alternative_input_str_accepted = (
+    ('<｜DSML｜parameter name="url" string="true">https://x.com/</｜DSML｜parameter>', True),
+    # The "^$" branch allows an empty value.
+    ('<｜DSML｜parameter name="url" string="true"></｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="url" string="true">http://x.com/</｜DSML｜parameter>', False),
+)
+
+
+@pytest.mark.parametrize(
+    "input_str, accepted", deepseek_pattern_empty_leading_alternative_input_str_accepted
+)
+def test_deepseek_pattern_empty_leading_alternative(input_str: str, accepted: bool):
+    # Regression: a pattern whose first alternative is empty ("^$|...") used to emit a bare
+    # leading '|' (root_prop_0 ::= | ...) and crash the grammar parser on the deepseek_xml path.
+    # It must now be emitted as root_prop_0 ::= "" | ...
+    expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
+basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= ["] basic_string_sub
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
+xml_any ::= xml_string | basic_array | basic_object
+xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
+root_prop_0 ::= "" | "h" "t" "t" "p" "s" ":" "/" "/" "x" "." "c" "o" "m" "/"
+root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"url\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_0 [ \n\t]* "</｜DSML｜parameter>" "")) [ \n\t]*
+"""
+    schema = {
+        "type": "object",
+        "properties": {"url": {"type": "string", "pattern": "^$|^https://x\\.com/"}},
+        "required": ["url"],
+    }
+    _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
+
+
 deepseek_test_additional_properties_schema_input_str_accepted = (
     (
         '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="false">\t100\n</｜DSML｜parameter><｜DSML｜parameter name="location" string="true">New York</｜DSML｜parameter>',
