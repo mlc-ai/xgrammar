@@ -789,6 +789,67 @@ def test_anyof_oneof():
     check_schema_with_instance(schema, schema_rejected, is_accepted=False, any_whitespace=False)
 
 
+def test_oneof_unsupported_overlap_fails_closed():
+    def assert_oneof_unsupported(schema: Dict[str, Any]):
+        with pytest.raises(Exception) as e:
+            xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+        assert "oneOf with overlapping or non-provably-disjoint branches is not supported" in str(
+            e.value
+        )
+
+    assert_oneof_unsupported({"oneOf": [{"type": "integer"}, {"type": "number"}]})
+    assert_oneof_unsupported({"oneOf": [{"type": ["integer", "string"]}, {"type": "number"}]})
+    assert_oneof_unsupported({"oneOf": [{"type": "integer"}, {}]})
+    assert_oneof_unsupported({"oneOf": [{"const": 1}, {"const": 1.0}]})
+    assert_oneof_unsupported({"oneOf": [{"enum": [1, "hello", 2]}, {"type": "integer"}]})
+    assert_oneof_unsupported(
+        {
+            "oneOf": [
+                {"type": "object"},
+                {
+                    "type": "object",
+                    "required": ["kind"],
+                    "properties": {"kind": {"const": "special"}},
+                },
+            ]
+        }
+    )
+    assert_oneof_unsupported(
+        {"oneOf": [{"type": "integer"}, {"anyOf": [{"type": "number"}, {"type": "string"}]}]}
+    )
+    assert_oneof_unsupported(
+        {"oneOf": [{"type": "integer"}, {"$ref": "#/$defs/x"}], "$defs": {"x": {"type": "integer"}}}
+    )
+
+
+def test_oneof_disjoint_cases():
+    schema = {"oneOf": [{"type": "string"}, {"type": "integer"}]}
+    check_schema_with_instance(schema, '"x"', any_whitespace=False)
+    check_schema_with_instance(schema, 1, any_whitespace=False)
+    check_schema_with_instance(schema, 1.5, is_accepted=False, any_whitespace=False)
+
+    schema = {"oneOf": [{"const": "cat"}, {"const": "dog"}]}
+    check_schema_with_instance(schema, '"cat"', any_whitespace=False)
+    check_schema_with_instance(schema, '"dog"', any_whitespace=False)
+    check_schema_with_instance(schema, '"fish"', is_accepted=False, any_whitespace=False)
+
+    schema = {
+        "oneOf": [
+            {"type": "object", "required": ["kind"], "properties": {"kind": {"const": "cat"}}},
+            {"type": "object", "required": ["kind"], "properties": {"kind": {"const": "dog"}}},
+        ]
+    }
+    check_schema_with_instance(schema, '{"kind": "cat"}', any_whitespace=False)
+    check_schema_with_instance(schema, '{"kind": "dog"}', any_whitespace=False)
+    check_schema_with_instance(schema, '{"kind": "fish"}', is_accepted=False, any_whitespace=False)
+
+
+def test_anyof_integer_number_unchanged():
+    schema = {"anyOf": [{"type": "integer"}, {"type": "number"}]}
+    check_schema_with_instance(schema, 1, any_whitespace=False)
+    check_schema_with_instance(schema, 1.5, any_whitespace=False)
+
+
 def test_alias():
     class MainModel(BaseModel):
         test: str = Field(..., alias="name")
