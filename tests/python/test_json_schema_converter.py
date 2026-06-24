@@ -790,17 +790,23 @@ def test_anyof_oneof():
 
 
 def test_oneof_unsupported_overlap_fails_closed():
-    def assert_oneof_unsupported(schema: Dict[str, Any]):
+    def assert_oneof_unsupported(schema: Union[Dict[str, Any], str]):
         with pytest.raises(Exception) as e:
             xgr.Grammar.from_json_schema(schema, any_whitespace=False)
         assert "oneOf with overlapping or non-provably-disjoint branches is not supported" in str(
             e.value
         )
 
+    assert_oneof_unsupported({"oneOf": []})
     assert_oneof_unsupported({"oneOf": [{"type": "integer"}, {"type": "number"}]})
     assert_oneof_unsupported({"oneOf": [{"type": ["integer", "string"]}, {"type": "number"}]})
     assert_oneof_unsupported({"oneOf": [{"type": "integer"}, {}]})
     assert_oneof_unsupported({"oneOf": [{"const": 1}, {"const": 1.0}]})
+    assert_oneof_unsupported('{"oneOf":[{"const":9007199254740993},{"const":9007199254740993.0}]}')
+    assert_oneof_unsupported('{"oneOf":[{"const":1.5},{"const":2.5}]}')
+    assert_oneof_unsupported(
+        '{"oneOf":[{"enum":[9007199254740993]},{"enum":[9007199254740993.0]}]}'
+    )
     assert_oneof_unsupported({"oneOf": [{"enum": [1, "hello", 2]}, {"type": "integer"}]})
     assert_oneof_unsupported(
         {
@@ -832,6 +838,12 @@ def test_oneof_disjoint_cases():
     check_schema_with_instance(schema, '"cat"', any_whitespace=False)
     check_schema_with_instance(schema, '"dog"', any_whitespace=False)
     check_schema_with_instance(schema, '"fish"', is_accepted=False, any_whitespace=False)
+
+    schema = '{"oneOf":[{"const":9007199254740992},{"const":9007199254740993}]}'
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    assert _is_grammar_accept_string(grammar, "9007199254740992")
+    assert _is_grammar_accept_string(grammar, "9007199254740993")
+    assert not _is_grammar_accept_string(grammar, "9007199254740994")
 
     schema = {
         "oneOf": [
