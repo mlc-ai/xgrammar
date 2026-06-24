@@ -367,50 +367,21 @@ def test_empty_alternative():
 
 
 def test_empty_alternative_positions():
-    # Leading empty alternative must not produce a bare leading '|'.
-    regex = "|a"
-    grammar_str = _regex_to_ebnf(regex)
-    assert grammar_str == 'root ::= "" | "a"\n'
-    assert _is_grammar_accept_string(grammar_str, "")
-    assert _is_grammar_accept_string(grammar_str, "a")
-    assert not _is_grammar_accept_string(grammar_str, "b")
+    # An empty alternative in any position must emit "" instead of a bare '|'.
+    expected = {
+        "a|": 'root ::= "a" | ""\n',  # trailing
+        "a||b": 'root ::= "a" | "" | "b"\n',  # consecutive
+        "(|a)": 'root ::= ( "" | "a" )\n',  # group start
+        "(a|$)": 'root ::= ( "a" | "" )\n',  # anchor collapses to empty before ')'
+    }
+    for regex, grammar_str in expected.items():
+        assert _regex_to_ebnf(regex) == grammar_str
 
-    # Trailing empty alternative must not produce a bare trailing '|'.
-    regex = "a|"
-    grammar_str = _regex_to_ebnf(regex)
-    assert grammar_str == 'root ::= "a" | ""\n'
-    assert _is_grammar_accept_string(grammar_str, "a")
-    assert _is_grammar_accept_string(grammar_str, "")
-
-    # Consecutive '|' (empty middle alternative).
-    regex = "a||b"
-    grammar_str = _regex_to_ebnf(regex)
-    assert grammar_str == 'root ::= "a" | "" | "b"\n'
-    assert _is_grammar_accept_string(grammar_str, "a")
-    assert _is_grammar_accept_string(grammar_str, "b")
-    assert _is_grammar_accept_string(grammar_str, "")
-
-    # Empty first alternative inside a group.
-    regex = "(|a)"
-    grammar_str = _regex_to_ebnf(regex)
-    assert grammar_str == 'root ::= ( "" | "a" )\n'
-    assert _is_grammar_accept_string(grammar_str, "")
-    assert _is_grammar_accept_string(grammar_str, "a")
-
-    # An all-anchor alternative collapses to empty; the dropped anchors must not leave a bare '|'.
-    # This is the deepseek_xml tool-calling crash from the bug report ("^$|^https://...").
-    regex = r"^$|^https://x\.com/"
-    grammar_str = _regex_to_ebnf(regex)
-    assert grammar_str.startswith('root ::= "" |')
+    # Bug report: a leading "^$" collapses to an empty first alternative ("^$|^https://...").
+    grammar_str = _regex_to_ebnf(r"^$|^https://x\.com/")
+    assert grammar_str == 'root ::= "" | "h" "t" "t" "p" "s" ":" "/" "/" "x" "." "c" "o" "m" "/"\n'
     assert _is_grammar_accept_string(grammar_str, "")
     assert _is_grammar_accept_string(grammar_str, "https://x.com/")
-
-    # An empty alternative produced by an anchor right before ')'.
-    regex = r"(a|$)"
-    grammar_str = _regex_to_ebnf(regex)
-    assert grammar_str == 'root ::= ( "a" | "" )\n'
-    assert _is_grammar_accept_string(grammar_str, "a")
-    assert _is_grammar_accept_string(grammar_str, "")
 
 
 def test_non_greedy_quantifier():

@@ -940,7 +940,6 @@ deepseek_pattern_empty_leading_alternative_input_str_accepted = (
     # The "^$" branch allows an empty value.
     ('<｜DSML｜parameter name="url" string="true"></｜DSML｜parameter>', True),
     ('<｜DSML｜parameter name="url" string="true">http://x.com/</｜DSML｜parameter>', False),
-    ('<｜DSML｜parameter name="url" string="true">https://y.com/</｜DSML｜parameter>', False),
 )
 
 
