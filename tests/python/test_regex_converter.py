@@ -366,6 +366,24 @@ def test_empty_alternative():
     assert not _is_grammar_accept_string(grammar_str, "abd")
 
 
+def test_empty_alternative_positions():
+    # An empty alternative in any position must emit "" instead of a bare '|'.
+    expected = {
+        "a|": 'root ::= "a" | ""\n',  # trailing
+        "a||b": 'root ::= "a" | "" | "b"\n',  # consecutive
+        "(|a)": 'root ::= ( "" | "a" )\n',  # group start
+        "(a|$)": 'root ::= ( "a" | "" )\n',  # anchor collapses to empty before ')'
+    }
+    for regex, grammar_str in expected.items():
+        assert _regex_to_ebnf(regex) == grammar_str
+
+    # Bug report: a leading "^$" collapses to an empty first alternative ("^$|^https://...").
+    grammar_str = _regex_to_ebnf(r"^$|^https://x\.com/")
+    assert grammar_str == 'root ::= "" | "h" "t" "t" "p" "s" ":" "/" "/" "x" "." "c" "o" "m" "/"\n'
+    assert _is_grammar_accept_string(grammar_str, "")
+    assert _is_grammar_accept_string(grammar_str, "https://x.com/")
+
+
 def test_non_greedy_quantifier():
     regex = "a{1,3}?"
     grammar_str = _regex_to_ebnf(regex)
