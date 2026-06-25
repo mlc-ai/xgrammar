@@ -266,6 +266,11 @@ class GrammarBuilder {
   std::string GetNewRuleName(const std::string& name_hint);
 
   /*!
+   * \brief Mark the given name as used for GrammarBuilder::GetNewRuleName.
+   */
+  void ReserveRuleName(const std::string& name);
+
+  /*!
    * \brief Get the rule id of the rule with the given name. Return -1 if not found.
    */
   int32_t GetRuleId(const std::string& name) const;
