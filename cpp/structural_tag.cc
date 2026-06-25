@@ -126,6 +126,12 @@ picojson::value AnyTextFormat::ToJSON() const {
   return picojson::value(std::move(obj));
 }
 
+// These two constructors are defined here rather than inline because instantiating
+// vector<Format> against the still-incomplete Format variant is ill-formed under C++20.
+SequenceFormat::SequenceFormat(std::vector<Format> elements) : elements(std::move(elements)) {}
+
+OrFormat::OrFormat(std::vector<Format> elements) : elements(std::move(elements)) {}
+
 picojson::value SequenceFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
