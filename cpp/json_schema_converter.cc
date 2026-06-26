@@ -2726,7 +2726,7 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
 
       if (len == 1) {
         parts.push_back(MakePatternForDigitRange(start_str[0], '9', 0));
-        parts.push_back("[1-9]\\d*");
+        parts.push_back("[1-9]\\d+");
       } else {
         parts.push_back(start_str);
 
@@ -2766,7 +2766,7 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
 
       if (len == 1) {
         parts.push_back("-" + MakePatternForDigitRange(end_str[0], '9', 0));
-        parts.push_back("-[1-9]\\d*");
+        parts.push_back("-[1-9]\\d+");
       } else {
         parts.push_back(std::to_string(end.value()));
 
@@ -2945,6 +2945,10 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
           }
         }
       }
+    } else if (isStartNegative) {
+      parts.push_back(std::to_string(startInt) + "\\.0{1," + std::to_string(precision) + "}");
+    } else {
+      parts.push_back(std::to_string(startInt) + "\\.\\d{1," + std::to_string(precision) + "}");
     }
 
     if (startInt < INT64_MAX - 1) {
@@ -3000,12 +3004,20 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
           }
         }
       }
+    } else if (!isEndNegative) {
+      parts.push_back(std::to_string(endInt) + "\\.0{1," + std::to_string(precision) + "}");
+    } else {
+      parts.push_back(std::to_string(endInt) + "\\.\\d{1," + std::to_string(precision) + "}");
     }
 
-    if (endInt > INT64_MIN + 1) {
-      std::string intRangeRegex = GenerateRangeRegex(std::nullopt, endInt - 1);
+    int64_t intRangeEnd = endFrac > 0.0 && endInt < 0 ? endInt : endInt - 1;
+    if (intRangeEnd > INT64_MIN) {
+      std::string intRangeRegex = GenerateRangeRegex(std::nullopt, intRangeEnd);
       intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
       parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
+    }
+    if (endFrac > 0.0 && endInt >= 0) {
+      parts.push_back(std::to_string(endInt));
     }
   } else if (start && end) {
     if (startInt == endInt) {
@@ -3019,6 +3031,9 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
         if (startStr != endStr) {
           parts.push_back(EscapeDotForRegex(endStr));
         }
+        if (start.value() <= 0.0 && end.value() >= 0.0) {
+          parts.push_back("0\\.0{1," + std::to_string(precision) + "}");
+        }
       }
     } else {
       std::string startStr = FormatFloat(start.value(), precision);
@@ -3029,10 +3044,21 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
         parts.push_back(EscapeDotForRegex(endStr));
       }
 
-      if (endInt > startInt + 1) {
-        std::string intRangeRegex = GenerateRangeRegex(startInt + 1, endInt - 1);
+      int64_t intRangeEnd = endFrac > 0.0 && endInt < 0 ? endInt : endInt - 1;
+      if (intRangeEnd > startInt) {
+        std::string intRangeRegex = GenerateRangeRegex(startInt + 1, intRangeEnd);
         intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
         parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
+      }
+      if ((startInt + 1 > 0 || intRangeEnd < 0) && start.value() <= 0.0 && end.value() >= 0.0) {
+        parts.push_back("0\\.0{1," + std::to_string(precision) + "}");
+      }
+      if (endFrac > 0.0 && endInt >= 0 && static_cast<double>(endInt) >= start.value()) {
+        parts.push_back(std::to_string(endInt));
+      }
+
+      if (start.value() <= -1.0 && end.value() > 0.0) {
+        parts.push_back("-0\\.\\d{1," + std::to_string(precision) + "}");
       }
 
       if (startFrac > 0.0) {
@@ -3078,6 +3104,8 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
             }
           }
         }
+      } else if (isStartNegative) {
+        parts.push_back(std::to_string(startInt) + "\\.0{1," + std::to_string(precision) + "}");
       } else {
         parts.push_back(std::to_string(startInt) + "\\.\\d{1," + std::to_string(precision) + "}");
       }
@@ -3124,10 +3152,17 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
             }
           }
         }
-      } else {
+      } else if (isEndNegative) {
         parts.push_back(std::to_string(endInt) + "\\.\\d{1," + std::to_string(precision) + "}");
+      } else {
+        parts.push_back(std::to_string(endInt) + "\\.0{1," + std::to_string(precision) + "}");
       }
     }
+  }
+
+  if (start && startInt == -1 && startFrac > 0.0) {
+    const std::string negative_zero_wildcard = "-0\\.\\d{1," + std::to_string(precision) + "}";
+    parts.erase(std::remove(parts.begin(), parts.end(), negative_zero_wildcard), parts.end());
   }
 
   std::ostringstream result;
