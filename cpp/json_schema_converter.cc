@@ -2855,7 +2855,9 @@ std::string NumberGenerator::AdjustGrid(const std::string& s, int precision, boo
   std::string int_part, frac_part;
   SplitDecimal(s, &int_part, &frac_part);
   // Build the scaled-integer numerator (value * 10^precision) as a digit string.
-  frac_part.append(precision - static_cast<int>(frac_part.size()), '0');
+  // Callers only pass FormatFloat output (<= precision fraction digits); guard
+  // the count so a longer string can never wrap the unsigned append count.
+  frac_part.append(std::max(0, precision - static_cast<int>(frac_part.size())), '0');
   std::string num = int_part + frac_part;
 
   if (inc) {
