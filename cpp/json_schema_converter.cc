@@ -2562,6 +2562,16 @@ class NumberGenerator {
 
   // --- Float range ---
   static std::string FormatFloat(double value, int precision);
+  // Snaps a non-negative bound to the precision grid in the direction that keeps
+  // the range sound: a lower bound rounds up, an upper bound rounds down, so no
+  // out-of-range value is ever admitted. Returns the canonical grid string and,
+  // via strict_out, whether the boundary value must still be excluded.
+  static std::string RoundBoundToGrid(
+      double value, int precision, bool is_lower, bool strict_in, bool* strict_out
+  );
+  // Adds (inc) or subtracts (!inc) one grid step (10^-precision) to a canonical
+  // non-negative decimal string, returning the canonical result.
+  static std::string AdjustGrid(const std::string& s, int precision, bool inc);
   static void SplitDecimal(const std::string& s, std::string* int_part, std::string* frac_part);
   static int CompareDecimal(
       const std::string& int_a,
@@ -2841,6 +2851,74 @@ std::string NumberGenerator::FormatFloat(double value, int precision) {
   return result;
 }
 
+std::string NumberGenerator::AdjustGrid(const std::string& s, int precision, bool inc) {
+  std::string int_part, frac_part;
+  SplitDecimal(s, &int_part, &frac_part);
+  // Build the scaled-integer numerator (value * 10^precision) as a digit string.
+  frac_part.append(precision - static_cast<int>(frac_part.size()), '0');
+  std::string num = int_part + frac_part;
+
+  if (inc) {
+    int i = static_cast<int>(num.size()) - 1;
+    for (; i >= 0 && num[i] == '9'; --i) {
+      num[i] = '0';
+    }
+    if (i < 0) {
+      num.insert(num.begin(), '1');
+    } else {
+      num[i]++;
+    }
+  } else {
+    int i = static_cast<int>(num.size()) - 1;
+    for (; i >= 0 && num[i] == '0'; --i) {
+      num[i] = '9';
+    }
+    if (i < 0) {
+      // Underflow below zero; clamp to zero (does not occur for the bounds the
+      // float pipeline feeds in, which are all >= one grid step when decremented).
+      num.assign(num.size(), '0');
+    } else {
+      num[i]--;
+    }
+  }
+
+  // Re-split into integer and `precision`-digit fraction, then canonicalize.
+  while (static_cast<int>(num.size()) <= precision) {
+    num.insert(num.begin(), '0');
+  }
+  std::string new_int = num.substr(0, num.size() - precision);
+  std::string new_frac = num.substr(num.size() - precision);
+  size_t nz = new_int.find_first_not_of('0');
+  new_int = (nz == std::string::npos) ? "0" : new_int.substr(nz);
+  size_t lnz = new_frac.find_last_not_of('0');
+  new_frac = (lnz == std::string::npos) ? "" : new_frac.substr(0, lnz + 1);
+  return new_frac.empty() ? new_int : new_int + "." + new_frac;
+}
+
+std::string NumberGenerator::RoundBoundToGrid(
+    double value, int precision, bool is_lower, bool strict_in, bool* strict_out
+) {
+  // FormatFloat rounds to the nearest grid point; if that lands exactly on the
+  // bound, keep the original strictness. Otherwise step to the grid point just
+  // inside the range so no out-of-range value is admitted, and the boundary is
+  // now strictly interior, so it becomes inclusive.
+  std::string r = FormatFloat(value, precision);
+  double rv = std::stod(r);
+  if (rv == value) {
+    *strict_out = strict_in;
+    return r;
+  }
+  *strict_out = false;
+  if (is_lower && rv < value) {
+    // Rounded below a lower bound: move up to the smallest grid point >= value.
+    r = AdjustGrid(r, precision, /*inc=*/true);
+  } else if (!is_lower && rv > value) {
+    // Rounded above an upper bound: move down to the largest grid point <= value.
+    r = AdjustGrid(r, precision, /*inc=*/false);
+  }
+  return r;
+}
+
 // Helpers for GenerateFloatRangeRegex. Fraction patterns operate on the
 // digit string after the decimal point, compared against a canonical bound
 // fraction (canonical: produced by FormatFloat, so no trailing zeros).
@@ -3046,10 +3124,13 @@ std::string NumberGenerator::StripAnchors(const std::string& regex) {
 }
 
 int64_t NumberGenerator::ParseIntCapped(const std::string& digits) {
-  // Bounds beyond 18 digits exceed double's integer precision anyway; cap to
-  // keep the int64 arithmetic below safe.
-  if (digits.size() > 18) {
-    return 999999999999999999LL;
+  // `digits` is a canonical non-negative integer string (no leading zeros).
+  // Parse it exactly when it fits in int64; clamp to INT64_MAX otherwise (such
+  // magnitudes are beyond practical float bounds and double integer precision).
+  static const std::string kMaxInt64 = std::to_string(std::numeric_limits<int64_t>::max());
+  if (digits.size() > kMaxInt64.size() ||
+      (digits.size() == kMaxInt64.size() && digits > kMaxInt64)) {
+    return std::numeric_limits<int64_t>::max();
   }
   return std::stoll(digits);
 }
@@ -3086,7 +3167,9 @@ std::vector<std::string> NumberGenerator::PositiveRangeParts(
 
   if (!high.has_value()) {
     add_with_int_part(int_low, FracGreaterPatterns(frac_low, strict_low, precision));
-    if (int_low_value < INT64_MAX - 1) {
+    // Guard the +1 against int64 overflow (int_low_value may be clamped to
+    // INT64_MAX for very large bounds).
+    if (int_low_value < std::numeric_limits<int64_t>::max()) {
       parts.push_back(
           StripAnchors(IntegerRangeRegex(int_low_value + 1, std::nullopt)) + opt_any_frac
       );
@@ -3151,18 +3234,20 @@ std::string NumberGenerator::FloatRangeRegex(
   // Negative values: x is in [start, end] iff -x is in [-end, -start], so the
   // positive-range patterns are reused on the negated bounds and prefixed
   // with '-'.
-  if (!start.has_value() || start.value() < 0) {
+  bool negatives_in_range = !start.has_value() || start.value() < 0;
+  if (negatives_in_range) {
     std::string low = "0";
     bool strict_low = true;
     if (end.has_value() && end.value() < 0) {
-      low = FormatFloat(-end.value(), precision);
-      strict_low = exclusive_end;
+      low =
+          RoundBoundToGrid(-end.value(), precision, /*is_lower=*/true, exclusive_end, &strict_low);
     }
     std::optional<std::string> high;
     bool strict_high = false;
     if (start.has_value()) {
-      high = FormatFloat(-start.value(), precision);
-      strict_high = exclusive_start;
+      high = RoundBoundToGrid(
+          -start.value(), precision, /*is_lower=*/false, exclusive_start, &strict_high
+      );
     }
     for (auto& part : PositiveRangeParts(low, strict_low, high, strict_high, precision)) {
       parts.push_back("-" + std::move(part));
@@ -3174,6 +3259,12 @@ std::string NumberGenerator::FloatRangeRegex(
       (!end.has_value() || end.value() > 0 || (end.value() == 0 && !exclusive_end));
   if (zero_allowed) {
     parts.push_back("0(\\." + SomeZeros(precision) + ")?");
+    // Negative zero written with an all-zero fraction ("-0.0".."-0.000000") also
+    // denotes 0. PositiveRangeParts never emits magnitude 0, so add these forms
+    // explicitly when the range covers the negative side.
+    if (negatives_in_range) {
+      parts.push_back("-0(\\." + SomeZeros(precision) + ")");
+    }
   }
 
   // Positive values
@@ -3181,14 +3272,15 @@ std::string NumberGenerator::FloatRangeRegex(
     std::string low = "0";
     bool strict_low = true;
     if (start.has_value() && start.value() > 0) {
-      low = FormatFloat(start.value(), precision);
-      strict_low = exclusive_start;
+      low = RoundBoundToGrid(
+          start.value(), precision, /*is_lower=*/true, exclusive_start, &strict_low
+      );
     }
     std::optional<std::string> high;
     bool strict_high = false;
     if (end.has_value()) {
-      high = FormatFloat(end.value(), precision);
-      strict_high = exclusive_end;
+      high =
+          RoundBoundToGrid(end.value(), precision, /*is_lower=*/false, exclusive_end, &strict_high);
     }
     for (auto& part : PositiveRangeParts(low, strict_low, high, strict_high, precision)) {
       parts.push_back(std::move(part));

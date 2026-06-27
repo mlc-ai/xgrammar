@@ -2277,7 +2277,7 @@ def test_generate_float_regex():
 
     assert (
         _generate_float_regex(-3.14, 2.71828)
-        == r"^(-0\.[1-9]\d{0,5}|-0\.0[1-9]\d{0,4}|-0\.00[1-9]\d{0,3}|-0\.000[1-9]\d{0,2}|-0\.0000[1-9]\d{0,1}|-0\.00000[1-9]|-(([1-2]))(\.\d{1,6})?|-3\.0\d{0,5}|-3\.1[0-3]\d{0,4}|-3\.0{1,6}|-3\.10{0,5}|-3\.140{0,4}|-3|0(\.0{1,6})?|0\.[1-9]\d{0,5}|0\.0[1-9]\d{0,4}|0\.00[1-9]\d{0,3}|0\.000[1-9]\d{0,2}|0\.0000[1-9]\d{0,1}|0\.00000[1-9]|((1))(\.\d{1,6})?|2\.[0-6]\d{0,5}|2\.70\d{0,4}|2\.71[0-7]\d{0,3}|2\.718[0-1]\d{0,2}|2\.7182[0-7]\d{0,1}|2\.0{1,6}|2\.70{0,5}|2\.710{0,4}|2\.7180{0,3}|2\.71820{0,2}|2\.718280{0,1}|2)$"
+        == r"^(-0\.[1-9]\d{0,5}|-0\.0[1-9]\d{0,4}|-0\.00[1-9]\d{0,3}|-0\.000[1-9]\d{0,2}|-0\.0000[1-9]\d{0,1}|-0\.00000[1-9]|-(([1-2]))(\.\d{1,6})?|-3\.0\d{0,5}|-3\.1[0-3]\d{0,4}|-3\.0{1,6}|-3\.10{0,5}|-3\.140{0,4}|-3|0(\.0{1,6})?|-0(\.0{1,6})|0\.[1-9]\d{0,5}|0\.0[1-9]\d{0,4}|0\.00[1-9]\d{0,3}|0\.000[1-9]\d{0,2}|0\.0000[1-9]\d{0,1}|0\.00000[1-9]|((1))(\.\d{1,6})?|2\.[0-6]\d{0,5}|2\.70\d{0,4}|2\.71[0-7]\d{0,3}|2\.718[0-1]\d{0,2}|2\.7182[0-7]\d{0,1}|2\.0{1,6}|2\.70{0,5}|2\.710{0,4}|2\.7180{0,3}|2\.71820{0,2}|2\.718280{0,1}|2)$"
     )
 
     assert (
@@ -2298,7 +2298,10 @@ def test_generate_float_regex():
 
     assert _generate_float_regex(5.123456, 5.123457) == r"^(5\.123456|5\.123457)$"
 
-    assert _generate_float_regex(-0.000001, 0.000001) == r"^(-0\.000001|0(\.0{1,6})?|0\.000001)$"
+    assert (
+        _generate_float_regex(-0.000001, 0.000001)
+        == r"^(-0\.000001|0(\.0{1,6})?|-0(\.0{1,6})|0\.000001)$"
+    )
 
     # exclusive bounds drop the boundary value itself
     assert (
@@ -2314,6 +2317,9 @@ def test_generate_float_regex():
 def test_generate_float_regex_cross_zero_accepts_negative_zero_decimal():
     regex = re.compile(_generate_float_regex(-4.0, 4.0))
     for value in ("-0.1", "-0.5", "-0.999999"):
+        assert regex.fullmatch(value) is not None
+    # negative zero written with an all-zero fraction denotes 0, which is in range
+    for value in ("-0.0", "-0.000000"):
         assert regex.fullmatch(value) is not None
     assert regex.fullmatch("-0") is None
     assert regex.fullmatch("-4.1") is None
@@ -2438,6 +2444,24 @@ number_range_instances = [
     # negative exclusive
     ({"type": "number", "exclusiveMinimum": -5.5}, "-5.5", False),
     ({"type": "number", "exclusiveMinimum": -5.5}, "-5.499999", True),
+    # bounds with more fraction digits than the 6-digit precision must round
+    # toward the feasible region (upper rounds down, lower rounds up) so no
+    # out-of-range value leaks in
+    ({"type": "number", "maximum": 0.9999999}, "1", False),
+    ({"type": "number", "maximum": 0.9999999}, "0.999999", True),
+    ({"type": "number", "maximum": 4.9999996}, "5", False),
+    ({"type": "number", "maximum": 0.0000006}, "0.000001", False),
+    ({"type": "number", "maximum": 0.0000006}, "0", True),
+    ({"type": "number", "minimum": 1.0000004}, "1", False),
+    ({"type": "number", "minimum": 1.0000004}, "1.000001", True),
+    ({"type": "number", "minimum": 5, "exclusiveMaximum": 5.0000001}, "5", True),
+    # both bounds collapse onto the same grid point but the value is in range
+    ({"type": "number", "minimum": 1, "exclusiveMaximum": 1.0000004}, "1", True),
+    ({"type": "number", "exclusiveMinimum": 0.9999999, "maximum": 1}, "1", True),
+    # large-magnitude bounds (>= 1e18) must not be clamped to ~1e18
+    ({"type": "number", "minimum": 5e18}, "1000000000000000000", False),
+    ({"type": "number", "minimum": 5e18}, "6000000000000000000", True),
+    ({"type": "number", "maximum": 1e19}, "5000000000000000000", True),
 ]
 
 
