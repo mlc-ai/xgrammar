@@ -119,7 +119,11 @@ struct RegexFormat {
 struct AnyTextFormat {
   static constexpr const char* type = "any_text";
   std::vector<std::string> excludes;
-  AnyTextFormat(std::vector<std::string> excluded_strs) : excludes(std::move(excluded_strs)) {}
+  // Max number of whole tokens this region may consume; -1 = unbounded. Enforced atomically at
+  // token granularity by the matcher (the region is forced to end once the budget is reached).
+  int32_t max_tokens = -1;
+  AnyTextFormat(std::vector<std::string> excluded_strs, int32_t max_tokens = -1)
+      : excludes(std::move(excluded_strs)), max_tokens(max_tokens) {}
   picojson::value ToJSON() const;
 
  private:

@@ -128,6 +128,9 @@ picojson::value AnyTextFormat::ToJSON() const {
   obj["type"] = picojson::value(type);
   obj["excludes"] = StringVectorToJSONArray(excludes);
   obj["detected_end_strs"] = StringVectorToJSONArray(detected_end_strs_);
+  if (max_tokens != -1) {
+    obj["max_tokens"] = picojson::value(static_cast<double>(max_tokens));
+  }
   return picojson::value(std::move(obj));
 }
 
@@ -576,14 +579,40 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
   );
 }
 
+// Reads an optional non-negative integer "max_tokens" field. Returns -1 if absent or null
+// (unbounded). A present-but-invalid value is an error rather than silently unbounded.
+static Result<int32_t, ISTError> ParseAnyTextMaxTokens(const picojson::object& obj) {
+  auto it = obj.find("max_tokens");
+  if (it == obj.end() || it->second.is<picojson::null>()) {
+    return ResultOk<int32_t>(-1);
+  }
+  if (!it->second.is<double>()) {
+    return ResultErr<ISTError>("max_tokens in any_text must be a non-negative integer or null.");
+  }
+  double raw = it->second.get<double>();
+  if (raw < 0 || raw > static_cast<double>(std::numeric_limits<int>::max()) ||
+      raw != std::floor(raw)) {
+    return ResultErr<ISTError>(
+        "max_tokens in any_text must be a non-negative integer in [0, INT_MAX]."
+    );
+  }
+  return ResultOk<int32_t>(static_cast<int32_t>(raw));
+}
+
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
 ) {
+  auto mt = ParseAnyTextMaxTokens(obj);
+  if (mt.IsErr()) {
+    return ResultErr<ISTError>(std::move(mt).UnwrapErr());
+  }
+  int32_t max_tokens = std::move(mt).Unwrap();
+
   auto excluded_strs_it = obj.find("excludes");
   if (excluded_strs_it == obj.end()) {
     if ((obj.find("type") == obj.end())) {
       return ResultErr<ISTError>("Any text format should not have any fields other than type");
     }
-    return ResultOk<AnyTextFormat>(std::vector<std::string>{});
+    return ResultOk<AnyTextFormat>(std::vector<std::string>{}, max_tokens);
   }
   if (!excluded_strs_it->second.is<picojson::array>()) {
     return ResultErr<ISTError>("AnyText format's excluded_strs field must be an array");
@@ -597,7 +626,7 @@ Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const pi
     }
     excluded_strs.push_back(excluded_str.get<std::string>());
   }
-  return ResultOk<AnyTextFormat>(std::move(excluded_strs));
+  return ResultOk<AnyTextFormat>(std::move(excluded_strs), max_tokens);
 }
 
 Result<GrammarFormat, ISTError> StructuralTagParser::ParseGrammarFormat(const picojson::object& obj
@@ -1911,9 +1940,15 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextForma
       all_excludes.push_back(s);
     }
   }
-  if (!all_excludes.empty()) {
-    auto tag_dispatch_expr =
-        grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{{}, false, all_excludes});
+  if (!all_excludes.empty() || format.max_tokens != -1) {
+    // With excludes, or with a token budget, the region is a TagDispatch (an Aho-Corasick scan).
+    // The token budget is carried on the TagDispatch and enforced by the matcher: once max_tokens
+    // content tokens are consumed the region is forced to complete (its end tag becomes the only
+    // continuation). An empty exclude set is fine (matches any text). This is the path used even
+    // for a budget without excludes, so the single enforcement mechanism covers both.
+    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
+        Grammar::Impl::TagDispatch{{}, false, all_excludes, format.max_tokens}
+    );
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {
     auto any_text_expr = grammar_builder_.AddCharacterClassStar({{0, 0x10FFFF}}, false);

@@ -60,6 +60,13 @@ class AnyTextFormat(BaseModel):
     excludes: List[str] = []
     """List of strings that should not appear in the matched text."""
 
+    max_tokens: Optional[int] = Field(default=None, ge=0)
+    """Maximum number of whole tokens this region may match. If None, unbounded. When set, at most
+    max_tokens tokens are matched and then the region is forced to end (e.g. its end tag becomes
+    the only valid continuation) -- a token budget that composes with multi-token/string
+    ``excludes``. Enforced atomically at token granularity. v1 supports a single bounded any_text
+    region per grammar."""
+
 
 class TokenFormat(BaseModel):
     """A format that matches a single token by ID or string representation."""

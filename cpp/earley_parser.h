@@ -277,6 +277,14 @@ class EarleyParser {
   bool stop_token_is_accepted_ = false;
 
   /*!
+   * \brief When set to a rule id (>=0), a bounded any_text TagDispatch region whose token budget
+   * is exhausted: AdvanceFsm refuses to consume further input bytes for that rule while at an
+   * accepting node, forcing the region to complete (its end tag becomes the only continuation).
+   * -1 = no active budget. Set by the matcher before each Advance-driving step.
+   */
+  int32_t budget_exhausted_rule_id_ = -1;
+
+  /*!
    * \brief Check if the state has been added into the queue.
    * \param state The state to check.
    * \return True if in the vector, false otherwise.
@@ -479,6 +487,12 @@ class EarleyParser {
     }
     return latest_states;
   }
+
+  /*!
+   * \brief Set the bounded any_text rule whose token budget is exhausted (or -1 to clear). When
+   * set, AdvanceFsm stops consuming input for that rule at accepting nodes, forcing completion.
+   */
+  void SetBudgetExhaustedRule(int32_t rule_id) { budget_exhausted_rule_id_ = rule_id; }
 
   /*!
    * \brief Push one state to check if it can accept the token.

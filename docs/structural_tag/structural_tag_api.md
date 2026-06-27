@@ -264,6 +264,7 @@ Matches arbitrary text.
 | Field | Type | Default |
 | --- | --- | --- |
 | `excludes` | `string[]` | `[]` |
+| `max_tokens` | `int \| null` | `null` |
 
 - **Use it when**: the content should remain free-form until some enclosing boundary is reached
 
@@ -276,6 +277,26 @@ Matches arbitrary text.
 
 When `any_text` appears inside a string-level `tag`, the enclosing end string is automatically
 treated as a stop condition.
+
+`max_tokens` (default `null`) caps how many **whole tokens** this region may consume. When set to a
+non-negative integer `N`, at most `N` tokens are matched and then the region is forced to end —
+i.e. its enclosing end tag (the next element after the region) becomes the only valid
+continuation, **not** the EOS/stop token. Because the limit is enforced at the token level by the
+matcher, it composes with **multi-token / multi-character `excludes`** (e.g. a `</think>` end
+marker that spans several tokens), which a token-level `any_tokens` budget cannot express. This
+gives, for example, a token budget on a reasoning/think section:
+
+```json
+{
+    "type": "tag",
+    "begin": "<think>",
+    "content": {"type": "any_text", "excludes": ["</think>"], "max_tokens": 256},
+    "end": "</think>"
+}
+```
+
+The budget is atomic at token granularity (the last admitted token is never split). The current
+implementation supports a single token-bounded `any_text` region per grammar.
 
 ### Composition Formats
 

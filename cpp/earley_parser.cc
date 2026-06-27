@@ -356,6 +356,7 @@ void EarleyParser::Reset() {
   scanable_state_history_.PopBack(scanable_state_history_.size());
   is_completed_.clear();
   stop_token_is_accepted_ = false;
+  budget_exhausted_rule_id_ = -1;
   XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
   PushStateAndExpand(ParserState(
       grammar_->GetRootRuleId(),
@@ -883,6 +884,15 @@ void EarleyParser::AdvanceCharacterClassStar(
 void EarleyParser::AdvanceFsm(const ParserState& state, const uint8_t ch) {
   XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
   const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
+  // Token budget: if this is the bounded any_text region and its budget is exhausted, refuse to
+  // consume any more input bytes while at an accepting node. AdvanceFsm only ever produces
+  // CharRange successors, so returning here drops the loop's continuation; the region has already
+  // reported completable at this accepting node, so the parent's end-tag bytes remain the only
+  // scanable continuation. The IsEndState guard ensures we never strand the FSM mid-tag-prefix.
+  if (budget_exhausted_rule_id_ != -1 && state.rule_id == budget_exhausted_rule_id_ &&
+      current_fsm.GetFsm().IsEndState(state.element_id)) {
+    return;
+  }
   for (const auto& edge : current_fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
     if ((!edge.IsCharRange()) || ch < edge.min || ch > edge.max) {
       continue;

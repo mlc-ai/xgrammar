@@ -197,7 +197,14 @@ class Grammar::Impl {
     bool loop_after_dispatch;
     /*! \brief The strings that are excluded by the tag dispatch. */
     std::vector<std::string> excludes;
-    static const int kTagDispatchExtraParameter = 2;
+    /*!
+     * \brief Max number of whole tokens this tag dispatch may consume before it must complete;
+     * -1 = unbounded. Enforced by the matcher (token budget for a bounded any_text region).
+     */
+    int32_t max_tokens = -1;
+    // Trailing (non tag/rule-pair) parameters in the kTagDispatch grammar expr, in order:
+    //   [loop_after_dispatch, excludes_choices_id, max_tokens].
+    static const int kTagDispatchExtraParameter = 3;
   };
 
   /*! \brief Get the tag dispatch from the grammar expr. */
@@ -229,6 +236,9 @@ class Grammar::Impl {
     for (int j = 0; j < exclude_str_expr.size(); j++) {
       result.excludes.push_back(GetByteString(exclude_str_expr[j]));
     }
+
+    result.max_tokens =
+        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 2];
     return result;
   }
 

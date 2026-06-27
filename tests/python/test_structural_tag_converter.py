@@ -7,6 +7,7 @@ from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.structural_tag import (
+    AnyTextFormat,
     AnyTokensFormat,
     JSONSchemaFormat,
     SequenceFormat,
@@ -4504,6 +4505,44 @@ def test_structural_tag_max_whitespace_cnt_compile_cache():
     g_bounded = compiler.compile_structural_tag(_ws_stag(max_whitespace_cnt=2)).grammar
     assert _is_grammar_accept_string(g_unbounded, _ws_instance(5))
     assert not _is_grammar_accept_string(g_bounded, _ws_instance(5))
+
+
+def test_any_text_max_tokens_builds_tag_dispatch():
+    """A bounded any_text (with or without excludes) compiles to a TagDispatch that carries the
+    budget; the budget itself is enforced by the matcher (see test_grammar_matcher_structural_tag).
+    """
+    for fmt in (
+        {"type": "any_text", "excludes": ["</think>"], "max_tokens": 4},
+        {"type": "any_text", "max_tokens": 4},  # no excludes, but bounded -> still a TagDispatch
+    ):
+        grammar_str = str(
+            xgr.Grammar.from_structural_tag({"type": "structural_tag", "format": fmt})
+        )
+        assert "TagDispatch" in grammar_str
+    # unbounded no-excludes stays a plain character-class star (no regression)
+    assert "[\\0-\\U0010ffff]*" in str(
+        xgr.Grammar.from_structural_tag({"type": "structural_tag", "format": {"type": "any_text"}})
+    )
+
+
+def test_any_text_max_tokens_model_roundtrip():
+    model = AnyTextFormat(excludes=["</think>"], max_tokens=8)
+    assert model.model_dump()["max_tokens"] == 8
+    assert AnyTextFormat.model_validate_json(model.model_dump_json()).max_tokens == 8
+    # unset -> None (unbounded), distinct from 0
+    assert AnyTextFormat(excludes=["</think>"]).model_dump()["max_tokens"] is None
+
+
+@pytest.mark.parametrize("bad", [-1, "2", 2.5, 10**12])
+def test_any_text_max_tokens_invalid_raises(bad):
+    stag = {"type": "structural_tag", "format": {"type": "any_text", "max_tokens": bad}}
+    with pytest.raises(Exception):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_any_text_max_tokens_negative_rejected_by_pydantic():
+    with pytest.raises(Exception):
+        AnyTextFormat(excludes=["</think>"], max_tokens=-1)
 
 
 if __name__ == "__main__":

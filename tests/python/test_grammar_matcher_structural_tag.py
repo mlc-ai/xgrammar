@@ -542,5 +542,114 @@ def test_tag_dispatch_perf(ebnf, input_str):
     print(f"Accept token: avg={statistics.mean(flat_accept):.2f} us, max={max(flat_accept):.2f} us")
 
 
+# ---------- any_text max_tokens (token budget) ----------
+
+# Synthetic vocab where the end tag "</think>" spans MULTIPLE tokens ("</" + "think>"), which is
+# exactly the case a byte-level any_text token budget must handle (AnyTokensFormat cannot, since
+# its excludes are single tokens).
+_TB_VOCAB = ["<think>", "a", "b", "</", "think>", "c", "<eos>"]
+_TB_B, _TB_A, _TB_BB, _TB_E1, _TB_E2, _TB_C, _TB_EOS = 0, 1, 2, 3, 4, 5, 6
+
+
+def _think_budget_compiled(max_tokens, *, cache_enabled=True, compiler=None):
+    tokenizer_info = xgr.TokenizerInfo(_TB_VOCAB, stop_token_ids=[_TB_EOS])
+    compiler = compiler or xgr.GrammarCompiler(tokenizer_info, cache_enabled=cache_enabled)
+    content = {"type": "any_text", "excludes": ["</think>"]}
+    if max_tokens is not None:
+        content["max_tokens"] = max_tokens
+    stag = {
+        "type": "structural_tag",
+        "format": {"type": "tag", "begin": "<think>", "content": content, "end": "</think>"},
+    }
+    return compiler, compiler.compile_structural_tag(stag)
+
+
+def _accepts(compiled, tokens):
+    matcher = xgr.GrammarMatcher(compiled)
+    for t in tokens:
+        if not matcher.accept_token(t):
+            return False
+    return matcher.is_completed()
+
+
+def _allowed(compiled, prefix, token):
+    matcher = xgr.GrammarMatcher(compiled)
+    for t in prefix:
+        assert matcher.accept_token(t)
+    return matcher.accept_token(token)
+
+
+def test_any_text_max_tokens_forces_end_tag_not_eos():
+    """After N content tokens the bounded region is forced to END: only the (multi-token) end tag
+    is valid, content is rejected, and EOS is NOT allowed (we force the end tag, not a stop)."""
+    _, cg = _think_budget_compiled(2)
+    B, A, BB, E1, E2, C, EOS = _TB_B, _TB_A, _TB_BB, _TB_E1, _TB_E2, _TB_C, _TB_EOS
+    assert _accepts(cg, [B, A, BB, E1, E2])  # 2 content tokens + end -> complete
+    assert _accepts(cg, [B, A, E1, E2])  # 1 content token
+    assert _accepts(cg, [B, E1, E2])  # 0 content tokens
+    assert not _accepts(cg, [B, A, BB, C, E1, E2])  # 3 content tokens exceeds budget
+    # at the budget, content is rejected but the end tag is allowed; EOS is not (region not done)
+    assert _allowed(cg, [B, A, BB], E1) is True
+    assert _allowed(cg, [B, A, BB], A) is False
+    assert _allowed(cg, [B, A, BB], EOS) is False
+
+
+def test_any_text_max_tokens_zero_forces_immediate_end():
+    _, cg = _think_budget_compiled(0)
+    B, A, E1, E2 = _TB_B, _TB_A, _TB_E1, _TB_E2
+    assert _accepts(cg, [B, E1, E2])
+    assert _allowed(cg, [B], A) is False
+    assert _allowed(cg, [B], E1) is True
+
+
+def test_any_text_max_tokens_rollback_restores_budget():
+    _, cg = _think_budget_compiled(2)
+    B, A, BB, C, E1, E2 = _TB_B, _TB_A, _TB_BB, _TB_C, _TB_E1, _TB_E2
+    matcher = xgr.GrammarMatcher(cg)
+    assert matcher.accept_token(B)
+    assert matcher.accept_token(A)
+    assert matcher.accept_token(BB)  # budget full
+    assert not matcher.accept_token(C)  # over budget
+    matcher.rollback(1)  # undo one content token
+    assert matcher.accept_token(C)  # budget restored: one content token allowed again
+    assert not matcher.accept_token(A)  # full again
+    assert matcher.accept_token(E1) and matcher.accept_token(E2)
+    assert matcher.is_completed()
+
+
+def test_any_text_max_tokens_cache_no_staleness():
+    """A bounded region must not reuse an unbounded region's cached fast-accept mask even when
+    their FSMs (excludes) are identical and they are compiled by the same cache-enabled compiler."""
+    tokenizer_info = xgr.TokenizerInfo(_TB_VOCAB, stop_token_ids=[_TB_EOS])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=True)
+    B, A, BB, C, E1, E2 = _TB_B, _TB_A, _TB_BB, _TB_C, _TB_E1, _TB_E2
+    # compile the UNBOUNDED variant first to populate the FSM-hash cache
+    _, cg_unbounded = _think_budget_compiled(None, compiler=compiler)
+    assert _accepts(cg_unbounded, [B, A, BB, C, A, E1, E2])  # 5 content tokens, no budget
+    # now the bounded variant (same excludes/FSM) must still enforce
+    _, cg_bounded = _think_budget_compiled(2, compiler=compiler)
+    assert _allowed(cg_bounded, [B, A, BB], A) is False
+    assert not _accepts(cg_bounded, [B, A, BB, C, E1, E2])
+    assert _accepts(cg_bounded, [B, A, BB, E1, E2])
+
+
+def test_any_text_unbounded_no_regression():
+    _, cg = _think_budget_compiled(None)
+    B, A, BB, C, E1, E2 = _TB_B, _TB_A, _TB_BB, _TB_C, _TB_E1, _TB_E2
+    # without a budget the region accepts arbitrarily many content tokens
+    assert _accepts(cg, [B, A, BB, C, A, BB, C, E1, E2])
+
+
+def test_any_text_max_tokens_fork_independent():
+    _, cg = _think_budget_compiled(2)
+    B, A, BB, C = _TB_B, _TB_A, _TB_BB, _TB_C
+    matcher = xgr.GrammarMatcher(cg)
+    assert matcher.accept_token(B) and matcher.accept_token(A)  # 1 content used
+    child = matcher.fork()
+    assert child.accept_token(BB)  # child uses its 2nd
+    assert not child.accept_token(C)  # child exhausted
+    assert matcher.accept_token(BB)  # parent budget independent, still has its 2nd
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

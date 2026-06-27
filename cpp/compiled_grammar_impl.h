@@ -118,6 +118,14 @@ class CompiledGrammar::Impl {
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache> adaptive_token_mask_cache;
 
+  /*!
+   * \brief Rule id of the single bounded any_text region (a TagDispatch carrying max_tokens != -1),
+   * or -1 if the grammar has no token-budgeted region. v1 supports at most one such region.
+   */
+  int32_t bounded_tag_dispatch_rule_id = -1;
+  /*! \brief Token budget (max_tokens) of the bounded region, or -1 if none. */
+  int32_t bounded_tag_dispatch_max_tokens = -1;
+
   Grammar GetGrammar() const { return grammar; }
 
   TokenizerInfo GetTokenizerInfo() const { return tokenizer_info; }
@@ -139,7 +147,11 @@ XGRAMMAR_MEMBER_TABLE(
     "tokenizer_info",
     &CompiledGrammar::Impl::tokenizer_info,
     "adaptive_token_mask_cache",
-    &CompiledGrammar::Impl::adaptive_token_mask_cache
+    &CompiledGrammar::Impl::adaptive_token_mask_cache,
+    "bounded_tag_dispatch_rule_id",
+    &CompiledGrammar::Impl::bounded_tag_dispatch_rule_id,
+    "bounded_tag_dispatch_max_tokens",
+    &CompiledGrammar::Impl::bounded_tag_dispatch_max_tokens
 );
 
 }  // namespace xgrammar
