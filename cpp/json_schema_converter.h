@@ -442,12 +442,12 @@ class JSONSchemaConverter {
   static std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
   std::string GenerateIntegerMultipleOfDFA(int64_t multiple_of, const std::string& rule_name);
   static std::string GenerateFloatRangeRegex(
-      std::optional<double> start, std::optional<double> end, int precision = 6
+      std::optional<double> start,
+      std::optional<double> end,
+      int precision = 6,
+      bool exclusive_start = false,
+      bool exclusive_end = false
   );
-  static std::string MakePatternForDigitRange(char start, char end, int remainingDigits);
-  static std::vector<std::string> GenerateNumberPatterns(int64_t lower, int64_t upper);
-  static std::string GenerateSubRangeRegex(int64_t lower, int64_t upper);
-  static std::string FormatFloat(double value, int precision);
 
   // JSON string helpers
   static std::string JSONStrToPrintableStr(const std::string& json_str);
@@ -458,7 +458,10 @@ class JSONSchemaConverter {
   // Expose for testing
   friend std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
   friend std::string GenerateFloatRangeRegex(
-      std::optional<double> start, std::optional<double> end
+      std::optional<double> start,
+      std::optional<double> end,
+      bool exclusive_start,
+      bool exclusive_end
   );
 };
 
@@ -545,7 +548,12 @@ std::string JSONSchemaToEBNF(
  */
 std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
 
-std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<double> end);
+std::string GenerateFloatRangeRegex(
+    std::optional<double> start,
+    std::optional<double> end,
+    bool exclusive_start = false,
+    bool exclusive_end = false
+);
 
 /*!
  * \brief Convert a function call to a Grammar.

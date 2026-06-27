@@ -170,7 +170,7 @@ struct AnyTokensFormat {
 struct SequenceFormat {
   static constexpr const char* type = "sequence";
   std::vector<Format> elements;
-  SequenceFormat(std::vector<Format> elements) : elements(std::move(elements)) {}
+  SequenceFormat(std::vector<Format> elements);
   picojson::value ToJSON() const;
 
  private:
@@ -183,7 +183,7 @@ struct SequenceFormat {
 struct OrFormat {
   static constexpr const char* type = "or";
   std::vector<Format> elements;
-  OrFormat(std::vector<Format> elements) : elements(std::move(elements)) {}
+  OrFormat(std::vector<Format> elements);
   picojson::value ToJSON() const;
 
  private:

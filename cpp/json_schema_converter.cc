@@ -595,18 +595,30 @@ Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object
     spec.exclusive_maximum = std::move(result).Unwrap();
   }
 
-  double effective_min = spec.minimum.value_or(-std::numeric_limits<double>::infinity());
-  double effective_max = spec.maximum.value_or(std::numeric_limits<double>::infinity());
-  if (spec.exclusive_minimum.has_value()) {
-    effective_min = std::max(effective_min, *spec.exclusive_minimum);
-  }
-  if (spec.exclusive_maximum.has_value()) {
-    effective_max = std::min(effective_max, *spec.exclusive_maximum);
-  }
-  if (effective_min > effective_max) {
+  // The range is empty if any lower bound conflicts with any upper bound. An
+  // exclusive bound also rules out equality, so it uses ">=" instead of ">".
+  auto empty = []() {
     return ResultErr<SchemaError>(
-        SchemaErrorType::kUnsatisfiableSchema, "Invalid range: minimum greater than maximum"
+        SchemaErrorType::kUnsatisfiableSchema, "Invalid range: empty range"
     );
+  };
+
+  // minimum (x >= min) vs maximum (x <= max).
+  if (spec.minimum && spec.maximum && *spec.minimum > *spec.maximum) {
+    return empty();
+  }
+  // minimum (x >= min) vs exclusiveMaximum (x < exclMax).
+  if (spec.minimum && spec.exclusive_maximum && *spec.minimum >= *spec.exclusive_maximum) {
+    return empty();
+  }
+  // exclusiveMinimum (x > exclMin) vs maximum (x <= max).
+  if (spec.exclusive_minimum && spec.maximum && *spec.exclusive_minimum >= *spec.maximum) {
+    return empty();
+  }
+  // exclusiveMinimum (x > exclMin) vs exclusiveMaximum (x < exclMax).
+  if (spec.exclusive_minimum && spec.exclusive_maximum &&
+      *spec.exclusive_minimum >= *spec.exclusive_maximum) {
+    return empty();
   }
   return ResultOk(std::move(spec));
 }
@@ -1524,13 +1536,21 @@ std::string JSONSchemaConverter::GenerateInteger(
     start = spec.minimum;
   }
   if (spec.exclusive_minimum.has_value()) {
-    start = *spec.exclusive_minimum + 1;
+    // Smallest integer strictly greater than exclusive_minimum (the parser
+    // rejects exclusive_minimum == INT64_MAX, so +1 cannot overflow). When
+    // minimum is also present the stricter (larger) lower bound wins.
+    int64_t excl_start = *spec.exclusive_minimum + 1;
+    start = start.has_value() ? std::max(*start, excl_start) : excl_start;
   }
   if (spec.maximum.has_value()) {
     end = spec.maximum;
   }
   if (spec.exclusive_maximum.has_value()) {
-    end = *spec.exclusive_maximum - 1;
+    // Largest integer strictly less than exclusive_maximum (the parser rejects
+    // exclusive_maximum == INT64_MIN, so -1 cannot underflow). When maximum is
+    // also present the stricter (smaller) upper bound wins.
+    int64_t excl_end = *spec.exclusive_maximum - 1;
+    end = end.has_value() ? std::min(*end, excl_end) : excl_end;
   }
 
   if (spec.multiple_of.has_value()) {
@@ -1612,21 +1632,29 @@ std::string JSONSchemaConverter::GenerateNumber(
     const NumberSpec& spec, const std::string& rule_name
 ) {
   std::optional<double> start, end;
+  bool exclusive_start = false;
+  bool exclusive_end = false;
   if (spec.minimum.has_value()) {
     start = spec.minimum;
   }
-  if (spec.exclusive_minimum.has_value()) {
+  // When both bounds are present the larger lower bound wins; on a tie the
+  // exclusive one is stricter.
+  if (spec.exclusive_minimum.has_value() &&
+      (!start.has_value() || *spec.exclusive_minimum >= *start)) {
     start = spec.exclusive_minimum;
+    exclusive_start = true;
   }
   if (spec.maximum.has_value()) {
     end = spec.maximum;
   }
-  if (spec.exclusive_maximum.has_value()) {
+  if (spec.exclusive_maximum.has_value() && (!end.has_value() || *spec.exclusive_maximum <= *end)) {
     end = spec.exclusive_maximum;
+    exclusive_end = true;
   }
 
   if (start.has_value() || end.has_value()) {
-    std::string range_regex = GenerateFloatRangeRegex(start, end, 6);
+    std::string range_regex =
+        GenerateFloatRangeRegex(start, end, 6, exclusive_start, exclusive_end);
     return RegexToEBNF(range_regex, false);
   }
   // Note: The format must be "-"? ("0" | ...) not ("0" | "-"? ...)
@@ -2655,227 +2683,239 @@ size_t JSONSchemaConverter::StringSpecKeyHash::operator()(const StringSpecKey& k
   );
 }
 
-// ==================== Range Regex Generation (moved from original) ====================
+// ==================== Range Regex Generation ====================
 
-std::string JSONSchemaConverter::MakePatternForDigitRange(
-    char start, char end, int remainingDigits
-) {
-  std::ostringstream oss;
-  if (start == end) {
-    oss << start;
-  } else {
-    oss << "[" << start << "-" << end << "]";
+// Stateless utility that turns a numeric range into an anchored regex matching
+// exactly the JSON integers / numbers inside it. Every method is static; the
+// class exists only to group the helpers and keep the internal ones private.
+class NumberGenerator {
+ public:
+  // Anchored regex matching every integer x with start <= x <= end. Either bound
+  // may be std::nullopt for an open side; an empty range yields "^()$". Bounds
+  // span the whole int64 range (|INT64_MIN| is handled without negation overflow).
+  static std::string IntegerRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
+
+  // Anchored regex matching every number in the range, written with up to
+  // `precision` fraction digits. `exclusive_start` / `exclusive_end` exclude the
+  // boundary value itself (turning >= / <= into > / <). Either bound may be
+  // std::nullopt for an open side; an empty range yields "^()$".
+  static std::string FloatRangeRegex(
+      std::optional<double> start,
+      std::optional<double> end,
+      int precision,
+      bool exclusive_start,
+      bool exclusive_end
+  );
+
+ private:
+  // Regex alternatives for the fraction digits following a decimal point.
+  struct FracPatternSet {
+    // Each pattern matches a non-empty fraction digit string.
+    std::vector<std::string> parts;
+    // Whether having no fraction digits at all also satisfies the bound.
+    bool include_empty = false;
+  };
+
+  // --- Regex fragment primitives ---
+  static std::string DigitClass(char lo, char hi);  // one digit in [lo, hi] (or \d)
+  static std::string ExactDigits(int k);            // exactly k free digits: \d{k}
+  static std::string FreeDigits(int max_count);     // 0..max_count free digits: \d{0,n}
+  static std::string OptionalZeros(int max_count);  // 0..max_count zeros: 0{0,n}
+  static std::string SomeZeros(int max_count);      // 1..max_count zeros: 0{1,n}
+  static bool AllChar(const std::string& s, char c);
+
+  // --- Integer range (operate on non-negative decimal magnitude strings) ---
+  static std::string AbsDigits(int64_t v);
+  static int CompareDigitStr(const std::string& a, const std::string& b);
+  static std::vector<std::string> IntSameLen(const std::string& a, const std::string& b);
+  static std::vector<std::string> NumberPatternsStr(const std::string& lo, const std::string& hi);
+  static std::string SubRangeRegexStr(const std::string& lo, const std::string& hi);
+  static std::vector<std::string> AtLeastPositivePatternsStr(const std::string& v_str);
+
+  // --- Float range ---
+  static std::string FormatFloat(double value, int precision);
+  // Snaps a non-negative bound to the precision grid in the direction that keeps
+  // the range sound: a lower bound rounds up, an upper bound rounds down, so no
+  // out-of-range value is ever admitted. Returns the canonical grid string and,
+  // via strict_out, whether the boundary value must still be excluded.
+  static std::string RoundBoundToGrid(
+      double value, int precision, bool is_lower, bool strict_in, bool* strict_out
+  );
+  // Adds (inc) or subtracts (!inc) one grid step (10^-precision) to a canonical
+  // non-negative decimal string, returning the canonical result.
+  static std::string AdjustGrid(const std::string& s, int precision, bool inc);
+  static void SplitDecimal(const std::string& s, std::string* int_part, std::string* frac_part);
+  static int CompareDecimal(
+      const std::string& int_a,
+      const std::string& frac_a,
+      const std::string& int_b,
+      const std::string& frac_b
+  );
+  static std::string StripAnchors(const std::string& regex);
+  static int64_t ParseIntCapped(const std::string& digits);
+  static FracPatternSet FracGreaterPatterns(const std::string& s, bool strict, int max_len);
+  static FracPatternSet FracLessPatterns(const std::string& s, bool strict, int max_len);
+  static FracPatternSet FracBetweenPatterns(
+      const std::string& a, bool strict_a, const std::string& b, bool strict_b, int max_len
+  );
+  static std::vector<std::string> PositiveRangeParts(
+      const std::string& low,
+      bool strict_low,
+      const std::optional<std::string>& high,
+      bool strict_high,
+      int precision
+  );
+};
+
+// Helpers for integer range regex generation. They operate purely on
+// fixed-length decimal digit strings (suffixes may carry leading zeros), so the
+// patterns are correct by construction regardless of digit position.
+
+// A regex fragment matching a single digit in [lo, hi].
+std::string NumberGenerator::DigitClass(char lo, char hi) {
+  if (lo == hi) {
+    return std::string(1, lo);
   }
-  if (remainingDigits > 0) {
-    oss << "\\d{" << remainingDigits << "}";
+  if (lo == '0' && hi == '9') {
+    return "\\d";
   }
-  return oss.str();
+  return "[" + std::string(1, lo) + "-" + std::string(1, hi) + "]";
 }
 
-std::vector<std::string> JSONSchemaConverter::GenerateNumberPatterns(int64_t lower, int64_t upper) {
+// A regex fragment matching k free digits (each 0-9). Empty when k <= 0.
+std::string NumberGenerator::ExactDigits(int k) {
+  if (k <= 0) {
+    return "";
+  }
+  if (k == 1) {
+    return "\\d";
+  }
+  return "\\d{" + std::to_string(k) + "}";
+}
+
+bool NumberGenerator::AllChar(const std::string& s, char c) {
+  return std::all_of(s.begin(), s.end(), [c](char ch) { return ch == c; });
+}
+
+// Patterns matching every equal-length digit string t with
+// value(a) <= value(t) <= value(b). Requires a.size() == b.size() and
+// value(a) <= value(b). Partitions t by its first digit:
+//   * first digit == a[0]: the suffix must be >= a's suffix (<= 99..9);
+//   * first digit strictly between a[0] and b[0]: the suffix is unconstrained;
+//   * first digit == b[0]: the suffix must be <= b's suffix (>= 00..0).
+// The partition is exact and non-overlapping, so the union is sound and
+// complete for [a, b].
+std::vector<std::string> NumberGenerator::IntSameLen(const std::string& a, const std::string& b) {
+  int n = static_cast<int>(a.size());
+  if (a == b) {
+    return {a};
+  }
+  if (n == 1) {
+    return {DigitClass(a[0], b[0])};
+  }
+  if (a[0] == b[0]) {
+    std::vector<std::string> res;
+    for (auto& p : IntSameLen(a.substr(1), b.substr(1))) {
+      res.push_back(std::string(1, a[0]) + p);
+    }
+    return res;
+  }
+  // a[0] < b[0]
+  std::string a_suf = a.substr(1);
+  std::string b_suf = b.substr(1);
+  if (AllChar(a_suf, '0') && AllChar(b_suf, '9')) {
+    // The whole suffix space is free: collapse to one box pattern.
+    if (a[0] == '0' && b[0] == '9') {
+      return {ExactDigits(n)};
+    }
+    return {DigitClass(a[0], b[0]) + ExactDigits(n - 1)};
+  }
+  std::vector<std::string> res;
+  std::string nines(n - 1, '9');
+  std::string zeros(n - 1, '0');
+  for (auto& p : IntSameLen(a_suf, nines)) {
+    res.push_back(std::string(1, a[0]) + p);
+  }
+  if (b[0] - a[0] >= 2) {
+    res.push_back(
+        DigitClass(static_cast<char>(a[0] + 1), static_cast<char>(b[0] - 1)) + ExactDigits(n - 1)
+    );
+  }
+  for (auto& p : IntSameLen(zeros, b_suf)) {
+    res.push_back(std::string(1, b[0]) + p);
+  }
+  return res;
+}
+
+// Compares two non-negative decimal magnitude strings (no leading zeros except
+// "0") by value.
+int NumberGenerator::CompareDigitStr(const std::string& a, const std::string& b) {
+  if (a.size() != b.size()) {
+    return a.size() < b.size() ? -1 : 1;
+  }
+  if (a < b) {
+    return -1;
+  }
+  return a > b ? 1 : 0;
+}
+
+// Patterns matching every integer whose magnitude has value in [lo, hi], where
+// lo and hi are non-negative decimal magnitude strings (no leading zeros except
+// "0"). An empty range (value(lo) > value(hi)) yields no patterns. Operating on
+// strings keeps the whole int64 range representable, including
+// |INT64_MIN| = 9223372036854775808, which does not fit in int64.
+std::vector<std::string> NumberGenerator::NumberPatternsStr(
+    const std::string& lo, const std::string& hi
+) {
   std::vector<std::string> patterns;
-
-  int lower_len = static_cast<int>(std::to_string(lower).size());
-  int upper_len = static_cast<int>(std::to_string(upper).size());
-
-  for (int len = lower_len; len <= upper_len; ++len) {
-    const int64_t digit_min = static_cast<int64_t>(std::pow(10, len - 1));
-    const int64_t digit_max = static_cast<int64_t>(std::pow(10, len)) - 1;
-
-    int64_t start = (len == lower_len) ? lower : digit_min;
-    int64_t end = (len == upper_len) ? upper : digit_max;
-
-    std::string start_str = std::to_string(start);
-    std::string end_str = std::to_string(end);
-
-    if (len == 1) {
-      patterns.push_back(MakePatternForDigitRange(start_str[0], end_str[0], 0));
-      continue;
-    }
-
-    int prefix = 0;
-    while (prefix < len && start_str[prefix] == end_str[prefix]) {
-      prefix++;
-    }
-
-    if (prefix == len) {
-      patterns.push_back(start_str);
-      continue;
-    }
-
-    if (prefix > 0 && prefix >= len - 2) {
-      std::string common_part = start_str.substr(0, prefix);
-      patterns.push_back(
-          common_part +
-          MakePatternForDigitRange(start_str[prefix], end_str[prefix], len - prefix - 1)
-      );
-      continue;
-    }
-
-    if (len == lower_len && len == upper_len) {
-      if (start == digit_max) {
-        patterns.push_back(start_str);
-      } else if (start == digit_min) {
-        if (end == digit_max) {
-          patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
-        } else {
-          for (size_t i = 0; i < end_str.size(); i++) {
-            if (i == 0) {
-              if (end_str[0] > '1') {
-                patterns.push_back(
-                    MakePatternForDigitRange('1', static_cast<char>(end_str[0] - 1), len - 1)
-                );
-              }
-            } else {
-              std::string pref = end_str.substr(0, i);
-              if (end_str[i] > '0') {
-                patterns.push_back(
-                    pref +
-                    MakePatternForDigitRange('0', static_cast<char>(end_str[i] - 1), len - i - 1)
-                );
-              }
-            }
-          }
-          patterns.push_back(end_str);
-        }
-      } else if (end == digit_max) {
-        for (size_t i = 0; i < start_str.size(); i++) {
-          if (i == 0) {
-            if (start_str[0] < '9') {
-              patterns.push_back(
-                  MakePatternForDigitRange(static_cast<char>(start_str[0] + 1), '9', len - 1)
-              );
-            }
-          } else {
-            std::string pref = start_str.substr(0, i);
-            if (start_str[i] < '9') {
-              patterns.push_back(
-                  pref +
-                  MakePatternForDigitRange(static_cast<char>(start_str[i] + 1), '9', len - i - 1)
-              );
-            }
-          }
-        }
-        patterns.push_back(start_str);
-      } else {
-        char start_first_digit = start_str[0];
-        char end_first_digit = end_str[0];
-
-        if (end_first_digit - start_first_digit > 1) {
-          patterns.push_back(MakePatternForDigitRange(
-              static_cast<char>(start_first_digit + 1),
-              static_cast<char>(end_first_digit - 1),
-              len - 1
-          ));
-        }
-
-        for (size_t i = 0; i < start_str.size(); i++) {
-          if (i == 0) {
-            std::string pref = start_str.substr(0, 1);
-            if (start_str[1] < '9') {
-              patterns.push_back(
-                  pref + MakePatternForDigitRange(static_cast<char>(start_str[1] + 1), '9', len - 2)
-              );
-            }
-          } else {
-            std::string pref = start_str.substr(0, i);
-            if (start_str[i] < '9') {
-              patterns.push_back(
-                  pref +
-                  MakePatternForDigitRange(static_cast<char>(start_str[i] + 1), '9', len - i - 1)
-              );
-            }
-          }
-        }
-        patterns.push_back(start_str);
-
-        for (size_t i = 0; i < end_str.size(); i++) {
-          if (i == 0) {
-            std::string pref = end_str.substr(0, 1);
-            if (end_str[1] > '0') {
-              patterns.push_back(
-                  pref + MakePatternForDigitRange('0', static_cast<char>(end_str[1] - 1), len - 2)
-              );
-            }
-          } else {
-            std::string pref = end_str.substr(0, i);
-            if (end_str[i] > '0') {
-              patterns.push_back(
-                  pref +
-                  MakePatternForDigitRange('0', static_cast<char>(end_str[i] - 1), len - i - 1)
-              );
-            }
-          }
-        }
-        patterns.push_back(end_str);
-      }
-    } else if (len == lower_len && len != upper_len) {
-      if (start == digit_min) {
-        patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
-      } else {
-        for (size_t i = 0; i < start_str.size(); i++) {
-          if (i == 0) {
-            if (start_str[0] < '9') {
-              patterns.push_back(
-                  MakePatternForDigitRange(static_cast<char>(start_str[0] + 1), '9', len - 1)
-              );
-            }
-          } else {
-            std::string pref = start_str.substr(0, i);
-            if (start_str[i] < '9') {
-              patterns.push_back(
-                  pref +
-                  MakePatternForDigitRange(static_cast<char>(start_str[i] + 1), '9', len - i - 1)
-              );
-            }
-          }
-        }
-        patterns.push_back(start_str);
-      }
-    } else if (len != lower_len && len == upper_len) {
-      if (end == digit_max) {
-        patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
-      } else {
-        for (size_t i = 0; i < end_str.size(); i++) {
-          if (i == 0) {
-            if (end_str[0] > '1') {
-              patterns.push_back(
-                  MakePatternForDigitRange('1', static_cast<char>(end_str[0] - 1), len - 1)
-              );
-            }
-          } else {
-            std::string pref = end_str.substr(0, i);
-            if (end_str[i] > '0') {
-              patterns.push_back(
-                  pref +
-                  MakePatternForDigitRange('0', static_cast<char>(end_str[i] - 1), len - i - 1)
-              );
-            }
-          }
-        }
-        patterns.push_back(end_str);
-      }
-    } else {
-      patterns.push_back("[1-9]\\d{" + std::to_string(len - 1) + "}");
+  if (CompareDigitStr(lo, hi) > 0) {
+    return patterns;
+  }
+  int lo_len = static_cast<int>(lo.size());
+  int hi_len = static_cast<int>(hi.size());
+  // Split [lo, hi] by digit length; each length yields a same-length segment
+  // handled exactly by IntSameLen.
+  for (int len = lo_len; len <= hi_len; ++len) {
+    std::string a_str = (len == lo_len) ? lo : ("1" + std::string(len - 1, '0'));
+    std::string b_str = (len == hi_len) ? hi : std::string(len, '9');
+    for (auto& p : IntSameLen(a_str, b_str)) {
+      patterns.push_back(p);
     }
   }
-
   return patterns;
 }
 
-std::string JSONSchemaConverter::GenerateSubRangeRegex(int64_t lower, int64_t upper) {
-  std::vector<std::string> patterns = GenerateNumberPatterns(lower, upper);
-  std::ostringstream oss;
+// Joins NumberPatternsStr alternatives into a parenthesised regex group.
+std::string NumberGenerator::SubRangeRegexStr(const std::string& lo, const std::string& hi) {
+  std::vector<std::string> patterns = NumberPatternsStr(lo, hi);
+  std::string joined;
   for (size_t i = 0; i < patterns.size(); ++i) {
     if (i > 0) {
-      oss << "|";
+      joined += "|";
     }
-    oss << patterns[i];
+    joined += patterns[i];
   }
-  return "(" + oss.str() + ")";
+  return "(" + joined + ")";
 }
 
-std::string JSONSchemaConverter::GenerateRangeRegex(
+// Patterns matching every integer in [value(v_str), +infinity) for v_str a
+// positive magnitude string (no leading zeros). Same-length values come from
+// IntSameLen(v_str, 99..9); strictly longer values are any non-zero-led number.
+std::vector<std::string> NumberGenerator::AtLeastPositivePatternsStr(const std::string& v_str) {
+  int len = static_cast<int>(v_str.size());
+  std::vector<std::string> res = IntSameLen(v_str, std::string(len, '9'));
+  res.push_back("[1-9]\\d{" + std::to_string(len) + ",}");
+  return res;
+}
+
+// The magnitude (absolute value) of v as a decimal string. Derived from the
+// signed text rather than by negating v, so INT64_MIN is handled correctly.
+std::string NumberGenerator::AbsDigits(int64_t v) {
+  std::string s = std::to_string(v);
+  return (!s.empty() && s[0] == '-') ? s.substr(1) : s;
+}
+
+std::string NumberGenerator::IntegerRangeRegex(
     std::optional<int64_t> start, std::optional<int64_t> end
 ) {
   std::vector<std::string> parts;
@@ -2888,39 +2928,16 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
   if (start && !end) {
     if (start.value() <= 0) {
       if (start.value() < 0) {
-        parts.push_back("-" + GenerateSubRangeRegex(-(-start.value()), 1));
+        // Negatives in [start, -1] are the magnitudes [1, |start|], negated.
+        parts.push_back("-" + SubRangeRegexStr("1", AbsDigits(start.value())));
       }
       parts.push_back("0");
       parts.push_back("[1-9]\\d*");
     } else {
-      std::string start_str = std::to_string(start.value());
-      int len = static_cast<int>(start_str.length());
-
-      if (len == 1) {
-        parts.push_back(MakePatternForDigitRange(start_str[0], '9', 0));
-        parts.push_back("[1-9]\\d*");
-      } else {
-        parts.push_back(start_str);
-
-        for (size_t i = 0; i < start_str.size(); i++) {
-          if (i == 0) {
-            if (start_str[0] < '9') {
-              parts.push_back(
-                  MakePatternForDigitRange(static_cast<char>(start_str[0] + 1), '9', len - 1)
-              );
-            }
-          } else {
-            std::string pref = start_str.substr(0, i);
-            if (start_str[i] < '9') {
-              parts.push_back(
-                  pref +
-                  MakePatternForDigitRange(static_cast<char>(start_str[i] + 1), '9', len - i - 1)
-              );
-            }
-          }
-        }
-
-        parts.push_back("[1-9]\\d{" + std::to_string(len) + ",}");
+      // x >= start with start > 0: same-length values >= start, plus every
+      // value with strictly more digits.
+      for (auto& p : AtLeastPositivePatternsStr(std::to_string(start.value()))) {
+        parts.push_back(p);
       }
     }
   }
@@ -2930,37 +2947,13 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
       parts.push_back("-[1-9]\\d*");
       parts.push_back("0");
       if (end.value() > 0) {
-        parts.push_back(GenerateSubRangeRegex(1, end.value()));
+        parts.push_back(SubRangeRegexStr("1", std::to_string(end.value())));
       }
     } else {
-      std::string end_str = std::to_string(-end.value());
-      int len = static_cast<int>(end_str.length());
-
-      if (len == 1) {
-        parts.push_back("-" + MakePatternForDigitRange(end_str[0], '9', 0));
-        parts.push_back("-[1-9]\\d*");
-      } else {
-        parts.push_back(std::to_string(end.value()));
-
-        for (size_t i = 0; i < end_str.size(); i++) {
-          if (i == 0) {
-            if (end_str[0] > '1') {
-              parts.push_back(
-                  "-" + MakePatternForDigitRange('1', static_cast<char>(end_str[0] - 1), len - 1)
-              );
-            }
-          } else {
-            std::string pref = end_str.substr(0, i);
-            if (end_str[i] > '0') {
-              parts.push_back(
-                  "-" + pref +
-                  MakePatternForDigitRange('0', static_cast<char>(end_str[i] - 1), len - i - 1)
-              );
-            }
-          }
-        }
-
-        parts.push_back("-[1-9]\\d{" + std::to_string(len) + ",}");
+      // x <= end with end < 0: x = -a where a >= |end| > 0, so negate every
+      // pattern for the range [|end|, +infinity).
+      for (auto& p : AtLeastPositivePatternsStr(AbsDigits(end.value()))) {
+        parts.push_back("-" + p);
       }
     }
   }
@@ -2976,7 +2969,9 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
     if (range_start < 0) {
       int64_t neg_start = range_start;
       int64_t neg_end = std::min(static_cast<int64_t>(-1), range_end);
-      parts.push_back("-" + GenerateSubRangeRegex(-neg_end, -neg_start));
+      // Negatives in [neg_start, neg_end] are the magnitudes
+      // [|neg_end|, |neg_start|], negated.
+      parts.push_back("-" + SubRangeRegexStr(AbsDigits(neg_end), AbsDigits(neg_start)));
     }
 
     if (range_start <= 0 && range_end >= 0) {
@@ -2985,7 +2980,7 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
 
     if (range_end > 0) {
       int64_t pos_start = std::max(static_cast<int64_t>(1), range_start);
-      parts.push_back(GenerateSubRangeRegex(pos_start, range_end));
+      parts.push_back(SubRangeRegexStr(std::to_string(pos_start), std::to_string(range_end)));
     }
   }
 
@@ -3001,8 +2996,13 @@ std::string JSONSchemaConverter::GenerateRangeRegex(
   return result.str();
 }
 
-std::string JSONSchemaConverter::FormatFloat(double value, int precision) {
-  if (value == static_cast<int64_t>(value)) {
+std::string NumberGenerator::FormatFloat(double value, int precision) {
+  // Casting a double outside [INT64_MIN, INT64_MAX] (or NaN/Inf) to int64_t is
+  // undefined behavior, so range-check before the integer fast path. 2^63 ==
+  // 9223372036854775808.0 is exactly representable and one past INT64_MAX, so the
+  // upper comparison must be strict.
+  if (value >= -9223372036854775808.0 && value < 9223372036854775808.0 &&
+      value == static_cast<int64_t>(value)) {
     return std::to_string(static_cast<int64_t>(value));
   }
 
@@ -3023,24 +3023,380 @@ std::string JSONSchemaConverter::FormatFloat(double value, int precision) {
   return result;
 }
 
-static std::string EscapeDotForRegex(const std::string& s) {
-  std::string result;
-  result.reserve(s.size() + 2);
-  for (char c : s) {
-    if (c == '.') {
-      result += "\\.";
+std::string NumberGenerator::AdjustGrid(const std::string& s, int precision, bool inc) {
+  std::string int_part, frac_part;
+  SplitDecimal(s, &int_part, &frac_part);
+  // Build the scaled-integer numerator (value * 10^precision) as a digit string.
+  // Callers only pass FormatFloat output (<= precision fraction digits); guard
+  // the count so a longer string can never wrap the unsigned append count.
+  frac_part.append(std::max(0, precision - static_cast<int>(frac_part.size())), '0');
+  std::string num = int_part + frac_part;
+
+  if (inc) {
+    int i = static_cast<int>(num.size()) - 1;
+    for (; i >= 0 && num[i] == '9'; --i) {
+      num[i] = '0';
+    }
+    if (i < 0) {
+      num.insert(num.begin(), '1');
     } else {
-      result += c;
+      num[i]++;
+    }
+  } else {
+    int i = static_cast<int>(num.size()) - 1;
+    for (; i >= 0 && num[i] == '0'; --i) {
+      num[i] = '9';
+    }
+    if (i < 0) {
+      // Underflow below zero; clamp to zero (does not occur for the bounds the
+      // float pipeline feeds in, which are all >= one grid step when decremented).
+      num.assign(num.size(), '0');
+    } else {
+      num[i]--;
+    }
+  }
+
+  // Re-split into integer and `precision`-digit fraction, then canonicalize.
+  while (static_cast<int>(num.size()) <= precision) {
+    num.insert(num.begin(), '0');
+  }
+  std::string new_int = num.substr(0, num.size() - precision);
+  std::string new_frac = num.substr(num.size() - precision);
+  size_t nz = new_int.find_first_not_of('0');
+  new_int = (nz == std::string::npos) ? "0" : new_int.substr(nz);
+  size_t lnz = new_frac.find_last_not_of('0');
+  new_frac = (lnz == std::string::npos) ? "" : new_frac.substr(0, lnz + 1);
+  return new_frac.empty() ? new_int : new_int + "." + new_frac;
+}
+
+std::string NumberGenerator::RoundBoundToGrid(
+    double value, int precision, bool is_lower, bool strict_in, bool* strict_out
+) {
+  // FormatFloat rounds to the nearest grid point; if that lands exactly on the
+  // bound, keep the original strictness. Otherwise step to the grid point just
+  // inside the range so no out-of-range value is admitted, and the boundary is
+  // now strictly interior, so it becomes inclusive.
+  std::string r = FormatFloat(value, precision);
+  double rv = std::stod(r);
+  if (rv == value) {
+    *strict_out = strict_in;
+    return r;
+  }
+  *strict_out = false;
+  if (is_lower && rv < value) {
+    // Rounded below a lower bound: move up to the smallest grid point >= value.
+    r = AdjustGrid(r, precision, /*inc=*/true);
+  } else if (!is_lower && rv > value) {
+    // Rounded above an upper bound: move down to the largest grid point <= value.
+    r = AdjustGrid(r, precision, /*inc=*/false);
+  }
+  return r;
+}
+
+// Helpers for GenerateFloatRangeRegex. Fraction patterns operate on the
+// digit string after the decimal point, compared against a canonical bound
+// fraction (canonical: produced by FormatFloat, so no trailing zeros).
+
+// Matches 0 to max_count free digits.
+std::string NumberGenerator::FreeDigits(int max_count) {
+  if (max_count <= 0) {
+    return "";
+  }
+  return "\\d{0," + std::to_string(max_count) + "}";
+}
+
+// Matches 0 to max_count zeros.
+std::string NumberGenerator::OptionalZeros(int max_count) {
+  if (max_count <= 0) {
+    return "";
+  }
+  return "0{0," + std::to_string(max_count) + "}";
+}
+
+// Matches 1 to max_count zeros.
+std::string NumberGenerator::SomeZeros(int max_count) {
+  return "0{1," + std::to_string(max_count) + "}";
+}
+
+// Patterns for fraction strings t (1 <= |t| <= max_len) whose value 0.t is
+// greater than 0.s (or equal when !strict). |s| <= max_len.
+NumberGenerator::FracPatternSet NumberGenerator::FracGreaterPatterns(
+    const std::string& s, bool strict, int max_len
+) {
+  FracPatternSet result;
+  int n = static_cast<int>(s.size());
+  // t agrees with s up to position i, then has a larger digit
+  for (int i = 0; i < n; ++i) {
+    if (s[i] < '9') {
+      result.parts.push_back(
+          s.substr(0, i) + DigitClass(s[i] + 1, '9') + FreeDigits(max_len - i - 1)
+      );
+    }
+  }
+  // t extends s with a nonzero digit (after optional zeros)
+  for (int k = 0; n + k + 1 <= max_len; ++k) {
+    result.parts.push_back(s + std::string(k, '0') + "[1-9]" + FreeDigits(max_len - n - k - 1));
+  }
+  if (!strict) {
+    // t has the same value as s: s plus optional trailing zeros
+    if (n > 0) {
+      result.parts.push_back(s + OptionalZeros(max_len - n));
+    } else {
+      result.include_empty = true;
+      if (max_len >= 1) {
+        result.parts.push_back(SomeZeros(max_len));
+      }
     }
   }
   return result;
 }
 
-std::string JSONSchemaConverter::GenerateFloatRangeRegex(
-    std::optional<double> start, std::optional<double> end, int precision
+// Patterns for fraction strings t (1 <= |t| <= max_len) whose value 0.t is
+// less than 0.s (or equal when !strict). |s| <= max_len.
+NumberGenerator::FracPatternSet NumberGenerator::FracLessPatterns(
+    const std::string& s, bool strict, int max_len
 ) {
-  if ((start && end) && (start.value() > end.value())) {
-    return "^()$";
+  FracPatternSet result;
+  int n = static_cast<int>(s.size());
+  // t agrees with s up to position i, then has a smaller digit
+  for (int i = 0; i < n; ++i) {
+    if (s[i] > '0') {
+      result.parts.push_back(
+          s.substr(0, i) + DigitClass('0', s[i] - 1) + FreeDigits(max_len - i - 1)
+      );
+    }
+  }
+  // t is a proper prefix of s plus optional trailing zeros: strictly smaller,
+  // since the remaining digits of s contain a nonzero one
+  for (int i = 0; i < n; ++i) {
+    if (i == 0) {
+      if (max_len >= 1) {
+        result.parts.push_back(SomeZeros(max_len));
+      }
+    } else {
+      result.parts.push_back(s.substr(0, i) + OptionalZeros(max_len - i));
+    }
+  }
+  if (!strict) {
+    // t has the same value as s
+    if (n > 0) {
+      result.parts.push_back(s + OptionalZeros(max_len - n));
+    } else if (max_len >= 1) {
+      result.parts.push_back(SomeZeros(max_len));
+    }
+  }
+  result.include_empty = n > 0 || !strict;
+  return result;
+}
+
+// Patterns for fraction strings t whose value 0.t lies between 0.a and 0.b.
+// Requires value(0.a) < value(0.b) and b non-empty.
+NumberGenerator::FracPatternSet NumberGenerator::FracBetweenPatterns(
+    const std::string& a, bool strict_a, const std::string& b, bool strict_b, int max_len
+) {
+  FracPatternSet result;
+  // Longest common prefix of b and zero-padded a. Always stops before |b|:
+  // value(0.a) < value(0.b) implies b is not a prefix of padded a.
+  int common_len = 0;
+  while (common_len < static_cast<int>(b.size()) &&
+         (common_len < static_cast<int>(a.size()) ? a[common_len] : '0') == b[common_len]) {
+    ++common_len;
+  }
+  std::string common = b.substr(0, common_len);
+  char digit_a = common_len < static_cast<int>(a.size()) ? a[common_len] : '0';
+  char digit_b = b[common_len];
+
+  // a digit strictly between the bounds' digits, then anything
+  if (digit_b - digit_a >= 2) {
+    result.parts.push_back(
+        common + DigitClass(digit_a + 1, digit_b - 1) + FreeDigits(max_len - common_len - 1)
+    );
+  }
+  // lower boundary: t continues with digit_a, the rest must exceed a's suffix
+  if (common_len < static_cast<int>(a.size())) {
+    FracPatternSet sub_lower =
+        FracGreaterPatterns(a.substr(common_len + 1), strict_a, max_len - common_len - 1);
+    for (auto& part : sub_lower.parts) {
+      result.parts.push_back(common + digit_a + std::move(part));
+    }
+    if (sub_lower.include_empty) {
+      result.parts.push_back(common + std::string(1, digit_a));
+    }
+  } else {
+    // a's value equals value(0.common): only nonzero extensions of
+    // common + digit_a ('0') are strictly greater
+    FracPatternSet sub_lower = FracGreaterPatterns("", true, max_len - common_len - 1);
+    for (auto& part : sub_lower.parts) {
+      result.parts.push_back(common + digit_a + std::move(part));
+    }
+    if (!strict_a) {
+      // t has the same value as a
+      if (!a.empty()) {
+        result.parts.push_back(a + OptionalZeros(max_len - static_cast<int>(a.size())));
+      } else {
+        result.include_empty = true;
+        if (max_len >= 1) {
+          result.parts.push_back(SomeZeros(max_len));
+        }
+      }
+    }
+  }
+  // upper boundary: t continues with digit_b, the rest must stay below b's suffix
+  FracPatternSet sub_upper =
+      FracLessPatterns(b.substr(common_len + 1), strict_b, max_len - common_len - 1);
+  for (auto& part : sub_upper.parts) {
+    result.parts.push_back(common + digit_b + std::move(part));
+  }
+  if (sub_upper.include_empty) {
+    result.parts.push_back(common + std::string(1, digit_b));
+  }
+  return result;
+}
+
+// Splits a canonical decimal string from FormatFloat ("12" or "12.34") into
+// integer and fraction parts.
+void NumberGenerator::SplitDecimal(
+    const std::string& s, std::string* int_part, std::string* frac_part
+) {
+  size_t dot = s.find('.');
+  if (dot == std::string::npos) {
+    *int_part = s;
+    frac_part->clear();
+  } else {
+    *int_part = s.substr(0, dot);
+    *frac_part = s.substr(dot + 1);
+  }
+}
+
+// Compares the values of two canonical non-negative decimals.
+int NumberGenerator::CompareDecimal(
+    const std::string& int_a,
+    const std::string& frac_a,
+    const std::string& int_b,
+    const std::string& frac_b
+) {
+  if (int_a.size() != int_b.size()) {
+    return int_a.size() < int_b.size() ? -1 : 1;
+  }
+  if (int_a != int_b) {
+    return int_a < int_b ? -1 : 1;
+  }
+  size_t max_frac = std::max(frac_a.size(), frac_b.size());
+  for (size_t i = 0; i < max_frac; ++i) {
+    char da = i < frac_a.size() ? frac_a[i] : '0';
+    char db = i < frac_b.size() ? frac_b[i] : '0';
+    if (da != db) {
+      return da < db ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
+// Strips the ^( )$ anchors added by IntegerRangeRegex, keeping the group.
+std::string NumberGenerator::StripAnchors(const std::string& regex) {
+  return regex.substr(1, regex.size() - 2);
+}
+
+int64_t NumberGenerator::ParseIntCapped(const std::string& digits) {
+  // `digits` is a canonical non-negative integer string (no leading zeros).
+  // Parse it exactly when it fits in int64; clamp to INT64_MAX otherwise (such
+  // magnitudes are beyond practical float bounds and double integer precision).
+  static const std::string kMaxInt64 = std::to_string(std::numeric_limits<int64_t>::max());
+  if (digits.size() > kMaxInt64.size() ||
+      (digits.size() == kMaxInt64.size() && digits > kMaxInt64)) {
+    return std::numeric_limits<int64_t>::max();
+  }
+  return std::stoll(digits);
+}
+
+// Patterns for unsigned decimals (integer part plus optional fraction of up
+// to `precision` digits) within the given bounds. `low` is required and
+// non-negative; `high` is optional. Patterns for the value 0 are never
+// produced: when low's value is 0 the bound is treated as strict, and the
+// caller emits the zero pattern itself.
+std::vector<std::string> NumberGenerator::PositiveRangeParts(
+    const std::string& low,
+    bool strict_low,
+    const std::optional<std::string>& high,
+    bool strict_high,
+    int precision
+) {
+  std::vector<std::string> parts;
+  std::string int_low, frac_low;
+  SplitDecimal(low, &int_low, &frac_low);
+  if (int_low == "0" && frac_low.empty()) {
+    strict_low = true;
+  }
+  int64_t int_low_value = ParseIntCapped(int_low);
+  std::string opt_any_frac = "(\\.\\d{1," + std::to_string(precision) + "})?";
+
+  auto add_with_int_part = [&](const std::string& int_part, const FracPatternSet& set) {
+    for (const auto& part : set.parts) {
+      parts.push_back(int_part + "\\." + part);
+    }
+    if (set.include_empty) {
+      parts.push_back(int_part);
+    }
+  };
+
+  if (!high.has_value()) {
+    add_with_int_part(int_low, FracGreaterPatterns(frac_low, strict_low, precision));
+    // Guard the +1 against int64 overflow (int_low_value may be clamped to
+    // INT64_MAX for very large bounds).
+    if (int_low_value < std::numeric_limits<int64_t>::max()) {
+      parts.push_back(
+          StripAnchors(IntegerRangeRegex(int_low_value + 1, std::nullopt)) + opt_any_frac
+      );
+    }
+    return parts;
+  }
+
+  std::string int_high, frac_high;
+  SplitDecimal(*high, &int_high, &frac_high);
+  int64_t int_high_value = ParseIntCapped(int_high);
+  int cmp = CompareDecimal(int_low, frac_low, int_high, frac_high);
+  if (cmp > 0 || (cmp == 0 && (strict_low || strict_high))) {
+    return parts;
+  }
+  if (cmp == 0) {
+    // single representable value, with optional redundant trailing zeros
+    if (frac_low.empty()) {
+      parts.push_back(int_low + "(\\." + SomeZeros(precision) + ")?");
+    } else {
+      parts.push_back(
+          int_low + "\\." + frac_low + OptionalZeros(precision - static_cast<int>(frac_low.size()))
+      );
+    }
+    return parts;
+  }
+  if (int_low == int_high) {
+    add_with_int_part(
+        int_low, FracBetweenPatterns(frac_low, strict_low, frac_high, strict_high, precision)
+    );
+  } else {
+    add_with_int_part(int_low, FracGreaterPatterns(frac_low, strict_low, precision));
+    if (int_high_value - int_low_value >= 2) {
+      parts.push_back(
+          StripAnchors(IntegerRangeRegex(int_low_value + 1, int_high_value - 1)) + opt_any_frac
+      );
+    }
+    add_with_int_part(int_high, FracLessPatterns(frac_high, strict_high, precision));
+  }
+  return parts;
+}
+
+std::string NumberGenerator::FloatRangeRegex(
+    std::optional<double> start,
+    std::optional<double> end,
+    int precision,
+    bool exclusive_start,
+    bool exclusive_end
+) {
+  if (start && end) {
+    if (start.value() > end.value() ||
+        (start.value() == end.value() && (exclusive_start || exclusive_end))) {
+      return "^()$";
+    }
   }
 
   if (!start && !end) {
@@ -3049,256 +3405,59 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
 
   std::vector<std::string> parts;
 
-  int64_t startInt = 0;
-  int64_t endInt = 0;
-  double startFrac = 0.0;
-  double endFrac = 0.0;
-  bool isStartNegative = false;
-  bool isEndNegative = false;
-
-  if (start) {
-    isStartNegative = start.value() < 0;
-    startInt = static_cast<int64_t>(floor(start.value()));
-    startFrac = start.value() - startInt;
+  // Negative values: x is in [start, end] iff -x is in [-end, -start], so the
+  // positive-range patterns are reused on the negated bounds and prefixed
+  // with '-'.
+  bool negatives_in_range = !start.has_value() || start.value() < 0;
+  if (negatives_in_range) {
+    std::string low = "0";
+    bool strict_low = true;
+    if (end.has_value() && end.value() < 0) {
+      low =
+          RoundBoundToGrid(-end.value(), precision, /*is_lower=*/true, exclusive_end, &strict_low);
+    }
+    std::optional<std::string> high;
+    bool strict_high = false;
+    if (start.has_value()) {
+      high = RoundBoundToGrid(
+          -start.value(), precision, /*is_lower=*/false, exclusive_start, &strict_high
+      );
+    }
+    for (auto& part : PositiveRangeParts(low, strict_low, high, strict_high, precision)) {
+      parts.push_back("-" + std::move(part));
+    }
   }
 
-  if (end) {
-    isEndNegative = end.value() < 0;
-    endInt = static_cast<int64_t>(floor(end.value()));
-    endFrac = end.value() - endInt;
+  bool zero_allowed =
+      (!start.has_value() || start.value() < 0 || (start.value() == 0 && !exclusive_start)) &&
+      (!end.has_value() || end.value() > 0 || (end.value() == 0 && !exclusive_end));
+  if (zero_allowed) {
+    parts.push_back("0(\\." + SomeZeros(precision) + ")?");
+    // Negative zero written with an all-zero fraction ("-0.0".."-0.000000") also
+    // denotes 0. PositiveRangeParts never emits magnitude 0, so add these forms
+    // explicitly when the range covers the negative side.
+    if (negatives_in_range) {
+      parts.push_back("-0(\\." + SomeZeros(precision) + ")");
+    }
   }
 
-  if (start && !end) {
-    std::string startIntStr = FormatFloat(start.value(), precision);
-    parts.push_back(EscapeDotForRegex(startIntStr));
-
-    if (startFrac > 0.0) {
-      size_t dotPos = startIntStr.find('.');
-      if (dotPos != std::string::npos) {
-        std::string intPartStr = startIntStr.substr(0, dotPos);
-        std::string fracPartStr = startIntStr.substr(dotPos + 1);
-
-        if (!fracPartStr.empty()) {
-          for (size_t i = 0; i < fracPartStr.length(); i++) {
-            if (i == 0) {
-              if (isStartNegative) {
-                for (char d = '0'; d < fracPartStr[0]; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
-                  );
-                }
-              } else {
-                for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
-                  );
-                }
-              }
-            } else {
-              std::string pref = fracPartStr.substr(0, i);
-              if (isStartNegative) {
-                if (fracPartStr[i] > '0') {
-                  for (char d = '0'; d < fracPartStr[i]; d++) {
-                    parts.push_back(
-                        intPartStr + "\\." + pref + d + "\\d{0," +
-                        std::to_string(precision - i - 1) + "}"
-                    );
-                  }
-                }
-              } else {
-                for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + pref + d + "\\d{0," + std::to_string(precision - i - 1) +
-                      "}"
-                  );
-                }
-              }
-            }
-          }
-        }
-      }
+  // Positive values
+  if (!end.has_value() || end.value() > 0) {
+    std::string low = "0";
+    bool strict_low = true;
+    if (start.has_value() && start.value() > 0) {
+      low = RoundBoundToGrid(
+          start.value(), precision, /*is_lower=*/true, exclusive_start, &strict_low
+      );
     }
-
-    if (startInt < INT64_MAX - 1) {
-      std::string intRangeRegex = GenerateRangeRegex(startInt + 1, std::nullopt);
-      intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
-      parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
+    std::optional<std::string> high;
+    bool strict_high = false;
+    if (end.has_value()) {
+      high =
+          RoundBoundToGrid(end.value(), precision, /*is_lower=*/false, exclusive_end, &strict_high);
     }
-  } else if (!start && end) {
-    std::string endIntStr = FormatFloat(end.value(), precision);
-    parts.push_back(EscapeDotForRegex(endIntStr));
-
-    if (endFrac > 0.0) {
-      size_t dotPos = endIntStr.find('.');
-      if (dotPos != std::string::npos) {
-        std::string intPartStr = endIntStr.substr(0, dotPos);
-        std::string fracPartStr = endIntStr.substr(dotPos + 1);
-
-        if (!fracPartStr.empty()) {
-          for (size_t i = 0; i < fracPartStr.length(); i++) {
-            if (i == 0) {
-              if (isEndNegative) {
-                for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
-                  );
-                }
-              } else {
-                for (char d = '0'; d < fracPartStr[0]; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
-                  );
-                }
-              }
-            } else {
-              if (isEndNegative) {
-                std::string pref = fracPartStr.substr(0, i);
-                for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + pref + d + "\\d{0," + std::to_string(precision - i - 1) +
-                      "}"
-                  );
-                }
-              } else if (fracPartStr[i] > '0') {
-                std::string pref = fracPartStr.substr(0, i);
-                for (char d = '0'; d < fracPartStr[i]; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + pref + d + "\\d{0," + std::to_string(precision - i - 1) +
-                      "}"
-                  );
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    if (endInt > INT64_MIN + 1) {
-      std::string intRangeRegex = GenerateRangeRegex(std::nullopt, endInt - 1);
-      intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
-      parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
-    }
-  } else if (start && end) {
-    if (startInt == endInt) {
-      if (startFrac == 0.0 && endFrac == 0.0) {
-        parts.push_back(std::to_string(startInt));
-      } else {
-        std::string startStr = FormatFloat(start.value(), precision);
-        parts.push_back(EscapeDotForRegex(startStr));
-
-        std::string endStr = FormatFloat(end.value(), precision);
-        if (startStr != endStr) {
-          parts.push_back(EscapeDotForRegex(endStr));
-        }
-      }
-    } else {
-      std::string startStr = FormatFloat(start.value(), precision);
-      parts.push_back(EscapeDotForRegex(startStr));
-
-      std::string endStr = FormatFloat(end.value(), precision);
-      if (startStr != endStr) {
-        parts.push_back(EscapeDotForRegex(endStr));
-      }
-
-      if (endInt > startInt + 1) {
-        std::string intRangeRegex = GenerateRangeRegex(startInt + 1, endInt - 1);
-        intRangeRegex = intRangeRegex.substr(1, intRangeRegex.length() - 2);
-        parts.push_back(intRangeRegex + "(\\.\\d{1," + std::to_string(precision) + "})?");
-      }
-
-      if (startFrac > 0.0) {
-        size_t dotPos = startStr.find('.');
-        if (dotPos != std::string::npos) {
-          std::string intPartStr = startStr.substr(0, dotPos);
-          std::string fracPartStr = startStr.substr(dotPos + 1);
-
-          for (size_t i = 0; i < fracPartStr.length(); i++) {
-            if (i == 0) {
-              if (isStartNegative) {
-                for (char d = '0'; d < fracPartStr[0]; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
-                  );
-                }
-              } else {
-                for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
-                  );
-                }
-              }
-            } else {
-              std::string pref = fracPartStr.substr(0, i);
-              if (isStartNegative) {
-                if (fracPartStr[i] > '0') {
-                  for (char d = '0'; d < fracPartStr[i]; d++) {
-                    parts.push_back(
-                        intPartStr + "\\." + pref + d + "\\d{0," +
-                        std::to_string(precision - i - 1) + "}"
-                    );
-                  }
-                }
-              } else {
-                for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + pref + d + "\\d{0," + std::to_string(precision - i - 1) +
-                      "}"
-                  );
-                }
-              }
-            }
-          }
-        }
-      } else {
-        parts.push_back(std::to_string(startInt) + "\\.\\d{1," + std::to_string(precision) + "}");
-      }
-
-      if (endFrac > 0.0) {
-        size_t dotPos = endStr.find('.');
-        if (dotPos != std::string::npos) {
-          std::string intPartStr = endStr.substr(0, dotPos);
-          std::string fracPartStr = endStr.substr(dotPos + 1);
-
-          for (size_t i = 0; i < fracPartStr.length(); i++) {
-            if (i == 0) {
-              if (isEndNegative) {
-                for (char d = fracPartStr[0] + 1; d <= '9'; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
-                  );
-                }
-              } else {
-                for (char d = '0'; d < fracPartStr[0]; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + d + "\\d{0," + std::to_string(precision - 1) + "}"
-                  );
-                }
-              }
-            } else {
-              if (isEndNegative) {
-                std::string pref = fracPartStr.substr(0, i);
-                for (char d = fracPartStr[i] + 1; d <= '9'; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + pref + d + "\\d{0," + std::to_string(precision - i - 1) +
-                      "}"
-                  );
-                }
-              } else if (fracPartStr[i] > '0') {
-                std::string pref = fracPartStr.substr(0, i);
-                for (char d = '0'; d < fracPartStr[i]; d++) {
-                  parts.push_back(
-                      intPartStr + "\\." + pref + d + "\\d{0," + std::to_string(precision - i - 1) +
-                      "}"
-                  );
-                }
-              }
-            }
-          }
-        }
-      } else {
-        parts.push_back(std::to_string(endInt) + "\\.\\d{1," + std::to_string(precision) + "}");
-      }
+    for (auto& part : PositiveRangeParts(low, strict_low, high, strict_high, precision)) {
+      parts.push_back(std::move(part));
     }
   }
 
@@ -3313,6 +3472,22 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
   result << ")$";
 
   return result.str();
+}
+
+std::string JSONSchemaConverter::GenerateRangeRegex(
+    std::optional<int64_t> start, std::optional<int64_t> end
+) {
+  return NumberGenerator::IntegerRangeRegex(start, end);
+}
+
+std::string JSONSchemaConverter::GenerateFloatRangeRegex(
+    std::optional<double> start,
+    std::optional<double> end,
+    int precision,
+    bool exclusive_start,
+    bool exclusive_end
+) {
+  return NumberGenerator::FloatRangeRegex(start, end, precision, exclusive_start, exclusive_end);
 }
 
 // ==================== Public API Functions ====================
@@ -3403,8 +3578,12 @@ std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64
   return JSONSchemaConverter::GenerateRangeRegex(start, end);
 }
 
-std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<double> end) {
-  return JSONSchemaConverter::GenerateFloatRangeRegex(start, end, 6);
+std::string GenerateFloatRangeRegex(
+    std::optional<double> start, std::optional<double> end, bool exclusive_start, bool exclusive_end
+) {
+  return JSONSchemaConverter::GenerateFloatRangeRegex(
+      start, end, 6, exclusive_start, exclusive_end
+  );
 }
 
 std::string QwenXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
