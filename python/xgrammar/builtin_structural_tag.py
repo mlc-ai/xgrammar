@@ -36,6 +36,7 @@ def get_model_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
 ) -> StructuralTag:
     r"""Get a structural tag for a model's reasoning and tool-call output format.
 
@@ -207,6 +208,14 @@ def get_model_structural_tag(
         emit in bad cases that would otherwise blow up grammar
         compilation/matching. Default: ``None``.
 
+    reasoning_max_tokens : Optional[int]
+        Optional token budget for the reasoning (think) span. When set to a
+        non-negative integer, a reasoning-capable model's think content is
+        bounded to at most this many tokens before the closing think marker is
+        forced -- i.e. a "think budget". ``None`` (default) leaves the reasoning
+        length unbounded. Has no effect for non-reasoning models or when
+        ``reasoning`` is ``False``.
+
     Notes
     -----
     If a tool's ``parameters`` field is omitted or ``None``, its generated
@@ -241,6 +250,7 @@ def get_model_structural_tag(
         any_order=any_order,
         exclude_special_tokens=exclude_special_tokens,
         max_whitespace_cnt=max_whitespace_cnt,
+        reasoning_max_tokens=reasoning_max_tokens,
     )
 
 
@@ -528,6 +538,7 @@ def get_llama_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Llama style structural tag format.
@@ -639,6 +650,7 @@ def get_kimi_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Kimi-K2 style structural tag format.
@@ -779,7 +791,9 @@ def get_kimi_structural_tag(
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
+    prefix_tag = TagFormat(
+        begin="", content=AnyTextFormat(max_tokens=reasoning_max_tokens), end=THINK_TAG_END
+    )
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
@@ -792,6 +806,7 @@ def get_deepseek_r1_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-R1 style structural tag format.
@@ -888,7 +903,9 @@ def get_deepseek_r1_structural_tag(
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
+    prefix_tag = TagFormat(
+        begin="", content=AnyTextFormat(max_tokens=reasoning_max_tokens), end=THINK_TAG_END
+    )
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
@@ -902,6 +919,7 @@ def get_deepseek_v3_1_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V3.1 style structural tag format.
@@ -996,7 +1014,9 @@ def get_deepseek_v3_1_structural_tag(
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
+    prefix_tag = TagFormat(
+        begin="", content=AnyTextFormat(max_tokens=reasoning_max_tokens), end=THINK_TAG_END
+    )
 
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
@@ -1011,6 +1031,7 @@ def get_qwen_3_5_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Qwen XML tool-call structural tag format.
@@ -1120,7 +1141,9 @@ def get_qwen_3_5_structural_tag(
 
     prefix_tag = SequenceFormat(
         elements=[
-            TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END),
+            TagFormat(
+                begin="", content=AnyTextFormat(max_tokens=reasoning_max_tokens), end=THINK_TAG_END
+            ),
             ConstStringFormat(value=THINK_SUFFIX),
         ]
     )
@@ -1140,6 +1163,7 @@ def get_qwen_3_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Qwen3 style structural tag format.
@@ -1245,7 +1269,9 @@ def get_qwen_3_structural_tag(
 
     prefix_tag = SequenceFormat(
         elements=[
-            TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END),
+            TagFormat(
+                begin="", content=AnyTextFormat(max_tokens=reasoning_max_tokens), end=THINK_TAG_END
+            ),
             ConstStringFormat(value=THINK_SUFFIX),
         ]
     )
@@ -1261,6 +1287,7 @@ def get_harmony_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get harmony(gpt-oss) style structural tag format.
@@ -1382,7 +1409,11 @@ def get_harmony_structural_tag(
         assert len(tags) > 0
 
     if reasoning:
-        analysis_tag = TagFormat(begin=ANALYSIS_BEGIN, content=AnyTextFormat(), end=FINAL_END)
+        analysis_tag = TagFormat(
+            begin=ANALYSIS_BEGIN,
+            content=AnyTextFormat(max_tokens=reasoning_max_tokens),
+            end=FINAL_END,
+        )
         tags.append(analysis_tag)
 
     tags_with_separator = TagsWithSeparatorFormat(tags=tags, separator=TAG_SEPARATOR)
@@ -1398,6 +1429,7 @@ def get_deepseek_v3_2_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V3.2 style structural tag format.
@@ -1518,7 +1550,9 @@ def get_deepseek_v3_2_structural_tag(
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
+    prefix_tag = TagFormat(
+        begin="", content=AnyTextFormat(max_tokens=reasoning_max_tokens), end=THINK_TAG_END
+    )
 
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
@@ -1533,6 +1567,7 @@ def get_minimax_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get MiniMax-M2.5 style structural tag format.
@@ -1650,7 +1685,9 @@ def get_minimax_structural_tag(
         )
 
     if reasoning:
-        think_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
+        think_tag = TagFormat(
+            begin="", content=AnyTextFormat(max_tokens=reasoning_max_tokens), end=THINK_TAG_END
+        )
     else:
         think_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
     return StructuralTag(
@@ -1669,6 +1706,7 @@ def get_glm_4_7_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get GLM-4.7/GLM-5 style structural tag format.
@@ -1788,7 +1826,10 @@ def get_glm_4_7_structural_tag(
 
     prefix_tag = TagFormat(
         begin="",
-        content=AnyTextFormat(excludes=_text_excludes(exclude_special_tokens, REASONING_EXCLUDES)),
+        content=AnyTextFormat(
+            excludes=_text_excludes(exclude_special_tokens, REASONING_EXCLUDES),
+            max_tokens=reasoning_max_tokens,
+        ),
         end=THINK_TAG_END,
     )
 
@@ -1806,6 +1847,7 @@ def _get_gemma_4_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Gemma 4 style structural tag format.
@@ -1919,7 +1961,11 @@ def _get_gemma_4_structural_tag(
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
-    prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
+    prefix_tag = TagFormat(
+        begin=THINK_TAG_BEGIN,
+        content=AnyTextFormat(max_tokens=reasoning_max_tokens),
+        end=THINK_TAG_END,
+    )
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
@@ -1932,6 +1978,7 @@ def get_deepseek_v4_structural_tag(
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    reasoning_max_tokens: Optional[int] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V4 style structural tag format.
@@ -2050,7 +2097,9 @@ def get_deepseek_v4_structural_tag(
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
+    prefix_tag = TagFormat(
+        begin="", content=AnyTextFormat(max_tokens=reasoning_max_tokens), end=THINK_TAG_END
+    )
 
     sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
     return StructuralTag(format=sequence_format)
