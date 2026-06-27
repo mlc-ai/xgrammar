@@ -2435,8 +2435,6 @@ number_range_instances = [
     # single-value range
     ({"type": "number", "minimum": 5, "maximum": 5}, "5", True),
     ({"type": "number", "minimum": 5, "maximum": 5}, "5.000001", False),
-    # empty range expressed via exclusivity: builds but matches nothing
-    ({"type": "number", "exclusiveMinimum": 5, "exclusiveMaximum": 5}, "5", False),
     # negative exclusive
     ({"type": "number", "exclusiveMinimum": -5.5}, "-5.5", False),
     ({"type": "number", "exclusiveMinimum": -5.5}, "-5.499999", True),
@@ -2446,6 +2444,28 @@ number_range_instances = [
 @pytest.mark.parametrize("schema, instance, accepted", number_range_instances)
 def test_number_range_value_acceptance(schema, instance, accepted):
     check_schema_with_instance(schema, instance, is_accepted=accepted)
+
+
+unsatisfiable_range_schemas = [
+    # minimum greater than maximum
+    {"type": "number", "minimum": 10, "maximum": 5},
+    {"type": "integer", "minimum": 10, "maximum": 5},
+    # min == max but the single candidate value is excluded by an exclusive bound
+    {"type": "number", "exclusiveMinimum": 5, "exclusiveMaximum": 5},
+    {"type": "number", "minimum": 5, "exclusiveMaximum": 5},
+    {"type": "number", "exclusiveMinimum": 5, "maximum": 5},
+    {"type": "number", "minimum": 5.5, "exclusiveMaximum": 5.5},
+    {"type": "number", "minimum": 5, "exclusiveMinimum": 5, "maximum": 5},
+    {"type": "integer", "exclusiveMinimum": 5, "exclusiveMaximum": 6},
+    {"type": "integer", "minimum": 5, "exclusiveMaximum": 5},
+]
+
+
+@pytest.mark.parametrize("schema", unsatisfiable_range_schemas)
+def test_unsatisfiable_range_raises(schema):
+    """An impossible numeric range must be rejected at build time."""
+    with pytest.raises(RuntimeError):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
 
 
 integer_range_instances = [

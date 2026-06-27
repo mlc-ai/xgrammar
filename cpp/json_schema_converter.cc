@@ -493,18 +493,30 @@ Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object
     spec.exclusive_maximum = std::move(result).Unwrap();
   }
 
-  double effective_min = spec.minimum.value_or(-std::numeric_limits<double>::infinity());
-  double effective_max = spec.maximum.value_or(std::numeric_limits<double>::infinity());
-  if (spec.exclusive_minimum.has_value()) {
-    effective_min = std::max(effective_min, *spec.exclusive_minimum);
-  }
-  if (spec.exclusive_maximum.has_value()) {
-    effective_max = std::min(effective_max, *spec.exclusive_maximum);
-  }
-  if (effective_min > effective_max) {
+  // The range is empty if any lower bound conflicts with any upper bound. An
+  // exclusive bound also rules out equality, so it uses ">=" instead of ">".
+  auto empty = []() {
     return ResultErr<SchemaError>(
-        SchemaErrorType::kUnsatisfiableSchema, "Invalid range: minimum greater than maximum"
+        SchemaErrorType::kUnsatisfiableSchema, "Invalid range: empty range"
     );
+  };
+
+  // minimum (x >= min) vs maximum (x <= max).
+  if (spec.minimum && spec.maximum && *spec.minimum > *spec.maximum) {
+    return empty();
+  }
+  // minimum (x >= min) vs exclusiveMaximum (x < exclMax).
+  if (spec.minimum && spec.exclusive_maximum && *spec.minimum >= *spec.exclusive_maximum) {
+    return empty();
+  }
+  // exclusiveMinimum (x > exclMin) vs maximum (x <= max).
+  if (spec.exclusive_minimum && spec.maximum && *spec.exclusive_minimum >= *spec.maximum) {
+    return empty();
+  }
+  // exclusiveMinimum (x > exclMin) vs exclusiveMaximum (x < exclMax).
+  if (spec.exclusive_minimum && spec.exclusive_maximum &&
+      *spec.exclusive_minimum >= *spec.exclusive_maximum) {
+    return empty();
   }
   return ResultOk(std::move(spec));
 }
