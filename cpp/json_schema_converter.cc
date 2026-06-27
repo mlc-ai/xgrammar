@@ -442,20 +442,12 @@ bool FiniteValuesOverlapTypeSet(
   return false;
 }
 
-bool TryGetFiniteValues(
-    const picojson::object& schema, std::vector<picojson::value>* values, bool require_pure_schema
-) {
+bool TryGetFiniteValues(const picojson::object& schema, std::vector<picojson::value>* values) {
   if (schema.count("const")) {
-    if (require_pure_schema && !HasOnlyKeys(schema, {"const"})) {
-      return false;
-    }
     values->push_back(schema.at("const"));
     return true;
   }
   if (schema.count("enum")) {
-    if (require_pure_schema && !HasOnlyKeys(schema, {"enum"})) {
-      return false;
-    }
     if (!schema.at("enum").is<picojson::array>()) {
       return false;
     }
@@ -489,7 +481,7 @@ std::optional<OneOfArmProof> ClassifyTypeOrFiniteOneOfArm(const picojson::value&
   }
 
   std::vector<picojson::value> finite_values;
-  if (TryGetFiniteValues(schema, &finite_values, true)) {
+  if (TryGetFiniteValues(schema, &finite_values)) {
     OneOfArmProof proof;
     proof.kind = OneOfArmProof::Kind::kFiniteValues;
     proof.finite_values = std::move(finite_values);
@@ -570,7 +562,7 @@ std::optional<std::vector<picojson::value>> GetDiscriminatorValues(
   }
 
   std::vector<picojson::value> values;
-  if (!TryGetFiniteValues(property_it->second.get<picojson::object>(), &values, true)) {
+  if (!TryGetFiniteValues(property_it->second.get<picojson::object>(), &values)) {
     return std::nullopt;
   }
   return values;
@@ -597,7 +589,7 @@ std::vector<std::string> GetDiscriminatorCandidates(const picojson::value& optio
       continue;
     }
     std::vector<picojson::value> values;
-    if (TryGetFiniteValues(property_it->second.get<picojson::object>(), &values, true)) {
+    if (TryGetFiniteValues(property_it->second.get<picojson::object>(), &values)) {
       candidates.push_back(key);
     }
   }
