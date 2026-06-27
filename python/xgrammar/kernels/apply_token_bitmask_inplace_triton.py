@@ -67,7 +67,9 @@ def apply_token_bitmask_inplace_kernel(
         vocab_mask = offsets < vocab_size
         packed_bitmask_mask = bitmask_offsets < bitmask_strides
         packed_bitmask = tl.load(
-            bitmask_ptr + batch_id * bitmask_strides + bitmask_offsets, packed_bitmask_mask
+            bitmask_ptr + batch_id * bitmask_strides + bitmask_offsets,
+            mask=packed_bitmask_mask,
+            other=0,
         )
         bitmask = ((packed_bitmask[:, None] >> (tl.arange(0, 32)[None, :])) & 1) == 0
         bitmask = bitmask.reshape(BLOCK_SIZE)
@@ -75,6 +77,38 @@ def apply_token_bitmask_inplace_kernel(
         tl.store(
             logits_ptr + batch_id * logits_strides + offsets, -float("inf"), vocab_mask & bitmask
         )
+
+
+@triton.jit
+def apply_token_bitmask_inplace_rocm_kernel(
+    logits_ptr,
+    bitmask_ptr,
+    indices_ptr,
+    num_rows,
+    vocab_size,
+    logits_strides,
+    bitmask_strides,
+    BLOCK_SIZE: tl.constexpr,
+):
+    block_id = tl.program_id(0)
+    row_id = tl.program_id(1)
+    block_offset = block_id * BLOCK_SIZE
+    batch_id = row_id if indices_ptr is None else tl.load(indices_ptr + row_id)
+    offsets = block_offset + tl.arange(0, BLOCK_SIZE)
+    bitmask_offsets = block_offset // 32 + tl.arange(0, BLOCK_SIZE // 32)
+    vocab_mask = offsets < vocab_size
+    packed_bitmask_mask = bitmask_offsets < bitmask_strides
+    packed_bitmask = tl.load(
+        bitmask_ptr + batch_id * bitmask_strides + bitmask_offsets,
+        mask=packed_bitmask_mask,
+        other=0,
+    )
+    bitmask = ((packed_bitmask[:, None] >> (tl.arange(0, 32)[None, :])) & 1) == 0
+    bitmask = bitmask.reshape(BLOCK_SIZE)
+
+    tl.store(
+        logits_ptr + batch_id * logits_strides + offsets, -float("inf"), vocab_mask & bitmask
+    )
 
 
 def apply_token_bitmask_inplace_triton(
@@ -86,8 +120,9 @@ def apply_token_bitmask_inplace_triton(
     NUM_SMS = torch.cuda.get_device_properties("cuda").multi_processor_count
     BLOCK_SIZE = 4096
 
-    arch = torch.cuda.get_device_properties(0).gcnArchName
-    if torch.version.hip is not None and "gfx1" not in arch:
+    is_rocm = torch.version.hip is not None
+    arch = getattr(torch.cuda.get_device_properties(0), "gcnArchName", "")
+    if is_rocm and "gfx1" not in arch:
         # For AMD GPUs (non-Navi)
         WARP_SIZE = 64
     else:
@@ -112,18 +147,32 @@ def apply_token_bitmask_inplace_triton(
             indices_cpu = torch.tensor(indices, dtype=torch.int32)
             indices = indices_cpu.to(device=logits.device, non_blocking=True)
 
-    grid = (NUM_SMS,)
-
-    apply_token_bitmask_inplace_kernel[grid](
-        logits,
-        bitmask,
-        indices,
-        num_rows,
-        vocab_size,
-        logits.stride()[0],
-        bitmask.stride()[0],
-        NUM_SMS,
-        BLOCK_SIZE,
-        num_warps=BLOCK_SIZE // WARP_SIZE // (16 // logits.element_size()),
-        num_stages=3,
-    )
+    if is_rocm:
+        grid = (triton.cdiv(vocab_size, BLOCK_SIZE), num_rows)
+        apply_token_bitmask_inplace_rocm_kernel[grid](
+            logits,
+            bitmask,
+            indices,
+            num_rows,
+            vocab_size,
+            logits.stride()[0],
+            bitmask.stride()[0],
+            BLOCK_SIZE,
+            num_warps=BLOCK_SIZE // WARP_SIZE // (16 // logits.element_size()),
+            num_stages=3,
+        )
+    else:
+        grid = (NUM_SMS,)
+        apply_token_bitmask_inplace_kernel[grid](
+            logits,
+            bitmask,
+            indices,
+            num_rows,
+            vocab_size,
+            logits.stride()[0],
+            bitmask.stride()[0],
+            NUM_SMS,
+            BLOCK_SIZE,
+            num_warps=BLOCK_SIZE // WARP_SIZE // (16 // logits.element_size()),
+            num_stages=3,
+        )
