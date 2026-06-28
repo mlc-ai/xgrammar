@@ -84,7 +84,6 @@ def apply_token_bitmask_inplace_rocm_kernel(
     logits_ptr,
     bitmask_ptr,
     indices_ptr,
-    num_rows,
     vocab_size,
     logits_strides,
     bitmask_strides,
@@ -117,11 +116,12 @@ def apply_token_bitmask_inplace_triton(
     vocab_size: Optional[int] = None,
     indices: Optional[Union[List[int], torch.Tensor]] = None,
 ):
-    NUM_SMS = torch.cuda.get_device_properties("cuda").multi_processor_count
+    device_props = torch.cuda.get_device_properties(logits.device)
+    NUM_SMS = device_props.multi_processor_count
     BLOCK_SIZE = 4096
 
     is_rocm = torch.version.hip is not None
-    arch = getattr(torch.cuda.get_device_properties(0), "gcnArchName", "")
+    arch = getattr(device_props, "gcnArchName", "")
     if is_rocm and "gfx1" not in arch:
         # For AMD GPUs (non-Navi)
         WARP_SIZE = 64
@@ -147,13 +147,15 @@ def apply_token_bitmask_inplace_triton(
             indices_cpu = torch.tensor(indices, dtype=torch.int32)
             indices = indices_cpu.to(device=logits.device, non_blocking=True)
 
+    if num_rows == 0 or vocab_size == 0:
+        return
+
     if is_rocm:
         grid = (triton.cdiv(vocab_size, BLOCK_SIZE), num_rows)
         apply_token_bitmask_inplace_rocm_kernel[grid](
             logits,
             bitmask,
             indices,
-            num_rows,
             vocab_size,
             logits.stride()[0],
             bitmask.stride()[0],

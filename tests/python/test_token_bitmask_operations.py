@@ -365,6 +365,28 @@ def test_apply_token_bitmask_inplace_indices(
         torch.testing.assert_close(logits, logits_expected)
 
 
+@pytest.mark.parametrize("case", ("empty_indices", "zero_vocab"))
+def test_apply_token_bitmask_inplace_triton_empty_work(case: str):
+    if not _is_cuda_available:
+        pytest.skip(reason="CUDA is not installed")
+
+    kernel = get_apply_token_bitmask_kernel("triton")
+
+    if case == "empty_indices":
+        logits = torch.randn((2, 64), dtype=torch.float32, device="cuda")
+        bitmask = torch.zeros((2, 2), dtype=torch.int32, device="cuda")
+        expected = logits.clone()
+        kernel(logits, bitmask, indices=[])
+    else:
+        logits = torch.empty((2, 0), dtype=torch.float32, device="cuda")
+        bitmask = torch.empty((2, 0), dtype=torch.int32, device="cuda")
+        expected = logits.clone()
+        kernel(logits, bitmask, vocab_size=0)
+
+    torch.cuda.synchronize()
+    torch.testing.assert_close(logits, expected)
+
+
 def test_bitmask_to_boolmask():
     # 0xFFFF0000, 0x0000FFFF
     bitmask = torch.tensor([[-65536, 65535]], dtype=torch.int32)
