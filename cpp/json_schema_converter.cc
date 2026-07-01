@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <climits>
 #include <cmath>
 #include <cstdint>
@@ -36,6 +37,17 @@ namespace xgrammar {
 
 namespace {
 
+// Parse the digit run pattern[begin, end) into a non-negative int. Uses std::from_chars so that
+// an overflowing quantifier (e.g. `{99999999999999999999}`) fails cleanly instead of throwing.
+// Returns false on overflow or if the range is not entirely digits.
+bool ParseNonNegativeInt(const std::string& pattern, size_t begin, size_t end, int* out) {
+  int value = 0;
+  auto [ptr, ec] = std::from_chars(pattern.data() + begin, pattern.data() + end, value);
+  if (ec != std::errc() || ptr != pattern.data() + end) return false;
+  *out = value;
+  return true;
+}
+
 // Parse a `{n}` / `{n,}` / `{n,m}` quantifier starting at pattern[pos] (which must be '{').
 // On success, sets *a/*b to the repetition range (b == -1 means unbounded) and advances *pos
 // to just past the closing '}'. Returns false if the braces do not form a valid quantifier.
@@ -46,7 +58,8 @@ bool ParseBraceQuantifier(const std::string& pattern, size_t* pos, int* a, int* 
   size_t lo_begin = i;
   while (i < n && std::isdigit(static_cast<unsigned char>(pattern[i]))) ++i;
   if (i == lo_begin) return false;  // {n,m} requires at least the lower bound digits
-  int lo = std::stoi(pattern.substr(lo_begin, i - lo_begin));
+  int lo;
+  if (!ParseNonNegativeInt(pattern, lo_begin, i, &lo)) return false;  // overflow / too many digits
   int hi;
   if (i < n && pattern[i] == '}') {
     hi = lo;  // {n}
@@ -58,8 +71,8 @@ bool ParseBraceQuantifier(const std::string& pattern, size_t* pos, int* a, int* 
     if (i >= n || pattern[i] != '}') return false;
     if (i == hi_begin) {
       hi = -1;  // {n,}
-    } else {
-      hi = std::stoi(pattern.substr(hi_begin, i - hi_begin));
+    } else if (!ParseNonNegativeInt(pattern, hi_begin, i, &hi)) {
+      return false;  // overflow / too many digits
     }
     ++i;  // skip '}'
   } else {
