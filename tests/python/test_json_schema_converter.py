@@ -2403,6 +2403,51 @@ def test_min_max_length():
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
 
 
+def test_string_pattern_with_length():
+    # Exact EBNF for the simplest case: [a-z]+ (element range [1, inf)) merged with maxLength=3
+    # -> [a-z]{1,3}.
+    schema_ebnf = {"type": "string", "pattern": "^[a-z]+$", "maxLength": 3}
+    ebnf_grammar = basic_json_rules_ebnf + (
+        r"""root ::= "\"" [a-z]{1,3} "\""
+"""
+    )
+    check_schema_with_grammar(schema_ebnf, ebnf_grammar, any_whitespace=True)
+
+    # L1a: char class + maxLength.
+    schema = {"type": "string", "pattern": "^[a-z]+$", "maxLength": 3}
+    check_schema_with_instance(schema, '"abc"', is_accepted=True, any_whitespace=False)
+    check_schema_with_instance(schema, '"abcd"', is_accepted=False, any_whitespace=False)
+
+    # L1b: char class + minLength.
+    schema2 = {"type": "string", "pattern": "^[a-z]+$", "minLength": 3}
+    check_schema_with_instance(schema2, '"ab"', is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema2, '"abc"', is_accepted=True, any_whitespace=False)
+
+    # Non-ASCII: length must be counted in Unicode code points, not bytes.
+    schema3 = {"type": "string", "pattern": "^.+$", "maxLength": 1}
+    check_schema_with_instance(schema3, '"你"', is_accepted=True, any_whitespace=False)
+    check_schema_with_instance(schema3, '"ab"', is_accepted=False, any_whitespace=False)
+
+    # Explicit {n,m} quantifier intersected with maxLength: [a-z]{2,8} & maxLength=4 -> {2,4}.
+    schema4 = {"type": "string", "pattern": "^[a-z]{2,8}$", "maxLength": 4}
+    check_schema_with_instance(schema4, '"abcd"', is_accepted=True, any_whitespace=False)
+    check_schema_with_instance(schema4, '"abcde"', is_accepted=False, any_whitespace=False)
+
+
+@pytest.mark.xfail(
+    reason="route C does not enforce length for alternation patterns; "
+    "general fix is route A follow-up",
+    strict=False,
+)
+def test_string_pattern_alternation_with_length():
+    # Alternation shapes are not recognized by route C, so length is not enforced (falls back to
+    # pattern-only). Route A (FSM intersection) is the general fix and is out of scope here.
+    schema = {"type": "string", "pattern": "^(a|bb|ccc)$", "maxLength": 2}
+    check_schema_with_instance(schema, '"a"', is_accepted=True, any_whitespace=False)
+    check_schema_with_instance(schema, '"bb"', is_accepted=True, any_whitespace=False)
+    check_schema_with_instance(schema, '"ccc"', is_accepted=False, any_whitespace=False)
+
+
 def test_type_array():
     schema = {
         "type": ["integer", "string"],
