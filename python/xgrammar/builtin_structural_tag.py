@@ -1847,10 +1847,10 @@ def get_gemma_4_structural_tag(
     TOOL_CALL_TRIGGER = "<|tool_call>"
     THINK_TAG_BEGIN = "<|channel>thought\n"
     THINK_TAG_END = "<channel|>"
-    # Besides the reasoning-channel markers, exclude the tool-response opener: Gemma 4
-    # otherwise reliably starts fabricating a <|tool_response>...  itself right after
-    # finishing a tool call instead of stopping.
-    GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>", "<|tool_response>"]
+    # Do NOT exclude <|tool_response> here: per the Gemma 4 prompt-formatting spec, the
+    # model emits <|tool_response> right after a tool call as its halt signal, and the
+    # inference engine is expected to register it as an additional stop sequence.
+    GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>"]
 
     tools = tools or []
     builtin_tools = builtin_tools or []
