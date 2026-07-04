@@ -1795,10 +1795,8 @@ def get_glm_4_7_structural_tag(
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-# TODO: We are dropping Gemma support because its parameter format is special and not supported
-# yet: the string are wrapped by <|"|> instead of ". We will support it later and get it back.
-# @register_model_structural_tag("gemma_4")
-def _get_gemma_4_structural_tag(
+@register_model_structural_tag("gemma_4")
+def get_gemma_4_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
@@ -1864,6 +1862,7 @@ def _get_gemma_4_structural_tag(
                     begin=TOOL_CALL_BEGIN_PREFIX + name,
                     content=JSONSchemaFormat(
                         json_schema=parameters,
+                        style="gemma",
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
                     ),
@@ -1890,6 +1889,7 @@ def _get_gemma_4_structural_tag(
             begin=TOOL_CALL_BEGIN_PREFIX + function.name,
             content=JSONSchemaFormat(
                 json_schema=_get_function_parameters(function),
+                style="gemma",
                 any_order=any_order,
                 max_whitespace_cnt=max_whitespace_cnt,
             ),
@@ -1907,6 +1907,7 @@ def _get_gemma_4_structural_tag(
                     begin=TOOL_CALL_BEGIN_PREFIX + name,
                     content=JSONSchemaFormat(
                         json_schema=parameters,
+                        style="gemma",
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
                     ),

@@ -1360,5 +1360,132 @@ def test_true_schema():
     assert not _is_grammar_accept_string(ebnf_grammar, "anything")
 
 
+# ---------- Gemma tool calling (json_format="gemma") ----------
+# Format: {key:<|"|>string value<|"|>,key2:123} — unquoted keys, <|"|>-delimited strings
+
+
+def _check_gemma_grammar(schema: dict, instance: str, accepted: bool):
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="gemma")
+    check_grammar_with_instance(ebnf_grammar, instance, accepted)
+
+
+gemma_string_schema_input_str_accepted = (
+    ('{name:<|"|>Bob<|"|>,age:100}', True),
+    ('{name:<|"|>Bob <html lang="en"> & "quotes"<|"|>,age:100}', True),
+    ('{name:<|"|>Bob<|"|>, age: 100}', True),
+    ('{name:<|"|><|"|>,age:0}', True),
+    # JSON-style quoting must be rejected
+    ('{name:"Bob",age:100}', False),
+    ('{"name":<|"|>Bob<|"|>,age:100}', False),
+    # The delimiter cannot appear inside the string content
+    ('{name:<|"|>Bo<|"|>b<|"|>,age:100}', False),
+    # Missing required property / unclosed brace
+    ('{name:<|"|>Bob<|"|>}', False),
+    ('{name:<|"|>Bob<|"|>,age:100', False),
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", gemma_string_schema_input_str_accepted)
+def test_gemma_string_schema(input_str: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["name", "age"],
+    }
+    _check_gemma_grammar(schema, input_str, accepted)
+
+
+gemma_value_types_input_str_accepted = (
+    ("{count:42,ratio:3.14,flag:true}", True),
+    ("{count:-7,ratio:1e-3,flag:false}", True),
+    ("{count:42,ratio:3.14,flag:True}", False),
+    ('{count:<|"|>42<|"|>,ratio:3.14,flag:true}', False),
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", gemma_value_types_input_str_accepted)
+def test_gemma_value_types(input_str: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {
+            "count": {"type": "integer"},
+            "ratio": {"type": "number"},
+            "flag": {"type": "boolean"},
+        },
+        "required": ["count", "ratio", "flag"],
+    }
+    _check_gemma_grammar(schema, input_str, accepted)
+
+
+gemma_nested_schema_input_str_accepted = (
+    ('{tags:[<|"|>a<|"|>,<|"|>b<|"|>],info:{city:<|"|>Seoul<|"|>}}', True),
+    ("{tags:[],info:{}}", False),  # city is required
+    ('{tags:[],info:{city:<|"|>Seoul<|"|>}}', True),
+    ('{tags:["a"],info:{city:<|"|>Seoul<|"|>}}', False),
+    ('{tags:[<|"|>a<|"|>],info:{"city":<|"|>Seoul<|"|>}}', False),
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", gemma_nested_schema_input_str_accepted)
+def test_gemma_nested_schema(input_str: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {
+            "tags": {"type": "array", "items": {"type": "string"}},
+            "info": {
+                "type": "object",
+                "properties": {"city": {"type": "string"}},
+                "required": ["city"],
+            },
+        },
+        "required": ["tags", "info"],
+    }
+    _check_gemma_grammar(schema, input_str, accepted)
+
+
+gemma_enum_schema_input_str_accepted = (
+    ('{unit:<|"|>celsius<|"|>}', True),
+    ('{unit:<|"|>fahrenheit<|"|>}', True),
+    ('{unit:<|"|>kelvin<|"|>}', False),
+    ('{unit:"celsius"}', False),
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", gemma_enum_schema_input_str_accepted)
+def test_gemma_enum_schema(input_str: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {"unit": {"enum": ["celsius", "fahrenheit"]}},
+        "required": ["unit"],
+    }
+    _check_gemma_grammar(schema, input_str, accepted)
+
+
+gemma_additional_properties_input_str_accepted = (
+    ('{name:<|"|>Bob<|"|>,extra:5}', True),
+    ('{name:<|"|>Bob<|"|>}', True),
+    ('{name:<|"|>Bob<|"|>,123bad:5}', False),
+    ('{name:<|"|>Bob<|"|>,extra:<|"|>5<|"|>}', False),
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", gemma_additional_properties_input_str_accepted)
+def test_gemma_additional_properties_schema(input_str: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+        "additionalProperties": {"type": "integer"},
+    }
+    _check_gemma_grammar(schema, input_str, accepted)
+
+
+def test_gemma_empty_schema():
+    schema = {"type": "object", "properties": {}}
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="gemma")
+    assert _is_grammar_accept_string(ebnf_grammar, "{}")
+    assert not _is_grammar_accept_string(ebnf_grammar, "")
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

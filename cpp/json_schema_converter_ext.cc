@@ -299,4 +299,146 @@ std::optional<std::string> XMLToolCallingConverter::GetCache(const std::string& 
   return rule_cache_manager_.GetCache(key, nested_object_level_ > 1);
 }
 
+// ==================== GemmaToolCallingConverter ====================
+
+const std::string GemmaToolCallingConverter::kStringDelim = "<|\"|>";
+const std::string GemmaToolCallingConverter::kGemmaStringContent = "gemma_string_content";
+const std::string GemmaToolCallingConverter::kGemmaVariableName = "gemma_variable_name";
+
+GemmaToolCallingConverter::GemmaToolCallingConverter(
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool any_whitespace,
+    std::optional<int> max_whitespace_cnt,
+    RefResolver ref_resolver,
+    bool any_order
+)
+    : JSONSchemaConverter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
+      ) {}
+
+void GemmaToolCallingConverter::AddBasicRules() {
+  // Any text not containing the string delimiter. The enclosing rules terminate it with
+  // the delimiter itself, so the boundary is unambiguous.
+  ebnf_script_creator_.AddRule(
+      kGemmaStringContent,
+      "TagDispatch(loop_after_dispatch=false,excludes=(" + EBNFScriptCreator::Str(kStringDelim) +
+          "))"
+  );
+  ebnf_script_creator_.AddRule(kGemmaVariableName, "[a-zA-Z_] [a-zA-Z0-9_]*");
+  // The base implementation builds all basic rules through the virtual Generate* methods,
+  // so basic_string / basic_any / basic_object etc. all come out in Gemma format.
+  JSONSchemaConverter::AddBasicRules();
+}
+
+std::string GemmaToolCallingConverter::GenerateString(
+    const StringSpec& spec, const std::string& rule_name
+) {
+  std::string delim = EBNFScriptCreator::Str(kStringDelim);
+
+  if (spec.format.has_value()) {
+    auto regex_pattern = JSONFormatToRegexPattern(*spec.format);
+    if (regex_pattern.has_value()) {
+      return delim + " " + RegexToEBNF(regex_pattern.value(), false) + " " + delim;
+    }
+  }
+
+  if (spec.pattern.has_value()) {
+    return delim + " " + RegexToEBNF(*spec.pattern, false) + " " + delim;
+  }
+
+  if (spec.min_length != 0 || spec.max_length != -1) {
+    // Exclude '<' so the multi-character delimiter can never appear inside the
+    // length-constrained content.
+    std::string char_pattern = "[^<]";
+    std::string repetition;
+    if (spec.max_length == -1) {
+      repetition = "{" + std::to_string(spec.min_length) + ",}";
+    } else {
+      repetition =
+          "{" + std::to_string(spec.min_length) + "," + std::to_string(spec.max_length) + "}";
+    }
+    return delim + " " + char_pattern + repetition + " " + delim;
+  }
+
+  return delim + " " + kGemmaStringContent + " " + delim;
+}
+
+std::string GemmaToolCallingConverter::GemmaSerializeJSON(const picojson::value& value) {
+  if (value.is<std::string>()) {
+    // Gemma strings have no escape sequences; the raw content is emitted between delimiters.
+    return kStringDelim + value.get<std::string>() + kStringDelim;
+  }
+  if (value.is<picojson::object>()) {
+    const auto& obj = value.get<picojson::object>();
+    std::string result = "{";
+    bool first = true;
+    for (const auto& [key, val] : obj) {
+      if (!first) {
+        result += ",";
+      }
+      first = false;
+      result += key + ":" + GemmaSerializeJSON(val);
+    }
+    return result + "}";
+  }
+  if (value.is<picojson::array>()) {
+    const auto& arr = value.get<picojson::array>();
+    std::string result = "[";
+    for (size_t i = 0; i < arr.size(); ++i) {
+      if (i != 0) {
+        result += ",";
+      }
+      result += GemmaSerializeJSON(arr[i]);
+    }
+    return result + "]";
+  }
+  // Numbers, booleans and null keep their JSON serialization.
+  return value.serialize();
+}
+
+std::string GemmaToolCallingConverter::GemmaValueToEBNFLiteral(const std::string& json_value) {
+  picojson::value value;
+  std::string err = picojson::parse(value, json_value);
+  XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON value: " << err
+                              << ". The JSON string is: " << json_value;
+  return EBNFScriptCreator::Str(GemmaSerializeJSON(value));
+}
+
+std::string GemmaToolCallingConverter::GenerateConst(
+    const ConstSpec& spec, const std::string& rule_name
+) {
+  return GemmaValueToEBNFLiteral(spec.json_value);
+}
+
+std::string GemmaToolCallingConverter::GenerateEnum(
+    const EnumSpec& spec, const std::string& rule_name
+) {
+  XGRAMMAR_DCHECK(!spec.json_values.empty())
+      << "GenerateEnum called with empty enum spec for rule: " << rule_name;
+  std::string result;
+  for (size_t i = 0; i < spec.json_values.size(); ++i) {
+    if (i != 0) {
+      result += " | ";
+    }
+    result += "(" + GemmaValueToEBNFLiteral(spec.json_values[i]) + ")";
+  }
+  return result;
+}
+
+std::string GemmaToolCallingConverter::FormatPropertyKey(const std::string& key) {
+  // Keys are unquoted in Gemma format.
+  return EBNFScriptCreator::Str(key);
+}
+
+std::string GemmaToolCallingConverter::GetKeyPattern() const { return kGemmaVariableName; }
+
+std::string GemmaToolCallingConverter::GetKeyPatternExcluding(
+    const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+) {
+  // The trie-based exclusion in the base class is built for JSON-quoted keys; Gemma keys
+  // are bare identifiers, so fall back to the plain key pattern.
+  return GetKeyPattern();
+}
+
 }  // namespace xgrammar

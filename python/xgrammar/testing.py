@@ -24,7 +24,9 @@ def _json_schema_to_ebnf(
     separators: Optional[Tuple[str, str]] = None,
     max_whitespace_cnt: Optional[int] = None,
     strict_mode: bool = True,
-    json_format: Literal["json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml"] = "json",
+    json_format: Literal[
+        "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml", "gemma"
+    ] = "json",
     any_order: bool = False,
 ) -> str:
     """Convert JSON schema string to BNF grammar string. For test purposes.
@@ -58,8 +60,9 @@ def _json_schema_to_ebnf(
 
     json_format : str, default: "json"
         The root format of the generated grammar. One of "json", "qwen_xml", "minimax_xml",
-        "deepseek_xml", "glm_xml". Formats other than "json" generate an XML-style root object
-        for tool calling, while the inner values remain JSON-style.
+        "deepseek_xml", "glm_xml", "gemma". Formats other than "json" generate a tool-calling
+        root object; the XML formats keep JSON-style inner values, while "gemma" uses Gemma's
+        unquoted-key, <|"|>-delimited-string format throughout.
 
     Returns
     -------

@@ -96,6 +96,54 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   const XMLWrapper xml_wrapper_;
 };
 
+/*!
+ * \brief Converter for Gemma Tool Calling format.
+ *
+ * This converter generates EBNF where the whole value space (all nesting levels)
+ * uses Gemma's custom format instead of JSON:
+ * - Object keys are unquoted: {key:value,key2:value2}
+ * - Strings are delimited by <|"|> instead of ", with no escape sequences:
+ *   <|"|>any text<|"|>
+ * - Numbers, booleans, arrays and objects otherwise follow JSON syntax.
+ */
+class GemmaToolCallingConverter : public JSONSchemaConverter {
+ public:
+  GemmaToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false
+  );
+
+ protected:
+  std::string GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  std::string GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
+  std::string GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
+
+  std::string FormatPropertyKey(const std::string& key) override;
+  std::string GetKeyPattern() const override;
+  std::string GetKeyPatternExcluding(
+      const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+  ) override;
+
+  void AddBasicRules() override;
+
+ private:
+  // The Gemma string delimiter that replaces the JSON double quote.
+  static const std::string kStringDelim;
+  // Rule matching any text that does not contain the string delimiter.
+  static const std::string kGemmaStringContent;
+  // Rule matching an unquoted property key.
+  static const std::string kGemmaVariableName;
+
+  /*! \brief Serialize a JSON value into Gemma's tool call argument format. */
+  static std::string GemmaSerializeJSON(const picojson::value& value);
+  /*! \brief Parse a JSON-serialized value and return its Gemma serialization as an EBNF literal. */
+  static std::string GemmaValueToEBNFLiteral(const std::string& json_value);
+};
+
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_

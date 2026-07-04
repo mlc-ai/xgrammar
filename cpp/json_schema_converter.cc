@@ -1198,7 +1198,7 @@ void JSONSchemaConverter::AddBasicRules() {
   // basic_string - cache_key matches SchemaParser::ComputeCacheKey for {"type": "string"}
   constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
   auto str_spec = SchemaSpec::Make(StringSpec{}, kStringCacheKey, kBasicString);
-  std::string str_body = "[\"] " + kBasicStringSub;
+  std::string str_body = GenerateString(std::get<StringSpec>(str_spec->spec), kBasicString);
   ebnf_script_creator_.AddRule(kBasicString, str_body);
   AddCache(kStringCacheKey, kBasicString);
 
@@ -3327,6 +3327,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"minimax_xml", JSONFormat::kMiniMaxXML},
       {"deepseek_xml", JSONFormat::kDeepSeekXML},
       {"glm_xml", JSONFormat::kGlmXML},
+      {"gemma", JSONFormat::kGemma},
   };
   auto it = kNameToFormat.find(format);
   if (it == kNameToFormat.end()) {
@@ -3407,6 +3408,12 @@ std::string JSONSchemaToEBNF(
           ref_resolver,
           json_format,
           any_order
+      );
+      return converter.Convert(spec);
+    }
+    case JSONFormat::kGemma: {
+      GemmaToolCallingConverter converter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
       return converter.Convert(spec);
     }

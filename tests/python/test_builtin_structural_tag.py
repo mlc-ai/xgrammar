@@ -13,6 +13,7 @@ from xgrammar.builtin_structural_tag import (
     get_deepseek_v3_1_structural_tag,
     get_deepseek_v3_2_structural_tag,
     get_deepseek_v4_structural_tag,
+    get_gemma_4_structural_tag,
     get_glm_4_7_structural_tag,
     get_harmony_structural_tag,
     get_kimi_structural_tag,
@@ -592,6 +593,7 @@ def test_kimi_auto_requires_tool_calls_section():
         get_deepseek_v4_structural_tag,
         get_minimax_structural_tag,
         get_glm_4_7_structural_tag,
+        get_gemma_4_structural_tag,
     ],
 )
 @pytest.mark.parametrize(

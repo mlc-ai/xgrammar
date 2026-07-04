@@ -188,6 +188,7 @@ enum class JSONFormat : int {
   kMiniMaxXML = 2,
   kDeepSeekXML = 3,
   kGlmXML = 4,
+  kGemma = 5,
 };
 
 /*!
