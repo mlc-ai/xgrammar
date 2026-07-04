@@ -1487,5 +1487,78 @@ def test_gemma_empty_schema():
     assert not _is_grammar_accept_string(ebnf_grammar, "")
 
 
+gemma_pattern_properties_input_str_accepted = (
+    ("{x_a:1}", True),
+    ("{x_a:1,x_b:2}", True),
+    ('{"x_a":1}', False),  # JSON-quoted keys must be rejected
+    ("{y_a:1}", False),  # key does not match the pattern
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", gemma_pattern_properties_input_str_accepted)
+def test_gemma_pattern_properties_schema(input_str: str, accepted: bool):
+    schema = {"type": "object", "patternProperties": {"^x_[a-z]+$": {"type": "integer"}}}
+    _check_gemma_grammar(schema, input_str, accepted)
+
+
+gemma_property_names_input_str_accepted = (
+    ("{abc:1}", True),
+    ('{<|"|>abc<|"|>:1}', False),  # delimited keys must be rejected
+    ("{ABC:1}", False),  # key does not match propertyNames pattern
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", gemma_property_names_input_str_accepted)
+def test_gemma_property_names_schema(input_str: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z]+$"},
+        "additionalProperties": {"type": "integer"},
+    }
+    _check_gemma_grammar(schema, input_str, accepted)
+
+
+gemma_length_bound_input_str_accepted = (
+    ('{s:<|"|>ab<|"|>}', True),
+    ('{s:<|"|>a<b<|"|>}', True),  # lone '<' is allowed in bounded strings
+    ('{s:<|"|>ab<<|"|>}', True),  # '<' as the last content character
+    ('{s:<|"|>한글날<|"|>}', True),  # repetition counts codepoints, not bytes
+    ('{s:<|"|>a<|"|>}', False),  # below minLength
+    ('{s:<|"|>abcdef<|"|>}', False),  # above maxLength
+    ('{s:<|"|>ab<|"|>cd<|"|>}', False),  # embedded delimiter
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", gemma_length_bound_input_str_accepted)
+def test_gemma_length_bound_string_schema(input_str: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {"s": {"type": "string", "minLength": 2, "maxLength": 5}},
+        "required": ["s"],
+    }
+    _check_gemma_grammar(schema, input_str, accepted)
+
+
+def test_gemma_const_scalar_preserves_literal():
+    # Large integers must not be rounded through double re-serialization.
+    big = 10000000000000001
+    schema = {"type": "object", "properties": {"v": {"const": big}}, "required": ["v"]}
+    ebnf_grammar = _gemma_tool_calling_to_ebnf(schema)
+    assert _is_grammar_accept_string(ebnf_grammar, "{v:%d}" % big)
+    assert not _is_grammar_accept_string(ebnf_grammar, "{v:%d}" % (big - 1))
+
+
+def test_gemma_const_nested_value():
+    # A single-key object avoids depending on the serializer's key ordering.
+    schema = {
+        "type": "object",
+        "properties": {"cfg": {"const": {"tags": ["a", 3, True]}}},
+        "required": ["cfg"],
+    }
+    ebnf_grammar = _gemma_tool_calling_to_ebnf(schema)
+    assert _is_grammar_accept_string(ebnf_grammar, '{cfg:{tags:[<|"|>a<|"|>,3,true]}}')
+    assert not _is_grammar_accept_string(ebnf_grammar, '{cfg:{"tags":["a",3,true]}}')
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

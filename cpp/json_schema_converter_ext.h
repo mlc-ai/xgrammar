@@ -127,6 +127,10 @@ class GemmaToolCallingConverter : public JSONSchemaConverter {
   std::string GetKeyPatternExcluding(
       const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
   ) override;
+  std::string FormatPatternKey(const std::string& pattern) override;
+  std::string CreatePropertyNamesKeyRule(
+      const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+  ) override;
 
   void AddBasicRules() override;
 
@@ -137,6 +141,9 @@ class GemmaToolCallingConverter : public JSONSchemaConverter {
   static const std::string kGemmaStringContent;
   // Rule matching an unquoted property key.
   static const std::string kGemmaVariableName;
+  // Rule matching exactly one character that cannot start the string delimiter.
+  // Used for length-constrained strings where repetition counts must stay exact.
+  static const std::string kGemmaBoundedChar;
 
   /*! \brief Serialize a JSON value into Gemma's tool call argument format. */
   static std::string GemmaSerializeJSON(const picojson::value& value);

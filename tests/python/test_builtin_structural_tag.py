@@ -1357,6 +1357,79 @@ def test_any_order_default_is_false():
     assert _collect_any_order_flags(structural_tag) == [False]
 
 
+def test_gemma_4_single_token_delimiter_walk():
+    """Gemma-4's <|"|> / <|tool_call> markers are single tokens in the real tokenizer.
+
+    Compile the gemma_4 tag against a TokenizerInfo where each marker is one vocab
+    entry (as in google/gemma-4 tokenizers) and walk a full tool call token by token,
+    so literal-vs-token matching is covered beyond byte-level string tests.
+    """
+    vocab = [
+        "<|tool_call>",
+        "<tool_call|>",
+        '<|"|>',
+        "<|channel>",
+        "<channel|>",
+        "call",
+        ":",
+        "get_weather",
+        "{",
+        "}",
+        "city",
+        "Seoul",
+        "<eos>",
+    ]
+    tokenizer_info = xgr.TokenizerInfo(
+        vocab, xgr.VocabType.RAW, stop_token_ids=[vocab.index("<eos>")]
+    )
+    tools = [
+        FunctionToolParam(
+            function={
+                "name": "get_weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"city": {"type": "string"}},
+                    "required": ["city"],
+                },
+            }
+        )
+    ]
+    structural_tag = get_gemma_4_structural_tag(
+        tools=tools, builtin_tools=[], tool_choice="required", reasoning=False
+    )
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    matcher = xgr.GrammarMatcher(compiler.compile_structural_tag(structural_tag))
+
+    token_walk = [
+        "<|tool_call>",
+        "call",
+        ":",
+        "get_weather",
+        "{",
+        "city",
+        ":",
+        '<|"|>',
+        "Seoul",
+        '<|"|>',
+        "}",
+        "<tool_call|>",
+    ]
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    for piece in token_walk:
+        matcher.fill_next_token_bitmask(bitmask)
+        token_id = vocab.index(piece)
+        assert _bitmask_allows(bitmask, token_id), f"bitmask disallows {piece!r}"
+        assert matcher.accept_token(token_id), f"matcher rejected {piece!r}"
+    # After a complete call the grammar reaches an accept state: EOS must be allowed.
+    matcher.fill_next_token_bitmask(bitmask)
+    assert _bitmask_allows(bitmask, vocab.index("<eos>"))
+
+
+def _bitmask_allows(bitmask, token_id: int) -> bool:
+    word = int(bitmask[0][token_id // 32].item())
+    return (word >> (token_id % 32)) & 1 == 1
+
+
 def test_any_order_reordered_arguments_accepted_only_when_enabled():
     """End-to-end: reordered tool-call arguments are accepted only when any_order=True."""
     tools = [

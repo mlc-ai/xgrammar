@@ -1847,7 +1847,10 @@ def get_gemma_4_structural_tag(
     TOOL_CALL_TRIGGER = "<|tool_call>"
     THINK_TAG_BEGIN = "<|channel>thought\n"
     THINK_TAG_END = "<channel|>"
-    GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>"]
+    # Besides the reasoning-channel markers, exclude the tool-response opener: Gemma 4
+    # otherwise reliably starts fabricating a <|tool_response>...  itself right after
+    # finishing a tool call instead of stopping.
+    GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>", "<|tool_response>"]
 
     tools = tools or []
     builtin_tools = builtin_tools or []

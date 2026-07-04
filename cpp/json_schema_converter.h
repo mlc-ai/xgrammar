@@ -324,6 +324,16 @@ class JSONSchemaConverter {
       const std::string& rule_name_suffix
   );
 
+  /*! \brief Format an object key constrained by a regex (patternProperties).
+   * Override for formats whose keys are not JSON-quoted. */
+  virtual std::string FormatPatternKey(const std::string& pattern);
+
+  /*! \brief Build the key pattern for propertyNames-constrained keys.
+   * Override for formats whose keys are not JSON strings. */
+  virtual std::string CreatePropertyNamesKeyRule(
+      const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+  );
+
   /*! \brief Get the basic string rule name. Override for different formats. */
   virtual std::string GetKeyPattern() const;
 
