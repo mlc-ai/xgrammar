@@ -178,6 +178,13 @@ def _collect_json_schema_nodes(structural_tag: StructuralTag) -> List[JSONSchema
     ]
 
 
+def _bitmask_allows(bitmask: Any, token_id: int) -> bool:
+    """Return whether the token is allowed by a bitmask from fill_next_token_bitmask."""
+
+    word = int(bitmask[0][token_id // 32].item())
+    return (word >> (token_id % 32)) & 1 == 1
+
+
 # ---------- Shared tool definitions ----------
 
 SIMPLE_SCHEMA = {"type": "object", "properties": {"q": {"type": "string"}}}
@@ -1357,6 +1364,41 @@ def test_any_order_default_is_false():
     assert _collect_any_order_flags(structural_tag) == [False]
 
 
+def test_any_order_reordered_arguments_accepted_only_when_enabled():
+    """End-to-end: reordered tool-call arguments are accepted only when any_order=True."""
+    tools = [
+        {
+            "function": {
+                "name": "fn",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"a": {"type": "integer"}, "b": {"type": "string"}},
+                    "required": ["a", "b"],
+                    "additionalProperties": False,
+                },
+            }
+        }
+    ]
+    forced = {"type": "function", "function": {"name": "fn"}}
+    ordered = '<tool_call>\n{"name": "fn", "arguments": {"a": 1, "b": "x"}}\n</tool_call>'
+    reordered = '<tool_call>\n{"name": "fn", "arguments": {"b": "x", "a": 1}}\n</tool_call>'
+
+    st_ordered = get_model_structural_tag(
+        "qwen_3", tools=tools, tool_choice=forced, reasoning=False
+    )
+    check_stag_with_instance(st_ordered, ordered, True)
+    check_stag_with_instance(st_ordered, reordered, False)
+
+    st_any_order = get_model_structural_tag(
+        "qwen_3", tools=tools, tool_choice=forced, reasoning=False, any_order=True
+    )
+    check_stag_with_instance(st_any_order, ordered, True)
+    check_stag_with_instance(st_any_order, reordered, True)
+
+
+# ---------- Test: gemma_4 token-level matching ----------
+
+
 def test_gemma_4_single_token_delimiter_walk():
     """Gemma-4's <|"|> / <|tool_call> markers are single tokens in the real tokenizer.
 
@@ -1423,43 +1465,6 @@ def test_gemma_4_single_token_delimiter_walk():
     # After a complete call the grammar reaches an accept state: EOS must be allowed.
     matcher.fill_next_token_bitmask(bitmask)
     assert _bitmask_allows(bitmask, vocab.index("<eos>"))
-
-
-def _bitmask_allows(bitmask, token_id: int) -> bool:
-    word = int(bitmask[0][token_id // 32].item())
-    return (word >> (token_id % 32)) & 1 == 1
-
-
-def test_any_order_reordered_arguments_accepted_only_when_enabled():
-    """End-to-end: reordered tool-call arguments are accepted only when any_order=True."""
-    tools = [
-        {
-            "function": {
-                "name": "fn",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"a": {"type": "integer"}, "b": {"type": "string"}},
-                    "required": ["a", "b"],
-                    "additionalProperties": False,
-                },
-            }
-        }
-    ]
-    forced = {"type": "function", "function": {"name": "fn"}}
-    ordered = '<tool_call>\n{"name": "fn", "arguments": {"a": 1, "b": "x"}}\n</tool_call>'
-    reordered = '<tool_call>\n{"name": "fn", "arguments": {"b": "x", "a": 1}}\n</tool_call>'
-
-    st_ordered = get_model_structural_tag(
-        "qwen_3", tools=tools, tool_choice=forced, reasoning=False
-    )
-    check_stag_with_instance(st_ordered, ordered, True)
-    check_stag_with_instance(st_ordered, reordered, False)
-
-    st_any_order = get_model_structural_tag(
-        "qwen_3", tools=tools, tool_choice=forced, reasoning=False, any_order=True
-    )
-    check_stag_with_instance(st_any_order, ordered, True)
-    check_stag_with_instance(st_any_order, reordered, True)
 
 
 # ---------- Test: max_whitespace_cnt propagation ----------

@@ -1,7 +1,7 @@
 /*!
  *  Copyright (c) 2024 by Contributors
  * \file xgrammar/json_schema_converter_ext.h
- * \brief Extended format converters for JSON Schema, including XML Tool Calling format.
+ * \brief Extended tool-calling format converters for JSON Schema (XML styles, Gemma).
  */
 
 #ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
@@ -136,7 +136,7 @@ class GemmaToolCallingConverter : public JSONSchemaConverter {
 
  private:
   // The Gemma string delimiter that replaces the JSON double quote.
-  static const std::string kStringDelim;
+  static const std::string kGemmaStringDelim;
   // Rule matching any text that does not contain the string delimiter.
   static const std::string kGemmaStringContent;
   // Rule matching an unquoted property key.
@@ -146,9 +146,9 @@ class GemmaToolCallingConverter : public JSONSchemaConverter {
   static const std::string kGemmaBoundedChar;
 
   /*! \brief Serialize a JSON value into Gemma's tool call argument format. */
-  static std::string GemmaSerializeJSON(const picojson::value& value);
+  static std::string SerializeJSON(const picojson::value& value);
   /*! \brief Parse a JSON-serialized value and return its Gemma serialization as an EBNF literal. */
-  static std::string GemmaValueToEBNFLiteral(const std::string& json_value);
+  static std::string ValueToEBNFLiteral(const std::string& json_value);
 };
 
 }  // namespace xgrammar

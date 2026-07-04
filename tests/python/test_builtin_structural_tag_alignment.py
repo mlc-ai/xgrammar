@@ -65,8 +65,7 @@ PARALLEL_TOOL_SCENARIOS = [(2, "auto", 2), (2, "required", 2)]
 # (stag_key, model_id, reasoning, template_kwargs)
 # Excluded:
 #   - Llama-4: pythonic tool call format, needs separate structural tag
-#   - gemma_4: grammar is supported (style="gemma"), but template alignment is not
-#     yet verified against a released Gemma-4 chat template
+#   - gemma_4: template alignment not verified against a released Gemma-4 chat template
 #   - deepseek_r1 thinking=True: template drops <think> in history rendering,
 #     prompt diff extraction doesn't work
 #   - Kimi-K2-Thinking thinking=False: model always outputs <think></think>,

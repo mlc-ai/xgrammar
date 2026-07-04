@@ -1826,8 +1826,9 @@ def get_gemma_4_structural_tag(
       ``function`` object containing ``name`` and ``parameters`` fields.
     - ``reasoning``: whether to enable reasoning mode. If ``False``, the
       reasoning channel is omitted.
-    - ``tool_choice``: ``"auto"`` or ``"required"``. ``"required"`` forces at
-      least one tool call.
+    - ``tool_choice``: ``"auto"``, ``"required"``, or ``"forced"``. ``"required"``
+      forces at least one tool call; ``"forced"`` forces exactly the single
+      resolved tool.
 
     Supported models:
 
@@ -1847,9 +1848,8 @@ def get_gemma_4_structural_tag(
     TOOL_CALL_TRIGGER = "<|tool_call>"
     THINK_TAG_BEGIN = "<|channel>thought\n"
     THINK_TAG_END = "<channel|>"
-    # Do NOT exclude <|tool_response> here: per the Gemma 4 prompt-formatting spec, the
-    # model emits <|tool_response> right after a tool call as its halt signal, and the
-    # inference engine is expected to register it as an additional stop sequence.
+    # <|tool_response> is deliberately not excluded: the model emits it as its halt
+    # signal after a tool call, so it must be handled as a stop sequence, not blocked.
     GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>"]
 
     tools = tools or []
@@ -1923,7 +1923,13 @@ def get_gemma_4_structural_tag(
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
-    prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
+    prefix_tag = TagFormat(
+        begin=THINK_TAG_BEGIN,
+        content=AnyTextFormat(
+            excludes=_text_excludes(exclude_special_tokens, GEMMA4_EXCLUDE_TOKENS)
+        ),
+        end=THINK_TAG_END,
+    )
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
