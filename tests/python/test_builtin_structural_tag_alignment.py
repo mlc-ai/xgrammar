@@ -65,7 +65,6 @@ PARALLEL_TOOL_SCENARIOS = [(2, "auto", 2), (2, "required", 2)]
 # (stag_key, model_id, reasoning, template_kwargs)
 # Excluded:
 #   - Llama-4: pythonic tool call format, needs separate structural tag
-#   - gemma_4: template alignment not verified against a released Gemma-4 chat template
 #   - deepseek_r1 thinking=True: template drops <think> in history rendering,
 #     prompt diff extraction doesn't work
 #   - Kimi-K2-Thinking thinking=False: model always outputs <think></think>,
@@ -96,10 +95,30 @@ MODEL_CONFIGS = [
     ("glm_4_7", "zai-org/GLM-4.7-Flash", False, {"enable_thinking": False}),
     ("deepseek_v4", "ENCODER:dsv4", True, {"thinking_mode": "thinking"}),
     ("deepseek_v4", "ENCODER:dsv4", False, {"thinking_mode": "chat"}),
+    ("gemma_4", "google/gemma-4-E2B-it", True, {"enable_thinking": True}),
+    ("gemma_4", "google/gemma-4-E2B-it", False, {"enable_thinking": False}),
+    ("gemma_4", "google/gemma-4-31B-it", True, {"enable_thinking": True}),
+    ("gemma_4", "google/gemma-4-31B-it", False, {"enable_thinking": False}),
 ]
 
-# DeepSeek V3.2 encoder rejects empty reasoning + no tool calls.
-SKIP_EMPTY_REASONING = {"ENCODER:dsv32", "MiniMaxAI/MiniMax-M2.5"}
+# DeepSeek V3.2 encoder rejects empty reasoning + no tool calls. Gemma-4 templates
+# drop the thought channel entirely when reasoning content is empty.
+SKIP_EMPTY_REASONING = {
+    "ENCODER:dsv32",
+    "MiniMaxAI/MiniMax-M2.5",
+    "google/gemma-4-E2B-it",
+    "google/gemma-4-31B-it",
+}
+
+# Templates that render the thought channel in history only alongside tool calls;
+# text-only reasoning outputs cannot be reconstructed via prompt diff, so those
+# scenarios are skipped.
+SKIP_REASONING_WITHOUT_TOOL_CALLS = {"google/gemma-4-E2B-it", "google/gemma-4-31B-it"}
+
+# Templates that pre-render an empty thought block in the generation prompt when
+# thinking is disabled; history rendering omits it, so it is stripped before diffing.
+PRERENDERED_EMPTY_THOUGHT_MODELS = {"google/gemma-4-31B-it"}
+PRERENDERED_EMPTY_THOUGHT = "<|channel>thought\n<channel|>"
 
 # Models where tool call format in template doesn't match structural tag.
 SKIP_TOOLS = set()
@@ -133,6 +152,8 @@ EOS_SUFFIXES = {
     "glm_4_7": [],
     "deepseek_v3_2": ["<｜end▁of▁sentence｜>"],
     "deepseek_v4": ["<｜end▁of▁sentence｜>"],
+    # <|tool_response> is the halt signal the template appends after a tool call.
+    "gemma_4": ["<turn|>", "<|tool_response>"],
 }
 
 
@@ -216,6 +237,9 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
         [USER_MSG, assistant_msg], add_generation_prompt=False, **kwargs
     )
 
+    if model_id in PRERENDERED_EMPTY_THOUGHT_MODELS and not full.startswith(prompt):
+        prompt = prompt.removesuffix(PRERENDERED_EMPTY_THOUGHT)
+
     if model_id in STRIP_THINK_MODELS and assistant_msg.get("reasoning_content") is not None:
         if not full.startswith(prompt):
             base = prompt.removesuffix("<think>\n").removesuffix("<think>")
@@ -295,6 +319,8 @@ def generate_test_cases():
             if num_tools > 0 and model_id in SKIP_TOOLS:
                 continue
             if num_tool_calls > 1 and model_id in SKIP_PARALLEL_TOOLS:
+                continue
+            if reasoning and num_tool_calls == 0 and model_id in SKIP_REASONING_WITHOUT_TOOL_CALLS:
                 continue
             if reasoning:
                 cases.append(
