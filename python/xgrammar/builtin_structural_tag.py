@@ -1850,7 +1850,9 @@ def get_gemma_4_structural_tag(
     THINK_TAG_END = "<channel|>"
     # <|tool_response> is deliberately not excluded: the model emits it as its halt
     # signal after a tool call, so it must be handled as a stop sequence, not blocked.
-    GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>"]
+    # <|tool_call> is excluded so the model cannot start a tool call inside the thought
+    # channel, whose content is free-form text and not constrained by the tool-call grammar.
+    GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>", "<|tool_call>"]
 
     tools = tools or []
     builtin_tools = builtin_tools or []
