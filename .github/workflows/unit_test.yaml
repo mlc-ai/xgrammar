@@ -83,7 +83,7 @@ jobs:
       - name: Install MLX
         if: matrix.os == 'macos-14' && !endsWith(matrix.python, 't')
         run: |
-          # transformers 5.13.0 breaks `import mlx_lm`.
+          # transformers >=5.13 breaks `import mlx_lm` (keep in sync with pyproject.toml [project.optional-dependencies].metal).
           pip install mlx-lm "transformers<5.13"
 
       - name: Run C++ tests
