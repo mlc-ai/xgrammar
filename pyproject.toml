@@ -29,16 +29,7 @@ Homepage = "https://xgrammar.mlc.ai/"
 GitHub = "https://github.com/mlc-ai/xgrammar"
 
 [project.optional-dependencies]
-test = [
-  "huggingface-hub[cli]",
-  "protobuf",
-  "pytest",
-  "sentencepiece",
-  "tiktoken",
-  # transformers==4.50.0 has error on MacOS.
-  # https://github.com/huggingface/transformers/issues/36906
-  "transformers<4.50.0; platform_system == 'Darwin'",
-]
+test = ["huggingface-hub[cli]", "protobuf", "pytest", "sentencepiece", "tiktoken"]
 metal = ["mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'"]
 
 [build-system]
