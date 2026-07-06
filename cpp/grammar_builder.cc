@@ -134,8 +134,17 @@ int32_t GrammarBuilder::AddChoices(const std::vector<int32_t>& choices) {
 }
 
 int32_t GrammarBuilder::AddTagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch) {
+  // The per-state budget counters are only propagated through CharRange edges, so a budgeted
+  // TagDispatch must not have triggers (whose rule-ref edges would reset the counters).
+  XGRAMMAR_CHECK(
+      (tag_dispatch.max_tokens == -1 && tag_dispatch.max_chars == -1) ||
+      tag_dispatch.tag_rule_pairs.empty()
+  ) << "max_tokens / max_chars are only supported for TagDispatch without triggers";
   std::vector<int32_t> data;
-  data.reserve(tag_dispatch.tag_rule_pairs.size() * 2 + 2);
+  data.reserve(
+      tag_dispatch.tag_rule_pairs.size() * 2 +
+      Grammar::Impl::TagDispatch::kTagDispatchExtraParameter
+  );
   for (const auto& [tag, rule_id] : tag_dispatch.tag_rule_pairs) {
     data.push_back(AddByteString(tag));
     data.push_back(rule_id);
@@ -146,6 +155,9 @@ int32_t GrammarBuilder::AddTagDispatch(const Grammar::Impl::TagDispatch& tag_dis
     exclude_str_expr_ids.push_back(AddByteString(exclude_str));
   }
   data.push_back(AddChoices(exclude_str_expr_ids));
+  // Trailing budgets (see TagDispatch::kTagDispatchExtraParameter layout).
+  data.push_back(tag_dispatch.max_tokens);
+  data.push_back(tag_dispatch.max_chars);
   return AddGrammarExpr(
       {GrammarExprType::kTagDispatch, data.data(), static_cast<int32_t>(data.size())}
   );

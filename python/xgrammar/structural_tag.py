@@ -60,6 +60,17 @@ class AnyTextFormat(BaseModel):
     excludes: List[str] = []
     """List of strings that should not appear in the matched text."""
 
+    max_tokens: Optional[int] = Field(default=None, ge=0)
+    """Maximum number of whole tokens this region may match. If None, unbounded. When set, at
+    most max_tokens tokens are matched and then the region is forced to end (e.g. its enclosing
+    end tag becomes the only valid continuation) -- a token budget that composes with
+    multi-token / multi-character ``excludes``. Enforced atomically at token granularity."""
+
+    max_chars: Optional[int] = Field(default=None, ge=0)
+    """Maximum number of Unicode characters this region may match. If None, unbounded. When set,
+    the region is forced to end once max_chars characters have been matched. May be combined
+    with ``max_tokens``; both budgets are then enforced."""
+
 
 class TokenFormat(BaseModel):
     """A format that matches a single token by ID or string representation."""
@@ -89,6 +100,11 @@ class AnyTokensFormat(BaseModel):
 
     exclude_tokens: List[Union[int, str]] = []
     """List of token IDs or strings to exclude."""
+
+    max_tokens: Optional[int] = Field(default=None, ge=0)
+    """Maximum number of tokens to match. If None, there is no limit. If set, at most
+    max_tokens tokens are matched (each excluding the tokens in exclude_tokens), giving an
+    exact token-count budget. It must be a non-negative integer."""
 
 
 class GrammarFormat(BaseModel):

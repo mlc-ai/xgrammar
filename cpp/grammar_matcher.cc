@@ -522,11 +522,27 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   std::string PrintBitmask(int32_t* bitmask_data_ptr, const TokenizerInfo& tokenizer_info);
 
+  /*!
+   * \brief Max token byte length in the vocab, computed lazily. A character-budgeted region
+   * state with at least this many characters remaining behaves exactly like an unbounded one
+   * (every single token fits), so the budget-agnostic mask cache entry applies as is.
+   */
+  int32_t GetMaxTokenBytes();
+
+  /*!
+   * \brief Live-check all vocab tokens against a single state by byte-level simulation, setting
+   * the accepted bits. Used for states near a character budget boundary, where the cached
+   * (budget-agnostic) mask may not be valid. The simulation runs on the real parser, whose
+   * budget checks in AdvanceFsm make the result exact.
+   */
+  void LiveCheckAllTokensForState(const ParserState& state);
+
   CompiledGrammar compiled_grammar_;
   TokenizerInfo tokenizer_info_;
   std::vector<int> stop_token_ids_;
   bool terminate_without_stop_token_;
   std::deque<int> token_length_history;
+  int32_t max_token_bytes_ = -1;
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
   DynamicBitset tmp_accepted_bitset_;
@@ -733,6 +749,15 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     }
   }
 
+  // Token budget: a whole token boundary has been crossed. Bump the token budget counter of the
+  // states that are (still) inside a token-budgeted region. The counters live in the state rows,
+  // so Rollback / Fork handle them automatically. Skip if this token pushed no state row (a
+  // zero-length token accepted through the pure byte path), since Rollback would not pop the
+  // mutated row then.
+  if (token_length_history.back() > 0) {
+    AdvanceTokenBoundary(token_length_history.back());
+  }
+
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << EscapeString(token) << "> accepted.";
   }
@@ -838,8 +863,32 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
 
   std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
       latest_states_with_masks;
+  // States of character-budgeted regions that are near the budget boundary: their cached
+  // (budget-agnostic) masks may accept tokens longer than the remaining budget, so they are
+  // handled by exact live-checking instead.
+  std::vector<ParserState> live_check_all_states;
 
   for (const auto& state : latest_states) {
+    // Budget handling for budgeted TagDispatch rules. The cached masks are budget-agnostic
+    // (shared across all counter values), so the budget is applied here, per state.
+    if (has_budgets_ && state.rule_id != -1) {
+      const auto [max_tokens, max_chars] = GetRuleBudget(state.rule_id);
+      if ((max_tokens >= 0 && state.repeat_count >= max_tokens) ||
+          (max_chars >= 0 && state.budget_char_count >= max_chars)) {
+        // Budget exhausted: this state cannot consume anything, so it contributes nothing to
+        // the mask. Its completion continuations (e.g. the region's end tag) are covered by the
+        // parent states, which Earley has already made scanable.
+        continue;
+      }
+      if (max_chars >= 0 && max_chars - state.budget_char_count < GetMaxTokenBytes()) {
+        // Near the character budget boundary: some tokens may not fit in the remaining budget.
+        // Fall back to exact per-token live-checking for this state.
+        live_check_all_states.push_back(state);
+        continue;
+      }
+      // Otherwise every whole token fits in the remaining budget, so the budget-agnostic mask
+      // entry is exact for this state; fall through to the normal fast path.
+    }
     auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
     XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
@@ -950,6 +999,11 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
     }
   }
 
+  // Exact live-checking for states near a character budget boundary.
+  for (const auto& state : live_check_all_states) {
+    LiveCheckAllTokensForState(state);
+  }
+
   // Finally update the rejected_ids bitset
   bool can_reach_end = IsCompleted();
   SetTokenBitmask(
@@ -959,6 +1013,75 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
     XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }
   return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
+}
+
+int32_t GrammarMatcher::Impl::GetMaxTokenBytes() {
+  if (max_token_bytes_ == -1) {
+    size_t max_size = 0;
+    for (const auto& id_and_token : tokenizer_info_.GetSortedDecodedVocab()) {
+      max_size = std::max(max_size, id_and_token.second.size());
+    }
+    max_token_bytes_ = static_cast<int32_t>(max_size);
+  }
+  return max_token_bytes_;
+}
+
+void GrammarMatcher::Impl::LiveCheckAllTokensForState(const ParserState& state) {
+  const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
+
+  PushOneStateToCheck(state);
+
+  const std::string* prev_token = nullptr;
+  int prev_matched_size = 0;
+  int last_rejected_range = 0;
+  for (int i = 0; i < static_cast<int>(sorted_decoded_vocab.size()); ++i) {
+    // Skip tokens already accepted by other states.
+    if (tmp_accepted_bitset_[sorted_decoded_vocab[i].first]) {
+      continue;
+    }
+    // Skip the trie subtree of a rejected prefix.
+    if (i < last_rejected_range) {
+      continue;
+    }
+
+    const auto& cur_token = sorted_decoded_vocab[i].second;
+    bool accepted = true;
+
+    // Reuse the matched prefix of the previous token (tokens are sorted, so common prefixes are
+    // adjacent).
+    if (prev_token) {
+      int lcp_len =
+          std::mismatch(cur_token.begin(), cur_token.end(), prev_token->begin(), prev_token->end())
+              .first -
+          cur_token.begin();
+      if (lcp_len > prev_matched_size) {
+        last_rejected_range = subtree_range[i];
+        accepted = false;
+      } else if (lcp_len < prev_matched_size) {
+        PopLastStates(prev_matched_size - lcp_len);
+      }
+      prev_matched_size = std::min(prev_matched_size, lcp_len);
+    }
+
+    if (accepted) {
+      for (int j = prev_matched_size; j < static_cast<int>(cur_token.size()); ++j) {
+        if (!Advance(cur_token[j])) {
+          last_rejected_range = subtree_range[i];
+          accepted = false;
+          break;
+        }
+        prev_matched_size = j + 1;
+      }
+    }
+
+    if (accepted) {
+      tmp_accepted_bitset_.Set(sorted_decoded_vocab[i].first, true);
+    }
+    prev_token = &cur_token;
+  }
+
+  PopLastStates(prev_matched_size + 1);
 }
 
 std::string GrammarMatcher::Impl::FindJumpForwardString() {

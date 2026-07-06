@@ -128,6 +128,12 @@ picojson::value AnyTextFormat::ToJSON() const {
   obj["type"] = picojson::value(type);
   obj["excludes"] = StringVectorToJSONArray(excludes);
   obj["detected_end_strs"] = StringVectorToJSONArray(detected_end_strs_);
+  if (max_tokens != -1) {
+    obj["max_tokens"] = picojson::value(static_cast<double>(max_tokens));
+  }
+  if (max_chars != -1) {
+    obj["max_chars"] = picojson::value(static_cast<double>(max_chars));
+  }
   return picojson::value(std::move(obj));
 }
 
@@ -199,6 +205,9 @@ picojson::value AnyTokensFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
   obj["exclude_tokens"] = IntOrStringVectorToJSONArray(exclude_tokens);
+  if (max_tokens.has_value()) {
+    obj["max_tokens"] = picojson::value(static_cast<double>(max_tokens.value()));
+  }
   return picojson::value(std::move(obj));
 }
 
@@ -573,14 +582,52 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
   );
 }
 
+/*!
+ * \brief Read an optional non-negative integer budget field (e.g. "max_tokens", "max_chars").
+ * Returns -1 if absent or null (unbounded). A present-but-invalid value is an error rather than
+ * silently unbounded.
+ */
+static Result<int32_t, ISTError> ParseOptionalBudgetField(
+    const picojson::object& obj, const std::string& field, const std::string& format_name
+) {
+  auto it = obj.find(field);
+  if (it == obj.end() || it->second.is<picojson::null>()) {
+    return ResultOk<int32_t>(-1);
+  }
+  if (!it->second.is<double>()) {
+    return ResultErr<ISTError>(
+        field + " in " + format_name + " must be a non-negative integer or null."
+    );
+  }
+  double raw = it->second.get<double>();
+  if (raw < 0 || raw > static_cast<double>(std::numeric_limits<int32_t>::max()) ||
+      raw != std::floor(raw)) {
+    return ResultErr<ISTError>(
+        field + " in " + format_name + " must be a non-negative integer in [0, INT32_MAX]."
+    );
+  }
+  return ResultOk<int32_t>(static_cast<int32_t>(raw));
+}
+
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
 ) {
+  auto max_tokens_result = ParseOptionalBudgetField(obj, "max_tokens", "any_text");
+  if (max_tokens_result.IsErr()) {
+    return ResultErr<ISTError>(std::move(max_tokens_result).UnwrapErr());
+  }
+  int32_t max_tokens = std::move(max_tokens_result).Unwrap();
+  auto max_chars_result = ParseOptionalBudgetField(obj, "max_chars", "any_text");
+  if (max_chars_result.IsErr()) {
+    return ResultErr<ISTError>(std::move(max_chars_result).UnwrapErr());
+  }
+  int32_t max_chars = std::move(max_chars_result).Unwrap();
+
   auto excluded_strs_it = obj.find("excludes");
   if (excluded_strs_it == obj.end()) {
     if ((obj.find("type") == obj.end())) {
       return ResultErr<ISTError>("Any text format should not have any fields other than type");
     }
-    return ResultOk<AnyTextFormat>(std::vector<std::string>{});
+    return ResultOk<AnyTextFormat>(std::vector<std::string>{}, max_tokens, max_chars);
   }
   if (!excluded_strs_it->second.is<picojson::array>()) {
     return ResultErr<ISTError>("AnyText format's excluded_strs field must be an array");
@@ -594,7 +641,7 @@ Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const pi
     }
     excluded_strs.push_back(excluded_str.get<std::string>());
   }
-  return ResultOk<AnyTextFormat>(std::move(excluded_strs));
+  return ResultOk<AnyTextFormat>(std::move(excluded_strs), max_tokens, max_chars);
 }
 
 Result<GrammarFormat, ISTError> StructuralTagParser::ParseGrammarFormat(const picojson::object& obj
@@ -994,7 +1041,14 @@ Result<AnyTokensFormat, ISTError> StructuralTagParser::ParseAnyTokensFormat(
     }
     exclude_tokens = std::move(parsed).Unwrap();
   }
-  return ResultOk<AnyTokensFormat>(std::move(exclude_tokens));
+  auto max_tokens_result = ParseOptionalBudgetField(obj, "max_tokens", "any_tokens");
+  if (max_tokens_result.IsErr()) {
+    return ResultErr<ISTError>(std::move(max_tokens_result).UnwrapErr());
+  }
+  int32_t max_tokens_raw = std::move(max_tokens_result).Unwrap();
+  std::optional<int32_t> max_tokens =
+      max_tokens_raw == -1 ? std::nullopt : std::make_optional(max_tokens_raw);
+  return ResultOk<AnyTokensFormat>(std::move(exclude_tokens), max_tokens);
 }
 
 Result<TokenTriggeredTagsFormat, ISTError> StructuralTagParser::ParseTokenTriggeredTagsFormat(
@@ -1920,9 +1974,14 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextForma
       all_excludes.push_back(s);
     }
   }
-  if (!all_excludes.empty()) {
-    auto tag_dispatch_expr =
-        grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{{}, false, all_excludes});
+  if (!all_excludes.empty() || format.max_tokens != -1 || format.max_chars != -1) {
+    // With excludes or a token/character budget, the region is a TagDispatch (an Aho-Corasick
+    // scan over the excludes; an empty exclude set matches any text). The budgets are carried on
+    // the TagDispatch and enforced per parser state: once a budget is reached, the region is
+    // forced to complete, so its enclosing end tag becomes the only valid continuation.
+    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
+        Grammar::Impl::TagDispatch{{}, false, all_excludes, format.max_tokens, format.max_chars}
+    );
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {
     auto any_text_expr = grammar_builder_.AddCharacterClassStar({{0, 0x10FFFF}}, false);
@@ -2282,6 +2341,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTokensFor
   int exclude_seq = grammar_builder_.AddSequence({exclude_expr});
   int exclude_choices = grammar_builder_.AddChoices({exclude_seq});
   int inner_rule = grammar_builder_.AddRuleWithHint("any_tokens_inner", exclude_choices);
+  // Each inner_rule matches exactly one token, so a bounded repetition of it gives an exact
+  // token-count budget, reusing the existing kRepeat machinery.
+  if (format.max_tokens.has_value()) {
+    int repeat_expr = grammar_builder_.AddRepeat(inner_rule, 0, format.max_tokens.value());
+    return ResultOk(grammar_builder_.AddRuleWithHint("any_tokens", repeat_expr));
+  }
   auto inner_ref = grammar_builder_.AddRuleRef(inner_rule);
   auto star_rule_id = grammar_builder_.AddEmptyRuleWithHint("any_tokens");
   auto star_ref = grammar_builder_.AddRuleRef(star_rule_id);
