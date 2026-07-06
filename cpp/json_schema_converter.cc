@@ -489,8 +489,14 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
 
   if (schema.count("multipleOf")) {
     auto result = checkAndConvertMultipleOf(schema.at("multipleOf"));
-    if (result.IsErr()) return ResultErr(std::move(result).UnwrapErr());
-    spec.multiple_of = std::move(result).Unwrap();
+    if (result.IsErr()) {
+      if (result.ErrRef().Type() != SchemaErrorType::kUnsupportedSchema) {
+        return ResultErr(std::move(result).UnwrapErr());
+      }
+      XGRAMMAR_LOG(WARNING) << result.ErrRef().what() << "; ignoring multipleOf";
+    } else {
+      spec.multiple_of = std::move(result).Unwrap();
+    }
   }
   if (schema.count("minimum")) {
     auto result = checkAndConvertIntegerBound(schema.at("minimum"));
@@ -544,9 +550,10 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
     if (has_lower_bound || has_upper_bound) {
       if (!has_lower_bound || !has_upper_bound ||
           IsRangeWidthOverCap(effective_min, effective_max, kIntegerMultipleOfRangeWidthMax)) {
-        return ResultErr<SchemaError>(
-            SchemaErrorType::kUnsupportedSchema, "range + multipleOf combination not yet supported"
-        );
+        XGRAMMAR_LOG(WARNING)
+            << "range + multipleOf combination not yet supported; ignoring multipleOf";
+        spec.multiple_of.reset();
+        return ResultOk(std::move(spec));
       }
       if (!HasMultipleInRange(effective_min, effective_max, *spec.multiple_of)) {
         return ResultErr<SchemaError>(
@@ -560,10 +567,18 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
 
 Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object& schema) {
   if (schema.count("multipleOf")) {
-    return ResultErr<SchemaError>(
-        SchemaErrorType::kUnsupportedSchema,
-        "multipleOf is not supported for type:number; use type:integer for integer multiples"
-    );
+    const auto& value = schema.at("multipleOf");
+    if (!value.is<int64_t>() && !value.is<double>()) {
+      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Value must be a number");
+    }
+    double multiple_of = value.is<int64_t>() ? static_cast<double>(value.get<int64_t>())
+                                             : value.get<double>();
+    if (multiple_of <= 0) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "multipleOf must be greater than 0"
+      );
+    }
+    XGRAMMAR_LOG(WARNING) << "multipleOf is not supported for type:number; ignoring multipleOf";
   }
   NumberSpec spec;
 
