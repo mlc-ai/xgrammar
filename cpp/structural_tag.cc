@@ -1850,15 +1850,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringF
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFormat& format) {
-  const static std::unordered_map<std::string, JSONFormat> style_to_json_format = {
-      {"json", JSONFormat::kJSON},
-      {"qwen_xml", JSONFormat::kQwenXML},
-      {"minimax_xml", JSONFormat::kMiniMaxXML},
-      {"deepseek_xml", JSONFormat::kDeepSeekXML},
-      {"glm_xml", JSONFormat::kGlmXML},
-  };
-  auto json_format_it = style_to_json_format.find(format.style);
-  if (json_format_it == style_to_json_format.end()) {
+  auto json_format = JSONFormatFromString(format.style);
+  if (!json_format.has_value()) {
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
   // The whitespace cap comes from the JSONSchemaFormat node (per-tag).
@@ -1869,7 +1862,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
       /*separators=*/std::nullopt,
       /*strict_mode=*/true,
       /*max_whitespace_cnt=*/format.max_whitespace_cnt,
-      /*json_format=*/json_format_it->second,
+      /*json_format=*/*json_format,
       format.any_order
   );
   auto sub_grammar = Grammar::FromEBNF(ebnf);

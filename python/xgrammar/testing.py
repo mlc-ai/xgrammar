@@ -4,7 +4,7 @@ The APIs in this module are used for testing and debugging and are prone to
 change. Don't use them in production."""
 
 import time
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
 import torch
 from pydantic import BaseModel
@@ -15,9 +15,6 @@ from .grammar import Grammar, _convert_schema_to_str
 from .matcher import GrammarMatcher, bitmask_dtype
 from .tokenizer_info import TokenizerInfo
 
-# Maps the json_format argument of _json_schema_to_ebnf to the C++ JSONFormat enum value.
-_JSON_FORMAT_TO_INT = {"json": 0, "qwen_xml": 1, "minimax_xml": 2, "deepseek_xml": 3, "glm_xml": 4}
-
 
 def _json_schema_to_ebnf(
     schema: Union[str, Type[BaseModel], Dict[str, Any]],
@@ -27,7 +24,7 @@ def _json_schema_to_ebnf(
     separators: Optional[Tuple[str, str]] = None,
     max_whitespace_cnt: Optional[int] = None,
     strict_mode: bool = True,
-    json_format: str = "json",
+    json_format: Literal["json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml"] = "json",
     any_order: bool = False,
 ) -> str:
     """Convert JSON schema string to BNF grammar string. For test purposes.
@@ -70,11 +67,6 @@ def _json_schema_to_ebnf(
         The BNF grammar string.
     """
     schema_str = _convert_schema_to_str(schema)
-    if json_format not in _JSON_FORMAT_TO_INT:
-        raise ValueError(
-            f"Invalid json_format: {json_format}. "
-            f"Expected one of {sorted(_JSON_FORMAT_TO_INT.keys())}"
-        )
     return _core.testing._json_schema_to_ebnf(
         schema_str,
         any_whitespace,
@@ -82,7 +74,7 @@ def _json_schema_to_ebnf(
         separators,
         strict_mode,
         max_whitespace_cnt,
-        _JSON_FORMAT_TO_INT[json_format],
+        json_format,
         any_order,
     )
 

@@ -3320,6 +3320,21 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
 
 // ==================== Public API Functions ====================
 
+std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
+  static const std::unordered_map<std::string, JSONFormat> kNameToFormat = {
+      {"json", JSONFormat::kJSON},
+      {"qwen_xml", JSONFormat::kQwenXML},
+      {"minimax_xml", JSONFormat::kMiniMaxXML},
+      {"deepseek_xml", JSONFormat::kDeepSeekXML},
+      {"glm_xml", JSONFormat::kGlmXML},
+  };
+  auto it = kNameToFormat.find(format);
+  if (it == kNameToFormat.end()) {
+    return std::nullopt;
+  }
+  return it->second;
+}
+
 std::string JSONSchemaToEBNF(
     const std::string& schema,
     bool any_whitespace,

@@ -191,6 +191,13 @@ enum class JSONFormat : int {
 };
 
 /*!
+ * \brief Convert a format name to JSONFormat.
+ * \param format One of "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml".
+ * \return The corresponding JSONFormat, or std::nullopt if the name is not recognized.
+ */
+std::optional<JSONFormat> JSONFormatFromString(const std::string& format);
+
+/*!
  * \brief Manage the rule generation cache. Wraps key-value cache for schema deduplication.
  */
 class GenerateCacheManager {

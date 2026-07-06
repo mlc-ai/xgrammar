@@ -713,8 +713,12 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              ffi::AnyView separators,
              bool strict_mode,
              ffi::AnyView max_whitespace_cnt,
-             int json_format,
+             ffi::String json_format,
              bool any_order) {
+            auto format = JSONFormatFromString(json_format);
+            if (!format.has_value()) {
+              TVM_FFI_THROW(RuntimeError) << "Invalid json_format: " << std::string(json_format);
+            }
             return ffi::String(JSONSchemaToEBNF(
                 schema,
                 any_whitespace,
@@ -722,7 +726,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 OptionalSeparatorsFromView(separators),
                 strict_mode,
                 OptionalIntFromView(max_whitespace_cnt),
-                static_cast<JSONFormat>(json_format),
+                *format,
                 any_order
             ));
           }
