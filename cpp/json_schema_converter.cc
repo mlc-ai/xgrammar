@@ -163,8 +163,8 @@ bool HasMultipleInRange(int64_t start, int64_t end, int64_t multiple_of) {
 }
 
 constexpr const char* kUnsupportedOneOfMessage =
-    "oneOf with overlapping or non-provably-disjoint branches is not supported; use anyOf for "
-    "union semantics or add a discriminator";
+    "oneOf with overlapping or non-provably-disjoint branches cannot be represented exactly; "
+    "falling back to anyOf semantics";
 
 bool IsSchemaAnnotationKey(const std::string& key) {
   static const std::unordered_set<std::string> kAnnotationKeys = {
@@ -694,7 +694,9 @@ class SchemaParser {
   Result<ConstSpec, SchemaError> ParseConst(const picojson::object& schema);
   Result<EnumSpec, SchemaError> ParseEnum(const picojson::object& schema);
   Result<RefSpec, SchemaError> ParseRef(const picojson::object& schema);
-  Result<AnyOfSpec, SchemaError> ParseAnyOf(const picojson::object& schema);
+  Result<AnyOfSpec, SchemaError> ParseAnyOf(
+      const picojson::object& schema, const std::string& keyword
+  );
   Result<OneOfSpec, SchemaError> ParseOneOf(const picojson::object& schema);
   Result<AllOfSpec, SchemaError> ParseAllOf(const picojson::object& schema);
   Result<TypeArraySpec, SchemaError> ParseTypeArray(
@@ -823,13 +825,22 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     if (enum_result.IsErr()) return ResultErr(std::move(enum_result).UnwrapErr());
     result = SchemaSpec::Make(std::move(enum_result).Unwrap(), cache_key, rule_name_hint);
   } else if (schema_obj.count("anyOf")) {
-    auto anyof_result = ParseAnyOf(schema_obj);
+    auto anyof_result = ParseAnyOf(schema_obj, "anyOf");
     if (anyof_result.IsErr()) return ResultErr(std::move(anyof_result).UnwrapErr());
     result = SchemaSpec::Make(std::move(anyof_result).Unwrap(), cache_key, rule_name_hint);
   } else if (schema_obj.count("oneOf")) {
     auto oneof_result = ParseOneOf(schema_obj);
-    if (oneof_result.IsErr()) return ResultErr(std::move(oneof_result).UnwrapErr());
-    result = SchemaSpec::Make(std::move(oneof_result).Unwrap(), cache_key, rule_name_hint);
+    if (oneof_result.IsErr()) {
+      if (oneof_result.ErrRef().Type() != SchemaErrorType::kUnsupportedSchema) {
+        return ResultErr(std::move(oneof_result).UnwrapErr());
+      }
+      XGRAMMAR_LOG(WARNING) << oneof_result.ErrRef().what();
+      auto anyof_result = ParseAnyOf(schema_obj, "oneOf");
+      if (anyof_result.IsErr()) return ResultErr(std::move(anyof_result).UnwrapErr());
+      result = SchemaSpec::Make(std::move(anyof_result).Unwrap(), cache_key, rule_name_hint);
+    } else {
+      result = SchemaSpec::Make(std::move(oneof_result).Unwrap(), cache_key, rule_name_hint);
+    }
   } else if (schema_obj.count("allOf")) {
     auto allof_result = ParseAllOf(schema_obj);
     if (allof_result.IsErr()) return ResultErr(std::move(allof_result).UnwrapErr());
@@ -1489,13 +1500,15 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
   return ResultOk(resolved);
 }
 
-Result<AnyOfSpec, SchemaError> SchemaParser::ParseAnyOf(const picojson::object& schema) {
+Result<AnyOfSpec, SchemaError> SchemaParser::ParseAnyOf(
+    const picojson::object& schema, const std::string& keyword
+) {
   AnyOfSpec spec;
-  if (!schema.at("anyOf").is<picojson::array>()) {
-    return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "anyOf must be an array");
+  if (!schema.at(keyword).is<picojson::array>()) {
+    return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, keyword + " must be an array");
   }
   int idx = 0;
-  for (const auto& option : schema.at("anyOf").get<picojson::array>()) {
+  for (const auto& option : schema.at(keyword).get<picojson::array>()) {
     auto option_result = Parse(option, "case_" + std::to_string(idx));
     if (option_result.IsErr()) return ResultErr(std::move(option_result).UnwrapErr());
     spec.options.push_back(std::move(option_result).Unwrap());

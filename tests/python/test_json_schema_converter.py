@@ -789,26 +789,45 @@ def test_anyof_oneof():
     check_schema_with_instance(schema, schema_rejected, is_accepted=False, any_whitespace=False)
 
 
-def test_oneof_unsupported_overlap_fails_closed():
-    def assert_oneof_unsupported(schema: Union[Dict[str, Any], str]):
-        with pytest.raises(Exception) as e:
-            xgr.Grammar.from_json_schema(schema, any_whitespace=False)
-        assert "oneOf with overlapping or non-provably-disjoint branches is not supported" in str(
-            e.value
-        )
+def test_oneof_unsupported_overlap_warns_and_falls_back(capfd):
+    def assert_oneof_falls_back(
+        schema: Union[Dict[str, Any], str],
+        accepted_instances: Optional[List[str]] = None,
+        rejected_instances: Optional[List[str]] = None,
+    ):
+        schema_input = schema if isinstance(schema, str) else json.dumps(schema)
+        grammar = xgr.Grammar.from_json_schema(schema_input, any_whitespace=False)
+        captured = capfd.readouterr()
+        assert "falling back to anyOf semantics" in captured.err
+        for instance in accepted_instances or []:
+            assert _is_grammar_accept_string(grammar, instance)
+        for instance in rejected_instances or []:
+            assert not _is_grammar_accept_string(grammar, instance)
 
-    assert_oneof_unsupported({"oneOf": []})
-    assert_oneof_unsupported({"oneOf": [{"type": "integer"}, {"type": "number"}]})
-    assert_oneof_unsupported({"oneOf": [{"type": ["integer", "string"]}, {"type": "number"}]})
-    assert_oneof_unsupported({"oneOf": [{"type": "integer"}, {}]})
-    assert_oneof_unsupported({"oneOf": [{"const": 1}, {"const": 1.0}]})
-    assert_oneof_unsupported('{"oneOf":[{"const":9007199254740993},{"const":9007199254740993.0}]}')
-    assert_oneof_unsupported('{"oneOf":[{"const":1.5},{"const":2.5}]}')
-    assert_oneof_unsupported(
+    assert_oneof_falls_back(
+        {"oneOf": [{"type": "integer"}, {"type": "number"}]},
+        ["1", "1.5"],
+        ['"x"'],
+    )
+    assert_oneof_falls_back(
+        {"oneOf": [{"type": ["integer", "string"]}, {"type": "number"}]},
+        ["1", '"x"', "1.5"],
+    )
+    assert_oneof_falls_back({"oneOf": [{"type": "integer"}, {}]}, ["1", "true"])
+    assert_oneof_falls_back({"oneOf": [{"const": 1}, {"const": 1.0}]}, ["1"])
+    assert_oneof_falls_back(
+        '{"oneOf":[{"const":9007199254740993},{"const":9007199254740993.0}]}'
+    )
+    assert_oneof_falls_back(
+        '{"oneOf":[{"const":1.5},{"const":2.5}]}',
+        ["1.5", "2.5"],
+        ["3.5"],
+    )
+    assert_oneof_falls_back(
         '{"oneOf":[{"enum":[9007199254740993]},{"enum":[9007199254740993.0]}]}'
     )
-    assert_oneof_unsupported({"oneOf": [{"enum": [1, "hello", 2]}, {"type": "integer"}]})
-    assert_oneof_unsupported(
+    assert_oneof_falls_back({"oneOf": [{"enum": [1, "hello", 2]}, {"type": "integer"}]}, ["1", "3"])
+    assert_oneof_falls_back(
         {
             "oneOf": [
                 {"type": "object"},
@@ -818,13 +837,16 @@ def test_oneof_unsupported_overlap_fails_closed():
                     "properties": {"kind": {"const": "special"}},
                 },
             ]
-        }
+        },
+        ['{"kind": "special"}', "{}"],
     )
-    assert_oneof_unsupported(
-        {"oneOf": [{"type": "integer"}, {"anyOf": [{"type": "number"}, {"type": "string"}]}]}
+    assert_oneof_falls_back(
+        {"oneOf": [{"type": "integer"}, {"anyOf": [{"type": "number"}, {"type": "string"}]}]},
+        ["1", "1.5", '"x"'],
     )
-    assert_oneof_unsupported(
-        {"oneOf": [{"type": "integer"}, {"$ref": "#/$defs/x"}], "$defs": {"x": {"type": "integer"}}}
+    assert_oneof_falls_back(
+        {"oneOf": [{"type": "integer"}, {"$ref": "#/$defs/x"}], "$defs": {"x": {"type": "integer"}}},
+        ["1"],
     )
 
 
