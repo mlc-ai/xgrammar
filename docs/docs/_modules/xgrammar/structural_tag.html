@@ -680,7 +680,7 @@ window.runMermaid = runMermaid;</script>
 <span></span><span class="sd">&quot;&quot;&quot;Defines all structural tag formats.&quot;&quot;&quot;</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
 
 <span class="k">try</span><span class="p">:</span>
     <span class="c1"># Python 3.9+</span>
@@ -725,7 +725,9 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">      keys may repeat. The entry count is bounded to ``[max(minProperties, n_required),</span>
 <span class="sd">      maxProperties]`` (unbounded when maxProperties is unset).</span>
 
-<span class="sd">    Applies to every object, nested included.&quot;&quot;&quot;</span></div>
+<span class="sd">    Applies to every object, nested included.&quot;&quot;&quot;</span>
+    <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Max consecutive whitespace characters in this content. None means no limit.&quot;&quot;&quot;</span></div>
 
 
 <div class="viewcode-block" id="AnyTextFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.AnyTextFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AnyTextFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
