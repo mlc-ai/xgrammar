@@ -15,6 +15,9 @@ from .grammar import Grammar, _convert_schema_to_str
 from .matcher import GrammarMatcher, bitmask_dtype
 from .tokenizer_info import TokenizerInfo
 
+# Maps the json_format argument of _json_schema_to_ebnf to the C++ JSONFormat enum value.
+_JSON_FORMAT_TO_INT = {"json": 0, "qwen_xml": 1, "minimax_xml": 2, "deepseek_xml": 3, "glm_xml": 4}
+
 
 def _json_schema_to_ebnf(
     schema: Union[str, Type[BaseModel], Dict[str, Any]],
@@ -24,6 +27,7 @@ def _json_schema_to_ebnf(
     separators: Optional[Tuple[str, str]] = None,
     max_whitespace_cnt: Optional[int] = None,
     strict_mode: bool = True,
+    json_format: str = "json",
     any_order: bool = False,
 ) -> str:
     """Convert JSON schema string to BNF grammar string. For test purposes.
@@ -55,14 +59,31 @@ def _json_schema_to_ebnf(
         If specified, it will limit the number of whitespace characters to at most max_whitespace_cnt.
         It should be a positive integer.
 
+    json_format : str, default: "json"
+        The root format of the generated grammar. One of "json", "qwen_xml", "minimax_xml",
+        "deepseek_xml", "glm_xml". Formats other than "json" generate an XML-style root object
+        for tool calling, while the inner values remain JSON-style.
+
     Returns
     -------
     bnf_string : str
         The BNF grammar string.
     """
     schema_str = _convert_schema_to_str(schema)
+    if json_format not in _JSON_FORMAT_TO_INT:
+        raise ValueError(
+            f"Invalid json_format: {json_format}. "
+            f"Expected one of {sorted(_JSON_FORMAT_TO_INT.keys())}"
+        )
     return _core.testing._json_schema_to_ebnf(
-        schema_str, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+        schema_str,
+        any_whitespace,
+        indent,
+        separators,
+        strict_mode,
+        max_whitespace_cnt,
+        _JSON_FORMAT_TO_INT[json_format],
+        any_order,
     )
 
 
@@ -351,38 +372,6 @@ def _print_grammar_fsms(grammar: Grammar) -> str:
     """Print the FSMs of the grammar. Now the fsms are initialized in the grammar compilation
     process."""
     return _core.testing._print_grammar_fsms(grammar._handle)
-
-
-def _qwen_xml_tool_calling_to_ebnf(
-    schema: Union[str, Type[BaseModel], Dict[str, Any]], any_order: bool = False
-) -> str:
-    """Convert Qwen XML tool calling schema to EBNF."""
-    schema_str = _convert_schema_to_str(schema)
-    return _core.testing._qwen_xml_tool_calling_to_ebnf(schema_str, any_order)
-
-
-def _minimax_xml_tool_calling_to_ebnf(
-    schema: Union[str, Type[BaseModel], Dict[str, Any]], any_order: bool = False
-) -> str:
-    """Convert MiniMax XML tool calling schema to EBNF."""
-    schema_str = _convert_schema_to_str(schema)
-    return _core.testing._minimax_xml_tool_calling_to_ebnf(schema_str, any_order)
-
-
-def _deepseek_xml_tool_calling_to_ebnf(
-    schema: Union[str, Type[BaseModel], Dict[str, Any]], any_order: bool = False
-) -> str:
-    """Convert DeepSeek XML tool calling schema to EBNF."""
-    schema_str = _convert_schema_to_str(schema)
-    return _core.testing._deepseek_xml_tool_calling_to_ebnf(schema_str, any_order)
-
-
-def _glm_xml_tool_calling_to_ebnf(
-    schema: Union[str, Type[BaseModel], Dict[str, Any]], any_order: bool = False
-) -> str:
-    """Convert GLM XML tool calling schema to EBNF."""
-    schema_str = _convert_schema_to_str(schema)
-    return _core.testing._glm_xml_tool_calling_to_ebnf(schema_str, any_order)
 
 
 def _traverse_draft_tree(

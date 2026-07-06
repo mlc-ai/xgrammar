@@ -3,13 +3,7 @@ import sys
 import pytest
 
 from xgrammar import Grammar
-from xgrammar.testing import (
-    _deepseek_xml_tool_calling_to_ebnf,
-    _glm_xml_tool_calling_to_ebnf,
-    _is_grammar_accept_string,
-    _minimax_xml_tool_calling_to_ebnf,
-    _qwen_xml_tool_calling_to_ebnf,
-)
+from xgrammar.testing import _is_grammar_accept_string, _json_schema_to_ebnf
 
 
 def check_grammar_with_expected_grammar(grammar: Grammar, expected_grammar: str):
@@ -23,25 +17,25 @@ def check_grammar_with_instance(grammar: Grammar, instance: str, accepted: bool)
 
 
 def _check_qwen_grammar(schema: dict, expected_grammar: str, instance: str, accepted: bool):
-    ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="qwen_xml")
     check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 
 def _check_minimax_grammar(schema: dict, expected_grammar: str, instance: str, accepted: bool):
-    ebnf_grammar = _minimax_xml_tool_calling_to_ebnf(schema)
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="minimax_xml")
     check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 
 def _check_deepseek_grammar(schema: dict, expected_grammar: str, instance: str, accepted: bool):
-    ebnf_grammar = _deepseek_xml_tool_calling_to_ebnf(schema)
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="deepseek_xml")
     check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 
 def _check_glm_grammar(schema: dict, instance: str, accepted: bool):
-    ebnf_grammar = _glm_xml_tool_calling_to_ebnf(schema)
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="glm_xml")
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 
@@ -438,7 +432,7 @@ root ::=  [ \n\t]* (("<parameter=array>" [ \n\t]* root_prop_0 [ \n\t]* "</parame
     _check_qwen_grammar(schema, expected_grammar, input_str, accepted)
 
 
-# ---------- MiniMax XML tool calling (_minimax_xml_tool_calling_to_ebnf) ----------
+# ---------- MiniMax XML tool calling (json_format="minimax_xml") ----------
 # Format: <parameter name="key">value</parameter> (not <parameter=key>)
 
 
@@ -866,7 +860,7 @@ root ::=  [ \n\t]* (("<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "<
     _check_minimax_grammar(schema, expected_grammar, input_str, accepted)
 
 
-# ---------- DeepSeek XML tool calling (_deepseek_xml_tool_calling_to_ebnf) ----------
+# ---------- DeepSeek XML tool calling (json_format="deepseek_xml") ----------
 # Format: <｜DSML｜parameter name="$PARAMETER_NAME" string="true|false">$PARAMETER_VALUE</｜DSML｜parameter>
 
 
@@ -1307,7 +1301,7 @@ root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "f
     _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
 
 
-# ---------- GLM XML tool calling (_glm_xml_tool_calling_to_ebnf) ----------
+# ---------- GLM XML tool calling (json_format="glm_xml") ----------
 # Format: <arg_key>$PARAMETER_NAME</arg_key><arg_value>$PARAMETER_VALUE</arg_value>
 
 
@@ -1336,7 +1330,7 @@ def test_glm_reject_wrong_parameter_format(input_str: str, accepted: bool):
         "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
         "required": ["name", "age"],
     }
-    ebnf_grammar = _glm_xml_tool_calling_to_ebnf(schema)
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="glm_xml")
     grammar_str = str(ebnf_grammar)
     assert "<arg_key>" in grammar_str
     assert "<arg_value>" in grammar_str
@@ -1346,7 +1340,7 @@ def test_glm_reject_wrong_parameter_format(input_str: str, accepted: bool):
 
 def test_nested_true_schema():
     schema = {"type": "object", "properties": {"name": True}, "required": ["name"]}
-    ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="qwen_xml")
     assert _is_grammar_accept_string(ebnf_grammar, "<parameter=name>\nvalue\n</parameter>")
     assert _is_grammar_accept_string(ebnf_grammar, "<parameter=name>\n[1, 2, 3]\n</parameter>")
     assert _is_grammar_accept_string(
@@ -1357,7 +1351,7 @@ def test_nested_true_schema():
 
 def test_true_schema():
     schema = "true"
-    ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="qwen_xml")
     assert _is_grammar_accept_string(ebnf_grammar, "<parameter=name>\nvalue\n</parameter>")
     assert _is_grammar_accept_string(ebnf_grammar, "<parameter=abc>\n[1, 2, 3]\n</parameter>")
     assert _is_grammar_accept_string(

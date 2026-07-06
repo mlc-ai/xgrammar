@@ -553,66 +553,6 @@ std::string GenerateFloatRangeRegex(
     bool exclusive_end = false
 );
 
-/*!
- * \brief Convert a function call to a Grammar.
- * \param schema The schema of the parameters of the function call.
- * \param any_order Whether object properties may appear in any order. Default: false.
- * \param max_whitespace_cnt Maximum consecutive whitespace count. Default: std::nullopt
- *   (unlimited).
- * \return The ebnf-grammar to match the requirements of the schema, and
- * in Qwen xml style.
- */
-std::string QwenXMLToolCallingToEBNF(
-    const std::string& schema,
-    bool any_order = false,
-    std::optional<int> max_whitespace_cnt = std::nullopt
-);
-
-/*!
- * \brief Convert a function call to a Grammar.
- * \param schema The schema of the parameters of the function call.
- * \param any_order Whether object properties may appear in any order. Default: false.
- * \param max_whitespace_cnt Maximum consecutive whitespace count. Default: std::nullopt
- *   (unlimited).
- * \return The ebnf-grammar to match the requirements of the schema, and
- * in MiniMax xml style.
- */
-std::string MiniMaxXMLToolCallingToEBNF(
-    const std::string& schema,
-    bool any_order = false,
-    std::optional<int> max_whitespace_cnt = std::nullopt
-);
-
-/*!
- * \brief Convert a function call to a Grammar.
- * \param schema The schema of the parameters of the function call.
- * \param any_order Whether object properties may appear in any order. Default: false.
- * \param max_whitespace_cnt Maximum consecutive whitespace count. Default: std::nullopt
- *   (unlimited).
- * \return The ebnf-grammar to match the requirements of the schema, and
- * in DeepSeek xml style.
- */
-std::string DeepSeekXMLToolCallingToEBNF(
-    const std::string& schema,
-    bool any_order = false,
-    std::optional<int> max_whitespace_cnt = std::nullopt
-);
-
-/*!
- * \brief Convert a function call to a Grammar.
- * \param schema The schema of the parameters of the function call.
- * \param any_order Whether object properties may appear in any order. Default: false.
- * \param max_whitespace_cnt Maximum consecutive whitespace count. Default: std::nullopt
- *   (unlimited).
- * \return The ebnf-grammar to match the requirements of the schema, and
- * in GLM xml style (<arg_key>key</arg_key><arg_value>value</arg_value>).
- */
-std::string GlmXMLToolCallingToEBNF(
-    const std::string& schema,
-    bool any_order = false,
-    std::optional<int> max_whitespace_cnt = std::nullopt
-);
-
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_JSON_SCHEMA_CONVERTER_H_

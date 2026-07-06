@@ -1850,53 +1850,29 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringF
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFormat& format) {
-  // The whitespace cap comes from the JSONSchemaFormat node (per-tag).
-  const static std::unordered_map<
-      std::string,
-      std::function<std::string(const std::string&, bool, std::optional<int>)>>
-      style_to_grammar_converter = {
-          {"json",
-           [](const std::string& json_schema, bool any_order, std::optional<int> max_whitespace_cnt
-           ) -> std::string {
-             return JSONSchemaToEBNF(
-                 json_schema,
-                 /*any_whitespace=*/true,
-                 /*indent=*/std::nullopt,
-                 /*separators=*/std::nullopt,
-                 /*strict_mode=*/true,
-                 max_whitespace_cnt,
-                 /*json_format=*/JSONFormat::kJSON,
-                 any_order
-             );
-           }},
-          {"qwen_xml",
-           [](const std::string& json_schema, bool any_order, std::optional<int> max_whitespace_cnt
-           ) -> std::string {
-             return QwenXMLToolCallingToEBNF(json_schema, any_order, max_whitespace_cnt);
-           }},
-          {"minimax_xml",
-           [](const std::string& json_schema, bool any_order, std::optional<int> max_whitespace_cnt
-           ) -> std::string {
-             return MiniMaxXMLToolCallingToEBNF(json_schema, any_order, max_whitespace_cnt);
-           }},
-          {"deepseek_xml",
-           [](const std::string& json_schema, bool any_order, std::optional<int> max_whitespace_cnt
-           ) -> std::string {
-             return DeepSeekXMLToolCallingToEBNF(json_schema, any_order, max_whitespace_cnt);
-           }},
-          {"glm_xml",
-           [](const std::string& json_schema, bool any_order, std::optional<int> max_whitespace_cnt
-           ) -> std::string {
-             return GlmXMLToolCallingToEBNF(json_schema, any_order, max_whitespace_cnt);
-           }},
-      };
-  auto converter = style_to_grammar_converter.find(format.style);
-  if (converter == style_to_grammar_converter.end()) {
+  const static std::unordered_map<std::string, JSONFormat> style_to_json_format = {
+      {"json", JSONFormat::kJSON},
+      {"qwen_xml", JSONFormat::kQwenXML},
+      {"minimax_xml", JSONFormat::kMiniMaxXML},
+      {"deepseek_xml", JSONFormat::kDeepSeekXML},
+      {"glm_xml", JSONFormat::kGlmXML},
+  };
+  auto json_format_it = style_to_json_format.find(format.style);
+  if (json_format_it == style_to_json_format.end()) {
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
-  auto sub_grammar = Grammar::FromEBNF(
-      converter->second(format.json_schema, format.any_order, format.max_whitespace_cnt)
+  // The whitespace cap comes from the JSONSchemaFormat node (per-tag).
+  std::string ebnf = JSONSchemaToEBNF(
+      format.json_schema,
+      /*any_whitespace=*/true,
+      /*indent=*/std::nullopt,
+      /*separators=*/std::nullopt,
+      /*strict_mode=*/true,
+      /*max_whitespace_cnt=*/format.max_whitespace_cnt,
+      /*json_format=*/json_format_it->second,
+      format.any_order
   );
+  auto sub_grammar = Grammar::FromEBNF(ebnf);
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }

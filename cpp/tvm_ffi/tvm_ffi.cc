@@ -713,6 +713,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              ffi::AnyView separators,
              bool strict_mode,
              ffi::AnyView max_whitespace_cnt,
+             int json_format,
              bool any_order) {
             return ffi::String(JSONSchemaToEBNF(
                 schema,
@@ -721,7 +722,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 OptionalSeparatorsFromView(separators),
                 strict_mode,
                 OptionalIntFromView(max_whitespace_cnt),
-                JSONFormat::kJSON,
+                static_cast<JSONFormat>(json_format),
                 any_order
             ));
           }
@@ -814,30 +815,6 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 std::remove(regex_string.begin(), regex_string.end(), '\0'), regex_string.end()
             );
             return ffi::String(regex_string);
-          }
-      )
-      .def(
-          "xgrammar.tvm_ffi_binding.testing._qwen_xml_tool_calling_to_ebnf",
-          [](ffi::String schema, bool any_order) {
-            return ffi::String(QwenXMLToolCallingToEBNF(schema, any_order));
-          }
-      )
-      .def(
-          "xgrammar.tvm_ffi_binding.testing._minimax_xml_tool_calling_to_ebnf",
-          [](ffi::String schema, bool any_order) {
-            return ffi::String(MiniMaxXMLToolCallingToEBNF(schema, any_order));
-          }
-      )
-      .def(
-          "xgrammar.tvm_ffi_binding.testing._deepseek_xml_tool_calling_to_ebnf",
-          [](ffi::String schema, bool any_order) {
-            return ffi::String(DeepSeekXMLToolCallingToEBNF(schema, any_order));
-          }
-      )
-      .def(
-          "xgrammar.tvm_ffi_binding.testing._glm_xml_tool_calling_to_ebnf",
-          [](ffi::String schema, bool any_order) {
-            return ffi::String(GlmXMLToolCallingToEBNF(schema, any_order));
           }
       )
       .def(
