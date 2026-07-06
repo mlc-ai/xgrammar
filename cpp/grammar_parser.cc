@@ -1036,7 +1036,7 @@ int32_t EBNFParser::ParseTokenSet() {
   std::sort(token_ids.begin(), token_ids.end());
   token_ids.erase(std::unique(token_ids.begin(), token_ids.end()), token_ids.end());
 
-  return builder_.AddTokenSet(token_ids);
+  return builder_.AddToken(token_ids);
 }
 
 int32_t EBNFParser::ParseExcludeToken() {
@@ -1063,7 +1063,7 @@ int32_t EBNFParser::ParseExcludeToken() {
   std::sort(token_ids.begin(), token_ids.end());
   token_ids.erase(std::unique(token_ids.begin(), token_ids.end()), token_ids.end());
 
-  return builder_.AddExcludeTokenSet(token_ids);
+  return builder_.AddExcludeToken(token_ids);
 }
 
 int32_t EBNFParser::ParseTokenTagDispatch() {

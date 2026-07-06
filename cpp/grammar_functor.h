@@ -283,15 +283,6 @@ class GrammarConcatFunctor {
   static Grammar Apply(const std::vector<Grammar>& grammars);
 };
 
-/*!
- * \brief Add a sub grammar to the current builder. The return value
- * of Apply is the new rule id of the sub grammar's root rule.
- */
-class SubGrammarAdder {
- public:
-  static int32_t Apply(GrammarBuilder* builder, const Grammar& sub_grammar);
-};
-
 /*************************** Grammar Normalizer ***************************/
 
 /*!
