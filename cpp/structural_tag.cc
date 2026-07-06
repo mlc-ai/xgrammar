@@ -101,7 +101,6 @@ picojson::value JSONSchemaFormat::ToJSON() const {
   }
   obj["style"] = picojson::value(style);
   obj["any_order"] = picojson::value(any_order);
-  obj["any_whitespace"] = picojson::value(any_whitespace);
   if (max_whitespace_cnt.has_value()) {
     obj["max_whitespace_cnt"] = picojson::value(static_cast<int64_t>(*max_whitespace_cnt));
   } else {
@@ -554,14 +553,6 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     }
     any_order = any_order_it->second.get<bool>();
   }
-  bool any_whitespace = true;
-  auto any_whitespace_it = obj.find("any_whitespace");
-  if (any_whitespace_it != obj.end() && !any_whitespace_it->second.is<picojson::null>()) {
-    if (!any_whitespace_it->second.is<bool>()) {
-      return ResultErr<ISTError>("any_whitespace must be a boolean");
-    }
-    any_whitespace = any_whitespace_it->second.get<bool>();
-  }
   std::optional<int> max_whitespace_cnt = std::nullopt;
   auto max_whitespace_cnt_it = obj.find("max_whitespace_cnt");
   if (max_whitespace_cnt_it != obj.end() && !max_whitespace_cnt_it->second.is<picojson::null>()) {
@@ -572,7 +563,7 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
   }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
   return ResultOk<JSONSchemaFormat>(
-      json_schema_it->second.serialize(false), style, any_order, any_whitespace, max_whitespace_cnt
+      json_schema_it->second.serialize(false), style, any_order, max_whitespace_cnt
   );
 }
 
@@ -1853,19 +1844,17 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringF
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFormat& format) {
-  // Whitespace control comes from the JSONSchemaFormat node (per-tag).
+  // The whitespace cap comes from the JSONSchemaFormat node (per-tag).
   const static std::unordered_map<
       std::string,
-      std::function<std::string(const std::string&, bool, bool, std::optional<int>)>>
+      std::function<std::string(const std::string&, bool, std::optional<int>)>>
       style_to_grammar_converter = {
           {"json",
-           [](const std::string& json_schema,
-              bool any_order,
-              bool any_whitespace,
-              std::optional<int> max_whitespace_cnt) -> std::string {
+           [](const std::string& json_schema, bool any_order, std::optional<int> max_whitespace_cnt
+           ) -> std::string {
              return JSONSchemaToEBNF(
                  json_schema,
-                 any_whitespace,
+                 /*any_whitespace=*/true,
                  /*indent=*/std::nullopt,
                  /*separators=*/std::nullopt,
                  /*strict_mode=*/true,
@@ -1875,49 +1864,33 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
              );
            }},
           {"qwen_xml",
-           [](const std::string& json_schema,
-              bool any_order,
-              bool any_whitespace,
-              std::optional<int> max_whitespace_cnt) -> std::string {
-             return QwenXMLToolCallingToEBNF(
-                 json_schema, any_order, any_whitespace, max_whitespace_cnt
-             );
+           [](const std::string& json_schema, bool any_order, std::optional<int> max_whitespace_cnt
+           ) -> std::string {
+             return QwenXMLToolCallingToEBNF(json_schema, any_order, max_whitespace_cnt);
            }},
           {"minimax_xml",
-           [](const std::string& json_schema,
-              bool any_order,
-              bool any_whitespace,
-              std::optional<int> max_whitespace_cnt) -> std::string {
-             return MiniMaxXMLToolCallingToEBNF(
-                 json_schema, any_order, any_whitespace, max_whitespace_cnt
-             );
+           [](const std::string& json_schema, bool any_order, std::optional<int> max_whitespace_cnt
+           ) -> std::string {
+             return MiniMaxXMLToolCallingToEBNF(json_schema, any_order, max_whitespace_cnt);
            }},
           {"deepseek_xml",
-           [](const std::string& json_schema,
-              bool any_order,
-              bool any_whitespace,
-              std::optional<int> max_whitespace_cnt) -> std::string {
-             return DeepSeekXMLToolCallingToEBNF(
-                 json_schema, any_order, any_whitespace, max_whitespace_cnt
-             );
+           [](const std::string& json_schema, bool any_order, std::optional<int> max_whitespace_cnt
+           ) -> std::string {
+             return DeepSeekXMLToolCallingToEBNF(json_schema, any_order, max_whitespace_cnt);
            }},
           {"glm_xml",
-           [](const std::string& json_schema,
-              bool any_order,
-              bool any_whitespace,
-              std::optional<int> max_whitespace_cnt) -> std::string {
-             return GlmXMLToolCallingToEBNF(
-                 json_schema, any_order, any_whitespace, max_whitespace_cnt
-             );
+           [](const std::string& json_schema, bool any_order, std::optional<int> max_whitespace_cnt
+           ) -> std::string {
+             return GlmXMLToolCallingToEBNF(json_schema, any_order, max_whitespace_cnt);
            }},
       };
   auto converter = style_to_grammar_converter.find(format.style);
   if (converter == style_to_grammar_converter.end()) {
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
-  auto sub_grammar = Grammar::FromEBNF(converter->second(
-      format.json_schema, format.any_order, format.any_whitespace, format.max_whitespace_cnt
-  ));
+  auto sub_grammar = Grammar::FromEBNF(
+      converter->second(format.json_schema, format.any_order, format.max_whitespace_cnt)
+  );
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }

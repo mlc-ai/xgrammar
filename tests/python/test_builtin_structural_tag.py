@@ -1405,20 +1405,3 @@ def test_get_model_structural_tag_max_whitespace_cnt_propagates():
     )
     assert nodes_bounded
     assert all(n.max_whitespace_cnt == 2 for n in nodes_bounded)
-
-
-def test_get_model_structural_tag_any_whitespace_propagates():
-    """get_model_structural_tag applies any_whitespace to every JSONSchemaFormat node."""
-    tools = make_tools(["f", "g"])
-
-    nodes_default = _collect_json_schema_nodes(
-        get_model_structural_tag("qwen_3", tools=tools, reasoning=False)
-    )
-    assert nodes_default  # the generated tag actually contains JSON-schema nodes
-    assert all(n.any_whitespace is True for n in nodes_default)
-
-    nodes_fixed = _collect_json_schema_nodes(
-        get_model_structural_tag("qwen_3", tools=tools, reasoning=False, any_whitespace=False)
-    )
-    assert nodes_fixed
-    assert all(n.any_whitespace is False for n in nodes_fixed)

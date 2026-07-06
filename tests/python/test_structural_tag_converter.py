@@ -4147,22 +4147,17 @@ def test_json_schema_format_any_order_via_pydantic():
     check_stag_with_instance(st_ordered, '{"b": "x", "a": 1}', False)
 
 
-# ---------- Per-tag whitespace control (JSONSchemaFormat.any_whitespace / max_whitespace_cnt) ----------
+# ---------- Per-tag whitespace control (JSONSchemaFormat.max_whitespace_cnt) ----------
 
 _WS_SCHEMA = {"type": "object", "properties": {"a": {"type": "integer"}}, "required": ["a"]}
 
 
-def _ws_stag(
-    *, any_whitespace: bool = True, max_whitespace_cnt: Optional[int] = None
-) -> StructuralTag:
+def _ws_stag(*, max_whitespace_cnt: Optional[int] = None) -> StructuralTag:
     return StructuralTag(
         format=TagFormat(
             begin="<call>",
             content=JSONSchemaFormat(
-                json_schema=_WS_SCHEMA,
-                style="json",
-                any_whitespace=any_whitespace,
-                max_whitespace_cnt=max_whitespace_cnt,
+                json_schema=_WS_SCHEMA, style="json", max_whitespace_cnt=max_whitespace_cnt
             ),
             end="</call>",
         )
@@ -4183,18 +4178,6 @@ def test_structural_tag_max_whitespace_cnt():
     # Beyond the bound: accepted only without the limit.
     assert _is_grammar_accept_string(g_unbounded, _ws_instance(5))
     assert not _is_grammar_accept_string(g_bounded, _ws_instance(5))
-
-
-def test_structural_tag_any_whitespace_false():
-    g_any = xgr.Grammar.from_structural_tag(_ws_stag(any_whitespace=True))
-    g_fixed = xgr.Grammar.from_structural_tag(_ws_stag(any_whitespace=False))
-    # any_whitespace=True accepts arbitrary spacing.
-    assert _is_grammar_accept_string(g_any, _ws_instance(0))
-    assert _is_grammar_accept_string(g_any, _ws_instance(3))
-    # any_whitespace=False enforces the fixed compact format (single space after colon).
-    assert _is_grammar_accept_string(g_fixed, _ws_instance(1))
-    assert not _is_grammar_accept_string(g_fixed, _ws_instance(0))
-    assert not _is_grammar_accept_string(g_fixed, _ws_instance(3))
 
 
 def test_structural_tag_per_tag_whitespace_independent():

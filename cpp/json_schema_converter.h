@@ -549,7 +549,6 @@ std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<d
  * \brief Convert a function call to a Grammar.
  * \param schema The schema of the parameters of the function call.
  * \param any_order Whether object properties may appear in any order. Default: false.
- * \param any_whitespace Whether to allow any whitespace characters. Default: true.
  * \param max_whitespace_cnt Maximum consecutive whitespace count. Default: std::nullopt
  *   (unlimited).
  * \return The ebnf-grammar to match the requirements of the schema, and
@@ -558,7 +557,6 @@ std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<d
 std::string QwenXMLToolCallingToEBNF(
     const std::string& schema,
     bool any_order = false,
-    bool any_whitespace = true,
     std::optional<int> max_whitespace_cnt = std::nullopt
 );
 
@@ -566,7 +564,6 @@ std::string QwenXMLToolCallingToEBNF(
  * \brief Convert a function call to a Grammar.
  * \param schema The schema of the parameters of the function call.
  * \param any_order Whether object properties may appear in any order. Default: false.
- * \param any_whitespace Whether to allow any whitespace characters. Default: true.
  * \param max_whitespace_cnt Maximum consecutive whitespace count. Default: std::nullopt
  *   (unlimited).
  * \return The ebnf-grammar to match the requirements of the schema, and
@@ -575,7 +572,6 @@ std::string QwenXMLToolCallingToEBNF(
 std::string MiniMaxXMLToolCallingToEBNF(
     const std::string& schema,
     bool any_order = false,
-    bool any_whitespace = true,
     std::optional<int> max_whitespace_cnt = std::nullopt
 );
 
@@ -583,7 +579,6 @@ std::string MiniMaxXMLToolCallingToEBNF(
  * \brief Convert a function call to a Grammar.
  * \param schema The schema of the parameters of the function call.
  * \param any_order Whether object properties may appear in any order. Default: false.
- * \param any_whitespace Whether to allow any whitespace characters. Default: true.
  * \param max_whitespace_cnt Maximum consecutive whitespace count. Default: std::nullopt
  *   (unlimited).
  * \return The ebnf-grammar to match the requirements of the schema, and
@@ -592,7 +587,6 @@ std::string MiniMaxXMLToolCallingToEBNF(
 std::string DeepSeekXMLToolCallingToEBNF(
     const std::string& schema,
     bool any_order = false,
-    bool any_whitespace = true,
     std::optional<int> max_whitespace_cnt = std::nullopt
 );
 
@@ -600,7 +594,6 @@ std::string DeepSeekXMLToolCallingToEBNF(
  * \brief Convert a function call to a Grammar.
  * \param schema The schema of the parameters of the function call.
  * \param any_order Whether object properties may appear in any order. Default: false.
- * \param any_whitespace Whether to allow any whitespace characters. Default: true.
  * \param max_whitespace_cnt Maximum consecutive whitespace count. Default: std::nullopt
  *   (unlimited).
  * \return The ebnf-grammar to match the requirements of the schema, and
@@ -609,7 +602,6 @@ std::string DeepSeekXMLToolCallingToEBNF(
 std::string GlmXMLToolCallingToEBNF(
     const std::string& schema,
     bool any_order = false,
-    bool any_whitespace = true,
     std::optional<int> max_whitespace_cnt = std::nullopt
 );
 

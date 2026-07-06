@@ -3236,10 +3236,7 @@ std::string GenerateFloatRangeRegex(std::optional<double> start, std::optional<d
 }
 
 std::string QwenXMLToolCallingToEBNF(
-    const std::string& schema,
-    bool any_order,
-    bool any_whitespace,
-    std::optional<int> max_whitespace_cnt
+    const std::string& schema, bool any_order, std::optional<int> max_whitespace_cnt
 ) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
@@ -3248,7 +3245,7 @@ std::string QwenXMLToolCallingToEBNF(
   }
   return JSONSchemaToEBNF(
       json_value,
-      any_whitespace,
+      true,
       std::nullopt,
       std::nullopt,
       true,
@@ -3259,10 +3256,7 @@ std::string QwenXMLToolCallingToEBNF(
 }
 
 std::string MiniMaxXMLToolCallingToEBNF(
-    const std::string& schema,
-    bool any_order,
-    bool any_whitespace,
-    std::optional<int> max_whitespace_cnt
+    const std::string& schema, bool any_order, std::optional<int> max_whitespace_cnt
 ) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
@@ -3271,7 +3265,7 @@ std::string MiniMaxXMLToolCallingToEBNF(
   }
   return JSONSchemaToEBNF(
       json_value,
-      any_whitespace,
+      true,
       std::nullopt,
       std::nullopt,
       true,
@@ -3282,10 +3276,7 @@ std::string MiniMaxXMLToolCallingToEBNF(
 }
 
 std::string DeepSeekXMLToolCallingToEBNF(
-    const std::string& schema,
-    bool any_order,
-    bool any_whitespace,
-    std::optional<int> max_whitespace_cnt
+    const std::string& schema, bool any_order, std::optional<int> max_whitespace_cnt
 ) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
@@ -3294,7 +3285,7 @@ std::string DeepSeekXMLToolCallingToEBNF(
   }
   return JSONSchemaToEBNF(
       json_value,
-      any_whitespace,
+      true,
       std::nullopt,
       std::nullopt,
       true,
@@ -3305,10 +3296,7 @@ std::string DeepSeekXMLToolCallingToEBNF(
 }
 
 std::string GlmXMLToolCallingToEBNF(
-    const std::string& schema,
-    bool any_order,
-    bool any_whitespace,
-    std::optional<int> max_whitespace_cnt
+    const std::string& schema, bool any_order, std::optional<int> max_whitespace_cnt
 ) {
   picojson::value json_value;
   std::string err = picojson::parse(json_value, schema);
@@ -3317,7 +3305,7 @@ std::string GlmXMLToolCallingToEBNF(
   }
   return JSONSchemaToEBNF(
       json_value,
-      any_whitespace,
+      true,
       std::nullopt,
       std::nullopt,
       true,
