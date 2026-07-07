@@ -175,7 +175,7 @@ class LogitsProcessor(transformers.LogitsProcessor):
                 if matcher.is_terminated():
                     terminated_rows.add(i)
                     break
-            if not i in terminated_rows:
+            if i not in terminated_rows:
                 matcher.fill_next_token_bitmask(self.token_bitmask, i)
 
         # We only support masking logits on CUDA or CPU
