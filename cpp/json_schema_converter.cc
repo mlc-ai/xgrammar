@@ -550,8 +550,8 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
     if (has_lower_bound || has_upper_bound) {
       if (!has_lower_bound || !has_upper_bound ||
           IsRangeWidthOverCap(effective_min, effective_max, kIntegerMultipleOfRangeWidthMax)) {
-        XGRAMMAR_LOG(WARNING)
-            << "range + multipleOf combination not yet supported; ignoring multipleOf";
+        XGRAMMAR_LOG(WARNING
+        ) << "range + multipleOf combination not yet supported; ignoring multipleOf";
         spec.multiple_of.reset();
         return ResultOk(std::move(spec));
       }
@@ -571,8 +571,8 @@ Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object
     if (!value.is<int64_t>() && !value.is<double>()) {
       return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Value must be a number");
     }
-    double multiple_of = value.is<int64_t>() ? static_cast<double>(value.get<int64_t>())
-                                             : value.get<double>();
+    double multiple_of =
+        value.is<int64_t>() ? static_cast<double>(value.get<int64_t>()) : value.get<double>();
     if (multiple_of <= 0) {
       return ResultErr<SchemaError>(
           SchemaErrorType::kInvalidSchema, "multipleOf must be greater than 0"
