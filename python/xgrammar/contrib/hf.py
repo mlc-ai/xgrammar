@@ -133,7 +133,7 @@ class LogitsProcessor(transformers.LogitsProcessor):
             scores: Logits modified with bitmask.
         """
         # Lazily initialize GrammarMatchers and bitmask
-        if len(self.matchers) == 0:
+        if self.token_bitmask is None:
             self.batch_size = input_ids.shape[0]
             self.compiled_grammars = (
                 self.compiled_grammars
@@ -169,8 +169,9 @@ class LogitsProcessor(transformers.LogitsProcessor):
             matcher = xgr.GrammarMatcher(self.compiled_grammars[i])
             # Rewalk all input_ids in row to build state
             for sampled_token in input_ids[i, self.prompt_len :].tolist():
-                assert matcher.accept_token(
-                    sampled_token
+                ok = matcher.accept_token(sampled_token)
+                assert (
+                    ok
                 ), f"Illegal token {sampled_token} allowed in row {i}. Could be that do_sample=True and number of branches in the grammar < num_beams, which forces a -inf scored token into the top num_beams branches. Or it could be a wrong EOS token. Or it could conflict with other logits processors."
                 if matcher.is_terminated():
                     terminated_rows.add(i)
