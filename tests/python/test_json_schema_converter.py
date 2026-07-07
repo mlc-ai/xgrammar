@@ -805,27 +805,16 @@ def test_oneof_unsupported_overlap_warns_and_falls_back(capfd):
             assert not _is_grammar_accept_string(grammar, instance)
 
     assert_oneof_falls_back(
-        {"oneOf": [{"type": "integer"}, {"type": "number"}]},
-        ["1", "1.5"],
-        ['"x"'],
+        {"oneOf": [{"type": "integer"}, {"type": "number"}]}, ["1", "1.5"], ['"x"']
     )
     assert_oneof_falls_back(
-        {"oneOf": [{"type": ["integer", "string"]}, {"type": "number"}]},
-        ["1", '"x"', "1.5"],
+        {"oneOf": [{"type": ["integer", "string"]}, {"type": "number"}]}, ["1", '"x"', "1.5"]
     )
     assert_oneof_falls_back({"oneOf": [{"type": "integer"}, {}]}, ["1", "true"])
     assert_oneof_falls_back({"oneOf": [{"const": 1}, {"const": 1.0}]}, ["1"])
-    assert_oneof_falls_back(
-        '{"oneOf":[{"const":9007199254740993},{"const":9007199254740993.0}]}'
-    )
-    assert_oneof_falls_back(
-        '{"oneOf":[{"const":1.5},{"const":2.5}]}',
-        ["1.5", "2.5"],
-        ["3.5"],
-    )
-    assert_oneof_falls_back(
-        '{"oneOf":[{"enum":[9007199254740993]},{"enum":[9007199254740993.0]}]}'
-    )
+    assert_oneof_falls_back('{"oneOf":[{"const":9007199254740993},{"const":9007199254740993.0}]}')
+    assert_oneof_falls_back('{"oneOf":[{"const":1.5},{"const":2.5}]}', ["1.5", "2.5"], ["3.5"])
+    assert_oneof_falls_back('{"oneOf":[{"enum":[9007199254740993]},{"enum":[9007199254740993.0]}]}')
     assert_oneof_falls_back({"oneOf": [{"enum": [1, "hello", 2]}, {"type": "integer"}]}, ["1", "3"])
     assert_oneof_falls_back(
         {
@@ -845,7 +834,10 @@ def test_oneof_unsupported_overlap_warns_and_falls_back(capfd):
         ["1", "1.5", '"x"'],
     )
     assert_oneof_falls_back(
-        {"oneOf": [{"type": "integer"}, {"$ref": "#/$defs/x"}], "$defs": {"x": {"type": "integer"}}},
+        {
+            "oneOf": [{"type": "integer"}, {"$ref": "#/$defs/x"}],
+            "$defs": {"x": {"type": "integer"}},
+        },
         ["1"],
     )
 
