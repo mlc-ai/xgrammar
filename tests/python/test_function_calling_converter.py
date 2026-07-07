@@ -1366,5 +1366,34 @@ def test_true_schema():
     assert not _is_grammar_accept_string(ebnf_grammar, "anything")
 
 
+def test_control_character_in_property_name_qwen():
+    # A property name containing a control character (here a newline) must be
+    # escaped before being embedded in the EBNF string literal. Previously the
+    # XML converters emitted the raw key, so the newline terminated the string
+    # literal mid-token and aborted grammar compilation with
+    # "EBNF lexer error ... Expect \" in string literal".
+    schema = {"type": "object", "properties": {"a\nb": {"type": "string"}}, "required": ["a\nb"]}
+    ebnf_grammar = _qwen_xml_tool_calling_to_ebnf(schema)  # must not raise
+    # Qwen emits the key verbatim in the tag, so the newline is matched literally.
+    check_grammar_with_instance(ebnf_grammar, "<parameter=a\nb>hello</parameter>", True)
+    check_grammar_with_instance(ebnf_grammar, "<parameter=ab>hello</parameter>", False)
+
+
+@pytest.mark.parametrize(
+    "to_ebnf",
+    [
+        _qwen_xml_tool_calling_to_ebnf,
+        _minimax_xml_tool_calling_to_ebnf,
+        _deepseek_xml_tool_calling_to_ebnf,
+        _glm_xml_tool_calling_to_ebnf,
+    ],
+)
+def test_control_character_in_property_name_compiles(to_ebnf):
+    # Every XML tool-calling style must escape control characters in a property
+    # name so grammar compilation never aborts on the raw key.
+    schema = {"type": "object", "properties": {"a\nb": {"type": "string"}}, "required": ["a\nb"]}
+    to_ebnf(schema)  # previously raised an EBNF lexer error
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

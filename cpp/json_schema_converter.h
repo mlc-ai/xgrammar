@@ -451,6 +451,15 @@ class JSONSchemaConverter {
   static std::string JSONStrToPrintableStr(const std::string& json_str);
 
  protected:
+  // Escape `str` (no surrounding quotes added) so it can be placed inside an
+  // EBNF string literal ("...") and match those exact raw bytes: escapes the
+  // EBNF metacharacters " and \, and any control byte (which would otherwise
+  // terminate the literal early, e.g. a newline) as \u00XX, leaving every other
+  // byte -- including '/' and UTF-8 -- verbatim. Used by the tool-calling
+  // subclasses that emit the property key as raw (non-JSON) text between
+  // format-specific delimiters.
+  static std::string EscapeStringForEBNFLiteral(const std::string& str);
+
   static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
 
   // Expose for testing
