@@ -27,7 +27,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install torch transformers datasets tqdm requests
+          pip install torch "transformers<5" datasets tqdm requests
 
       - name: Run benchmark
         id: benchmark
