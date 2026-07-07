@@ -3142,16 +3142,14 @@ def test_any_order_backward_compatible():
 
 
 def test_any_order_qwen_xml():
-    from xgrammar.testing import _qwen_xml_tool_calling_to_ebnf
-
     schema = {
         "type": "object",
         "properties": {"a": {"type": "integer"}, "b": {"type": "string"}},
         "required": ["a", "b"],
         "additionalProperties": False,
     }
-    ordered = _qwen_xml_tool_calling_to_ebnf(json.dumps(schema), False)
-    any_order = _qwen_xml_tool_calling_to_ebnf(json.dumps(schema), True)
+    ordered = _json_schema_to_ebnf(json.dumps(schema), json_format="qwen_xml", any_order=False)
+    any_order = _json_schema_to_ebnf(json.dumps(schema), json_format="qwen_xml", any_order=True)
 
     # Both grammars share the same basic_*/xml_* prefix; only the root rules differ.
     prefix = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]

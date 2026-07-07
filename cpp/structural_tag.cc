@@ -101,6 +101,11 @@ picojson::value JSONSchemaFormat::ToJSON() const {
   }
   obj["style"] = picojson::value(style);
   obj["any_order"] = picojson::value(any_order);
+  if (max_whitespace_cnt.has_value()) {
+    obj["max_whitespace_cnt"] = picojson::value(static_cast<int64_t>(*max_whitespace_cnt));
+  } else {
+    obj["max_whitespace_cnt"] = picojson::value();
+  }
   return picojson::value(std::move(obj));
 }
 
@@ -554,9 +559,18 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     }
     any_order = any_order_it->second.get<bool>();
   }
-
+  std::optional<int> max_whitespace_cnt = std::nullopt;
+  auto max_whitespace_cnt_it = obj.find("max_whitespace_cnt");
+  if (max_whitespace_cnt_it != obj.end() && !max_whitespace_cnt_it->second.is<picojson::null>()) {
+    if (!max_whitespace_cnt_it->second.is<double>()) {
+      return ResultErr<ISTError>("max_whitespace_cnt must be an integer or null");
+    }
+    max_whitespace_cnt = static_cast<int>(max_whitespace_cnt_it->second.get<int64_t>());
+  }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
-  return ResultOk<JSONSchemaFormat>(json_schema_it->second.serialize(false), style, any_order);
+  return ResultOk<JSONSchemaFormat>(
+      json_schema_it->second.serialize(false), style, any_order, max_whitespace_cnt
+  );
 }
 
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
@@ -1736,6 +1750,8 @@ class StructuralTagGrammarConverter {
   static Result<Grammar, ISTError> Convert(const StructuralTag& structural_tag);
 
  private:
+  StructuralTagGrammarConverter() = default;
+
   /*!
    * \brief Visit a Format and return the rule id of the added rule.
    * \param format The Format to visit.
@@ -1834,43 +1850,21 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringF
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFormat& format) {
-  const static std::unordered_map<std::string, std::function<std::string(const std::string&, bool)>>
-      style_to_grammar_converter = {
-          {"json",
-           [](const std::string& json_schema, bool any_order) -> std::string {
-             return JSONSchemaToEBNF(
-                 json_schema,
-                 /*any_whitespace=*/true,
-                 /*indent=*/std::nullopt,
-                 /*separators=*/std::nullopt,
-                 /*strict_mode=*/true,
-                 /*max_whitespace_cnt=*/std::nullopt,
-                 /*json_format=*/JSONFormat::kJSON,
-                 any_order
-             );
-           }},
-          {"qwen_xml",
-           [](const std::string& json_schema, bool any_order) -> std::string {
-             return QwenXMLToolCallingToEBNF(json_schema, any_order);
-           }},
-          {"minimax_xml",
-           [](const std::string& json_schema, bool any_order) -> std::string {
-             return MiniMaxXMLToolCallingToEBNF(json_schema, any_order);
-           }},
-          {"deepseek_xml",
-           [](const std::string& json_schema, bool any_order) -> std::string {
-             return DeepSeekXMLToolCallingToEBNF(json_schema, any_order);
-           }},
-          {"glm_xml",
-           [](const std::string& json_schema, bool any_order) -> std::string {
-             return GlmXMLToolCallingToEBNF(json_schema, any_order);
-           }},
-      };
-  auto converter = style_to_grammar_converter.find(format.style);
-  if (converter == style_to_grammar_converter.end()) {
+  auto json_format = JSONFormatFromString(format.style);
+  if (!json_format.has_value()) {
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
-  std::string ebnf = converter->second(format.json_schema, format.any_order);
+  // The whitespace cap comes from the JSONSchemaFormat node (per-tag).
+  std::string ebnf = JSONSchemaToEBNF(
+      format.json_schema,
+      /*any_whitespace=*/true,
+      /*indent=*/std::nullopt,
+      /*separators=*/std::nullopt,
+      /*strict_mode=*/true,
+      /*max_whitespace_cnt=*/format.max_whitespace_cnt,
+      /*json_format=*/*json_format,
+      format.any_order
+  );
   auto sub_grammar = Grammar::FromEBNF(ebnf);
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
