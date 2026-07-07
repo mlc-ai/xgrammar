@@ -40,7 +40,11 @@ class LogitsProcessor(transformers.LogitsProcessor):
         - Note that this implementation may contain extra overhead.
     """
 
-    def __init__(self, compiled_grammar: Union[xgr.CompiledGrammar, List[xgr.CompiledGrammar]]):
+    def __init__(
+        self,
+        compiled_grammar: Union[xgr.CompiledGrammar, List[xgr.CompiledGrammar]],
+        stateless: bool = False,
+    ):
         """Initialize the LogitsProcessor.
 
         Parameters
@@ -56,8 +60,12 @@ class LogitsProcessor(transformers.LogitsProcessor):
         self.token_bitmask = None
         self.prefilled = False
         self.batch_size = 0
+        self.prompt_len = 0
+        self.call_fn = self.stateless_call if stateless else self.stateful_call
 
-    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
+    def stateful_call(
+        self, input_ids: torch.LongTensor, scores: torch.FloatTensor
+    ) -> torch.FloatTensor:
         """
         Accept token sampled in the last iteration, fill in bitmask, and apply bitmask to logits.
 
@@ -112,3 +120,85 @@ class LogitsProcessor(transformers.LogitsProcessor):
         # LogitsProcessor
 
         return scores
+
+    def stateless_call(
+        self, input_ids: torch.LongTensor, scores: torch.FloatTensor
+    ) -> torch.FloatTensor:
+        """
+        Build state from input_ids when ordering of rows is not guaranteed to be consistent, as during beam search.
+
+        After rewalking of the input_ids, fill in bitmask, and apply bitmask to logits.
+
+        Returns:
+            scores: Logits modified with bitmask.
+        """
+        # Lazily initialize GrammarMatchers and bitmask
+        if len(self.matchers) == 0:
+            self.batch_size = input_ids.shape[0]
+            self.compiled_grammars = (
+                self.compiled_grammars
+                if len(self.compiled_grammars) > 1
+                else self.compiled_grammars * self.batch_size
+            )
+            assert (
+                len(self.compiled_grammars) == self.batch_size
+            ), "The number of compiled grammars must be equal to the batch size."
+            # Allocate memory for bitmasks once - reset each call
+            self.token_bitmask = xgr.allocate_token_bitmask(self.batch_size, self.full_vocab_size)
+            # No stateful matchers
+
+        if input_ids.shape[0] != self.batch_size:
+            raise RuntimeError(
+                "Expect input_ids.shape[0] to be LogitsProcessor.batch_size."
+                + f"Got {input_ids.shape[0]} for the former, and {self.batch_size} for the latter."
+            )
+
+        # Reset bitmask on each call
+        xgr.reset_token_bitmask(self.token_bitmask)
+
+        # Track which matchers terminated
+        terminated_rows = set()
+
+        if not self.prefilled:
+            # Have not sampled a token yet
+            self.prefilled = True
+            self.prompt_len = input_ids.shape[1]
+
+        for i in range(self.batch_size):
+            # New stateless matcher for each row per call
+            matcher = xgr.GrammarMatcher(self.compiled_grammars[i])
+            # Rewalk all input_ids in row to build state
+            for sampled_token in input_ids[i, self.prompt_len :].tolist():
+                assert matcher.accept_token(
+                    sampled_token
+                ), f"Illegal token {sampled_token} allowed in row {i}. Could be that do_sample=True and number of branches in the grammar < num_beams, which forces a -inf scored token into the top num_beams branches. Or it could be a wrong EOS token. Or it could conflict with other logits processors."
+                if matcher.is_terminated():
+                    terminated_rows.add(i)
+                    break
+            if not i in terminated_rows:
+                matcher.fill_next_token_bitmask(self.token_bitmask, i)
+
+        # We only support masking logits on CUDA or CPU
+        device_type = scores.device.type
+        if device_type != "cuda":
+            scores = scores.to("cpu")
+        xgr.apply_token_bitmask_inplace(scores, self.token_bitmask.to(scores.device))
+        if device_type != "cuda":
+            scores = scores.to(device_type)
+
+        # NOTE: Cannot reset here because __call__ is not invoked when stop token
+        # is sampled. This is why each `generate()` call needs to instantiate an
+        # LogitsProcessor
+
+        return scores
+
+    def __call__(self, input_ids: torch.LongTensor, scores: torch.FloatTensor) -> torch.FloatTensor:
+        """
+        If stateful [default], accept token sampled in the last iteration as state and mask scores.
+        If stateless, rewalk input_ids to build state and mask scores.
+
+        Returns:
+            scores: Logits modified with bitmask.
+        """
+
+        return self.call_fn(input_ids, scores)
