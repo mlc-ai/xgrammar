@@ -6,7 +6,7 @@ import pytest
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.structural_tag import StructuralTag
+from xgrammar.structural_tag import JSONSchemaFormat, SequenceFormat, StructuralTag, TagFormat
 from xgrammar.testing import _is_grammar_accept_string
 
 
@@ -4145,6 +4145,76 @@ def test_json_schema_format_any_order_via_pydantic():
         format=JSONSchemaFormat(json_schema=any_order_schema, any_order=False)
     )
     check_stag_with_instance(st_ordered, '{"b": "x", "a": 1}', False)
+
+
+# ---------- Per-tag whitespace control (JSONSchemaFormat.max_whitespace_cnt) ----------
+
+_WS_SCHEMA = {"type": "object", "properties": {"a": {"type": "integer"}}, "required": ["a"]}
+
+
+def _ws_stag(*, max_whitespace_cnt: Optional[int] = None) -> StructuralTag:
+    return StructuralTag(
+        format=TagFormat(
+            begin="<call>",
+            content=JSONSchemaFormat(
+                json_schema=_WS_SCHEMA, style="json", max_whitespace_cnt=max_whitespace_cnt
+            ),
+            end="</call>",
+        )
+    )
+
+
+def _ws_instance(num_spaces: int) -> str:
+    return '<call>{"a":' + " " * num_spaces + "1}</call>"
+
+
+def test_structural_tag_max_whitespace_cnt():
+    g_unbounded = xgr.Grammar.from_structural_tag(_ws_stag())
+    g_bounded = xgr.Grammar.from_structural_tag(_ws_stag(max_whitespace_cnt=2))
+    # Within the bound: accepted by both.
+    for n in (1, 2):
+        assert _is_grammar_accept_string(g_unbounded, _ws_instance(n))
+        assert _is_grammar_accept_string(g_bounded, _ws_instance(n))
+    # Beyond the bound: accepted only without the limit.
+    assert _is_grammar_accept_string(g_unbounded, _ws_instance(5))
+    assert not _is_grammar_accept_string(g_bounded, _ws_instance(5))
+
+
+def test_structural_tag_per_tag_whitespace_independent():
+    # Two JSONSchemaFormat nodes can carry different whitespace controls: <a> bounded, <b> not.
+    stag = StructuralTag(
+        format=SequenceFormat(
+            elements=[
+                TagFormat(
+                    begin="<a>",
+                    content=JSONSchemaFormat(
+                        json_schema=_WS_SCHEMA, style="json", max_whitespace_cnt=2
+                    ),
+                    end="</a>",
+                ),
+                TagFormat(
+                    begin="<b>",
+                    content=JSONSchemaFormat(json_schema=_WS_SCHEMA, style="json"),
+                    end="</b>",
+                ),
+            ]
+        )
+    )
+    g = xgr.Grammar.from_structural_tag(stag)
+    a = lambda n: '<a>{"a":' + " " * n + "1}</a>"
+    b = lambda n: '<b>{"a":' + " " * n + "1}</b>"
+    assert _is_grammar_accept_string(g, a(2) + b(5))
+    # The first tag rejects 5 consecutive whitespaces even though the second one allows them.
+    assert not _is_grammar_accept_string(g, a(5) + b(5))
+
+
+def test_structural_tag_max_whitespace_cnt_compile_cache():
+    # The per-tag setting is part of the serialized tag JSON (the cache key), so no collision.
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=True)
+    g_unbounded = compiler.compile_structural_tag(_ws_stag()).grammar
+    g_bounded = compiler.compile_structural_tag(_ws_stag(max_whitespace_cnt=2)).grammar
+    assert _is_grammar_accept_string(g_unbounded, _ws_instance(5))
+    assert not _is_grammar_accept_string(g_bounded, _ws_instance(5))
 
 
 if __name__ == "__main__":

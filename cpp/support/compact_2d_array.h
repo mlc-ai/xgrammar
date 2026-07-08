@@ -7,6 +7,7 @@
 
 #include <picojson.h>
 
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -325,6 +326,9 @@ inline int32_t Compact2DArray<DataType>::PushBack(const DataType* new_data, int3
   } else {
     data_.insert(data_.end(), new_data, new_data + new_data_len);
   }
+  XGRAMMAR_DCHECK(data_.size() <= static_cast<size_t>(INT32_MAX))
+      << "Compact2DArray data_ size (" << data_.size()
+      << ") exceeds int32_t limit, likely due to unbounded grammar pattern causing state explosion";
   indptr_.push_back(static_cast<int32_t>(data_.size()));
   return static_cast<int32_t>(indptr_.size()) - 2;
 }
@@ -332,6 +336,9 @@ inline int32_t Compact2DArray<DataType>::PushBack(const DataType* new_data, int3
 template <typename DataType>
 inline int32_t Compact2DArray<DataType>::PushBack(const std::vector<DataType>& new_data) {
   data_.insert(data_.end(), new_data.begin(), new_data.end());
+  XGRAMMAR_DCHECK(data_.size() <= static_cast<size_t>(INT32_MAX))
+      << "Compact2DArray data_ size (" << data_.size()
+      << ") exceeds int32_t limit, likely due to unbounded grammar pattern causing state explosion";
   indptr_.push_back(static_cast<int32_t>(data_.size()));
   return static_cast<int32_t>(indptr_.size()) - 2;
 }
@@ -348,6 +355,9 @@ inline int32_t Compact2DArray<DataType>::PushBackNonContiguous(
     data_.push_back(data_1);
     data_.insert(data_.end(), data_2, data_2 + data_2_len);
   }
+  XGRAMMAR_DCHECK(data_.size() <= static_cast<size_t>(INT32_MAX))
+      << "Compact2DArray data_ size (" << data_.size()
+      << ") exceeds int32_t limit, likely due to unbounded grammar pattern causing state explosion";
   indptr_.push_back(static_cast<int32_t>(data_.size()));
   return static_cast<int32_t>(indptr_.size()) - 2;
 }

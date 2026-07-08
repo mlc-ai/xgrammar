@@ -1170,7 +1170,7 @@ void JSONSchemaConverter::AddBasicRules() {
   // Create basic rules with a temporary indent manager for compact format
   auto saved_indent_manager = indent_manager_;
   if (any_whitespace_) {
-    indent_manager_ = IndentManager(std::nullopt, ",", true, std::nullopt);
+    indent_manager_ = IndentManager(std::nullopt, ",", true, max_whitespace_cnt_);
   } else {
     indent_manager_ = IndentManager(std::nullopt, ", ", false, std::nullopt);
   }
@@ -3320,6 +3320,21 @@ std::string JSONSchemaConverter::GenerateFloatRangeRegex(
 
 // ==================== Public API Functions ====================
 
+std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
+  static const std::unordered_map<std::string, JSONFormat> kNameToFormat = {
+      {"json", JSONFormat::kJSON},
+      {"qwen_xml", JSONFormat::kQwenXML},
+      {"minimax_xml", JSONFormat::kMiniMaxXML},
+      {"deepseek_xml", JSONFormat::kDeepSeekXML},
+      {"glm_xml", JSONFormat::kGlmXML},
+  };
+  auto it = kNameToFormat.find(format);
+  if (it == kNameToFormat.end()) {
+    return std::nullopt;
+  }
+  return it->second;
+}
+
 std::string JSONSchemaToEBNF(
     const std::string& schema,
     bool any_whitespace,
@@ -3411,78 +3426,6 @@ std::string GenerateFloatRangeRegex(
 ) {
   return JSONSchemaConverter::GenerateFloatRangeRegex(
       start, end, 6, exclusive_start, exclusive_end
-  );
-}
-
-std::string QwenXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
-  picojson::value json_value;
-  std::string err = picojson::parse(json_value, schema);
-  if (!err.empty()) {
-    XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
-  }
-  return JSONSchemaToEBNF(
-      json_value,
-      true,
-      std::nullopt,
-      std::nullopt,
-      true,
-      std::nullopt,
-      JSONFormat::kQwenXML,
-      any_order
-  );
-}
-
-std::string MiniMaxXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
-  picojson::value json_value;
-  std::string err = picojson::parse(json_value, schema);
-  if (!err.empty()) {
-    XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
-  }
-  return JSONSchemaToEBNF(
-      json_value,
-      true,
-      std::nullopt,
-      std::nullopt,
-      true,
-      std::nullopt,
-      JSONFormat::kMiniMaxXML,
-      any_order
-  );
-}
-
-std::string DeepSeekXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
-  picojson::value json_value;
-  std::string err = picojson::parse(json_value, schema);
-  if (!err.empty()) {
-    XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
-  }
-  return JSONSchemaToEBNF(
-      json_value,
-      true,
-      std::nullopt,
-      std::nullopt,
-      true,
-      std::nullopt,
-      JSONFormat::kDeepSeekXML,
-      any_order
-  );
-}
-
-std::string GlmXMLToolCallingToEBNF(const std::string& schema, bool any_order) {
-  picojson::value json_value;
-  std::string err = picojson::parse(json_value, schema);
-  if (!err.empty()) {
-    XGRAMMAR_LOG(FATAL) << "Failed to parse JSON schema: " << err;
-  }
-  return JSONSchemaToEBNF(
-      json_value,
-      true,
-      std::nullopt,
-      std::nullopt,
-      true,
-      std::nullopt,
-      JSONFormat::kGlmXML,
-      any_order
   );
 }
 
