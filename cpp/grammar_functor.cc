@@ -1688,7 +1688,7 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
 
   /*!
    * \brief Handle repetition range {lower, upper}, using unzip for small bounds or kRepeat for
-   * large.
+   * large. Identical repetitions are expanded only once and shared via memoization.
    * \param cur_rule_name Name hint for generated rules.
    * \param rule_id The rule to repeat.
    * \param lower Minimum count (inclusive).
@@ -1698,6 +1698,32 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
   int32_t HandleRepetitionRange(
       const std::string& cur_rule_name, int32_t rule_id, int64_t lower, int64_t upper
   );
+
+  /*!
+   * \brief Expand a repetition range into rules. Called by HandleRepetitionRange on cache miss.
+   * \param cur_rule_name Name hint for generated rules.
+   * \param grammar_expr_id The expression to repeat.
+   * \param lower Minimum count (inclusive).
+   * \param upper Maximum count (inclusive), or -1 for unbounded.
+   * \return grammar_expr_id of the repetition result.
+   */
+  int32_t ExpandRepetitionRange(
+      const std::string& cur_rule_name, int32_t grammar_expr_id, int64_t lower, int64_t upper
+  );
+
+  /*!
+   * \brief Memoization of expanded repetitions, mapping (content of the repeated expr, lower,
+   * upper) to the resulting grammar_expr_id.
+   *
+   * Grammars may contain a large number of identical repetitions. E.g. a JSON schema converted
+   * with max_whitespace_cnt emits one [ \n\t]{0,n} repetition per whitespace position, so a
+   * schema with 50k properties produces 200k+ identical repetitions. Expanding each occurrence
+   * into its own chain of rules multiplies the rule count by more than an order of magnitude,
+   * which blows up all downstream compilation stages (FSM building, token mask cache) in both
+   * time and memory. Sharing one expansion among identical repetitions keeps the rule count
+   * linear in the schema size.
+   */
+  std::map<std::vector<int64_t>, int32_t> repetition_cache_;
 };
 
 /****************** Repetition range helpers ******************/
@@ -1772,10 +1798,6 @@ int32_t RepetitionRangeExpanderImpl::LegacyHandleRepetitionRange(
 int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
     const std::string& cur_rule_name, int32_t rule_id, int64_t lower, int64_t upper
 ) {
-  static const int64_t kUnzipThreshold = 128;
-  XGRAMMAR_DCHECK(lower >= 0);
-  XGRAMMAR_DCHECK(upper == -1 || upper >= lower);
-
   // Check if the referred rule is only one single element. If so, we can directly use the element
   // for further optimization.
   int32_t grammar_expr_id = builder_->AddRuleRef(rule_id);
@@ -1788,6 +1810,33 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
       grammar_expr_id = builder_->AddGrammarExpr(base_grammar_->GetGrammarExpr(ref_choice[0]));
     }
   }
+
+  // Memoize on (content of the repeated expr, lower, upper) so that identical repetitions share
+  // one expansion instead of each producing its own chain of rules.
+  const auto repeated_expr = builder_->GetGrammarExpr(grammar_expr_id);
+  std::vector<int64_t> cache_key;
+  cache_key.reserve(repeated_expr.size() + 3);
+  cache_key.push_back(static_cast<int64_t>(repeated_expr.type));
+  cache_key.insert(cache_key.end(), repeated_expr.begin(), repeated_expr.end());
+  cache_key.push_back(lower);
+  cache_key.push_back(upper);
+  auto it = repetition_cache_.find(cache_key);
+  if (it != repetition_cache_.end()) {
+    return it->second;
+  }
+
+  int32_t result = ExpandRepetitionRange(cur_rule_name, grammar_expr_id, lower, upper);
+  repetition_cache_.emplace(std::move(cache_key), result);
+  return result;
+}
+
+int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
+    const std::string& cur_rule_name, int32_t grammar_expr_id, int64_t lower, int64_t upper
+) {
+  static const int64_t kUnzipThreshold = 128;
+  XGRAMMAR_DCHECK(lower >= 0);
+  XGRAMMAR_DCHECK(upper == -1 || upper >= lower);
+
   // Case 1.1 small upper (<=threshold), unzip the repetition.
   // Case 1.2 unbounded upper, and lower is also small (<=threshold), unzip the lower part.
   if ((upper != -1 && upper <= kUnzipThreshold) || (upper == -1 && lower <= kUnzipThreshold)) {
