@@ -848,7 +848,11 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">        will be applied to logits[..., :vocab_size] and bitmask[..., :ceil(vocab_size / 32)].</span>
 
 <span class="sd">        If vocab_size is not provided, the vocab size will be detected as min(logits.shape[-1],</span>
-<span class="sd">        bitmask.shape[-1] * 32).</span>
+<span class="sd">        bitmask.shape[-1] * 32). In this case, if the bitmask covers fewer tokens than</span>
+<span class="sd">        logits.shape[-1], the trailing logits are left unmasked and out-of-grammar tokens there</span>
+<span class="sd">        (e.g. padded/reserved vocabulary ids) can still be sampled, which may cause the sampled</span>
+<span class="sd">        token to be rejected downstream. Allocate the bitmask with the model&#39;s full (padded)</span>
+<span class="sd">        vocabulary size to avoid this. A warning is emitted when this mismatch is detected.</span>
 
 <span class="sd">    Indices:</span>
 <span class="sd">        Indices can be used to specify which logits in the batch to apply the bitmask to. It is</span>
@@ -905,6 +909,16 @@ window.runMermaid = runMermaid;</script>
             <span class="s2">&quot;logits and bitmask should be on the same device. &quot;</span>
             <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;But got logits.device: </span><span class="si">{</span><span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, bitmask.device: </span><span class="si">{</span><span class="n">bitmask</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">&quot;</span>
         <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">vocab_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">masked_width</span> <span class="o">=</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">32</span>
+        <span class="k">if</span> <span class="n">masked_width</span> <span class="o">&lt;</span> <span class="n">logits</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;The bitmask covers only </span><span class="si">{</span><span class="n">masked_width</span><span class="si">}</span><span class="s2"> tokens but logits have &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">logits</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">, so logits[..., </span><span class="si">{</span><span class="n">masked_width</span><span class="si">}</span><span class="s2">:] are left unmasked. &quot;</span>
+                <span class="s2">&quot;Allocate the bitmask with the full vocab size, or pass vocab_size explicitly.&quot;</span><span class="p">,</span>
+                <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
 
     <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
