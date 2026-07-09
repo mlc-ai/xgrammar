@@ -68,10 +68,20 @@ def test_escaped_char_class():
     regex = r"\w\w\W\d\D\s\S"
     instance = "A_ 1b 0"
     grammar_str = _regex_to_ebnf(regex)
-    expected_grammar = r"""root ::= [a-zA-Z0-9_] [a-zA-Z0-9_] [^a-zA-Z0-9_] [0-9] [^0-9] [\f\n\r\t\v\u0020\u00a0] [^[\f\n\r\t\v\u0020\u00a0]
+    expected_grammar = r"""root ::= [a-zA-Z0-9_] [a-zA-Z0-9_] [^a-zA-Z0-9_] [0-9] [^0-9] [\f\n\r\t\v\u0020\u00a0] [^\f\n\r\t\v\u0020\u00a0]
 """
     assert grammar_str == expected_grammar
     assert _is_grammar_accept_string(grammar_str, instance)
+
+
+def test_non_whitespace_accepts_bracket():
+    # Regression: \S is the negation of \s, so it must accept every
+    # non-whitespace character, including a literal "[". A stray "[" right
+    # after "^" once made \S expand to a class that wrongly excluded "[".
+    grammar_str = _regex_to_ebnf(r"\S")
+    assert _is_grammar_accept_string(grammar_str, "[")
+    assert _is_grammar_accept_string(grammar_str, "a")
+    assert not _is_grammar_accept_string(grammar_str, " ")
 
 
 def test_char_class():
