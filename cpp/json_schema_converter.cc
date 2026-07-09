@@ -175,6 +175,39 @@ bool IsRangeWidthOverCap(int64_t start, int64_t end, int64_t cap) {
   return value_count > cap_u;
 }
 
+// Effective inclusive integer range after folding exclusive bounds into minimum/maximum. A nullopt
+// side means that side is unbounded.
+struct EffectiveIntegerRange {
+  std::optional<int64_t> start;
+  std::optional<int64_t> end;
+};
+
+// Fold the inclusive [minimum, maximum] bounds together with any exclusive bounds so the stricter
+// bound wins on each side. Shared by ParseInteger (range validation) and GenerateInteger (grammar
+// emission) so the two can never disagree about the effective range. Precondition:
+// exclusive_minimum != INT64_MAX and exclusive_maximum != INT64_MIN (ParseInteger rejects those
+// before building the spec), so the +1/-1 below cannot overflow.
+EffectiveIntegerRange ComputeEffectiveIntegerRange(const IntegerSpec& spec) {
+  EffectiveIntegerRange range;
+  if (spec.minimum.has_value()) {
+    range.start = spec.minimum;
+  }
+  if (spec.exclusive_minimum.has_value()) {
+    // Smallest integer strictly greater than exclusive_minimum; the larger lower bound wins.
+    int64_t excl_start = *spec.exclusive_minimum + 1;
+    range.start = range.start.has_value() ? std::max(*range.start, excl_start) : excl_start;
+  }
+  if (spec.maximum.has_value()) {
+    range.end = spec.maximum;
+  }
+  if (spec.exclusive_maximum.has_value()) {
+    // Largest integer strictly less than exclusive_maximum; the smaller upper bound wins.
+    int64_t excl_end = *spec.exclusive_maximum - 1;
+    range.end = range.end.has_value() ? std::min(*range.end, excl_end) : excl_end;
+  }
+  return range;
+}
+
 std::string DigitLiteral(int64_t digit) {
   return EBNFScriptCreator::Str(std::string(1, static_cast<char>('0' + digit)));
 }
@@ -531,14 +564,9 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
     spec.exclusive_maximum = val;
   }
 
-  int64_t effective_min = spec.minimum.value_or(std::numeric_limits<int64_t>::min());
-  int64_t effective_max = spec.maximum.value_or(std::numeric_limits<int64_t>::max());
-  if (spec.exclusive_minimum.has_value()) {
-    effective_min = std::max(effective_min, *spec.exclusive_minimum + 1);
-  }
-  if (spec.exclusive_maximum.has_value()) {
-    effective_max = std::min(effective_max, *spec.exclusive_maximum - 1);
-  }
+  EffectiveIntegerRange effective_range = ComputeEffectiveIntegerRange(spec);
+  int64_t effective_min = effective_range.start.value_or(std::numeric_limits<int64_t>::min());
+  int64_t effective_max = effective_range.end.value_or(std::numeric_limits<int64_t>::max());
   if (effective_min > effective_max) {
     return ResultErr<SchemaError>(
         SchemaErrorType::kUnsatisfiableSchema, "Invalid range: minimum greater than maximum"
@@ -1544,52 +1572,18 @@ std::string JSONSchemaConverter::GenerateFromSpec(
 std::string JSONSchemaConverter::GenerateInteger(
     const IntegerSpec& spec, const std::string& rule_name
 ) {
-  // Preserve the pre-existing last-wins behavior for non-multipleOf ranges; the multipleOf path
-  // below uses intersected bounds to match ParseInteger validation.
-  std::optional<int64_t> start, end;
-  if (spec.minimum.has_value()) {
-    start = spec.minimum;
-  }
-  if (spec.exclusive_minimum.has_value()) {
-    // Smallest integer strictly greater than exclusive_minimum (the parser
-    // rejects exclusive_minimum == INT64_MAX, so +1 cannot overflow). When
-    // minimum is also present the stricter (larger) lower bound wins.
-    int64_t excl_start = *spec.exclusive_minimum + 1;
-    start = start.has_value() ? std::max(*start, excl_start) : excl_start;
-  }
-  if (spec.maximum.has_value()) {
-    end = spec.maximum;
-  }
-  if (spec.exclusive_maximum.has_value()) {
-    // Largest integer strictly less than exclusive_maximum (the parser rejects
-    // exclusive_maximum == INT64_MIN, so -1 cannot underflow). When maximum is
-    // also present the stricter (smaller) upper bound wins.
-    int64_t excl_end = *spec.exclusive_maximum - 1;
-    end = end.has_value() ? std::min(*end, excl_end) : excl_end;
-  }
+  // Shared with ParseInteger's range validation so emission and validation agree on the effective
+  // range; a nullopt side means that side is unbounded.
+  const EffectiveIntegerRange range = ComputeEffectiveIntegerRange(spec);
+  std::optional<int64_t> start = range.start;
+  std::optional<int64_t> end = range.end;
 
   if (spec.multiple_of.has_value()) {
-    std::optional<int64_t> multiple_of_start, multiple_of_end;
-    if (spec.minimum.has_value()) {
-      multiple_of_start = spec.minimum;
-    }
-    if (spec.exclusive_minimum.has_value()) {
-      int64_t exclusive_start = *spec.exclusive_minimum + 1;
-      multiple_of_start = multiple_of_start.has_value()
-                              ? std::max(*multiple_of_start, exclusive_start)
-                              : exclusive_start;
-    }
-    if (spec.maximum.has_value()) {
-      multiple_of_end = spec.maximum;
-    }
-    if (spec.exclusive_maximum.has_value()) {
-      int64_t exclusive_end = *spec.exclusive_maximum - 1;
-      multiple_of_end =
-          multiple_of_end.has_value() ? std::min(*multiple_of_end, exclusive_end) : exclusive_end;
-    }
-    if (multiple_of_start.has_value() && multiple_of_end.has_value()) {
+    // ParseInteger keeps multiple_of only when the range is fully bounded (enumerate the
+    // multiples) or fully unbounded (emit a modulo DFA); the half-bounded case is dropped there.
+    if (start.has_value() && end.has_value()) {
       std::vector<std::string> multiples;
-      for (int64_t value = *multiple_of_start; value <= *multiple_of_end; ++value) {
+      for (int64_t value = *start; value <= *end; ++value) {
         if (IsMultipleOf(value, *spec.multiple_of)) multiples.push_back(std::to_string(value));
         if (value == std::numeric_limits<int64_t>::max()) break;
       }
