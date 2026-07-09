@@ -88,7 +88,11 @@ def apply_token_bitmask_inplace(
         will be applied to logits[..., :vocab_size] and bitmask[..., :ceil(vocab_size / 32)].
 
         If vocab_size is not provided, the vocab size will be detected as min(logits.shape[-1],
-        bitmask.shape[-1] * 32).
+        bitmask.shape[-1] * 32). In this case, if the bitmask covers fewer tokens than
+        logits.shape[-1], the trailing logits are left unmasked and out-of-grammar tokens there
+        (e.g. padded/reserved vocabulary ids) can still be sampled, which may cause the sampled
+        token to be rejected downstream. Allocate the bitmask with the model's full (padded)
+        vocabulary size to avoid this. A warning is emitted when this mismatch is detected.
 
     Indices:
         Indices can be used to specify which logits in the batch to apply the bitmask to. It is
@@ -145,6 +149,16 @@ def apply_token_bitmask_inplace(
             "logits and bitmask should be on the same device. "
             + f"But got logits.device: {logits.device}, bitmask.device: {bitmask.device}"
         )
+
+    if vocab_size is None:
+        masked_width = bitmask.shape[-1] * 32
+        if masked_width < logits.shape[-1]:
+            warnings.warn(
+                f"The bitmask covers only {masked_width} tokens but logits have "
+                f"{logits.shape[-1]}, so logits[..., {masked_width}:] are left unmasked. "
+                "Allocate the bitmask with the full vocab size, or pass vocab_size explicitly.",
+                stacklevel=2,
+            )
 
     if backend == "auto":
         if logits.device.type == "cpu":
