@@ -1781,7 +1781,12 @@ def get_glm_4_7_structural_tag(
                 )
             )
         assert len(tags) > 0
-        suffix_tag = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        suffix_tag = TriggeredTagsFormat(
+            triggers=[TOOL_CALL_TRIGGER],
+            tags=tags,
+            excludes=_text_excludes(exclude_special_tokens, TEXT_EXCLUDES),
+            at_least_one=True,
+        )
 
     if not reasoning:
         return StructuralTag(format=suffix_tag)
