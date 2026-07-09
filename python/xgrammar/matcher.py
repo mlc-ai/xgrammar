@@ -154,13 +154,9 @@ def apply_token_bitmask_inplace(
         masked_width = bitmask.shape[-1] * 32
         if masked_width < logits.shape[-1]:
             warnings.warn(
-                f"The bitmask covers fewer tokens (bitmask.shape[-1] * 32 = {masked_width}) than "
-                f"the logits (logits.shape[-1] = {logits.shape[-1]}). Only logits[..., "
-                f":{masked_width}] will be masked; logits[..., {masked_width}:] are left unmasked, "
-                "so out-of-grammar tokens there (e.g. padded/reserved vocabulary ids) can still be "
-                "sampled. Allocate the bitmask with the model's full (padded) vocabulary size so it "
-                "covers every logit. To intentionally mask only a prefix, pass vocab_size = your "
-                "real (unpadded) vocab size, which must be <= bitmask.shape[-1] * 32.",
+                f"The bitmask covers only {masked_width} tokens but logits have "
+                f"{logits.shape[-1]}, so logits[..., {masked_width}:] are left unmasked. "
+                "Allocate the bitmask with the full vocab size, or pass vocab_size explicitly.",
                 stacklevel=2,
             )
 
