@@ -1376,6 +1376,69 @@ def test_glm_required_allows_termination_with_trailing_text(reasoning: bool):
     )
 
 
+# ---------- Regression: required suffixes must allow termination (same bug as GLM-4.7 above) ----------
+
+_REQUIRED_TERMINATION_TOOLS = [
+    {
+        "function": {
+            "name": "get_weather",
+            "parameters": {
+                "type": "object",
+                "properties": {"location": {"type": "string"}},
+                "required": ["location"],
+            },
+        }
+    },
+    {
+        "function": {
+            "name": "get_time",
+            "parameters": {
+                "type": "object",
+                "properties": {"timezone": {"type": "string"}},
+                "required": ["timezone"],
+            },
+        }
+    },
+]
+
+# (stag_key, one call, parallel calls or None); strings are exact chat-template renderings.
+_REQUIRED_TERMINATION_CASES = [
+    ("llama", '{"name": "get_weather", "parameters": {"location": "Beijing"}}', None),
+    (
+        "qwen_3",
+        '<tool_call>\n{"name": "get_weather", "arguments": {"location": "Beijing"}}\n</tool_call>',
+        '<tool_call>\n{"name": "get_weather", "arguments": {"location": "Beijing"}}\n</tool_call>\n'
+        '<tool_call>\n{"name": "get_time", "arguments": {"timezone": "UTC"}}\n</tool_call>',
+    ),
+    (
+        "qwen_3_5",
+        "<tool_call>\n<function=get_weather>\n<parameter=location>\nBeijing\n</parameter>\n"
+        "</function>\n</tool_call>",
+        "<tool_call>\n<function=get_weather>\n<parameter=location>\nBeijing\n</parameter>\n"
+        "</function>\n</tool_call>\n<tool_call>\n<function=get_time>\n<parameter=timezone>\nUTC\n"
+        "</parameter>\n</function>\n</tool_call>",
+    ),
+]
+
+
+@pytest.mark.parametrize("stag_key, one_call, two_calls", _REQUIRED_TERMINATION_CASES)
+def test_required_allows_termination_with_trailing_text(stag_key, one_call, two_calls):
+    """Required tool calls must accept trailing free text so a greedy LM can stop."""
+    structural_tag = get_model_structural_tag(
+        stag_key, tools=_REQUIRED_TERMINATION_TOOLS, tool_choice="required", reasoning=False
+    )
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+
+    assert not _is_grammar_accept_string(grammar, ""), f"{stag_key}: zero calls must be rejected"
+    assert _is_grammar_accept_string(grammar, one_call), f"{stag_key}: single call rejected"
+    if two_calls is not None:
+        assert _is_grammar_accept_string(grammar, two_calls), f"{stag_key}: parallel calls rejected"
+    # the fix: a call followed by trailing text must be accepted (else greedy loops to max_tokens).
+    assert _is_grammar_accept_string(
+        grammar, one_call + " done"
+    ), f"{stag_key}: tool call + trailing text rejected"
+
+
 # ---------- Test: any_order propagation ----------
 
 
