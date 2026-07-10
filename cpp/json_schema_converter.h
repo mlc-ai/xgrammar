@@ -35,6 +35,7 @@ struct IntegerSpec {
   std::optional<int64_t> maximum;
   std::optional<int64_t> exclusive_minimum;
   std::optional<int64_t> exclusive_maximum;
+  std::optional<int64_t> multiple_of;
 
   std::string ToString() const;
 };
@@ -446,6 +447,7 @@ class JSONSchemaConverter {
 
   // Helper for integer/number range regex generation
   static std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
+  std::string GenerateIntegerMultipleOfDFA(int64_t multiple_of, const std::string& rule_name);
   static std::string GenerateFloatRangeRegex(
       std::optional<double> start,
       std::optional<double> end,

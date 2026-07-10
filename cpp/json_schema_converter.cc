@@ -37,7 +37,8 @@ std::string IntegerSpec::ToString() const {
          ", exclusive_minimum=" +
          (exclusive_minimum.has_value() ? std::to_string(*exclusive_minimum) : "null") +
          ", exclusive_maximum=" +
-         (exclusive_maximum.has_value() ? std::to_string(*exclusive_maximum) : "null") + "}";
+         (exclusive_maximum.has_value() ? std::to_string(*exclusive_maximum) : "null") +
+         ", multiple_of=" + (multiple_of.has_value() ? std::to_string(*multiple_of) : "null") + "}";
 }
 
 std::string NumberSpec::ToString() const {
@@ -137,9 +138,88 @@ namespace {
 enum class SchemaErrorType : int {
   kInvalidSchema = 0,
   kUnsatisfiableSchema = 1,
+  kUnsupportedSchema = 2,
 };
 
 using SchemaError = TypedError<SchemaErrorType>;
+
+// Unbounded integer multipleOf emits a modulo DFA: states ~= N, transitions ~= 10N.
+// Fail closed above the cap to keep generated grammars bounded.
+constexpr int64_t kIntegerMultipleOfMax = 1024;
+constexpr int64_t kIntegerMultipleOfRangeWidthMax = 10000;
+
+bool IsMultipleOf(int64_t value, int64_t multiple_of) { return (value % multiple_of) == 0; }
+
+bool HasMultipleInRange(int64_t start, int64_t end, int64_t multiple_of) {
+  for (int64_t value = start; value <= end; ++value) {
+    if (IsMultipleOf(value, multiple_of)) return true;
+    if (value == std::numeric_limits<int64_t>::max()) break;
+  }
+  return false;
+}
+
+bool IsRangeWidthOverCap(int64_t start, int64_t end, int64_t cap) {
+  uint64_t cap_u = static_cast<uint64_t>(cap);
+  if (start <= 0 && end >= 0) {
+    // Count [start, end] inclusively without evaluating -INT64_MIN or overflowing the sum.
+    uint64_t negative_count = start < 0 ? static_cast<uint64_t>(-(start + 1)) + 1 : 0;
+    if (negative_count > cap_u) return true;
+    uint64_t remaining = cap_u - negative_count;
+    if (remaining == 0) return true;
+    --remaining;  // zero
+    uint64_t positive_count = end > 0 ? static_cast<uint64_t>(end) : 0;
+    return positive_count > remaining;
+  }
+
+  uint64_t value_count = static_cast<uint64_t>(end - start) + 1;
+  return value_count > cap_u;
+}
+
+// Effective inclusive integer range after folding exclusive bounds into minimum/maximum. A nullopt
+// side means that side is unbounded.
+struct EffectiveIntegerRange {
+  std::optional<int64_t> start;
+  std::optional<int64_t> end;
+};
+
+// Fold the inclusive [minimum, maximum] bounds together with any exclusive bounds so the stricter
+// bound wins on each side. Shared by ParseInteger (range validation) and GenerateInteger (grammar
+// emission) so the two can never disagree about the effective range. Precondition:
+// exclusive_minimum != INT64_MAX and exclusive_maximum != INT64_MIN (ParseInteger rejects those
+// before building the spec), so the +1/-1 below cannot overflow.
+EffectiveIntegerRange ComputeEffectiveIntegerRange(const IntegerSpec& spec) {
+  EffectiveIntegerRange range;
+  if (spec.minimum.has_value()) {
+    range.start = spec.minimum;
+  }
+  if (spec.exclusive_minimum.has_value()) {
+    // Smallest integer strictly greater than exclusive_minimum; the larger lower bound wins.
+    int64_t excl_start = *spec.exclusive_minimum + 1;
+    range.start = range.start.has_value() ? std::max(*range.start, excl_start) : excl_start;
+  }
+  if (spec.maximum.has_value()) {
+    range.end = spec.maximum;
+  }
+  if (spec.exclusive_maximum.has_value()) {
+    // Largest integer strictly less than exclusive_maximum; the smaller upper bound wins.
+    int64_t excl_end = *spec.exclusive_maximum - 1;
+    range.end = range.end.has_value() ? std::min(*range.end, excl_end) : excl_end;
+  }
+  return range;
+}
+
+std::string DigitLiteral(int64_t digit) {
+  return EBNFScriptCreator::Str(std::string(1, static_cast<char>('0' + digit)));
+}
+
+std::string JoinRegexAlternatives(const std::vector<std::string>& alternatives) {
+  std::string result;
+  for (size_t i = 0; i < alternatives.size(); ++i) {
+    if (i != 0) result += "|";
+    result += alternatives[i];
+  }
+  return result;
+}
 
 /*!
  * \brief Parser for JSON Schema, converts JSON Schema to SchemaSpec intermediate representation.
@@ -377,7 +457,6 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
 }
 
 Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::object& schema) {
-  WarnUnsupportedKeywords(schema, {"multipleOf"});
   IntegerSpec spec;
 
   auto checkAndConvertIntegerBound = [](const picojson::value& value
@@ -412,6 +491,46 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
     return ResultOk<int64_t>(static_cast<int64_t>(val));
   };
 
+  auto checkAndConvertMultipleOf = [](const picojson::value& value
+                                   ) -> Result<int64_t, SchemaError> {
+    double val;
+    if (value.is<int64_t>()) {
+      val = static_cast<double>(value.get<int64_t>());
+    } else if (value.is<double>()) {
+      val = value.get<double>();
+    } else {
+      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Value must be a number");
+    }
+    if (val <= 0) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "multipleOf must be greater than 0"
+      );
+    }
+    if (val != std::floor(val)) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema, "multipleOf for type:integer must be an integer"
+      );
+    }
+    if (val > static_cast<double>(kIntegerMultipleOfMax)) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "multipleOf for type:integer must be > 0 and <= " + std::to_string(kIntegerMultipleOfMax)
+      );
+    }
+    return ResultOk<int64_t>(static_cast<int64_t>(val));
+  };
+
+  if (schema.count("multipleOf")) {
+    auto result = checkAndConvertMultipleOf(schema.at("multipleOf"));
+    if (result.IsErr()) {
+      if (result.ErrRef().Type() != SchemaErrorType::kUnsupportedSchema) {
+        return ResultErr(std::move(result).UnwrapErr());
+      }
+      XGRAMMAR_LOG(WARNING) << result.ErrRef().what() << "; ignoring multipleOf";
+    } else {
+      spec.multiple_of = std::move(result).Unwrap();
+    }
+  }
   if (schema.count("minimum")) {
     auto result = checkAndConvertIntegerBound(schema.at("minimum"));
     if (result.IsErr()) return ResultErr(std::move(result).UnwrapErr());
@@ -445,24 +564,50 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
     spec.exclusive_maximum = val;
   }
 
-  int64_t effective_min = spec.minimum.value_or(std::numeric_limits<int64_t>::min());
-  int64_t effective_max = spec.maximum.value_or(std::numeric_limits<int64_t>::max());
-  if (spec.exclusive_minimum.has_value()) {
-    effective_min = std::max(effective_min, *spec.exclusive_minimum + 1);
-  }
-  if (spec.exclusive_maximum.has_value()) {
-    effective_max = std::min(effective_max, *spec.exclusive_maximum - 1);
-  }
+  EffectiveIntegerRange effective_range = ComputeEffectiveIntegerRange(spec);
+  int64_t effective_min = effective_range.start.value_or(std::numeric_limits<int64_t>::min());
+  int64_t effective_max = effective_range.end.value_or(std::numeric_limits<int64_t>::max());
   if (effective_min > effective_max) {
     return ResultErr<SchemaError>(
         SchemaErrorType::kUnsatisfiableSchema, "Invalid range: minimum greater than maximum"
     );
   }
+  if (spec.multiple_of.has_value()) {
+    bool has_lower_bound = spec.minimum.has_value() || spec.exclusive_minimum.has_value();
+    bool has_upper_bound = spec.maximum.has_value() || spec.exclusive_maximum.has_value();
+    if (has_lower_bound || has_upper_bound) {
+      if (!has_lower_bound || !has_upper_bound ||
+          IsRangeWidthOverCap(effective_min, effective_max, kIntegerMultipleOfRangeWidthMax)) {
+        XGRAMMAR_LOG(WARNING
+        ) << "range + multipleOf combination not yet supported; ignoring multipleOf";
+        spec.multiple_of.reset();
+        return ResultOk(std::move(spec));
+      }
+      if (!HasMultipleInRange(effective_min, effective_max, *spec.multiple_of)) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsatisfiableSchema, "range contains no multipleOf value"
+        );
+      }
+    }
+  }
   return ResultOk(std::move(spec));
 }
 
 Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object& schema) {
-  WarnUnsupportedKeywords(schema, {"multipleOf"});
+  if (schema.count("multipleOf")) {
+    const auto& value = schema.at("multipleOf");
+    if (!value.is<int64_t>() && !value.is<double>()) {
+      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Value must be a number");
+    }
+    double multiple_of =
+        value.is<int64_t>() ? static_cast<double>(value.get<int64_t>()) : value.get<double>();
+    if (multiple_of <= 0) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "multipleOf must be greater than 0"
+      );
+    }
+    XGRAMMAR_LOG(WARNING) << "multipleOf is not supported for type:number; ignoring multipleOf";
+  }
   NumberSpec spec;
 
   auto getDouble = [](const picojson::value& value) -> Result<double, SchemaError> {
@@ -1427,26 +1572,24 @@ std::string JSONSchemaConverter::GenerateFromSpec(
 std::string JSONSchemaConverter::GenerateInteger(
     const IntegerSpec& spec, const std::string& rule_name
 ) {
-  std::optional<int64_t> start, end;
-  if (spec.minimum.has_value()) {
-    start = spec.minimum;
-  }
-  if (spec.exclusive_minimum.has_value()) {
-    // Smallest integer strictly greater than exclusive_minimum (the parser
-    // rejects exclusive_minimum == INT64_MAX, so +1 cannot overflow). When
-    // minimum is also present the stricter (larger) lower bound wins.
-    int64_t excl_start = *spec.exclusive_minimum + 1;
-    start = start.has_value() ? std::max(*start, excl_start) : excl_start;
-  }
-  if (spec.maximum.has_value()) {
-    end = spec.maximum;
-  }
-  if (spec.exclusive_maximum.has_value()) {
-    // Largest integer strictly less than exclusive_maximum (the parser rejects
-    // exclusive_maximum == INT64_MIN, so -1 cannot underflow). When maximum is
-    // also present the stricter (smaller) upper bound wins.
-    int64_t excl_end = *spec.exclusive_maximum - 1;
-    end = end.has_value() ? std::min(*end, excl_end) : excl_end;
+  // Shared with ParseInteger's range validation so emission and validation agree on the effective
+  // range; a nullopt side means that side is unbounded.
+  const EffectiveIntegerRange range = ComputeEffectiveIntegerRange(spec);
+  std::optional<int64_t> start = range.start;
+  std::optional<int64_t> end = range.end;
+
+  if (spec.multiple_of.has_value()) {
+    // ParseInteger keeps multiple_of only when the range is fully bounded (enumerate the
+    // multiples) or fully unbounded (emit a modulo DFA); the half-bounded case is dropped there.
+    if (start.has_value() && end.has_value()) {
+      std::vector<std::string> multiples;
+      for (int64_t value = *start; value <= *end; ++value) {
+        if (IsMultipleOf(value, *spec.multiple_of)) multiples.push_back(std::to_string(value));
+        if (value == std::numeric_limits<int64_t>::max()) break;
+      }
+      return RegexToEBNF("^(" + JoinRegexAlternatives(multiples) + ")$", false);
+    }
+    return GenerateIntegerMultipleOfDFA(*spec.multiple_of, rule_name);
   }
 
   if (start.has_value() || end.has_value()) {
@@ -1454,6 +1597,44 @@ std::string JSONSchemaConverter::GenerateInteger(
     return RegexToEBNF(range_regex, false);
   }
   return "(\"0\" | \"-\"? [1-9] [0-9]*)";
+}
+
+std::string JSONSchemaConverter::GenerateIntegerMultipleOfDFA(
+    int64_t multiple_of, const std::string& rule_name
+) {
+  std::vector<std::string> state_rule_names(multiple_of);
+  for (int64_t state = 0; state < multiple_of; ++state) {
+    state_rule_names[state] = ebnf_script_creator_.AllocateRuleName(
+        rule_name + "_multiple_of_" + std::to_string(multiple_of) + "_mod_" + std::to_string(state)
+    );
+  }
+
+  for (int64_t state = 0; state < multiple_of; ++state) {
+    std::vector<std::string> transitions;
+    if (state == 0) transitions.push_back("\"\"");
+    for (int64_t digit = 0; digit <= 9; ++digit) {
+      int64_t next_state = (state * 10 + digit) % multiple_of;
+      transitions.push_back(
+          EBNFScriptCreator::Concat({DigitLiteral(digit), state_rule_names[next_state]})
+      );
+    }
+    ebnf_script_creator_.AddRuleWithAllocatedName(
+        state_rule_names[state], EBNFScriptCreator::Or(transitions)
+    );
+  }
+
+  std::vector<std::string> non_zero_start_transitions;
+  for (int64_t digit = 1; digit <= 9; ++digit) {
+    non_zero_start_transitions.push_back(
+        EBNFScriptCreator::Concat({DigitLiteral(digit), state_rule_names[digit % multiple_of]})
+    );
+  }
+  return EBNFScriptCreator::Or(
+      {EBNFScriptCreator::Str("0"),
+       EBNFScriptCreator::Concat(
+           {EBNFScriptCreator::Str("-") + "?", EBNFScriptCreator::Or(non_zero_start_transitions)}
+       )}
+  );
 }
 
 std::string JSONSchemaConverter::GenerateNumber(

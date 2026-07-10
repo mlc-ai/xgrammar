@@ -260,6 +260,130 @@ def test_empty_enum_rejected():
         xgr.Grammar.from_json_schema(schema_int)
 
 
+@pytest.mark.parametrize(
+    "schema, accepted_instances, rejected_instances",
+    [
+        ({"type": "integer", "multipleOf": 2}, [2, 0, -4], [3, -3]),
+        ({"type": "integer", "multipleOf": 1}, [0, 1, -1, 123456, -123456], []),
+        ({"type": "integer", "multipleOf": 7}, [0, 7, 14, 49, -14, -21], [8, -20]),
+        ({"type": "integer", "multipleOf": 1024}, [0, 1024, 2048], [1000]),
+        ({"type": "integer", "minimum": 5, "maximum": 10, "multipleOf": 3}, [6, 9], [5, 7]),
+        (
+            {
+                "type": "integer",
+                "minimum": 10,
+                "exclusiveMinimum": 3,
+                "maximum": 20,
+                "multipleOf": 5,
+            },
+            [10, 15, 20],
+            [5, 6],
+        ),
+    ],
+)
+def test_integer_multiple_of(
+    schema: Dict[str, Any], accepted_instances: List[int], rejected_instances: List[int]
+):
+    for instance in accepted_instances:
+        check_schema_with_instance(schema, instance, is_accepted=True)
+    for instance in rejected_instances:
+        check_schema_with_instance(schema, instance, is_accepted=False)
+
+
+@pytest.mark.parametrize(
+    "schema, warning_message, accepted_instances, rejected_instances",
+    [
+        (
+            {"type": "number", "multipleOf": 2},
+            "multipleOf is not supported for type:number; ignoring multipleOf",
+            [3, 5.5],
+            [],
+        ),
+        (
+            {"type": "integer", "multipleOf": 2.5},
+            "multipleOf for type:integer must be an integer; ignoring multipleOf",
+            [2, 3],
+            [1.5],
+        ),
+        (
+            {"type": "integer", "multipleOf": 1025},
+            "multipleOf for type:integer must be > 0 and <= 1024; ignoring multipleOf",
+            [1025, 1026],
+            [],
+        ),
+        (
+            {"type": "integer", "multipleOf": 1e30},
+            "multipleOf for type:integer must be > 0 and <= 1024; ignoring multipleOf",
+            [1, 2],
+            [],
+        ),
+        (
+            {"type": "integer", "minimum": 0, "multipleOf": 2},
+            "range + multipleOf combination not yet supported; ignoring multipleOf",
+            [1, 3],
+            [-1],
+        ),
+    ],
+)
+def test_multiple_of_unsupported_warns_and_ignores(
+    capfd,
+    schema: Dict[str, Any],
+    warning_message: str,
+    accepted_instances: List[Union[int, float]],
+    rejected_instances: List[Union[int, float]],
+):
+    for instance in accepted_instances:
+        check_schema_with_instance(schema, instance)
+    captured = capfd.readouterr()
+    assert warning_message in captured.err
+    for instance in rejected_instances:
+        check_schema_with_instance(schema, instance, is_accepted=False)
+
+
+@pytest.mark.parametrize(
+    "schema, err_message",
+    [
+        ({"type": "integer", "multipleOf": "x"}, "Value must be a number"),
+        ({"type": "integer", "multipleOf": 0}, "multipleOf must be greater than 0"),
+        ({"type": "integer", "multipleOf": -2}, "multipleOf must be greater than 0"),
+        ({"type": "number", "multipleOf": "x"}, "Value must be a number"),
+        ({"type": "number", "multipleOf": 0}, "multipleOf must be greater than 0"),
+        (
+            {"type": "integer", "minimum": 5, "maximum": 6, "multipleOf": 7},
+            "range contains no multipleOf value",
+        ),
+    ],
+)
+def test_integer_multiple_of_compile_errors(schema: Dict[str, Any], err_message: str):
+    with pytest.raises(Exception) as e:
+        _json_schema_to_ebnf(schema)
+    assert err_message in str(e.value)
+
+
+@pytest.mark.parametrize(
+    "schema, multiple_of, lower, upper",
+    [
+        ({"type": "integer", "multipleOf": 2}, 2, -30, 30),
+        ({"type": "integer", "multipleOf": 3}, 3, -30, 30),
+        ({"type": "integer", "multipleOf": 7}, 7, -30, 30),
+        ({"type": "integer", "minimum": -12, "maximum": 12, "multipleOf": 3}, 3, -30, 30),
+        ({"type": "integer", "minimum": 10, "maximum": 20, "multipleOf": 5}, 5, -30, 30),
+    ],
+)
+def test_integer_multiple_of_sweep(
+    schema: Dict[str, Any], multiple_of: int, lower: int, upper: int
+):
+    json_schema_grammar = xgr.Grammar.from_json_schema(
+        json.dumps(schema), any_whitespace=True, indent=None, separators=None, strict_mode=True
+    )
+    minimum = schema.get("minimum", lower)
+    maximum = schema.get("maximum", upper)
+    for value in range(lower, upper + 1):
+        expected = minimum <= value <= maximum and value % multiple_of == 0
+        accepted = _is_grammar_accept_string(json_schema_grammar, json.dumps(value))
+        assert accepted == expected, (schema, value, expected, accepted)
+
+
 def test_optional():
     class MainModel(BaseModel):
         num: int = 0
