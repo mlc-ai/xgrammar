@@ -934,7 +934,7 @@ int32_t EBNFParser::ParseTagDispatch() {
   Grammar::Impl::TagDispatch tag_dispatch;
 
   static const std::unordered_set<std::string> kValidNamedArgs = {
-      "loop_after_dispatch", "excludes"
+      "loop_after_dispatch", "excludes", "lock_excluded_prefixes"
   };
   for (const auto& [name, _] : args.named_arguments) {
     if (kValidNamedArgs.count(name) == 0) {
@@ -994,6 +994,17 @@ int32_t EBNFParser::ParseTagDispatch() {
       }
       tag_dispatch.excludes.push_back(str_node->value);
     }
+  }
+
+  // lock_excluded_prefixes
+  tag_dispatch.lock_excluded_prefixes = false;
+  if (auto it = args.named_arguments.find("lock_excluded_prefixes");
+      it != args.named_arguments.end()) {
+    auto bool_node = std::get_if<MacroIR::BooleanNode>(it->second.get());
+    if (bool_node == nullptr) {
+      ReportParseError("lock_excluded_prefixes must be a boolean literal", delta_element);
+    }
+    tag_dispatch.lock_excluded_prefixes = bool_node->value;
   }
 
   // Well-formedness checks: string excludes vs string triggers

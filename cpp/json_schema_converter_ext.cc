@@ -64,10 +64,14 @@ void XMLToolCallingConverter::AddBasicRules() {
   nested_object_level_ = 1;
   // The outer part, xml format, is at level 1.
   // Add XML string rule
+  // lock_excluded_prefixes=true forces a started end marker (e.g. "</parameter") to be completed
+  // into the full suffix instead of drifting into ordinary content (e.g. "</parameter1>"), which
+  // otherwise causes malformed tool-call arguments / runaway generation under constrained decoding.
   ebnf_script_creator_.AddRule(
       kXMLString,
       "TagDispatch("
       "loop_after_dispatch=false,"
+      "lock_excluded_prefixes=true,"
       "excludes=(\"" +
           xml_wrapper_.parameter_suffix +
           "\")"

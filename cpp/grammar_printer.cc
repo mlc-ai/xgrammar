@@ -142,6 +142,10 @@ std::string GrammarPrinter::PrintTagDispatch(const GrammarExpr& grammar_expr) {
   }
   result +=
       indent + "loop_after_dispatch=" + PrintBoolean(tag_dispatch.loop_after_dispatch) + ",\n";
+  if (tag_dispatch.lock_excluded_prefixes) {
+    result += indent +
+              "lock_excluded_prefixes=" + PrintBoolean(tag_dispatch.lock_excluded_prefixes) + ",\n";
+  }
   result += indent + "excludes=(";
   for (int i = 0; i < static_cast<int>(tag_dispatch.excludes.size()); ++i) {
     if (i > 0) result += ", ";
