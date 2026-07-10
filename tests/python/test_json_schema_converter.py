@@ -789,6 +789,127 @@ def test_anyof_oneof():
     check_schema_with_instance(schema, schema_rejected, is_accepted=False, any_whitespace=False)
 
 
+def test_oneof_unsupported_overlap_warns_and_falls_back(capfd):
+    def assert_oneof_falls_back(
+        schema: Union[Dict[str, Any], str],
+        accepted_instances: Optional[List[str]] = None,
+        rejected_instances: Optional[List[str]] = None,
+    ):
+        schema_input = schema if isinstance(schema, str) else json.dumps(schema)
+        grammar = xgr.Grammar.from_json_schema(schema_input, any_whitespace=False)
+        captured = capfd.readouterr()
+        assert "falling back to anyOf semantics" in captured.err
+        for instance in accepted_instances or []:
+            assert _is_grammar_accept_string(grammar, instance)
+        for instance in rejected_instances or []:
+            assert not _is_grammar_accept_string(grammar, instance)
+
+    assert_oneof_falls_back(
+        {"oneOf": [{"type": "integer"}, {"type": "number"}]}, ["1", "1.5"], ['"x"']
+    )
+    assert_oneof_falls_back(
+        {"oneOf": [{"type": ["integer", "string"]}, {"type": "number"}]}, ["1", '"x"', "1.5"]
+    )
+    assert_oneof_falls_back({"oneOf": [{"type": "integer"}, {}]}, ["1", "true"])
+    assert_oneof_falls_back({"oneOf": [{"const": 1}, {"const": 1.0}]}, ["1"])
+    assert_oneof_falls_back('{"oneOf":[{"const":9007199254740993},{"const":9007199254740993.0}]}')
+    assert_oneof_falls_back('{"oneOf":[{"const":1.5},{"const":2.5}]}', ["1.5", "2.5"], ["3.5"])
+    assert_oneof_falls_back('{"oneOf":[{"enum":[9007199254740993]},{"enum":[9007199254740993.0]}]}')
+    assert_oneof_falls_back({"oneOf": [{"enum": [1, "hello", 2]}, {"type": "integer"}]}, ["1", "3"])
+    # A non-integer numeric const is conservatively treated as possibly overlapping an
+    # integer-typed arm, so this disjoint schema still falls back to anyOf semantics.
+    assert_oneof_falls_back(
+        {"oneOf": [{"type": "integer"}, {"const": 1.5}]}, ["1", "1.5"], ["2.5", '"x"']
+    )
+    assert_oneof_falls_back(
+        {
+            "oneOf": [
+                {"type": "object"},
+                {
+                    "type": "object",
+                    "required": ["kind"],
+                    "properties": {"kind": {"const": "special"}},
+                },
+            ]
+        },
+        ['{"kind": "special"}', "{}"],
+    )
+    assert_oneof_falls_back(
+        {"oneOf": [{"type": "integer"}, {"anyOf": [{"type": "number"}, {"type": "string"}]}]},
+        ["1", "1.5", '"x"'],
+    )
+    assert_oneof_falls_back(
+        {
+            "oneOf": [{"type": "integer"}, {"$ref": "#/$defs/x"}],
+            "$defs": {"x": {"type": "integer"}},
+        },
+        ["1"],
+    )
+
+
+def test_oneof_disjoint_cases(capfd):
+    # A oneOf proven pairwise-disjoint must NOT emit the anyOf fallback warning. The generated
+    # grammar is identical to the fallback, so asserting the warning is absent is the only way to
+    # verify the disjointness prover actually fired.
+    def assert_no_fallback():
+        captured = capfd.readouterr()
+        assert "falling back to anyOf semantics" not in captured.err
+
+    schema = {"oneOf": [{"type": "string"}, {"type": "integer"}]}
+    check_schema_with_instance(schema, '"x"', any_whitespace=False)
+    check_schema_with_instance(schema, 1, any_whitespace=False)
+    check_schema_with_instance(schema, 1.5, is_accepted=False, any_whitespace=False)
+    assert_no_fallback()
+
+    schema = {"oneOf": [{"const": "cat"}, {"const": "dog"}]}
+    check_schema_with_instance(schema, '"cat"', any_whitespace=False)
+    check_schema_with_instance(schema, '"dog"', any_whitespace=False)
+    check_schema_with_instance(schema, '"fish"', is_accepted=False, any_whitespace=False)
+    assert_no_fallback()
+
+    schema = {"oneOf": [{"enum": ["a", "b"]}, {"enum": ["c", "d"]}]}
+    check_schema_with_instance(schema, '"a"', any_whitespace=False)
+    check_schema_with_instance(schema, '"d"', any_whitespace=False)
+    check_schema_with_instance(schema, '"e"', is_accepted=False, any_whitespace=False)
+    assert_no_fallback()
+
+    schema = '{"oneOf":[{"const":9007199254740992},{"const":9007199254740993}]}'
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    assert _is_grammar_accept_string(grammar, "9007199254740992")
+    assert _is_grammar_accept_string(grammar, "9007199254740993")
+    assert not _is_grammar_accept_string(grammar, "9007199254740994")
+    assert_no_fallback()
+
+    schema = {
+        "oneOf": [
+            {"type": "object", "required": ["kind"], "properties": {"kind": {"const": "cat"}}},
+            {"type": "object", "required": ["kind"], "properties": {"kind": {"const": "dog"}}},
+        ]
+    }
+    check_schema_with_instance(schema, '{"kind": "cat"}', any_whitespace=False)
+    check_schema_with_instance(schema, '{"kind": "dog"}', any_whitespace=False)
+    check_schema_with_instance(schema, '{"kind": "fish"}', is_accepted=False, any_whitespace=False)
+    assert_no_fallback()
+
+    # Numeric discriminator: exercises the discriminator prover with non-string const values.
+    schema = {
+        "oneOf": [
+            {"type": "object", "required": ["v"], "properties": {"v": {"const": 1}}},
+            {"type": "object", "required": ["v"], "properties": {"v": {"const": 2}}},
+        ]
+    }
+    check_schema_with_instance(schema, '{"v": 1}', any_whitespace=False)
+    check_schema_with_instance(schema, '{"v": 2}', any_whitespace=False)
+    check_schema_with_instance(schema, '{"v": 3}', is_accepted=False, any_whitespace=False)
+    assert_no_fallback()
+
+
+def test_anyof_integer_number_unchanged():
+    schema = {"anyOf": [{"type": "integer"}, {"type": "number"}]}
+    check_schema_with_instance(schema, 1, any_whitespace=False)
+    check_schema_with_instance(schema, 1.5, any_whitespace=False)
+
+
 def test_alias():
     class MainModel(BaseModel):
         test: str = Field(..., alias="name")
