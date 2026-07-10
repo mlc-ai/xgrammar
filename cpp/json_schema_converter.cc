@@ -37,7 +37,8 @@ std::string IntegerSpec::ToString() const {
          ", exclusive_minimum=" +
          (exclusive_minimum.has_value() ? std::to_string(*exclusive_minimum) : "null") +
          ", exclusive_maximum=" +
-         (exclusive_maximum.has_value() ? std::to_string(*exclusive_maximum) : "null") + "}";
+         (exclusive_maximum.has_value() ? std::to_string(*exclusive_maximum) : "null") +
+         ", multiple_of=" + (multiple_of.has_value() ? std::to_string(*multiple_of) : "null") + "}";
 }
 
 std::string NumberSpec::ToString() const {
@@ -115,6 +116,10 @@ std::string AnyOfSpec::ToString() const {
   return "AnyOfSpec{options.size()=" + std::to_string(options.size()) + "}";
 }
 
+std::string OneOfSpec::ToString() const {
+  return "OneOfSpec{options.size()=" + std::to_string(options.size()) + "}";
+}
+
 std::string AllOfSpec::ToString() const {
   return "AllOfSpec{schemas.size()=" + std::to_string(schemas.size()) + "}";
 }
@@ -137,9 +142,520 @@ namespace {
 enum class SchemaErrorType : int {
   kInvalidSchema = 0,
   kUnsatisfiableSchema = 1,
+  kUnsupportedSchema = 2,
 };
 
 using SchemaError = TypedError<SchemaErrorType>;
+
+// Unbounded integer multipleOf emits a modulo DFA: states ~= N, transitions ~= 10N.
+// Fail closed above the cap to keep generated grammars bounded.
+constexpr int64_t kIntegerMultipleOfMax = 1024;
+constexpr int64_t kIntegerMultipleOfRangeWidthMax = 10000;
+
+bool IsMultipleOf(int64_t value, int64_t multiple_of) { return (value % multiple_of) == 0; }
+
+bool HasMultipleInRange(int64_t start, int64_t end, int64_t multiple_of) {
+  for (int64_t value = start; value <= end; ++value) {
+    if (IsMultipleOf(value, multiple_of)) return true;
+    if (value == std::numeric_limits<int64_t>::max()) break;
+  }
+  return false;
+}
+
+constexpr const char* kUnsupportedOneOfMessage =
+    "oneOf with overlapping or non-provably-disjoint branches cannot be represented exactly; "
+    "falling back to anyOf semantics";
+
+bool IsSchemaAnnotationKey(const std::string& key) {
+  static const std::unordered_set<std::string> kAnnotationKeys = {
+      "title",
+      "default",
+      "description",
+      "examples",
+      "deprecated",
+      "readOnly",
+      "writeOnly",
+      "$comment",
+      "$schema",
+  };
+  return kAnnotationKeys.count(key) != 0;
+}
+
+bool HasOnlyKeys(
+    const picojson::object& schema, const std::unordered_set<std::string>& allowed_keys
+) {
+  for (const auto& [key, _] : schema) {
+    if (allowed_keys.count(key) == 0 && !IsSchemaAnnotationKey(key)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool IsSupportedJSONType(const std::string& type) {
+  static const std::unordered_set<std::string> kTypes = {
+      "null",
+      "boolean",
+      "object",
+      "array",
+      "number",
+      "string",
+      "integer",
+  };
+  return kTypes.count(type) != 0;
+}
+
+bool NormalizeTypeSet(
+    const picojson::value& type_value, std::unordered_set<std::string>* type_set
+) {
+  if (type_value.is<std::string>()) {
+    const auto& type = type_value.get<std::string>();
+    if (!IsSupportedJSONType(type)) {
+      return false;
+    }
+    type_set->insert(type);
+    return true;
+  }
+  if (!type_value.is<picojson::array>()) {
+    return false;
+  }
+
+  const auto& type_array = type_value.get<picojson::array>();
+  if (type_array.empty()) {
+    return false;
+  }
+  for (const auto& item : type_array) {
+    if (!item.is<std::string>()) {
+      return false;
+    }
+    const auto& type = item.get<std::string>();
+    if (!IsSupportedJSONType(type)) {
+      return false;
+    }
+    type_set->insert(type);
+  }
+  return true;
+}
+
+bool IsNumericValue(const picojson::value& value) {
+  return value.is<int64_t>() || value.is<double>();
+}
+
+bool IsIntegerValue(const picojson::value& value) {
+  if (value.is<int64_t>()) {
+    return true;
+  }
+  if (!value.is<double>()) {
+    return false;
+  }
+  double number = value.get<double>();
+  return std::isfinite(number) && std::floor(number) == number;
+}
+
+bool JSONValuesMayOverlap(const picojson::value& lhs, const picojson::value& rhs) {
+  if (IsNumericValue(lhs) || IsNumericValue(rhs)) {
+    if (!IsNumericValue(lhs) || !IsNumericValue(rhs)) {
+      return false;
+    }
+    if (lhs.is<int64_t>() && rhs.is<int64_t>()) {
+      return lhs.get<int64_t>() == rhs.get<int64_t>();
+    }
+    return true;
+  }
+  if (lhs.is<picojson::null>() || rhs.is<picojson::null>()) {
+    return lhs.is<picojson::null>() && rhs.is<picojson::null>();
+  }
+  if (lhs.is<bool>() || rhs.is<bool>()) {
+    return lhs.is<bool>() && rhs.is<bool>() && lhs.get<bool>() == rhs.get<bool>();
+  }
+  if (lhs.is<std::string>() || rhs.is<std::string>()) {
+    return lhs.is<std::string>() && rhs.is<std::string>() &&
+           lhs.get<std::string>() == rhs.get<std::string>();
+  }
+  if (lhs.is<picojson::array>() || rhs.is<picojson::array>()) {
+    if (!lhs.is<picojson::array>() || !rhs.is<picojson::array>()) {
+      return false;
+    }
+    const auto& lhs_array = lhs.get<picojson::array>();
+    const auto& rhs_array = rhs.get<picojson::array>();
+    if (lhs_array.size() != rhs_array.size()) {
+      return false;
+    }
+    for (size_t i = 0; i < lhs_array.size(); ++i) {
+      if (!JSONValuesMayOverlap(lhs_array[i], rhs_array[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (lhs.is<picojson::object>() || rhs.is<picojson::object>()) {
+    if (!lhs.is<picojson::object>() || !rhs.is<picojson::object>()) {
+      return false;
+    }
+    const auto& lhs_object = lhs.get<picojson::object>();
+    const auto& rhs_object = rhs.get<picojson::object>();
+    if (lhs_object.size() != rhs_object.size()) {
+      return false;
+    }
+    for (const auto& [key, lhs_value] : lhs_object) {
+      auto rhs_it = rhs_object.find(key);
+      if (rhs_it == rhs_object.end() || !JSONValuesMayOverlap(lhs_value, rhs_it->second)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return lhs.serialize() == rhs.serialize();
+}
+
+bool ValueMatchesType(const picojson::value& value, const std::string& type) {
+  if (type == "null") {
+    return value.is<picojson::null>();
+  }
+  if (type == "boolean") {
+    return value.is<bool>();
+  }
+  if (type == "string") {
+    return value.is<std::string>();
+  }
+  if (type == "integer") {
+    return IsIntegerValue(value);
+  }
+  if (type == "number") {
+    return IsNumericValue(value);
+  }
+  if (type == "array") {
+    return value.is<picojson::array>();
+  }
+  if (type == "object") {
+    return value.is<picojson::object>();
+  }
+  return false;
+}
+
+bool IsRangeWidthOverCap(int64_t start, int64_t end, int64_t cap) {
+  uint64_t cap_u = static_cast<uint64_t>(cap);
+  if (start <= 0 && end >= 0) {
+    // Count [start, end] inclusively without evaluating -INT64_MIN or overflowing the sum.
+    uint64_t negative_count = start < 0 ? static_cast<uint64_t>(-(start + 1)) + 1 : 0;
+    if (negative_count > cap_u) return true;
+    uint64_t remaining = cap_u - negative_count;
+    if (remaining == 0) return true;
+    --remaining;  // zero
+    uint64_t positive_count = end > 0 ? static_cast<uint64_t>(end) : 0;
+    return positive_count > remaining;
+  }
+
+  uint64_t value_count = static_cast<uint64_t>(end - start) + 1;
+  return value_count > cap_u;
+}
+
+// Effective inclusive integer range after folding exclusive bounds into minimum/maximum. A nullopt
+// side means that side is unbounded.
+struct EffectiveIntegerRange {
+  std::optional<int64_t> start;
+  std::optional<int64_t> end;
+};
+
+// Fold the inclusive [minimum, maximum] bounds together with any exclusive bounds so the stricter
+// bound wins on each side. Shared by ParseInteger (range validation) and GenerateInteger (grammar
+// emission) so the two can never disagree about the effective range. Precondition:
+// exclusive_minimum != INT64_MAX and exclusive_maximum != INT64_MIN (ParseInteger rejects those
+// before building the spec), so the +1/-1 below cannot overflow.
+EffectiveIntegerRange ComputeEffectiveIntegerRange(const IntegerSpec& spec) {
+  EffectiveIntegerRange range;
+  if (spec.minimum.has_value()) {
+    range.start = spec.minimum;
+  }
+  if (spec.exclusive_minimum.has_value()) {
+    // Smallest integer strictly greater than exclusive_minimum; the larger lower bound wins.
+    int64_t excl_start = *spec.exclusive_minimum + 1;
+    range.start = range.start.has_value() ? std::max(*range.start, excl_start) : excl_start;
+  }
+  if (spec.maximum.has_value()) {
+    range.end = spec.maximum;
+  }
+  if (spec.exclusive_maximum.has_value()) {
+    // Largest integer strictly less than exclusive_maximum; the smaller upper bound wins.
+    int64_t excl_end = *spec.exclusive_maximum - 1;
+    range.end = range.end.has_value() ? std::min(*range.end, excl_end) : excl_end;
+  }
+  return range;
+}
+
+std::string DigitLiteral(int64_t digit) {
+  return EBNFScriptCreator::Str(std::string(1, static_cast<char>('0' + digit)));
+}
+
+std::string JoinRegexAlternatives(const std::vector<std::string>& alternatives) {
+  std::string result;
+  for (size_t i = 0; i < alternatives.size(); ++i) {
+    if (i != 0) result += "|";
+    result += alternatives[i];
+  }
+  return result;
+}
+
+bool TypeSetsOverlap(
+    const std::unordered_set<std::string>& lhs, const std::unordered_set<std::string>& rhs
+) {
+  for (const auto& lhs_type : lhs) {
+    for (const auto& rhs_type : rhs) {
+      if (lhs_type == rhs_type) {
+        return true;
+      }
+      if ((lhs_type == "integer" || lhs_type == "number") &&
+          (rhs_type == "integer" || rhs_type == "number")) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool FiniteValuesOverlap(
+    const std::vector<picojson::value>& lhs, const std::vector<picojson::value>& rhs
+) {
+  for (const auto& lhs_value : lhs) {
+    for (const auto& rhs_value : rhs) {
+      if (JSONValuesMayOverlap(lhs_value, rhs_value)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool FiniteValuesOverlapTypeSet(
+    const std::vector<picojson::value>& values, const std::unordered_set<std::string>& type_set
+) {
+  for (const auto& value : values) {
+    if (IsNumericValue(value) && (type_set.count("integer") || type_set.count("number"))) {
+      return true;
+    }
+    for (const auto& type : type_set) {
+      if (ValueMatchesType(value, type)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool TryGetFiniteValues(const picojson::object& schema, std::vector<picojson::value>* values) {
+  if (schema.count("const")) {
+    values->push_back(schema.at("const"));
+    return true;
+  }
+  if (schema.count("enum")) {
+    if (!schema.at("enum").is<picojson::array>()) {
+      return false;
+    }
+    const auto& enum_values = schema.at("enum").get<picojson::array>();
+    if (enum_values.empty()) {
+      return false;
+    }
+    values->insert(values->end(), enum_values.begin(), enum_values.end());
+    return true;
+  }
+  return false;
+}
+
+struct OneOfArmProof {
+  enum class Kind { kTypeSet, kFiniteValues };
+
+  Kind kind;
+  std::unordered_set<std::string> type_set;
+  std::vector<picojson::value> finite_values;
+};
+
+std::optional<OneOfArmProof> ClassifyTypeOrFiniteOneOfArm(const picojson::value& option) {
+  if (!option.is<picojson::object>()) {
+    return std::nullopt;
+  }
+  const auto& schema = option.get<picojson::object>();
+
+  if (schema.count("$ref") || schema.count("anyOf") || schema.count("allOf") ||
+      schema.count("oneOf")) {
+    return std::nullopt;
+  }
+
+  std::vector<picojson::value> finite_values;
+  if (TryGetFiniteValues(schema, &finite_values)) {
+    OneOfArmProof proof;
+    proof.kind = OneOfArmProof::Kind::kFiniteValues;
+    proof.finite_values = std::move(finite_values);
+    return proof;
+  }
+
+  if (!schema.count("type") || !HasOnlyKeys(schema, {"type"})) {
+    return std::nullopt;
+  }
+
+  std::unordered_set<std::string> type_set;
+  if (!NormalizeTypeSet(schema.at("type"), &type_set)) {
+    return std::nullopt;
+  }
+  if (type_set.count("object")) {
+    return std::nullopt;
+  }
+
+  OneOfArmProof proof;
+  proof.kind = OneOfArmProof::Kind::kTypeSet;
+  proof.type_set = std::move(type_set);
+  return proof;
+}
+
+bool OneOfArmProofsAreDisjoint(const OneOfArmProof& lhs, const OneOfArmProof& rhs) {
+  if (lhs.kind == OneOfArmProof::Kind::kTypeSet && rhs.kind == OneOfArmProof::Kind::kTypeSet) {
+    return !TypeSetsOverlap(lhs.type_set, rhs.type_set);
+  }
+  if (lhs.kind == OneOfArmProof::Kind::kFiniteValues &&
+      rhs.kind == OneOfArmProof::Kind::kFiniteValues) {
+    return !FiniteValuesOverlap(lhs.finite_values, rhs.finite_values);
+  }
+  if (lhs.kind == OneOfArmProof::Kind::kFiniteValues && rhs.kind == OneOfArmProof::Kind::kTypeSet) {
+    return !FiniteValuesOverlapTypeSet(lhs.finite_values, rhs.type_set);
+  }
+  return !FiniteValuesOverlapTypeSet(rhs.finite_values, lhs.type_set);
+}
+
+std::optional<std::vector<picojson::value>> GetDiscriminatorValues(
+    const picojson::value& option, const std::string& discriminator_key
+) {
+  if (!option.is<picojson::object>()) {
+    return std::nullopt;
+  }
+  const auto& schema = option.get<picojson::object>();
+  if (schema.count("$ref") || schema.count("anyOf") || schema.count("allOf") ||
+      schema.count("oneOf")) {
+    return std::nullopt;
+  }
+  if (!schema.count("type") || !schema.at("type").is<std::string>() ||
+      schema.at("type").get<std::string>() != "object") {
+    return std::nullopt;
+  }
+  if (!schema.count("required") || !schema.at("required").is<picojson::array>()) {
+    return std::nullopt;
+  }
+
+  bool requires_discriminator = false;
+  for (const auto& required_key : schema.at("required").get<picojson::array>()) {
+    if (!required_key.is<std::string>()) {
+      return std::nullopt;
+    }
+    if (required_key.get<std::string>() == discriminator_key) {
+      requires_discriminator = true;
+    }
+  }
+  if (!requires_discriminator) {
+    return std::nullopt;
+  }
+
+  if (!schema.count("properties") || !schema.at("properties").is<picojson::object>()) {
+    return std::nullopt;
+  }
+  const auto& properties = schema.at("properties").get<picojson::object>();
+  auto property_it = properties.find(discriminator_key);
+  if (property_it == properties.end() || !property_it->second.is<picojson::object>()) {
+    return std::nullopt;
+  }
+
+  std::vector<picojson::value> values;
+  if (!TryGetFiniteValues(property_it->second.get<picojson::object>(), &values)) {
+    return std::nullopt;
+  }
+  return values;
+}
+
+std::vector<std::string> GetDiscriminatorCandidates(const picojson::value& option) {
+  std::vector<std::string> candidates;
+  if (!option.is<picojson::object>()) {
+    return candidates;
+  }
+  const auto& schema = option.get<picojson::object>();
+  if (!schema.count("required") || !schema.at("required").is<picojson::array>() ||
+      !schema.count("properties") || !schema.at("properties").is<picojson::object>()) {
+    return candidates;
+  }
+  const auto& properties = schema.at("properties").get<picojson::object>();
+  for (const auto& required_key : schema.at("required").get<picojson::array>()) {
+    if (!required_key.is<std::string>()) {
+      continue;
+    }
+    const auto& key = required_key.get<std::string>();
+    auto property_it = properties.find(key);
+    if (property_it == properties.end() || !property_it->second.is<picojson::object>()) {
+      continue;
+    }
+    std::vector<picojson::value> values;
+    if (TryGetFiniteValues(property_it->second.get<picojson::object>(), &values)) {
+      candidates.push_back(key);
+    }
+  }
+  return candidates;
+}
+
+bool TryProveStrictDiscriminatorOneOf(const picojson::array& options) {
+  if (options.empty()) {
+    return false;
+  }
+
+  for (const auto& discriminator_key : GetDiscriminatorCandidates(options.front())) {
+    std::vector<std::vector<picojson::value>> branch_values;
+    bool all_branches_have_key = true;
+    for (const auto& option : options) {
+      auto values = GetDiscriminatorValues(option, discriminator_key);
+      if (!values.has_value()) {
+        all_branches_have_key = false;
+        break;
+      }
+      branch_values.push_back(std::move(values.value()));
+    }
+    if (!all_branches_have_key) {
+      continue;
+    }
+
+    bool pairwise_disjoint = true;
+    for (size_t i = 0; i < branch_values.size() && pairwise_disjoint; ++i) {
+      for (size_t j = i + 1; j < branch_values.size(); ++j) {
+        if (FiniteValuesOverlap(branch_values[i], branch_values[j])) {
+          pairwise_disjoint = false;
+          break;
+        }
+      }
+    }
+    if (pairwise_disjoint) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool TryProveTypeOrFiniteOneOf(const picojson::array& options) {
+  std::vector<OneOfArmProof> proofs;
+  proofs.reserve(options.size());
+  for (const auto& option : options) {
+    auto proof = ClassifyTypeOrFiniteOneOfArm(option);
+    if (!proof.has_value()) {
+      return false;
+    }
+    proofs.push_back(std::move(proof.value()));
+  }
+
+  for (size_t i = 0; i < proofs.size(); ++i) {
+    for (size_t j = i + 1; j < proofs.size(); ++j) {
+      if (!OneOfArmProofsAreDisjoint(proofs[i], proofs[j])) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool TryProvePairwiseDisjointOneOf(const picojson::array& options) {
+  return TryProveStrictDiscriminatorOneOf(options) || TryProveTypeOrFiniteOneOf(options);
+}
 
 /*!
  * \brief Parser for JSON Schema, converts JSON Schema to SchemaSpec intermediate representation.
@@ -178,7 +694,10 @@ class SchemaParser {
   Result<ConstSpec, SchemaError> ParseConst(const picojson::object& schema);
   Result<EnumSpec, SchemaError> ParseEnum(const picojson::object& schema);
   Result<RefSpec, SchemaError> ParseRef(const picojson::object& schema);
-  Result<AnyOfSpec, SchemaError> ParseAnyOf(const picojson::object& schema);
+  Result<AnyOfSpec, SchemaError> ParseAnyOf(
+      const picojson::object& schema, const std::string& keyword
+  );
+  Result<OneOfSpec, SchemaError> ParseOneOf(const picojson::object& schema);
   Result<AllOfSpec, SchemaError> ParseAllOf(const picojson::object& schema);
   Result<TypeArraySpec, SchemaError> ParseTypeArray(
       const picojson::object& schema, const std::string& rule_name_hint
@@ -305,10 +824,23 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     auto enum_result = ParseEnum(schema_obj);
     if (enum_result.IsErr()) return ResultErr(std::move(enum_result).UnwrapErr());
     result = SchemaSpec::Make(std::move(enum_result).Unwrap(), cache_key, rule_name_hint);
-  } else if (schema_obj.count("anyOf") || schema_obj.count("oneOf")) {
-    auto anyof_result = ParseAnyOf(schema_obj);
+  } else if (schema_obj.count("anyOf")) {
+    auto anyof_result = ParseAnyOf(schema_obj, "anyOf");
     if (anyof_result.IsErr()) return ResultErr(std::move(anyof_result).UnwrapErr());
     result = SchemaSpec::Make(std::move(anyof_result).Unwrap(), cache_key, rule_name_hint);
+  } else if (schema_obj.count("oneOf")) {
+    auto oneof_result = ParseOneOf(schema_obj);
+    if (oneof_result.IsErr()) {
+      if (oneof_result.ErrRef().Type() != SchemaErrorType::kUnsupportedSchema) {
+        return ResultErr(std::move(oneof_result).UnwrapErr());
+      }
+      XGRAMMAR_LOG(WARNING) << oneof_result.ErrRef().what();
+      auto anyof_result = ParseAnyOf(schema_obj, "oneOf");
+      if (anyof_result.IsErr()) return ResultErr(std::move(anyof_result).UnwrapErr());
+      result = SchemaSpec::Make(std::move(anyof_result).Unwrap(), cache_key, rule_name_hint);
+    } else {
+      result = SchemaSpec::Make(std::move(oneof_result).Unwrap(), cache_key, rule_name_hint);
+    }
   } else if (schema_obj.count("allOf")) {
     auto allof_result = ParseAllOf(schema_obj);
     if (allof_result.IsErr()) return ResultErr(std::move(allof_result).UnwrapErr());
@@ -377,7 +909,6 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
 }
 
 Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::object& schema) {
-  WarnUnsupportedKeywords(schema, {"multipleOf"});
   IntegerSpec spec;
 
   auto checkAndConvertIntegerBound = [](const picojson::value& value
@@ -412,6 +943,46 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
     return ResultOk<int64_t>(static_cast<int64_t>(val));
   };
 
+  auto checkAndConvertMultipleOf = [](const picojson::value& value
+                                   ) -> Result<int64_t, SchemaError> {
+    double val;
+    if (value.is<int64_t>()) {
+      val = static_cast<double>(value.get<int64_t>());
+    } else if (value.is<double>()) {
+      val = value.get<double>();
+    } else {
+      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Value must be a number");
+    }
+    if (val <= 0) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "multipleOf must be greater than 0"
+      );
+    }
+    if (val != std::floor(val)) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema, "multipleOf for type:integer must be an integer"
+      );
+    }
+    if (val > static_cast<double>(kIntegerMultipleOfMax)) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "multipleOf for type:integer must be > 0 and <= " + std::to_string(kIntegerMultipleOfMax)
+      );
+    }
+    return ResultOk<int64_t>(static_cast<int64_t>(val));
+  };
+
+  if (schema.count("multipleOf")) {
+    auto result = checkAndConvertMultipleOf(schema.at("multipleOf"));
+    if (result.IsErr()) {
+      if (result.ErrRef().Type() != SchemaErrorType::kUnsupportedSchema) {
+        return ResultErr(std::move(result).UnwrapErr());
+      }
+      XGRAMMAR_LOG(WARNING) << result.ErrRef().what() << "; ignoring multipleOf";
+    } else {
+      spec.multiple_of = std::move(result).Unwrap();
+    }
+  }
   if (schema.count("minimum")) {
     auto result = checkAndConvertIntegerBound(schema.at("minimum"));
     if (result.IsErr()) return ResultErr(std::move(result).UnwrapErr());
@@ -445,24 +1016,50 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
     spec.exclusive_maximum = val;
   }
 
-  int64_t effective_min = spec.minimum.value_or(std::numeric_limits<int64_t>::min());
-  int64_t effective_max = spec.maximum.value_or(std::numeric_limits<int64_t>::max());
-  if (spec.exclusive_minimum.has_value()) {
-    effective_min = std::max(effective_min, *spec.exclusive_minimum + 1);
-  }
-  if (spec.exclusive_maximum.has_value()) {
-    effective_max = std::min(effective_max, *spec.exclusive_maximum - 1);
-  }
+  EffectiveIntegerRange effective_range = ComputeEffectiveIntegerRange(spec);
+  int64_t effective_min = effective_range.start.value_or(std::numeric_limits<int64_t>::min());
+  int64_t effective_max = effective_range.end.value_or(std::numeric_limits<int64_t>::max());
   if (effective_min > effective_max) {
     return ResultErr<SchemaError>(
         SchemaErrorType::kUnsatisfiableSchema, "Invalid range: minimum greater than maximum"
     );
   }
+  if (spec.multiple_of.has_value()) {
+    bool has_lower_bound = spec.minimum.has_value() || spec.exclusive_minimum.has_value();
+    bool has_upper_bound = spec.maximum.has_value() || spec.exclusive_maximum.has_value();
+    if (has_lower_bound || has_upper_bound) {
+      if (!has_lower_bound || !has_upper_bound ||
+          IsRangeWidthOverCap(effective_min, effective_max, kIntegerMultipleOfRangeWidthMax)) {
+        XGRAMMAR_LOG(WARNING
+        ) << "range + multipleOf combination not yet supported; ignoring multipleOf";
+        spec.multiple_of.reset();
+        return ResultOk(std::move(spec));
+      }
+      if (!HasMultipleInRange(effective_min, effective_max, *spec.multiple_of)) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsatisfiableSchema, "range contains no multipleOf value"
+        );
+      }
+    }
+  }
   return ResultOk(std::move(spec));
 }
 
 Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object& schema) {
-  WarnUnsupportedKeywords(schema, {"multipleOf"});
+  if (schema.count("multipleOf")) {
+    const auto& value = schema.at("multipleOf");
+    if (!value.is<int64_t>() && !value.is<double>()) {
+      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Value must be a number");
+    }
+    double multiple_of =
+        value.is<int64_t>() ? static_cast<double>(value.get<int64_t>()) : value.get<double>();
+    if (multiple_of <= 0) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "multipleOf must be greater than 0"
+      );
+    }
+    XGRAMMAR_LOG(WARNING) << "multipleOf is not supported for type:number; ignoring multipleOf";
+  }
   NumberSpec spec;
 
   auto getDouble = [](const picojson::value& value) -> Result<double, SchemaError> {
@@ -903,21 +1500,46 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
   return ResultOk(resolved);
 }
 
-Result<AnyOfSpec, SchemaError> SchemaParser::ParseAnyOf(const picojson::object& schema) {
+Result<AnyOfSpec, SchemaError> SchemaParser::ParseAnyOf(
+    const picojson::object& schema, const std::string& keyword
+) {
   AnyOfSpec spec;
-  auto anyof_key = schema.count("anyOf") ? "anyOf" : "oneOf";
-  if (!schema.at(anyof_key).is<picojson::array>()) {
-    return ResultErr<SchemaError>(
-        SchemaErrorType::kInvalidSchema, std::string(anyof_key) + " must be an array"
-    );
+  if (!schema.at(keyword).is<picojson::array>()) {
+    return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, keyword + " must be an array");
   }
   int idx = 0;
-  for (const auto& option : schema.at(anyof_key).get<picojson::array>()) {
+  for (const auto& option : schema.at(keyword).get<picojson::array>()) {
     auto option_result = Parse(option, "case_" + std::to_string(idx));
     if (option_result.IsErr()) return ResultErr(std::move(option_result).UnwrapErr());
     spec.options.push_back(std::move(option_result).Unwrap());
     ++idx;
   }
+  return ResultOk(std::move(spec));
+}
+
+Result<OneOfSpec, SchemaError> SchemaParser::ParseOneOf(const picojson::object& schema) {
+  OneOfSpec spec;
+  if (!schema.at("oneOf").is<picojson::array>()) {
+    return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "oneOf must be an array");
+  }
+
+  const auto& options = schema.at("oneOf").get<picojson::array>();
+  if (options.empty()) {
+    return ResultErr<SchemaError>(SchemaErrorType::kUnsupportedSchema, kUnsupportedOneOfMessage);
+  }
+
+  int idx = 0;
+  for (const auto& option : options) {
+    auto option_result = Parse(option, "case_" + std::to_string(idx));
+    if (option_result.IsErr()) return ResultErr(std::move(option_result).UnwrapErr());
+    spec.options.push_back(std::move(option_result).Unwrap());
+    ++idx;
+  }
+
+  if (!TryProvePairwiseDisjointOneOf(options)) {
+    return ResultErr<SchemaError>(SchemaErrorType::kUnsupportedSchema, kUnsupportedOneOfMessage);
+  }
+
   return ResultOk(std::move(spec));
 }
 
@@ -1409,6 +2031,8 @@ std::string JSONSchemaConverter::GenerateFromSpec(
           return GenerateRef(s, rule_name_hint);
         } else if constexpr (std::is_same_v<T, AnyOfSpec>) {
           return GenerateAnyOf(s, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, OneOfSpec>) {
+          return GenerateOneOf(s, rule_name_hint);
         } else if constexpr (std::is_same_v<T, AllOfSpec>) {
           return GenerateAllOf(s, rule_name_hint);
         } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
@@ -1427,26 +2051,24 @@ std::string JSONSchemaConverter::GenerateFromSpec(
 std::string JSONSchemaConverter::GenerateInteger(
     const IntegerSpec& spec, const std::string& rule_name
 ) {
-  std::optional<int64_t> start, end;
-  if (spec.minimum.has_value()) {
-    start = spec.minimum;
-  }
-  if (spec.exclusive_minimum.has_value()) {
-    // Smallest integer strictly greater than exclusive_minimum (the parser
-    // rejects exclusive_minimum == INT64_MAX, so +1 cannot overflow). When
-    // minimum is also present the stricter (larger) lower bound wins.
-    int64_t excl_start = *spec.exclusive_minimum + 1;
-    start = start.has_value() ? std::max(*start, excl_start) : excl_start;
-  }
-  if (spec.maximum.has_value()) {
-    end = spec.maximum;
-  }
-  if (spec.exclusive_maximum.has_value()) {
-    // Largest integer strictly less than exclusive_maximum (the parser rejects
-    // exclusive_maximum == INT64_MIN, so -1 cannot underflow). When maximum is
-    // also present the stricter (smaller) upper bound wins.
-    int64_t excl_end = *spec.exclusive_maximum - 1;
-    end = end.has_value() ? std::min(*end, excl_end) : excl_end;
+  // Shared with ParseInteger's range validation so emission and validation agree on the effective
+  // range; a nullopt side means that side is unbounded.
+  const EffectiveIntegerRange range = ComputeEffectiveIntegerRange(spec);
+  std::optional<int64_t> start = range.start;
+  std::optional<int64_t> end = range.end;
+
+  if (spec.multiple_of.has_value()) {
+    // ParseInteger keeps multiple_of only when the range is fully bounded (enumerate the
+    // multiples) or fully unbounded (emit a modulo DFA); the half-bounded case is dropped there.
+    if (start.has_value() && end.has_value()) {
+      std::vector<std::string> multiples;
+      for (int64_t value = *start; value <= *end; ++value) {
+        if (IsMultipleOf(value, *spec.multiple_of)) multiples.push_back(std::to_string(value));
+        if (value == std::numeric_limits<int64_t>::max()) break;
+      }
+      return RegexToEBNF("^(" + JoinRegexAlternatives(multiples) + ")$", false);
+    }
+    return GenerateIntegerMultipleOfDFA(*spec.multiple_of, rule_name);
   }
 
   if (start.has_value() || end.has_value()) {
@@ -1454,6 +2076,44 @@ std::string JSONSchemaConverter::GenerateInteger(
     return RegexToEBNF(range_regex, false);
   }
   return "(\"0\" | \"-\"? [1-9] [0-9]*)";
+}
+
+std::string JSONSchemaConverter::GenerateIntegerMultipleOfDFA(
+    int64_t multiple_of, const std::string& rule_name
+) {
+  std::vector<std::string> state_rule_names(multiple_of);
+  for (int64_t state = 0; state < multiple_of; ++state) {
+    state_rule_names[state] = ebnf_script_creator_.AllocateRuleName(
+        rule_name + "_multiple_of_" + std::to_string(multiple_of) + "_mod_" + std::to_string(state)
+    );
+  }
+
+  for (int64_t state = 0; state < multiple_of; ++state) {
+    std::vector<std::string> transitions;
+    if (state == 0) transitions.push_back("\"\"");
+    for (int64_t digit = 0; digit <= 9; ++digit) {
+      int64_t next_state = (state * 10 + digit) % multiple_of;
+      transitions.push_back(
+          EBNFScriptCreator::Concat({DigitLiteral(digit), state_rule_names[next_state]})
+      );
+    }
+    ebnf_script_creator_.AddRuleWithAllocatedName(
+        state_rule_names[state], EBNFScriptCreator::Or(transitions)
+    );
+  }
+
+  std::vector<std::string> non_zero_start_transitions;
+  for (int64_t digit = 1; digit <= 9; ++digit) {
+    non_zero_start_transitions.push_back(
+        EBNFScriptCreator::Concat({DigitLiteral(digit), state_rule_names[digit % multiple_of]})
+    );
+  }
+  return EBNFScriptCreator::Or(
+      {EBNFScriptCreator::Str("0"),
+       EBNFScriptCreator::Concat(
+           {EBNFScriptCreator::Str("-") + "?", EBNFScriptCreator::Or(non_zero_start_transitions)}
+       )}
+  );
 }
 
 std::string JSONSchemaConverter::GenerateNumber(
@@ -2341,6 +3001,19 @@ std::string JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::str
 
 std::string JSONSchemaConverter::GenerateAnyOf(
     const AnyOfSpec& spec, const std::string& rule_name
+) {
+  std::string result = "";
+  for (size_t i = 0; i < spec.options.size(); ++i) {
+    if (i != 0) {
+      result += " | ";
+    }
+    result += CreateRule(spec.options[i], rule_name + "_case_" + std::to_string(i));
+  }
+  return result;
+}
+
+std::string JSONSchemaConverter::GenerateOneOf(
+    const OneOfSpec& spec, const std::string& rule_name
 ) {
   std::string result = "";
   for (size_t i = 0; i < spec.options.size(); ++i) {

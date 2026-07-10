@@ -35,6 +35,7 @@ struct IntegerSpec {
   std::optional<int64_t> maximum;
   std::optional<int64_t> exclusive_minimum;
   std::optional<int64_t> exclusive_maximum;
+  std::optional<int64_t> multiple_of;
 
   std::string ToString() const;
 };
@@ -132,6 +133,12 @@ struct AnyOfSpec {
   std::string ToString() const;
 };
 
+struct OneOfSpec {
+  std::vector<SchemaSpecPtr> options;
+
+  std::string ToString() const;
+};
+
 struct AllOfSpec {
   std::vector<SchemaSpecPtr> schemas;
 
@@ -159,6 +166,7 @@ using SchemaSpecVariant = std::variant<
     EnumSpec,
     RefSpec,
     AnyOfSpec,
+    OneOfSpec,
     AllOfSpec,
     TypeArraySpec>;
 
@@ -299,6 +307,7 @@ class JSONSchemaConverter {
   virtual std::string GenerateEnum(const EnumSpec& spec, const std::string& rule_name);
   virtual std::string GenerateRef(const RefSpec& spec, const std::string& rule_name);
   virtual std::string GenerateAnyOf(const AnyOfSpec& spec, const std::string& rule_name);
+  virtual std::string GenerateOneOf(const OneOfSpec& spec, const std::string& rule_name);
   virtual std::string GenerateAllOf(const AllOfSpec& spec, const std::string& rule_name);
   virtual std::string GenerateTypeArray(const TypeArraySpec& spec, const std::string& rule_name);
 
@@ -446,6 +455,7 @@ class JSONSchemaConverter {
 
   // Helper for integer/number range regex generation
   static std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
+  std::string GenerateIntegerMultipleOfDFA(int64_t multiple_of, const std::string& rule_name);
   static std::string GenerateFloatRangeRegex(
       std::optional<double> start,
       std::optional<double> end,
