@@ -206,6 +206,14 @@ std::string BuildStringPatternEBNF(const StringSpec& spec) {
       // correctness (length is counted in Unicode code points, not bytes).
       return RegexToEBNF(element_regex, false) + repetition;
     }
+    // The pattern carries length constraints but is not a recognized single-element anchored
+    // shape (e.g. alternation, grouping, or multiple variable-length parts), so we fall back to
+    // the plain pattern EBNF below and cannot enforce the length here. Warn instead of dropping
+    // the constraints silently.
+    XGRAMMAR_LOG(WARNING) << "String schema combines pattern \"" << *spec.pattern
+                          << "\" with minLength/maxLength, but the pattern is not a recognized "
+                             "shape for length merging; the length constraints will not be "
+                             "enforced.";
   }
   return RegexToEBNF(*spec.pattern, false);
 }

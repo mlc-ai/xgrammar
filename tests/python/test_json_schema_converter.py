@@ -2448,6 +2448,19 @@ def test_string_pattern_alternation_with_length():
     check_schema_with_instance(schema, '"ccc"', is_accepted=False, any_whitespace=False)
 
 
+def test_string_pattern_with_length_unsupported_shape_warns(capfd):
+    # A pattern that is not a recognized single-element anchored shape (here: a group with a
+    # nested variable-length repetition) cannot have its length constraints merged by route C,
+    # so length is not enforced (falls back to pattern-only). Instead of dropping the constraint
+    # silently, we emit a warning. The general fix is an FSM-intersection follow-up.
+    schema = {"type": "string", "pattern": r"^[a-z]+([a-z]+\s)+$", "maxLength": 10}
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema), any_whitespace=False)
+    captured = capfd.readouterr()
+    assert "will not be enforced" in captured.err
+    # length is not enforced: a matching string longer than maxLength is still accepted.
+    assert _is_grammar_accept_string(grammar, json.dumps("aaaa bbbb cccc "))
+
+
 def test_type_array():
     schema = {
         "type": ["integer", "string"],
