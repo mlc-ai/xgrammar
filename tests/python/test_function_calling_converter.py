@@ -1543,7 +1543,7 @@ def test_gemma_const_scalar_preserves_literal():
     # Large integers must not be rounded through double re-serialization.
     big = 10000000000000001
     schema = {"type": "object", "properties": {"v": {"const": big}}, "required": ["v"]}
-    ebnf_grammar = _gemma_tool_calling_to_ebnf(schema)
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="gemma")
     assert _is_grammar_accept_string(ebnf_grammar, "{v:%d}" % big)
     assert not _is_grammar_accept_string(ebnf_grammar, "{v:%d}" % (big - 1))
 
@@ -1555,7 +1555,7 @@ def test_gemma_const_nested_value():
         "properties": {"cfg": {"const": {"tags": ["a", 3, True]}}},
         "required": ["cfg"],
     }
-    ebnf_grammar = _gemma_tool_calling_to_ebnf(schema)
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="gemma")
     assert _is_grammar_accept_string(ebnf_grammar, '{cfg:{tags:[<|"|>a<|"|>,3,true]}}')
     assert not _is_grammar_accept_string(ebnf_grammar, '{cfg:{"tags":["a",3,true]}}')
 
