@@ -125,6 +125,105 @@ def test_apply_token_bitmask_inplace_shape_stride_mismatch(device: str):
     torch.testing.assert_close(logits, expected)
 
 
+def _bitmask_buffer_size(vocab_size: int) -> int:
+    return xgr.get_bitmask_shape(1, vocab_size)[-1]
+
+
+def _single_token_grammar() -> Tuple[xgr.TokenizerInfo, xgr.CompiledGrammar]:
+    """A grammar accepting exactly one token, so the expected mask is unambiguous."""
+    tokenizer_info = xgr.TokenizerInfo([f"t{i}" for i in range(40)] + ["<eos>"], stop_token_ids=[40])
+    compiled_grammar = xgr.GrammarCompiler(tokenizer_info).compile_grammar(
+        xgr.Grammar.from_ebnf('root ::= "t0"')
+    )
+    return tokenizer_info, compiled_grammar
+
+
+def _bitmask_allocated(batch_size: int, vocab_size: int) -> torch.Tensor:
+    return xgr.allocate_token_bitmask(batch_size, vocab_size)
+
+
+def _bitmask_row_sliced(batch_size: int, vocab_size: int) -> torch.Tensor:
+    buffer_size = _bitmask_buffer_size(vocab_size)
+    return torch.zeros(batch_size * 2, buffer_size, dtype=torch.int32)[:batch_size]
+
+
+def _bitmask_strided(batch_size: int, vocab_size: int) -> torch.Tensor:
+    buffer_size = _bitmask_buffer_size(vocab_size)
+    return torch.zeros(batch_size * 2, buffer_size, dtype=torch.int32)[::2]
+
+
+def _bitmask_col_cropped(batch_size: int, vocab_size: int) -> torch.Tensor:
+    """A buffer preallocated on a padded vocab, then cropped to the real buffer size."""
+    buffer_size = _bitmask_buffer_size(vocab_size)
+    return torch.zeros(batch_size, buffer_size + 3, dtype=torch.int32)[:, :buffer_size]
+
+
+# `allocate` and `row_slice` are contiguous and act as negative controls: they must pass
+# both before and after any stride fix. `strided` and `col_cropped` have
+# stride(0) != buffer_size, which is what these tests are about.
+bitmask_layouts = {
+    "allocate": _bitmask_allocated,
+    "row_slice": _bitmask_row_sliced,
+    "strided": _bitmask_strided,
+    "col_cropped": _bitmask_col_cropped,
+}
+
+
+@pytest.mark.parametrize("layout", list(bitmask_layouts))
+def test_fill_next_token_bitmask_row_addressing(layout: str):
+    """fill_next_token_bitmask must write into the row the caller asked for, regardless of
+    the bitmask's memory layout.
+
+    It addresses rows as `data + index * buffer_size`, ignoring stride(0), so for a
+    non-contiguous bitmask it writes outside the requested row.
+    """
+    tokenizer_info, compiled_grammar = _single_token_grammar()
+    batch_size, index = 2, 1
+
+    expected = xgr.allocate_token_bitmask(batch_size, tokenizer_info.vocab_size)
+    xgr.GrammarMatcher(compiled_grammar).fill_next_token_bitmask(expected, index)
+
+    bitmask = bitmask_layouts[layout](batch_size, tokenizer_info.vocab_size)
+    xgr.GrammarMatcher(compiled_grammar).fill_next_token_bitmask(bitmask, index)
+
+    torch.testing.assert_close(bitmask[index], expected[index])
+
+
+@pytest.mark.parametrize("layout", list(bitmask_layouts))
+def test_fill_apply_round_trip_row_addressing(layout: str):
+    """fill_next_token_bitmask -> apply_token_bitmask_inplace must mask the logits row
+    corresponding to the bitmask row that was filled.
+
+    fill addresses rows by buffer_size and apply by stride(0). They agree only when the
+    bitmask is contiguous; otherwise the mask is written to one row and read from another,
+    leaving the victim row all -inf. Silent: nothing raises.
+    """
+    tokenizer_info, compiled_grammar = _single_token_grammar()
+    batch_size, index = 2, 1
+    vocab_size = tokenizer_info.vocab_size
+
+    bitmask = bitmask_layouts[layout](batch_size, vocab_size)
+    xgr.GrammarMatcher(compiled_grammar).fill_next_token_bitmask(bitmask, index)
+
+    logits = torch.zeros(batch_size, vocab_size)
+    xgr.apply_token_bitmask_inplace(logits, bitmask)
+
+    # `root ::= "t0"` accepts only token 0, so exactly that logit must stay finite.
+    surviving = torch.isfinite(logits[index]).nonzero().flatten().tolist()
+    assert surviving == [0]
+
+
+def test_fill_next_token_bitmask_rejects_strided_vocab_dim():
+    """A row of the bitmask is read as one packed bitset, so a bitmask whose vocabulary
+    dimension is not unit-stride must be rejected rather than silently misread."""
+    tokenizer_info, compiled_grammar = _single_token_grammar()
+    buffer_size = _bitmask_buffer_size(tokenizer_info.vocab_size)
+    bitmask = torch.zeros(2, buffer_size * 2, dtype=torch.int32)[:, ::2]
+
+    with pytest.raises(RuntimeError, match="contiguous along the vocabulary dimension"):
+        xgr.GrammarMatcher(compiled_grammar).fill_next_token_bitmask(bitmask, 1)
+
+
 def get_apply_token_bitmask_kernel(impl: str) -> Callable:
     if impl == "cpu":
         from xgrammar.kernels.apply_token_bitmask_inplace_cpu import apply_token_bitmask_inplace_cpu
