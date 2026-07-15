@@ -177,7 +177,23 @@ int32_t* CheckAndGetBitmaskPtr(const DLTensor& token_bitmask, int vocab_size, in
       token_bitmask.device.device_type == kDLROCMHost
   ) << "The provided bitmask's device is not valid: should be CPU";
 
-  return reinterpret_cast<int32_t*>(token_bitmask.data) + index * buffer_size;
+  // The bitmask may be a non-contiguous view, so the row offset must follow strides[0] instead
+  // of assuming a compact layout: ApplyMask32Bits addresses rows the same way, and filling and
+  // applying must agree on where a row lives. Null strides means compact (DLPack). The vocab
+  // dimension must stay unit-stride, since a row is read as one contiguous DynamicBitset.
+  int64_t row_stride = buffer_size;
+  if (token_bitmask.strides != nullptr) {
+    int64_t vocab_stride = token_bitmask.strides[token_bitmask.ndim - 1];
+    XGRAMMAR_CHECK(vocab_stride == 1)
+        << "The provided bitmask must be contiguous along the vocabulary dimension, but got "
+           "stride "
+        << vocab_stride;
+    if (token_bitmask.ndim == 2) {
+      row_stride = token_bitmask.strides[0];
+    }
+  }
+
+  return reinterpret_cast<int32_t*>(token_bitmask.data) + index * row_stride;
 }
 
 void _DebugGetMaskedTokensFromBitmask(
@@ -213,8 +229,12 @@ void ApplyMask32Bits(
       logits->ndim == 2
           ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
           : std::make_pair(1, static_cast<int>(logits->shape[0]));
-  int logits_stride0 = logits->strides[0];
-  int bitmask_stride0 = bitmask.strides[0];
+  // Null strides means compact (DLPack), in which case a row is one shape[-1]-long span.
+  int logits_stride0 =
+      logits->strides != nullptr ? static_cast<int>(logits->strides[0]) : logits_shape.second;
+  int bitmask_stride0 = bitmask.strides != nullptr
+                            ? static_cast<int>(bitmask.strides[0])
+                            : static_cast<int>(bitmask.shape[bitmask.ndim - 1]);
   if (indices.has_value()) {
     for (auto idx : indices.value()) {
       uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
@@ -262,8 +282,12 @@ void ApplyMask16Bits(
       logits->ndim == 2
           ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
           : std::make_pair(1, static_cast<int>(logits->shape[0]));
-  int logits_stride0 = logits->strides[0];
-  int bitmask_stride0 = bitmask.strides[0];
+  // Null strides means compact (DLPack), in which case a row is one shape[-1]-long span.
+  int logits_stride0 =
+      logits->strides != nullptr ? static_cast<int>(logits->strides[0]) : logits_shape.second;
+  int bitmask_stride0 = bitmask.strides != nullptr
+                            ? static_cast<int>(bitmask.strides[0])
+                            : static_cast<int>(bitmask.shape[bitmask.ndim - 1]);
   if (indices.has_value()) {
     for (auto idx : indices.value()) {
       uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
