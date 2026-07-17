@@ -115,8 +115,7 @@ SKIP_EMPTY_REASONING = {
 
 # Templates that render the thought channel in history only alongside tool calls;
 # text-only reasoning outputs cannot be reconstructed via prompt diff, so those
-# scenarios are skipped. (The pre-2026-07-09 gemma-4 templates needed this; the
-# vendored templates render the thought channel for text-only messages too.)
+# scenarios are skipped.
 SKIP_REASONING_WITHOUT_TOOL_CALLS = set()
 
 # Templates that pre-render an empty thought block in the generation prompt when
