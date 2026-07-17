@@ -31,7 +31,7 @@ Homepage = "https://xgrammar.mlc.ai/"
 GitHub = "https://github.com/mlc-ai/xgrammar"
 
 [project.optional-dependencies]
-test = ["huggingface-hub[cli]", "protobuf", "pytest", "sentencepiece", "tiktoken"]
+test = ["huggingface-hub[cli]", "jinja2", "protobuf", "pytest", "sentencepiece", "tiktoken"]
 metal = [
   # transformers >=5.13 breaks `import mlx_lm`.
   "mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'",
