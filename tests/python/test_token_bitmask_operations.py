@@ -131,7 +131,9 @@ def _bitmask_buffer_size(vocab_size: int) -> int:
 
 def _single_token_grammar() -> Tuple[xgr.TokenizerInfo, xgr.CompiledGrammar]:
     """A grammar accepting exactly one token, so the expected mask is unambiguous."""
-    tokenizer_info = xgr.TokenizerInfo([f"t{i}" for i in range(40)] + ["<eos>"], stop_token_ids=[40])
+    tokenizer_info = xgr.TokenizerInfo(
+        [f"t{i}" for i in range(40)] + ["<eos>"], stop_token_ids=[40]
+    )
     compiled_grammar = xgr.GrammarCompiler(tokenizer_info).compile_grammar(
         xgr.Grammar.from_ebnf('root ::= "t0"')
     )
