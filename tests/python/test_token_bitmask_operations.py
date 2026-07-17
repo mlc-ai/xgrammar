@@ -226,6 +226,20 @@ def test_fill_next_token_bitmask_rejects_strided_vocab_dim():
         xgr.GrammarMatcher(compiled_grammar).fill_next_token_bitmask(bitmask, 1)
 
 
+def test_fill_next_token_bitmask_rejects_overlapping_rows():
+    """A row spans buffer_size int32s, so a row stride smaller than that overlaps adjacent rows
+    and a write would run past the buffer. Such a layout must be rejected, not silently corrupt
+    memory."""
+    tokenizer_info, compiled_grammar = _single_token_grammar()
+    buffer_size = _bitmask_buffer_size(tokenizer_info.vocab_size)
+    assert buffer_size >= 2  # otherwise there is no room for an overlapping row stride
+    # Two rows with row stride 1 < buffer_size, vocab dim still unit-stride: rows overlap.
+    bitmask = torch.zeros(buffer_size + 1, dtype=torch.int32).as_strided((2, buffer_size), (1, 1))
+
+    with pytest.raises(RuntimeError, match="rows do not overlap"):
+        xgr.GrammarMatcher(compiled_grammar).fill_next_token_bitmask(bitmask, 1)
+
+
 def get_apply_token_bitmask_kernel(impl: str) -> Callable:
     if impl == "cpu":
         from xgrammar.kernels.apply_token_bitmask_inplace_cpu import apply_token_bitmask_inplace_cpu
