@@ -19,8 +19,8 @@ thought block in the generation prompt when thinking is disabled.
 
 To refresh after an upstream template update::
 
-    huggingface-cli download google/gemma-4-E2B-it chat_template.jinja
-    huggingface-cli download google/gemma-4-31B-it chat_template.jinja
+    hf download google/gemma-4-E2B-it chat_template.jinja
+    hf download google/gemma-4-31B-it chat_template.jinja
 
 then copy the files over the vendored ones and re-run
 ``test_gemma_4_vendored_template_matches_official``.
