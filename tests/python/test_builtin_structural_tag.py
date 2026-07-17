@@ -871,7 +871,7 @@ InstanceCase = Tuple[Dict[str, Any], List[str], bool, List[bool]]
 
 def run_instance_case(format_type: str, case: InstanceCase):
     """Run one instance test case (accept/reject per instance string)."""
-    (input_dict, instances, reasoning, expected_accept_per_instance) = case
+    input_dict, instances, reasoning, expected_accept_per_instance = case
     kwargs = _input_dict_to_get_stag_kwargs(format_type, input_dict)
     kwargs["reasoning"] = reasoning
     stag = get_model_structural_tag(**kwargs)
@@ -1465,6 +1465,34 @@ def test_gemma_4_single_token_delimiter_walk():
     # After a complete call the grammar reaches an accept state: EOS must be allowed.
     matcher.fill_next_token_bitmask(bitmask)
     assert _bitmask_allows(bitmask, vocab.index("<eos>"))
+
+
+def test_gemma_4_auto_tool_call_trigger_dispatches():
+    """gemma_4 "auto" dispatches on <|tool_call> while the thought channel blocks it.
+
+    Regression test: the thought-channel exclude list (which blocks <|tool_call>)
+    was also applied to the triggered free text, where <|tool_call> is the trigger.
+    Excluding the trigger removed the dispatch path, so every auto tool call was
+    rejected.
+    """
+    structural_tag = get_model_structural_tag(
+        "gemma_4", tools=make_tools(["get_weather"]), reasoning=True
+    )
+
+    check_stag_with_instance(
+        structural_tag,
+        "<|channel>thought\nLet me check the weather.\n<channel|>"
+        '<|tool_call>call:get_weather{q:<|"|>Seoul<|"|>}<tool_call|>',
+        True,
+    )
+    # <|tool_call> must stay blocked inside the thought channel.
+    check_stag_with_instance(
+        structural_tag, "<|channel>thought\nmaybe <|tool_call> here\n<channel|>done", False
+    )
+    # In free text, <|tool_call> is only valid as the start of a well-formed call.
+    check_stag_with_instance(
+        structural_tag, "<|channel>thought\nok\n<channel|>text <|tool_call> not a call", False
+    )
 
 
 # ---------- Test: max_whitespace_cnt propagation ----------

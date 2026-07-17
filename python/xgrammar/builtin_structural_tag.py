@@ -1850,9 +1850,13 @@ def get_gemma_4_structural_tag(
     THINK_TAG_END = "<channel|>"
     # <|tool_response> is deliberately not excluded: the model emits it as its halt
     # signal after a tool call, so it must be handled as a stop sequence, not blocked.
-    # <|tool_call> is excluded so the model cannot start a tool call inside the thought
-    # channel, whose content is free-form text and not constrained by the tool-call grammar.
-    GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>", "<|tool_call>"]
+    # The triggered free text must NOT exclude <|tool_call>: it is the trigger, and
+    # excluding it would block the dispatch into the tool-call tags entirely.
+    TEXT_EXCLUDES = ["<|channel>", "<channel|>"]
+    # <|tool_call> is excluded from the thought channel (and from free text when no
+    # tools are available) so the model cannot start a tool call there: that content
+    # is free-form text and not constrained by the tool-call grammar.
+    REASONING_EXCLUDES = TEXT_EXCLUDES + [TOOL_CALL_TRIGGER]
 
     tools = tools or []
     builtin_tools = builtin_tools or []
@@ -1879,11 +1883,11 @@ def get_gemma_4_structural_tag(
             suffix_tag = TriggeredTagsFormat(
                 triggers=[TOOL_CALL_TRIGGER],
                 tags=tags,
-                excludes=_text_excludes(exclude_special_tokens, GEMMA4_EXCLUDE_TOKENS),
+                excludes=_text_excludes(exclude_special_tokens, TEXT_EXCLUDES),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens, GEMMA4_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, REASONING_EXCLUDES)
             )
 
     elif tool_choice == "forced":
@@ -1927,9 +1931,7 @@ def get_gemma_4_structural_tag(
 
     prefix_tag = TagFormat(
         begin=THINK_TAG_BEGIN,
-        content=AnyTextFormat(
-            excludes=_text_excludes(exclude_special_tokens, GEMMA4_EXCLUDE_TOKENS)
-        ),
+        content=AnyTextFormat(excludes=_text_excludes(exclude_special_tokens, REASONING_EXCLUDES)),
         end=THINK_TAG_END,
     )
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
