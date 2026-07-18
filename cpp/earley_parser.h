@@ -307,8 +307,17 @@ class EarleyParser {
   /*! \brief Set by the constructor: whether the grammar has any budgeted TagDispatch rule. */
   bool has_budgets_ = false;
 
+  /*!
+   * \brief enforce_budgets_ && has_budgets_, precombined into the single flag that the byte-level
+   * hot paths (AdvanceFsm / ScanAtomicToken) branch on.
+   */
+  bool budget_checks_enabled_ = false;
+
   /*! \brief Disable budget enforcement (used by the token mask cache generator). */
-  void SetEnforceBudgets(bool enforce) { enforce_budgets_ = enforce; }
+  void SetEnforceBudgets(bool enforce) {
+    enforce_budgets_ = enforce;
+    budget_checks_enabled_ = enforce_budgets_ && has_budgets_;
+  }
 
   /*!
    * \brief Check if the state has been added into the queue.

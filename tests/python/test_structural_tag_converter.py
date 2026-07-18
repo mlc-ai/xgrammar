@@ -3632,8 +3632,8 @@ root ::= ((any_tokens))
 def test_any_tokens_format_max_tokens_enforced():
     """End-to-end: max_tokens=N accepts at most N tokens (each excluding exclude_tokens),
     then the section must end. Each token counts exactly once."""
-    # raw vocab: a=0, b=1, c=2, X=3
-    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c", "X"])
+    vocab = ["a", "b", "c", "X"]  # "X" ends the section; the rest are content tokens
+    tokenizer_info = xgr.TokenizerInfo(vocab)
     compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
     spec = {
         "type": "structural_tag",
@@ -3646,20 +3646,19 @@ def test_any_tokens_format_max_tokens_enforced():
         },
     }
     compiled = compiler.compile_structural_tag(spec)
-    A, B, C, X = 0, 1, 2, 3
 
-    def accepts(tokens):
+    def accepts(*tokens):
         matcher = xgr.GrammarMatcher(compiled)
-        for token_id in tokens:
-            if not matcher.accept_token(token_id):
+        for token in tokens:
+            if not matcher.accept_token(vocab.index(token)):
                 return False
         return matcher.is_completed()
 
-    assert accepts([X])  # 0 budget tokens, then end
-    assert accepts([A, X])  # 1 budget token
-    assert accepts([A, B, X])  # 2 budget tokens (budget full), then end
-    assert not accepts([A, B, C])  # 3rd budget token exceeds max_tokens -> rejected
-    assert not accepts([A, B, C, X])
+    assert accepts("X")  # 0 budget tokens, then end
+    assert accepts("a", "X")  # 1 budget token
+    assert accepts("a", "b", "X")  # 2 budget tokens (budget full), then end
+    assert not accepts("a", "b", "c")  # 3rd budget token exceeds max_tokens -> rejected
+    assert not accepts("a", "b", "c", "X")
 
 
 def test_any_tokens_max_tokens_inside_tag_grammar():
@@ -3683,40 +3682,39 @@ root ::= ((tag))
 def test_any_tokens_max_tokens_inside_tag_enforced():
     """Think-style enforcement: end reachable after 0..N content tokens (early end allowed),
     end forced once the budget is reached, and content cannot exceed N tokens."""
-    # vocab: B=0 (begin), x=1 (content), y=2 (content), E=3 (end)
-    tokenizer_info = xgr.TokenizerInfo(["<b>", "x", "y", "</e>"])
+    vocab = ["<b>", "x", "y", "</e>"]  # begin token, two content tokens, end token
+    tokenizer_info = xgr.TokenizerInfo(vocab)
     compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
     spec = {
         "type": "structural_tag",
         "format": {
             "type": "tag",
-            "begin": {"type": "token", "token": 0},
+            "begin": {"type": "token", "token": vocab.index("<b>")},
             "content": {"type": "any_tokens", "exclude_tokens": [], "max_tokens": 3},
-            "end": {"type": "token", "token": 3},
+            "end": {"type": "token", "token": vocab.index("</e>")},
         },
     }
     compiled = compiler.compile_structural_tag(spec)
-    B, X, E = 0, 1, 3
 
-    def accepts(token_ids):
+    def accepts(*tokens):
         matcher = xgr.GrammarMatcher(compiled)
-        for token_id in token_ids:
-            if not matcher.accept_token(token_id):
+        for token in tokens:
+            if not matcher.accept_token(vocab.index(token)):
                 return False
         return matcher.is_completed()
 
-    assert accepts([B, E])  # 0 content tokens
-    assert accepts([B, X, E])  # 1 content token
-    assert accepts([B, X, X, X, E])  # exactly N=3 content tokens
-    assert not accepts([B, X, X, X, X, E])  # 4 content tokens > N
+    assert accepts("<b>", "</e>")  # 0 content tokens
+    assert accepts("<b>", "x", "</e>")  # 1 content token
+    assert accepts("<b>", "x", "x", "x", "</e>")  # exactly N=3 content tokens
+    assert not accepts("<b>", "x", "x", "x", "x", "</e>")  # 4 content tokens > N
 
     # end is FORCED once budget is reached
     matcher = xgr.GrammarMatcher(compiled)
-    assert matcher.accept_token(B)
+    assert matcher.accept_token(vocab.index("<b>"))
     for _ in range(3):
-        assert matcher.accept_token(X)
-    assert not matcher.accept_token(X)  # 4th content token rejected
-    assert matcher.accept_token(E)  # only the end is allowed
+        assert matcher.accept_token(vocab.index("x"))
+    assert not matcher.accept_token(vocab.index("x"))  # 4th content token rejected
+    assert matcher.accept_token(vocab.index("</e>"))  # only the end is allowed
     assert matcher.is_completed()
 
 

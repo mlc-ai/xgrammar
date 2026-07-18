@@ -543,17 +543,29 @@ def test_tag_dispatch_perf(ebnf, input_str):
 
 
 # ---------- any_text max_tokens / max_chars (region budgets) ----------
+#
+# All budget tests below share this small vocabulary. Tests refer to tokens by their string via
+# the helpers, so token sequences read like the generated text:
+#
+#   "<think>"       the begin tag, as one whole token
+#   "</", "think>"  the end tag "</think>" SPANS TWO TOKENS: a byte-level any_text budget must
+#                   handle multi-token end markers (a token-level any_tokens budget cannot)
+#   "a", "b", "c"   1-character content tokens
+#   "de"            a 2-character content token (for max_chars)
+#   "中"            a 1-character but 3-byte content token (max_chars counts characters, not bytes)
+#   "a</"           a hybrid token: 1 character of content followed by the START of the end tag
+#   "<eos>"         the stop token
 
-# Synthetic vocab where the end tag "</think>" spans MULTIPLE tokens ("</" + "think>"), which is
-# exactly the case a byte-level any_text token budget must handle (AnyTokensFormat cannot, since
-# its excludes are single tokens). "de" is a 2-char token and "中" is a 1-char / 3-byte token,
-# used by the max_chars tests.
-_TB_VOCAB = ["<think>", "a", "b", "</", "think>", "c", "<eos>", "de", "中"]
-_TB_B, _TB_A, _TB_BB, _TB_E1, _TB_E2, _TB_C, _TB_EOS, _TB_DE, _TB_ZH = range(9)
+_BUDGET_VOCAB = ["<think>", "a", "b", "c", "de", "中", "a</", "</", "think>", "<eos>"]
+
+
+def _tok(token: str) -> int:
+    return _BUDGET_VOCAB.index(token)
 
 
 def _think_budget_compiled(max_tokens=None, max_chars=None, *, cache_enabled=True, compiler=None):
-    tokenizer_info = xgr.TokenizerInfo(_TB_VOCAB, stop_token_ids=[_TB_EOS])
+    """Compile ``<think>`` + any_text(excludes=["</think>"], budgets...) + ``</think>``."""
+    tokenizer_info = xgr.TokenizerInfo(_BUDGET_VOCAB, stop_token_ids=[_tok("<eos>")])
     compiler = compiler or xgr.GrammarCompiler(tokenizer_info, cache_enabled=cache_enabled)
     content = {"type": "any_text", "excludes": ["</think>"]}
     if max_tokens is not None:
@@ -567,94 +579,93 @@ def _think_budget_compiled(max_tokens=None, max_chars=None, *, cache_enabled=Tru
     return compiler, compiler.compile_structural_tag(stag)
 
 
-def _accepts(compiled, tokens):
+def _accepts(compiled, *tokens: str) -> bool:
+    """Whether the token string sequence is accepted and completes the grammar."""
     matcher = xgr.GrammarMatcher(compiled)
     for t in tokens:
-        if not matcher.accept_token(t):
+        if not matcher.accept_token(_tok(t)):
             return False
     return matcher.is_completed()
 
 
-def _allowed(compiled, prefix, token):
+def _allowed(compiled, prefix: List[str], token: str) -> bool:
+    """Whether `token` can be accepted right after the given prefix."""
     matcher = xgr.GrammarMatcher(compiled)
     for t in prefix:
-        assert matcher.accept_token(t)
-    return matcher.accept_token(token)
+        assert matcher.accept_token(_tok(t))
+    return matcher.accept_token(_tok(token))
 
 
-def _mask_allows(compiled, prefix, token):
+def _mask_allows(compiled, prefix: List[str], token: str) -> bool:
+    """Whether the token bitmask generated after the given prefix allows `token`."""
     matcher = xgr.GrammarMatcher(compiled)
     for t in prefix:
-        assert matcher.accept_token(t)
-    bitmask = xgr.allocate_token_bitmask(1, len(_TB_VOCAB))
+        assert matcher.accept_token(_tok(t))
+    bitmask = xgr.allocate_token_bitmask(1, len(_BUDGET_VOCAB))
     matcher.fill_next_token_bitmask(bitmask)
-    return token not in _get_masked_tokens_from_bitmask(bitmask, len(_TB_VOCAB))
+    return _tok(token) not in _get_masked_tokens_from_bitmask(bitmask, len(_BUDGET_VOCAB))
 
 
 def test_any_text_max_tokens_forces_end_tag_not_eos():
     """After N content tokens the bounded region is forced to END: only the (multi-token) end tag
     is valid, content is rejected, and EOS is NOT allowed (the end tag is forced, not a stop)."""
     _, cg = _think_budget_compiled(max_tokens=2)
-    B, A, BB, E1, E2, C, EOS = _TB_B, _TB_A, _TB_BB, _TB_E1, _TB_E2, _TB_C, _TB_EOS
-    assert _accepts(cg, [B, A, BB, E1, E2])  # 2 content tokens + end -> complete
-    assert _accepts(cg, [B, A, E1, E2])  # 1 content token
-    assert _accepts(cg, [B, E1, E2])  # 0 content tokens
-    assert not _accepts(cg, [B, A, BB, C, E1, E2])  # 3 content tokens exceeds budget
+    assert _accepts(cg, "<think>", "a", "b", "</", "think>")  # 2 content tokens + end
+    assert _accepts(cg, "<think>", "a", "</", "think>")  # 1 content token
+    assert _accepts(cg, "<think>", "</", "think>")  # 0 content tokens
+    assert not _accepts(cg, "<think>", "a", "b", "c", "</", "think>")  # 3 > budget
     # at the budget, content is rejected but the end tag is allowed; EOS is not (region not done)
-    assert _allowed(cg, [B, A, BB], E1) is True
-    assert _allowed(cg, [B, A, BB], A) is False
-    assert _allowed(cg, [B, A, BB], EOS) is False
+    assert _allowed(cg, ["<think>", "a", "b"], "</") is True
+    assert _allowed(cg, ["<think>", "a", "b"], "a") is False
+    assert _allowed(cg, ["<think>", "a", "b"], "<eos>") is False
     # the token mask agrees with accept_token
-    assert _mask_allows(cg, [B, A, BB], E1)
-    assert not _mask_allows(cg, [B, A, BB], A)
-    assert _mask_allows(cg, [B, A], A)  # budget not exhausted yet
+    assert _mask_allows(cg, ["<think>", "a", "b"], "</")
+    assert not _mask_allows(cg, ["<think>", "a", "b"], "a")
+    assert _mask_allows(cg, ["<think>", "a"], "a")  # budget not exhausted yet
 
 
 def test_any_text_max_tokens_zero_forces_immediate_end():
     _, cg = _think_budget_compiled(max_tokens=0)
-    B, A, E1, E2 = _TB_B, _TB_A, _TB_E1, _TB_E2
-    assert _accepts(cg, [B, E1, E2])
-    assert _allowed(cg, [B], A) is False
-    assert _allowed(cg, [B], E1) is True
+    assert _accepts(cg, "<think>", "</", "think>")
+    assert _allowed(cg, ["<think>"], "a") is False
+    assert _allowed(cg, ["<think>"], "</") is True
 
 
 def test_any_text_max_tokens_rollback_restores_budget():
     """The budget counters live in the parser state history, so rollback restores them."""
     _, cg = _think_budget_compiled(max_tokens=2)
-    B, A, BB, C, E1, E2 = _TB_B, _TB_A, _TB_BB, _TB_C, _TB_E1, _TB_E2
     matcher = xgr.GrammarMatcher(cg)
-    assert matcher.accept_token(B)
-    assert matcher.accept_token(A)
-    assert matcher.accept_token(BB)  # budget full
-    assert not matcher.accept_token(C)  # over budget
+    assert matcher.accept_token(_tok("<think>"))
+    assert matcher.accept_token(_tok("a"))
+    assert matcher.accept_token(_tok("b"))  # budget full
+    assert not matcher.accept_token(_tok("c"))  # over budget
     matcher.rollback(1)  # undo one content token
-    assert matcher.accept_token(C)  # budget restored: one content token allowed again
-    assert not matcher.accept_token(A)  # full again
-    assert matcher.accept_token(E1) and matcher.accept_token(E2)
+    assert matcher.accept_token(_tok("c"))  # budget restored: one content token allowed again
+    assert not matcher.accept_token(_tok("a"))  # full again
+    assert matcher.accept_token(_tok("</")) and matcher.accept_token(_tok("think>"))
     assert matcher.is_completed()
 
 
 def test_any_text_max_tokens_fork_independent():
     _, cg = _think_budget_compiled(max_tokens=2)
-    B, A, BB, C = _TB_B, _TB_A, _TB_BB, _TB_C
     matcher = xgr.GrammarMatcher(cg)
-    assert matcher.accept_token(B) and matcher.accept_token(A)  # 1 content used
+    assert matcher.accept_token(_tok("<think>"))
+    assert matcher.accept_token(_tok("a"))  # 1 of 2 content tokens used
     child = matcher.fork()
-    assert child.accept_token(BB)  # child uses its 2nd
-    assert not child.accept_token(C)  # child exhausted
-    assert matcher.accept_token(BB)  # parent budget independent, still has its 2nd
+    assert child.accept_token(_tok("b"))  # child uses its 2nd
+    assert not child.accept_token(_tok("c"))  # child exhausted
+    assert matcher.accept_token(_tok("b"))  # parent budget independent, still has its 2nd
 
 
 def test_any_text_max_tokens_reset_restores_budget():
     _, cg = _think_budget_compiled(max_tokens=1)
-    B, A, BB, E1, E2 = _TB_B, _TB_A, _TB_BB, _TB_E1, _TB_E2
     matcher = xgr.GrammarMatcher(cg)
-    assert matcher.accept_token(B) and matcher.accept_token(A)
-    assert not matcher.accept_token(BB)
+    assert matcher.accept_token(_tok("<think>")) and matcher.accept_token(_tok("a"))
+    assert not matcher.accept_token(_tok("b"))
     matcher.reset()
-    assert matcher.accept_token(B) and matcher.accept_token(A)
-    assert not matcher.accept_token(BB)
-    assert matcher.accept_token(E1) and matcher.accept_token(E2)
+    assert matcher.accept_token(_tok("<think>")) and matcher.accept_token(_tok("a"))
+    assert not matcher.accept_token(_tok("b"))
+    assert matcher.accept_token(_tok("</")) and matcher.accept_token(_tok("think>"))
     assert matcher.is_completed()
 
 
@@ -662,38 +673,35 @@ def test_any_text_max_tokens_cache_no_staleness():
     """Bounded and unbounded regions with the same excludes share the same (budget-agnostic)
     cached masks; the budget is applied per state at runtime, so sharing is safe in BOTH
     directions."""
-    tokenizer_info = xgr.TokenizerInfo(_TB_VOCAB, stop_token_ids=[_TB_EOS])
-    B, A, BB, C, E1, E2 = _TB_B, _TB_A, _TB_BB, _TB_C, _TB_E1, _TB_E2
+    tokenizer_info = xgr.TokenizerInfo(_BUDGET_VOCAB, stop_token_ids=[_tok("<eos>")])
     # compile the UNBOUNDED variant first to populate the FSM-hash cache
     compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=True)
     _, cg_unbounded = _think_budget_compiled(compiler=compiler)
-    assert _accepts(cg_unbounded, [B, A, BB, C, A, E1, E2])  # 5 content tokens, no budget
+    assert _accepts(cg_unbounded, "<think>", "a", "b", "c", "a", "</", "think>")  # no budget
     # now the bounded variant (same excludes/FSM) must still enforce
     _, cg_bounded = _think_budget_compiled(max_tokens=2, compiler=compiler)
-    assert _allowed(cg_bounded, [B, A, BB], A) is False
-    assert not _accepts(cg_bounded, [B, A, BB, C, E1, E2])
-    assert _accepts(cg_bounded, [B, A, BB, E1, E2])
+    assert _allowed(cg_bounded, ["<think>", "a", "b"], "a") is False
+    assert not _accepts(cg_bounded, "<think>", "a", "b", "c", "</", "think>")
+    assert _accepts(cg_bounded, "<think>", "a", "b", "</", "think>")
     # the reverse direction: a bounded variant cached first must not restrict the unbounded one
     compiler2 = xgr.GrammarCompiler(tokenizer_info, cache_enabled=True)
     _, cg_bounded2 = _think_budget_compiled(max_tokens=1, compiler=compiler2)
-    assert not _accepts(cg_bounded2, [B, A, BB, E1, E2])
+    assert not _accepts(cg_bounded2, "<think>", "a", "b", "</", "think>")
     _, cg_unbounded2 = _think_budget_compiled(compiler=compiler2)
-    assert _accepts(cg_unbounded2, [B, A, BB, C, A, E1, E2])
+    assert _accepts(cg_unbounded2, "<think>", "a", "b", "c", "a", "</", "think>")
 
 
 def test_any_text_unbounded_no_regression():
     _, cg = _think_budget_compiled()
-    B, A, BB, C, E1, E2 = _TB_B, _TB_A, _TB_BB, _TB_C, _TB_E1, _TB_E2
     # without a budget the region accepts arbitrarily many content tokens
-    assert _accepts(cg, [B, A, BB, C, A, BB, C, E1, E2])
+    assert _accepts(cg, "<think>", "a", "b", "c", "a", "b", "c", "</", "think>")
 
 
 def test_any_text_max_tokens_multiple_regions():
     """Each budgeted region instance has its own per-state counter, so one grammar can contain
     multiple bounded regions with independent budgets."""
-    tokenizer_info = xgr.TokenizerInfo(_TB_VOCAB, stop_token_ids=[_TB_EOS])
+    tokenizer_info = xgr.TokenizerInfo(_BUDGET_VOCAB, stop_token_ids=[_tok("<eos>")])
     compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
-    B, A, BB, C, E1, E2 = _TB_B, _TB_A, _TB_BB, _TB_C, _TB_E1, _TB_E2
 
     def think_tag(max_tokens):
         return {
@@ -708,51 +716,70 @@ def test_any_text_max_tokens_multiple_regions():
         "format": {"type": "sequence", "elements": [think_tag(1), think_tag(2)]},
     }
     cg = compiler.compile_structural_tag(stag)
-    assert _accepts(cg, [B, A, E1, E2, B, A, BB, E1, E2])
-    assert not _accepts(cg, [B, A, BB, E1, E2, B, A, E1, E2])  # first region over budget
-    assert not _accepts(cg, [B, A, E1, E2, B, A, BB, C, E1, E2])  # second region over budget
+    region1 = ["<think>", "a", "</", "think>"]  # 1 content token, at its budget
+    region2 = ["<think>", "a", "b", "</", "think>"]  # 2 content tokens, at its budget
+    assert _accepts(cg, *region1, *region2)
+    # first region over ITS budget (2 content tokens), even though region 2 would allow it
+    assert not _accepts(cg, *region2, *region1)
+    # second region over its budget (3 content tokens)
+    assert not _accepts(cg, *region1, "<think>", "a", "b", "c", "</", "think>")
 
 
 def test_any_text_max_chars_enforced():
     """max_chars counts Unicode characters: multi-char tokens consume more budget, and multi-byte
     (UTF-8) tokens consume one unit per character, not per byte."""
     _, cg = _think_budget_compiled(max_chars=3)
-    B, A, DE, ZH, E1, E2 = _TB_B, _TB_A, _TB_DE, _TB_ZH, _TB_E1, _TB_E2
-    assert _accepts(cg, [B, A, A, A, E1, E2])  # 3 chars
-    assert not _accepts(cg, [B, A, A, A, A, E1, E2])  # 4 chars
-    assert _accepts(cg, [B, DE, A, E1, E2])  # 2 + 1 = 3 chars
-    assert not _accepts(cg, [B, DE, DE, E1, E2])  # 4 chars
-    assert _accepts(cg, [B, ZH, ZH, ZH, E1, E2])  # 3 characters (9 bytes)
-    assert not _accepts(cg, [B, ZH, ZH, ZH, ZH, E1, E2])
-    assert _allowed(cg, [B, A, A, A], E1) is True
-    assert _allowed(cg, [B, A, A, A], A) is False
+    end = ["</", "think>"]
+    assert _accepts(cg, "<think>", "a", "b", "c", *end)  # 3 chars
+    assert not _accepts(cg, "<think>", "a", "b", "c", "a", *end)  # 4 chars
+    assert _accepts(cg, "<think>", "de", "a", *end)  # 2 + 1 = 3 chars
+    assert not _accepts(cg, "<think>", "de", "de", *end)  # 4 chars
+    assert _accepts(cg, "<think>", "中", "中", "中", *end)  # 3 characters (9 bytes)
+    assert not _accepts(cg, "<think>", "中", "中", "中", "中", *end)
+    assert _allowed(cg, ["<think>", "a", "b", "c"], "</") is True
+    assert _allowed(cg, ["<think>", "a", "b", "c"], "a") is False
     # the token mask near the boundary is exact: with 1 char remaining, a 1-char token is
     # allowed but a 2-char token is masked out
-    assert _mask_allows(cg, [B, A, A], A)
-    assert not _mask_allows(cg, [B, A, A], DE)
-    assert _mask_allows(cg, [B, A, A], E1)
-    assert not _mask_allows(cg, [B, A, A, A], A)
-    assert _mask_allows(cg, [B, A, A, A], E1)
+    assert _mask_allows(cg, ["<think>", "a", "b"], "a")
+    assert not _mask_allows(cg, ["<think>", "a", "b"], "de")
+    assert _mask_allows(cg, ["<think>", "a", "b"], "</")
+    assert not _mask_allows(cg, ["<think>", "a", "b", "c"], "a")
+    assert _mask_allows(cg, ["<think>", "a", "b", "c"], "</")
+
+
+def test_any_text_max_chars_hybrid_content_plus_end_tag_token():
+    """A token can spend the last budget characters as content and continue into the end tag
+    ("a</" = 1 char of content + the start of "</think>"). With 1 char remaining it must stay
+    allowed, while a pure 2-char content token must be masked out."""
+    _, cg = _think_budget_compiled(max_chars=2)
+    # 1 of 2 chars used, 1 remaining
+    assert _mask_allows(cg, ["<think>", "a"], "a</")
+    assert not _mask_allows(cg, ["<think>", "a"], "de")
+    assert _allowed(cg, ["<think>", "a"], "a</") is True
+    assert _accepts(cg, "<think>", "a", "a</", "think>")
+    # 2 of 2 chars used: even the hybrid token is over budget now
+    assert _mask_allows(cg, ["<think>", "a", "b"], "</")
+    assert not _mask_allows(cg, ["<think>", "a", "b"], "a</")
+    assert _allowed(cg, ["<think>", "a", "b"], "a</") is False
 
 
 def test_any_text_max_tokens_and_max_chars_combined():
     """When both budgets are set, both are enforced."""
     _, cg = _think_budget_compiled(max_tokens=2, max_chars=3)
-    B, A, DE, E1, E2 = _TB_B, _TB_A, _TB_DE, _TB_E1, _TB_E2
-    assert _accepts(cg, [B, DE, A, E1, E2])  # 2 tokens, 3 chars
-    assert not _accepts(cg, [B, A, A, A, E1, E2])  # 3 tokens > max_tokens
-    assert not _accepts(cg, [B, DE, DE, E1, E2])  # 4 chars > max_chars
+    end = ["</", "think>"]
+    assert _accepts(cg, "<think>", "de", "a", *end)  # 2 tokens, 3 chars
+    assert not _accepts(cg, "<think>", "a", "b", "c", *end)  # 3 tokens > max_tokens
+    assert not _accepts(cg, "<think>", "de", "de", *end)  # 4 chars > max_chars
 
 
 def test_any_text_budget_compiled_grammar_serialization_roundtrip():
     """The budget is part of the grammar, so serialized compiled grammars keep enforcing it."""
-    tokenizer_info = xgr.TokenizerInfo(_TB_VOCAB, stop_token_ids=[_TB_EOS])
+    tokenizer_info = xgr.TokenizerInfo(_BUDGET_VOCAB, stop_token_ids=[_tok("<eos>")])
     compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
     _, cg = _think_budget_compiled(max_tokens=2, compiler=compiler)
-    B, A, BB, C, E1, E2 = _TB_B, _TB_A, _TB_BB, _TB_C, _TB_E1, _TB_E2
     recovered = xgr.CompiledGrammar.deserialize_json(cg.serialize_json(), tokenizer_info)
-    assert _accepts(recovered, [B, A, BB, E1, E2])
-    assert not _accepts(recovered, [B, A, BB, C, E1, E2])
+    assert _accepts(recovered, "<think>", "a", "b", "</", "think>")
+    assert not _accepts(recovered, "<think>", "a", "b", "c", "</", "think>")
 
 
 if __name__ == "__main__":

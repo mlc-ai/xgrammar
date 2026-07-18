@@ -297,6 +297,7 @@ EarleyParser::EarleyParser(
 )
     : grammar_(grammar) {
   has_budgets_ = !grammar_->per_rule_budget_max_tokens.empty();
+  budget_checks_enabled_ = enforce_budgets_ && has_budgets_;
   if (!grammar->optimized) {
     XGRAMMAR_LOG(FATAL) << "The grammar is not optimized. Please optimize the grammar before using "
                            "the Earley parser.";
@@ -888,7 +889,7 @@ void EarleyParser::AdvanceFsm(const ParserState& state, const uint8_t ch) {
   // state cannot consume any more input bytes; the hypothesis either completes here (already
   // reported completable at an end node, so the parent's continuation stays scanable) or dies.
   int32_t budget_char_delta = 0;
-  if (enforce_budgets_ && has_budgets_) {
+  if (budget_checks_enabled_) {
     const auto [max_tokens, max_chars] = GetRuleBudget(state.rule_id);
     if (max_tokens >= 0 && state.repeat_count >= max_tokens) {
       return;
@@ -926,7 +927,7 @@ void EarleyParser::ScanAtomicToken(const ParserState& state, int32_t token_id) {
   XGRAMMAR_DCHECK(grammar_->per_rule_fsms[state.rule_id].has_value());
   // Budgeted TagDispatch rules only have CharRange edges today; this guard keeps the budget
   // semantics if token edges are ever combined with budgets.
-  if (enforce_budgets_ && has_budgets_) {
+  if (budget_checks_enabled_) {
     const auto [max_tokens, max_chars] = GetRuleBudget(state.rule_id);
     if ((max_tokens >= 0 && state.repeat_count >= max_tokens) ||
         (max_chars >= 0 && state.budget_char_count >= max_chars)) {
@@ -987,7 +988,7 @@ bool EarleyParser::AdvanceAtomicToken(int32_t token_id, bool debug_print) {
 }
 
 void EarleyParser::AdvanceTokenBoundary(int32_t rows_pushed) {
-  if (!enforce_budgets_ || !has_budgets_) {
+  if (!budget_checks_enabled_) {
     return;
   }
   const int32_t latest = scanable_state_history_.size() - 1;
