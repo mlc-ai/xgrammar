@@ -460,11 +460,11 @@ def test_gemma_4_vendored_template_matches_official(variant):
         for messages in ([USER_MSG], [USER_MSG, assistant_tool_calls], [USER_MSG, assistant_text]):
             for tools in (None, [TOOL_A], [TOOL_A, TOOL_B]):
                 for add_generation_prompt in (True, False):
-                    kwargs = dict(
-                        tools=tools,
-                        add_generation_prompt=add_generation_prompt,
-                        enable_thinking=enable_thinking,
-                    )
+                    kwargs = {
+                        "tools": tools,
+                        "add_generation_prompt": add_generation_prompt,
+                        "enable_thinking": enable_thinking,
+                    }
                     official = tokenizer.apply_chat_template(messages, tokenize=False, **kwargs)
                     vendored = renderer.apply_chat_template(messages, tokenize=False, **kwargs)
                     assert official == vendored, (
