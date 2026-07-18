@@ -7,6 +7,7 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <array>
 #include <bitset>
 #include <cstdint>
 #include <map>
@@ -2040,6 +2041,13 @@ class GrammarFSMHasherImpl {
   std::vector<bool> has_inward_edges_;
 
   /*!
+   * \brief The worklist of fsms that are ready to be hashed: fsms whose references are all
+   * hashed (except possibly a self-recursion). Maintained incrementally so that the main hashing
+   * loop is O(V + E) instead of rescanning all rules after each hashed fsm.
+   */
+  std::queue<int32_t> ready_queue_;
+
+  /*!
    * \brief Get the hash value of a fsm, with a given grammar.
    */
   uint64_t HashFsm(int fsm_index);
@@ -2056,11 +2064,22 @@ class GrammarFSMHasherImpl {
   void HashSimpleCycle(const std::vector<int32_t>& simple_cycle);
 
   /*!
-   * \brief Find a simple fsm that can be hashed. If it can't, it will
-   * call FindSimpleCycle() and try to simplify the graph, and then try to
-   * find a simple fsm again.
+   * \brief Check if a fsm is ready to be hashed: it is not hashed yet, and it references no
+   * unhashed fsms other than itself.
    */
-  int32_t FindSimpleFsmCanBeHashed();
+  bool IsReadyToHash(int32_t fsm_index) const {
+    if (visited_[fsm_index]) {
+      return false;
+    }
+    const auto& referees = ref_graph_from_referrer_to_referee_[fsm_index];
+    return referees.empty() || (referees.size() == 1 && referees[0] == fsm_index);
+  }
+
+  /*!
+   * \brief Remove the hashed fsm from the reference graph, and push the referrers that become
+   * ready to hash into the ready queue.
+   */
+  void RemoveHashedFsmFromRefGraph(int32_t fsm_index);
 
   std::pair<bool, uint64_t> IsPartialHashable(int fsm_index);
 };
@@ -2068,6 +2087,9 @@ class GrammarFSMHasherImpl {
 bool GrammarFSMHasherImpl::FindSimpleCycle() {
   // Try to find a simple cycle.
   std::vector<bool> not_simple_cycle = visited_;
+  // Allocated once and cleaned up after each walk, to avoid an O(num_rules) allocation per
+  // outer iteration.
+  std::vector<bool> in_stack(ref_graph_from_referee_to_referrer_.size(), false);
   for (size_t i = 0; i < ref_graph_from_referee_to_referrer_.size(); i++) {
     if (not_simple_cycle[i]) {
       continue;
@@ -2075,10 +2097,11 @@ bool GrammarFSMHasherImpl::FindSimpleCycle() {
     // Not a simple cycle if it has more than one referee.
     std::stack<int32_t> dfs_stack;
     std::vector<int32_t> simple_cycle;
-    auto in_stack = std::vector<bool>(ref_graph_from_referee_to_referrer_.size(), false);
+    std::vector<int32_t> walked_states;
     dfs_stack.push(static_cast<int32_t>(i));
     int32_t current_fsm_index = i;
     in_stack[current_fsm_index] = true;
+    walked_states.push_back(current_fsm_index);
     while ((ref_graph_from_referrer_to_referee_[current_fsm_index].size() == 1) &&
            !not_simple_cycle[current_fsm_index]) {
       XGRAMMAR_CHECK(current_fsm_index != ref_graph_from_referrer_to_referee_[current_fsm_index][0])
@@ -2096,11 +2119,15 @@ bool GrammarFSMHasherImpl::FindSimpleCycle() {
       } else {
         dfs_stack.push(current_fsm_index);
         in_stack[current_fsm_index] = true;
+        walked_states.push_back(current_fsm_index);
       }
     }
     if (!simple_cycle.empty()) {
       HashSimpleCycle(simple_cycle);
       return true;
+    }
+    for (auto state : walked_states) {
+      in_stack[state] = false;
     }
   }
   return false;
@@ -2130,37 +2157,21 @@ void GrammarFSMHasherImpl::HashSimpleCycle(const std::vector<int32_t>& simple_cy
 
   for (int i = 0; i < static_cast<int>(simple_cycle.size()); i++) {
     grammar_->ImplPtr()->per_rule_fsm_hashes[simple_cycle[i]] = local_cycle_hash[i];
-    for (const auto& referer : ref_graph_from_referee_to_referrer_[simple_cycle[i]]) {
-      ref_graph_from_referrer_to_referee_[referer].erase(std::find_if(
-          ref_graph_from_referrer_to_referee_[referer].begin(),
-          ref_graph_from_referrer_to_referee_[referer].end(),
-          [&](int32_t rule_id) { return rule_id == simple_cycle[i]; }
-      ));
-    }
+    RemoveHashedFsmFromRefGraph(simple_cycle[i]);
   }
 }
 
-int32_t GrammarFSMHasherImpl::FindSimpleFsmCanBeHashed() {
-  bool possible_to_find = true;
-  while (possible_to_find) {
-    possible_to_find = false;
-    for (size_t i = 0; i < ref_graph_from_referrer_to_referee_.size(); i++) {
-      if (visited_[i]) {
-        continue;
-      }
-      if (ref_graph_from_referrer_to_referee_[i].empty()) {
-        return i;
-      }
-      if (ref_graph_from_referrer_to_referee_[i].size() == 1 &&
-          ref_graph_from_referrer_to_referee_[i][0] == static_cast<int32_t>(i)) {
-        // Self-recursion fsm.
-        return static_cast<int32_t>(i);
-      }
+void GrammarFSMHasherImpl::RemoveHashedFsmFromRefGraph(int32_t fsm_index) {
+  for (const auto& referer : ref_graph_from_referee_to_referrer_[fsm_index]) {
+    auto& referees = ref_graph_from_referrer_to_referee_[referer];
+    auto it = std::find(referees.begin(), referees.end(), fsm_index);
+    if (it != referees.end()) {
+      referees.erase(it);
     }
-    // Try to find a simple cycle. We must ensure there are not self-recursion cycles.
-    possible_to_find = FindSimpleCycle();
+    if (IsReadyToHash(referer)) {
+      ready_queue_.push(referer);
+    }
   }
-  return -1;
 }
 
 void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
@@ -2209,24 +2220,34 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
     }
   }
 
-  // Find the fsm which can be hashed: a terminal fsm, or a self-recursion fsm.
-  auto current_operating_index = FindSimpleFsmCanBeHashed();
-  while (current_operating_index != -1) {
+  // Hash the fsms which can be hashed: terminal fsms, or self-recursion fsms. The ready queue
+  // is seeded with all currently hashable fsms and maintained incrementally as fsms are hashed,
+  // so the whole loop is O(V + E) over the reference graph. When no fsm is ready, try to break
+  // a simple cycle in the reference graph and continue.
+  ready_queue_ = {};
+  for (int i = 0; i < (*grammar)->NumRules(); i++) {
+    if (IsReadyToHash(i)) {
+      ready_queue_.push(i);
+    }
+  }
+  while (true) {
+    if (ready_queue_.empty()) {
+      // Try to find a simple cycle. We must ensure there are not self-recursion cycles.
+      if (!FindSimpleCycle()) {
+        break;
+      }
+      continue;
+    }
+    int32_t current_operating_index = ready_queue_.front();
+    ready_queue_.pop();
+    // Skip stale entries: an fsm may be pushed multiple times before it is processed.
+    if (!IsReadyToHash(current_operating_index)) {
+      continue;
+    }
     visited_[current_operating_index] = true;
-
     grammar->ImplPtr()->per_rule_fsm_hashes[current_operating_index] =
         HashFsm(current_operating_index);
-    // Remove the fsm from the reference graph.
-    for (const auto& referer : ref_graph_from_referee_to_referrer_[current_operating_index]) {
-      ref_graph_from_referrer_to_referee_[referer].erase(std::find_if(
-          ref_graph_from_referrer_to_referee_[referer].begin(),
-          ref_graph_from_referrer_to_referee_[referer].end(),
-          [&](int32_t rule_id) { return rule_id == current_operating_index; }
-      ));
-    }
-
-    // Find if there are more fsms can be hashed.
-    current_operating_index = FindSimpleFsmCanBeHashed();
+    RemoveHashedFsmFromRefGraph(current_operating_index);
   }
 
   // Try to hash the remaining fsms: they must contain something can't be hashed, like repetition.
@@ -2568,17 +2589,44 @@ class RuleLevelCache::Impl {
 
   void ClearCache();
 
-  friend size_t MemorySize(const Impl* impl) { return impl->current_cache_memory_size_; }
+  friend size_t MemorySize(const Impl* impl) {
+    int64_t total = 0;
+    for (const auto& shard : impl->shards_) {
+      total += shard.current_cache_memory_size;
+    }
+    return total;
+  }
 
   size_t GetMaxSize() const { return max_cache_memory_size_; }
 
  private:
-  // The cache map: fsm_hash -> fsm_new_node_id -> AdaptiveTokenMask
-  std::mutex mutex_;
+  /*!
+   * \brief The cache is sharded to reduce lock contention: the token mask cache generation
+   * queries and inserts from all compilation threads, and a single global mutex would serialize
+   * them (large grammars issue millions of cache operations).
+   */
+  static constexpr size_t kNumShards = 16;
+
+  struct Shard {
+    std::mutex mutex;
+    int64_t current_cache_memory_size = 0;
+    // The cache map: (fsm_hash, node_id, ...) -> index in cache_list
+    List<NodeType> cache_list;
+    std::unordered_map<NodeKey, int> cache;
+  };
+
+  Shard& GetShard(const NodeKey& key) {
+    return shards_[HashCombine(std::get<0>(key), std::get<1>(key)) % kNumShards];
+  }
+
+  /*! \brief The memory budget of one shard. Eviction is performed per shard. */
+  size_t ShardMaxSize() const {
+    return max_cache_memory_size_ == kUnlimitedSize ? kUnlimitedSize
+                                                    : max_cache_memory_size_ / kNumShards;
+  }
+
   const size_t max_cache_memory_size_;
-  int64_t current_cache_memory_size_ = 0;
-  List<NodeType> cache_list_;
-  std::unordered_map<NodeKey, int> cache_;
+  std::array<Shard, kNumShards> shards_;
 };
 
 std::optional<AdaptiveTokenMask> RuleLevelCache::GetCache(
@@ -2621,16 +2669,17 @@ std::optional<AdaptiveTokenMask> RuleLevelCache::Impl::GetCache(
     const int32_t edge_cnt
 ) {
   // Find in the cache.
-  std::lock_guard<std::mutex> lock(mutex_);
   NodeKey key = std::make_tuple(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt);
-  auto it = cache_.find(key);
-  if (it == cache_.end()) {
+  Shard& shard = GetShard(key);
+  std::lock_guard<std::mutex> lock(shard.mutex);
+  auto it = shard.cache.find(key);
+  if (it == shard.cache.end()) {
     return std::nullopt;
   }
 
   // Move the node to the back of the list.
-  cache_list_.MoveBack(it->second);
-  return List<NodeType>::iterator(it->second, cache_list_)->second;
+  shard.cache_list.MoveBack(it->second);
+  return List<NodeType>::iterator(it->second, shard.cache_list)->second;
 }
 
 bool RuleLevelCache::Impl::AddCache(
@@ -2651,38 +2700,40 @@ bool RuleLevelCache::Impl::AddCache(
     AdaptiveTokenMask&& token_mask
 ) {
   // Check if we can add to the cache.
-  std::lock_guard<std::mutex> lock(mutex_);
   NodeKey key = std::make_tuple(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt);
-  if (max_cache_memory_size_ != kUnlimitedSize && MemorySize(token_mask) > max_cache_memory_size_) {
+  Shard& shard = GetShard(key);
+  const size_t shard_max_size = ShardMaxSize();
+  std::lock_guard<std::mutex> lock(shard.mutex);
+  if (shard_max_size != kUnlimitedSize && MemorySize(token_mask) > shard_max_size) {
     // The token mask is too large to be cached.
     return false;
   }
-  if (cache_.find(key) != cache_.end()) {
+  if (shard.cache.find(key) != shard.cache.end()) {
     // Already exists.
     return false;
   }
 
   // Evict old entries if needed.
-  if (max_cache_memory_size_ != kUnlimitedSize) {
+  if (shard_max_size != kUnlimitedSize) {
     size_t new_item_size = MemorySize(token_mask);
-    while ((current_cache_memory_size_) >
-           static_cast<int64_t>(max_cache_memory_size_ - new_item_size)) {
-      auto oldest_it = cache_list_.begin();
-      if (oldest_it == cache_list_.end()) {
+    while ((shard.current_cache_memory_size) > static_cast<int64_t>(shard_max_size - new_item_size)
+    ) {
+      auto oldest_it = shard.cache_list.begin();
+      if (oldest_it == shard.cache_list.end()) {
         // This should not happen if the size of the new item is smaller than
-        // max_cache_memory_size_, but this is a safeguard.
+        // the shard budget, but this is a safeguard.
         break;
       }
-      current_cache_memory_size_ -= MemorySize(oldest_it->second);
-      cache_.erase(oldest_it->first);
-      cache_list_.Erase(oldest_it);
+      shard.current_cache_memory_size -= MemorySize(oldest_it->second);
+      shard.cache.erase(oldest_it->first);
+      shard.cache_list.Erase(oldest_it);
     }
   }
 
   // Add to the cache.
-  auto new_it = cache_list_.PushBack(NodeType(key, std::move(token_mask)));
-  current_cache_memory_size_ += MemorySize(new_it->second);
-  cache_[key] = new_it.Index();
+  auto new_it = shard.cache_list.PushBack(NodeType(key, std::move(token_mask)));
+  shard.current_cache_memory_size += MemorySize(new_it->second);
+  shard.cache[key] = new_it.Index();
   return true;
 }
 
@@ -2690,10 +2741,12 @@ RuleLevelCache::RuleLevelCache(size_t max_cache_memory_size)
     : pimpl_(std::make_shared<Impl>(max_cache_memory_size)) {}
 
 void RuleLevelCache::Impl::ClearCache() {
-  std::lock_guard<std::mutex> lock(mutex_);
-  cache_list_.Clear();
-  cache_.clear();
-  current_cache_memory_size_ = 0;
+  for (auto& shard : shards_) {
+    std::lock_guard<std::mutex> lock(shard.mutex);
+    shard.cache_list.Clear();
+    shard.cache.clear();
+    shard.current_cache_memory_size = 0;
+  }
 }
 
 size_t MemorySize(const RuleLevelCache& manager) { return MemorySize(manager.ImplPtr()); }
