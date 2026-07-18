@@ -18,7 +18,9 @@ dependencies = [
   "apache-tvm-ffi>=0.1.9",
   "pydantic",
   "torch>=1.10.0",
-  "transformers>=4.38.0",
+  # transformers v5 breaks tokenizer loading for several models (e.g. internlm2_5,
+  # aya-23, deepseek-coder-v1.5), which breaks TokenizerInfo.from_huggingface.
+  "transformers>=4.38.0,<5",
   "triton; platform_system == 'Linux' and platform_machine == 'x86_64'",
   "numpy",
   "typing-extensions>=4.9.0",

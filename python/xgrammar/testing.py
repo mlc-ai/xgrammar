@@ -4,7 +4,7 @@ The APIs in this module are used for testing and debugging and are prone to
 change. Don't use them in production."""
 
 import time
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
 import torch
 from pydantic import BaseModel
@@ -24,6 +24,7 @@ def _json_schema_to_ebnf(
     separators: Optional[Tuple[str, str]] = None,
     max_whitespace_cnt: Optional[int] = None,
     strict_mode: bool = True,
+    json_format: Literal["json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml"] = "json",
     any_order: bool = False,
 ) -> str:
     """Convert JSON schema string to BNF grammar string. For test purposes.
@@ -55,6 +56,11 @@ def _json_schema_to_ebnf(
         If specified, it will limit the number of whitespace characters to at most max_whitespace_cnt.
         It should be a positive integer.
 
+    json_format : str, default: "json"
+        The root format of the generated grammar. One of "json", "qwen_xml", "minimax_xml",
+        "deepseek_xml", "glm_xml". Formats other than "json" generate an XML-style root object
+        for tool calling, while the inner values remain JSON-style.
+
     Returns
     -------
     bnf_string : str
@@ -62,7 +68,14 @@ def _json_schema_to_ebnf(
     """
     schema_str = _convert_schema_to_str(schema)
     return _core.testing._json_schema_to_ebnf(
-        schema_str, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+        schema_str,
+        any_whitespace,
+        indent,
+        separators,
+        strict_mode,
+        max_whitespace_cnt,
+        json_format,
+        any_order,
     )
 
 
@@ -351,38 +364,6 @@ def _print_grammar_fsms(grammar: Grammar) -> str:
     """Print the FSMs of the grammar. Now the fsms are initialized in the grammar compilation
     process."""
     return _core.testing._print_grammar_fsms(grammar._handle)
-
-
-def _qwen_xml_tool_calling_to_ebnf(
-    schema: Union[str, Type[BaseModel], Dict[str, Any]], any_order: bool = False
-) -> str:
-    """Convert Qwen XML tool calling schema to EBNF."""
-    schema_str = _convert_schema_to_str(schema)
-    return _core.testing._qwen_xml_tool_calling_to_ebnf(schema_str, any_order)
-
-
-def _minimax_xml_tool_calling_to_ebnf(
-    schema: Union[str, Type[BaseModel], Dict[str, Any]], any_order: bool = False
-) -> str:
-    """Convert MiniMax XML tool calling schema to EBNF."""
-    schema_str = _convert_schema_to_str(schema)
-    return _core.testing._minimax_xml_tool_calling_to_ebnf(schema_str, any_order)
-
-
-def _deepseek_xml_tool_calling_to_ebnf(
-    schema: Union[str, Type[BaseModel], Dict[str, Any]], any_order: bool = False
-) -> str:
-    """Convert DeepSeek XML tool calling schema to EBNF."""
-    schema_str = _convert_schema_to_str(schema)
-    return _core.testing._deepseek_xml_tool_calling_to_ebnf(schema_str, any_order)
-
-
-def _glm_xml_tool_calling_to_ebnf(
-    schema: Union[str, Type[BaseModel], Dict[str, Any]], any_order: bool = False
-) -> str:
-    """Convert GLM XML tool calling schema to EBNF."""
-    schema_str = _convert_schema_to_str(schema)
-    return _core.testing._glm_xml_tool_calling_to_ebnf(schema_str, any_order)
 
 
 def _traverse_draft_tree(
