@@ -1434,7 +1434,7 @@ FSMWithStartEnd GrammarFSMBuilderImpl::Token(const GrammarExpr& expr) {
   std::vector<int32_t> token_ids(expr.begin(), expr.end());
   FSM fsm(2);
   fsm.AddTokenEdge(0, 1, token_ids);
-  return FSMWithStartEnd(fsm, 0, {false, true});
+  return FSMWithStartEnd(fsm, 0, {1});
 }
 
 FSMWithStartEnd GrammarFSMBuilderImpl::ExcludeToken(const GrammarExpr& expr) {
@@ -1442,7 +1442,7 @@ FSMWithStartEnd GrammarFSMBuilderImpl::ExcludeToken(const GrammarExpr& expr) {
   std::vector<int32_t> token_ids(expr.begin(), expr.end());
   FSM fsm(2);
   fsm.AddExcludeTokenEdge(0, 1, token_ids);
-  return FSMWithStartEnd(fsm, 0, {false, true});
+  return FSMWithStartEnd(fsm, 0, {1});
 }
 
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TokenTagDispatch(
@@ -1452,13 +1452,13 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TokenTagDispatch(
   bool loop = ttd.loop_after_dispatch;
   int num_states = 1 + num_triggers + (loop ? 0 : 1);
   FSM fsm(num_states);
-  std::vector<bool> ends(num_states, false);
+  std::vector<int32_t> ends;
   int start = 0;
-  ends[start] = true;
+  ends.push_back(start);
   int end_state = -1;
   if (!loop) {
     end_state = num_states - 1;
-    ends[end_state] = true;
+    ends.push_back(end_state);
   }
   std::vector<int32_t> self_loop_exclude;
   for (const auto& [token_id, rule_id] : ttd.trigger_rule_pairs) {
@@ -1619,18 +1619,12 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatch(
   }
   auto trie_fsm = trie_result->GetFsm();
   auto start = trie_result->GetStart();
-  std::unordered_set<int> old_ends;
-  std::vector<bool> ends(trie_fsm.NumStates(), false);
-  for (int end = 0; end < trie_result->NumStates(); end++) {
-    if (trie_result->IsEndState(end)) {
-      old_ends.insert(end);
-    }
-  }
 
-  // The final end states are all but old_ends.
+  // The final end states are all but the trie's original end states.
+  std::vector<int32_t> ends;
   for (int i = 0; i < trie_fsm.NumStates(); i++) {
-    if (old_ends.count(i) == 0) {
-      ends[i] = true;
+    if (!trie_result->IsEndState(i)) {
+      ends.push_back(i);
     }
   }
 
@@ -1641,12 +1635,12 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatch(
       next_state = start;
     } else {
       next_state = trie_fsm.AddState();
-      ends.push_back(true);
+      ends.push_back(next_state);
     }
     trie_fsm.AddRuleEdge(end_states[i], next_state, string_trigger_rules[i].second);
   }
 
-  return FSMWithStartEnd(trie_fsm, start, ends);
+  return FSMWithStartEnd(trie_fsm, start, std::move(ends));
 }
 
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TagDispatch(

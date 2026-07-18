@@ -597,10 +597,10 @@ class FSMWithStartEndBase {
   // For serialization only
   FSMWithStartEndBase() = default;
 
-  FSMWithStartEndBase(
-      const FSMType& fsm, int start, const std::vector<bool>& ends, bool is_dfa = false
-  )
-      : fsm_(fsm), start_(start), ends_(ends), is_dfa_(is_dfa) {}
+  FSMWithStartEndBase(const FSMType& fsm, int start, std::vector<int32_t> ends, bool is_dfa = false)
+      : fsm_(fsm), start_(start), ends_(std::move(ends)), is_dfa_(is_dfa) {
+    NormalizeEnds();
+  }
 
   /****************** Member Accessors and Mutators ******************/
 
@@ -610,15 +610,20 @@ class FSMWithStartEndBase {
   /*! \brief Returns the start state of the FSM. */
   int GetStart() const { return start_; }
 
-  /*! \brief Returns the end states of the FSM. */
-  const std::vector<bool>& GetEnds() const { return ends_; }
+  /*!
+   * \brief Returns the end states of the FSM as a sorted, deduplicated list of state ids.
+   * \note End states are stored sparsely because an FSM view over a large shared FSM (e.g. the
+   * per-rule FSMs over the complete FSM of a grammar) usually has only a few end states, while
+   * the state id space can be very large.
+   */
+  const std::vector<int32_t>& GetEnds() const { return ends_; }
 
   /*!
    * \brief Checks if a given state is an end/accepting state.
    * \param state The state to check.
    * \return True if the state is an end state, false otherwise.
    */
-  bool IsEndState(int state) const { return ends_[state]; }
+  bool IsEndState(int state) const { return std::binary_search(ends_.begin(), ends_.end(), state); }
 
   /*! \brief Check if a state is scanable.
    *  \param state The state to check.
@@ -662,23 +667,26 @@ class FSMWithStartEndBase {
    */
   void AddEndState(int state) {
     XGRAMMAR_DCHECK(state < NumStates());
-    ends_[state] = true;
+    auto it = std::lower_bound(ends_.begin(), ends_.end(), state);
+    if (it == ends_.end() || *it != state) {
+      ends_.insert(it, state);
+    }
   }
 
   /*!
    * \brief Adds a new state to the FSM and marks it as non-end.
    * \return The index of the newly added state.
    */
-  int AddState() {
-    ends_.push_back(false);
-    return fsm_.AddState();
-  }
+  int AddState() { return fsm_.AddState(); }
 
   /*!
    * \brief Sets the end states of the FSM.
-   * \param ends The new end states.
+   * \param ends The new end states, as a list of state ids. Need not be sorted or deduplicated.
    */
-  void SetEndStates(const std::vector<bool>& ends) { ends_ = ends; }
+  void SetEndStates(std::vector<int32_t> ends) {
+    ends_ = std::move(ends);
+    NormalizeEnds();
+  }
 
   /*! \brief Returns the total number of states in the FSM. */
   int NumStates() const { return fsm_.NumStates(); }
@@ -710,13 +718,23 @@ class FSMWithStartEndBase {
   bool IsLeaf() const;
 
  protected:
+  /*! \brief Sort and deduplicate the end states to maintain the sorted invariant. */
+  void NormalizeEnds() {
+    std::sort(ends_.begin(), ends_.end());
+    ends_.erase(std::unique(ends_.begin(), ends_.end()), ends_.end());
+  }
+
   /*! \brief The underlying finite state machine. */
   FSMType fsm_;
   /*! \brief The start state of the FSM. */
   int start_;
 
-  /*! \brief The set of accepting/end states. */
-  std::vector<bool> ends_;
+  /*!
+   * \brief The set of accepting/end states, stored as a sorted, deduplicated list of state ids.
+   * \note Stored sparsely (rather than as a bitvector over all states) because FSM views over a
+   * large shared FSM usually have only a few end states, while the state id space can be huge.
+   */
+  std::vector<int32_t> ends_;
 
  protected:
   /*! \brief Whether this FSM is a deterministic finite automaton. */
@@ -893,8 +911,9 @@ class CompactFSMWithStartEnd : public FSMWithStartEndBase<CompactFSM> {
   // For serialization only
   CompactFSMWithStartEnd() = default;
 
-  explicit CompactFSMWithStartEnd(const CompactFSM& fsm, int start, const std::vector<bool>& ends)
-      : FSMWithStartEndBase<CompactFSM>(fsm, start, ends), edge_num_(fsm.GetNumEdges()) {}
+  explicit CompactFSMWithStartEnd(const CompactFSM& fsm, int start, std::vector<int32_t> ends)
+      : FSMWithStartEndBase<CompactFSM>(fsm, start, std::move(ends)),
+        edge_num_(fsm.GetNumEdges()) {}
 
   using FSMWithStartEndBase<CompactFSM>::FSMWithStartEndBase;
 
@@ -1003,7 +1022,7 @@ inline bool FSMWithStartEndBase<FSMType>::AcceptString(const std::string& str) c
     start_states = result_states;
   }
   return std::any_of(start_states.begin(), start_states.end(), [&](int state) {
-    return ends_[state];
+    return IsEndState(state);
   });
 }
 
