@@ -279,13 +279,10 @@ Matches arbitrary text.
 When `any_text` appears inside a string-level `tag`, the enclosing end string is automatically
 treated as a stop condition.
 
-`max_tokens` (default `null`) caps how many **whole tokens** this region may consume. When set to
-a non-negative integer `N`, at most `N` tokens are matched and then the region is forced to end —
-i.e. its enclosing end tag (the next element after the region) becomes the only valid
-continuation, **not** the EOS/stop token. Because the limit is enforced at the token level by the
-matcher, it composes with **multi-token / multi-character `excludes`** (e.g. a `</think>` end
-marker that spans several tokens), which a token-level `any_tokens` budget cannot express. This
-gives, for example, a token budget on a reasoning/think section:
+`max_tokens` (default `null`) caps how many **whole tokens** the region may consume. Once the
+budget is reached, the region is forced to end: its enclosing end tag becomes the only valid
+continuation. Unlike `any_tokens`, it also works when the end marker spans multiple tokens. For
+example, a token budget on a reasoning/think section:
 
 ```json
 {
@@ -296,12 +293,8 @@ gives, for example, a token budget on a reasoning/think section:
 }
 ```
 
-`max_chars` (default `null`) similarly caps how many **Unicode characters** the region may
-consume. Both budgets may be combined; each is then enforced independently.
-
-The token budget is atomic at token granularity (the last admitted token is never split). The
-budgets are tracked per region instance, so a grammar may contain multiple bounded regions with
-independent budgets.
+`max_chars` (default `null`) similarly caps how many **Unicode characters** (codepoints, not
+bytes) the region may consume. Both budgets may be combined; each is then enforced independently.
 
 ### Composition Formats
 
