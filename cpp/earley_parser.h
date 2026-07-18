@@ -276,6 +276,38 @@ class EarleyParser {
   /*! \brief Check if the stop token is accepted. */
   bool stop_token_is_accepted_ = false;
 
+  enum FsmStateFlag : uint8_t {
+    kFsmStateInitialized = 1 << 0,
+    kFsmStateScanable = 1 << 1,
+    kFsmStateNonTerminal = 1 << 2,
+    kFsmStateEnd = 1 << 3,
+    kFsmStateHasEdges = 1 << 4,
+  };
+
+  /*! \brief Lazily-computed FSM state properties, indexed by rule id and state id. */
+  std::vector<std::vector<uint8_t>> fsm_state_flags_cache_;
+
+  /*! \brief Whether each rule can match the empty string. */
+  std::vector<uint8_t> rule_is_nullable_;
+
+  /*! \brief Compute and cache properties for a state in a per-rule FSM. */
+  uint8_t InitializeFsmStateFlags(int32_t rule_id, int32_t state_id);
+
+  /*! \brief Return cached properties for a state in a per-rule FSM. */
+  uint8_t GetFsmStateFlags(int32_t rule_id, int32_t state_id) {
+    XGRAMMAR_DCHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(fsm_state_flags_cache_.size()));
+    auto& flags_cache = fsm_state_flags_cache_[rule_id];
+    if (!flags_cache.empty()) {
+      XGRAMMAR_DCHECK(state_id >= 0 && state_id < static_cast<int32_t>(flags_cache.size()));
+      if (flags_cache[state_id] != 0) {
+        return flags_cache[state_id];
+      }
+    }
+    return InitializeFsmStateFlags(rule_id, state_id);
+  }
+
+  bool IsRuleNullable(int32_t rule_id) const { return rule_is_nullable_[rule_id] != 0; }
+
   /*!
    * \brief Check if the state has been added into the queue.
    * \param state The state to check.
