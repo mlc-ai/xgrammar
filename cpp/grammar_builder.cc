@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "grammar_functor.h"
@@ -215,72 +216,82 @@ int32_t GrammarBuilder::AddExpr(
 int32_t GrammarBuilder::AddExprImpl(
     const GrammarExprSpec& spec, int32_t self_rule_id, const std::string& name_hint
 ) {
-  using Kind = GrammarExprSpec::Kind;
-  switch (spec.kind_) {
-    case Kind::kExprId:
-      XGRAMMAR_DCHECK(spec.id_ >= 0 && spec.id_ < NumGrammarExprs())
-          << "The grammar expr id " << spec.id_ << " is out of bound";
-      return spec.id_;
-    case Kind::kByteString:
-      return AddByteString(spec.str_);
-    case Kind::kCharacterClass:
-      return AddCharacterClass(spec.cc_elements_, spec.is_negative_);
-    case Kind::kCharacterClassStar:
-      return AddCharacterClassStar(spec.cc_elements_, spec.is_negative_);
-    case Kind::kEmptyStr:
-      return AddEmptyStr();
-    case Kind::kRuleRef:
-      return AddRuleRef(spec.id_);
-    case Kind::kSelfRef:
+  namespace gs = grammar_spec;
+
+  struct Visitor {
+    GrammarBuilder* builder;
+    int32_t self_rule_id;
+    const std::string& name_hint;
+
+    int32_t CheckedSelfRuleId() const {
       XGRAMMAR_CHECK(self_rule_id != -1)
           << "SelfRef is only allowed when the spec is materialized with a bound self rule id, "
              "e.g. through GrammarBuilder::AddRule";
-      return AddRuleRef(self_rule_id);
-    case Kind::kSequence: {
+      return self_rule_id;
+    }
+
+    int32_t operator()(const gs::ExprId& spec) const {
+      XGRAMMAR_DCHECK(spec.id >= 0 && spec.id < builder->NumGrammarExprs())
+          << "The grammar expr id " << spec.id << " is out of bound";
+      return spec.id;
+    }
+    int32_t operator()(const gs::ByteString& spec) const {
+      return builder->AddByteString(spec.str);
+    }
+    int32_t operator()(const gs::CharacterClass& spec) const {
+      return builder->AddCharacterClass(spec.elements, spec.is_negative);
+    }
+    int32_t operator()(const gs::CharacterClassStar& spec) const {
+      return builder->AddCharacterClassStar(spec.elements, spec.is_negative);
+    }
+    int32_t operator()(const gs::EmptyStr&) const { return builder->AddEmptyStr(); }
+    int32_t operator()(const gs::RuleRef& spec) const { return builder->AddRuleRef(spec.rule_id); }
+    int32_t operator()(const gs::SelfRef&) const {
+      return builder->AddRuleRef(CheckedSelfRuleId());
+    }
+    int32_t operator()(const gs::Token& spec) const { return builder->AddToken(spec.token_ids); }
+    int32_t operator()(const gs::ExcludeToken& spec) const {
+      return builder->AddExcludeToken(spec.token_ids);
+    }
+    int32_t operator()(const gs::TagDispatch& spec) const { return builder->AddTagDispatch(spec); }
+    int32_t operator()(const gs::TokenTagDispatch& spec) const {
+      return builder->AddTokenTagDispatch(spec);
+    }
+    int32_t operator()(const gs::Sequence& spec) const {
       std::vector<int32_t> element_ids;
-      element_ids.reserve(spec.children_.size());
-      for (const auto& child : spec.children_) {
-        element_ids.push_back(AddExprImpl(child, self_rule_id, name_hint));
+      element_ids.reserve(spec.elements.size());
+      for (const auto& element : spec.elements) {
+        element_ids.push_back(builder->AddExprImpl(element, self_rule_id, name_hint));
       }
-      return AddSequence(element_ids);
+      return builder->AddSequence(element_ids);
     }
-    case Kind::kChoices: {
+    int32_t operator()(const gs::Choices& spec) const {
       std::vector<int32_t> choice_ids;
-      choice_ids.reserve(spec.children_.size());
-      for (const auto& child : spec.children_) {
-        choice_ids.push_back(AddExprImpl(child, self_rule_id, name_hint));
+      choice_ids.reserve(spec.choices.size());
+      for (const auto& choice : spec.choices) {
+        choice_ids.push_back(builder->AddExprImpl(choice, self_rule_id, name_hint));
       }
-      return AddChoices(choice_ids);
+      return builder->AddChoices(choice_ids);
     }
-    case Kind::kRepeat: {
-      XGRAMMAR_DCHECK(spec.children_.size() == 1);
-      const auto& element = spec.children_[0];
-      if (element.kind_ == Kind::kRuleRef) {
-        return AddRepeat(element.id_, spec.min_repeat_count_, spec.max_repeat_count_);
+    int32_t operator()(const gs::Repeat& spec) const {
+      XGRAMMAR_DCHECK(spec.element.size() == 1);
+      const auto& element = spec.element[0];
+      if (auto* rule_ref = std::get_if<gs::RuleRef>(&element.value)) {
+        return builder->AddRepeat(rule_ref->rule_id, spec.min_repeat_count, spec.max_repeat_count);
       }
-      if (element.kind_ == Kind::kSelfRef) {
-        XGRAMMAR_CHECK(self_rule_id != -1)
-            << "SelfRef is only allowed when the spec is materialized with a bound self rule id, "
-               "e.g. through GrammarBuilder::AddRule";
-        return AddRepeat(self_rule_id, spec.min_repeat_count_, spec.max_repeat_count_);
+      if (std::holds_alternative<gs::SelfRef>(element.value)) {
+        return builder->AddRepeat(
+            CheckedSelfRuleId(), spec.min_repeat_count, spec.max_repeat_count
+        );
       }
-      auto element_expr_id = AddExprImpl(element, self_rule_id, name_hint);
-      return AddRepeatFromExpr(
-          name_hint, element_expr_id, spec.min_repeat_count_, spec.max_repeat_count_
+      auto element_expr_id = builder->AddExprImpl(element, self_rule_id, name_hint);
+      return builder->AddRepeatFromExpr(
+          name_hint, element_expr_id, spec.min_repeat_count, spec.max_repeat_count
       );
     }
-    case Kind::kToken:
-      return AddToken(spec.token_ids_);
-    case Kind::kExcludeToken:
-      return AddExcludeToken(spec.token_ids_);
-    case Kind::kTagDispatch:
-      return AddTagDispatch(*spec.tag_dispatch_);
-    case Kind::kTokenTagDispatch:
-      return AddTokenTagDispatch(*spec.token_tag_dispatch_);
-    default:
-      XGRAMMAR_LOG(FATAL) << "Unexpected spec kind: " << static_cast<int>(spec.kind_);
-      XGRAMMAR_UNREACHABLE();
-  }
+  };
+
+  return std::visit(Visitor{this, self_rule_id, name_hint}, spec.value);
 }
 
 int32_t GrammarBuilder::AddSubGrammar(const Grammar& sub_grammar) {

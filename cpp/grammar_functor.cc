@@ -2510,31 +2510,31 @@ size_t MemorySize(const RuleLevelCache& manager) { return MemorySize(manager.Imp
 /*************************** Grammar constructors ***************************/
 
 Grammar GrammarUnionFunctor::Apply(const std::vector<Grammar>& grammars) {
-  using Spec = GrammarExprSpec;
+  namespace gs = grammar_spec;
   GrammarBuilder builder;
   // Add the root rule first so it takes the name "root".
   auto root_rule_id = builder.AddEmptyRule("root");
-  std::vector<Spec> choices;
+  std::vector<GrammarExprSpec> choices;
   choices.reserve(grammars.size());
   for (const auto& grammar : grammars) {
-    choices.push_back(Spec::Sequence(Spec::RuleRef(builder.AddSubGrammar(grammar))));
+    choices.push_back(gs::Sequence(gs::RuleRef(builder.AddSubGrammar(grammar))));
   }
-  builder.UpdateRuleBody(root_rule_id, builder.AddExpr(Spec::Choices(std::move(choices))));
+  builder.UpdateRuleBody(root_rule_id, builder.AddExpr(gs::Choices(std::move(choices))));
   return builder.Get(root_rule_id);
 }
 
 Grammar GrammarConcatFunctor::Apply(const std::vector<Grammar>& grammars) {
-  using Spec = GrammarExprSpec;
+  namespace gs = grammar_spec;
   GrammarBuilder builder;
   // Add the root rule first so it takes the name "root".
   auto root_rule_id = builder.AddEmptyRule("root");
-  std::vector<Spec> sequence;
+  std::vector<GrammarExprSpec> sequence;
   sequence.reserve(grammars.size());
   for (const auto& grammar : grammars) {
-    sequence.push_back(Spec::RuleRef(builder.AddSubGrammar(grammar)));
+    sequence.push_back(gs::RuleRef(builder.AddSubGrammar(grammar)));
   }
   builder.UpdateRuleBody(
-      root_rule_id, builder.AddExpr(Spec::Choices(Spec::Sequence(std::move(sequence))))
+      root_rule_id, builder.AddExpr(gs::Choices(gs::Sequence(std::move(sequence))))
   );
   return builder.Get(root_rule_id);
 }

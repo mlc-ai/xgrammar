@@ -17,16 +17,16 @@
 
 using namespace xgrammar;
 
-using Spec = GrammarExprSpec;
+using namespace xgrammar::grammar_spec;
 
 TEST(XGrammarGrammarBuilderTest, NestedSpec) {
   GrammarBuilder builder;
   builder.AddRule(
       "root",
-      Spec::Choices(
-          Spec::Sequence(Spec::ByteString("abc"), Spec::CharacterClass({{'a', 'z'}})),
-          Spec::ByteString("def"),
-          Spec::Sequence(Spec::CharacterClassStar({{'0', '9'}}), Spec::EmptyStr())
+      Choices(
+          Sequence(ByteString("abc"), CharacterClass({{'a', 'z'}})),
+          ByteString("def"),
+          Sequence(CharacterClassStar({{'0', '9'}}), EmptyStr())
       )
   );
   auto grammar = builder.Get("root");
@@ -35,11 +35,8 @@ TEST(XGrammarGrammarBuilderTest, NestedSpec) {
 
 TEST(XGrammarGrammarBuilderTest, SelfRef) {
   GrammarBuilder builder;
-  auto item_rule_id = builder.AddRule("item", Spec::ByteString("a"));
-  builder.AddRule(
-      "list",
-      Spec::Choices(Spec::EmptyStr(), Spec::Sequence(Spec::RuleRef(item_rule_id), Spec::SelfRef()))
-  );
+  auto item_rule_id = builder.AddRule("item", ByteString("a"));
+  builder.AddRule("list", Choices(EmptyStr(), Sequence(RuleRef(item_rule_id), SelfRef())));
   auto grammar = builder.Get("list");
   EXPECT_EQ(grammar.ToString(), "item ::= \"a\"\nlist ::= (\"\" | (item list))\n");
 }
@@ -48,20 +45,16 @@ TEST(XGrammarGrammarBuilderTest, MixExprIdsInSpec) {
   GrammarBuilder builder;
   auto expr_id1 = builder.AddByteString("x");
   auto expr_id2 = builder.AddCharacterClass({{'a', 'z'}}, /*is_negative=*/true);
-  builder.AddRule("root", Spec::Choices(expr_id1, expr_id2, Spec::ByteString("y")));
+  builder.AddRule("root", Choices(expr_id1, expr_id2, ByteString("y")));
   auto grammar = builder.Get("root");
   EXPECT_EQ(grammar.ToString(), "root ::= (\"x\" | [^a-z] | \"y\")\n");
 }
 
 TEST(XGrammarGrammarBuilderTest, RepeatSpec) {
   GrammarBuilder builder;
-  auto item_rule_id = builder.AddRule("item", Spec::ByteString("a"));
+  auto item_rule_id = builder.AddRule("item", ByteString("a"));
   builder.AddRule(
-      "root",
-      Spec::Sequence(
-          Spec::Repeat(Spec::RuleRef(item_rule_id), 2, 4),
-          Spec::Repeat(Spec::ByteString("b"), 0, -1)
-      )
+      "root", Sequence(Repeat(RuleRef(item_rule_id), 2, 4), Repeat(ByteString("b"), 0, -1))
   );
   auto grammar = builder.Get("root");
   // The non-rule-ref repeat element is wrapped into a new rule root_1.
@@ -72,13 +65,10 @@ TEST(XGrammarGrammarBuilderTest, RepeatSpec) {
 
 TEST(XGrammarGrammarBuilderTest, TagDispatchSpec) {
   GrammarBuilder builder;
-  auto tag_a_rule_id = builder.AddRule("tag_a", Spec::ByteString("A"));
-  auto tag_b_rule_id = builder.AddRule("tag_b", Spec::ByteString("B"));
+  auto tag_a_rule_id = builder.AddRule("tag_a", ByteString("A"));
+  auto tag_b_rule_id = builder.AddRule("tag_b", ByteString("B"));
   builder.AddRule(
-      "root",
-      Spec::TagDispatch(Grammar::Impl::TagDispatch{
-          {{"<a>", tag_a_rule_id}, {"<b>", tag_b_rule_id}}, true, {"</end>"}
-      })
+      "root", TagDispatch{{{"<a>", tag_a_rule_id}, {"<b>", tag_b_rule_id}}, true, {"</end>"}}
   );
   auto grammar = builder.Get("root");
   EXPECT_EQ(
@@ -96,12 +86,7 @@ TEST(XGrammarGrammarBuilderTest, TagDispatchSpec) {
 
 TEST(XGrammarGrammarBuilderTest, GetWithNormalize) {
   GrammarBuilder builder;
-  builder.AddRule(
-      "root",
-      Spec::Choices(
-          Spec::ByteString("a"), Spec::Choices(Spec::ByteString("b"), Spec::ByteString("c"))
-      )
-  );
+  builder.AddRule("root", Choices(ByteString("a"), Choices(ByteString("b"), ByteString("c"))));
   auto grammar = builder.Get("root", /*normalize=*/true);
   EXPECT_EQ(grammar.ToString(), "root ::= ((\"a\") | (\"b\") | (\"c\"))\n");
 }
@@ -116,9 +101,7 @@ TEST(XGrammarGrammarBuilderTest, AddSubGrammar) {
   auto sub_root_id2 = builder.AddSubGrammar(sub_grammar2);
   builder.UpdateRuleBody(
       root_rule_id,
-      builder.AddExpr(Spec::Choices(
-          Spec::Sequence(Spec::RuleRef(sub_root_id1)), Spec::Sequence(Spec::RuleRef(sub_root_id2))
-      ))
+      builder.AddExpr(Choices(Sequence(RuleRef(sub_root_id1)), Sequence(RuleRef(sub_root_id2))))
   );
   auto grammar = builder.Get(root_rule_id);
 
@@ -139,7 +122,7 @@ TEST(XGrammarGrammarBuilderTest, AddSubGrammarWithLookaheadAndTagDispatch) {
       "tag_a ::= \"A\" (=\"end\")\n"
   );
   GrammarBuilder builder;
-  builder.AddRule("root", Spec::ByteString("prefix"));
+  builder.AddRule("root", ByteString("prefix"));
   auto sub_root_id = builder.AddSubGrammar(sub_grammar);
   auto grammar = builder.Get(sub_root_id);
 

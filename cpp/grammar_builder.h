@@ -10,11 +10,11 @@
 #include <xgrammar/xgrammar.h>
 
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "grammar_impl.h"
@@ -23,194 +23,241 @@
 namespace xgrammar {
 
 /*!
- * \brief A lightweight, nestable description of a grammar expression tree.
+ * \brief Nestable build-time descriptions of grammar expression trees.
  *
- * A GrammarExprSpec is built with the static factory methods and can be nested arbitrarily:
+ * Every GrammarExprType has its own spec class with a trivial constructor that just stores its
+ * arguments. A spec tree can be nested arbitrarily and is materialized into grammar exprs by
+ * GrammarBuilder:
  *
  * \code
- * using Spec = GrammarExprSpec;
- * auto spec = Spec::Choices(
- *     Spec::Sequence(Spec::ByteString("abc"), Spec::RuleRef(other_rule_id)),
- *     Spec::ByteString("def"),
- *     Spec::Sequence(Spec::ByteString("ghi"), Spec::SelfRef())
- * );
- * int32_t rule_id = builder.AddRule("my_rule", spec);
+ * using namespace grammar_spec;
+ * int32_t rule_id = builder.AddRule("my_rule", Choices(
+ *     Sequence(ByteString("abc"), RuleRef(other_rule_id)),
+ *     ByteString("def"),
+ *     Sequence(ByteString("ghi"), SelfRef())
+ * ));
  * \endcode
  *
- * An int32_t (an already-added grammar expr id) converts implicitly to a GrammarExprSpec, so
- * existing expr ids can be mixed with nested specs, e.g. Choices(id1, id2, Spec::EmptyStr()).
+ * Any spec class (and int32_t, wrapping an already-added grammar expr id) converts implicitly
+ * to GrammarExprSpec, so existing expr ids can be mixed with nested specs, e.g.
+ * Choices(id1, id2, EmptyStr()).
  *
- * SelfRef() refers to the rule currently being defined, and is only valid when the spec is
+ * SelfRef refers to the rule currently being defined, and is only valid when the spec is
  * materialized through GrammarBuilder::AddRule / AddRuleWithHint, or through an AddExpr overload
  * that binds the self rule id explicitly.
  *
- * The spec is a build-time-only description: it is materialized into grammar exprs by
+ * The specs are build-time-only descriptions: they are materialized into grammar exprs by
  * GrammarBuilder, and can be discarded afterwards.
+ */
+namespace grammar_spec {
+
+class GrammarExprSpec;
+struct ExprId;
+struct ByteString;
+struct CharacterClass;
+struct CharacterClassStar;
+struct EmptyStr;
+struct RuleRef;
+struct SelfRef;
+struct Token;
+struct ExcludeToken;
+struct Sequence;
+struct Choices;
+struct Repeat;
+
+namespace detail {
+
+template <typename T, typename... Ts>
+inline constexpr bool is_one_of_v = (std::is_same_v<T, Ts> || ...);
+
+/*!
+ * \brief Whether T (after decay) can be used to construct a GrammarExprSpec: one of the spec
+ * classes, GrammarExprSpec itself, or an integral grammar expr id.
+ * \note This trait is spelled out as a type list instead of
+ * std::is_convertible<T, GrammarExprSpec>, because the latter would recursively instantiate
+ * itself through the converting constructors of GrammarExprSpec and Sequence/Choices/Repeat.
+ */
+template <typename T>
+inline constexpr bool is_spec_arg_v = is_one_of_v<
+                                          std::decay_t<T>,
+                                          GrammarExprSpec,
+                                          ExprId,
+                                          ByteString,
+                                          CharacterClass,
+                                          CharacterClassStar,
+                                          EmptyStr,
+                                          RuleRef,
+                                          SelfRef,
+                                          Token,
+                                          ExcludeToken,
+                                          Grammar::Impl::TagDispatch,
+                                          Grammar::Impl::TokenTagDispatch,
+                                          Sequence,
+                                          Choices,
+                                          Repeat> ||
+                                      std::is_integral_v<std::decay_t<T>>;
+
+}  // namespace detail
+
+/*! \brief Wraps an already-added grammar expr id. int32_t converts implicitly to it. */
+struct ExprId {
+  int32_t id;
+  ExprId(int32_t id) : id(id) {}
+};
+
+/*! \brief A byte string expr. Supports UTF-8 strings. */
+struct ByteString {
+  std::string str;
+  explicit ByteString(std::string str) : str(std::move(str)) {}
+};
+
+/*! \brief A character class expr, e.g. [a-z] or [^a-z]. */
+struct CharacterClass {
+  std::vector<Grammar::Impl::CharacterClassElement> elements;
+  bool is_negative;
+  explicit CharacterClass(
+      std::vector<Grammar::Impl::CharacterClassElement> elements, bool is_negative = false
+  )
+      : elements(std::move(elements)), is_negative(is_negative) {}
+};
+
+/*! \brief A character class star expr, e.g. [a-z]* or [^a-z]*. */
+struct CharacterClassStar {
+  std::vector<Grammar::Impl::CharacterClassElement> elements;
+  bool is_negative;
+  explicit CharacterClassStar(
+      std::vector<Grammar::Impl::CharacterClassElement> elements, bool is_negative = false
+  )
+      : elements(std::move(elements)), is_negative(is_negative) {}
+};
+
+/*! \brief An empty string expr. */
+struct EmptyStr {};
+
+/*! \brief A reference to the rule with the given id. */
+struct RuleRef {
+  int32_t rule_id;
+  explicit RuleRef(int32_t rule_id) : rule_id(rule_id) {}
+};
+
+/*! \brief A reference to the rule currently being defined. Only valid when materialized with a
+ * bound self rule id. \sa GrammarBuilder::AddRule */
+struct SelfRef {};
+
+/*! \brief A token expr (token-level matching). Any one of the tokens can be matched. */
+struct Token {
+  std::vector<int32_t> token_ids;
+  explicit Token(std::vector<int32_t> token_ids) : token_ids(std::move(token_ids)) {}
+};
+
+/*! \brief An exclude token expr. Any token except the given ones can be matched. */
+struct ExcludeToken {
+  std::vector<int32_t> token_ids;
+  explicit ExcludeToken(std::vector<int32_t> token_ids) : token_ids(std::move(token_ids)) {}
+};
+
+/*! \brief A tag dispatch expr, described by its typed representation. The referenced rules must
+ * already exist in the builder. */
+using TagDispatch = Grammar::Impl::TagDispatch;
+
+/*! \brief A token tag dispatch expr, described by its typed representation. The referenced rules
+ * must already exist in the builder. */
+using TokenTagDispatch = Grammar::Impl::TokenTagDispatch;
+
+/*! \brief A sequence expr. Elements are matched one after another. */
+struct Sequence {
+  std::vector<GrammarExprSpec> elements;
+
+  explicit Sequence(std::vector<GrammarExprSpec> elements) : elements(std::move(elements)) {}
+
+  /*! \brief Constructs from a variadic list of specs (or expr ids). */
+  template <
+      typename... Args,
+      typename = std::enable_if_t<
+          (detail::is_spec_arg_v<Args> && ...) &&
+          !(sizeof...(Args) == 1 && (std::is_same_v<std::decay_t<Args>, Sequence> && ...))>>
+  Sequence(Args&&... args) {
+    elements.reserve(sizeof...(Args));
+    (elements.emplace_back(std::forward<Args>(args)), ...);
+  }
+};
+
+/*! \brief A choices expr. Any one of the choices can be matched. */
+struct Choices {
+  std::vector<GrammarExprSpec> choices;
+
+  explicit Choices(std::vector<GrammarExprSpec> choices) : choices(std::move(choices)) {}
+
+  /*! \brief Constructs from a variadic list of specs (or expr ids). */
+  template <
+      typename... Args,
+      typename = std::enable_if_t<
+          (detail::is_spec_arg_v<Args> && ...) &&
+          !(sizeof...(Args) == 1 && (std::is_same_v<std::decay_t<Args>, Choices> && ...))>>
+  Choices(Args&&... args) {
+    choices.reserve(sizeof...(Args));
+    (choices.emplace_back(std::forward<Args>(args)), ...);
+  }
+};
+
+/*!
+ * \brief A repeat expr, matching the element between min_repeat_count and max_repeat_count
+ * times (max_repeat_count == -1 means unbounded). If the element is not a rule reference, a new
+ * rule will be created to wrap it on materialization.
+ */
+struct Repeat {
+  /*! \brief The repeated element. Stored in a vector because GrammarExprSpec is incomplete here;
+   * it always contains exactly one element. */
+  std::vector<GrammarExprSpec> element;
+  int32_t min_repeat_count;
+  int32_t max_repeat_count;
+
+  template <typename T, typename = std::enable_if_t<detail::is_spec_arg_v<T>>>
+  Repeat(T&& element, int32_t min_repeat_count, int32_t max_repeat_count)
+      : min_repeat_count(min_repeat_count), max_repeat_count(max_repeat_count) {
+    this->element.emplace_back(std::forward<T>(element));
+  }
+};
+
+/*!
+ * \brief The type-erased wrapper holding any of the spec classes. All spec classes and int32_t
+ * (an already-added grammar expr id) convert implicitly to it.
  */
 class GrammarExprSpec {
  public:
-  using CharacterClassElement = Grammar::Impl::CharacterClassElement;
+  using Variant = std::variant<
+      ExprId,
+      ByteString,
+      CharacterClass,
+      CharacterClassStar,
+      EmptyStr,
+      RuleRef,
+      SelfRef,
+      Token,
+      ExcludeToken,
+      TagDispatch,
+      TokenTagDispatch,
+      Sequence,
+      Choices,
+      Repeat>;
 
   /*! \brief Implicitly wraps an already-added grammar expr id. */
-  GrammarExprSpec(int32_t grammar_expr_id) : kind_(Kind::kExprId), id_(grammar_expr_id) {}
+  GrammarExprSpec(int32_t grammar_expr_id) : value(ExprId(grammar_expr_id)) {}
 
-  /*! \brief A byte string expr. Supports UTF-8 strings. */
-  static GrammarExprSpec ByteString(std::string str) {
-    GrammarExprSpec spec(Kind::kByteString);
-    spec.str_ = std::move(str);
-    return spec;
-  }
-
-  /*! \brief A character class expr, e.g. [a-z] or [^a-z]. */
-  static GrammarExprSpec CharacterClass(
-      std::vector<CharacterClassElement> elements, bool is_negative = false
-  ) {
-    GrammarExprSpec spec(Kind::kCharacterClass);
-    spec.cc_elements_ = std::move(elements);
-    spec.is_negative_ = is_negative;
-    return spec;
-  }
-
-  /*! \brief A character class star expr, e.g. [a-z]* or [^a-z]*. */
-  static GrammarExprSpec CharacterClassStar(
-      std::vector<CharacterClassElement> elements, bool is_negative = false
-  ) {
-    GrammarExprSpec spec(Kind::kCharacterClassStar);
-    spec.cc_elements_ = std::move(elements);
-    spec.is_negative_ = is_negative;
-    return spec;
-  }
-
-  /*! \brief An empty string expr. */
-  static GrammarExprSpec EmptyStr() { return GrammarExprSpec(Kind::kEmptyStr); }
-
-  /*! \brief A reference to the rule with the given id. */
-  static GrammarExprSpec RuleRef(int32_t rule_id) {
-    GrammarExprSpec spec(Kind::kRuleRef);
-    spec.id_ = rule_id;
-    return spec;
-  }
-
-  /*! \brief A reference to the rule currently being defined. Only valid when materialized with
-   * a bound self rule id. \sa GrammarBuilder::AddRule */
-  static GrammarExprSpec SelfRef() { return GrammarExprSpec(Kind::kSelfRef); }
-
-  /*! \brief A sequence expr. Elements are matched one after another. */
-  static GrammarExprSpec Sequence(std::vector<GrammarExprSpec> elements) {
-    GrammarExprSpec spec(Kind::kSequence);
-    spec.children_ = std::move(elements);
-    return spec;
-  }
-
-  /*! \brief A sequence expr from a variadic list of specs (or expr ids). */
+  /*! \brief Implicitly wraps any of the spec classes. */
   template <
-      typename... Args,
-      typename = std::enable_if_t<(std::is_convertible_v<Args, GrammarExprSpec> && ...)>>
-  static GrammarExprSpec Sequence(Args&&... elements) {
-    return Sequence(MakeChildren(std::forward<Args>(elements)...));
-  }
+      typename T,
+      typename = std::enable_if_t<
+          detail::is_spec_arg_v<T> && !std::is_same_v<std::decay_t<T>, GrammarExprSpec> &&
+          !std::is_integral_v<std::decay_t<T>>>>
+  GrammarExprSpec(T&& value) : value(std::forward<T>(value)) {}
 
-  /*! \brief A choices expr. Any one of the choices can be matched. */
-  static GrammarExprSpec Choices(std::vector<GrammarExprSpec> choices) {
-    GrammarExprSpec spec(Kind::kChoices);
-    spec.children_ = std::move(choices);
-    return spec;
-  }
-
-  /*! \brief A choices expr from a variadic list of specs (or expr ids). */
-  template <
-      typename... Args,
-      typename = std::enable_if_t<(std::is_convertible_v<Args, GrammarExprSpec> && ...)>>
-  static GrammarExprSpec Choices(Args&&... choices) {
-    return Choices(MakeChildren(std::forward<Args>(choices)...));
-  }
-
-  /*!
-   * \brief A repeat expr, matching the element between min_repeat_count and max_repeat_count
-   * times. If the element is not a rule reference, a new rule will be created to wrap it.
-   * \param max_repeat_count The maximum repeat count (inclusive), or -1 for unbounded.
-   */
-  static GrammarExprSpec Repeat(
-      GrammarExprSpec element, int32_t min_repeat_count, int32_t max_repeat_count
-  ) {
-    GrammarExprSpec spec(Kind::kRepeat);
-    spec.children_.push_back(std::move(element));
-    spec.min_repeat_count_ = min_repeat_count;
-    spec.max_repeat_count_ = max_repeat_count;
-    return spec;
-  }
-
-  /*! \brief A token expr (token-level matching). Any one of the tokens can be matched. */
-  static GrammarExprSpec Token(std::vector<int32_t> token_ids) {
-    GrammarExprSpec spec(Kind::kToken);
-    spec.token_ids_ = std::move(token_ids);
-    return spec;
-  }
-
-  /*! \brief An exclude token expr. Any token except the given ones can be matched. */
-  static GrammarExprSpec ExcludeToken(std::vector<int32_t> token_ids) {
-    GrammarExprSpec spec(Kind::kExcludeToken);
-    spec.token_ids_ = std::move(token_ids);
-    return spec;
-  }
-
-  /*! \brief A tag dispatch expr. The referenced rules must already exist in the builder. */
-  static GrammarExprSpec TagDispatch(Grammar::Impl::TagDispatch tag_dispatch) {
-    GrammarExprSpec spec(Kind::kTagDispatch);
-    spec.tag_dispatch_ = std::move(tag_dispatch);
-    return spec;
-  }
-
-  /*! \brief A token tag dispatch expr. The referenced rules must already exist in the builder. */
-  static GrammarExprSpec TokenTagDispatch(Grammar::Impl::TokenTagDispatch token_tag_dispatch) {
-    GrammarExprSpec spec(Kind::kTokenTagDispatch);
-    spec.token_tag_dispatch_ = std::move(token_tag_dispatch);
-    return spec;
-  }
-
- private:
-  friend class GrammarBuilder;
-
-  enum class Kind : int32_t {
-    kExprId,
-    kByteString,
-    kCharacterClass,
-    kCharacterClassStar,
-    kEmptyStr,
-    kRuleRef,
-    kSelfRef,
-    kSequence,
-    kChoices,
-    kRepeat,
-    kToken,
-    kExcludeToken,
-    kTagDispatch,
-    kTokenTagDispatch,
-  };
-
-  explicit GrammarExprSpec(Kind kind) : kind_(kind) {}
-
-  template <typename... Args>
-  static std::vector<GrammarExprSpec> MakeChildren(Args&&... args) {
-    std::vector<GrammarExprSpec> children;
-    children.reserve(sizeof...(Args));
-    (children.push_back(GrammarExprSpec(std::forward<Args>(args))), ...);
-    return children;
-  }
-
-  Kind kind_;
-  /*! \brief The expr id for kExprId, or the rule id for kRuleRef. */
-  int32_t id_ = -1;
-  std::string str_;
-  bool is_negative_ = false;
-  std::vector<CharacterClassElement> cc_elements_;
-  std::vector<GrammarExprSpec> children_;
-  int32_t min_repeat_count_ = 0;
-  int32_t max_repeat_count_ = -1;
-  std::vector<int32_t> token_ids_;
-  std::optional<Grammar::Impl::TagDispatch> tag_dispatch_;
-  std::optional<Grammar::Impl::TokenTagDispatch> token_tag_dispatch_;
+  Variant value;
 };
+
+}  // namespace grammar_spec
+
+using grammar_spec::GrammarExprSpec;
 
 /*!
  * \brief Helper class to build a BNF grammar. It is the unified entry for constructing the
@@ -370,10 +417,11 @@ class GrammarBuilder {
    * can be built in one call:
    *
    * \code
+   * using namespace grammar_spec;
    * // list ::= "" | item list
-   * builder.AddRule("list", Spec::Choices(
-   *     Spec::EmptyStr(),
-   *     Spec::Sequence(Spec::RuleRef(item_rule_id), Spec::SelfRef())
+   * builder.AddRule("list", Choices(
+   *     EmptyStr(),
+   *     Sequence(RuleRef(item_rule_id), SelfRef())
    * ));
    * \endcode
    */
