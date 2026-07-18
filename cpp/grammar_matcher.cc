@@ -515,6 +515,15 @@ class GrammarMatcher::Impl : public EarleyParser {
    */
   bool AcceptStopToken();
 
+  /*!
+   * \brief Check if consuming the given token as a grammar terminal completes the grammar, via a
+   * trial advance that is rolled back. This handles tokens that are both a stop token and a
+   * grammar terminal, e.g. harmony's <|return|>. Completion is required since stopping
+   * mid-grammar would emit a truncated output.
+   * \returns Whether the grammar can consume the token and is completed afterwards.
+   */
+  bool StopTokenCompletesGrammar(int32_t token_id);
+
   bool IsStopTokenAccepted() const;
 
   /*! \brief Check if the token bitmask is all-true. */
@@ -597,6 +606,41 @@ bool GrammarMatcher::Impl::AcceptStopToken() {
   return true;
 }
 
+bool GrammarMatcher::Impl::StopTokenCompletesGrammar(int32_t token_id) {
+  // override_stop_tokens may contain a padded id out of the decoded vocab range.
+  const auto& decoded_vocab = tokenizer_info_.GetDecodedVocab();
+  if (token_id < 0 || token_id >= static_cast<int32_t>(decoded_vocab.size())) {
+    return false;
+  }
+
+  // Try the atomic (token-level) path first, then the byte path, mirroring AcceptToken.
+  if (AdvanceAtomicToken(token_id)) {
+    const bool completed = IsCompleted();
+    PopLastStates(1);
+    if (completed) {
+      return true;
+    }
+  }
+
+  const auto& token = decoded_vocab[token_id];
+  if (token.empty()) {
+    return false;
+  }
+
+  int pos = 0;
+  bool consumed = true;
+  for (auto char_value : token) {
+    if (!Advance(char_value)) {
+      consumed = false;
+      break;
+    }
+    ++pos;
+  }
+  const bool completed = consumed && IsCompleted();
+  PopLastStates(pos);
+  return completed;
+}
+
 bool GrammarMatcher::Impl::IsTerminated() const {
   if (terminate_without_stop_token_) {
     return IsCompleted();
@@ -630,14 +674,20 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
                        << "\", current state:\n"
                        << states_str;
   }
-  // Handle the stop token
+  // Handle the stop token. If the grammar cannot terminate here, fall through: the token may
+  // also be a grammar terminal (e.g. harmony's <|return|>) matched by the paths below.
   if (std::find(stop_token_ids_.begin(), stop_token_ids_.end(), token_id) !=
       stop_token_ids_.end()) {
-    bool accepted = AcceptStopToken();
-    if (debug_print) {
-      XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: " << accepted;
+    if (AcceptStopToken()) {
+      if (debug_print) {
+        XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: true";
+      }
+      return true;
     }
-    return accepted;
+    if (debug_print) {
+      XGRAMMAR_LOG(INFO) << "The token is an end token, but the grammar cannot terminate here. "
+                         << "Trying to match it as a grammar terminal.";
+    }
   }
 
   const auto& special_token_ids = tokenizer_info_.GetSpecialTokenIds();
@@ -1060,9 +1110,10 @@ void GrammarMatcher::Impl::SetTokenBitmask(
       }
     }
 
-    if (can_reach_end) {
-      // add end tokens
-      for (int id : stop_token_ids_) {
+    // Add the stop tokens when the grammar is completed, or when the stop token is itself a
+    // grammar terminal that completes the grammar
+    for (int id : stop_token_ids_) {
+      if (can_reach_end || StopTokenCompletesGrammar(id)) {
         next_token_bitset.Set(id, true);
       }
     }
@@ -1081,9 +1132,10 @@ void GrammarMatcher::Impl::SetTokenBitmask(
         next_token_bitset.Set(id, false);
       }
     }
+    // If the grammar is not completed, only keep the stop tokens that complete the grammar
     if (!can_reach_end) {
       for (int id : stop_token_ids_) {
-        next_token_bitset.Set(id, false);
+        next_token_bitset.Set(id, StopTokenCompletesGrammar(id));
       }
     }
   }

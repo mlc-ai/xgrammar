@@ -591,5 +591,106 @@ def test_tag_dispatch_perf(ebnf, input_str):
     print(f"Accept token: avg={statistics.mean(flat_accept):.2f} us, max={max(flat_accept):.2f} us")
 
 
+# A token can be both a stop token and a grammar terminal, e.g. gpt-oss's <|return|> ends
+# generation and also closes harmony's final-message tag. The tests are token-level because
+# accept_string bypasses the stop token handling.
+_GPT_OSS_MODEL = "openai/gpt-oss-20b"
+_GPT_OSS_VOCAB_SIZE = 200019
+_RETURN_TOKEN = 200002  # <|return|>: gpt-oss stop token, and a harmony tag terminal
+_CALL_TOKEN = 200012  # <|call|>: terminal closing a harmony tool call
+
+
+def _gpt_oss_tokenizer_info():
+    tokenizer = AutoTokenizer.from_pretrained(_GPT_OSS_MODEL)
+    return tokenizer, xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=_GPT_OSS_VOCAB_SIZE)
+
+
+def _mask_allows(matcher, token_id):
+    bitmask = xgr.allocate_token_bitmask(1, _GPT_OSS_VOCAB_SIZE)
+    matcher.fill_next_token_bitmask(bitmask)
+    return bool((bitmask[0][token_id >> 5] >> (token_id & 31)) & 1)
+
+
+def test_stop_token_as_grammar_terminal_harmony():
+    """<|return|> closes the harmony final-message tag and must be accepted."""
+    from xgrammar.builtin_structural_tag import get_harmony_structural_tag
+
+    tokenizer, tokenizer_info = _gpt_oss_tokenizer_info()
+    # Check that the tag terminal <|return|> is also a stop token
+    assert _RETURN_TOKEN in tokenizer_info.stop_token_ids
+
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(
+        get_harmony_structural_tag(tools=[], reasoning=False)
+    )
+    matcher = xgr.GrammarMatcher(compiled)
+
+    output = "<|channel|>final<|message|>ok<|return|>"
+    for token in tokenizer.encode(output, add_special_tokens=False):
+        assert _mask_allows(matcher, token), f"token {token} masked out"
+        assert matcher.accept_token(token), f"token {token} rejected"
+
+
+def test_stop_token_as_grammar_terminal_mask_matches_accept():
+    """The mask and accept_token must agree for an overridden stop token."""
+    from xgrammar.structural_tag import (
+        JSONSchemaFormat,
+        StructuralTag,
+        TagFormat,
+        TagsWithSeparatorFormat,
+    )
+
+    tokenizer, tokenizer_info = _gpt_oss_tokenizer_info()
+    schema = {"type": "object", "properties": {"bar": {"type": "string"}}, "required": ["bar"]}
+    tag = StructuralTag(
+        format=TagsWithSeparatorFormat(
+            tags=[
+                TagFormat(
+                    begin="<|channel|>commentary to=functions.foo<|constrain|>json<|message|>",
+                    content=JSONSchemaFormat(json_schema=schema),
+                    end="<|call|>",
+                )
+            ],
+            separator="<|start|>assistant",
+        )
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(tag)
+    # <|call|> is a stop token only because of the override, so it stays in the matchable
+    # vocabulary; accept_token should agree with the mask
+    matcher = xgr.GrammarMatcher(compiled, override_stop_tokens=[_RETURN_TOKEN, _CALL_TOKEN])
+
+    output = (
+        "<|channel|>commentary to=functions.foo<|constrain|>json<|message|>" '{"bar":"ok"}<|call|>'
+    )
+    for token in tokenizer.encode(output, add_special_tokens=False):
+        allowed = _mask_allows(matcher, token)
+        accepted = matcher.accept_token(token)
+        assert allowed == accepted, f"mask/accept disagree on token {token}"
+        assert accepted, f"token {token} rejected"
+
+
+def test_stop_token_masked_out_when_it_would_truncate():
+    """A stop token is only allowed when emitting it leaves a complete grammar."""
+    _, tokenizer_info = _gpt_oss_tokenizer_info()
+    schema = {"type": "object", "properties": {"bar": {"type": "string"}}, "required": ["bar"]}
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(schema)
+
+    # A JSON string can contain the literal text "<|return|>", so the grammar can consume
+    # those bytes, but stopping there would emit truncated JSON
+    probe = xgr.GrammarMatcher(compiled)
+    assert probe.accept_string('{"bar": "')
+    assert probe.accept_string("<|return|>")
+
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_string('{"bar": "')
+    assert not _mask_allows(matcher, _RETURN_TOKEN)
+
+    # Once the JSON is complete, the stop token is allowed and terminates the matcher
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_string('{"bar": "ok"}')
+    assert _mask_allows(matcher, _RETURN_TOKEN)
+    assert matcher.accept_token(_RETURN_TOKEN)
+    assert matcher.is_terminated()
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
