@@ -320,6 +320,7 @@ class JSONSchemaConverter {
   virtual std::string FormatProperty(
       const std::string& key,
       const std::string& value_rule,
+      const SchemaSpecPtr& value_schema,
       const std::string& rule_name,
       int64_t idx
   );
@@ -328,6 +329,7 @@ class JSONSchemaConverter {
   virtual std::string FormatOtherProperty(
       const std::string& key_pattern,
       const std::string& value_rule,
+      const SchemaSpecPtr& value_schema,
       const std::string& rule_name,
       const std::string& rule_name_suffix
   );
