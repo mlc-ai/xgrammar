@@ -383,6 +383,21 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           }
       )
       .def_static(
+          "from_lark",
+          [](ffi::String lark_string, ffi::AnyView tokenizer_info_view) {
+            XGRAMMAR_FFI_TRY_BEGIN();
+            std::optional<TokenizerInfo> tokenizer_info = std::nullopt;
+            if (tokenizer_info_view != nullptr) {
+              tokenizer_info =
+                  tokenizer_info_view.cast<ffi::ObjectRef>().as<TokenizerInfoObj>()->value;
+            }
+            return ffi::ObjectRef(
+                ffi::make_object<GrammarObj>(Grammar::FromLark(lark_string, tokenizer_info))
+            );
+            XGRAMMAR_FFI_TRY_END();
+          }
+      )
+      .def_static(
           "from_structural_tag",
           [](ffi::String structural_tag_json) {
             XGRAMMAR_FFI_TRY_BEGIN();

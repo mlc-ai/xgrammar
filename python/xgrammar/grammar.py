@@ -1,13 +1,16 @@
 """This module provides classes representing grammars."""
 
 import json
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
 from typing_extensions import deprecated
 
 from .base import XGRObject, _core
 from .structural_tag import StructuralTag, StructuralTagItem
+
+if TYPE_CHECKING:
+    from .tokenizer_info import TokenizerInfo
 
 
 def _convert_instance_to_str(instance: Union[str, Dict[str, Any], StructuralTag]) -> str:
@@ -296,6 +299,27 @@ class Grammar(XGRObject):
         return Grammar._create_from_handle(
             _core.Grammar.from_regex(regex_string, print_converted_ebnf)
         )
+
+    @staticmethod
+    def from_lark(
+        lark_string: str, *, tokenizer_info: Optional["TokenizerInfo"] = None
+    ) -> "Grammar":
+        """Create a grammar from LLGuidance-compatible Lark syntax.
+
+        The grammar must define a ``start`` rule. Core rules, terminals, regular
+        expressions, repetition, ``%ignore``, ``%import common``, inline ``%json``,
+        special tokens, and the structural-tool-call lazy pattern are supported.
+
+        Parameters
+        ----------
+        lark_string : str
+            The Lark grammar source.
+
+        tokenizer_info : Optional[TokenizerInfo]
+            Tokenizer metadata used to resolve named special tokens.
+        """
+        tokenizer_handle = None if tokenizer_info is None else tokenizer_info._handle
+        return Grammar._create_from_handle(_core.Grammar.from_lark(lark_string, tokenizer_handle))
 
     @overload
     @staticmethod

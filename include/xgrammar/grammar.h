@@ -131,6 +131,16 @@ class Grammar {
   static Grammar FromRegex(const std::string& regex, bool print_converted_ebnf = false);
 
   /*!
+   * \brief Construct a grammar from LLGuidance-compatible Lark syntax.
+   * \param lark_string The Lark grammar. The root rule must be named "start".
+   * \param tokenizer_info Optional tokenizer metadata used to resolve named special tokens.
+   */
+  static Grammar FromLark(
+      const std::string& lark_string,
+      const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt
+  );
+
+  /*!
    * \brief Construct a grammar from a structural tag string.
    * \param structural_tag_json The structural tag string.
    * \param tokenizer_info Optional tokenizer info for resolving string token references.
