@@ -745,6 +745,10 @@ def test_any_text_max_chars_enforced():
     assert _mask_allows(cg, ["<think>", "a", "b"], "</")
     assert not _mask_allows(cg, ["<think>", "a", "b", "c"], "a")
     assert _mask_allows(cg, ["<think>", "a", "b", "c"], "</")
+    # EOS must never leak into the mask near or at the boundary (the region is not the grammar
+    # end; only the end tag may follow)
+    assert not _mask_allows(cg, ["<think>", "a", "b"], "<eos>")
+    assert not _mask_allows(cg, ["<think>", "a", "b", "c"], "<eos>")
 
 
 def test_any_text_max_chars_hybrid_content_plus_end_tag_token():
@@ -761,6 +765,45 @@ def test_any_text_max_chars_hybrid_content_plus_end_tag_token():
     assert _mask_allows(cg, ["<think>", "a", "b"], "</")
     assert not _mask_allows(cg, ["<think>", "a", "b"], "a</")
     assert _allowed(cg, ["<think>", "a", "b"], "a</") is False
+
+
+def test_any_text_max_chars_boundary_large_vocab_no_eos_leak():
+    """Regression test for the char-budget boundary path with a large vocab. With >1000 tokens
+    the region's cached mask is stored in the kRejected/bitset forms, whose reconstruction in the
+    boundary handler must not leak token ids outside the sorted vocab (special/stop tokens) into
+    the accepted set: EOS stays masked until the end tag is matched."""
+    vocab = ["<think>", "</", "think>", "<eos>", "a"] + [f"w{i}" for i in range(1200)]
+    eos_id = vocab.index("<eos>")
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[eos_id])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": "<think>",
+            "content": {"type": "any_text", "excludes": ["</think>"], "max_chars": 3},
+            "end": "</think>",
+        },
+    }
+    compiled = compiler.compile_structural_tag(stag)
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_token(vocab.index("<think>"))
+    bitmask = xgr.allocate_token_bitmask(1, len(vocab))
+    for step_token in ["a", "a", "a"]:  # consume the 3-char budget one char at a time
+        matcher.fill_next_token_bitmask(bitmask)
+        masked = _get_masked_tokens_from_bitmask(bitmask, len(vocab))
+        assert eos_id in masked  # EOS never allowed inside the region
+        assert vocab.index("</") not in masked  # the end tag is always allowed
+        assert matcher.accept_token(vocab.index(step_token))
+    # budget exhausted: only the end tag may follow
+    matcher.fill_next_token_bitmask(bitmask)
+    masked = _get_masked_tokens_from_bitmask(bitmask, len(vocab))
+    assert eos_id in masked
+    assert vocab.index("a") in masked
+    assert vocab.index("</") not in masked
+    assert matcher.accept_token(vocab.index("</"))
+    assert matcher.accept_token(vocab.index("think>"))
+    assert matcher.is_completed()
 
 
 def test_any_text_max_tokens_and_max_chars_combined():

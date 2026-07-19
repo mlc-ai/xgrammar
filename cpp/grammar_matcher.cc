@@ -1154,13 +1154,27 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
   } else if (mask_entry.store_type == StoreType::kAcceptedBitset) {
     tmp_char_boundary_bitset_ |= mask_entry.accepted_bitset;
   } else {
-    // kRejected: accepted = all - rejected - uncertain.
+    // kRejected: accepted = (sorted vocab) - rejected - uncertain.
     tmp_char_boundary_bitset_.Set();
     for (auto i : mask_entry.rejected_indices) {
       tmp_char_boundary_bitset_.Set(sorted_decoded_vocab[i].first, false);
     }
     for (auto i : mask_entry.uncertain_indices) {
       tmp_char_boundary_bitset_.Set(sorted_decoded_vocab[i].first, false);
+    }
+    // Token ids NOT in the sorted vocab (special tokens, stop tokens, padding ids) are never
+    // accepted by the entry; they must be cleared since this bitset is OR-ed into the accepted
+    // set, where a stray stop-token bit would e.g. allow EOS before the region's end tag.
+    for (auto id : tokenizer_info_.GetSpecialTokenIds()) {
+      tmp_char_boundary_bitset_.Set(id, false);
+    }
+    for (auto id : tokenizer_info_.GetStopTokenIds()) {
+      tmp_char_boundary_bitset_.Set(id, false);
+    }
+    for (int id = static_cast<int>(tokenizer_info_.GetDecodedVocab().size());
+         id < tmp_char_boundary_bitset_.Size();
+         ++id) {
+      tmp_char_boundary_bitset_.Set(id, false);
     }
   }
 
