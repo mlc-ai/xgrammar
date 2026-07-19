@@ -83,9 +83,9 @@ jobs:
       - name: Install MLX
         if: matrix.os == 'macos-14' && !endsWith(matrix.python, 't')
         run: |
-          # transformers must stay <5 (see pyproject.toml dependencies); >=5.13 also breaks `import mlx_lm`
+          # transformers >=5.13 breaks `import mlx_lm`
           # (keep in sync with pyproject.toml [project.optional-dependencies].metal).
-          pip install mlx-lm "transformers<5"
+          pip install mlx-lm "transformers<5.13"
 
       - name: Run C++ tests
         run: |

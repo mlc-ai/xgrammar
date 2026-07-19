@@ -18,9 +18,10 @@ dependencies = [
   "apache-tvm-ffi>=0.1.9",
   "pydantic",
   "torch>=1.10.0",
-  # transformers v5 breaks tokenizer loading for several models (e.g. internlm2_5,
-  # aya-23, deepseek-coder-v1.5), which breaks TokenizerInfo.from_huggingface.
-  "transformers>=4.38.0,<5",
+  # transformers 5.0 fails to initialize several remote-code tiktoken tokenizers
+  # (e.g. Qwen-7B-Chat, Phi-3-small: "has no attribute mergeable_ranks"); fixed in 5.1+.
+  # v5 requires Python >=3.10, so on Python 3.8/3.9 pip resolves to v4.
+  "transformers>=4.38.0,!=5.0.*",
   "triton; platform_system == 'Linux' and platform_machine == 'x86_64'",
   "numpy",
   "typing-extensions>=4.9.0",
