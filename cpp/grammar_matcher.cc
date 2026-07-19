@@ -524,6 +524,13 @@ class GrammarMatcher::Impl : public EarleyParser {
    */
   bool StopTokenCompletesGrammar(int32_t token_id);
 
+  /*!
+   * \brief Decide, for every stop token, whether it may be emitted at the current position, and
+   * write that decision into the bitmask. Overrides whatever the grammar-level mask decided, since
+   * emitting a stop token ends generation.
+   */
+  void ApplyStopTokenPolicy(DynamicBitset* next_token_bitset, bool can_reach_end);
+
   bool IsStopTokenAccepted() const;
 
   /*! \brief Check if the token bitmask is all-true. */
@@ -1110,13 +1117,7 @@ void GrammarMatcher::Impl::SetTokenBitmask(
       }
     }
 
-    // Add the stop tokens when the grammar is completed, or when the stop token is itself a
-    // grammar terminal that completes the grammar
-    for (int id : stop_token_ids_) {
-      if (can_reach_end || StopTokenCompletesGrammar(id)) {
-        next_token_bitset.Set(id, true);
-      }
-    }
+    ApplyStopTokenPolicy(&next_token_bitset, can_reach_end);
   } else {
     // Otherwise, the final rejected token set is (rejected_indices \ accepted_indices)
     next_token_bitset.Set();
@@ -1132,12 +1133,19 @@ void GrammarMatcher::Impl::SetTokenBitmask(
         next_token_bitset.Set(id, false);
       }
     }
-    // If the grammar is not completed, only keep the stop tokens that complete the grammar
-    if (!can_reach_end) {
-      for (int id : stop_token_ids_) {
-        next_token_bitset.Set(id, StopTokenCompletesGrammar(id));
-      }
-    }
+    ApplyStopTokenPolicy(&next_token_bitset, can_reach_end);
+  }
+}
+
+void GrammarMatcher::Impl::ApplyStopTokenPolicy(
+    DynamicBitset* next_token_bitset, bool can_reach_end
+) {
+  // Stop tokens are part of the matchable vocabulary, so the mask above may already allow one as
+  // ordinary text. That is not enough: emitting a stop token ends generation, so it is only
+  // allowed when the grammar is complete, or when consuming it as a terminal completes the
+  // grammar. Otherwise the output would be truncated, so the decision is overridden here.
+  for (int id : stop_token_ids_) {
+    next_token_bitset->Set(id, can_reach_end || StopTokenCompletesGrammar(id));
   }
 }
 
