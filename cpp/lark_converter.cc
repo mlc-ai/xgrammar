@@ -71,7 +71,7 @@ enum class TokenType {
   kGrammarRef,
   kJson,
   kRegexExt,
-  kLLGuidance,
+  kGrammarOptions,
   kImport,
   kIgnore,
   kLark,
@@ -439,8 +439,8 @@ class LarkLexer {
     if (directive == "%regex") {
       return LexJSONValue(TokenType::kRegexExt, location, directive);
     }
-    if (directive == "%llguidance") {
-      return LexJSONValue(TokenType::kLLGuidance, location, directive);
+    if (directive == "%grammar_options") {
+      return LexJSONValue(TokenType::kGrammarOptions, location, directive);
     }
     if (directive == "%import") {
       return {TokenType::kImport, directive, "", location};
@@ -517,6 +517,8 @@ struct Definition {
   std::string name;
   bool is_terminal = false;
   bool lazy = false;
+  std::optional<std::string> suffix;
+  Location suffix_location;
   Node body;
   Location location;
 };
@@ -579,7 +581,7 @@ class LarkParser {
         case TokenType::kIgnore:
           ParseIgnore(&document);
           break;
-        case TokenType::kLLGuidance:
+        case TokenType::kGrammarOptions:
           ParseOptions(&document);
           break;
         case TokenType::kUnsupportedDirective:
@@ -647,11 +649,11 @@ class LarkParser {
   }
 
   void ParseOptions(Document* document) {
-    Token token = Consume(TokenType::kLLGuidance, "expected %llguidance");
+    Token token = Consume(TokenType::kGrammarOptions, "expected %grammar_options");
     picojson::value value;
     std::string error = picojson::parse(value, token.text);
     if (!error.empty()) {
-      RaiseLarkError(source_, token.location, "invalid %llguidance value: " + error);
+      RaiseLarkError(source_, token.location, "invalid %grammar_options value: " + error);
     }
     document->options.push_back({std::move(value), token.location});
   }
@@ -689,6 +691,23 @@ class LarkParser {
       Token key = Consume(TokenType::kName, "expected rule attribute");
       if (key.text == "lazy" && Peek().type != TokenType::kEquals) {
         definition->lazy = true;
+      } else if (key.text == "suffix") {
+        Consume(TokenType::kEquals, "expected '=' after suffix attribute");
+        Token suffix_token = Consume(TokenType::kString, "expected string literal after suffix=");
+        Node suffix = ParseStringNode(suffix_token);
+        if (!suffix.flags.empty()) {
+          RaiseLarkError(
+              source_, suffix.location, "case-insensitive flags are not supported on suffix"
+          );
+        }
+        if (suffix.text.empty()) {
+          RaiseLarkError(source_, suffix.location, "suffix must not be empty");
+        }
+        if (definition->suffix.has_value()) {
+          RaiseLarkError(source_, key.location, "suffix attribute is specified more than once");
+        }
+        definition->suffix = std::move(suffix.text);
+        definition->suffix_location = suffix.location;
       } else {
         RaiseLarkError(
             source_,
@@ -855,11 +874,18 @@ class LarkParser {
       Node result = ParseStringNode(token);
       if (Match(TokenType::kDotDot)) {
         Token end = Consume(TokenType::kString, "expected string after '..'");
+        Node end_node = ParseStringNode(end);
+        if (!result.flags.empty()) {
+          RaiseLarkError(source_, token.location, "flags are not allowed on character ranges");
+        }
+        if (!end_node.flags.empty()) {
+          RaiseLarkError(source_, end.location, "flags are not allowed on character ranges");
+        }
         Node range;
         range.kind = Node::Kind::kRange;
         range.location = token.location;
         range.text = result.text;
-        range.text2 = ParseStringNode(end).text;
+        range.text2 = end_node.text;
         return range;
       }
       return result;
@@ -1001,14 +1027,148 @@ std::string Trim(std::string value) {
   return value.substr(begin, end - begin);
 }
 
+std::string RewriteRegexDots(const std::string& pattern, bool dot_matches_newline) {
+  if (dot_matches_newline) {
+    return pattern;
+  }
+  std::string result;
+  result.reserve(pattern.size());
+  bool escaped = false;
+  bool in_character_class = false;
+  for (char c : pattern) {
+    if (escaped) {
+      result.push_back(c);
+      escaped = false;
+      continue;
+    }
+    if (c == '\\') {
+      result.push_back(c);
+      escaped = true;
+    } else if (c == '[') {
+      result.push_back(c);
+      in_character_class = true;
+    } else if (c == ']' && in_character_class) {
+      result.push_back(c);
+      in_character_class = false;
+    } else if (c == '.' && !in_character_class) {
+      result += "[^\\n]";
+    } else {
+      result.push_back(c);
+    }
+  }
+  return result;
+}
+
+std::optional<std::string> ParseFixedRegexLiteral(const std::string& pattern) {
+  std::string result;
+  for (size_t i = 0; i < pattern.size();) {
+    char c = pattern[i++];
+    if (c != '\\') {
+      if (std::string(".^$*+?()[]{}|").find(c) != std::string::npos) {
+        return std::nullopt;
+      }
+      result.push_back(c);
+      continue;
+    }
+    if (i == pattern.size()) {
+      return std::nullopt;
+    }
+    char escaped = pattern[i++];
+    switch (escaped) {
+      case 'n':
+        result.push_back('\n');
+        break;
+      case 'r':
+        result.push_back('\r');
+        break;
+      case 't':
+        result.push_back('\t');
+        break;
+      case 'f':
+        result.push_back('\f');
+        break;
+      case 'v':
+        result.push_back('\v');
+        break;
+      case '0':
+        result.push_back('\0');
+        break;
+      case '^':
+      case '$':
+      case '.':
+      case '*':
+      case '+':
+      case '?':
+      case '(':
+      case ')':
+      case '[':
+      case ']':
+      case '{':
+      case '}':
+      case '|':
+      case '\\':
+      case '/':
+      case '-':
+        result.push_back(escaped);
+        break;
+      case 'x':
+      case 'u': {
+        bool braced = escaped == 'u' && i < pattern.size() && pattern[i] == '{';
+        TCodepoint codepoint = 0;
+        if (braced) {
+          ++i;
+          int digit_count = 0;
+          while (i < pattern.size() && HexCharToInt(pattern[i]) != -1 && digit_count < 6) {
+            codepoint = codepoint * 16 + HexCharToInt(pattern[i++]);
+            ++digit_count;
+          }
+          if (digit_count == 0 || i >= pattern.size() || pattern[i++] != '}') {
+            return std::nullopt;
+          }
+        } else {
+          int digit_count = escaped == 'x' ? 2 : 4;
+          if (i + static_cast<size_t>(digit_count) > pattern.size()) {
+            return std::nullopt;
+          }
+          for (int digit = 0; digit < digit_count; ++digit) {
+            int value = HexCharToInt(pattern[i++]);
+            if (value == -1) {
+              return std::nullopt;
+            }
+            codepoint = codepoint * 16 + value;
+          }
+        }
+        if (codepoint > 0x10FFFF || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) {
+          return std::nullopt;
+        }
+        result += CharToUTF8(codepoint);
+        break;
+      }
+      default:
+        return std::nullopt;
+    }
+  }
+  return result;
+}
+
+struct NamedGrammarRegistry {
+  std::unordered_map<std::string, std::variant<Grammar, std::string>> inputs;
+  std::unordered_map<std::string, Grammar> compiled;
+  std::vector<std::string> active;
+};
+
 class LarkCompiler {
  public:
   LarkCompiler(
       const std::string& source,
       Document document,
-      const std::optional<TokenizerInfo>& tokenizer_info
+      const std::optional<TokenizerInfo>& tokenizer_info,
+      NamedGrammarRegistry& named_grammars
   )
-      : source_(source), document_(std::move(document)), tokenizer_info_(tokenizer_info) {}
+      : source_(source),
+        document_(std::move(document)),
+        tokenizer_info_(tokenizer_info),
+        named_grammars_(named_grammars) {}
 
   Grammar Compile() {
     ExpandImports();
@@ -1045,7 +1205,7 @@ class LarkCompiler {
       if (definition.name == "start") {
         if (dynamic_start_body.has_value()) {
           body_expr_id = dynamic_start_body.value();
-        } else if (definition.lazy) {
+        } else if (HasLazySemantics(definition)) {
           body_expr_id = CompileLazyRule(definition);
         } else {
           body_expr_id = CompileNode(definition.body, definition.name, false);
@@ -1053,7 +1213,7 @@ class LarkCompiler {
         if (allow_initial_skip_ && skip_rule_id_ != -1) {
           body_expr_id = builder_.AddSequence({builder_.AddRuleRef(skip_rule_id_), body_expr_id});
         }
-      } else if (definition.lazy) {
+      } else if (HasLazySemantics(definition)) {
         body_expr_id = CompileLazyRule(definition);
       } else {
         body_expr_id = CompileNode(definition.body, definition.name, false);
@@ -1086,6 +1246,10 @@ class LarkCompiler {
     Node remainder;
   };
 
+  static bool HasLazySemantics(const Definition& definition) {
+    return definition.lazy || definition.suffix.has_value();
+  }
+
   void ExpandImports() {
     for (const auto& import : document_.imports) {
       auto it = CommonRegexes().find(import.path);
@@ -1108,7 +1272,7 @@ class LarkCompiler {
   void ParseOptions() {
     for (const auto& [value, location] : document_.options) {
       if (!value.is<picojson::object>()) {
-        RaiseLarkError(source_, location, "%llguidance value must be an object");
+        RaiseLarkError(source_, location, "%grammar_options value must be an object");
       }
       for (const auto& [key, option] : value.get<picojson::object>()) {
         if (key == "allow_initial_skip") {
@@ -1121,10 +1285,12 @@ class LarkCompiler {
             RaiseLarkError(source_, location, key + " must be a boolean");
           }
           if (option.get<bool>()) {
-            RaiseLarkError(source_, location, "%llguidance option '" + key + "' is not supported");
+            RaiseLarkError(
+                source_, location, "%grammar_options option '" + key + "' is not supported"
+            );
           }
         } else {
-          RaiseLarkError(source_, location, "unknown %llguidance option '" + key + "'");
+          RaiseLarkError(source_, location, "unknown %grammar_options option '" + key + "'");
         }
       }
     }
@@ -1208,6 +1374,110 @@ class LarkCompiler {
     skip_rule_id_ = builder_.AddRuleWithHint("lark_ignore", ignore_repeat);
   }
 
+  int32_t CompileStringLiteral(const Node& node) {
+    if (node.flags.empty()) {
+      return node.text.empty() ? builder_.AddEmptyStr() : builder_.AddByteString(node.text);
+    }
+    if (node.flags != "i") {
+      RaiseLarkError(
+          source_, node.location, "unsupported string literal flags '" + node.flags + "'"
+      );
+    }
+    std::vector<TCodepoint> codepoints = ParseUTF8(node.text.c_str());
+    if (!node.text.empty() &&
+        (codepoints.empty() || codepoints[0] == CharHandlingError::kInvalidUTF8)) {
+      RaiseLarkError(source_, node.location, "case-insensitive string is not valid UTF-8");
+    }
+    std::vector<int32_t> elements;
+    elements.reserve(codepoints.size());
+    for (TCodepoint codepoint : codepoints) {
+      if (codepoint > 0x7F) {
+        RaiseLarkError(
+            source_,
+            node.location,
+            "case-insensitive string literals currently support ASCII characters only"
+        );
+      }
+      if ((codepoint >= 'a' && codepoint <= 'z') || (codepoint >= 'A' && codepoint <= 'Z')) {
+        TCodepoint lowercase =
+            static_cast<TCodepoint>(std::tolower(static_cast<unsigned char>(codepoint)));
+        TCodepoint uppercase =
+            static_cast<TCodepoint>(std::toupper(static_cast<unsigned char>(codepoint)));
+        elements.push_back(
+            builder_.AddCharacterClass({{lowercase, lowercase}, {uppercase, uppercase}})
+        );
+      } else {
+        elements.push_back(builder_.AddByteString(CharToUTF8(codepoint)));
+      }
+    }
+    if (elements.empty()) {
+      return builder_.AddEmptyStr();
+    }
+    return elements.size() == 1 ? elements[0] : builder_.AddSequence(elements);
+  }
+
+  std::string PrepareRegexPattern(const Node& node) const {
+    if (node.flags.empty()) {
+      return RewriteRegexDots(node.text, false);
+    }
+    if (node.flags == "s") {
+      return RewriteRegexDots(node.text, true);
+    }
+    if (node.flags.find('l') != std::string::npos) {
+      RaiseLarkError(source_, node.location, "regular-expression flag 'l' is not supported");
+    }
+    RaiseLarkError(
+        source_, node.location, "only the regular-expression flag 's' is currently supported"
+    );
+  }
+
+  const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {
+    auto input_it = named_grammars_.inputs.find(name);
+    if (input_it == named_grammars_.inputs.end()) {
+      RaiseLarkError(source_, location, "unknown named grammar '@" + name + "'");
+    }
+    if (std::holds_alternative<Grammar>(input_it->second)) {
+      return std::get<Grammar>(input_it->second);
+    }
+    auto compiled_it = named_grammars_.compiled.find(name);
+    if (compiled_it != named_grammars_.compiled.end()) {
+      return compiled_it->second;
+    }
+
+    auto active_it = std::find(named_grammars_.active.begin(), named_grammars_.active.end(), name);
+    if (active_it != named_grammars_.active.end()) {
+      std::ostringstream cycle;
+      for (auto it = active_it; it != named_grammars_.active.end(); ++it) {
+        if (it != active_it) {
+          cycle << " -> ";
+        }
+        cycle << "@" << *it;
+      }
+      cycle << " -> @" << name;
+      RaiseLarkError(source_, location, "circular named grammar reference: " + cycle.str());
+    }
+
+    named_grammars_.active.push_back(name);
+    try {
+      const std::string& named_source = std::get<std::string>(input_it->second);
+      auto tokens = LarkLexer(named_source).Tokenize();
+      auto document = LarkParser(named_source, std::move(tokens)).Parse();
+      Grammar compiled =
+          LarkCompiler(named_source, std::move(document), tokenizer_info_, named_grammars_)
+              .Compile();
+      auto compiled_it = named_grammars_.compiled.emplace(name, std::move(compiled)).first;
+      named_grammars_.active.pop_back();
+      return compiled_it->second;
+    } catch (const std::exception& error) {
+      named_grammars_.active.pop_back();
+      RaiseLarkError(
+          source_,
+          location,
+          "failed to compile named grammar '@" + name + "': " + std::string(error.what())
+      );
+    }
+  }
+
   int32_t CompileNode(const Node& node, const std::string& rule_hint, bool terminal_mode) {
     switch (node.kind) {
       case Node::Kind::kSequence: {
@@ -1249,11 +1519,7 @@ class LarkCompiler {
         return !terminal_mode && definition_it->second->is_terminal ? AppendSkip(result) : result;
       }
       case Node::Kind::kString: {
-        if (!node.flags.empty()) {
-          RaiseLarkError(source_, node.location, "case-insensitive string flags are not supported");
-        }
-        int32_t result =
-            node.text.empty() ? builder_.AddEmptyStr() : builder_.AddByteString(node.text);
+        int32_t result = CompileStringLiteral(node);
         return !terminal_mode && !node.text.empty() ? AppendSkip(result) : result;
       }
       case Node::Kind::kRange: {
@@ -1270,11 +1536,9 @@ class LarkCompiler {
         return terminal_mode ? result : AppendSkip(result);
       }
       case Node::Kind::kRegex: {
-        if (!node.flags.empty()) {
-          RaiseLarkError(source_, node.location, "regular-expression flags are not supported");
-        }
+        std::string pattern = PrepareRegexPattern(node);
         try {
-          int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromRegex(node.text));
+          int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromRegex(pattern));
           int32_t result = builder_.AddRuleRef(root);
           return terminal_mode ? result : AppendSkip(result);
         } catch (const std::exception& error) {
@@ -1286,6 +1550,9 @@ class LarkCompiler {
         }
       }
       case Node::Kind::kJson: {
+        if (terminal_mode) {
+          RaiseLarkError(source_, node.location, "%json cannot be used in terminals");
+        }
         try {
           int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromJSONSchema(node.text));
           int32_t result = builder_.AddRuleRef(root);
@@ -1299,8 +1566,11 @@ class LarkCompiler {
         }
       }
       case Node::Kind::kNestedLark: {
+        if (terminal_mode) {
+          RaiseLarkError(source_, node.location, "nested %lark cannot be used in terminals");
+        }
         try {
-          LarkCompiler compiler(source_, *node.nested, tokenizer_info_);
+          LarkCompiler compiler(source_, *node.nested, tokenizer_info_, named_grammars_);
           int32_t root = SubGrammarAdder::Apply(&builder_, compiler.Compile());
           int32_t result = builder_.AddRuleRef(root);
           return terminal_mode ? result : AppendSkip(result);
@@ -1323,8 +1593,19 @@ class LarkCompiler {
       }
       case Node::Kind::kRegexExt:
         RaiseLarkError(source_, node.location, "structured %regex is not supported");
-      case Node::Kind::kGrammarRef:
-        RaiseLarkError(source_, node.location, "multiple grammar references are not supported");
+      case Node::Kind::kGrammarRef: {
+        if (terminal_mode) {
+          RaiseLarkError(source_, node.location, "named grammars cannot be used in terminals");
+        }
+        std::string name = node.text.substr(1);
+        auto root_it = named_grammar_roots_.find(name);
+        if (root_it == named_grammar_roots_.end()) {
+          int32_t root =
+              SubGrammarAdder::Apply(&builder_, ResolveNamedGrammar(name, node.location));
+          root_it = named_grammar_roots_.emplace(name, root).first;
+        }
+        return AppendSkip(builder_.AddRuleRef(root_it->second));
+      }
       case Node::Kind::kNot:
         RaiseLarkError(
             source_, node.location, "regular-expression complement '~' is not supported"
@@ -1439,16 +1720,29 @@ class LarkCompiler {
     return result;
   }
 
+  static const Node* UnwrapSingle(const Node* node) {
+    while (node->kind == Node::Kind::kSequence && node->children.size() == 1) {
+      node = &node->children[0];
+    }
+    return node;
+  }
+
   bool IsAnyText(const Node& node, std::unordered_set<std::string>* visiting = nullptr) const {
-    if (node.kind == Node::Kind::kRegex && node.flags.empty()) {
+    if (node.kind == Node::Kind::kRegex) {
       std::string pattern;
       for (char c : node.text) {
         if (c != ' ' && c != '\t' && c != '\r') {
           pattern.push_back(c);
         }
       }
+      if (node.flags == "s") {
+        return pattern == ".*";
+      }
+      if (!node.flags.empty()) {
+        return false;
+      }
       return pattern == "(.|\\n)*" || pattern == "(\\n|.)*" || pattern == "(?s:.*)" ||
-             pattern == "[\\s\\S]*";
+             pattern == "(?:.|\\n)*" || pattern == "(?:\\n|.)*" || pattern == "[\\s\\S]*";
     }
     if (node.kind == Node::Kind::kSequence && node.children.size() == 1) {
       return IsAnyText(node.children[0], visiting);
@@ -1473,9 +1767,51 @@ class LarkCompiler {
     return false;
   }
 
+  std::optional<Trigger> ExtractLazyRegexTrigger(const Node& node) const {
+    if (node.kind != Node::Kind::kRegex) {
+      return std::nullopt;
+    }
+    std::vector<std::string> prefixes;
+    if (node.flags.empty()) {
+      prefixes = {"(.|\\n)*", "(\\n|.)*", "(?:.|\\n)*", "(?:\\n|.)*", "[\\s\\S]*", "(?s:.*)"};
+    } else if (node.flags == "s") {
+      prefixes = {".*"};
+    } else {
+      return std::nullopt;
+    }
+    for (const std::string& prefix : prefixes) {
+      if (node.text.size() <= prefix.size() || node.text.compare(0, prefix.size(), prefix) != 0) {
+        continue;
+      }
+      auto trigger = ParseFixedRegexLiteral(node.text.substr(prefix.size()));
+      if (trigger.has_value() && !trigger->empty()) {
+        return Trigger{Trigger::Level::kString, std::move(trigger.value()), {}, node.location};
+      }
+    }
+    return std::nullopt;
+  }
+
   std::optional<Trigger> ExtractLazyTrigger(const Definition& definition) const {
-    if (!definition.lazy || definition.body.kind != Node::Kind::kSequence ||
-        definition.body.children.size() != 2 || !IsAnyText(definition.body.children[0])) {
+    if (definition.suffix.has_value()) {
+      if (!IsAnyText(definition.body)) {
+        return std::nullopt;
+      }
+      return Trigger{
+          Trigger::Level::kString, definition.suffix.value(), {}, definition.suffix_location
+      };
+    }
+    if (!definition.lazy) {
+      return std::nullopt;
+    }
+    const Node* body = UnwrapSingle(&definition.body);
+    if (body->kind == Node::Kind::kRegex) {
+      auto regex_trigger = ExtractLazyRegexTrigger(*body);
+      if (regex_trigger.has_value()) {
+        return regex_trigger;
+      }
+    }
+    if (definition.body.kind != Node::Kind::kSequence || definition.body.children.size() != 2 ||
+        !IsAnyText(definition.body.children[0])) {
       return std::nullopt;
     }
     const Node& trigger = definition.body.children[1];
@@ -1493,12 +1829,28 @@ class LarkCompiler {
   }
 
   int32_t CompileLazyRule(const Definition& definition) {
+    if (definition.suffix.has_value()) {
+      RaiseLarkError(
+          source_,
+          definition.location,
+          "suffix is only supported on an ANY_TEXT head used by dynamic dispatch"
+      );
+    }
+    const Node* body = UnwrapSingle(&definition.body);
+    if (body->kind == Node::Kind::kRegex && ExtractLazyRegexTrigger(*body).has_value()) {
+      RaiseLarkError(
+          source_,
+          definition.location,
+          "lazy regex suffix is only supported on a head used by dynamic dispatch"
+      );
+    }
     auto trigger = ExtractLazyTrigger(definition);
     if (!trigger.has_value()) {
       RaiseLarkError(
           source_,
           definition.location,
-          "general lazy rules are not supported; expected ANY_TEXT followed by a fixed trigger"
+          "general lazy rules are not supported; expected ANY_TEXT with a fixed string, token, "
+          "regex suffix, or suffix attribute"
       );
     }
     int32_t empty_rule = builder_.AddRuleWithHint("lark_lazy_end", builder_.AddEmptyStr());
@@ -1514,13 +1866,6 @@ class LarkCompiler {
       result = builder_.AddTokenTagDispatch(dispatch);
     }
     return AppendSkip(result);
-  }
-
-  static const Node* UnwrapSingle(const Node* node) {
-    while (node->kind == Node::Kind::kSequence && node->children.size() == 1) {
-      node = &node->children[0];
-    }
-    return node;
   }
 
   static std::vector<Node> FlattenSequence(const Node& node) {
@@ -1691,9 +2036,11 @@ class LarkCompiler {
   const std::string& source_;
   Document document_;
   const std::optional<TokenizerInfo>& tokenizer_info_;
+  NamedGrammarRegistry& named_grammars_;
   GrammarBuilder builder_;
   std::unordered_map<std::string, Definition*> definition_by_name_;
   std::unordered_map<std::string, int32_t> rule_ids_;
+  std::unordered_map<std::string, int32_t> named_grammar_roots_;
   int32_t skip_rule_id_ = -1;
   bool allow_initial_skip_ = false;
   std::unordered_set<std::string> dynamic_unused_rules_;
@@ -1702,11 +2049,31 @@ class LarkCompiler {
 }  // namespace
 
 Grammar LarkToGrammar(
-    const std::string& lark_string, const std::optional<TokenizerInfo>& tokenizer_info
+    const std::string& lark_string,
+    const std::optional<TokenizerInfo>& tokenizer_info,
+    const std::vector<NamedGrammar>& named_grammars
 ) {
+  NamedGrammarRegistry named_grammar_registry;
+  for (const auto& [name, grammar_or_source] : named_grammars) {
+    if (name.empty()) {
+      throw XGrammarError("Named grammar names must not be empty");
+    }
+    if (!std::all_of(name.begin(), name.end(), [](unsigned char character) {
+          return std::isalnum(character) || character == '_' || character == '-';
+        })) {
+      throw XGrammarError(
+          "Invalid named grammar name '" + name +
+          "': names may contain only letters, digits, underscores, and hyphens"
+      );
+    }
+    if (!named_grammar_registry.inputs.emplace(name, grammar_or_source).second) {
+      throw XGrammarError("Duplicate named grammar '" + name + "'");
+    }
+  }
   auto tokens = LarkLexer(lark_string).Tokenize();
   auto document = LarkParser(lark_string, std::move(tokens)).Parse();
-  return LarkCompiler(lark_string, std::move(document), tokenizer_info).Compile();
+  return LarkCompiler(lark_string, std::move(document), tokenizer_info, named_grammar_registry)
+      .Compile();
 }
 
 }  // namespace xgrammar

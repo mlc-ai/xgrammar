@@ -76,9 +76,11 @@ Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) 
 }
 
 Grammar Grammar::FromLark(
-    const std::string& lark_string, const std::optional<TokenizerInfo>& tokenizer_info
+    const std::string& lark_string,
+    const std::optional<TokenizerInfo>& tokenizer_info,
+    const std::vector<NamedGrammar>& named_grammars
 ) {
-  return LarkToGrammar(lark_string, tokenizer_info);
+  return LarkToGrammar(lark_string, tokenizer_info, named_grammars);
 }
 
 std::variant<Grammar, StructuralTagError> Grammar::FromStructuralTag(

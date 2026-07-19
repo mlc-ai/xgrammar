@@ -1,7 +1,7 @@
 # Lark Grammar Frontend
 
-XGrammar can compile a practical subset of the Lark grammar syntax used by LLGuidance. The result
-is a normal `Grammar`, so it works with the existing compiler, matcher, serialization, and engine
+XGrammar's Lark frontend is compatible with the Lark dialect used by LLGuidance. The result is a
+normal `Grammar`, so it works with the existing compiler, matcher, serialization, and engine
 integrations.
 
 ```python
@@ -25,6 +25,8 @@ The root rule must be named `start`.
 
 - lowercase rules and uppercase terminals
 - string and regular-expression literals
+- ASCII case-insensitive string literals such as `"yes"i`
+- the regex `s` flag, such as `/.*/s`; without `s`, `.` does not match newline
 - sequences, alternatives, groups, and optional groups
 - `?`, `*`, `+`, `~M..N`, `{M}`, `{M,N}`, `{M,}`, and `{,N}` repetitions
 - single-character ranges such as `"a".."z"`
@@ -38,9 +40,11 @@ The root rule must be named `start`.
 - nested `%lark { ... }`
 - numeric token sets such as `<[1,3-8]>`, exclusions such as `<[^1,3]>`, and `<[*]>`
 - named special tokens when `tokenizer_info` is supplied
-- `%llguidance {"allow_initial_skip": true}`
+- named grammars referenced with `@name`
+- `%grammar_options {"allow_initial_skip": true}`
 
-String and regex flags are not currently supported.
+Case-insensitive string literals containing non-ASCII characters are rejected. Regex flags other
+than `s` are not currently supported.
 
 ## Inline JSON
 
@@ -63,14 +67,38 @@ grammar = xgr.Grammar.from_lark(
 Whitespace outside the JSON value is controlled by the surrounding Lark grammar. Whitespace inside
 the value follows the JSON Schema converter's normal behavior.
 
+## Named Grammars
+
+Pass existing `Grammar` objects or Lark grammar strings through `named_grammars` and reference them
+with `@name`. Dictionary keys do not include the leading `@`.
+
+```python
+arguments = xgr.Grammar.from_json_schema(
+    {
+        "type": "object",
+        "properties": {"city": {"type": "string"}},
+        "required": ["city"],
+        "additionalProperties": False,
+    }
+)
+grammar = xgr.Grammar.from_lark(
+    'start: "<tool_call>" @arguments "</tool_call>" ":" @status',
+    named_grammars={
+        "arguments": arguments,
+        "status": 'start: "ok" | "cancelled"',
+    },
+)
+```
+
+String values are parsed as Lark grammars and may reference other entries in the same mapping. The
+same named grammar may be referenced more than once and from inside nested `%lark` blocks.
+
 ## Dynamic Tool Calls
 
-LLGuidance uses a lazy text lexeme to allow arbitrary text until a tool-call trigger appears. The
-grammar remains static; the trigger changes the active parser state rather than replacing the
-grammar at runtime.
-
-XGrammar recognizes the LLGuidance structural-tag pattern below and lowers the complete `start`
-rule to `TagDispatch`:
+A lazy text lexeme can allow arbitrary text until a tool-call trigger appears. The grammar remains
+static; the trigger changes the active parser state rather than replacing the grammar at runtime.
+XGrammar recognizes the structural-tag pattern below and lowers the complete `start` rule to
+`TagDispatch`:
 
 ```python
 grammar = xgr.Grammar.from_lark(
@@ -110,7 +138,18 @@ TEXT: /(\n|.)*/
 ```
 
 The supported lazy form is deliberately narrow: an arbitrary-text terminal followed by one fixed
-string or special-token trigger. General shortest-match regex semantics are not approximated.
+string or special-token trigger. Dynamic heads may also express the same fixed string trigger as a
+regex suffix or a `suffix` attribute:
+
+```text
+regex_head[lazy]: /(\n|.)*<tool>/
+suffix_head[suffix="<tool>"]: TEXT
+```
+
+For regex suffixes, the prefix must be one of the recognized arbitrary-text forms and the remainder
+must be a fixed regex literal. These forms are only enabled when the entire `start: tool* tail`
+pattern can be lowered to dispatch. General shortest-match regex and standalone suffix semantics
+are not approximated.
 
 ## Special Tokens
 
@@ -126,21 +165,3 @@ Named references are resolved by exact match against the decoded vocabulary:
 tokenizer_info = xgr.TokenizerInfo(["a", "<|tool|>", "b"])
 grammar = xgr.Grammar.from_lark("start: <|tool|>", tokenizer_info=tokenizer_info)
 ```
-
-## Unsupported LLGuidance Extensions
-
-The following features require regular-language or generation-runtime state that is not represented
-by XGrammar's current `Grammar` API. The frontend rejects them with a source-located error:
-
-- captures
-- general `lazy`, `stop`, `suffix`, and stop captures
-- rule-level `max_tokens` and `temperature`
-- terminal intersection and complement (`&` and `~`)
-- structured `%regex` substring nodes
-- multiple named grammars referenced with `@name`
-- parametric grammar rules and `%if`
-- templates, priorities, `%declare`, and `%override`
-- `%llguidance` options other than `allow_initial_skip`
-
-Rejecting these constructs is intentional. Ignoring them would silently accept a different language
-or drop generation-time behavior.

@@ -152,6 +152,24 @@ def _assert_lark_error(
             id="regex-escaped-delimiter-and-repeat",
         ),
         pytest.param(
+            "start: /a.b/",
+            ["acb", "a b", "a😀b"],
+            ["ab", "a\nb", "a\n\nb"],
+            id="regex-dot-excludes-newline",
+        ),
+        pytest.param(
+            "start: /a.b/s", ["acb", "a\nb", "a😀b"], ["ab", "a\n\nb"], id="regex-dotall-flag"
+        ),
+        pytest.param(
+            r"start: /a\.b/s", ["a.b"], ["acb", "a\nb"], id="regex-dotall-preserves-escaped-dot"
+        ),
+        pytest.param(
+            "start: /a[.]b/s",
+            ["a.b"],
+            ["acb", "a\nb"],
+            id="regex-dotall-preserves-character-class-dot",
+        ),
+        pytest.param(
             'start: "a".."z"+ "0".."9"?',
             ["a", "xyz", "hello7"],
             ["", "A", "7", "abc78"],
@@ -165,6 +183,18 @@ def _assert_lark_error(
             ["😀é中文"],
             ["", "😀é", "😀e中文"],
             id="unicode-string-literals",
+        ),
+        pytest.param(
+            'start: "Ab-C9"i',
+            ["Ab-C9", "ab-c9", "AB-C9", "aB-c9"],
+            ["", "ab-c", "ab_c9", "äb-c9"],
+            id="ascii-case-insensitive-string",
+        ),
+        pytest.param(
+            'start: TOKEN\nTOKEN: "Yes"i | "no"',
+            ["yes", "YES", "YeS", "no"],
+            ["", "y", "No"],
+            id="case-insensitive-string-in-terminal",
         ),
         pytest.param(
             r'''start: "\n" "\t" "\\" "\"" "\u03bb"''',
@@ -342,8 +372,8 @@ def test_lark_ignore_inline_regex() -> None:
 
 def test_lark_allow_initial_skip_options() -> None:
     grammar = """
-        %llguidance {"allow_initial_skip": false}
-        %llguidance {"allow_initial_skip": true, "no_forcing": false, "allow_invalid_utf8": false}
+        %grammar_options {"allow_initial_skip": false}
+        %grammar_options {"allow_initial_skip": true, "no_forcing": false, "allow_invalid_utf8": false}
         %import common.WS
         %ignore WS
         start: "a" "b"
@@ -430,7 +460,7 @@ def test_lark_nested_lark_has_an_independent_namespace() -> None:
 def test_lark_nested_lark_supports_recursion_json_and_ignore() -> None:
     grammar = r"""
         start: "[" %lark {
-          %llguidance {"allow_initial_skip": true}
+          %grammar_options {"allow_initial_skip": true}
           %import common.WS
           %ignore WS
           start: item ":" %json {"type":"integer"}
@@ -543,6 +573,81 @@ def test_lark_dynamic_distinct_string_triggers() -> None:
         grammar,
         ["free text", "partial <fo remains text", "x<foo>abc</foo>y", "<bar>12</bar><foo>x</foo>"],
         ["<foo>", "<foo>12</foo>", "<bar>x</bar>", "<bar>12"],
+    )
+
+
+def test_lark_dynamic_lazy_regex_suffix() -> None:
+    grammar = r"""
+        start: tool* tail
+        tail: TEXT
+        head[lazy]: /(\n|.)*<call>/
+        tool: head /[0-9]+/ "</call>"
+        TEXT: /(\n|.)*/
+    """
+    _assert_language(
+        grammar,
+        ["", "free text", "partial <cal", "x<call>12</call>y"],
+        ["<call>", "<call>x</call>", "<call>12", "x<call>12</call><call>"],
+    )
+
+
+def test_lark_dynamic_lazy_dotall_regex_suffix() -> None:
+    grammar = r"""
+        start: tool* tail
+        tail: TEXT
+        head[lazy]: /.*<call>/s
+        tool: head "ok" "</call>"
+        TEXT: /.*/s
+    """
+    _assert_language(
+        grammar,
+        ["line 1\nline 2", "x\n<call>ok</call>tail"],
+        ["<call>", "<call>bad</call>", "x\n<call>ok"],
+    )
+
+
+def test_lark_dynamic_fixed_string_suffix_attribute() -> None:
+    grammar = r"""
+        start: tool* tail
+        tail: TEXT
+        head[suffix="<tool>"]: TEXT
+        tool: head /[a-z]+/ "</tool>"
+        TEXT: /(\n|.)*/
+    """
+    _assert_language(
+        grammar,
+        ["free", "x<tool>abc</tool>y", "partial <too"],
+        ["<tool>", "<tool>123</tool>", "<tool>abc"],
+    )
+
+
+def test_lark_dynamic_lazy_regex_escaped_newline_trigger() -> None:
+    grammar = r"""
+        start: tool* tail
+        tail: TEXT
+        head[lazy]: /(\n|.)*\n>>>>>>>/
+        tool: head "replacement"
+        TEXT: /(\n|.)*/
+    """
+    _assert_language(
+        grammar,
+        ["free >>>>>>> text", "before\n>>>>>>>replacementafter"],
+        ["\n>>>>>>>", "before\n>>>>>>>wrong"],
+    )
+
+
+def test_lark_dynamic_lazy_regex_escaped_metacharacter_trigger() -> None:
+    grammar = r"""
+        start: tool* tail
+        tail: TEXT
+        head[lazy]: /(\n|.)*END\./
+        tool: head "ok"
+        TEXT: /(\n|.)*/
+    """
+    _assert_language(
+        grammar,
+        ["free END text", "beforeEND.okafter"],
+        ["END.", "beforeEND.not-ok", "beforeEND.okEND."],
     )
 
 
@@ -665,6 +770,58 @@ def test_lark_grammar_union_and_concat_integration() -> None:
     _assert_grammar_language(xgr.Grammar.concat(left, right), ["a0", "b123"], ["a", "1", "c1"])
 
 
+def test_lark_named_grammar_references() -> None:
+    item = xgr.Grammar.from_lark('start: "x" | "y"')
+    grammar = xgr.Grammar.from_lark(
+        'start: "[" @item ("," @item)* "]"', named_grammars={"item": item}
+    )
+    _assert_grammar_language(grammar, ["[x]", "[y,x]", "[x,y,x]"], ["[]", "[z]", "[x,]"])
+
+
+def test_lark_named_grammar_reference_in_nested_lark() -> None:
+    value = xgr.Grammar.from_regex("[0-9]+")
+    grammar = xgr.Grammar.from_lark(
+        'start: "outer:" %lark { start: "inner:" @value }', named_grammars={"value": value}
+    )
+    _assert_grammar_language(grammar, ["outer:inner:0", "outer:inner:123"], ["inner:1", "outer:1"])
+
+
+def test_lark_named_grammar_string_references() -> None:
+    grammar = xgr.Grammar.from_lark(
+        "start: @pair", named_grammars={"pair": 'start: @item ":" @item', "item": "start: /[a-z]+/"}
+    )
+    _assert_grammar_language(grammar, ["a:b", "hello:world"], ["a:", ":b", "a:1"])
+
+
+def test_lark_named_grammar_string_can_reference_grammar_object() -> None:
+    item = xgr.Grammar.from_regex("[0-9]+")
+    grammar = xgr.Grammar.from_lark(
+        "start: @wrapper", named_grammars={"wrapper": 'start: "[" @item "]"', "item": item}
+    )
+    _assert_grammar_language(grammar, ["[0]", "[123]"], ["[]", "[x]"])
+
+
+def test_lark_named_grammar_string_cycle() -> None:
+    with pytest.raises(
+        RuntimeError, match=r"circular named grammar reference: @left -> @right -> @left"
+    ):
+        xgr.Grammar.from_lark(
+            "start: @left", named_grammars={"left": "start: @right", "right": "start: @left"}
+        )
+
+
+def test_lark_named_grammar_argument_validation() -> None:
+    item = xgr.Grammar.from_lark('start: "x"')
+    with pytest.raises(TypeError, match="must be a dictionary"):
+        xgr.Grammar.from_lark("start: @item", named_grammars=[item])  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="names must be strings"):
+        xgr.Grammar.from_lark("start: @item", named_grammars={1: item})  # type: ignore[dict-item]
+    with pytest.raises(TypeError, match="values must be Grammar instances or Lark strings"):
+        xgr.Grammar.from_lark("start: @item", named_grammars={"item": 1})  # type: ignore[dict-item]
+    with pytest.raises(RuntimeError, match="Invalid named grammar name"):
+        xgr.Grammar.from_lark("start: @item", named_grammars={"bad name": item})
+
+
 def test_lark_large_choice_grammar() -> None:
     options = [f"option-{index:03d}" for index in range(256)]
     choices = " | ".join(json.dumps(option) for option in options)
@@ -729,10 +886,23 @@ def test_lark_large_choice_grammar() -> None:
         ),
         pytest.param("start: ~/[a]/", "complement '~' is not supported", id="complement"),
         pytest.param(
-            'start: "a"i', "case-insensitive string flags are not supported", id="string-flag"
+            'start: "\\u00c4"i',
+            "case-insensitive string literals currently support ASCII characters only",
+            id="non-ascii-string-flag",
         ),
         pytest.param(
-            "start: /abc/i", "regular-expression flags are not supported", id="regex-flag"
+            "start: /abc/i",
+            "only the regular-expression flag 's' is currently supported",
+            id="unsupported-regex-flag",
+        ),
+        pytest.param(
+            "start: /abc/l", "regular-expression flag 'l' is not supported", id="unsupported-l-flag"
+        ),
+        pytest.param(
+            'start: "a"i.."z"', "flags are not allowed on character ranges", id="range-start-flag"
+        ),
+        pytest.param(
+            'start: "a".."z"i', "flags are not allowed on character ranges", id="range-end-flag"
         ),
         pytest.param("start: /[abc/", "failed to compile regular expression", id="invalid-regex"),
         pytest.param('start: "\\q"', "invalid string literal", id="invalid-string-escape"),
@@ -806,15 +976,21 @@ def test_lark_large_choice_grammar() -> None:
             "structured %regex is not supported",
             id="structured-regex",
         ),
-        pytest.param(
-            "start: @other",
-            "multiple grammar references are not supported",
-            id="named-grammar-reference",
-        ),
+        pytest.param("start: @other", "unknown named grammar '@other'", id="unknown-named-grammar"),
         pytest.param(
             "start: TOKEN\nTOKEN: <[1]>",
             "special tokens cannot be used in terminals",
             id="special-in-terminal",
+        ),
+        pytest.param(
+            "start: TOKEN\nTOKEN: %json {}",
+            "%json cannot be used in terminals",
+            id="json-in-terminal",
+        ),
+        pytest.param(
+            'start: TOKEN\nTOKEN: %lark { start: "a" }',
+            "nested %lark cannot be used in terminals",
+            id="nested-lark-in-terminal",
         ),
         pytest.param(
             "start: <[1-2-3]>", "invalid numeric special-token range", id="multiple-range-dashes"
@@ -843,34 +1019,64 @@ def test_lark_large_choice_grammar() -> None:
             "start: <[0-1000001]>", "special-token range is too large", id="token-range-too-large"
         ),
         pytest.param(
-            '%llguidance {"allow_initial_skip": 1}\nstart: "a"',
+            '%grammar_options {"allow_initial_skip": 1}\nstart: "a"',
             "allow_initial_skip must be a boolean",
             id="initial-skip-type",
         ),
         pytest.param(
-            '%llguidance {"no_forcing": true}\nstart: "a"',
-            "%llguidance option 'no_forcing' is not supported",
+            '%grammar_options {"no_forcing": true}\nstart: "a"',
+            "%grammar_options option 'no_forcing' is not supported",
             id="no-forcing-option",
         ),
         pytest.param(
-            '%llguidance {"allow_invalid_utf8": true}\nstart: "a"',
-            "%llguidance option 'allow_invalid_utf8' is not supported",
+            '%grammar_options {"allow_invalid_utf8": true}\nstart: "a"',
+            "%grammar_options option 'allow_invalid_utf8' is not supported",
             id="invalid-utf8-option",
         ),
         pytest.param(
-            '%llguidance {"unknown": false}\nstart: "a"',
-            "unknown %llguidance option 'unknown'",
-            id="unknown-llguidance-option",
+            '%grammar_options {"unknown": false}\nstart: "a"',
+            "unknown %grammar_options option 'unknown'",
+            id="unknown-grammar-options-option",
         ),
         pytest.param(
-            '%llguidance []\nstart: "a"',
-            "%llguidance value must be an object",
-            id="llguidance-not-object",
+            '%grammar_options []\nstart: "a"',
+            "%grammar_options value must be an object",
+            id="grammar-options-not-object",
         ),
         pytest.param(
             "start: thing\nthing[lazy]: /[a-z]+/",
             "general lazy rules are not supported",
             id="unsupported-general-lazy",
+        ),
+        pytest.param(
+            'start: head\nhead[suffix=""]: TEXT\nTEXT: /(\\n|.)*/',
+            "suffix must not be empty",
+            id="empty-suffix",
+        ),
+        pytest.param(
+            "start: head\nhead[suffix=/x/]: TEXT\nTEXT: /(\\n|.)*/",
+            "expected string literal after suffix=",
+            id="non-string-suffix",
+        ),
+        pytest.param(
+            'start: head\nhead[suffix="x",suffix="y"]: TEXT\nTEXT: /(\\n|.)*/',
+            "suffix attribute is specified more than once",
+            id="duplicate-suffix",
+        ),
+        pytest.param(
+            'start: head\nhead[suffix="x"i]: TEXT\nTEXT: /(\\n|.)*/',
+            "case-insensitive flags are not supported on suffix",
+            id="case-insensitive-suffix",
+        ),
+        pytest.param(
+            'start: head\nhead[suffix="x"]: /[a-z]+/',
+            "suffix is only supported on an ANY_TEXT head used by dynamic dispatch",
+            id="suffix-requires-any-text",
+        ),
+        pytest.param(
+            "start: head\nhead[lazy]: /(\\n|.)*END/",
+            "lazy regex suffix is only supported on a head used by dynamic dispatch",
+            id="standalone-lazy-regex-suffix",
         ),
         pytest.param(
             '%ignore MISSING\nstart: "a"', "unknown name 'MISSING'", id="unknown-ignore-name"

@@ -302,13 +302,17 @@ class Grammar(XGRObject):
 
     @staticmethod
     def from_lark(
-        lark_string: str, *, tokenizer_info: Optional["TokenizerInfo"] = None
+        lark_string: str,
+        *,
+        tokenizer_info: Optional["TokenizerInfo"] = None,
+        named_grammars: Optional[Dict[str, Union["Grammar", str]]] = None,
     ) -> "Grammar":
-        """Create a grammar from LLGuidance-compatible Lark syntax.
+        """Create a grammar from Lark syntax.
 
         The grammar must define a ``start`` rule. Core rules, terminals, regular
         expressions, repetition, ``%ignore``, ``%import common``, inline ``%json``,
-        special tokens, and the structural-tool-call lazy pattern are supported.
+        named grammar references, special tokens, and the structural-tool-call lazy
+        pattern are supported.
 
         Parameters
         ----------
@@ -317,9 +321,33 @@ class Grammar(XGRObject):
 
         tokenizer_info : Optional[TokenizerInfo]
             Tokenizer metadata used to resolve named special tokens.
+
+        named_grammars : Optional[Dict[str, Union[Grammar, str]]]
+            Grammars referenced by ``@name`` in the Lark source. String values
+            contain Lark grammar sources with their own ``start`` rules. Dictionary
+            keys are passed without the leading ``@``.
         """
         tokenizer_handle = None if tokenizer_info is None else tokenizer_info._handle
-        return Grammar._create_from_handle(_core.Grammar.from_lark(lark_string, tokenizer_handle))
+        if named_grammars is None:
+            named_grammars = {}
+        if not isinstance(named_grammars, dict):
+            raise TypeError("named_grammars must be a dictionary")
+        names: List[str] = []
+        values: List[Any] = []
+        for name, grammar_or_source in named_grammars.items():
+            if not isinstance(name, str):
+                raise TypeError("named grammar names must be strings")
+            if isinstance(grammar_or_source, Grammar):
+                value = grammar_or_source._handle
+            elif isinstance(grammar_or_source, str):
+                value = grammar_or_source
+            else:
+                raise TypeError("named grammar values must be Grammar instances or Lark strings")
+            names.append(name)
+            values.append(value)
+        return Grammar._create_from_handle(
+            _core.Grammar.from_lark(lark_string, tokenizer_handle, names, values)
+        )
 
     @overload
     @staticmethod

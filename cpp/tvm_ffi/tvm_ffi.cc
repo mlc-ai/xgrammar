@@ -384,16 +384,37 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       )
       .def_static(
           "from_lark",
-          [](ffi::String lark_string, ffi::AnyView tokenizer_info_view) {
+          [](ffi::String lark_string,
+             ffi::AnyView tokenizer_info_view,
+             ffi::AnyView named_grammar_names_view,
+             ffi::AnyView named_grammar_values_view) {
             XGRAMMAR_FFI_TRY_BEGIN();
             std::optional<TokenizerInfo> tokenizer_info = std::nullopt;
             if (tokenizer_info_view != nullptr) {
               tokenizer_info =
                   tokenizer_info_view.cast<ffi::ObjectRef>().as<TokenizerInfoObj>()->value;
             }
-            return ffi::ObjectRef(
-                ffi::make_object<GrammarObj>(Grammar::FromLark(lark_string, tokenizer_info))
-            );
+            auto named_grammar_names = named_grammar_names_view.cast<ffi::Array<ffi::Any>>();
+            auto named_grammar_values = named_grammar_values_view.cast<ffi::Array<ffi::Any>>();
+            if (named_grammar_names.size() != named_grammar_values.size()) {
+              throw XGrammarError("Named grammar names and values must have the same length");
+            }
+            std::vector<NamedGrammar> named_grammars;
+            named_grammars.reserve(static_cast<size_t>(named_grammar_names.size()));
+            for (int64_t i = 0; i < static_cast<int64_t>(named_grammar_names.size()); ++i) {
+              std::string name = named_grammar_names[i].cast<ffi::String>();
+              ffi::AnyView value = named_grammar_values[i];
+              if (const auto* grammar_obj = value.as<GrammarObj>()) {
+                named_grammars.push_back({std::move(name), grammar_obj->value});
+              } else if (value.as<ffi::String>()) {
+                named_grammars.push_back({std::move(name), std::string(value.cast<ffi::String>())});
+              } else {
+                throw XGrammarError("Named grammar values must be Grammar or Lark strings");
+              }
+            }
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(
+                Grammar::FromLark(lark_string, tokenizer_info, named_grammars)
+            ));
             XGRAMMAR_FFI_TRY_END();
           }
       )
