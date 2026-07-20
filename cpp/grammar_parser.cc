@@ -493,6 +493,7 @@ class EBNFParser {
   int32_t ParseTokenSet();
   int32_t ParseExcludeToken();
   int32_t ParseTokenTagDispatch();
+  int32_t ParseRegexMacro();
 
   // Helper functions
 
@@ -544,6 +545,7 @@ const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>>
         {"Token", [](EBNFParser* parser) { return parser->ParseTokenSet(); }},
         {"ExcludeToken", [](EBNFParser* parser) { return parser->ParseExcludeToken(); }},
         {"TokenTagDispatch", [](EBNFParser* parser) { return parser->ParseTokenTagDispatch(); }},
+        {"Regex", [](EBNFParser* parser) { return parser->ParseRegexMacro(); }},
 };
 
 const EBNFParser::Token& EBNFParser::Peek(int delta) const { return *(current_token_ + delta); }
@@ -1008,6 +1010,25 @@ int32_t EBNFParser::ParseTagDispatch() {
   }
 
   return builder_.AddTagDispatch(tag_dispatch);
+}
+
+int32_t EBNFParser::ParseRegexMacro() {
+  Consume();  // Consume Regex operator
+  auto start = current_token_;
+  auto args = ParseMacroArguments();
+  auto delta_element = start - current_token_;  // Used to report parse errors
+
+  if (!args.named_arguments.empty()) {
+    ReportParseError("Regex does not support named arguments", delta_element);
+  }
+  if (args.arguments.size() != 1) {
+    ReportParseError("Regex expects exactly one string argument", delta_element);
+  }
+  auto pattern_node = std::get_if<MacroIR::StringNode>(args.arguments[0].get());
+  if (pattern_node == nullptr) {
+    ReportParseError("Regex pattern must be a string literal", delta_element);
+  }
+  return builder_.AddRegex(pattern_node->value);
 }
 
 int32_t EBNFParser::ParseTokenSet() {

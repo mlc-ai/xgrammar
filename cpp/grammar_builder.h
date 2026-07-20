@@ -75,6 +75,13 @@ class GrammarBuilder {
   int32_t AddByteString(const std::string& str);
 
   /*!
+   * \brief Add a GrammarExpr for a regex. The pattern is stored as-is and compiled into an
+   * automaton by GrammarFSMBuilder.
+   * \param regex_str The regex pattern string.
+   */
+  int32_t AddRegex(const std::string& regex_str);
+
+  /*!
    * \brief Add a GrammarExpr for a character class.
    * \param elements A vector of CharacterClassElement, each containing a lower and a upper bound.
    * \param is_negative Whether the character class is negated.

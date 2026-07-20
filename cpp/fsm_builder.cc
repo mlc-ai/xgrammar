@@ -287,8 +287,9 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   FSMWithStartEnd result = child.Copy();
   std::unordered_set<int> new_ends;
 
-  if (state.lower_bound == 1) {
-    // Insert the first end state.
+  bool has_upper_bound = state.upper_bound != RegexIR::kRepeatNoUpperBound;
+  if (state.lower_bound <= 1 && (!has_upper_bound || state.upper_bound >= 1)) {
+    // A single copy is accepting when the lower bound is at most 1.
     for (int end = 0; end < result.NumStates(); ++end) {
       if (result.IsEndState(end)) {
         new_ends.insert(end);
@@ -296,8 +297,18 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
     }
   }
 
+  // Add a fresh accepting start state so that zero repetitions match. A fresh state is
+  // required: making the original start accepting would also accept strings that merely
+  // loop back to the start inside the first copy.
+  auto allow_zero_repetitions = [](FSMWithStartEnd* fsm) {
+    int new_start = fsm->AddState();
+    fsm->GetFsm().AddEpsilonEdge(new_start, fsm->GetStart());
+    fsm->SetStartState(new_start);
+    fsm->AddEndState(new_start);
+  };
+
   // Handling {n,}
-  if (state.upper_bound == RegexIR::kRepeatNoUpperBound) {
+  if (!has_upper_bound) {
     for (int i = 2; i < state.lower_bound; i++) {
       result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
     }
@@ -316,6 +327,12 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
         result.GetFsm().AddEpsilonEdge(end, end_state_of_lower_bound_fsm);
       }
     }
+    for (const auto& end : new_ends) {
+      result.AddEndState(end);
+    }
+    if (state.lower_bound == 0) {
+      allow_zero_repetitions(&result);
+    }
     return ResultOk(std::move(result));
   }
   // Handling {n, m} or {n}
@@ -331,6 +348,9 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   }
   for (const auto& end : new_ends) {
     result.AddEndState(end);
+  }
+  if (state.lower_bound == 0) {
+    allow_zero_repetitions(&result);
   }
   return ResultOk(std::move(result));
 }

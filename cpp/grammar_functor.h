@@ -16,6 +16,7 @@
 #include "compiled_grammar_impl.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
+#include "support/utils.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -143,6 +144,8 @@ class GrammarFunctor {
         return VisitExcludeToken(grammar_expr);
       case GrammarExprType::kTokenTagDispatch:
         return VisitTokenTagDispatch(grammar_expr);
+      case GrammarExprType::kRegex:
+        return VisitRegex(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
         XGRAMMAR_UNREACHABLE();
@@ -236,6 +239,9 @@ class GrammarFunctor {
   virtual T VisitTokenTagDispatch(const GrammarExpr& grammar_expr) {
     return VisitElement(grammar_expr);
   }
+
+  /*! \brief Visit a regex GrammarExpr. It is a leaf: the pattern string is carried as-is. */
+  virtual T VisitRegex(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
 
   /*! \brief The grammar to visit or mutate. */
   Grammar base_grammar_{NullObj{}};
@@ -373,6 +379,8 @@ class GrammarFSMBuilder {
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
+  /*! \brief Build the automaton of a regex pattern. Returns the error message on failure. */
+  static Result<FSMWithStartEnd> Regex(const std::string& regex);
 };
 
 /*!
