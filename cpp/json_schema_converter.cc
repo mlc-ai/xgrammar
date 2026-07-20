@@ -22,8 +22,10 @@
 #include <variant>
 #include <vector>
 
+#include "fsm_builder.h"
 #include "json_schema_converter_ext.h"
 #include "regex_converter.h"
+#include "support/encoding.h"
 #include "support/logging.h"
 #include "support/utils.h"
 
@@ -2151,6 +2153,21 @@ std::string JSONSchemaConverter::GenerateNumber(
   return "\"-\"? (\"0\" | [1-9] [0-9]*) (\".\" [0-9]+)? ([eE] [+-]? [0-9]+)?";
 }
 
+/*!
+ * \brief Emit the EBNF fragment matching a regex. Prefer the Regex(...) macro so the pattern
+ * is compiled into a single automaton by GrammarFSMBuilder; fall back to the CFG expansion
+ * when the FSM regex engine does not support the pattern.
+ */
+static std::string RegexToEBNFElement(const std::string& regex) {
+  bool is_printable_ascii = std::all_of(regex.begin(), regex.end(), [](unsigned char c) {
+    return c >= 0x20 && c <= 0x7E;
+  });
+  if (is_printable_ascii && RegexFSMBuilder::Build(regex).IsOk()) {
+    return "Regex(\"" + EscapeString(regex) + "\")";
+  }
+  return RegexToEBNF(regex, false);
+}
+
 std::string JSONSchemaConverter::GenerateString(
     const StringSpec& spec, const std::string& rule_name
 ) {
@@ -2160,6 +2177,8 @@ std::string JSONSchemaConverter::GenerateString(
     auto regex_pattern = JSONFormatToRegexPattern(format);
 
     if (regex_pattern.has_value()) {
+      // The built-in format regexes use constructs that the FSM regex engine does not fully
+      // support yet (e.g. quoted email local parts), so they keep the CFG expansion.
       std::string converted_regex = RegexToEBNF(regex_pattern.value(), false);
       return "\"\\\"\" " + converted_regex + " \"\\\"\"";
     }
@@ -2167,7 +2186,7 @@ std::string JSONSchemaConverter::GenerateString(
 
   // Check for pattern
   if (spec.pattern.has_value()) {
-    std::string converted_regex = RegexToEBNF(*spec.pattern, false);
+    std::string converted_regex = RegexToEBNFElement(*spec.pattern);
     return "\"\\\"\" " + converted_regex + " \"\\\"\"";
   }
 
@@ -2793,7 +2812,7 @@ std::string JSONSchemaConverter::GenerateObject(
       for (size_t i = 0; i < spec.pattern_properties.size(); ++i) {
         const auto& pp = spec.pattern_properties[i];
         std::string value = CreateRule(pp.schema, rule_name + "_pp_" + std::to_string(i));
-        std::string pp_single = "\"\\\"\"" + RegexToEBNF(pp.pattern, false) + "\"\\\"\" " +
+        std::string pp_single = "\"\\\"\" " + RegexToEBNFElement(pp.pattern) + " \"\\\"\" " +
                                 colon_pattern_ + " " + value;
         if (i != 0) pp_body += " | ";
         pp_body += pp_single;
@@ -2843,8 +2862,8 @@ std::string JSONSchemaConverter::GenerateObject(
         for (size_t i = 0; i < spec.pattern_properties.size(); ++i) {
           const auto& pp = spec.pattern_properties[i];
           std::string value = CreateRule(pp.schema, rule_name + "_prop_" + std::to_string(i));
-          std::string property_pattern = "\"\\\"\"" + RegexToEBNF(pp.pattern, false) + "\"\\\"\" " +
-                                         colon_pattern_ + " " + value;
+          std::string property_pattern = "\"\\\"\" " + RegexToEBNFElement(pp.pattern) +
+                                         " \"\\\"\" " + colon_pattern_ + " " + value;
           if (i != 0) {
             property_rule_body += " | ";
           }
