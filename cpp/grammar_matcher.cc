@@ -1292,8 +1292,7 @@ void GrammarMatcher::Impl::ApplyStopTokenPolicy(
       continue;
     }
     // Stop tokens beyond kMaxTrialStopTokens fall back to being allowed only at completion.
-    bool allowed =
-        can_reach_end || (i < kMaxTrialStopTokens && ((complete_bits >> i) & 1) != 0);
+    bool allowed = can_reach_end || (i < kMaxTrialStopTokens && ((complete_bits >> i) & 1) != 0);
     next_token_bitset->Set(id, allowed);
   }
 }
