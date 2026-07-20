@@ -162,6 +162,9 @@ class EBNFScriptCreator {
     return script;
   }
 
+  /*! \brief Get generated rules without materializing a combined EBNF script. */
+  const std::vector<std::pair<std::string, std::string>>& GetRules() const { return rules_; }
+
   /*!
    * \brief Retrieves the content/definition of a specific rule
    * \param rule_name The name of the rule to look up

@@ -7,6 +7,20 @@
 
 using namespace xgrammar;
 
+TEST(XGrammarParserTest, GeneratedRulesMatchCombinedScript) {
+  std::vector<std::pair<std::string, std::string>> rules = {
+      {"helper", "\"x\"+"},
+      {"root", "(\"a\" helper tail) (= [a-z] tail)"},
+      {"tail", "\"z\"?"},
+  };
+  std::string combined;
+  for (const auto& [name, body] : rules) {
+    combined += name + " ::= " + body + "\n";
+  }
+
+  EXPECT_EQ(ParseEBNFRules(rules).ToString(), ParseEBNF(combined).ToString());
+}
+
 // Note: the inputs to the lexer tests may not be valid EBNF
 TEST(XGrammarLexerTest, BasicTokenization) {
   // Test basic token types

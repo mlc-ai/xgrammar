@@ -50,6 +50,12 @@ Grammar Grammar::FromJSONSchema(
     bool print_converted_ebnf,
     bool any_order
 ) {
+  if (!print_converted_ebnf) {
+    auto grammar = JSONSchemaToGrammar(
+        schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+    );
+    return GrammarNormalizer().Apply(grammar);
+  }
   auto ebnf_string = JSONSchemaToEBNF(
       schema,
       any_whitespace,
