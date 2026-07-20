@@ -235,32 +235,15 @@ std::string XMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
   return JSONSchemaConverter::FormatPropertyKey(key);
 }
 
-std::string XMLToolCallingConverter::FormatPropertyValue(
-    const std::string& value_rule, const SchemaSpecPtr& value_schema
-) const {
-  // xml_string accepts every byte sequence up to the closing tag, including whitespace. Wrapping
-  // it in separate whitespace repetitions preserves the language but creates one Earley state for
-  // every possible split between the repetitions and the string body.
-  if (const auto* string_spec = std::get_if<StringSpec>(&value_schema->spec)) {
-    if (!string_spec->pattern.has_value() && !string_spec->format.has_value() &&
-        string_spec->min_length == 0 && string_spec->max_length == -1) {
-      return value_rule;
-    }
-  }
-  std::string whitespace = GetWhitespacePattern();
-  return whitespace + " " + value_rule + " " + whitespace;
-}
-
 std::string XMLToolCallingConverter::FormatProperty(
-    const std::string& key,
-    const std::string& value_rule,
-    const SchemaSpecPtr& value_schema,
-    const std::string& rule_name,
-    int64_t idx
+    const std::string& key, const std::string& value_rule, const std::string& rule_name, int64_t idx
 ) {
   if (nested_object_level_ <= 1) {
     std::string whitespace = GetWhitespacePattern();
-    std::string formatted_value = FormatPropertyValue(value_rule, value_schema);
+    // xml_string already accepts whitespace. Adding whitespace repetitions around it preserves the
+    // language but creates one Earley state for every possible split with the string body.
+    std::string formatted_value =
+        value_rule == kXMLString ? value_rule : whitespace + " " + value_rule + " " + whitespace;
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
       return "\"" + xml_wrapper_.key_wrapper_prefix + key + xml_wrapper_.key_wrapper_suffix +
              "\" " + whitespace + " \"" + xml_wrapper_.value_wrapper_prefix + "\" " +
@@ -269,19 +252,19 @@ std::string XMLToolCallingConverter::FormatProperty(
     return "\"" + xml_wrapper_.key_wrapper_prefix + key + xml_wrapper_.key_wrapper_suffix + "\" " +
            formatted_value + " \"" + xml_wrapper_.parameter_suffix + "\"";
   }
-  return JSONSchemaConverter::FormatProperty(key, value_rule, value_schema, rule_name, idx);
+  return JSONSchemaConverter::FormatProperty(key, value_rule, rule_name, idx);
 }
 
 std::string XMLToolCallingConverter::FormatOtherProperty(
     const std::string& key_pattern,
     const std::string& value_rule,
-    const SchemaSpecPtr& value_schema,
     const std::string& rule_name,
     const std::string& rule_name_suffix
 ) {
   if (nested_object_level_ <= 1) {
     std::string whitespace = GetWhitespacePattern();
-    std::string formatted_value = FormatPropertyValue(value_rule, value_schema);
+    std::string formatted_value =
+        value_rule == kXMLString ? value_rule : whitespace + " " + value_rule + " " + whitespace;
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
       return "\"" + xml_wrapper_.key_wrapper_prefix + "\" " + key_pattern + " \"" +
              xml_wrapper_.key_wrapper_suffix + "\" " + whitespace + " \"" +
@@ -293,7 +276,7 @@ std::string XMLToolCallingConverter::FormatOtherProperty(
            xml_wrapper_.parameter_suffix + "\"";
   }
   return JSONSchemaConverter::FormatOtherProperty(
-      key_pattern, value_rule, value_schema, rule_name, rule_name_suffix
+      key_pattern, value_rule, rule_name, rule_name_suffix
   );
 }
 

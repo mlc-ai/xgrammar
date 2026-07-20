@@ -2305,11 +2305,7 @@ std::string JSONSchemaConverter::FormatPropertyKey(const std::string& key) {
 }
 
 std::string JSONSchemaConverter::FormatProperty(
-    const std::string& key,
-    const std::string& value_rule,
-    const SchemaSpecPtr& value_schema,
-    const std::string& rule_name,
-    int64_t idx
+    const std::string& key, const std::string& value_rule, const std::string& rule_name, int64_t idx
 ) {
   return FormatPropertyKey(key) + " " + colon_pattern_ + " " + value_rule;
 }
@@ -2317,7 +2313,6 @@ std::string JSONSchemaConverter::FormatProperty(
 std::string JSONSchemaConverter::FormatOtherProperty(
     const std::string& key_pattern,
     const std::string& value_rule,
-    const SchemaSpecPtr& value_schema,
     const std::string& rule_name,
     const std::string& rule_name_suffix
 ) {
@@ -2364,7 +2359,7 @@ std::string JSONSchemaConverter::GetAnyOrderRuleForProperties(
   for (size_t idx = 0; idx < properties.size(); ++idx) {
     const auto& prop = properties[idx];
     std::string value_rule = CreateRule(prop.schema, rule_name + "_prop_" + std::to_string(idx));
-    item_patterns.push_back(FormatProperty(prop.name, value_rule, prop.schema, rule_name, idx));
+    item_patterns.push_back(FormatProperty(prop.name, value_rule, rule_name, idx));
   }
   if (additional != nullptr) {
     if (!additional_prop_pattern_override.empty()) {
@@ -2374,7 +2369,6 @@ std::string JSONSchemaConverter::GetAnyOrderRuleForProperties(
       item_patterns.push_back(FormatOtherProperty(
           GetKeyPatternExcluding(properties, rule_name),
           add_value_rule,
-          additional,
           rule_name,
           additional_suffix
       ));
@@ -2437,7 +2431,7 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
   for (size_t idx = 0; idx < properties.size(); ++idx) {
     const auto& prop = properties[idx];
     std::string value_rule = CreateRule(prop.schema, rule_name + "_prop_" + std::to_string(idx));
-    prop_patterns.push_back(FormatProperty(prop.name, value_rule, prop.schema, rule_name, idx));
+    prop_patterns.push_back(FormatProperty(prop.name, value_rule, rule_name, idx));
   }
 
   if (min_properties == 0 && max_properties == -1) {
@@ -2456,7 +2450,6 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
         additional_prop_pattern = FormatOtherProperty(
             GetKeyPatternExcluding(properties, rule_name),
             add_value_rule,
-            additional,
             rule_name,
             additional_suffix
         );
@@ -2521,7 +2514,6 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
         additional_prop_pattern = FormatOtherProperty(
             GetKeyPatternExcluding(properties, rule_name),
             add_value_rule,
-            additional,
             rule_name,
             additional_suffix
         );
@@ -2641,7 +2633,6 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
         additional_prop_pattern = FormatOtherProperty(
             GetKeyPatternExcluding(properties, rule_name),
             add_value_rule,
-            additional,
             rule_name,
             additional_suffix
         );
@@ -2811,9 +2802,8 @@ std::string JSONSchemaConverter::GenerateObject(
       if (effective_additional) {
         std::string add_value_rule =
             CreateRule(effective_additional, rule_name + "_" + effective_suffix);
-        std::string add_prop = FormatOtherProperty(
-            GetKeyPattern(), add_value_rule, effective_additional, rule_name, effective_suffix
-        );
+        std::string add_prop =
+            FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, effective_suffix);
         pp_body += " | " + add_prop;
       }
       // Wrap in parentheses to ensure correct EBNF precedence when | is present
@@ -2895,9 +2885,8 @@ std::string JSONSchemaConverter::GenerateObject(
     if (spec.max_properties != 0) {
       std::string add_value_rule =
           CreateRule(additional_property, rule_name + "_" + additional_suffix);
-      std::string other_property_pattern = FormatOtherProperty(
-          GetKeyPattern(), add_value_rule, additional_property, rule_name, additional_suffix
-      );
+      std::string other_property_pattern =
+          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
       result += " " + NextSeparator() + " " + other_property_pattern + " ";
       result += GetPropertyWithNumberConstraints(
                     NextSeparator() + " " + other_property_pattern,
