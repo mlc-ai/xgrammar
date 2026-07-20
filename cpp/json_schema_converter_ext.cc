@@ -240,14 +240,17 @@ std::string XMLToolCallingConverter::FormatProperty(
 ) {
   if (nested_object_level_ <= 1) {
     std::string whitespace = GetWhitespacePattern();
+    // xml_string already accepts whitespace. Adding whitespace repetitions around it preserves the
+    // language but creates one Earley state for every possible split with the string body.
+    std::string formatted_value =
+        value_rule == kXMLString ? value_rule : whitespace + " " + value_rule + " " + whitespace;
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
       return "\"" + xml_wrapper_.key_wrapper_prefix + key + xml_wrapper_.key_wrapper_suffix +
-             "\" " + whitespace + " \"" + xml_wrapper_.value_wrapper_prefix + "\" " + whitespace +
-             " " + value_rule + " " + whitespace + " \"" + xml_wrapper_.parameter_suffix + "\"";
+             "\" " + whitespace + " \"" + xml_wrapper_.value_wrapper_prefix + "\" " +
+             formatted_value + " \"" + xml_wrapper_.parameter_suffix + "\"";
     }
     return "\"" + xml_wrapper_.key_wrapper_prefix + key + xml_wrapper_.key_wrapper_suffix + "\" " +
-           whitespace + " " + value_rule + " " + whitespace + " \"" +
-           xml_wrapper_.parameter_suffix + "\"";
+           formatted_value + " \"" + xml_wrapper_.parameter_suffix + "\"";
   }
   return JSONSchemaConverter::FormatProperty(key, value_rule, rule_name, idx);
 }
@@ -260,15 +263,17 @@ std::string XMLToolCallingConverter::FormatOtherProperty(
 ) {
   if (nested_object_level_ <= 1) {
     std::string whitespace = GetWhitespacePattern();
+    std::string formatted_value =
+        value_rule == kXMLString ? value_rule : whitespace + " " + value_rule + " " + whitespace;
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
       return "\"" + xml_wrapper_.key_wrapper_prefix + "\" " + key_pattern + " \"" +
              xml_wrapper_.key_wrapper_suffix + "\" " + whitespace + " \"" +
-             xml_wrapper_.value_wrapper_prefix + "\" " + whitespace + " " + value_rule + " " +
-             whitespace + " \"" + xml_wrapper_.parameter_suffix + "\"";
+             xml_wrapper_.value_wrapper_prefix + "\" " + formatted_value + " \"" +
+             xml_wrapper_.parameter_suffix + "\"";
     }
     return "\"" + xml_wrapper_.key_wrapper_prefix + "\" " + key_pattern + " \"" +
-           xml_wrapper_.key_wrapper_suffix + "\" " + whitespace + " " + value_rule + " " +
-           whitespace + " \"" + xml_wrapper_.parameter_suffix + "\"";
+           xml_wrapper_.key_wrapper_suffix + "\" " + formatted_value + " \"" +
+           xml_wrapper_.parameter_suffix + "\"";
   }
   return JSONSchemaConverter::FormatOtherProperty(
       key_pattern, value_rule, rule_name, rule_name_suffix
