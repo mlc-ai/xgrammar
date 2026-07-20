@@ -202,7 +202,9 @@ class Compact2DArray {
    */
   void PushBackInLatestRow(const DataType& new_data) {
     XGRAMMAR_DCHECK(!indptr_.empty()) << "Cannot push back in an empty Compact2DArray";
-    CheckCanAppendData(1);
+    XGRAMMAR_ICHECK(data_.size() < INT32_MAX)
+        << "Compact2DArray data size would exceed the int32_t limit, likely due to an unbounded "
+           "grammar pattern causing state explosion";
     data_.push_back(new_data);
     indptr_.back()++;
   }
@@ -252,14 +254,6 @@ class Compact2DArray {
   }
 
  private:
-  static constexpr size_t kMaxRepresentableSize = static_cast<size_t>(INT32_MAX);
-
-  void CheckCanAppendData(size_t additional_size) const {
-    XGRAMMAR_ICHECK(additional_size <= kMaxRepresentableSize - data_.size())
-        << "Compact2DArray data size would exceed the int32_t limit, likely due to an unbounded "
-           "grammar pattern causing state explosion";
-  }
-
   /*! \brief Vector storing all elements contiguously. */
   std::vector<DataType> data_;
   /*! \brief Vector storing the starting index of each row in data_. */
@@ -319,6 +313,8 @@ inline void Compact2DArray<DataType>::ResetWithRowSizes(const std::vector<int32_
   indptr_[0] = 0;
   for (int32_t i = 0; i < static_cast<int32_t>(row_sizes.size()); ++i) {
     XGRAMMAR_CHECK(row_sizes[i] >= 0) << "Compact2DArray row size cannot be negative";
+    XGRAMMAR_CHECK(row_sizes[i] <= INT32_MAX - indptr_[i])
+        << "Compact2DArray data size exceeds the int32_t limit";
     indptr_[i + 1] = indptr_[i] + row_sizes[i];
   }
   data_.resize(indptr_.back());
@@ -326,8 +322,9 @@ inline void Compact2DArray<DataType>::ResetWithRowSizes(const std::vector<int32_
 
 template <typename DataType>
 inline int32_t Compact2DArray<DataType>::PushBack(const DataType* new_data, int32_t new_data_len) {
-  // TODO(yixin): whether to add a additional data_len
-  CheckCanAppendData(static_cast<size_t>(new_data_len));
+  XGRAMMAR_ICHECK(static_cast<size_t>(new_data_len) <= INT32_MAX - data_.size())
+      << "Compact2DArray data size would exceed the int32_t limit, likely due to an unbounded "
+         "grammar pattern causing state explosion";
   // If the new data is already in the Compact2DArray, we need to copy it to the new memory
   // location.
   if (new_data >= data_.data() && new_data < data_.data() + data_.size()) {
@@ -342,7 +339,9 @@ inline int32_t Compact2DArray<DataType>::PushBack(const DataType* new_data, int3
 
 template <typename DataType>
 inline int32_t Compact2DArray<DataType>::PushBack(const std::vector<DataType>& new_data) {
-  CheckCanAppendData(new_data.size());
+  XGRAMMAR_ICHECK(new_data.size() <= INT32_MAX - data_.size())
+      << "Compact2DArray data size would exceed the int32_t limit, likely due to an unbounded "
+         "grammar pattern causing state explosion";
   data_.insert(data_.end(), new_data.begin(), new_data.end());
   indptr_.push_back(static_cast<int32_t>(data_.size()));
   return static_cast<int32_t>(indptr_.size()) - 2;
@@ -352,7 +351,9 @@ template <typename DataType>
 inline int32_t Compact2DArray<DataType>::PushBackNonContiguous(
     DataType data_1, const DataType* data_2, int32_t data_2_len
 ) {
-  CheckCanAppendData(static_cast<size_t>(data_2_len) + 1);
+  XGRAMMAR_ICHECK(static_cast<size_t>(data_2_len) < INT32_MAX - data_.size())
+      << "Compact2DArray data size would exceed the int32_t limit, likely due to an unbounded "
+         "grammar pattern causing state explosion";
   if (data_2 >= data_.data() && data_2 < data_.data() + data_.size()) {
     std::vector<DataType> new_data_copied(data_2, data_2 + data_2_len);
     data_.push_back(data_1);
