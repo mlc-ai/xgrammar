@@ -3,9 +3,11 @@
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Tuple
 
 import pytest
+import torch
 from pydantic import BaseModel
 from transformers import AutoTokenizer
 
@@ -379,6 +381,152 @@ def test_grammar_compiler_crossing_cache_different_grammar_with_same_fsm():
     assert (
         contextb.serialize_json() == contextb_without_cache.serialize_json()
     ), "Cached and non-cached compilations should yield the same result."
+
+
+HASHER_GRAPH_CASES = [
+    (
+        """
+root ::= first
+first ::= "a" second
+second ::= "b" third
+third ::= "c"
+""",
+        ["abc"],
+        ["", "ab", "abd"],
+    ),
+    (
+        """
+root ::= left | right
+left ::= "a" leaf
+right ::= "b" leaf
+leaf ::= "c"
+""",
+        ["ac", "bc"],
+        ["a", "b", "cc"],
+    ),
+    (
+        """
+root ::= node
+node ::= "a" node | "z"
+""",
+        ["z", "az", "aaaz"],
+        ["", "a", "za"],
+    ),
+    (
+        """
+root ::= "s" outer
+outer ::= "a" middle | "z"
+middle ::= "b" inner
+inner ::= "c" outer | "d"
+""",
+        ["sz", "sabd", "sabcz", "sabcabd"],
+        ["", "s", "sab", "sabc"],
+    ),
+    (
+        """
+root ::= pair
+pair ::= leaf leaf | leaf
+leaf ::= "x" | "y"
+""",
+        ["x", "y", "xx", "xy", "yx", "yy"],
+        ["", "xxx", "z"],
+    ),
+    (
+        """
+root ::= item {2, 3}
+item ::= "a" | "bc"
+""",
+        ["aa", "abc", "bca", "bcbc", "aaa", "abca"],
+        ["", "a", "bc", "aaaa"],
+    ),
+]
+
+
+def _compiled_accepts(compiled_grammar: xgr.CompiledGrammar, input_str: str) -> bool:
+    matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+    return matcher.accept_string(input_str) and matcher.is_terminated()
+
+
+def _mask_trace(compiled_grammar: xgr.CompiledGrammar, input_str: str):
+    matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+    bitmask = xgr.allocate_token_bitmask(1, compiled_grammar.tokenizer_info.vocab_size)
+    trace = []
+    for char in input_str:
+        xgr.reset_token_bitmask(bitmask)
+        need_apply = matcher.fill_next_token_bitmask(bitmask)
+        trace.append((need_apply, bitmask.clone()))
+        assert matcher.accept_string(char)
+    assert matcher.is_terminated()
+    return trace
+
+
+@pytest.mark.parametrize(
+    "grammar_str,accepted_inputs,rejected_inputs",
+    HASHER_GRAPH_CASES,
+    ids=["chain", "diamond", "self-cycle", "cycle-with-tail", "duplicate-referee", "repeat"],
+)
+def test_grammar_fsm_hasher_worklist_graphs(
+    grammar_str: str, accepted_inputs: List[str], rejected_inputs: List[str]
+):
+    """Compare cache and threading paths across the hasher's graph corner cases."""
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c", "d", "s", "x", "y", "z", "ab", "bc", "abc"])
+    compiled_variants = [
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=False).compile_grammar(
+            grammar_str
+        ),
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=True).compile_grammar(
+            grammar_str
+        ),
+        xgr.GrammarCompiler(tokenizer_info, max_threads=8, cache_enabled=True).compile_grammar(
+            grammar_str
+        ),
+    ]
+
+    for compiled in compiled_variants:
+        for input_str in accepted_inputs:
+            assert _compiled_accepts(compiled, input_str)
+        for input_str in rejected_inputs:
+            assert not _compiled_accepts(compiled, input_str)
+
+    expected_trace = _mask_trace(compiled_variants[0], accepted_inputs[0])
+    for compiled in compiled_variants[1:]:
+        actual_trace = _mask_trace(compiled, accepted_inputs[0])
+        assert len(actual_trace) == len(expected_trace)
+        for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(
+            expected_trace, actual_trace
+        ):
+            assert actual_apply == expected_apply
+            torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+def test_sharded_rule_cache_concurrent_compilation():
+    """Propagate worker failures while exercising concurrent cache lookup and insertion."""
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c", "d", "x", "y", "z", "ab", "bc"])
+    cache_limit = 4 * 1024 * 1024
+    compiler = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=4, cache_enabled=True, cache_limit_bytes=cache_limit
+    )
+    cases = HASHER_GRAPH_CASES[:5]
+
+    def compile_and_check(index: int) -> None:
+        grammar_str, accepted_inputs, rejected_inputs = cases[index % len(cases)]
+        compiled = compiler.compile_grammar(grammar_str)
+        assert _compiled_accepts(compiled, accepted_inputs[0])
+        assert not _compiled_accepts(compiled, rejected_inputs[0])
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(compile_and_check, i) for i in range(32)]
+        for future in futures:
+            future.result()
+
+    assert 0 < compiler.get_cache_size_bytes() <= cache_limit
+    size_before_reuse = compiler.get_cache_size_bytes()
+    for index in range(len(cases)):
+        compile_and_check(index)
+    assert compiler.get_cache_size_bytes() == size_before_reuse
+
+    compiler.clear_cache()
+    assert compiler.get_cache_size_bytes() == 0
 
 
 if __name__ == "__main__":

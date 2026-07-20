@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sys
 import threading
@@ -291,6 +292,42 @@ def test_empty_tag_dispatch():
     assert _is_grammar_accept_string(grammar_with_excludes, "好")
     assert not _is_grammar_accept_string(grammar_with_excludes, "any stringend")
     assert not _is_grammar_accept_string(grammar_with_excludes, "endaaa")
+
+
+@pytest.mark.parametrize("loop", [False, True])
+def test_dense_tag_dispatch_end_states(loop: bool):
+    """Exercise dense accepting states and the post-dispatch final state."""
+    patterns = ["@" + hashlib.sha1(f"sparse-end-{i}".encode()).hexdigest()[:12] for i in range(32)]
+    dispatch = {
+        "type": "structural_tag",
+        "format": {
+            "type": "dispatch",
+            "rules": [
+                [pattern, {"type": "const_string", "value": f"X{i:02d}"}]
+                for i, pattern in enumerate(patterns)
+            ],
+            "loop": loop,
+            "excludes": [],
+        },
+    }
+    compiled = xgr.GrammarCompiler(
+        xgr.TokenizerInfo([]), cache_enabled=False
+    ).compile_structural_tag(dispatch)
+
+    def accepts(input_str: str) -> bool:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        return matcher.accept_string(input_str) and matcher.is_terminated()
+
+    for index in [0, 15, 31]:
+        assert accepts(f"free{patterns[index]}X{index:02d}")
+        assert not accepts(f"free{patterns[index]}WRONG")
+
+    repeated = f"free{patterns[0]}X00tail{patterns[31]}X31"
+    if loop:
+        assert accepts(repeated)
+    else:
+        assert not accepts(repeated)
+        assert not accepts(f"free{patterns[0]}X00tail")
 
 
 def test_excludes_overlapping_prefixes():

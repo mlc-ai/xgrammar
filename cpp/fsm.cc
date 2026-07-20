@@ -843,14 +843,8 @@ struct CompactFSMWithStartEndSerializeHelper {
       : fsm(compact_fsm_with_se.fsm_),
         start(compact_fsm_with_se.start_),
         is_dfa(compact_fsm_with_se.is_dfa_),
-        edge_num(compact_fsm_with_se.edge_num_) {
-    end_index.reserve(compact_fsm_with_se.NumStates());
-    for (int i = 0; i < static_cast<int>(compact_fsm_with_se.ends_.size()); ++i) {
-      if (compact_fsm_with_se.ends_[i]) {
-        end_index.push_back(i);
-      }
-    }
-  }
+        end_index(compact_fsm_with_se.ends_),
+        edge_num(compact_fsm_with_se.edge_num_) {}
 
   CompactFSMWithStartEndSerializeHelper() = default;
 };
@@ -879,11 +873,7 @@ std::optional<SerializationError> DeserializeJSONValue(
   result->start_ = tmp.start;
   result->is_dfa_ = tmp.is_dfa;
   result->edge_num_ = tmp.edge_num;
-  const auto& end_index = tmp.end_index;
-  result->ends_.resize(result->fsm_.NumStates(), false);
-  for (const auto& idx : end_index) {
-    result->ends_[idx] = true;
-  }
+  result->SetEndStates(std::move(tmp.end_index));
   return std::nullopt;
 }
 
@@ -942,15 +932,12 @@ std::string FSMWithStartEnd::ToString() const {
   std::sort(reachable_states_vec.begin(), reachable_states_vec.end());
 
   bool first = true;
-  for (int i = 0; i < NumStates(); ++i) {
-    if (!IsEndState(i)) {
-      continue;
-    }
+  for (auto end : ends_) {
     if (!first) {
       result += ", ";
     }
     first = false;
-    result += std::to_string(i);
+    result += std::to_string(end);
   }
 
   result += "], edges=" + fsm_.EdgesToString(reachable_states_vec) + ")";
@@ -971,13 +958,12 @@ FSMWithStartEnd FSMWithStartEnd::RebuildWithMapping(
 ) const {
   FSM new_fsm = fsm_.RebuildWithMapping(state_mapping, new_num_states);
   auto new_start = state_mapping[start_];
-  std::vector<bool> new_ends(new_num_states, false);
-  for (int end = 0; end < NumStates(); ++end) {
-    if (IsEndState(end)) {
-      new_ends[state_mapping[end]] = true;
-    }
+  std::vector<int32_t> new_ends;
+  new_ends.reserve(ends_.size());
+  for (auto end : ends_) {
+    new_ends.push_back(state_mapping[end]);
   }
-  return FSMWithStartEnd(new_fsm, new_start, new_ends);
+  return FSMWithStartEnd(new_fsm, new_start, std::move(new_ends));
 }
 
 CompactFSMWithStartEnd FSMWithStartEnd::ToCompact() {
@@ -990,11 +976,14 @@ FSMWithStartEndWithSize FSMWithStartEnd::AddToCompleteFSM(
   XGRAMMAR_DCHECK(state_mapping != nullptr) << "state_mapping cannot be nullptr";
   complete_fsm->AddFSM(fsm_, state_mapping);
   int new_start = (*state_mapping)[start_];
-  std::vector<bool> new_ends(complete_fsm->NumStates(), false);
-  for (int end = 0; end < NumStates(); ++end) {
-    if (IsEndState(end)) {
-      new_ends[(*state_mapping)[end]] = true;
-    }
+  // Map the end states to the states in the complete FSM. The mapping is monotonic, so the
+  // sorted invariant is preserved. The sparse representation is important here: this method is
+  // called once per rule, and the ends of each returned view must not scale with the size of the
+  // complete FSM, otherwise the total cost is O(num_rules * num_total_states).
+  std::vector<int32_t> new_ends;
+  new_ends.reserve(ends_.size());
+  for (auto end : ends_) {
+    new_ends.push_back((*state_mapping)[end]);
   }
 
   int num_edges = 0;
@@ -1004,7 +993,7 @@ FSMWithStartEndWithSize FSMWithStartEnd::AddToCompleteFSM(
 
   int num_nodes = fsm_.NumStates();
 
-  auto fsm_with_se = FSMWithStartEnd(*complete_fsm, new_start, new_ends, is_dfa_);
+  auto fsm_with_se = FSMWithStartEnd(*complete_fsm, new_start, std::move(new_ends), is_dfa_);
 
   return FSMWithStartEndWithSize(fsm_with_se, num_edges, num_nodes);
 }
@@ -1012,34 +1001,25 @@ FSMWithStartEndWithSize FSMWithStartEnd::AddToCompleteFSM(
 FSMWithStartEnd FSMWithStartEnd::Star() const {
   FSM fsm = fsm_.Copy();
   auto new_start = fsm.AddState();
-  for (int end = 0; end < NumStates(); ++end) {
-    if (IsEndState(end)) {
-      fsm.AddEpsilonEdge(end, new_start);
-    }
+  for (auto end : ends_) {
+    fsm.AddEpsilonEdge(end, new_start);
   }
   fsm.AddEpsilonEdge(new_start, start_);
-  std::vector<bool> is_end(NumStates() + 1, false);
-  is_end[new_start] = true;
-  return FSMWithStartEnd(fsm, new_start, is_end);
+  return FSMWithStartEnd(fsm, new_start, {new_start});
 }
 
 FSMWithStartEnd FSMWithStartEnd::Plus() const {
   FSM fsm = fsm_.Copy();
-  for (int end = 0; end < NumStates(); ++end) {
-    if (IsEndState(end)) {
-      fsm.AddEpsilonEdge(end, start_);
-    }
+  for (auto end : ends_) {
+    fsm.AddEpsilonEdge(end, start_);
   }
   return FSMWithStartEnd(fsm, start_, ends_);
 }
 
 FSMWithStartEnd FSMWithStartEnd::Optional() const {
   FSM fsm = fsm_.Copy();
-  for (int end = 0; end < NumStates(); ++end) {
-    if (IsEndState(end)) {
-      fsm.AddEpsilonEdge(start_, end);
-      break;
-    }
+  if (!ends_.empty()) {
+    fsm.AddEpsilonEdge(start_, ends_.front());
   }
   return FSMWithStartEnd(fsm, start_, ends_);
 }
@@ -1060,16 +1040,16 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Not(int max_result_num_states) const {
     result = std::move(dfa_result).Unwrap();
   }
   // Reverse all the final states.
-  std::vector<bool> new_final_states(result.NumStates() + 1, false);
+  std::vector<int32_t> new_final_states;
   for (int i = 0; i < result.NumStates(); ++i) {
     if (!result.IsEndState(i)) {
-      new_final_states[i] = true;  // Mark all states as final except the original final states.
+      new_final_states.push_back(i);  // Mark all states as final except the original final states.
     }
   }
 
   // Add a new final state that accepts all characters.
   int accept_all_new_state = result.AddState();
-  new_final_states[accept_all_new_state] = true;
+  new_final_states.push_back(accept_all_new_state);
 
   std::bitset<256> char_set;
   for (int i = 0; i < result.NumStates(); i++) {
@@ -1111,19 +1091,19 @@ FSMWithStartEnd FSMWithStartEnd::Union(const std::vector<FSMWithStartEnd>& fsms)
 
   FSM fsm(1);
   int start = 0;
-  std::vector<bool> ends(1, false);
+  std::vector<int32_t> ends;
 
   std::vector<int> state_mapping;
 
   for (const auto& fsm_with_se : fsms) {
     fsm.AddFSM(fsm_with_se.GetFsm(), &state_mapping);
     fsm.AddEpsilonEdge(start, state_mapping[fsm_with_se.GetStart()]);
-    for (int state = 0; state < fsm_with_se.NumStates(); ++state) {
-      ends.push_back(fsm_with_se.IsEndState(state));
+    for (auto end : fsm_with_se.GetEnds()) {
+      ends.push_back(state_mapping[end]);
     }
   }
 
-  return FSMWithStartEnd(fsm, start, ends);
+  return FSMWithStartEnd(fsm, start, std::move(ends));
 }
 
 FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms) {
@@ -1137,7 +1117,7 @@ FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms
 
   FSM fsm;
   int start = 0;
-  std::vector<bool> ends;
+  std::vector<int32_t> ends;
 
   std::vector<int> state_mapping;
   std::vector<int> previous_ends;
@@ -1153,24 +1133,19 @@ FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms
       }
     }
     if (i == static_cast<int>(fsms.size()) - 1) {
-      ends.resize(fsm.NumStates(), false);
-      for (int end = 0; end < fsms[i].NumStates(); ++end) {
-        if (fsms[i].IsEndState(end)) {
-          ends[state_mapping[end]] = true;
-        }
+      for (auto end : fsms[i].GetEnds()) {
+        ends.push_back(state_mapping[end]);
       }
     } else {
       previous_ends.clear();
-      previous_ends.reserve(fsms[i].GetFsm().NumStates());
-      for (int end = 0; end < fsms[i].NumStates(); ++end) {
-        if (fsms[i].IsEndState(end)) {
-          previous_ends.push_back(state_mapping[end]);
-        }
+      previous_ends.reserve(fsms[i].GetEnds().size());
+      for (auto end : fsms[i].GetEnds()) {
+        previous_ends.push_back(state_mapping[end]);
       }
     }
   }
 
-  return FSMWithStartEnd(fsm, start, ends);
+  return FSMWithStartEnd(fsm, start, std::move(ends));
 }
 
 Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
@@ -1193,7 +1168,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
   auto rhs_dfa = std::move(rhs_dfa_raw).Unwrap();
   // Initialize the result FSM.
   FSM result_fsm(0);
-  FSMWithStartEnd result(result_fsm, 0, std::vector<bool>(), true);
+  FSMWithStartEnd result(result_fsm, 0, std::vector<int32_t>(), true);
   std::unordered_map<std::pair<int, int>, int> state_map;
   std::unordered_set<std::pair<int, int>> visited;
   std::queue<std::pair<int, int>> queue;
@@ -1619,7 +1594,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
 }
 
 Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_num_states) const {
-  FSMWithStartEnd now_fsm(FSM(0), 0, std::vector<bool>(), true);
+  FSMWithStartEnd now_fsm(FSM(0), 0, std::vector<int32_t>(), true);
   if (NumStates() > max_num_states) {
     return ResultErr("The number of states exceeds the limit.");
   }
@@ -1747,7 +1722,7 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
   if (NumStates() > max_num_states) {
     return ResultErr("The number of states exceeds the limit.");
   }
-  FSMWithStartEnd dfa(FSM(0), 0, std::vector<bool>(), true);
+  FSMWithStartEnd dfa(FSM(0), 0, std::vector<int32_t>(), true);
   std::vector<std::unordered_set<int>> closures;
   std::unordered_set<int> rules;
   std::unordered_set<int32_t> repeat_aux_indices;
@@ -1981,8 +1956,8 @@ std::string CompactFSMWithStartEnd::ToString() const {
   std::vector<int> reachable_states_vec(reachable_states.begin(), reachable_states.end());
   std::sort(reachable_states_vec.begin(), reachable_states_vec.end());
   bool first = true;
-  for (int end = 0; end < NumStates(); end++) {
-    if (reachable_states.count(end) && IsEndState(end)) {
+  for (auto end : ends_) {
+    if (reachable_states.count(end)) {
       if (!first) {
         result += ", ";
       }
@@ -2003,7 +1978,11 @@ std::ostream& operator<<(std::ostream& os, const CompactFSMWithStartEnd& fsm) {
 std::size_t MemorySize(const CompactFSM& self) { return MemorySize(*self.ImplPtr()); }
 
 std::size_t MemorySize(const CompactFSMWithStartEnd& self) {
-  return MemorySize(self.fsm_) + MemorySize(self.ends_);
+  // The underlying CompactFSM is not counted here: CompactFSMWithStartEnd is a view, and many
+  // views usually share one CompactFSM (e.g. the per-rule FSMs of a grammar all point to the
+  // grammar's complete FSM, which is counted by the grammar itself). Counting it per view would
+  // multiply the shared FSM's size by the number of views.
+  return MemorySize(self.ends_);
 }
 
 FSMWithStartEnd CompactFSMWithStartEnd::ToFSM() const {
