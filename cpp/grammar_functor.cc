@@ -1109,7 +1109,7 @@ class GrammarFSMBuilderImpl {
       } else if (grammar_expr.type == Grammar::Impl::GrammarExprType::kRegex) {
         // Every regex rule must have an automaton.
         auto regex_str = (*grammar)->GetRegexString(grammar_expr);
-        auto rule_fsm_result = Regex(regex_str);
+        auto rule_fsm_result = Regex(regex_str, (*grammar)->GetRegexIsJSONString(grammar_expr));
         if (rule_fsm_result.IsErr()) {
           XGRAMMAR_LOG(FATAL) << "Failed to build the automaton for rule "
                               << (*grammar)->GetRule(i).name << " with regex " << regex_str << ": "
@@ -1166,7 +1166,7 @@ class GrammarFSMBuilderImpl {
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
-  static Result<FSMWithStartEnd> Regex(const std::string& regex);
+  static Result<FSMWithStartEnd> Regex(const std::string& regex, bool json_string = false);
   static void AddCharacterRange(FSMWithStartEnd& fsm, int from, int to, uint32_t min, uint32_t max);
   /* Building tool functions.*/
   static std::optional<FSMWithStartEnd> BuildTagDispatch(
@@ -1709,10 +1709,18 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TagDispatch(
   );
 }
 
-Result<FSMWithStartEnd> GrammarFSMBuilderImpl::Regex(const std::string& regex) {
-  // Note: do not run SimplifyEpsilon here. Its state-merging rule can merge an accepting
-  // state into its epsilon-successor and change the accepted language.
-  return RegexFSMBuilder::Build(regex);
+Result<FSMWithStartEnd> GrammarFSMBuilderImpl::Regex(const std::string& regex, bool json_string) {
+  auto build_result = json_string ? RegexFSMBuilder::BuildWithForbiddenChars(
+                                        regex, GrammarFSMBuilder::JSONStringForbiddenChars()
+                                    )
+                                  : RegexFSMBuilder::Build(regex);
+  if (build_result.IsErr()) {
+    return build_result;
+  }
+  auto result = std::move(build_result).Unwrap();
+  result = result.SimplifyEpsilon();
+  result = result.MergeEquivalentStates();
+  return ResultOk(std::move(result));
 }
 
 class RepetitionRangeExpanderImpl : public GrammarMutator {
@@ -2894,8 +2902,21 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilder::Choices(
   return GrammarFSMBuilderImpl::Choices(expr, grammar);
 }
 
-Result<FSMWithStartEnd> GrammarFSMBuilder::Regex(const std::string& regex) {
-  return GrammarFSMBuilderImpl::Regex(regex);
+Result<FSMWithStartEnd> GrammarFSMBuilder::Regex(const std::string& regex, bool json_string) {
+  return GrammarFSMBuilderImpl::Regex(regex, json_string);
+}
+
+const std::bitset<256>& GrammarFSMBuilder::JSONStringForbiddenChars() {
+  static const std::bitset<256> forbidden_chars = [] {
+    std::bitset<256> chars;
+    for (int c = 0x00; c <= 0x1F; ++c) {
+      chars.set(c);
+    }
+    chars.set('"');
+    chars.set('\\');
+    return chars;
+  }();
+  return forbidden_chars;
 }
 
 std::optional<FSMWithStartEnd> GrammarFSMBuilder::TagDispatch(

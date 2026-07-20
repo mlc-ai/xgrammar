@@ -1018,9 +1018,6 @@ int32_t EBNFParser::ParseRegexMacro() {
   auto args = ParseMacroArguments();
   auto delta_element = start - current_token_;  // Used to report parse errors
 
-  if (!args.named_arguments.empty()) {
-    ReportParseError("Regex does not support named arguments", delta_element);
-  }
   if (args.arguments.size() != 1) {
     ReportParseError("Regex expects exactly one string argument", delta_element);
   }
@@ -1028,7 +1025,21 @@ int32_t EBNFParser::ParseRegexMacro() {
   if (pattern_node == nullptr) {
     ReportParseError("Regex pattern must be a string literal", delta_element);
   }
-  return builder_.AddRegex(pattern_node->value);
+
+  bool json_string = false;
+  for (const auto& [name, _] : args.named_arguments) {
+    if (name != "json_string") {
+      ReportParseError("Regex does not support the named argument " + name, delta_element);
+    }
+  }
+  if (auto it = args.named_arguments.find("json_string"); it != args.named_arguments.end()) {
+    auto bool_node = std::get_if<MacroIR::BooleanNode>(it->second.get());
+    if (bool_node == nullptr) {
+      ReportParseError("json_string must be a boolean", delta_element);
+    }
+    json_string = bool_node->value;
+  }
+  return builder_.AddRegex(pattern_node->value, json_string);
 }
 
 int32_t EBNFParser::ParseTokenSet() {

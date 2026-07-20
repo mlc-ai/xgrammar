@@ -795,6 +795,45 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
   return ir.Build();
 }
 
+Result<FSMWithStartEnd> RegexFSMBuilder::BuildWithForbiddenChars(
+    const std::string& regex, const std::bitset<256>& forbidden_chars
+) {
+  auto build_result = Build(regex);
+  if (build_result.IsErr() || forbidden_chars.none()) {
+    return build_result;
+  }
+  auto fsm_wse = std::move(build_result).Unwrap();
+  const auto& fsm = fsm_wse.GetFsm();
+  FSM new_fsm(fsm_wse.NumStates());
+  for (int state = 0; state < fsm_wse.NumStates(); ++state) {
+    for (const auto& edge : fsm.GetEdges(state)) {
+      if (!edge.IsCharRange()) {
+        new_fsm.AddEdge(state, edge.target, edge.min, edge.max);
+        continue;
+      }
+      // Split the character range into the maximal sub-ranges of allowed characters.
+      int range_start = -1;
+      for (int c = edge.min; c <= edge.max + 1; ++c) {
+        if (c <= edge.max && !forbidden_chars[c]) {
+          if (range_start == -1) {
+            range_start = c;
+          }
+        } else if (range_start != -1) {
+          new_fsm.AddEdge(state, edge.target, range_start, c - 1);
+          range_start = -1;
+        }
+      }
+    }
+  }
+  std::vector<bool> ends(fsm_wse.NumStates(), false);
+  for (int state = 0; state < fsm_wse.NumStates(); ++state) {
+    if (fsm_wse.IsEndState(state)) {
+      ends[state] = true;
+    }
+  }
+  return ResultOk(FSMWithStartEnd(new_fsm, fsm_wse.GetStart(), std::move(ends)));
+}
+
 class TrieFSMBuilderImpl {
  public:
   TrieFSMBuilderImpl() = default;

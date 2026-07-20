@@ -369,3 +369,71 @@ TEST(XGrammarFSMBuilderTest, TestChoicesFSMBuilder) {
   EXPECT_TRUE(fsm_rule2_result.has_value());
   EXPECT_EQ(fsm_rule2_result->ToString(), expected_fsm_rule2);
 }
+
+TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenChars) {
+  // \S matches any non-whitespace byte. With the JSON forbidden characters removed, the
+  // quote and the backslash must be rejected while other printable characters stay.
+  const auto& forbidden = GrammarFSMBuilder::JSONStringForbiddenChars();
+  auto fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars("\\S+", forbidden).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a!~z"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a\"b"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a\\b"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a b"));
+
+  // A positive class spanning the quote and the backslash is split around them.
+  fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars("[ -~]+", forbidden).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A z!"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\""));
+  EXPECT_FALSE(fsm_wse.AcceptString("\\"));
+
+  // . matches any byte; the control characters must be rejected as well.
+  fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars(".", forbidden).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\t"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\n"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\""));
+
+  // Epsilon transitions are preserved: the pattern still accepts the empty string.
+  fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars("(ab)*", forbidden).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString(""));
+  EXPECT_TRUE(fsm_wse.AcceptString("abab"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+
+  // A pattern that requires a forbidden character becomes the empty language.
+  fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars("a\"b", forbidden).Unwrap();
+  EXPECT_FALSE(fsm_wse.AcceptString("a\"b"));
+  EXPECT_FALSE(fsm_wse.AcceptString("ab"));
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+
+  // Multi-byte UTF-8 characters (bytes >= 0x80) are not affected by the JSON exclusion.
+  fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars(".+", forbidden).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("你好"));
+}
+
+TEST(XGrammarFSMBuilderTest, TestGrammarFSMBuilderRegex) {
+  // The compiled regex automaton must preserve the language after simplification.
+  auto fsm_wse = GrammarFSMBuilder::Regex("(ab)+").Unwrap();
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("ab"));
+  EXPECT_TRUE(fsm_wse.AcceptString("abab"));
+
+  fsm_wse = GrammarFSMBuilder::Regex("[0-9]{5}$").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("12345"));
+  EXPECT_FALSE(fsm_wse.AcceptString("1234"));
+  EXPECT_FALSE(fsm_wse.AcceptString("123456"));
+
+  // json_string=true excludes the JSON forbidden characters.
+  fsm_wse = GrammarFSMBuilder::Regex("\\S+", /*json_string=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a\"b"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a\\b"));
+
+  // Without the flag, the quote is accepted.
+  fsm_wse = GrammarFSMBuilder::Regex("\\S+").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a\"b"));
+
+  // Invalid patterns report an error.
+  EXPECT_TRUE(GrammarFSMBuilder::Regex("+a").IsErr());
+}

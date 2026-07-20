@@ -132,11 +132,13 @@ class Grammar::Impl {
     //               loop_after_dispatch,
     //               exclude_cnt, token_id × M]
     kTokenTagDispatch,
-    // data format: [byte0, byte1, ...]
+    // data format: [json_string, byte0, byte1, ...]
     // The bytes are the regex pattern string. Like kTagDispatch, it can only be the body of a
     // rule. The pattern is carried through the grammar passes as-is; when GrammarFSMBuilder
     // runs, the pattern is compiled into an automaton, so every regex rule always has a
-    // per-rule FSM after optimization.
+    // per-rule FSM after optimization. If json_string is 1, the regex matches the body of a
+    // JSON string literal: the characters that must be escaped in a JSON string (the control
+    // characters, '"' and '\\') are excluded from every character match of the automaton.
     kRegex,
   };
 
@@ -198,9 +200,10 @@ class Grammar::Impl {
   /*! \brief Get the regex pattern string of the regex grammar expr. */
   std::string GetRegexString(const GrammarExpr& grammar_expr) const {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kRegex) << "GrammarExpr is not a regex";
+    XGRAMMAR_DCHECK(grammar_expr.size() >= 1) << "Regex expr must contain the json_string flag";
     std::string str;
-    str.reserve(grammar_expr.size());
-    for (int i = 0; i < grammar_expr.size(); ++i) {
+    str.reserve(grammar_expr.size() - 1);
+    for (int i = 1; i < grammar_expr.size(); ++i) {
       str.push_back(static_cast<char>(static_cast<uint8_t>(grammar_expr[i])));
     }
     return str;
@@ -209,6 +212,13 @@ class Grammar::Impl {
   /*! \brief Get the regex pattern string of the regex grammar expr with the given id. */
   std::string GetRegexString(int32_t grammar_expr_id) const {
     return GetRegexString(GetGrammarExpr(grammar_expr_id));
+  }
+
+  /*! \brief Get whether the regex grammar expr matches the body of a JSON string literal. */
+  bool GetRegexIsJSONString(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kRegex) << "GrammarExpr is not a regex";
+    XGRAMMAR_DCHECK(grammar_expr.size() >= 1) << "Regex expr must contain the json_string flag";
+    return grammar_expr[0] != 0;
   }
 
   /*! \brief The object representing a tag dispatch. */

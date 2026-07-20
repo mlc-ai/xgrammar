@@ -22,7 +22,7 @@
 #include <variant>
 #include <vector>
 
-#include "fsm_builder.h"
+#include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
 #include "regex_converter.h"
 #include "support/encoding.h"
@@ -2154,16 +2154,32 @@ std::string JSONSchemaConverter::GenerateNumber(
 }
 
 /*!
- * \brief Emit the EBNF fragment matching a regex. Prefer the Regex(...) macro so the pattern
- * is compiled into a single automaton by GrammarFSMBuilder; fall back to the CFG expansion
- * when the FSM regex engine does not support the pattern.
+ * \brief Emit the EBNF fragment matching a regex that forms the body of a JSON string
+ * literal. Prefer the Regex(..., json_string=true) macro so the pattern is compiled into a
+ * single automaton by GrammarFSMBuilder; json_string=true excludes the characters that must
+ * be escaped in a JSON string ('"', '\\' and the control characters) from every character
+ * match, so classes like \S cannot emit an unescaped quote. Fall back to the CFG expansion
+ * when the FSM regex engine does not support the pattern, or when the exclusion makes the
+ * pattern unmatchable (e.g. a pattern requiring a literal '"').
  */
 static std::string RegexToEBNFElement(const std::string& regex) {
   bool is_printable_ascii = std::all_of(regex.begin(), regex.end(), [](unsigned char c) {
     return c >= 0x20 && c <= 0x7E;
   });
-  if (is_printable_ascii && RegexFSMBuilder::Build(regex).IsOk()) {
-    return "Regex(\"" + EscapeString(regex) + "\")";
+  if (is_printable_ascii) {
+    auto fsm_result = GrammarFSMBuilder::Regex(regex, /*json_string=*/true);
+    if (fsm_result.IsOk()) {
+      auto fsm = std::move(fsm_result).Unwrap();
+      std::unordered_set<int> reachable_states;
+      fsm.GetReachableStates(&reachable_states);
+      bool language_is_empty =
+          std::none_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
+            return fsm.IsEndState(state);
+          });
+      if (!language_is_empty) {
+        return "Regex(\"" + EscapeString(regex) + "\", json_string=true)";
+      }
+    }
   }
   return RegexToEBNF(regex, false);
 }

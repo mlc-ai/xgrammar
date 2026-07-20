@@ -130,7 +130,11 @@ std::string GrammarPrinter::PrintChoices(const GrammarExpr& grammar_expr) {
 }
 
 std::string GrammarPrinter::PrintRegex(const GrammarExpr& grammar_expr) {
-  return "Regex(" + PrintString(grammar_->GetRegexString(grammar_expr)) + ")";
+  std::string result = "Regex(" + PrintString(grammar_->GetRegexString(grammar_expr));
+  if (grammar_->GetRegexIsJSONString(grammar_expr)) {
+    result += ", json_string=true";
+  }
+  return result + ")";
 }
 
 std::string GrammarPrinter::PrintString(const std::string& str) {
