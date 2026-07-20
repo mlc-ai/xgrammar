@@ -433,6 +433,12 @@ class EBNFParser {
       const int& max_nest_layer = 1000
   );
 
+  Grammar ParseRules(
+      const std::vector<std::pair<std::string, std::string>>& rules,
+      const std::string& root_rule_name,
+      const int& max_nest_layer = 1000
+  );
+
  private:
   using Rule = Grammar::Impl::Rule;
   using GrammarExprType = Grammar::Impl::GrammarExprType;
@@ -1210,11 +1216,54 @@ Grammar EBNFParser::Parse(
   return builder_.Get(root_rule_name);
 }
 
+Grammar EBNFParser::ParseRules(
+    const std::vector<std::pair<std::string, std::string>>& rules,
+    const std::string& root_rule_name,
+    const int& max_nest_layer
+) {
+  max_nest_layer_ = max_nest_layer;
+  root_rule_name_ = root_rule_name;
+
+  // Register every generated rule before parsing bodies to preserve forward-reference behavior.
+  for (const auto& [rule_name, _] : rules) {
+    XGRAMMAR_CHECK(builder_.GetRuleId(rule_name) == -1)
+        << "Rule \"" << rule_name << "\" is defined multiple times";
+    builder_.AddEmptyRule(rule_name);
+  }
+  XGRAMMAR_CHECK(builder_.GetRuleId(root_rule_name_) != -1)
+      << "The root rule with name \"" << root_rule_name_ << "\" is not found";
+
+  EBNFLexer lexer;
+  for (const auto& [rule_name, rule_body] : rules) {
+    nest_layer_guard_ = 0;
+    std::string definition;
+    definition.reserve(rule_name.size() + rule_body.size() + 6);
+    definition.append(rule_name).append(" ::= ").append(rule_body);
+    tokens_ = lexer.Tokenize(definition);
+    current_token_ = tokens_.data();
+
+    auto new_rule = ParseRule();
+    XGRAMMAR_DCHECK(new_rule.name == rule_name);
+    XGRAMMAR_CHECK(Peek().type == TokenType::EndOfFile)
+        << "Unexpected trailing tokens in generated rule \"" << rule_name << "\"";
+    builder_.UpdateRuleBody(new_rule.name, new_rule.body_expr_id);
+    builder_.UpdateLookaheadAssertion(new_rule.name, new_rule.lookahead_assertion_id);
+  }
+
+  return builder_.Get(root_rule_name_);
+}
+
 Grammar ParseEBNF(const std::string& ebnf_string, const std::string& root_rule_name) {
   EBNFLexer lexer;
   auto tokens = lexer.Tokenize(ebnf_string);
   EBNFParser parser;
   return parser.Parse(std::move(tokens), root_rule_name);
+}
+
+Grammar ParseEBNFRules(
+    const std::vector<std::pair<std::string, std::string>>& rules, const std::string& root_rule_name
+) {
+  return EBNFParser().ParseRules(rules, root_rule_name);
 }
 
 }  // namespace xgrammar

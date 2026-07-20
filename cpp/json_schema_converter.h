@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "ebnf_script_creator.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -289,6 +290,9 @@ class JSONSchemaConverter {
    */
   std::string Convert(const SchemaSpecPtr& spec);
 
+  /*! \brief Convert SchemaSpec directly to Grammar without materializing a combined EBNF script. */
+  Grammar ConvertToGrammar(const SchemaSpecPtr& spec);
+
  protected:
   // ==================== Virtual methods for generation ====================
   // Subclasses can override these to customize output format
@@ -434,6 +438,9 @@ class JSONSchemaConverter {
   GenerateCacheManager rule_cache_manager_;
 
  private:
+  void GenerateRules(const SchemaSpecPtr& spec);
+
+ private:
   void AddHelperRules();
 
   std::unordered_map<std::string, std::string>
@@ -516,6 +523,18 @@ std::string JSONSchemaToEBNF(
     bool strict_mode = true,
     std::optional<int> max_whitespace_cnt = std::nullopt,
     JSONFormat json_format = JSONFormat::kJSON,
+    bool any_order = false
+);
+
+/*! \brief Convert a JSON schema directly to Grammar through the generated per-rule representation.
+ */
+Grammar JSONSchemaToGrammar(
+    const std::string& schema,
+    bool any_whitespace = true,
+    std::optional<int> indent = std::nullopt,
+    std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
+    bool strict_mode = true,
+    std::optional<int> max_whitespace_cnt = std::nullopt,
     bool any_order = false
 );
 
