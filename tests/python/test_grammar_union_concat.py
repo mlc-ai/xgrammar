@@ -5,6 +5,7 @@ import sys
 import pytest
 
 import xgrammar as xgr
+from xgrammar.testing import _is_grammar_accept_string
 
 
 def test_grammar_union():
@@ -158,6 +159,25 @@ root_2 ::= (([a-z] root_2) | ([a-z]))
     assert str(grammar_union) == expected_grammar_union
     grammar_concat = xgr.Grammar.concat(stag_grammar, start_grammar)
     assert str(grammar_concat) == expected_grammar_concat
+
+
+def test_grammar_union_concat_compiled_semantics():
+    """Check end-state mapping after union and concatenation are optimized into FSMs."""
+    nullable = xgr.Grammar.from_ebnf('root ::= "a" | ""')
+    alternatives = xgr.Grammar.from_ebnf('root ::= "bc" | "d"')
+    repeated = xgr.Grammar.from_ebnf("root ::= [x-z]+")
+
+    union = xgr.Grammar.union(nullable, alternatives, repeated)
+    for input_str in ["", "a", "bc", "d", "x", "xyz"]:
+        assert _is_grammar_accept_string(union, input_str)
+    for input_str in ["ab", "bd", "1", "ax"]:
+        assert not _is_grammar_accept_string(union, input_str)
+
+    concatenated = xgr.Grammar.concat(nullable, alternatives, repeated)
+    for input_str in ["bcx", "dxyz", "abcx", "adxyz"]:
+        assert _is_grammar_accept_string(concatenated, input_str)
+    for input_str in ["", "a", "bc", "x", "abdx", "abc"]:
+        assert not _is_grammar_accept_string(concatenated, input_str)
 
 
 if __name__ == "__main__":

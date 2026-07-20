@@ -12,6 +12,7 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include "reflection.h"
 
@@ -30,6 +31,8 @@ inline constexpr std::size_t MemorySize(const std::tuple<Ts...>& tpl);
 
 template <typename T>
 inline constexpr std::size_t MemorySize(const std::optional<T>& optional_value);
+
+inline std::size_t MemorySize(const std::vector<bool>& value);
 
 /******************* MemorySize Implementations *******************/
 
@@ -112,6 +115,14 @@ template <typename T>
 inline constexpr std::size_t MemorySize(const std::optional<T>& optional_value) {
   return optional_value.has_value() ? MemorySize(*optional_value) : 0;
 }
+
+/*!
+ * \brief Compute the memory consumption of a std::vector<bool>, which is bit-packed: it stores
+ * one bit (not one byte) per element. The generic container overload would over-count it by 8x.
+ * \param value The vector<bool>.
+ * \return The memory consumption in heap memory of the vector<bool> in bytes.
+ */
+inline std::size_t MemorySize(const std::vector<bool>& value) { return (value.size() + 7) / 8; }
 
 }  // namespace xgrammar
 

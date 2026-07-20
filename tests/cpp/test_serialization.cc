@@ -577,7 +577,7 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
     fsm.AddEpsilonEdge(0, 2);
 
     CompactFSM compact_fsm = fsm.ToCompact();
-    CompactFSMWithStartEnd compact_fsm_with_start_end(compact_fsm, 0, {false, false, true});
+    CompactFSMWithStartEnd compact_fsm_with_start_end(compact_fsm, 0, {2});
 
     auto json_value = AutoSerializeJSONValue(compact_fsm_with_start_end);
     ASSERT_TRUE(json_value.is<picojson::array>());
@@ -595,7 +595,7 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
     // Test basic properties
     ASSERT_EQ(deserialized.GetFsm().NumStates(), compact_fsm.NumStates());
     ASSERT_EQ(deserialized.GetStart(), 0);
-    ASSERT_EQ(deserialized.GetEnds(), std::vector<bool>({false, false, true}));
+    ASSERT_EQ(deserialized.GetEnds(), std::vector<int32_t>({2}));
 
     // Test roundtrip
     auto json_value2 = AutoSerializeJSONValue(deserialized);
@@ -610,7 +610,7 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
     fsm.AddEOSEdge(2, 0);
 
     CompactFSM compact_fsm = fsm.ToCompact();
-    CompactFSMWithStartEnd compact_fsm_with_start_end(compact_fsm, 0, {false, false, true});
+    CompactFSMWithStartEnd compact_fsm_with_start_end(compact_fsm, 0, {2});
 
     auto json_value = AutoSerializeJSONValue(compact_fsm_with_start_end);
 
@@ -626,7 +626,7 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
 
     ASSERT_EQ(deserialized.GetFsm().NumStates(), compact_fsm.NumStates());
     ASSERT_EQ(deserialized.GetStart(), 0);
-    ASSERT_EQ(deserialized.GetEnds(), std::vector<bool>({false, false, true}));
+    ASSERT_EQ(deserialized.GetEnds(), std::vector<int32_t>({2}));
 
     // Test roundtrip
     auto json_value2 = AutoSerializeJSONValue(deserialized);

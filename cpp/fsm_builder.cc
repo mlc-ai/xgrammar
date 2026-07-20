@@ -193,7 +193,7 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
 Result<FSMWithStartEnd> RegexIR::Build() const {
   if (states.empty()) {
     FSM empty_fsm(1);
-    FSMWithStartEnd result(empty_fsm, 0, {true}, false);
+    FSMWithStartEnd result(empty_fsm, 0, {0}, false);
     return ResultOk(std::move(result));
   }
   std::vector<FSMWithStartEnd> fsm_list;
@@ -496,9 +496,7 @@ FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
         new_fsm.AddEdge(0, 1, last, 0xFF);
       }
     }
-    std::vector<bool> ends(new_fsm.NumStates(), false);
-    ends[1] = true;
-    result = FSMWithStartEnd(new_fsm, 0, ends, false);
+    result = FSMWithStartEnd(new_fsm, 0, {1}, false);
   } else {
     // TODO: The support for rules.
     XGRAMMAR_LOG(WARNING) << "rule is not supported yet.";
@@ -883,12 +881,7 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
     XGRAMMAR_LOG(WARNING) << "Excluded patterns are ignored when back edges are not added.";
   }
 
-  std::vector<bool> is_end_state(fsm.NumStates(), false);
-  for (const auto& end : ends) {
-    is_end_state[end] = true;
-  }
-
-  return FSMWithStartEnd(fsm, start, is_end_state);
+  return FSMWithStartEnd(fsm, start, std::vector<int32_t>(ends.begin(), ends.end()));
 }
 
 void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends) {
