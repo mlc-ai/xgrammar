@@ -37,14 +37,22 @@ namespace xgrammar {
 
 /************** AdaptiveTokenMaskCache Generator **************/
 
+struct TagDispatchTokenOptimization {
+  // Tokens that contain no trigger or exclude string after their first byte.
+  DynamicBitset definitely_accepted_since_second_byte;
+  // The sorted-vocabulary indices of all other tokens. Keeping the sparse complement avoids
+  // scanning the full vocabulary again for every state of a large TagDispatch automaton.
+  std::vector<int32_t> requires_full_match_since_second_byte;
+};
+
 /*! \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcherForTokenMaskCache : public EarleyParser {
  public:
   GrammarMatcherForTokenMaskCache(
       const Grammar& grammar,
       const ParserState& init_state,
-      const std::unordered_map<int32_t, DynamicBitset>&
-          tag_dispatch_rule_id_to_second_slicing_bitset,
+      const std::unordered_map<int32_t, TagDispatchTokenOptimization>&
+          tag_dispatch_token_optimizations,
       const TokenizerInfo& tokenizer_info,
       std::optional<RuleLevelCache>& rule_level_cache,
       const bool& need_expand = true
@@ -52,8 +60,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       : EarleyParser(grammar, init_state),
         init_rule_id_(init_state.rule_id),
         initial_state_(init_state),
-        tag_dispatch_rule_id_to_second_slicing_bitset_(tag_dispatch_rule_id_to_second_slicing_bitset
-        ),
+        tag_dispatch_token_optimizations_(tag_dispatch_token_optimizations),
         tokenizer_info_(tokenizer_info),
         rule_level_cache_(rule_level_cache) {}
   /*!
@@ -127,7 +134,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
    *  When we check a token, we first check if its first character can transit to the start state.
    *  If yes, then we check if it is in the bitset. If yes, then we accept it directly.
    */
-  const std::unordered_map<int32_t, DynamicBitset>& tag_dispatch_rule_id_to_second_slicing_bitset_;
+  const std::unordered_map<int32_t, TagDispatchTokenOptimization>&
+      tag_dispatch_token_optimizations_;
 
   const TokenizerInfo& tokenizer_info_;
 
@@ -538,24 +546,84 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
   int last_rejected_range = 0;
   const bool& is_exact_lookahead = grammar_->GetRule(init_rule_id_).is_exact_lookahead;
   std::optional<const DynamicBitset*> definite_accepted_bitset = std::nullopt;
+  const TagDispatchTokenOptimization* tag_dispatch_token_optimization = nullptr;
   const bool is_tag_dispatch_rule =
       grammar_->GetGrammarExpr(grammar_->GetRule(init_rule_id_).body_expr_id).type ==
       Grammar::Impl::GrammarExprType::kTagDispatch;
   if (is_tag_dispatch_rule) {
-    XGRAMMAR_DCHECK(tag_dispatch_rule_id_to_second_slicing_bitset_.count(init_rule_id_) > 0);
-    definite_accepted_bitset = &tag_dispatch_rule_id_to_second_slicing_bitset_.at(init_rule_id_);
+    XGRAMMAR_DCHECK(tag_dispatch_token_optimizations_.count(init_rule_id_) > 0);
+    tag_dispatch_token_optimization = &tag_dispatch_token_optimizations_.at(init_rule_id_);
+    definite_accepted_bitset =
+        &tag_dispatch_token_optimization->definitely_accepted_since_second_byte;
   }
   tmp_store_rejected_only_ = is_tag_dispatch_rule && speculative_calculation && fill_reject_indices;
+
+  std::vector<int32_t> sparse_candidate_indices;
+  if (tmp_store_rejected_only_) {
+    XGRAMMAR_DCHECK(tag_dispatch_token_optimization != nullptr);
+    const auto& requires_full_match =
+        tag_dispatch_token_optimization->requires_full_match_since_second_byte;
+    sparse_candidate_indices.reserve(requires_full_match.size());
+    for (int32_t i : requires_full_match) {
+      const auto& token = sorted_decoded_vocab[i].second;
+      XGRAMMAR_DCHECK(!token.empty());
+      const auto first_byte = static_cast<uint8_t>(token[0]);
+      if (first_char_mask[first_byte] && speculative_mask[first_byte]) {
+        sparse_candidate_indices.push_back(i);
+      }
+    }
+
+    // Any first byte that is accepted by the grammar but does not return the TagDispatch
+    // automaton to its start state also requires full matching. These byte ranges are disjoint
+    // from the indices collected above.
+    std::bitset<256> non_speculative_first_bytes = first_char_mask & ~speculative_mask;
+    if (non_speculative_first_bytes.any()) {
+      std::vector<std::pair<int32_t, int32_t>> non_speculative_intervals;
+      GetPossibleTokenIntervals(
+          sorted_decoded_vocab, non_speculative_first_bytes, non_speculative_intervals
+      );
+      for (const auto& [begin, end] : non_speculative_intervals) {
+        for (int32_t i = begin; i < end; ++i) {
+          sparse_candidate_indices.push_back(i);
+        }
+      }
+      std::sort(sparse_candidate_indices.begin(), sparse_candidate_indices.end());
+    }
+  }
 
   const std::string* prev_token = nullptr;
   int32_t skip_ptr = 0;
   const int32_t skip_size = static_cast<int32_t>(token_edge_accepted.size());
+  size_t sparse_candidate_ptr = 0;
+  auto next_token_index = [&](int32_t cursor, int32_t interval_end) {
+    if (!tmp_store_rejected_only_) {
+      return cursor;
+    }
+    while (sparse_candidate_ptr < sparse_candidate_indices.size() &&
+           sparse_candidate_indices[sparse_candidate_ptr] < cursor) {
+      ++sparse_candidate_ptr;
+    }
+    if (sparse_candidate_ptr == sparse_candidate_indices.size() ||
+        sparse_candidate_indices[sparse_candidate_ptr] >= interval_end) {
+      return interval_end;
+    }
+    return sparse_candidate_indices[sparse_candidate_ptr++];
+  };
   for (size_t interval_idx = 0; interval_idx < possible_intervals.size(); ++interval_idx) {
     const auto& interval = possible_intervals[interval_idx];
-    for (int i = interval.first; i < interval.second; ++i) {
+    int32_t cursor = interval.first;
+    while (cursor < interval.second) {
+      int32_t i = next_token_index(cursor, interval.second);
+      if (i == interval.second) {
+        break;
+      }
+      int32_t next_cursor = i + 1;
       // Skip tokens already accepted by token edges (avoid expensive Earley simulation).
       while (skip_ptr < skip_size && token_edge_accepted[skip_ptr] < i) ++skip_ptr;
-      if (skip_ptr < skip_size && token_edge_accepted[skip_ptr] == i) continue;
+      if (skip_ptr < skip_size && token_edge_accepted[skip_ptr] == i) {
+        cursor = next_cursor;
+        continue;
+      }
 
       // Check if the current token is in the rejected range. i.e. check if the current token
       // is on the subtree of the rejected token.
@@ -569,8 +637,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
                     : fill_reject_indices;
           }
         } else {
-          i = last_rejected_range - 1;
+          next_cursor = last_rejected_range;
         }
+        cursor = next_cursor;
         continue;
       }
       const auto& token = sorted_decoded_vocab[i].second;
@@ -583,6 +652,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
             if (!tmp_store_rejected_only_) {
               tmp_accepted_indices_.push_back(i);
             }
+            cursor = next_cursor;
             continue;
           }
           // If the token doesn't contain tags or stop strings since the second character, and it
@@ -593,6 +663,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
             if (!tmp_store_rejected_only_) {
               tmp_accepted_indices_.push_back(i);
             }
+            cursor = next_cursor;
             continue;
           }
         } else {
@@ -609,6 +680,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
             if (!tmp_store_rejected_only_) {
               tmp_accepted_indices_.push_back(i);
             }
+            cursor = next_cursor;
             continue;
           }
         }
@@ -679,7 +751,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
             tmp_rejected_indices_.push_back(j);
             tmp_rejected_by_lookahead_indices_.push_back(j);
           }
-          i = subtree_nodes_range[i] - 1;  // Skip the subtree nodes.
+          next_cursor = subtree_nodes_range[i];
         }
       } else {
         tmp_rejected_indices_.push_back(i);
@@ -691,6 +763,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
                   : fill_reject_indices;
         }
       }
+      cursor = next_cursor;
     }
     if (interval_idx != possible_intervals.size() - 1 && fill_reject_indices) {
       const auto& next_interval = possible_intervals[interval_idx + 1];
@@ -1069,12 +1142,12 @@ class GrammarCompilerSub {
   CompiledGrammar MultiThreadCompileGrammar(Grammar grammar);
   /*! \brief Optimization for TagDispatch.
    *  \param compiled_grammar_impl the compiled_grammar to be optimized.
-   *  \param tag_dispatch_rule_id_to_second_slicing_bitset Return value. Mapping from the rule_id to
-   * the definite accepted token mask.
+   *  \param tag_dispatch_token_optimizations Return value. Mapping from the rule_id to the
+   * TagDispatch vocabulary optimization.
    */
   void TagDispatchOptimization(
       std::shared_ptr<CompiledGrammar::Impl> compiled_grammar_impl,
-      std::unordered_map<int32_t, DynamicBitset>* tag_dispatch_rule_id_to_second_slicing_bitset
+      std::unordered_map<int32_t, TagDispatchTokenOptimization>* tag_dispatch_token_optimizations
   );
 
   /*! \brief The vocabulary associated with this storage class. */
@@ -1093,8 +1166,8 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
-  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
-  TagDispatchOptimization(compiled_grammar_impl, &tag_dispatch_rule_id_to_second_slicing_bitset);
+  std::unordered_map<int32_t, TagDispatchTokenOptimization> tag_dispatch_token_optimizations;
+  TagDispatchOptimization(compiled_grammar_impl, &tag_dispatch_token_optimizations);
 
   // If the compiler is cache-enabled, then we hash the grammars for crossing-grammar caching.
   if (rule_level_cache_.has_value()) {
@@ -1120,7 +1193,7 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(
         compiled_grammar_impl->grammar,
         state,
-        tag_dispatch_rule_id_to_second_slicing_bitset,
+        tag_dispatch_token_optimizations,
         tokenizer_info_,
         rule_level_cache_,
         false
@@ -1220,10 +1293,10 @@ CompiledGrammar GrammarCompilerSub::CompileGrammar(
 
 void GrammarCompilerSub::TagDispatchOptimization(
     std::shared_ptr<CompiledGrammar::Impl> compiled_grammar_impl,
-    std::unordered_map<int32_t, DynamicBitset>* tag_dispatch_rule_id_to_second_slicing_bitset
+    std::unordered_map<int32_t, TagDispatchTokenOptimization>* tag_dispatch_token_optimizations
 ) {
   using GrammarExprType = Grammar::Impl::GrammarExprType;
-  tag_dispatch_rule_id_to_second_slicing_bitset->clear();
+  tag_dispatch_token_optimizations->clear();
 
   // Optimization for TagDispatch: Precompute the definitely accepted tokens.
   for (int i = 0; i < compiled_grammar_impl->grammar->NumRules(); i++) {
@@ -1244,21 +1317,23 @@ void GrammarCompilerSub::TagDispatchOptimization(
     patterns.insert(patterns.end(), tag_dispatch.excludes.begin(), tag_dispatch.excludes.end());
     AhoCorasick matcher(patterns);
 
-    DynamicBitset definite_accepted_tokens_since_second_char(sorted_decoded_vocab.size());
+    TagDispatchTokenOptimization optimization;
+    optimization.definitely_accepted_since_second_byte = DynamicBitset(sorted_decoded_vocab.size());
     for (int j = 0; j < static_cast<int32_t>(sorted_decoded_vocab.size()); j++) {
       const auto& token = sorted_decoded_vocab[j].second;
       if (token.empty()) {
-        definite_accepted_tokens_since_second_char.Set(j);
+        optimization.definitely_accepted_since_second_byte.Set(j);
         continue;
       }
 
       // Check if the token contains any string trigger or exclude string after first char.
       if (!matcher.ContainsMatch(token, 1)) {
-        definite_accepted_tokens_since_second_char.Set(j);
+        optimization.definitely_accepted_since_second_byte.Set(j);
+      } else {
+        optimization.requires_full_match_since_second_byte.push_back(j);
       }
     }
-    (*tag_dispatch_rule_id_to_second_slicing_bitset)[i] =
-        definite_accepted_tokens_since_second_char;
+    (*tag_dispatch_token_optimizations)[i] = std::move(optimization);
   }
 }
 
