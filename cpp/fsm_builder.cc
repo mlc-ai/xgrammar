@@ -255,6 +255,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Symbol& state) const {
     }
     default: {
       XGRAMMAR_LOG(FATAL) << "Unknown regex symbol: " << static_cast<int>(state.symbol);
+      XGRAMMAR_UNREACHABLE();
     }
   }
 }
@@ -825,13 +826,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::BuildWithForbiddenChars(
       }
     }
   }
-  std::vector<bool> ends(fsm_wse.NumStates(), false);
-  for (int state = 0; state < fsm_wse.NumStates(); ++state) {
-    if (fsm_wse.IsEndState(state)) {
-      ends[state] = true;
-    }
-  }
-  return ResultOk(FSMWithStartEnd(new_fsm, fsm_wse.GetStart(), std::move(ends)));
+  return ResultOk(FSMWithStartEnd(new_fsm, fsm_wse.GetStart(), fsm_wse.GetEnds()));
 }
 
 class TrieFSMBuilderImpl {
