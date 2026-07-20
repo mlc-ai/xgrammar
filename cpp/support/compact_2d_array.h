@@ -152,7 +152,7 @@ class Compact2DArray {
   /****************** Accessors ******************/
 
   /*! \brief Get the number of rows in the Compact2DArray. */
-  int32_t size() const { return static_cast<int32_t>(indptr_.size() - 1); }
+  int32_t size() const { return static_cast<int32_t>(indptr_.size()) - 1; }
 
   friend std::size_t MemorySize(const Compact2DArray<DataType>& arr) {
     return MemorySize(arr.data_) + MemorySize(arr.indptr_);
@@ -201,7 +201,7 @@ class Compact2DArray {
    * \param new_data the element to be pushed.
    */
   void PushBackInLatestRow(const DataType& new_data) {
-    XGRAMMAR_ICHECK(!indptr_.empty()) << "Cannot push back in an empty Compact2DArray";
+    XGRAMMAR_DCHECK(!indptr_.empty()) << "Cannot push back in an empty Compact2DArray";
     CheckCanAppendData(1);
     data_.push_back(new_data);
     indptr_.back()++;
@@ -260,11 +260,6 @@ class Compact2DArray {
            "grammar pattern causing state explosion";
   }
 
-  void CheckCanAppendRow() const {
-    XGRAMMAR_ICHECK(indptr_.size() <= kMaxRepresentableSize)
-        << "Compact2DArray row count would exceed the int32_t limit";
-  }
-
   /*! \brief Vector storing all elements contiguously. */
   std::vector<DataType> data_;
   /*! \brief Vector storing the starting index of each row in data_. */
@@ -296,12 +291,8 @@ inline Compact2DArray<DataType> Compact2DArray<DataType>::FromDataAndIndptr(
     std::vector<DataType> data, std::vector<int32_t> indptr
 ) {
   XGRAMMAR_CHECK(!indptr.empty()) << "Compact2DArray indptr cannot be empty";
-  XGRAMMAR_CHECK(data.size() <= kMaxRepresentableSize)
-      << "Compact2DArray data size exceeds the int32_t limit";
-  XGRAMMAR_CHECK(indptr.size() <= kMaxRepresentableSize + 1)
-      << "Compact2DArray row count exceeds the int32_t limit";
   XGRAMMAR_CHECK(indptr.front() == 0) << "Compact2DArray indptr must start with 0";
-  for (size_t i = 1; i < indptr.size(); ++i) {
+  for (int32_t i = 1; i < static_cast<int32_t>(indptr.size()); ++i) {
     XGRAMMAR_CHECK(indptr[i - 1] <= indptr[i]) << "Compact2DArray indptr must be non-decreasing";
   }
   XGRAMMAR_CHECK(indptr.back() == static_cast<int32_t>(data.size()))
@@ -324,36 +315,22 @@ inline Compact2DArray<DataType> Compact2DArray<DataType>::FromRowSizes(
 
 template <typename DataType>
 inline void Compact2DArray<DataType>::ResetWithRowSizes(const std::vector<int32_t>& row_sizes) {
-  XGRAMMAR_CHECK(row_sizes.size() <= kMaxRepresentableSize)
-      << "Compact2DArray row count exceeds the int32_t limit";
-  std::vector<int32_t> new_indptr(row_sizes.size() + 1, 0);
-  size_t total_size = 0;
-  for (size_t i = 0; i < row_sizes.size(); ++i) {
+  indptr_.resize(row_sizes.size() + 1);
+  indptr_[0] = 0;
+  for (int32_t i = 0; i < static_cast<int32_t>(row_sizes.size()); ++i) {
     XGRAMMAR_CHECK(row_sizes[i] >= 0) << "Compact2DArray row size cannot be negative";
-    const size_t row_size = static_cast<size_t>(row_sizes[i]);
-    XGRAMMAR_CHECK(row_size <= kMaxRepresentableSize - total_size)
-        << "Compact2DArray data size exceeds the int32_t limit";
-    total_size += row_size;
-    new_indptr[i + 1] = static_cast<int32_t>(total_size);
+    indptr_[i + 1] = indptr_[i] + row_sizes[i];
   }
-  std::vector<DataType> new_data(total_size);
-  indptr_ = std::move(new_indptr);
-  data_ = std::move(new_data);
+  data_.resize(indptr_.back());
 }
 
 template <typename DataType>
 inline int32_t Compact2DArray<DataType>::PushBack(const DataType* new_data, int32_t new_data_len) {
-  XGRAMMAR_ICHECK(new_data_len >= 0) << "Compact2DArray row size cannot be negative";
+  // TODO(yixin): whether to add a additional data_len
   CheckCanAppendData(static_cast<size_t>(new_data_len));
-  CheckCanAppendRow();
-  if (new_data_len == 0) {
-    indptr_.push_back(static_cast<int32_t>(data_.size()));
-    return static_cast<int32_t>(indptr_.size()) - 2;
-  }
-  XGRAMMAR_ICHECK(new_data != nullptr) << "Compact2DArray row data cannot be null";
   // If the new data is already in the Compact2DArray, we need to copy it to the new memory
   // location.
-  if (!data_.empty() && new_data >= data_.data() && new_data < data_.data() + data_.size()) {
+  if (new_data >= data_.data() && new_data < data_.data() + data_.size()) {
     std::vector<DataType> new_data_copied(new_data, new_data + new_data_len);
     data_.insert(data_.end(), new_data_copied.begin(), new_data_copied.end());
   } else {
@@ -366,7 +343,6 @@ inline int32_t Compact2DArray<DataType>::PushBack(const DataType* new_data, int3
 template <typename DataType>
 inline int32_t Compact2DArray<DataType>::PushBack(const std::vector<DataType>& new_data) {
   CheckCanAppendData(new_data.size());
-  CheckCanAppendRow();
   data_.insert(data_.end(), new_data.begin(), new_data.end());
   indptr_.push_back(static_cast<int32_t>(data_.size()));
   return static_cast<int32_t>(indptr_.size()) - 2;
@@ -376,16 +352,8 @@ template <typename DataType>
 inline int32_t Compact2DArray<DataType>::PushBackNonContiguous(
     DataType data_1, const DataType* data_2, int32_t data_2_len
 ) {
-  XGRAMMAR_ICHECK(data_2_len >= 0) << "Compact2DArray row size cannot be negative";
   CheckCanAppendData(static_cast<size_t>(data_2_len) + 1);
-  CheckCanAppendRow();
-  if (data_2_len == 0) {
-    data_.push_back(data_1);
-    indptr_.push_back(static_cast<int32_t>(data_.size()));
-    return static_cast<int32_t>(indptr_.size()) - 2;
-  }
-  XGRAMMAR_ICHECK(data_2 != nullptr) << "Compact2DArray row data cannot be null";
-  if (!data_.empty() && data_2 >= data_.data() && data_2 < data_.data() + data_.size()) {
+  if (data_2 >= data_.data() && data_2 < data_.data() + data_.size()) {
     std::vector<DataType> new_data_copied(data_2, data_2 + data_2_len);
     data_.push_back(data_1);
     data_.insert(data_.end(), new_data_copied.begin(), new_data_copied.end());
