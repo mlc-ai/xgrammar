@@ -22,6 +22,7 @@
 #include "fsm.h"
 #include "grammar_functor.h"
 #include "grammar_impl.h"
+#include "support/aho_corasick.h"
 #include "support/dynamic_bitset.h"
 #include "support/int_set.h"
 #include "support/logging.h"
@@ -1194,9 +1195,16 @@ void GrammarCompilerSub::TagDispatchOptimization(
     Grammar::Impl::TagDispatch tag_dispatch =
         compiled_grammar_impl->GetGrammar()->GetTagDispatch(rule.body_expr_id);
     const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+    std::vector<std::string> patterns;
+    patterns.reserve(tag_dispatch.tag_rule_pairs.size() + tag_dispatch.excludes.size());
+    for (const auto& [trigger, rule_id] : tag_dispatch.tag_rule_pairs) {
+      patterns.push_back(trigger);
+    }
+    patterns.insert(patterns.end(), tag_dispatch.excludes.begin(), tag_dispatch.excludes.end());
+    AhoCorasick matcher(patterns);
+
     DynamicBitset definite_accepted_tokens_since_second_char(sorted_decoded_vocab.size());
     for (int j = 0; j < static_cast<int32_t>(sorted_decoded_vocab.size()); j++) {
-      bool definite_accept_since_second_char = true;
       const auto& token = sorted_decoded_vocab[j].second;
       if (token.empty()) {
         definite_accepted_tokens_since_second_char.Set(j);
@@ -1204,22 +1212,7 @@ void GrammarCompilerSub::TagDispatchOptimization(
       }
 
       // Check if the token contains any string trigger or exclude string after first char.
-      for (const auto& [trigger, rule_id] : tag_dispatch.tag_rule_pairs) {
-        if (token.find(trigger, 1) != std::string::npos) {
-          definite_accept_since_second_char = false;
-          break;
-        }
-      }
-      if (definite_accept_since_second_char) {
-        for (const auto& excl : tag_dispatch.excludes) {
-          if (token.find(excl, 1) != std::string::npos) {
-            definite_accept_since_second_char = false;
-            break;
-          }
-        }
-      }
-
-      if (definite_accept_since_second_char) {
+      if (!matcher.ContainsMatch(token, 1)) {
         definite_accepted_tokens_since_second_char.Set(j);
       }
     }
