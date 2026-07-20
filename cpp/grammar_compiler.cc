@@ -141,10 +141,24 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   std::vector<int32_t> tmp_accepted_by_lookahead_indices_;
   std::vector<bool> tmp_can_reach_end_stack_;
   std::vector<bool> tmp_can_reach_end_prefix_or_stack_;
+  // Whether every token not explicitly classified as rejected or uncertain is known to be
+  // accepted. This lets TagDispatch masks use their natural "accept all + sparse delta"
+  // representation without first materializing every accepted vocabulary index.
+  bool tmp_store_rejected_only_ = false;
   // Temporary data for GetTokenEdgeAcceptedIndices.
   std::vector<int32_t> tmp_token_edge_accepted_;
   std::vector<int32_t> tmp_token_edge_excluded_;
 };
+
+AdaptiveTokenMask MakeRejectedAdaptiveTokenMask(
+    const std::vector<int32_t>& rejected_indices, const std::vector<int32_t>& uncertain_indices
+) {
+  AdaptiveTokenMask result;
+  result.store_type = AdaptiveTokenMask::StoreType::kRejected;
+  result.rejected_indices = rejected_indices;
+  result.uncertain_indices = uncertain_indices;
+  return result;
+}
 
 void GrammarMatcherForTokenMaskCache::AdaptCacheWithLookahead(
     AdaptiveTokenMask* cache_ptr, bool is_root_rule
@@ -531,6 +545,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     XGRAMMAR_DCHECK(tag_dispatch_rule_id_to_second_slicing_bitset_.count(init_rule_id_) > 0);
     definite_accepted_bitset = &tag_dispatch_rule_id_to_second_slicing_bitset_.at(init_rule_id_);
   }
+  tmp_store_rejected_only_ = is_tag_dispatch_rule && speculative_calculation && fill_reject_indices;
 
   const std::string* prev_token = nullptr;
   int32_t skip_ptr = 0;
@@ -547,10 +562,12 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       if (i < last_rejected_range) {
         if (fill_reject_indices) {
           tmp_rejected_indices_.push_back(i);
-          fill_reject_indices =
-              tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
-                  ? false
-                  : fill_reject_indices;
+          if (!tmp_store_rejected_only_) {
+            fill_reject_indices =
+                tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
+                    ? false
+                    : fill_reject_indices;
+          }
         } else {
           i = last_rejected_range - 1;
         }
@@ -563,7 +580,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
         if (definite_accepted_bitset.has_value()) {
           // If the token is empty, it must be accepted.
           if (token.empty()) {
-            tmp_accepted_indices_.push_back(i);
+            if (!tmp_store_rejected_only_) {
+              tmp_accepted_indices_.push_back(i);
+            }
             continue;
           }
           // If the token doesn't contain tags or stop strings since the second character, and it
@@ -571,7 +590,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
           // accepted.
           if (speculative_mask[static_cast<uint8_t>(token[0])] &&
               (*definite_accepted_bitset.value())[i]) {
-            tmp_accepted_indices_.push_back(i);
+            if (!tmp_store_rejected_only_) {
+              tmp_accepted_indices_.push_back(i);
+            }
             continue;
           }
         } else {
@@ -585,7 +606,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
             }
           }
           if (all_accepted) {
-            tmp_accepted_indices_.push_back(i);
+            if (!tmp_store_rejected_only_) {
+              tmp_accepted_indices_.push_back(i);
+            }
             continue;
           }
         }
@@ -638,7 +661,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       bool can_reach_end = tmp_can_reach_end_prefix_or_stack_.back();
 
       if (accepted) {
-        tmp_accepted_indices_.push_back(i);
+        if (!tmp_store_rejected_only_) {
+          tmp_accepted_indices_.push_back(i);
+        }
       } else if (can_reach_end && prev_matched_size > 0) {
         auto [lookahead_accepted, lookahead_completed] =
             IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_);
@@ -659,10 +684,12 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       } else {
         tmp_rejected_indices_.push_back(i);
         last_rejected_range = subtree_nodes_range[i];
-        fill_reject_indices =
-            tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
-                ? false
-                : fill_reject_indices;
+        if (!tmp_store_rejected_only_) {
+          fill_reject_indices =
+              tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
+                  ? false
+                  : fill_reject_indices;
+        }
       }
     }
     if (interval_idx != possible_intervals.size() - 1 && fill_reject_indices) {
@@ -670,9 +697,12 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       for (int i = interval.second; i < next_interval.first; ++i) {
         tmp_rejected_indices_.push_back(i);
       }
-      fill_reject_indices = tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
-                                ? false
-                                : fill_reject_indices;
+      if (!tmp_store_rejected_only_) {
+        fill_reject_indices =
+            tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
+                ? false
+                : fill_reject_indices;
+      }
     }
   }
 
@@ -786,6 +816,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   tmp_accepted_by_lookahead_indices_.clear();
   tmp_can_reach_end_prefix_or_stack_.clear();
   tmp_can_reach_end_stack_.clear();
+  tmp_store_rejected_only_ = false;
   // For every character in the current token, stores whether it is possible to reach the end of
   // the rule when matching until this character. Store it in a stack for later rollback.
   tmp_can_reach_end_stack_.push_back(false);
@@ -855,18 +886,23 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   // rejected  = rejected - token_edge_accepted
   // uncertain = uncertain - token_edge_accepted
   if (!token_edge_accepted.empty()) {
-    IntsetUnion(&tmp_accepted_indices_, token_edge_accepted);
+    if (!tmp_store_rejected_only_) {
+      IntsetUnion(&tmp_accepted_indices_, token_edge_accepted);
+    }
     IntsetDifference(&tmp_rejected_indices_, token_edge_accepted);
     IntsetDifference(&tmp_uncertain_indices_, token_edge_accepted);
   }
   if (rejected_filled) {
-    auto return_value = AdaptiveTokenMask(
-        tokenizer_info_.GetVocabSize(),
-        tokenizer_info_.GetSortedDecodedVocab(),
-        tmp_accepted_indices_,
-        tmp_rejected_indices_,
-        tmp_uncertain_indices_
-    );
+    auto return_value =
+        tmp_store_rejected_only_
+            ? MakeRejectedAdaptiveTokenMask(tmp_rejected_indices_, tmp_uncertain_indices_)
+            : AdaptiveTokenMask(
+                  tokenizer_info_.GetVocabSize(),
+                  tokenizer_info_.GetSortedDecodedVocab(),
+                  tmp_accepted_indices_,
+                  tmp_rejected_indices_,
+                  tmp_uncertain_indices_
+              );
     if (rule_level_cache_is_available) {
       if (lookahead_id == -1 && !is_root_rule) {
         // If the rule doesn't have a lookahead, then it is exactly the same fsm.
@@ -909,13 +945,16 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
           new_state_id,
           fsm.GetNodeNum(),
           fsm.GetEdgeNum(),
-          AdaptiveTokenMask(
-              tokenizer_info_.GetVocabSize(),
-              tokenizer_info_.GetSortedDecodedVocab(),
-              accepted_indices_without_lookahead,
-              rejected_indices_without_lookahead,
-              tmp_uncertain_indices_
-          )
+          tmp_store_rejected_only_ ? MakeRejectedAdaptiveTokenMask(
+                                         rejected_indices_without_lookahead, tmp_uncertain_indices_
+                                     )
+                                   : AdaptiveTokenMask(
+                                         tokenizer_info_.GetVocabSize(),
+                                         tokenizer_info_.GetSortedDecodedVocab(),
+                                         accepted_indices_without_lookahead,
+                                         rejected_indices_without_lookahead,
+                                         tmp_uncertain_indices_
+                                     )
       );
       if (lookahead_hash.has_value()) {
         auto& fsm = grammar_->per_rule_fsms[init_rule_id_].value();
