@@ -635,7 +635,9 @@ class UsedRulesAnalyzer : public GrammarVisitor<std::vector<int32_t>> {
   std::vector<int32_t> Apply(const Grammar& grammar) final {
     InitGrammar(grammar);
 
-    std::set<int32_t> visited;
+    std::vector<uint8_t> visited(base_grammar_->NumRules(), 0);
+    std::vector<int32_t> used_rules;
+    used_rules.reserve(base_grammar_->NumRules());
 
     std::queue<int32_t>().swap(visit_queue_);
 
@@ -643,10 +645,11 @@ class UsedRulesAnalyzer : public GrammarVisitor<std::vector<int32_t>> {
     while (!visit_queue_.empty()) {
       auto rule_id = visit_queue_.front();
       visit_queue_.pop();
-      if (visited.count(rule_id)) {
+      if (visited[rule_id]) {
         continue;
       }
-      visited.insert(rule_id);
+      visited[rule_id] = 1;
+      used_rules.push_back(rule_id);
       auto rule = base_grammar_->GetRule(rule_id);
       VisitExpr(rule.body_expr_id);
       if (rule.lookahead_assertion_id != -1) {
@@ -654,7 +657,8 @@ class UsedRulesAnalyzer : public GrammarVisitor<std::vector<int32_t>> {
       }
     }
 
-    return std::vector<int32_t>(visited.begin(), visited.end());
+    std::sort(used_rules.begin(), used_rules.end());
+    return used_rules;
   }
 
   void VisitTagDispatch(const GrammarExpr& grammar_expr) {
@@ -1936,9 +1940,71 @@ class RepetitionNormalizerImpl {
 
 class GrammarOptimizerImpl {
  public:
+  static bool NeedsByteStringFusing(const Grammar& grammar) {
+    for (int32_t expr_id = 0; expr_id < grammar->NumGrammarExprs(); ++expr_id) {
+      const auto& expr = grammar->GetGrammarExpr(expr_id);
+      if (expr.type != Grammar::Impl::GrammarExprType::kSequence) {
+        continue;
+      }
+      bool previous_is_byte_string = false;
+      for (int32_t element_id : expr) {
+        bool current_is_byte_string =
+            grammar->GetGrammarExpr(element_id).type == Grammar::Impl::GrammarExprType::kByteString;
+        if (previous_is_byte_string && current_is_byte_string) {
+          return true;
+        }
+        previous_is_byte_string = current_is_byte_string;
+      }
+    }
+    return false;
+  }
+
+  static bool RuleCanBeInlined(const Grammar& grammar, int32_t rule_id) {
+    const auto& body = grammar->GetGrammarExpr(grammar->GetRule(rule_id).body_expr_id);
+    if (body.type != Grammar::Impl::GrammarExprType::kChoices || body.size() == 0) {
+      return false;
+    }
+    for (int32_t choice_id : body) {
+      const auto& choice = grammar->GetGrammarExpr(choice_id);
+      if (choice.type == Grammar::Impl::GrammarExprType::kEmptyStr) {
+        return false;
+      }
+      XGRAMMAR_DCHECK(choice.type == Grammar::Impl::GrammarExprType::kSequence);
+      for (int32_t element_id : choice) {
+        if (grammar->GetGrammarExpr(element_id).type == Grammar::Impl::GrammarExprType::kRuleRef) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  static bool HasPotentialInline(const Grammar& grammar) {
+    for (int32_t rule_id : UsedRulesAnalyzer().Apply(grammar)) {
+      const auto& body = grammar->GetGrammarExpr(grammar->GetRule(rule_id).body_expr_id);
+      if (body.type != Grammar::Impl::GrammarExprType::kChoices) {
+        continue;
+      }
+      for (int32_t choice_id : body) {
+        const auto& choice = grammar->GetGrammarExpr(choice_id);
+        if (choice.type != Grammar::Impl::GrammarExprType::kSequence || choice.size() == 0) {
+          continue;
+        }
+        const auto& first = grammar->GetGrammarExpr(choice[0]);
+        if (first.type == Grammar::Impl::GrammarExprType::kRuleRef &&
+            RuleCanBeInlined(grammar, first[0])) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   static Grammar Apply(const Grammar& grammar) {
-    auto result = ByteStringFuser::Apply(grammar);
-    result = RuleInliner::Apply(result);
+    auto result = NeedsByteStringFusing(grammar) ? ByteStringFuser::Apply(grammar) : grammar;
+    if (HasPotentialInline(result)) {
+      result = RuleInliner::Apply(result);
+    }
     result = RepetitionRangeExpander::Apply(result);
     result = DeadCodeEliminator::Apply(result);
     result = LookaheadAssertionAnalyzer::Apply(result);
