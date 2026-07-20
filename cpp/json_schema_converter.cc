@@ -3169,6 +3169,27 @@ std::string JSONSchemaConverter::JSONStrToPrintableStr(const std::string& json_s
   return result;
 }
 
+std::string JSONSchemaConverter::EscapeStringForEBNFLiteral(const std::string& str) {
+  static const char* kHexDigits = "0123456789abcdef";
+  std::string result;
+  result.reserve(str.size());
+  for (char ch : str) {
+    unsigned char c = static_cast<unsigned char>(ch);
+    if (c == '"') {
+      result += "\\\"";
+    } else if (c == '\\') {
+      result += "\\\\";
+    } else if (c < 0x20 || c == 0x7f) {
+      result += "\\u00";
+      result += kHexDigits[(c >> 4) & 0xf];
+      result += kHexDigits[c & 0xf];
+    } else {
+      result += ch;
+    }
+  }
+  return result;
+}
+
 bool JSONSchemaConverter::StringSpecKey::operator==(const StringSpecKey& other) const {
   return pattern == other.pattern && min_length == other.min_length &&
          max_length == other.max_length && wrapper == other.wrapper;

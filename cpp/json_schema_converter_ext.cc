@@ -230,7 +230,12 @@ std::string XMLToolCallingConverter::GenerateEnum(
 
 std::string XMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
   if (nested_object_level_ <= 1) {
-    return "\"" + xml_wrapper_.key_wrapper_prefix + key + xml_wrapper_.key_wrapper_suffix + "\"";
+    // The key is emitted as raw text inside the XML wrapper, so escape it for the
+    // EBNF string literal; a control character such as a newline would otherwise
+    // terminate the literal and abort grammar compilation. The wrappers are
+    // pre-built EBNF fragments and must be left as-is.
+    return "\"" + xml_wrapper_.key_wrapper_prefix + EscapeStringForEBNFLiteral(key) +
+           xml_wrapper_.key_wrapper_suffix + "\"";
   }
   return JSONSchemaConverter::FormatPropertyKey(key);
 }
@@ -240,13 +245,13 @@ std::string XMLToolCallingConverter::FormatProperty(
 ) {
   if (nested_object_level_ <= 1) {
     std::string whitespace = GetWhitespacePattern();
+    std::string key_tag = FormatPropertyKey(key);
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
-      return "\"" + xml_wrapper_.key_wrapper_prefix + key + xml_wrapper_.key_wrapper_suffix +
-             "\" " + whitespace + " \"" + xml_wrapper_.value_wrapper_prefix + "\" " + whitespace +
-             " " + value_rule + " " + whitespace + " \"" + xml_wrapper_.parameter_suffix + "\"";
+      return key_tag + " " + whitespace + " \"" + xml_wrapper_.value_wrapper_prefix + "\" " +
+             whitespace + " " + value_rule + " " + whitespace + " \"" +
+             xml_wrapper_.parameter_suffix + "\"";
     }
-    return "\"" + xml_wrapper_.key_wrapper_prefix + key + xml_wrapper_.key_wrapper_suffix + "\" " +
-           whitespace + " " + value_rule + " " + whitespace + " \"" +
+    return key_tag + " " + whitespace + " " + value_rule + " " + whitespace + " \"" +
            xml_wrapper_.parameter_suffix + "\"";
   }
   return JSONSchemaConverter::FormatProperty(key, value_rule, rule_name, idx);
