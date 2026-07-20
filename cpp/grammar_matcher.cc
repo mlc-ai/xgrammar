@@ -461,6 +461,15 @@ class GrammarMatcher::Impl : public EarleyParser {
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
+    all_stop_token_bits_ = stop_token_ids_.size() >= kMaxTrialStopTokens
+                               ? ~uint64_t{0}
+                               : (uint64_t{1} << stop_token_ids_.size()) - 1;
+    if (stop_token_ids_.size() > kMaxTrialStopTokens) {
+      XGRAMMAR_LOG(WARNING) << "More than " << kMaxTrialStopTokens << " stop tokens are used. "
+                            << "Only the first " << kMaxTrialStopTokens << " can be accepted as "
+                            << "grammar terminals; the rest are only allowed when the grammar is "
+                            << "already completed.";
+    }
   }
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
@@ -475,7 +484,10 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   bool IsTerminated() const;
 
-  void Reset() { EarleyParser::Reset(); }
+  void Reset() {
+    EarleyParser::Reset();
+    stop_token_trial_memo_.clear();
+  }
 
   int GetMaxRollbackTokens() const { return -1; }
 
@@ -516,20 +528,57 @@ class GrammarMatcher::Impl : public EarleyParser {
   bool AcceptStopToken();
 
   /*!
-   * \brief Check if consuming the given token as a grammar terminal completes the grammar, via a
-   * trial advance that is rolled back. This handles tokens that are both a stop token and a
-   * grammar terminal, e.g. harmony's <|return|>. Completion is required since stopping
-   * mid-grammar would emit a truncated output.
-   * \returns Whether the grammar can consume the token and is completed afterwards.
-   */
-  bool StopTokenCompletesGrammar(int32_t token_id);
-
-  /*!
    * \brief Decide, for every stop token, whether it may be emitted at the current position, and
    * write that decision into the bitmask. Overrides whatever the grammar-level mask decided, since
-   * emitting a stop token ends generation.
+   * emitting a stop token ends generation. When terminate_without_stop_token_ is true, stop
+   * tokens are ordinary tokens and the grammar-level decision is kept as is.
    */
   void ApplyStopTokenPolicy(DynamicBitset* next_token_bitset, bool can_reach_end);
+
+  /*!
+   * \brief The memoization key for GetStopTokenCompleteBits.
+   */
+  struct StopTokenTrialKey {
+    ParserState state;
+    std::vector<ParserState> parents;
+
+    bool operator==(const StopTokenTrialKey& other) const {
+      StateEqualForParsing eq;
+      if (!eq(state, other.state) || parents.size() != other.parents.size()) {
+        return false;
+      }
+      for (size_t i = 0; i < parents.size(); ++i) {
+        if (!eq(parents[i], other.parents[i])) {
+          return false;
+        }
+      }
+      return true;
+    }
+  };
+
+  struct StopTokenTrialKeyHash {
+    size_t operator()(const StopTokenTrialKey& key) const {
+      StateHashForParsing state_hash;
+      size_t result = state_hash(key.state);
+      for (const auto& parent : key.parents) {
+        result = HashCombine(result, state_hash(parent));
+      }
+      return result;
+    }
+  };
+
+  /*! \brief Build the memoization key for the given state into tmp_trial_key_. */
+  void BuildStopTokenTrialKey(const ParserState& state);
+
+  /*!
+   * \brief Check, for every stop token, whether consuming it as a grammar terminal from the given
+   * state completes the grammar, via a trial advance that is rolled back. This handles tokens
+   * that are both a stop token and a grammar terminal, e.g. harmony's <|return|>.
+   * \returns A bitset where bit i corresponds to stop_token_ids_[i], covering at most the first
+   * 64 (kMaxTrialStopTokens) stop tokens.
+   * \details Results are memoized per state in stop_token_trial_memo_.
+   */
+  uint64_t GetStopTokenCompleteBits(const ParserState& state);
 
   bool IsStopTokenAccepted() const;
 
@@ -544,10 +593,24 @@ class GrammarMatcher::Impl : public EarleyParser {
   bool terminate_without_stop_token_;
   std::deque<int> token_length_history;
 
+  /*! \brief How many stop tokens can get completion trials, bounded by the width of the bitset
+   * used to store the trial results. Stop tokens beyond this limit are allowed only when the
+   * grammar is already completed. */
+  static constexpr size_t kMaxTrialStopTokens = 64;
+
+  /*! \brief All the bits GetStopTokenCompleteBits can ever set, i.e. one per stop token, where
+   * bit i corresponds to stop_token_ids_[i]. Only the first kMaxTrialStopTokens are covered. */
+  uint64_t all_stop_token_bits_ = 0;
+
+  /*! \brief Memoized results of GetStopTokenCompleteBits. Must be cleared by Rollback() and
+   * Reset(), since they remove parser state history that the results may depend on. */
+  std::unordered_map<StopTokenTrialKey, uint64_t, StopTokenTrialKeyHash> stop_token_trial_memo_;
+
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
   DynamicBitset tmp_accepted_bitset_;
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
+  StopTokenTrialKey tmp_trial_key_;
 };
 
 class BatchGrammarMatcher::Impl {
@@ -613,39 +676,66 @@ bool GrammarMatcher::Impl::AcceptStopToken() {
   return true;
 }
 
-bool GrammarMatcher::Impl::StopTokenCompletesGrammar(int32_t token_id) {
-  // override_stop_tokens may contain a padded id out of the decoded vocab range.
+void GrammarMatcher::Impl::BuildStopTokenTrialKey(const ParserState& state) {
+  tmp_trial_key_.state = state;
+  tmp_trial_key_.parents.clear();
+  if (state.rule_start_pos != ParserState::kNoPrevInputPos) {
+    // Erase rule_start_pos: the position itself does not matter, only the parent chain it
+    // points to, which is collected below.
+    tmp_trial_key_.state.rule_start_pos = 0;
+    const auto& parent_states_map = rule_id_to_completable_states_[state.rule_start_pos];
+    for (const auto& [ref_id, parent_state] : parent_states_map) {
+      if (ref_id == state.rule_id) {
+        tmp_trial_key_.parents.push_back(parent_state);
+      }
+    }
+  }
+}
+
+uint64_t GrammarMatcher::Impl::GetStopTokenCompleteBits(const ParserState& state) {
+  BuildStopTokenTrialKey(state);
+  auto it = stop_token_trial_memo_.find(tmp_trial_key_);
+  if (it != stop_token_trial_memo_.end()) {
+    return it->second;
+  }
+
+  uint64_t complete_bits = 0;
   const auto& decoded_vocab = tokenizer_info_.GetDecodedVocab();
-  if (token_id < 0 || token_id >= static_cast<int32_t>(decoded_vocab.size())) {
-    return false;
-  }
-
-  // Try the atomic (token-level) path first, then the byte path, mirroring AcceptToken.
-  if (AdvanceAtomicToken(token_id)) {
-    const bool completed = IsCompleted();
-    PopLastStates(1);
-    if (completed) {
-      return true;
+  int num_tokens = static_cast<int>(std::min(stop_token_ids_.size(), kMaxTrialStopTokens));
+  for (int i = 0; i < num_tokens; ++i) {
+    int32_t token_id = stop_token_ids_[i];
+    // override_stop_tokens may contain a padded id out of the decoded vocab range.
+    if (token_id < 0 || token_id >= static_cast<int32_t>(decoded_vocab.size())) {
+      continue;
+    }
+    bool complete = false;
+    PushOneStateToCheck(state);
+    // Try the atomic (token-level) path first, then the byte path, mirroring AcceptToken.
+    if (AdvanceAtomicToken(token_id)) {
+      complete = is_completed_.back();
+      PopLastStates(1);
+    }
+    const auto& token = decoded_vocab[token_id];
+    int num_advanced_chars = 0;
+    bool consumed = true;
+    for (auto char_value : token) {
+      if (!Advance(char_value)) {
+        consumed = false;
+        break;
+      }
+      ++num_advanced_chars;
+    }
+    // An empty token consumes nothing, so it cannot newly complete the grammar; that case is
+    // covered by can_reach_end in ApplyStopTokenPolicy.
+    if (consumed && !token.empty()) {
+      complete = complete || is_completed_.back();
+    }
+    PopLastStates(num_advanced_chars + 1);
+    if (complete) {
+      complete_bits |= uint64_t{1} << i;
     }
   }
-
-  const auto& token = decoded_vocab[token_id];
-  if (token.empty()) {
-    return false;
-  }
-
-  int pos = 0;
-  bool consumed = true;
-  for (auto char_value : token) {
-    if (!Advance(char_value)) {
-      consumed = false;
-      break;
-    }
-    ++pos;
-  }
-  const bool completed = consumed && IsCompleted();
-  PopLastStates(pos);
-  return completed;
+  return stop_token_trial_memo_.emplace(tmp_trial_key_, complete_bits).first->second;
 }
 
 bool GrammarMatcher::Impl::IsTerminated() const {
@@ -683,14 +773,28 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   }
   // Handle the stop token. If the grammar cannot terminate here, fall through: the token may
   // also be a grammar terminal (e.g. harmony's <|return|>) matched by the paths below.
-  if (std::find(stop_token_ids_.begin(), stop_token_ids_.end(), token_id) !=
-      stop_token_ids_.end()) {
+  // When terminate_without_stop_token_ is true, stop tokens are not termination signals and are
+  // matched as ordinary text.
+  bool is_stop_token_as_terminal = false;
+  auto stop_token_it = std::find(stop_token_ids_.begin(), stop_token_ids_.end(), token_id);
+  if (stop_token_it != stop_token_ids_.end() && !terminate_without_stop_token_) {
     if (AcceptStopToken()) {
       if (debug_print) {
         XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: true";
       }
       return true;
     }
+    if (static_cast<size_t>(stop_token_it - stop_token_ids_.begin()) >= kMaxTrialStopTokens) {
+      // Only the first kMaxTrialStopTokens stop tokens get completion trials in the mask, so
+      // beyond that a stop token is allowed only when the grammar is already completed. Reject
+      // here as well, to stay consistent with the mask.
+      if (debug_print) {
+        XGRAMMAR_LOG(INFO) << "The token is an end token beyond the first " << kMaxTrialStopTokens
+                           << " ones, and the grammar cannot terminate here. Rejecting the token.";
+      }
+      return false;
+    }
+    is_stop_token_as_terminal = true;
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "The token is an end token, but the grammar cannot terminate here. "
                          << "Trying to match it as a grammar terminal.";
@@ -788,6 +892,23 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       is_completed_.push_back(byte_completed || atomic_completed);
       token_length_history.push_back(token.size());
     }
+  }
+
+  if (is_stop_token_as_terminal) {
+    // Emitting a stop token ends generation, so consuming it as a grammar terminal is only
+    // valid when the grammar is completed afterwards; otherwise the output would be truncated.
+    // This mirrors ApplyStopTokenPolicy, keeping accept_token consistent with the mask.
+    if (!IsCompleted()) {
+      PopLastStates(token_length_history.back());
+      token_length_history.pop_back();
+      if (debug_print) {
+        XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << EscapeString(token)
+                           << "> is an end token and matches the grammar, but does not complete "
+                           << "it. Rejecting the token.";
+      }
+      return false;
+    }
+    stop_token_is_accepted_ = true;
   }
 
   if (debug_print) {
@@ -1087,6 +1208,7 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
     token_length_history.pop_back();
     --num_tokens;
   }
+  stop_token_trial_memo_.clear();
 }
 
 void GrammarMatcher::Impl::SetTokenBitmask(
@@ -1140,12 +1262,39 @@ void GrammarMatcher::Impl::SetTokenBitmask(
 void GrammarMatcher::Impl::ApplyStopTokenPolicy(
     DynamicBitset* next_token_bitset, bool can_reach_end
 ) {
+  if (terminate_without_stop_token_) {
+    // The grammar-level mask above already decided their bits
+    return;
+  }
+
   // Stop tokens are part of the matchable vocabulary, so the mask above may already allow one as
   // ordinary text. That is not enough: emitting a stop token ends generation, so it is only
   // allowed when the grammar is complete, or when consuming it as a terminal completes the
   // grammar. Otherwise the output would be truncated, so the decision is overridden here.
-  for (int id : stop_token_ids_) {
-    next_token_bitset->Set(id, can_reach_end || StopTokenCompletesGrammar(id));
+  uint64_t complete_bits = 0;
+  if (!can_reach_end && all_stop_token_bits_ != 0) {
+    int num_latest_states = scanable_state_history_[scanable_state_history_.size() - 1].size();
+    for (int i = 0; i < num_latest_states; ++i) {
+      ParserState state = scanable_state_history_[scanable_state_history_.size() - 1][i];
+      complete_bits |= GetStopTokenCompleteBits(state);
+      // Stop early once every stop token is known to complete the grammar.
+      if ((complete_bits & all_stop_token_bits_) == all_stop_token_bits_) {
+        break;
+      }
+    }
+  }
+
+  for (size_t i = 0; i < stop_token_ids_.size(); ++i) {
+    int id = stop_token_ids_[i];
+    // Due to override_stop_tokens, a stop token id may be out of the vocabulary range;
+    // Ignore them.
+    if (id < 0 || id >= tokenizer_info_.GetVocabSize()) {
+      continue;
+    }
+    // Stop tokens beyond kMaxTrialStopTokens fall back to being allowed only at completion.
+    bool allowed =
+        can_reach_end || (i < kMaxTrialStopTokens && ((complete_bits >> i) & 1) != 0);
+    next_token_bitset->Set(id, allowed);
   }
 }
 

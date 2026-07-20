@@ -628,6 +628,8 @@ def test_stop_token_as_grammar_terminal_harmony():
     for token in tokenizer.encode(output, add_special_tokens=False):
         assert _mask_allows(matcher, token), f"token {token} masked out"
         assert matcher.accept_token(token), f"token {token} rejected"
+    # Emitting the stop token ends generation, so the matcher must be terminated
+    assert matcher.is_terminated()
 
 
 def test_stop_token_as_grammar_terminal_mask_matches_accept():
@@ -666,6 +668,8 @@ def test_stop_token_as_grammar_terminal_mask_matches_accept():
         accepted = matcher.accept_token(token)
         assert allowed == accepted, f"mask/accept disagree on token {token}"
         assert accepted, f"token {token} rejected"
+    # Emitting the stop token ends generation, so the matcher must be terminated
+    assert matcher.is_terminated()
 
 
 def test_stop_token_masked_out_when_it_would_truncate():
@@ -683,10 +687,37 @@ def test_stop_token_masked_out_when_it_would_truncate():
     matcher = xgr.GrammarMatcher(compiled)
     assert matcher.accept_string('{"bar": "')
     assert not _mask_allows(matcher, _RETURN_TOKEN)
+    # accept_token must agree with the mask: the token matches the grammar as text, but
+    # accepting it would truncate the output
+    assert not matcher.accept_token(_RETURN_TOKEN)
+    # The rejection must not corrupt the matcher state
+    assert matcher.accept_string('ok"}')
 
     # Once the JSON is complete, the stop token is allowed and terminates the matcher
     matcher = xgr.GrammarMatcher(compiled)
     assert matcher.accept_string('{"bar": "ok"}')
+    assert _mask_allows(matcher, _RETURN_TOKEN)
+    assert matcher.accept_token(_RETURN_TOKEN)
+    assert matcher.is_terminated()
+
+
+def test_stop_token_as_grammar_terminal_rollback():
+    """Rolling back an accepted dual-role stop token restores the matcher."""
+    from xgrammar.builtin_structural_tag import get_harmony_structural_tag
+
+    tokenizer, tokenizer_info = _gpt_oss_tokenizer_info()
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(
+        get_harmony_structural_tag(tools=[], reasoning=False)
+    )
+    matcher = xgr.GrammarMatcher(compiled)
+    for token in tokenizer.encode("<|channel|>final<|message|>ok", add_special_tokens=False):
+        assert matcher.accept_token(token)
+
+    assert matcher.accept_token(_RETURN_TOKEN)
+    assert matcher.is_terminated()
+
+    matcher.rollback(1)
+    assert not matcher.is_terminated()
     assert _mask_allows(matcher, _RETURN_TOKEN)
     assert matcher.accept_token(_RETURN_TOKEN)
     assert matcher.is_terminated()
