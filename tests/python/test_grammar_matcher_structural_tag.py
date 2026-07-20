@@ -379,6 +379,67 @@ def test_excludes_overlapping_prefixes():
     )
 
 
+def test_tag_dispatch_sparse_candidates_match_direct_parser():
+    """Cached masks must agree with byte-by-byte parsing at every AC state."""
+    vocab = [
+        "a",
+        "ab",
+        "abc",
+        "abcd",
+        "abcd!",
+        "aba",
+        "abax",
+        "b",
+        "bc",
+        "bc!",
+        "bcd",
+        "c",
+        "d",
+        "!",
+        "x",
+        "xx",
+        "xbc",
+        "xbc!",
+        "cabcd",
+        "zaba",
+        "STOP",
+        "xSTOP",
+        "STO",
+        "TOP",
+        "ordinary",
+        "好",
+        "a好",
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf(
+        """root ::= TagDispatch(
+  ("abcd", body), ("bc", body),
+  loop_after_dispatch=true,
+  excludes=("aba", "STOP")
+)
+body ::= "!"
+"""
+    )
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False
+    ).compile_grammar(grammar)
+
+    for prefix in ["", "a", "ab", "abc", "bc", "x", "xb", "xab"]:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert matcher.accept_string(prefix)
+        token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        matcher.fill_next_token_bitmask(token_bitmask)
+        rejected = set(_get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size))
+
+        for token_id, token in enumerate(vocab):
+            direct_matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+            assert direct_matcher.accept_string(prefix)
+            direct_accepted = direct_matcher.accept_token(token_id)
+            assert (
+                token_id not in rejected
+            ) == direct_accepted, f"cached mask disagrees at prefix={prefix!r}, token={token!r}"
+
+
 @pytest.mark.hf_token_required
 def test_utf8_structural_tag_begin_end():
     model = "deepseek-ai/DeepSeek-V3-0324"
