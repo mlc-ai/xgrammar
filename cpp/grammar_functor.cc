@@ -1533,30 +1533,74 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
   // immediately instead of retaining one allocation-heavy FSM object per sequence element.
   FSM result_fsm;
   int start = -1;
-  std::vector<int32_t> previous_ends;
+  int previous_end = -1;
   std::vector<int> state_mapping;
   for (int32_t sequence_id : expr) {
-    auto element_fsm = build_element(grammar->GetGrammarExpr(sequence_id));
-    if (!element_fsm.has_value()) {
-      return std::nullopt;
+    const auto& element_expr = grammar->GetGrammarExpr(sequence_id);
+    int element_start = result_fsm.NumStates();
+    int element_end = -1;
+    switch (element_expr.type) {
+      case ExprType::kByteString: {
+        int current_state = result_fsm.AddState();
+        for (int32_t byte : element_expr) {
+          int next_state = result_fsm.AddState();
+          result_fsm.AddEdge(
+              current_state, next_state, static_cast<uint8_t>(byte), static_cast<uint8_t>(byte)
+          );
+          current_state = next_state;
+        }
+        element_end = current_state;
+        break;
+      }
+      case ExprType::kRuleRef: {
+        result_fsm.AddState();
+        element_end = result_fsm.AddState();
+        result_fsm.AddRuleEdge(element_start, element_end, element_expr[0]);
+        break;
+      }
+      case ExprType::kRepeat: {
+        result_fsm.AddState();
+        element_end = result_fsm.AddState();
+        result_fsm.AddRepeatEdge(
+            element_start, element_end, element_expr[0], element_expr[1], element_expr[2]
+        );
+        break;
+      }
+      case ExprType::kToken:
+      case ExprType::kExcludeToken: {
+        result_fsm.AddState();
+        element_end = result_fsm.AddState();
+        std::vector<int32_t> token_ids(element_expr.begin(), element_expr.end());
+        if (element_expr.type == ExprType::kToken) {
+          result_fsm.AddTokenEdge(element_start, element_end, token_ids);
+        } else {
+          result_fsm.AddExcludeTokenEdge(element_start, element_end, token_ids);
+        }
+        break;
+      }
+      case ExprType::kCharacterClass:
+      case ExprType::kCharacterClassStar: {
+        auto element_fsm = CharacterClass(element_expr);
+        result_fsm.AddFSM(element_fsm.GetFsm(), &state_mapping);
+        element_start = state_mapping[element_fsm.GetStart()];
+        XGRAMMAR_DCHECK(element_fsm.GetEnds().size() == 1);
+        element_end = state_mapping[element_fsm.GetEnds()[0]];
+        break;
+      }
+      default: {
+        return std::nullopt;
+      }
     }
-    result_fsm.AddFSM(element_fsm->GetFsm(), &state_mapping);
-    int element_start = state_mapping[element_fsm->GetStart()];
+
     if (start == -1) {
       start = element_start;
     } else {
-      for (int32_t previous_end : previous_ends) {
-        result_fsm.AddEpsilonEdge(previous_end, element_start);
-      }
+      result_fsm.AddEpsilonEdge(previous_end, element_start);
     }
-    previous_ends.clear();
-    previous_ends.reserve(element_fsm->GetEnds().size());
-    for (int32_t end : element_fsm->GetEnds()) {
-      previous_ends.push_back(state_mapping[end]);
-    }
+    previous_end = element_end;
   }
 
-  return FSMWithStartEnd(result_fsm, start, std::move(previous_ends));
+  return FSMWithStartEnd(result_fsm, start, {previous_end});
 }
 
 FSMWithStartEnd GrammarFSMBuilderImpl::RuleRef(const GrammarExpr& expr) {
