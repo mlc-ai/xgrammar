@@ -4,6 +4,7 @@ import {
   structuralTagArgsToJSONString,
 } from "./structural_tag.js";
 import type {
+  JSONSchemaStyle,
   StructuralTagItem,
   StructuralTagLike,
 } from "./structural_tag.js";
@@ -14,6 +15,7 @@ export type {
   ConstStringFormat,
   GrammarFormat,
   JSONSchemaFormat,
+  JSONSchemaStyle,
   QwenXMLParameterFormat,
   RegexFormat,
   SequenceFormat,
@@ -68,7 +70,8 @@ export class Testings {
    * equivalent to setting unevaluatedProperties and unevaluatedItems to false.
    * @param {number} [maxWhitespaceCnt] Maximum number of whitespace characters allowed between
    * JSON elements when anyWhitespace is true. Undefined means unlimited.
-   * @param {"json" | "xml"} [jsonFormat="json"] The JSON schema output format.
+   * @param {JSONSchemaStyle | "xml"} [jsonFormat="json"] The JSON schema output format. The
+   * legacy "xml" value is an alias for "qwen_xml".
    * @param {boolean} [anyOrder=false] Whether to allow object properties to appear in any order.
    * @returns {string} The EBNF grammar string.
    */
@@ -79,7 +82,7 @@ export class Testings {
     separators?: [string, string],
     strictMode = true,
     maxWhitespaceCnt?: number,
-    jsonFormat: "json" | "xml" = "json",
+    jsonFormat: JSONSchemaStyle | "xml" = "json",
     anyOrder: boolean = false
   ): Promise<string> {
     const separatorsPair = toSeparatorPair(separators);
@@ -88,9 +91,16 @@ export class Testings {
     // This is a workaround to Typescript not being able to express Optional value like Python; if
     // user specifies indent to be undefined, it still becomes 2.
     const optionalIndent: number | undefined = indent == -1 ? undefined : indent;
-    const formatEnum = jsonFormat === "xml"
-      ? binding.JSONFormat.kQwenXML
-      : binding.JSONFormat.kJSON;
+    const formatEnums: Record<JSONSchemaStyle | "xml", unknown> = {
+      json: binding.JSONFormat.kJSON,
+      xml: binding.JSONFormat.kQwenXML,
+      qwen_xml: binding.JSONFormat.kQwenXML,
+      minimax_xml: binding.JSONFormat.kMiniMaxXML,
+      minimax_m3_xml: binding.JSONFormat.kMiniMaxM3XML,
+      deepseek_xml: binding.JSONFormat.kDeepSeekXML,
+      glm_xml: binding.JSONFormat.kGlmXML,
+    };
+    const formatEnum = formatEnums[jsonFormat];
     return binding._JSONSchemaToEBNF(
       schema,
       anyWhitespace,

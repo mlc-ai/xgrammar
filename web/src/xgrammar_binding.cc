@@ -45,6 +45,33 @@ Grammar Grammar_FromStructuralTag(const std::string& structural_tag_json) {
 }
 
 /*!
+ * \brief Preserve the public Web binding signature after JSONSchemaToEBNF gained an internal
+ * output parameter for dynamic-tag matcher metadata.
+ */
+std::string JSONSchemaToEBNFForWeb(
+    const std::string& schema,
+    bool any_whitespace,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
+    JSONFormat json_format,
+    bool any_order
+) {
+  return JSONSchemaToEBNF(
+      schema,
+      any_whitespace,
+      indent,
+      separators,
+      strict_mode,
+      max_whitespace_cnt,
+      json_format,
+      any_order,
+      nullptr
+  );
+}
+
+/*!
  * \brief Wrapper for GrammarCompiler::CompileStructuralTag that validates the structural tag JSON.
  */
 CompiledGrammar GrammarCompiler_CompileStructuralTag(
@@ -156,7 +183,9 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .value("kJSON", xgrammar::JSONFormat::kJSON)
       .value("kQwenXML", xgrammar::JSONFormat::kQwenXML)
       .value("kMiniMaxXML", xgrammar::JSONFormat::kMiniMaxXML)
-      .value("kDeepSeekXML", xgrammar::JSONFormat::kDeepSeekXML);
+      .value("kMiniMaxM3XML", xgrammar::JSONFormat::kMiniMaxM3XML)
+      .value("kDeepSeekXML", xgrammar::JSONFormat::kDeepSeekXML)
+      .value("kGlmXML", xgrammar::JSONFormat::kGlmXML);
 
   // Register std::optional used in Grammar::FromJSONSchema
   register_optional<int>();
@@ -184,19 +213,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   function("vecIntToView", &vecIntToView);
 
   // Testing methods
-  function(
-      "_JSONSchemaToEBNF",
-      select_overload<std::string(
-          const std::string&,
-          bool,
-          std::optional<int>,
-          std::optional<std::pair<std::string, std::string>>,
-          bool,
-          std::optional<int>,
-          JSONFormat,
-          bool
-      )>(&JSONSchemaToEBNF)
-  );
+  function("_JSONSchemaToEBNF", &JSONSchemaToEBNFForWeb);
   function("DebugGetMaskedTokensFromBitmask", &Testing_DebugGetMaskedTokensFromBitmask);
   function("EBNFToGrammarNoNormalization", &_EBNFToGrammarNoNormalization);
 

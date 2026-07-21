@@ -39,6 +39,18 @@ Grammar GrammarBuilder::Get(int32_t root_rule_id) {
   return Grammar(grammar_);
 }
 
+void GrammarBuilder::SetDynamicTagMatcherConfig(const DynamicTagMatcherConfig& config) {
+  if (auto error = ValidateDynamicTagMatcherConfig(config)) {
+    XGRAMMAR_LOG(FATAL) << *error;
+  }
+  if (grammar_->dynamic_tag_matcher_config.has_value()) {
+    XGRAMMAR_CHECK(*grammar_->dynamic_tag_matcher_config == config)
+        << "Cannot combine grammars with different dynamic-tag matcher syntaxes";
+    return;
+  }
+  grammar_->dynamic_tag_matcher_config = config;
+}
+
 int32_t GrammarBuilder::AddGrammarExpr(const GrammarExpr& grammar_expr) {
   grammar_->grammar_expr_indptr_.push_back(grammar_->grammar_expr_data_.size());
   grammar_->grammar_expr_data_.push_back(static_cast<int32_t>(grammar_expr.type));

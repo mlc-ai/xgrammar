@@ -163,6 +163,15 @@ class DynamicBitset {
     return *this;
   }
 
+  /*! \brief Perform a bitwise AND operation between the current bitset and another bitset. */
+  DynamicBitset& operator&=(const DynamicBitset& other) {
+    XGRAMMAR_DCHECK(size_ == other.size_);
+    for (int i = 0; i < buffer_size_; ++i) {
+      data_[i] &= other.data_[i];
+    }
+    return *this;
+  }
+
   int FindFirstOne() const { return DoFindOneFrom(0); }
 
   int FindNextOne(int pos) const {

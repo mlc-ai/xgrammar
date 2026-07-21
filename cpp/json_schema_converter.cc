@@ -1767,7 +1767,7 @@ std::string JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
   // Register the root rule for circular reference handling
   // This allows $ref: "#" to resolve to "root"
   std::string root_rule_name = ebnf_script_creator_.AllocateRuleName("root");
-  uri_to_rule_name_["#"] = root_rule_name;
+  uri_to_rule_name_[GetRefCacheKey("#")] = root_rule_name;
 
   // Check if the spec can be directly mapped to an existing rule
   auto cached_rule = GetCache(spec->cache_key);
@@ -1982,6 +1982,12 @@ std::optional<std::string> JSONSchemaConverter::GetCache(const std::string& key)
     return std::nullopt;
   }
   return rule_cache_manager_.GetCache(key, true);
+}
+
+int JSONSchemaConverter::GetRefCacheDomain() const { return 0; }
+
+std::string JSONSchemaConverter::GetRefCacheKey(const std::string& uri) const {
+  return std::to_string(GetRefCacheDomain()) + ":" + uri;
 }
 
 std::string JSONSchemaConverter::CreateRule(
@@ -2317,6 +2323,22 @@ std::string JSONSchemaConverter::FormatOtherProperty(
     const std::string& rule_name_suffix
 ) {
   return key_pattern + " " + colon_pattern_ + " " + value_rule;
+}
+
+std::string JSONSchemaConverter::FormatPatternProperty(
+    const std::string& key_regex,
+    const std::string& value_rule,
+    const std::string& rule_name,
+    const std::string& rule_name_suffix
+) {
+  return "\"\\\"\"" + RegexToEBNF(key_regex, false) + "\"\\\"\" " + colon_pattern_ + " " +
+         value_rule;
+}
+
+std::string JSONSchemaConverter::CreatePropertyNameRule(
+    const SchemaSpecPtr& spec, const std::string& rule_name_hint
+) {
+  return CreateRule(spec, rule_name_hint);
 }
 
 std::string JSONSchemaConverter::GetPropertyWithNumberConstraints(
@@ -2793,8 +2815,8 @@ std::string JSONSchemaConverter::GenerateObject(
       for (size_t i = 0; i < spec.pattern_properties.size(); ++i) {
         const auto& pp = spec.pattern_properties[i];
         std::string value = CreateRule(pp.schema, rule_name + "_pp_" + std::to_string(i));
-        std::string pp_single = "\"\\\"\"" + RegexToEBNF(pp.pattern, false) + "\"\\\"\" " +
-                                colon_pattern_ + " " + value;
+        std::string pp_single =
+            FormatPatternProperty(pp.pattern, value, rule_name, "pp_" + std::to_string(i));
         if (i != 0) pp_body += " | ";
         pp_body += pp_single;
       }
@@ -2816,9 +2838,9 @@ std::string JSONSchemaConverter::GenerateObject(
       // propertyNames constrains keys of additional properties.
       // Only apply when additional properties are allowed — when additionalProperties
       // is false, no extra keys beyond named properties should be permitted.
-      auto key_pattern = CreateRule(spec.property_names, rule_name + "_name");
+      auto key_pattern = CreatePropertyNameRule(spec.property_names, rule_name + "_name");
       std::string val_rule = CreateRule(effective_additional, rule_name + "_" + effective_suffix);
-      pp_override = key_pattern + " " + colon_pattern_ + " " + val_rule;
+      pp_override = FormatOtherProperty(key_pattern, val_rule, rule_name, "pn");
       effective_suffix = "pn";
     }
 
@@ -2843,8 +2865,8 @@ std::string JSONSchemaConverter::GenerateObject(
         for (size_t i = 0; i < spec.pattern_properties.size(); ++i) {
           const auto& pp = spec.pattern_properties[i];
           std::string value = CreateRule(pp.schema, rule_name + "_prop_" + std::to_string(i));
-          std::string property_pattern = "\"\\\"\"" + RegexToEBNF(pp.pattern, false) + "\"\\\"\" " +
-                                         colon_pattern_ + " " + value;
+          std::string property_pattern =
+              FormatPatternProperty(pp.pattern, value, rule_name, "pp_" + std::to_string(i));
           if (i != 0) {
             property_rule_body += " | ";
           }
@@ -2852,9 +2874,10 @@ std::string JSONSchemaConverter::GenerateObject(
         }
         property_rule_body += ")";
       } else {
-        auto key_pattern = CreateRule(spec.property_names, rule_name + "_name");
+        auto key_pattern = CreatePropertyNameRule(spec.property_names, rule_name + "_name");
         property_rule_body +=
-            beg_seq + " " + key_pattern + " " + colon_pattern_ + " " + GetBasicAnyRuleName() + ")";
+            beg_seq + " " +
+            FormatOtherProperty(key_pattern, GetBasicAnyRuleName(), rule_name, "pn") + ")";
       }
 
       auto prop_rule_name = ebnf_script_creator_.AllocateRuleName(rule_name + "_prop");
@@ -2912,7 +2935,7 @@ std::string JSONSchemaConverter::GenerateObject(
     std::string whitespace_part = GetWhitespacePattern();
     auto rest = need_braces
                     ? "\"{\" " + std::string(any_whitespace_ ? whitespace_part + " " : "") + "\"}\""
-                    : std::string(any_whitespace_ ? whitespace_part : "");
+                    : std::string(any_whitespace_ ? whitespace_part : EBNFScriptCreator::Str(""));
     if (result == "\"{\"  \"}\"" || result == "") {
       result = rest;
     } else {
@@ -2952,8 +2975,9 @@ std::string JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::s
 
 std::string JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string& rule_name) {
   // First check if we have a direct URI mapping (for circular references)
-  if (uri_to_rule_name_.count(spec.uri)) {
-    return uri_to_rule_name_[spec.uri];
+  const std::string ref_cache_key = GetRefCacheKey(spec.uri);
+  if (uri_to_rule_name_.count(ref_cache_key)) {
+    return uri_to_rule_name_[ref_cache_key];
   }
 
   if (!ref_resolver_) {
@@ -2986,7 +3010,7 @@ std::string JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::str
   }
 
   std::string allocated_rule_name = ebnf_script_creator_.AllocateRuleName(rule_name_hint);
-  uri_to_rule_name_[spec.uri] = allocated_rule_name;
+  uri_to_rule_name_[ref_cache_key] = allocated_rule_name;
 
   SchemaSpecPtr resolved = ref_resolver_(spec.uri, allocated_rule_name);
   std::string rule_body = GenerateFromSpec(resolved, allocated_rule_name);
@@ -3998,6 +4022,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"json", JSONFormat::kJSON},
       {"qwen_xml", JSONFormat::kQwenXML},
       {"minimax_xml", JSONFormat::kMiniMaxXML},
+      {"minimax_m3_xml", JSONFormat::kMiniMaxM3XML},
       {"deepseek_xml", JSONFormat::kDeepSeekXML},
       {"glm_xml", JSONFormat::kGlmXML},
   };
@@ -4016,7 +4041,8 @@ std::string JSONSchemaToEBNF(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     JSONFormat json_format,
-    bool any_order
+    bool any_order,
+    bool* requires_dynamic_tag_matcher
 ) {
   picojson::value schema_value;
   std::string err = picojson::parse(schema_value, schema);
@@ -4030,7 +4056,8 @@ std::string JSONSchemaToEBNF(
       strict_mode,
       max_whitespace_cnt,
       json_format,
-      any_order
+      any_order,
+      requires_dynamic_tag_matcher
   );
 }
 
@@ -4042,8 +4069,12 @@ std::string JSONSchemaToEBNF(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     JSONFormat json_format,
-    bool any_order
+    bool any_order,
+    bool* requires_dynamic_tag_matcher
 ) {
+  if (requires_dynamic_tag_matcher != nullptr) {
+    *requires_dynamic_tag_matcher = false;
+  }
   // Parse JSON Schema to SchemaSpec
   SchemaParser parser(schema, {strict_mode, json_format});
   auto spec_result = parser.Parse(schema, "root");
@@ -4070,6 +4101,7 @@ std::string JSONSchemaToEBNF(
     }
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
+    case JSONFormat::kMiniMaxM3XML:
     case JSONFormat::kDeepSeekXML:
     case JSONFormat::kGlmXML: {
       XMLToolCallingConverter converter(
@@ -4081,7 +4113,11 @@ std::string JSONSchemaToEBNF(
           json_format,
           any_order
       );
-      return converter.Convert(spec);
+      std::string result = converter.Convert(spec);
+      if (requires_dynamic_tag_matcher != nullptr) {
+        *requires_dynamic_tag_matcher = converter.RequiresDynamicTagMatcher();
+      }
+      return result;
     }
     default:
       XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);

@@ -6,6 +6,7 @@
 #include <xgrammar/grammar.h>
 
 #include <string>
+#include <utility>
 
 #include "grammar_functor.h"
 #include "grammar_parser.h"
@@ -28,7 +29,9 @@ std::size_t MemorySize(const Grammar::Impl& impl) {
   /// This should be improved in the future.
   return impl.rules_.size() * sizeof(std::string) + MemorySize(impl.grammar_expr_data_) +
          MemorySize(impl.grammar_expr_indptr_) + MemorySize(impl.complete_fsm) +
-         MemorySize(impl.per_rule_fsms) + MemorySize(impl.allow_empty_rule_ids);
+         MemorySize(impl.per_rule_fsms) + MemorySize(impl.allow_empty_rule_ids) +
+         (impl.dynamic_tag_matcher_config.has_value() ? MemorySize(*impl.dynamic_tag_matcher_config)
+                                                      : 0);
 }
 
 /******************* Grammar *******************/
@@ -189,12 +192,44 @@ std::ostream& operator<<(std::ostream& os, const Grammar& grammar) {
   return os;
 }
 
-std::string Grammar::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
+std::string Grammar::SerializeJSON() const {
+  picojson::value json_value = AutoSerializeJSONValue(*this);
+  auto& object = json_value.get<picojson::object>();
+  if (pimpl_->dynamic_tag_matcher_config.has_value()) {
+    object["dynamic_tag_matcher_config"] =
+        AutoSerializeJSONValue(*pimpl_->dynamic_tag_matcher_config);
+  }
+  SerializeVersion::Apply(&object);
+  return json_value.serialize();
+}
 
 std::variant<Grammar, SerializationError> Grammar::DeserializeJSON(const std::string& json_string) {
+  picojson::value json_value;
+  if (auto error = picojson::parse(json_value, json_string); !error.empty()) {
+    return InvalidJSONError(error);
+  }
+  if (!json_value.is<picojson::object>()) {
+    return DeserializeFormatError("Expect an object");
+  }
+  const auto& object = json_value.get<picojson::object>();
+  if (auto error = SerializeVersion::Check(object)) {
+    return error.value();
+  }
+
   Grammar result{NullObj()};
-  if (auto err = AutoDeserializeJSON(&result, json_string, true, "Grammar")) {
-    return err.value();
+  if (auto error = AutoDeserializeJSONValue(&result, json_value, "Grammar")) {
+    return error.value();
+  }
+  if (auto it = object.find("dynamic_tag_matcher_config"); it != object.end()) {
+    DynamicTagMatcherConfig config;
+    if (auto error =
+            AutoDeserializeJSONValue(&config, it->second, "Grammar.dynamic_tag_matcher_config")) {
+      return error.value();
+    }
+    if (auto error = ValidateDynamicTagMatcherConfig(config)) {
+      return ConstructDeserializeError(*error, "Grammar.dynamic_tag_matcher_config");
+    }
+    result->dynamic_tag_matcher_config = std::move(config);
   }
   return result;
 }

@@ -542,11 +542,10 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     auto it = obj.find("style");
     if (it != obj.end() && it->second.is<std::string>()) {
       style = it->second.get<std::string>();
-      if (style != "json" && style != "qwen_xml" && style != "minimax_xml" &&
-          style != "deepseek_xml" && style != "glm_xml") {
+      if (!JSONFormatFromString(style).has_value()) {
         return ResultErr<ISTError>(
-            "style must be \"json\", \"qwen_xml\", \"minimax_xml\", \"deepseek_xml\", or "
-            "\"glm_xml\""
+            "style must be \"json\", \"qwen_xml\", \"minimax_xml\", \"minimax_m3_xml\", "
+            "\"deepseek_xml\", or \"glm_xml\""
         );
       }
     }
@@ -1855,6 +1854,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
   // The whitespace cap comes from the JSONSchemaFormat node (per-tag).
+  bool requires_dynamic_tag_matcher = false;
   std::string ebnf = JSONSchemaToEBNF(
       format.json_schema,
       /*any_whitespace=*/true,
@@ -1863,8 +1863,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
       /*strict_mode=*/true,
       /*max_whitespace_cnt=*/format.max_whitespace_cnt,
       /*json_format=*/*json_format,
-      format.any_order
+      format.any_order,
+      &requires_dynamic_tag_matcher
   );
+  if (requires_dynamic_tag_matcher) {
+    grammar_builder_.SetDynamicTagMatcherConfig(GetMiniMaxM3DynamicTagMatcherConfig());
+  }
   auto sub_grammar = Grammar::FromEBNF(ebnf);
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);

@@ -24,7 +24,9 @@ def _json_schema_to_ebnf(
     separators: Optional[Tuple[str, str]] = None,
     max_whitespace_cnt: Optional[int] = None,
     strict_mode: bool = True,
-    json_format: Literal["json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml"] = "json",
+    json_format: Literal[
+        "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml", "glm_xml"
+    ] = "json",
     any_order: bool = False,
 ) -> str:
     """Convert JSON schema string to BNF grammar string. For test purposes.
@@ -57,9 +59,11 @@ def _json_schema_to_ebnf(
         It should be a positive integer.
 
     json_format : str, default: "json"
-        The root format of the generated grammar. One of "json", "qwen_xml", "minimax_xml",
-        "deepseek_xml", "glm_xml". Formats other than "json" generate an XML-style root object
-        for tool calling, while the inner values remain JSON-style.
+        The generated grammar format. One of "json", "qwen_xml", "minimax_xml",
+        "minimax_m3_xml", "deepseek_xml", or "glm_xml". MiniMax M3 recursively encodes nested
+        objects and arrays as XML elements; the other XML styles use JSON for nested values. The
+        raw EBNF describes dynamic opening and closing names independently; the matching-name
+        constraint is added when the style is compiled through a structural tag.
 
     Returns
     -------

@@ -23,13 +23,15 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 ### Parameters
 
-- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm_4_7"`, `"deepseek_v4"`.
+- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"minimax_m3"`, `"glm_4_7"`, `"deepseek_v4"`.
 - **tools** (`List[ToolParam | dict]`, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:
   - **Function tools** use the OpenAI Chat Completions shape:
     ```json
     {"type": "function", "function": {"name": "...", "parameters": {...}}}
     ```
     The `"parameters"` field accepts a JSON Schema dict, `True` (any JSON), or can be omitted (unconstrained). When `"strict"` is `False`, the parameters constraint is skipped.
+    MiniMax-M3 encodes unconstrained and dynamically named properties as recursive XML. Its
+    runtime matcher captures each opening element name and requires the closing name to match.
   - **Builtin tools** use a compact shape with XGrammar-specific fields:
     ```json
     {"type": "web_search_preview", "name": "browser.search", "parameters": {...}}
@@ -47,7 +49,8 @@ Use it when you need to constrain the model to output in a fixed pattern such as
   - `{"type": "function", "function": {"name": ...}}`: forces one function tool.
   - `{"type": <builtin_type>}`: forces one builtin tool (matched by `type`).
   - `{"type": "allowed_tools", "allowed_tools": {"mode": ..., "tools": [...]}}`: limits available tools before applying its `mode`. The `tools` list may contain both function refs and builtin refs (matched by `type`).
-- **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags or model-specific equivalents). Default `True`.
+- **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags or model-specific equivalents). Default `True`. For MiniMax-M3 this remains a compatibility switch: `False` selects `reasoning_mode="disabled"`, while `True` leaves its default `"auto"` mode unchanged.
+- **reasoning_mode** (`"enabled" | "disabled" | "auto"`, optional): MiniMax-M3's explicit reasoning mode. In `"enabled"` mode, the caller's prompt is expected to have already emitted `<mm:think>`, and the grammar requires its content through `</mm:think>`. In `"disabled"` mode, the grammar emits no reasoning block and constrains only the response/tool-call suffix; the caller must use a matching non-reasoning prompt. In `"auto"` mode (the default), the prompt should not prefill the opener, and the model may emit one complete `<mm:think>...</mm:think>` block or answer/call a tool directly. Other model formats accept `"enabled"` and `"disabled"` as aliases for their boolean `reasoning` behavior, but do not support `"auto"`.
 - **any_order** (`bool`, optional): When `True`, applies `any_order=True` to every `JSONSchemaFormat` in the generated structural tag, so each tool's arguments may be emitted in any property order (see [`JSONSchemaFormat`](structural_tag_api) for the exact semantics). Default `False`, which keeps the declared property order with full validation.
 - **max_whitespace_cnt** (`Optional[int]`, optional): Caps the number of consecutive whitespace characters. Setting it (e.g. `2`) bounds runs of whitespace, which avoids the unbounded-whitespace outputs some models emit in bad cases that would otherwise blow up grammar compilation/matching.
 
@@ -201,6 +204,7 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `"harmony"` | gpt-oss |
 | `"deepseek_v3_2"` | DeepSeek-V3.2 |
 | `"minimax"` | MiniMax-M2.5 |
+| `"minimax_m3"` | MiniMax-M3 |
 | `"glm_4_7"` | GLM-5, GLM-4.7 |
 | `"deepseek_v4"` | DeepSeek-V4 |
 

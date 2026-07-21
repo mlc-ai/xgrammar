@@ -201,7 +201,7 @@ xml_object ::= (([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 root_prop_1 ::= (("0") | (root_prop_1_1 [1-9] [0-9]*))
 root_part_0 ::= (([ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>"))
-root_0 ::= (([ \n\t]* "<parameter=name>" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0 [ \n\t]*))
+root_0 ::= (([ \n\t]* "<parameter=name>" xml_string "</parameter>" root_part_0 [ \n\t]*))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -313,7 +313,7 @@ xml_object ::= (([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* 
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 root_prop_1 ::= (("0") | (root_prop_1_1 [1-9] [0-9]*))
 root_part_0 ::= (([ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>"))
-root_0 ::= (([ \n\t]* "<parameter name=\"name\">" [ \n\t]* xml_string [ \n\t]* "</parameter>" root_part_0 [ \n\t]*))
+root_0 ::= (([ \n\t]* "<parameter name=\"name\">" xml_string "</parameter>" root_part_0 [ \n\t]*))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -396,7 +396,7 @@ xml_object ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 root_prop_1 ::= (("0") | (root_prop_1_1 [1-9] [0-9]*))
 root_part_0 ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"age\" string=\"" root_part_0_1 "\">" [ \n\t]* root_prop_1 [ \n\t]* "</\uff5cDSML\uff5cparameter>"))
-root_0 ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"name\" string=\"" root_1 "\">" [ \n\t]* xml_string [ \n\t]* "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\t]*))
+root_0 ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"name\" string=\"" root_1 "\">" xml_string "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\t]*))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
@@ -2599,7 +2599,8 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "style": "not_string"}}',
-        'style must be "json", "qwen_xml", "minimax_xml", "deepseek_xml", or "glm_xml"',
+        'style must be "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", '
+        '"deepseek_xml", or "glm_xml"',
     ),
     # RepeatFormat Errors - illegal min/max
     (
@@ -2833,6 +2834,45 @@ basic_structural_tags_instance_is_accepted = [
             style="minimax_xml",
         ),
         '<parameter name="name">value</param>',
+        False,
+    ),
+    # JSONSchemaFormat with style="minimax_m3_xml"
+    (
+        xgr.structural_tag.JSONSchemaFormat(
+            json_schema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "meta": {
+                        "type": "object",
+                        "properties": {"count": {"type": "integer"}},
+                        "required": ["count"],
+                        "additionalProperties": False,
+                    },
+                },
+                "required": ["name", "meta"],
+                "additionalProperties": False,
+            },
+            style="minimax_m3_xml",
+        ),
+        (
+            "]<]minimax[>[<name>value]<]minimax[>[</name>"
+            "]<]minimax[>[<meta>]<]minimax[>[<count>1]<]minimax[>[</count>"
+            "]<]minimax[>[</meta>"
+        ),
+        True,
+    ),
+    (
+        xgr.structural_tag.JSONSchemaFormat(
+            json_schema={
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "required": ["name"],
+                "additionalProperties": False,
+            },
+            style="minimax_m3_xml",
+        ),
+        "]<]minimax[>[<name>value]<]minimax[>[</wrong>",
         False,
     ),
     # JSONSchemaFormat with style="deepseek_xml"

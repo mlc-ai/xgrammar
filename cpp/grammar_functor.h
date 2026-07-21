@@ -90,6 +90,9 @@ class GrammarFunctor {
   virtual void InitBuilder() {
     owned_builder_ = GrammarBuilder();
     builder_ = &owned_builder_;
+    if (!base_grammar_.IsNull() && base_grammar_->GetDynamicTagMatcherConfig().has_value()) {
+      builder_->SetDynamicTagMatcherConfig(*base_grammar_->GetDynamicTagMatcherConfig());
+    }
   }
 
   virtual void InitBuilder(const Grammar& grammar) {
@@ -97,7 +100,12 @@ class GrammarFunctor {
     builder_ = &owned_builder_;
   }
 
-  virtual void InitBuilder(GrammarBuilder* builder) { builder_ = builder; }
+  virtual void InitBuilder(GrammarBuilder* builder) {
+    builder_ = builder;
+    if (!base_grammar_.IsNull() && base_grammar_->GetDynamicTagMatcherConfig().has_value()) {
+      builder_->SetDynamicTagMatcherConfig(*base_grammar_->GetDynamicTagMatcherConfig());
+    }
+  }
 
   /*! \brief Visit a lookahead assertion expr referred by id. */
   virtual T VisitLookaheadAssertion(int32_t lookahead_assertion_id) {

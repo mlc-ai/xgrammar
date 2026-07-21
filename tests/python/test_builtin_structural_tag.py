@@ -1,5 +1,7 @@
 """Tests for get_structural_tag_for_model and generated structural tags."""
 
+import json
+import random
 import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -17,6 +19,7 @@ from xgrammar.builtin_structural_tag import (
     get_harmony_structural_tag,
     get_kimi_structural_tag,
     get_llama_structural_tag,
+    get_minimax_m3_structural_tag,
     get_minimax_structural_tag,
     get_model_structural_tag,
     get_qwen_3_5_structural_tag,
@@ -25,8 +28,15 @@ from xgrammar.builtin_structural_tag import (
     normalize_tool_choice,
 )
 from xgrammar.openai_tool_call_schema import BuiltinToolParam, FunctionToolParam
-from xgrammar.structural_tag import JSONSchemaFormat, StructuralTag, TagFormat
-from xgrammar.testing import _is_grammar_accept_string
+from xgrammar.structural_tag import (
+    ConstStringFormat,
+    JSONSchemaFormat,
+    OptionalFormat,
+    SequenceFormat,
+    StructuralTag,
+    TagFormat,
+)
+from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
 
 
 def _input_dict_to_get_stag_kwargs(format_type: str, input_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -577,6 +587,22 @@ def test_kimi_auto_requires_tool_calls_section():
     )
 
 
+@pytest.mark.parametrize("model", ["qwen_3", "qwen_3_5"])
+def test_qwen_reasoning_suffix_stays_outside_the_think_tag(model: str):
+    structural_tag = get_model_structural_tag(model, tools=[], reasoning=True)
+    assert isinstance(structural_tag.format, SequenceFormat)
+
+    reasoning_prefix = structural_tag.format.elements[0]
+    assert isinstance(reasoning_prefix, SequenceFormat)
+    assert isinstance(reasoning_prefix.elements[0], TagFormat)
+    assert reasoning_prefix.elements[0].end == "</think>"
+    assert reasoning_prefix.elements[1] == ConstStringFormat(value="\n\n")
+
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    assert _is_grammar_accept_string(grammar, "reasoning</think>\n\nanswer")
+    assert not _is_grammar_accept_string(grammar, "reasoning</think>answer")
+
+
 @pytest.mark.parametrize(
     "structural_tag_fn",
     [
@@ -862,7 +888,7 @@ InstanceCase = Tuple[Dict[str, Any], List[str], bool, List[bool]]
 
 def run_instance_case(format_type: str, case: InstanceCase):
     """Run one instance test case (accept/reject per instance string)."""
-    (input_dict, instances, reasoning, expected_accept_per_instance) = case
+    input_dict, instances, reasoning, expected_accept_per_instance = case
     kwargs = _input_dict_to_get_stag_kwargs(format_type, input_dict)
     kwargs["reasoning"] = reasoning
     stag = get_model_structural_tag(**kwargs)
@@ -1176,6 +1202,7 @@ _TOOLS: List[Dict[str, Any]] = [
         ("deepseek_v3_2", {"tools": _TOOLS}),
         ("deepseek_v4", {"tools": _TOOLS}),
         ("minimax", {"tools": _TOOLS}),
+        ("minimax_m3", {"tools": _TOOLS}),
         (
             "harmony",
             {
@@ -1439,6 +1466,746 @@ def test_required_allows_termination_with_trailing_text(stag_key, one_call, two_
     ), f"{stag_key}: tool call + trailing text rejected"
 
 
+# ---------- MiniMax M3 recursive XML tool calling ----------
+
+_M3_NS = "]<]minimax[>["
+_M3_TOOL_TRIGGER = _M3_NS + "<tool_call>"
+_M3_SCHEMA = {
+    "type": "object",
+    "properties": {"q": {"type": "string"}},
+    "required": ["q"],
+    "additionalProperties": False,
+}
+_M3_TOOLS = make_tools(["search", "alt"], _M3_SCHEMA)
+
+
+def _m3_element(name: str, value: str) -> str:
+    return f"{_M3_NS}<{name}>{value}{_M3_NS}</{name}>"
+
+
+def _m3_invoke(name: str, value: str = "v") -> str:
+    return f'{_M3_NS}<invoke name="{name}">' f"{_m3_element('q', value)}" f"{_M3_NS}</invoke>\n"
+
+
+def _m3_invoke_with_body(name: str, body: str) -> str:
+    return f'{_M3_NS}<invoke name="{name}">{body}{_M3_NS}</invoke>\n'
+
+
+def _m3_tool_block(*invokes: str) -> str:
+    return f"{_M3_TOOL_TRIGGER}\n{''.join(invokes)}{_M3_NS}</tool_call>"
+
+
+def test_minimax_m3_registered_auto_plain_text_and_tool_calls():
+    structural_tag = get_model_structural_tag(
+        "minimax_m3", tools=_M3_TOOLS, reasoning_mode="disabled"
+    )
+    assert isinstance(structural_tag, StructuralTag)
+    check_stag_with_instance(structural_tag, "plain response", True)
+    check_stag_with_instance(structural_tag, _m3_tool_block(_m3_invoke("search")), True)
+    check_stag_with_instance(
+        structural_tag, _m3_tool_block(_m3_invoke("search"), _m3_invoke("alt")), True
+    )
+    check_stag_with_instance(structural_tag, _m3_tool_block(_m3_invoke("missing")), False)
+
+
+def test_minimax_m3_auto_without_tools_forbids_tool_trigger():
+    structural_tag = get_model_structural_tag("minimax_m3", tools=[], reasoning_mode="disabled")
+    check_stag_with_instance(structural_tag, "plain response", True)
+    check_stag_with_instance(structural_tag, _m3_tool_block(_m3_invoke("search")), False)
+
+
+def test_minimax_m3_required_supports_parallel_invokes_and_trailing_text():
+    structural_tag = get_model_structural_tag(
+        "minimax_m3", tools=_M3_TOOLS, tool_choice="required", reasoning_mode="disabled"
+    )
+    one_call = _m3_tool_block(_m3_invoke("search"))
+    two_calls = _m3_tool_block(_m3_invoke("search"), _m3_invoke("alt"))
+    check_stag_with_instance(structural_tag, "", False)
+    check_stag_with_instance(structural_tag, one_call, True)
+    check_stag_with_instance(structural_tag, two_calls, True)
+    check_stag_with_instance(structural_tag, one_call + " done", True)
+
+    double_newline = two_calls.replace(
+        f"{_M3_NS}</invoke>\n{_M3_NS}<invoke", f"{_M3_NS}</invoke>\n\n{_M3_NS}<invoke", 1
+    )
+    check_stag_with_instance(structural_tag, double_newline, False)
+
+
+def test_minimax_m3_named_choice_forces_exactly_one_invoke():
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=_M3_TOOLS,
+        tool_choice={"type": "function", "function": {"name": "search"}},
+        reasoning_mode="disabled",
+    )
+    check_stag_with_instance(structural_tag, _m3_tool_block(_m3_invoke("search")), True)
+    check_stag_with_instance(structural_tag, _m3_tool_block(_m3_invoke("alt")), False)
+    check_stag_with_instance(
+        structural_tag, _m3_tool_block(_m3_invoke("search"), _m3_invoke("search")), False
+    )
+
+
+def test_minimax_m3_reasoning_modes():
+    call = _m3_tool_block(_m3_invoke("search"))
+
+    enabled = get_model_structural_tag("minimax_m3", tools=_M3_TOOLS, reasoning_mode="enabled")
+    check_stag_with_instance(enabled, "plan</mm:think>" + call, True)
+    check_stag_with_instance(enabled, "plan</mm:think>answer", True)
+    check_stag_with_instance(enabled, call, False)
+    check_stag_with_instance(enabled, "<mm:think>plan</mm:think>answer", False)
+    check_stag_with_instance(enabled, "bad<mm:think>plan</mm:think>answer", False)
+
+    disabled = get_model_structural_tag("minimax_m3", tools=_M3_TOOLS, reasoning_mode="disabled")
+    check_stag_with_instance(disabled, call, True)
+    check_stag_with_instance(disabled, "plain response", True)
+    check_stag_with_instance(disabled, "</mm:think>" + call, False)
+    check_stag_with_instance(disabled, "<mm:think>plan</mm:think>answer", False)
+
+    auto = get_model_structural_tag("minimax_m3", tools=_M3_TOOLS, reasoning_mode="auto")
+    check_stag_with_instance(auto, call, True)
+    check_stag_with_instance(auto, "plain response", True)
+    check_stag_with_instance(auto, "<mm:think>plan</mm:think>" + call, True)
+    check_stag_with_instance(auto, "<mm:think>plan</mm:think>answer", True)
+    check_stag_with_instance(auto, "plan</mm:think>answer", False)
+
+
+def test_minimax_m3_reasoning_mode_structural_shapes():
+    enabled = get_minimax_m3_structural_tag(tools=[], reasoning_mode="enabled")
+    assert isinstance(enabled.format, SequenceFormat)
+    assert isinstance(enabled.format.elements[0], TagFormat)
+    assert enabled.format.elements[0].begin == ""
+
+    disabled = get_minimax_m3_structural_tag(tools=[], reasoning_mode="disabled")
+    assert not isinstance(disabled.format, SequenceFormat)
+
+    auto = get_minimax_m3_structural_tag(tools=[], reasoning_mode="auto")
+    assert isinstance(auto.format, SequenceFormat)
+    assert isinstance(auto.format.elements[0], OptionalFormat)
+    assert isinstance(auto.format.elements[0].content, TagFormat)
+    assert auto.format.elements[0].content.begin == "<mm:think>"
+
+
+def test_minimax_m3_reasoning_mode_validation_and_legacy_bool_mapping():
+    with pytest.raises(ValueError, match="reasoning_mode"):
+        get_model_structural_tag("minimax_m3", tools=[], reasoning_mode="invalid")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="only supported by MiniMax M3"):
+        get_model_structural_tag("qwen_3", tools=[], reasoning_mode="auto")
+
+    default_auto = get_model_structural_tag("minimax_m3", tools=[])
+    assert isinstance(default_auto.format, SequenceFormat)
+    assert isinstance(default_auto.format.elements[0], OptionalFormat)
+
+    legacy_disabled = get_model_structural_tag("minimax_m3", tools=[], reasoning=False)
+    assert not isinstance(legacy_disabled.format, SequenceFormat)
+
+
+def test_minimax_m3_excludes_keep_the_multi_token_trigger_reachable():
+    structural_tag = get_minimax_m3_structural_tag(
+        tools=[FunctionToolParam(function={"name": "search", "parameters": _M3_SCHEMA})],
+        reasoning_mode="auto",
+    )
+    excludes = _collect_excludes(structural_tag)
+    flat = [token for group in excludes for token in group]
+    assert "<mm:think>" in flat
+    assert "</mm:think>" in flat
+    assert _M3_TOOL_TRIGGER in flat
+    assert _M3_NS not in flat
+    check_stag_with_instance(
+        structural_tag, "<mm:think>plan</mm:think>" + _m3_tool_block(_m3_invoke("search")), True
+    )
+
+    no_excludes = get_model_structural_tag(
+        "minimax_m3", tools=_M3_TOOLS, reasoning_mode="auto", exclude_special_tokens=False
+    )
+    assert all(group == [] for group in _collect_excludes(no_excludes))
+
+
+def test_minimax_m3_nested_object_and_array_arguments():
+    schema = {
+        "type": "object",
+        "properties": {
+            "details": {
+                "type": "object",
+                "properties": {"city": {"type": "string"}},
+                "required": ["city"],
+                "additionalProperties": False,
+            },
+            "tags": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        },
+        "required": ["details", "tags"],
+        "additionalProperties": False,
+    }
+    tools = make_tools(["submit"], schema)
+    forced = {"type": "function", "function": {"name": "submit"}}
+    structural_tag = get_model_structural_tag(
+        "minimax_m3", tools=tools, tool_choice=forced, reasoning_mode="disabled"
+    )
+    invoke = (
+        f'{_M3_NS}<invoke name="submit">'
+        + _m3_element("details", _m3_element("city", "Hangzhou"))
+        + _m3_element("tags", _m3_element("item", "a") + _m3_element("item", "b"))
+        + f"{_M3_NS}</invoke>\n"
+    )
+    check_stag_with_instance(structural_tag, _m3_tool_block(invoke), True)
+    check_stag_with_instance(
+        structural_tag,
+        _m3_tool_block(
+            invoke.replace(
+                _m3_element("details", _m3_element("city", "Hangzhou")),
+                _m3_element("details", '{"city":"Hangzhou"}'),
+            )
+        ),
+        False,
+    )
+
+
+@pytest.mark.parametrize(
+    "tool",
+    [
+        {"function": {"name": "search", "parameters": None}},
+        {"function": {"name": "search", "parameters": _M3_SCHEMA, "strict": False}},
+    ],
+)
+def test_minimax_m3_supports_unconstrained_tool_parameters(tool: Dict[str, Any]):
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=[tool],
+        tool_choice={"type": "function", "function": {"name": "search"}},
+        reasoning_mode="disabled",
+    )
+    body = _m3_element("runtime", _m3_element("nested", "value"))
+    check_stag_with_instance(
+        structural_tag, _m3_tool_block(_m3_invoke_with_body("search", body)), True
+    )
+    check_stag_with_instance(
+        structural_tag, _m3_tool_block(_m3_invoke_with_body("search", "")), True
+    )
+    crossed = f"{_M3_NS}<runtime>{_M3_NS}<nested>value" f"{_M3_NS}</runtime>{_M3_NS}</nested>"
+    check_stag_with_instance(
+        structural_tag, _m3_tool_block(_m3_invoke_with_body("search", crossed)), False
+    )
+    check_stag_with_instance(
+        structural_tag, _m3_tool_block(_m3_invoke_with_body("search", "raw scalar")), False
+    )
+
+
+@pytest.mark.parametrize(
+    "schema, valid_body, invalid_body",
+    [
+        (
+            {"type": "object", "additionalProperties": {"type": "string"}},
+            _m3_element("runtime key/城市", "value"),
+            f"{_M3_NS}<runtime key/城市>value{_M3_NS}</wrong_key>",
+        ),
+        (
+            {"type": "object", "additionalProperties": {"type": "string"}},
+            _m3_element("runtime", "value"),
+            _m3_element(" \t", "value"),
+        ),
+        (
+            {
+                "type": "object",
+                "patternProperties": {"^x_[a-z]+$": {"type": "string"}},
+                "additionalProperties": False,
+            },
+            _m3_element("x_runtime", "value"),
+            _m3_element("y_runtime", "value"),
+        ),
+        (
+            {
+                "type": "object",
+                "propertyNames": {"pattern": "^[a-z]+$"},
+                "additionalProperties": {"type": "string"},
+            },
+            _m3_element("runtime", "value"),
+            _m3_element("runtime_1", "value"),
+        ),
+        (
+            {
+                "type": "object",
+                "patternProperties": {"^invoke with space$": {"type": "string"}},
+                "additionalProperties": False,
+            },
+            _m3_element("invoke with space", "value"),
+            _m3_element("invoke with wrong", "value"),
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"invoke": {"type": "string"}},
+                "required": ["invoke"],
+                "additionalProperties": False,
+            },
+            _m3_element("invoke", "value"),
+            f"{_M3_NS}<invoke>value{_M3_NS}</wrong>",
+        ),
+        (
+            {
+                "type": "object",
+                "propertyNames": {"pattern": "^.*$"},
+                "additionalProperties": {"type": "string"},
+            },
+            _m3_element("runtime", "value"),
+            f"{_M3_NS}<a>b>value{_M3_NS}</a>b>",
+        ),
+    ],
+)
+def test_minimax_m3_dynamic_property_names(
+    schema: Dict[str, Any], valid_body: str, invalid_body: str
+):
+    tools = make_tools(["dynamic"], schema)
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=tools,
+        tool_choice={"type": "function", "function": {"name": "dynamic"}},
+        reasoning_mode="disabled",
+    )
+    check_stag_with_instance(
+        structural_tag, _m3_tool_block(_m3_invoke_with_body("dynamic", valid_body)), True
+    )
+    check_stag_with_instance(
+        structural_tag, _m3_tool_block(_m3_invoke_with_body("dynamic", invalid_body)), False
+    )
+
+
+@pytest.mark.parametrize(
+    "schema, requires_dynamic_matcher",
+    [
+        (
+            {
+                "type": "object",
+                "properties": {"fixed": {"type": "string"}},
+                "required": ["fixed"],
+                "additionalProperties": False,
+            },
+            False,
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {
+                    "fixed": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {"nested": {"type": "integer"}},
+                            "required": ["nested"],
+                            "additionalProperties": False,
+                        },
+                    }
+                },
+                "required": ["fixed"],
+                "additionalProperties": False,
+            },
+            False,
+        ),
+        ({"type": "object", "additionalProperties": {"type": "string"}}, True),
+        (
+            {
+                "type": "object",
+                "properties": {"dynamic_value": {}},
+                "required": ["dynamic_value"],
+                "additionalProperties": False,
+            },
+            True,
+        ),
+        ({"type": "array", "items": {}}, True),
+        (
+            {
+                "type": "object",
+                "patternProperties": {"^runtime_": {"type": "string"}},
+                "additionalProperties": False,
+            },
+            True,
+        ),
+    ],
+)
+def test_minimax_m3_enables_dynamic_matcher_only_when_schema_needs_runtime_names(
+    schema: Dict[str, Any], requires_dynamic_matcher: bool
+):
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=make_tools(["schema_test"], schema),
+        tool_choice={"type": "function", "function": {"name": "schema_test"}},
+        reasoning_mode="disabled",
+    )
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    serialized = json.loads(grammar.serialize_json())
+    assert ("dynamic_tag_matcher_config" in serialized) == requires_dynamic_matcher
+
+    compiled = xgr.GrammarCompiler(xgr.TokenizerInfo(["plain", _M3_NS])).compile_grammar(grammar)
+    compiled_serialized = json.loads(compiled.serialize_json())
+    assert ("dynamic_tag_matcher_config" in compiled_serialized) == requires_dynamic_matcher
+
+
+def test_minimax_m3_dynamic_name_delimiter_ambiguity_is_masked():
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^.*$"},
+        "additionalProperties": {"type": "string"},
+    }
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=make_tools(["dynamic"], schema),
+        tool_choice={"type": "function", "function": {"name": "dynamic"}},
+        reasoning_mode="disabled",
+    )
+    tokenizer_info = xgr.TokenizerInfo(["b>", "x"])
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(structural_tag)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string(
+        f"{_M3_NS}<tool_call>\n"
+        f'{_M3_NS}<invoke name="dynamic">'
+        f"{_M3_NS}<a>b>value{_M3_NS}</a>"
+    )
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 0 in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert not matcher.accept_token(0)
+
+
+def test_minimax_m3_dynamic_closing_name_filters_token_mask_and_survives_rollback():
+    schema = {"type": "object", "additionalProperties": {"type": "string"}}
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=make_tools(["dynamic"], schema),
+        tool_choice={"type": "function", "function": {"name": "dynamic"}},
+        reasoning_mode="disabled",
+    )
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    grammar = xgr.Grammar.deserialize_json(grammar.serialize_json())
+    tokenizer_info = xgr.TokenizerInfo(["runtime_key", "wrong_key", ">"])
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    compiled = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), tokenizer_info)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    prefix = (
+        f"{_M3_NS}<tool_call>\n"
+        f'{_M3_NS}<invoke name="dynamic">'
+        f"{_M3_NS}<runtime_key>value{_M3_NS}</"
+    )
+    assert matcher.accept_string(prefix)
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size) == [1, 2]
+
+    mismatched = prefix + "wrong_key>" + f"{_M3_NS}</invoke>\n" + f"{_M3_NS}</tool_call>"
+    assert not _is_grammar_accept_string(compiled.grammar, mismatched)
+
+    forked = matcher.fork()
+    assert matcher.accept_token(0)
+    matcher.rollback(1)
+    assert not matcher.accept_token(1)
+    assert forked.accept_token(0)
+
+    matcher.reset()
+    assert matcher.accept_string(prefix)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size) == [1, 2]
+
+
+def test_minimax_m3_dynamic_name_chunks_survive_rollback_and_split_invoke_name():
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=make_tools(
+            ["dynamic"], {"type": "object", "additionalProperties": {"type": "string"}}
+        ),
+        tool_choice={"type": "function", "function": {"name": "dynamic"}},
+        reasoning_mode="disabled",
+    )
+    name_chunk = "runtime_key_segment_"
+    old_name = name_chunk * 3 + "old"
+    new_name = name_chunk * 3 + "new"
+    vocab = ["in", "voke", name_chunk, "old", "new", ">", old_name, new_name]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(structural_tag)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_string(f"{_M3_NS}<tool_call>\n{_M3_NS}<")
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(1)
+    assert matcher.accept_string(f' name="dynamic">{_M3_NS}<')
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(3)
+    matcher.rollback(1)
+    assert matcher.accept_token(4)
+    assert matcher.accept_token(5)
+    assert matcher.accept_string(f"value{_M3_NS}</")
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    accepted = set(range(tokenizer_info.vocab_size)) - set(
+        _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    )
+    assert accepted == {2, 7}
+    assert matcher.accept_token(7)
+    assert matcher.accept_token(5)
+    assert matcher.accept_string(f"{_M3_NS}</invoke>\n{_M3_NS}</tool_call>")
+    assert matcher.is_completed()
+
+
+def test_minimax_m3_dynamic_rollback_across_unchanged_tokens():
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=make_tools(
+            ["dynamic"], {"type": "object", "additionalProperties": {"type": "string"}}
+        ),
+        tool_choice={"type": "function", "function": {"name": "dynamic"}},
+        reasoning_mode="disabled",
+    )
+    tokenizer_info = xgr.TokenizerInfo(["value"])
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(structural_tag)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_string(
+        f"{_M3_NS}<tool_call>\n" f'{_M3_NS}<invoke name="dynamic">' f"{_M3_NS}<runtime_key>"
+    )
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(0)
+    assert matcher.accept_string(f"{_M3_NS}</")
+
+    # The two value tokens leave the semantic stack unchanged, while the closing prefix changes
+    # it. Rolling all three back must restore the state immediately after the opening tag.
+    matcher.rollback(3)
+    assert matcher.accept_string(
+        f"replacement{_M3_NS}</runtime_key>" f"{_M3_NS}</invoke>\n" f"{_M3_NS}</tool_call>"
+    )
+    assert matcher.is_completed()
+
+
+@pytest.mark.parametrize("dynamic_first", [False, True])
+def test_minimax_m3_dynamic_constraint_is_part_of_compiler_cache_key(dynamic_first: bool):
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=make_tools(
+            ["dynamic"], {"type": "object", "additionalProperties": {"type": "string"}}
+        ),
+        tool_choice={"type": "function", "function": {"name": "dynamic"}},
+        reasoning_mode="disabled",
+    )
+    dynamic_grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    cfg_only_grammar = xgr.Grammar.from_ebnf(str(dynamic_grammar))
+    invalid = _m3_tool_block(
+        _m3_invoke_with_body("dynamic", f"{_M3_NS}<runtime_key>value{_M3_NS}</wrong_key>")
+    )
+
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo(["x"]), cache_enabled=True)
+    ordered = (
+        [("dynamic", dynamic_grammar), ("cfg_only", cfg_only_grammar)]
+        if dynamic_first
+        else [("cfg_only", cfg_only_grammar), ("dynamic", dynamic_grammar)]
+    )
+    compiled = {name: compiler.compile_grammar(grammar) for name, grammar in ordered}
+
+    assert _is_grammar_accept_string(compiled["cfg_only"].grammar, invalid)
+    assert not _is_grammar_accept_string(compiled["dynamic"].grammar, invalid)
+
+
+def test_minimax_m3_dynamic_token_mask_matches_accept_token_in_every_state():
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=make_tools(
+            ["dynamic"], {"type": "object", "additionalProperties": {"type": "string"}}
+        ),
+        tool_choice={"type": "function", "function": {"name": "dynamic"}},
+        reasoning_mode="disabled",
+    )
+    vocab = [
+        "a",
+        "]",
+        "<",
+        ">",
+        "/",
+        "tool_call",
+        "tool_call>",
+        "\n",
+        "invoke",
+        "invoke ",
+        'name="dynamic">',
+        "runtime",
+        "_key",
+        "runtime_key",
+        "wrong_key",
+        "runtime_key>",
+        "runtime_key>tail",
+        "/runtime_key",
+        "/runtime_key>",
+        f"{_M3_NS}<",
+        f"{_M3_NS}</runtime_key>",
+        f"{_M3_NS}<x>",
+        f"runtime_key>value{_M3_NS}</runtime_key>",
+        f"runtime_key>{_M3_NS}<nested>value{_M3_NS}</nested>",
+        " invoke with space>",
+        "EOS_WITHOUT_PROTOCOL_MARKERS",
+    ]
+    rng = random.Random(0)
+    token_alphabet = "]<minax[>/_ invoke_toolcaruntimekyb"
+    while len(vocab) < 280:
+        token = "".join(rng.choice(token_alphabet) for _ in range(rng.randint(1, 24)))
+        if token not in vocab:
+            vocab.append(token)
+    tokenizer_info = xgr.TokenizerInfo(
+        vocab, stop_token_ids=[vocab.index("EOS_WITHOUT_PROTOCOL_MARKERS")]
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(structural_tag)
+    outer = f"{_M3_NS}<tool_call>\n"
+    invoke = outer + f'{_M3_NS}<invoke name="dynamic">'
+    opening = invoke + f"{_M3_NS}<runtime"
+    closing = invoke + f"{_M3_NS}<runtime_key>value{_M3_NS}</"
+    state_prefixes = [
+        "",
+        _M3_NS,
+        f"{_M3_NS}<",
+        f"{_M3_NS}<tool",
+        outer,
+        outer + f"{_M3_NS}<invoke ",
+        opening,
+        invoke + f"{_M3_NS}<runtime_key>value{_M3_NS}<",
+        closing,
+        closing + "runtime_key",
+        invoke + _m3_element("runtime_key", "value"),
+        invoke + _m3_element("runtime_key", "value") + _M3_NS[:1],
+        outer + f'{_M3_NS}<invoke name="dynamic">{_M3_NS}</invoke>\n{_M3_NS}</tool_call>',
+    ]
+
+    for state_prefix in state_prefixes:
+        matcher = xgr.GrammarMatcher(compiled)
+        assert matcher.accept_string(state_prefix)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        matcher.fill_next_token_bitmask(bitmask)
+        masked = set(_get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size))
+        for token_id in range(tokenizer_info.vocab_size):
+            assert matcher.fork().accept_token(token_id) == (token_id not in masked), (
+                state_prefix,
+                vocab[token_id],
+            )
+
+
+def test_minimax_m3_unclosed_dynamic_element_masks_stop_token():
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=make_tools(
+            ["dynamic"], {"type": "object", "additionalProperties": {"type": "string"}}
+        ),
+        tool_choice={"type": "function", "function": {"name": "dynamic"}},
+        reasoning_mode="disabled",
+    )
+    vocab = ["value", "EOS"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(structural_tag)
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_string(
+        f"{_M3_NS}<tool_call>\n" f'{_M3_NS}<invoke name="dynamic">' f"{_M3_NS}<runtime_key>"
+    )
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 1 in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert not matcher.accept_token(1)
+
+    assert matcher.accept_string(
+        f"value{_M3_NS}</runtime_key>{_M3_NS}</invoke>\n{_M3_NS}</tool_call>"
+    )
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 1 not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert matcher.accept_token(1)
+
+
+def test_minimax_m3_dynamic_closing_name_supports_jump_forward():
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=make_tools(
+            ["dynamic"], {"type": "object", "additionalProperties": {"type": "string"}}
+        ),
+        tool_choice={"type": "function", "function": {"name": "dynamic"}},
+        reasoning_mode="disabled",
+    )
+    compiled = xgr.GrammarCompiler(xgr.TokenizerInfo(["x"])).compile_structural_tag(structural_tag)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    prefix = (
+        f"{_M3_NS}<tool_call>\n"
+        f'{_M3_NS}<invoke name="dynamic">'
+        f"{_M3_NS}<runtime_key>value{_M3_NS}</"
+    )
+    assert matcher.accept_string(prefix)
+
+    jump_forward = matcher.find_jump_forward_string()
+    assert jump_forward.startswith("runtime_key>")
+    assert matcher.find_jump_forward_string() == jump_forward
+    assert matcher.accept_string(jump_forward)
+    assert matcher.accept_string(f"{_M3_NS}</invoke>\n{_M3_NS}</tool_call>")
+    assert matcher.is_completed()
+
+
+def test_minimax_m3_dynamic_batch_matcher_thread_safety():
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=make_tools(
+            ["dynamic"], {"type": "object", "additionalProperties": {"type": "string"}}
+        ),
+        tool_choice={"type": "function", "function": {"name": "dynamic"}},
+        reasoning_mode="disabled",
+    )
+    vocab = ["alpha_key", "beta_key", "wrong_key", "alpha_key>", "beta_key>", ">"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(structural_tag)
+    runtime_names = ["alpha_key", "beta_key"] * 8
+    initial_matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    matchers = []
+    for runtime_name in runtime_names:
+        matcher = initial_matcher.fork()
+        prefix = (
+            f"{_M3_NS}<tool_call>\n"
+            f'{_M3_NS}<invoke name="dynamic">'
+            f"{_M3_NS}<{runtime_name}>value{_M3_NS}</"
+        )
+        assert matcher.accept_string(prefix)
+        matchers.append(matcher)
+
+    expected_rejected = []
+    for matcher in matchers:
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        matcher.fill_next_token_bitmask(bitmask)
+        expected_rejected.append(
+            _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+        )
+
+    batch_matcher = xgr.BatchGrammarMatcher(4)
+    bitmask = xgr.allocate_token_bitmask(len(matchers), tokenizer_info.vocab_size)
+    for _ in range(50):
+        batch_matcher.batch_fill_next_token_bitmask(matchers, bitmask)
+        for index, rejected in enumerate(expected_rejected):
+            assert (
+                _get_masked_tokens_from_bitmask(bitmask[index], tokenizer_info.vocab_size)
+                == rejected
+            )
+
+    correct_token_ids = [0 if name == "alpha_key" else 1 for name in runtime_names]
+    assert xgr.BatchGrammarMatcher.batch_accept_token(matchers, correct_token_ids) == [True] * len(
+        matchers
+    )
+    xgr.BatchGrammarMatcher.batch_rollback(matchers, 1)
+    batch_matcher.batch_fill_next_token_bitmask(matchers, bitmask)
+    for index, rejected in enumerate(expected_rejected):
+        assert (
+            _get_masked_tokens_from_bitmask(bitmask[index], tokenizer_info.vocab_size) == rejected
+        )
+
+
+def test_minimax_m3_max_whitespace_cnt_propagates():
+    structural_tag = get_model_structural_tag(
+        "minimax_m3", tools=_M3_TOOLS, reasoning_mode="disabled", max_whitespace_cnt=2
+    )
+    nodes = _collect_json_schema_nodes(structural_tag)
+    assert nodes
+    assert all(node.max_whitespace_cnt == 2 for node in nodes)
+
+
 # ---------- Test: any_order propagation ----------
 
 
@@ -1462,6 +2229,7 @@ _ANY_ORDER_MODELS = [
     "deepseek_v3_2",
     "deepseek_v4",
     "minimax",
+    "minimax_m3",
     "glm_4_7",
     "harmony",
 ]

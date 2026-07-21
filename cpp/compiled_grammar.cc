@@ -5,6 +5,8 @@
 
 #include <xgrammar/compiler.h>
 
+#include <algorithm>
+
 #include "compiled_grammar_impl.h"
 #include "support/json_serializer.h"
 #include "testing.h"
@@ -164,11 +166,59 @@ std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const 
 
 /************** CompiledGrammar::Impl **************/
 
+void CompiledGrammar::Impl::InitializeDynamicTagTokenIndexes() {
+  dynamic_tag_token_indexes.reset();
+  if (!dynamic_tag_matcher_config.has_value()) {
+    return;
+  }
+  auto indexes = std::make_shared<DynamicTagTokenIndexes>(
+      *dynamic_tag_matcher_config, tokenizer_info.GetVocabSize()
+  );
+  indexes->first_byte_ranges.fill({-1, -1});
+  const char prefix_completion_byte = dynamic_tag_matcher_config->element_prefix.back();
+  const char suffix_byte = dynamic_tag_matcher_config->tag_suffix.front();
+  const auto& sorted_decoded_vocab = tokenizer_info.GetSortedDecodedVocab();
+  for (int32_t index = 0; index < static_cast<int32_t>(sorted_decoded_vocab.size()); ++index) {
+    const auto& [token_id, token] = sorted_decoded_vocab[index];
+    XGRAMMAR_DCHECK(!token.empty());
+    if (token.find(prefix_completion_byte) != std::string::npos) {
+      indexes->prefix_completion_token_ids.push_back(token_id);
+    }
+    if (token.find(dynamic_tag_matcher_config->element_prefix) != std::string::npos) {
+      indexes->full_prefix_token_ids.push_back(token_id);
+    }
+    if (token.find(suffix_byte) != std::string::npos) {
+      indexes->suffix_token_ids.push_back(token_id);
+    }
+    const bool contains_prefix_start =
+        token.find(dynamic_tag_matcher_config->element_prefix.front()) != std::string::npos;
+    if (contains_prefix_start) {
+      indexes->content_boundary_token_ids.push_back(token_id);
+    }
+    if (contains_prefix_start || std::all_of(token.begin(), token.end(), [](char byte) {
+          const uint8_t value = static_cast<uint8_t>(byte);
+          return value == ' ' || value == '\t' || value == '\n' || value == '\r' || value == '\f' ||
+                 value == '\v';
+        })) {
+      indexes->content_boundary_candidate_bitset.Set(token_id);
+    }
+    auto& range = indexes->first_byte_ranges[static_cast<uint8_t>(token.front())];
+    if (range.first == -1) {
+      range.first = index;
+    }
+    range.second = index + 1;
+  }
+  dynamic_tag_token_indexes = std::move(indexes);
+}
+
 picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   auto result = picojson::object{};
   result["grammar"] = AutoSerializeJSONValue(impl.grammar);
   result["tokenizer_metadata"] = impl.tokenizer_info->DumpMetadataValue();
   result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(impl.adaptive_token_mask_cache);
+  if (impl.dynamic_tag_matcher_config.has_value()) {
+    result["dynamic_tag_matcher_config"] = AutoSerializeJSONValue(*impl.dynamic_tag_matcher_config);
+  }
   return picojson::value(result);
 }
 
@@ -200,13 +250,53 @@ std::optional<SerializationError> DeserializeJSONValue(
     return ConstructDeserializeError("Expect a 'adaptive_token_mask_cache' field", type_name);
   }
   AutoDeserializeJSONValue(&(impl->adaptive_token_mask_cache), object["adaptive_token_mask_cache"]);
+  if (object.find("dynamic_tag_matcher_config") != object.end()) {
+    if (auto error = AutoDeserializeJSONValue(
+            &(impl->dynamic_tag_matcher_config.emplace()),
+            object["dynamic_tag_matcher_config"],
+            type_name
+        )) {
+      return error;
+    }
+    if (auto error = ValidateDynamicTagMatcherConfig(*impl->dynamic_tag_matcher_config)) {
+      return ConstructDeserializeError(
+          *error, std::string(type_name) + ".dynamic_tag_matcher_config"
+      );
+    }
+  }
+  const auto& grammar_config = impl->grammar->GetDynamicTagMatcherConfig();
+  if (impl->dynamic_tag_matcher_config.has_value() && grammar_config.has_value() &&
+      !(*impl->dynamic_tag_matcher_config == *grammar_config)) {
+    return ConstructDeserializeError(
+        "The grammar and compiled grammar contain different dynamic-tag matcher configs", type_name
+    );
+  }
+  if (!impl->dynamic_tag_matcher_config.has_value() && grammar_config.has_value()) {
+    impl->dynamic_tag_matcher_config = *grammar_config;
+  }
+  impl->grammar->dynamic_tag_matcher_config = impl->dynamic_tag_matcher_config;
+  impl->InitializeDynamicTagTokenIndexes();
   return std::nullopt;
 }
 
 /************** CompiledGrammar **************/
 
 std::size_t MemorySize(const CompiledGrammar::Impl& impl) {
-  return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache);
+  std::size_t dynamic_tag_index_size = 0;
+  if (impl.dynamic_tag_token_indexes) {
+    dynamic_tag_index_size =
+        sizeof(CompiledGrammar::Impl::DynamicTagTokenIndexes) +
+        impl.dynamic_tag_token_indexes->initial_matcher.SharedDefinitionMemorySize() +
+        MemorySize(impl.dynamic_tag_token_indexes->prefix_completion_token_ids) +
+        MemorySize(impl.dynamic_tag_token_indexes->full_prefix_token_ids) +
+        MemorySize(impl.dynamic_tag_token_indexes->suffix_token_ids) +
+        MemorySize(impl.dynamic_tag_token_indexes->content_boundary_token_ids) +
+        MemorySize(impl.dynamic_tag_token_indexes->content_boundary_candidate_bitset);
+  }
+  return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache) +
+         dynamic_tag_index_size +
+         (impl.dynamic_tag_matcher_config.has_value() ? MemorySize(*impl.dynamic_tag_matcher_config)
+                                                      : 0);
 }
 
 std::size_t CompiledGrammar::MemorySizeBytes() const { return MemorySize(*pimpl_); }
