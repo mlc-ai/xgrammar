@@ -547,20 +547,20 @@ class GrammarMatcher::Impl : public EarleyParser {
   };
 
   /*!
-   * \brief Enables capture-event recording in the Earley parser for the lifetime of the scope.
-   * Used in the definitive accept paths (AcceptToken / AcceptString) only, so that speculative
-   * advances (mask computation, jump-forward search) never record capture events.
+   * \brief RAII guard that enables capture-event recording in the Earley parser for its
+   * lifetime. Used in the definitive accept paths (AcceptToken / AcceptString) only, so that
+   * speculative advances (mask computation, jump-forward search) never record capture events.
    */
-  class CaptureRecordingScope {
+  class CaptureRecordingGuard {
    public:
-    explicit CaptureRecordingScope(Impl* impl) : impl_(impl) {
+    explicit CaptureRecordingGuard(Impl* impl) : impl_(impl) {
       if (impl_->capture_tracking_) {
         impl_->capture_recording_ = true;
       }
     }
-    ~CaptureRecordingScope() { impl_->capture_recording_ = false; }
-    CaptureRecordingScope(const CaptureRecordingScope&) = delete;
-    CaptureRecordingScope& operator=(const CaptureRecordingScope&) = delete;
+    ~CaptureRecordingGuard() { impl_->capture_recording_ = false; }
+    CaptureRecordingGuard(const CaptureRecordingGuard&) = delete;
+    CaptureRecordingGuard& operator=(const CaptureRecordingGuard&) = delete;
 
    private:
     Impl* impl_;
@@ -771,7 +771,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   const auto& token = tokenizer_info_.GetDecodedVocab()[token_id];
 
   // Capture events are only recorded on the definitive accept path.
-  CaptureRecordingScope capture_scope(this);
+  CaptureRecordingGuard capture_guard(this);
   const int32_t size_before_token = rule_id_to_completable_states_.size();
 
   // Phase 1: Try atomic token path (from current state, before byte path)
@@ -913,7 +913,7 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
   current_token_index_ = static_cast<int32_t>(token_length_history.size());
 
   // Capture events are only recorded on the definitive accept path.
-  CaptureRecordingScope capture_scope(this);
+  CaptureRecordingGuard capture_guard(this);
 
   int accepted_cnt = 0;
   for (auto char_value : input_str) {
