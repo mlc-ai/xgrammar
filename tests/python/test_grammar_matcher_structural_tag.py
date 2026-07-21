@@ -611,6 +611,7 @@ def _mask_allows(matcher, token_id):
     return bool((bitmask[0][token_id >> 5] >> (token_id & 31)) & 1)
 
 
+@pytest.mark.hf_token_required
 def test_stop_token_as_grammar_terminal_harmony():
     """<|return|> closes the harmony final-message tag and must be accepted."""
     from xgrammar.builtin_structural_tag import get_harmony_structural_tag
@@ -632,6 +633,7 @@ def test_stop_token_as_grammar_terminal_harmony():
     assert matcher.is_terminated()
 
 
+@pytest.mark.hf_token_required
 def test_stop_token_as_grammar_terminal_mask_matches_accept():
     """The mask and accept_token must agree for an overridden stop token."""
     from xgrammar.structural_tag import (
@@ -672,6 +674,7 @@ def test_stop_token_as_grammar_terminal_mask_matches_accept():
     assert matcher.is_terminated()
 
 
+@pytest.mark.hf_token_required
 def test_stop_token_masked_out_when_it_would_truncate():
     """A stop token is only allowed when emitting it leaves a complete grammar."""
     _, tokenizer_info = _gpt_oss_tokenizer_info()
@@ -701,6 +704,7 @@ def test_stop_token_masked_out_when_it_would_truncate():
     assert matcher.is_terminated()
 
 
+@pytest.mark.hf_token_required
 def test_stop_token_as_grammar_terminal_rollback():
     """Rolling back an accepted dual-role stop token restores the matcher."""
     from xgrammar.builtin_structural_tag import get_harmony_structural_tag
