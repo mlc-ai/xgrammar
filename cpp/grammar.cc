@@ -11,6 +11,7 @@
 #include "grammar_parser.h"
 #include "grammar_printer.h"
 #include "json_schema_converter.h"
+#include "lark_converter.h"
 #include "regex_converter.h"
 #include "structural_tag.h"
 #include "support/json_serializer.h"
@@ -72,6 +73,14 @@ Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) 
     XGRAMMAR_LOG(INFO) << "Converted EBNF: " << ebnf_string << std::endl;
   }
   return FromEBNF(ebnf_string);
+}
+
+Grammar Grammar::FromLark(
+    const std::string& lark_string,
+    const std::optional<TokenizerInfo>& tokenizer_info,
+    const std::vector<NamedGrammar>& named_grammars
+) {
+  return LarkToGrammar(lark_string, tokenizer_info, named_grammars);
 }
 
 std::variant<Grammar, StructuralTagError> Grammar::FromStructuralTag(

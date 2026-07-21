@@ -13,6 +13,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -29,6 +30,8 @@ struct StructuralTagItem {
     return begin == other.begin && schema == other.schema && end == other.end;
   }
 };
+
+struct NamedGrammar;
 
 /*!
  * \brief This class stores the abstract syntax tree (AST) of the Backus-Naur Form (BNF) grammar.
@@ -131,6 +134,18 @@ class Grammar {
   static Grammar FromRegex(const std::string& regex, bool print_converted_ebnf = false);
 
   /*!
+   * \brief Construct a grammar from Lark syntax.
+   * \param lark_string The Lark grammar. The root rule must be named "start".
+   * \param tokenizer_info Optional tokenizer metadata used to resolve named special tokens.
+   * \param named_grammars Grammar objects or Lark sources that can be referenced with `@name`.
+   */
+  static Grammar FromLark(
+      const std::string& lark_string,
+      const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt,
+      const std::vector<NamedGrammar>& named_grammars = {}
+  );
+
+  /*!
    * \brief Construct a grammar from a structural tag string.
    * \param structural_tag_json The structural tag string.
    * \param tokenizer_info Optional tokenizer info for resolving string token references.
@@ -185,6 +200,17 @@ class Grammar {
   static std::variant<Grammar, SerializationError> DeserializeJSON(const std::string& json_string);
 
   XGRAMMAR_DEFINE_PIMPL_METHODS(Grammar);
+};
+
+/*!
+ * \brief A grammar or Lark source that can be referenced by name from another Lark grammar.
+ */
+struct NamedGrammar {
+  /*! \brief The reference name, without the leading `@`. */
+  std::string name;
+
+  /*! \brief An existing grammar or a Lark source with its own `start` rule. */
+  std::variant<Grammar, std::string> grammar;
 };
 
 }  // namespace xgrammar
