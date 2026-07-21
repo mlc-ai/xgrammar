@@ -1,0 +1,816 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Lark Grammar &mdash; XGrammar 0.2.4 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/autodoc_pydantic.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/fix_text_selection.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
+        <script src="../_static/clipboard.min.js"></script>
+        <script src="../_static/copybutton.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="JavaScript API" href="javascript_api.html" />
+    <link rel="prev" title="Serialization" href="serialization.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
+             </ul>
+          </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html">
+          
+
+          
+            
+            <img src="../_static/img/logo.png" class="logo" alt="Logo"/>
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.2.4
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../structural_tag/structural_tag_api.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../structural_tag/tool_calling_and_reasoning.html">Tool Calling and Reasoning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../structural_tag/advanced_usage.html">Advanced Topics of Structural Tag</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="serialization.html">Serialization</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Lark Grammar</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#usage">Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#grammar-structure">Grammar Structure</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#rules-and-terminals">Rules and Terminals</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#string-literals">String Literals</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#character-ranges">Character Ranges</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#regular-expressions">Regular Expressions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#sequences-alternatives-and-groups">Sequences, Alternatives, and Groups</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#repetition">Repetition</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#directives">Directives</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#import-common"><code class="docutils literal notranslate"><span class="pre">%import</span> <span class="pre">common</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#ignore"><code class="docutils literal notranslate"><span class="pre">%ignore</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#grammar-options"><code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#inline-json-schema">Inline JSON Schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#nested-grammars">Nested Grammars</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#special-tokens">Special Tokens</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#named-grammars">Named Grammars</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#dynamic-tool-call-dispatch">Dynamic Tool-Call Dispatch</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#the-recognized-pattern">The Recognized Pattern</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#multiple-tools">Multiple Tools</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#standalone-lazy-rules">Standalone Lazy Rules</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/code_coverage.html">Code Coverage</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../api/python/index.html">XGrammar Python API</a></li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+      <li>Lark Grammar</li>
+    
+    
+      
+      
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/xgrammar_features/lark_grammar.md" class="fa fa-github"> Edit on GitHub</a>
+            
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <section class="tex2jax_ignore mathjax_ignore" id="lark-grammar">
+<h1>Lark Grammar<a class="headerlink" href="#lark-grammar" title="Permalink to this heading">¶</a></h1>
+<p>XGrammar can build grammars from a dialect of the
+<a class="reference external" href="https://lark-parser.readthedocs.io/en/latest/grammar.html">Lark grammar language</a> through
+<a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar.from_lark" title="xgrammar.Grammar.from_lark"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar.from_lark</span></code></span></a>. Lark is a compact, readable notation for
+describing structured text: fixed strings, alternatives, repetition, recursion, and regular
+expressions. The result is a normal <a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar</span></code></span></a>, so it works with the
+existing compiler, matcher, serialization, <code class="docutils literal notranslate"><span class="pre">Grammar.union</span></code> / <code class="docutils literal notranslate"><span class="pre">Grammar.concat</span></code>, and all engine
+integrations.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xgr</span>
+
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    %import common.INT</span>
+<span class="sd">    %import common.WS</span>
+<span class="sd">    %ignore WS</span>
+
+<span class="sd">    start: item (&quot;,&quot; item)*</span>
+<span class="sd">    item: &quot;id=&quot; INT</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>This grammar accepts strings such as <code class="docutils literal notranslate"><span class="pre">id=1</span></code>, <code class="docutils literal notranslate"><span class="pre">id=1,</span> <span class="pre">id=42</span></code>, or <code class="docutils literal notranslate"><span class="pre">id=1</span> <span class="pre">,id=2</span> <span class="pre">,</span> <span class="pre">id=3</span></code>.</p>
+<p>XGrammar’s Lark dialect is compatible with the dialect used by
+<a class="reference external" href="https://github.com/guidance-ai/llguidance">llguidance</a>.</p>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Permalink to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+    <span class="n">lark_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">tokenizer_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">named_grammars</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">lark_string</span></code> is the grammar source. It must define a rule named <code class="docutils literal notranslate"><span class="pre">start</span></code>, which is the entry
+point of the grammar.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code> is only required when the grammar uses named special tokens (such as
+<code class="docutils literal notranslate"><span class="pre">&lt;|tool_call|&gt;</span></code>) or the all-token wildcard <code class="docutils literal notranslate"><span class="pre">&lt;[*]&gt;</span></code>. See <a class="reference internal" href="#special-tokens"><span class="std std-ref">Special Tokens</span></a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">named_grammars</span></code> supplies external grammars referenced with <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code> in the Lark source. See
+<a class="reference internal" href="#named-grammars"><span class="std std-ref">Named Grammars</span></a>.</p></li>
+</ul>
+<p>The returned grammar is compiled and matched like any other grammar:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">from_huggingface</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">)</span>
+<span class="n">compiler</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">)</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span><span class="s1">&#39;start: &quot;a&quot; | &quot;b&quot;&#39;</span><span class="p">))</span>
+<span class="n">matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarMatcher</span><span class="p">(</span><span class="n">compiled</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Errors in the grammar raise <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> with the line, the column, and the offending source
+line:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Lark error at line 3, column 6: expected &#39;:&#39; after rule name
+item missing
+     ^
+</pre></div>
+</div>
+</section>
+<section id="grammar-structure">
+<h2>Grammar Structure<a class="headerlink" href="#grammar-structure" title="Permalink to this heading">¶</a></h2>
+<p>A grammar is a sequence of items separated by newlines. Each item is one of:</p>
+<ul class="simple">
+<li><p>a rule definition: <code class="docutils literal notranslate"><span class="pre">name:</span> <span class="pre">expression</span></code></p></li>
+<li><p>a terminal definition: <code class="docutils literal notranslate"><span class="pre">NAME:</span> <span class="pre">expression</span></code></p></li>
+<li><p>a directive: <code class="docutils literal notranslate"><span class="pre">%import</span></code>, <code class="docutils literal notranslate"><span class="pre">%ignore</span></code>, or <code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code></p></li>
+</ul>
+<p>Comments start with <code class="docutils literal notranslate"><span class="pre">#</span></code> or <code class="docutils literal notranslate"><span class="pre">//</span></code> and run to the end of the line. Blank lines are ignored. An
+alternative may continue on the next line when that line starts with <code class="docutils literal notranslate"><span class="pre">|</span></code>:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &quot;a&quot;
+     | &quot;b&quot;
+     | &quot;c&quot;
+</pre></div>
+</div>
+<section id="rules-and-terminals">
+<h3>Rules and Terminals<a class="headerlink" href="#rules-and-terminals" title="Permalink to this heading">¶</a></h3>
+<p>Names consist of letters, digits, underscores, and hyphens. A definition whose name starts with a
+lowercase letter (ignoring a leading underscore) is a <strong>rule</strong>; one that starts with an uppercase
+letter is a <strong>terminal</strong>.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: value (&quot;;&quot; value)*     // rule
+value: INT | NAME             // rule referencing terminals
+INT: /[0-9]+/                 // terminal
+NAME: /[a-z]+/                // terminal
+</pre></div>
+</div>
+<p>Rules may reference each other freely, including forward references, direct recursion, and
+indirect recursion:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: value
+value: &quot;x&quot; | &quot;(&quot; value &quot;)&quot; | &quot;[&quot; (value (&quot;,&quot; value)*)? &quot;]&quot;
+</pre></div>
+</div>
+<p>Terminals are matched as one indivisible unit:</p>
+<ul class="simple">
+<li><p>A terminal may be composed of strings, character ranges, regular expressions, repetition, and
+other terminals, but it cannot reference rules and cannot be recursive.</p></li>
+<li><p>Content skipped by <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> is never inserted inside a terminal. In the first example above,
+with <code class="docutils literal notranslate"><span class="pre">%ignore</span> <span class="pre">WS</span></code>, spaces may appear around an <code class="docutils literal notranslate"><span class="pre">INT</span></code> but not between its digits.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">%json</span></code>, <code class="docutils literal notranslate"><span class="pre">%lark</span></code>, special tokens, and <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code> references cannot appear inside terminals.</p></li>
+</ul>
+<p>For compatibility with grammars written for parse-tree-producing parsers, XGrammar accepts and
+ignores the rule prefixes <code class="docutils literal notranslate"><span class="pre">?</span></code> and <code class="docutils literal notranslate"><span class="pre">!</span></code> (as in <code class="docutils literal notranslate"><span class="pre">?value:</span> <span class="pre">...</span></code>) and alternative aliases
+(<code class="docutils literal notranslate"><span class="pre">&quot;a&quot;</span> <span class="pre">-&gt;</span> <span class="pre">first</span></code>). These constructs only affect parse-tree shaping and have no effect on which
+strings the grammar accepts.</p>
+</section>
+<section id="string-literals">
+<h3>String Literals<a class="headerlink" href="#string-literals" title="Permalink to this heading">¶</a></h3>
+<p>String literals use double quotes and JSON escape syntax: <code class="docutils literal notranslate"><span class="pre">\&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">\\</span></code>, <code class="docutils literal notranslate"><span class="pre">\/</span></code>, <code class="docutils literal notranslate"><span class="pre">\b</span></code>, <code class="docutils literal notranslate"><span class="pre">\f</span></code>, <code class="docutils literal notranslate"><span class="pre">\n</span></code>,
+<code class="docutils literal notranslate"><span class="pre">\r</span></code>, <code class="docutils literal notranslate"><span class="pre">\t</span></code>, and <code class="docutils literal notranslate"><span class="pre">\uXXXX</span></code>. Non-ASCII characters may be written directly (<code class="docutils literal notranslate"><span class="pre">&quot;中文&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;😀&quot;</span></code>) or with
+Unicode escapes (<code class="docutils literal notranslate"><span class="pre">&quot;\u03bb&quot;</span></code> matches <code class="docutils literal notranslate"><span class="pre">λ</span></code>).</p>
+<p>A trailing <code class="docutils literal notranslate"><span class="pre">i</span></code> makes the literal case-insensitive: <code class="docutils literal notranslate"><span class="pre">&quot;yes&quot;i</span></code> matches <code class="docutils literal notranslate"><span class="pre">yes</span></code>, <code class="docutils literal notranslate"><span class="pre">YES</span></code>, <code class="docutils literal notranslate"><span class="pre">Yes</span></code>, and so
+on. Case-insensitive literals currently support ASCII characters only; a case-insensitive literal
+containing non-ASCII characters is rejected.</p>
+</section>
+<section id="character-ranges">
+<h3>Character Ranges<a class="headerlink" href="#character-ranges" title="Permalink to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">&quot;a&quot;..&quot;z&quot;</span></code> matches one character between the two endpoints, inclusive. Both endpoints must be
+exactly one character and may be any Unicode character: <code class="docutils literal notranslate"><span class="pre">&quot;α&quot;..&quot;γ&quot;</span></code> matches <code class="docutils literal notranslate"><span class="pre">α</span></code>, <code class="docutils literal notranslate"><span class="pre">β</span></code>, or <code class="docutils literal notranslate"><span class="pre">γ</span></code>. The
+<code class="docutils literal notranslate"><span class="pre">i</span></code> flag is not allowed on range endpoints.</p>
+</section>
+<section id="regular-expressions">
+<h3>Regular Expressions<a class="headerlink" href="#regular-expressions" title="Permalink to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">/pattern/</span></code> matches text against a regular expression. The pattern is compiled through XGrammar’s
+regex converter (the same engine as <a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar.from_regex" title="xgrammar.Grammar.from_regex"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar.from_regex</span></code></span></a>) and
+supports character classes, alternation, groups, repetition (<code class="docutils literal notranslate"><span class="pre">*</span></code>, <code class="docutils literal notranslate"><span class="pre">+</span></code>, <code class="docutils literal notranslate"><span class="pre">?</span></code>, <code class="docutils literal notranslate"><span class="pre">{m,n}</span></code>), and the
+usual escapes. A <code class="docutils literal notranslate"><span class="pre">/</span></code> inside the pattern is written <code class="docutils literal notranslate"><span class="pre">\/</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">.</span></code> matches one Unicode character. By default it does not match newline; adding the <code class="docutils literal notranslate"><span class="pre">s</span></code> flag
+(<code class="docutils literal notranslate"><span class="pre">/pattern/s</span></code>) makes <code class="docutils literal notranslate"><span class="pre">.</span></code> match newline as well. <code class="docutils literal notranslate"><span class="pre">s</span></code> is currently the only supported regex flag.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: /a.b/      // accepts &quot;acb&quot;, &quot;a😀b&quot;; rejects &quot;a\nb&quot;
+line: /a.b/s      // also accepts &quot;a\nb&quot;
+</pre></div>
+</div>
+</section>
+<section id="sequences-alternatives-and-groups">
+<h3>Sequences, Alternatives, and Groups<a class="headerlink" href="#sequences-alternatives-and-groups" title="Permalink to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Form</p></th>
+<th class="head"><p>Example</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Sequence</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;a&quot;</span> <span class="pre">&quot;b&quot;</span></code></p></td>
+<td><p>Match the elements in order.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Alternative</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;a&quot;</span> <span class="pre">|</span> <span class="pre">&quot;b&quot;</span></code></p></td>
+<td><p>Match any one branch.</p></td>
+</tr>
+<tr class="row-even"><td><p>Group</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(&quot;a&quot;</span> <span class="pre">|</span> <span class="pre">&quot;b&quot;)</span> <span class="pre">&quot;c&quot;</span></code></p></td>
+<td><p>Group a sub-expression; may carry repetition.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Optional group</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[&quot;a&quot;</span> <span class="pre">&quot;b&quot;]</span></code></p></td>
+<td><p>The whole group appears zero or one time.</p></td>
+</tr>
+<tr class="row-even"><td><p>Empty</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">start:</span></code> or <code class="docutils literal notranslate"><span class="pre">start:</span> <span class="pre">|</span> <span class="pre">&quot;a&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code></p></td>
+<td><p>Matches the empty string.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="repetition">
+<h3>Repetition<a class="headerlink" href="#repetition" title="Permalink to this heading">¶</a></h3>
+<p>Repetition operators follow an element (a literal, a name, or a group):</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Form</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">x?</span></code></p></td>
+<td><p>zero or one</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">x*</span></code></p></td>
+<td><p>zero or more</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">x+</span></code></p></td>
+<td><p>one or more</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">x~3</span></code></p></td>
+<td><p>exactly 3</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">x~2..4</span></code></p></td>
+<td><p>2 to 4, inclusive</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">x{3}</span></code></p></td>
+<td><p>exactly 3</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">x{2,4}</span></code></p></td>
+<td><p>2 to 4, inclusive</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">x{2,}</span></code></p></td>
+<td><p>2 or more</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">x{,4}</span></code></p></td>
+<td><p>0 to 4</p></td>
+</tr>
+</tbody>
+</table>
+<p>Zero counts such as <code class="docutils literal notranslate"><span class="pre">x{0}</span></code> are allowed and match the empty string. Ranges with the upper bound
+below the lower bound are rejected.</p>
+</section>
+</section>
+<section id="directives">
+<h2>Directives<a class="headerlink" href="#directives" title="Permalink to this heading">¶</a></h2>
+<section id="import-common">
+<h3><code class="docutils literal notranslate"><span class="pre">%import</span> <span class="pre">common</span></code><a class="headerlink" href="#import-common" title="Permalink to this heading">¶</a></h3>
+<p>XGrammar provides a built-in library of common terminals. <code class="docutils literal notranslate"><span class="pre">%import</span></code> brings one of them into scope
+as a terminal definition:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%import common.INT                 // defines INT
+%import common.INT -&gt; NUMBER       // defines NUMBER with INT&#39;s pattern
+%import common (INT, WS, CNAME)    // multiple imports in one line
+</pre></div>
+</div>
+<p>Imports may appear anywhere in the grammar, including after the first use of the imported name.
+Importing a name that is already defined is an error. The available names:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Category</p></th>
+<th class="head"><p>Names</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Numbers</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">DIGIT</span></code>, <code class="docutils literal notranslate"><span class="pre">HEXDIGIT</span></code>, <code class="docutils literal notranslate"><span class="pre">INT</span></code>, <code class="docutils literal notranslate"><span class="pre">SIGNED_INT</span></code>, <code class="docutils literal notranslate"><span class="pre">DECIMAL</span></code>, <code class="docutils literal notranslate"><span class="pre">_EXP</span></code>, <code class="docutils literal notranslate"><span class="pre">FLOAT</span></code>, <code class="docutils literal notranslate"><span class="pre">SIGNED_FLOAT</span></code>, <code class="docutils literal notranslate"><span class="pre">NUMBER</span></code>, <code class="docutils literal notranslate"><span class="pre">SIGNED_NUMBER</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Strings and names</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ESCAPED_STRING</span></code>, <code class="docutils literal notranslate"><span class="pre">LCASE_LETTER</span></code>, <code class="docutils literal notranslate"><span class="pre">UCASE_LETTER</span></code>, <code class="docutils literal notranslate"><span class="pre">LETTER</span></code>, <code class="docutils literal notranslate"><span class="pre">WORD</span></code>, <code class="docutils literal notranslate"><span class="pre">CNAME</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Whitespace</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">WS_INLINE</span></code>, <code class="docutils literal notranslate"><span class="pre">WS</span></code>, <code class="docutils literal notranslate"><span class="pre">CR</span></code>, <code class="docutils literal notranslate"><span class="pre">LF</span></code>, <code class="docutils literal notranslate"><span class="pre">NEWLINE</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Comments</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SH_COMMENT</span></code>, <code class="docutils literal notranslate"><span class="pre">CPP_COMMENT</span></code>, <code class="docutils literal notranslate"><span class="pre">C_COMMENT</span></code>, <code class="docutils literal notranslate"><span class="pre">SQL_COMMENT</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Only the <code class="docutils literal notranslate"><span class="pre">common</span></code> library can be imported.</p>
+</section>
+<section id="ignore">
+<h3><code class="docutils literal notranslate"><span class="pre">%ignore</span></code><a class="headerlink" href="#ignore" title="Permalink to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">%ignore</span></code> declares content that may appear between terminals, typically whitespace:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%import common.WS
+%ignore WS
+start: &quot;a&quot; DIGIT
+DIGIT: &quot;0&quot;..&quot;9&quot;
+</pre></div>
+</div>
+<p>This accepts <code class="docutils literal notranslate"><span class="pre">a1</span></code>, <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">1</span></code>, and <code class="docutils literal notranslate"><span class="pre">a\n1</span>&#160; </code>. The ignored content:</p>
+<ul class="simple">
+<li><p>may appear between any two lexemes (terminals, string literals, character ranges, regexes) in a
+rule, and after the last one;</p></li>
+<li><p>may <strong>not</strong> appear before the first lexeme, unless <code class="docutils literal notranslate"><span class="pre">allow_initial_skip</span></code> is enabled (see below);</p></li>
+<li><p>is never inserted inside a terminal.</p></li>
+</ul>
+<p>The <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> expression may be a terminal name, a string, a regex, or a combination. Multiple
+<code class="docutils literal notranslate"><span class="pre">%ignore</span></code> declarations are merged:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%import common (WS, CPP_COMMENT)
+%ignore WS
+%ignore CPP_COMMENT
+%ignore /;+/
+</pre></div>
+</div>
+</section>
+<section id="grammar-options">
+<h3><code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code><a class="headerlink" href="#grammar-options" title="Permalink to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code> takes a JSON object that configures the whole grammar:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%grammar_options {&quot;allow_initial_skip&quot;: true}
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">allow_initial_skip</span></code> (boolean, default <code class="docutils literal notranslate"><span class="pre">false</span></code>) allows <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> content to appear before the
+first lexeme of the output. Multiple <code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code> declarations are merged; unknown option
+names are rejected.</p>
+</section>
+</section>
+<section id="inline-json-schema">
+<h2>Inline JSON Schema<a class="headerlink" href="#inline-json-schema" title="Permalink to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">%json</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code> embeds a JSON Schema and behaves like a rule reference: the element matches any
+JSON value conforming to the schema, converted through XGrammar’s JSON Schema converter.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    start: &quot;&lt;tool_call&gt;&quot; arguments &quot;&lt;/tool_call&gt;&quot;</span>
+<span class="sd">    arguments: %json {</span>
+<span class="sd">      &quot;type&quot;: &quot;object&quot;,</span>
+<span class="sd">      &quot;properties&quot;: {&quot;city&quot;: {&quot;type&quot;: &quot;string&quot;}},</span>
+<span class="sd">      &quot;required&quot;: [&quot;city&quot;],</span>
+<span class="sd">      &quot;additionalProperties&quot;: false</span>
+<span class="sd">    }</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">%json</span></code> may appear inside sequences, alternatives, and repetition. Whitespace outside the JSON
+value is controlled by the surrounding Lark grammar; whitespace inside the value follows the JSON
+Schema converter’s normal behavior. <code class="docutils literal notranslate"><span class="pre">%json</span></code> cannot be used inside terminals.</p>
+</section>
+<section id="nested-grammars">
+<h2>Nested Grammars<a class="headerlink" href="#nested-grammars" title="Permalink to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">%lark</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code> embeds a complete Lark grammar as one element. The nested grammar has its own
+independent namespace: it must define its own <code class="docutils literal notranslate"><span class="pre">start</span></code> rule, and it may declare its own imports,
+<code class="docutils literal notranslate"><span class="pre">%ignore</span></code>, and <code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code> without affecting the outer grammar. Rule names may be reused
+across the boundary.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    start: &quot;[&quot; %lark {</span>
+<span class="sd">      %import common.WS</span>
+<span class="sd">      %ignore WS</span>
+<span class="sd">      start: item &quot;:&quot; %json {&quot;type&quot;: &quot;integer&quot;}</span>
+<span class="sd">      item: &quot;x&quot; | &quot;(&quot; item &quot;)&quot;</span>
+<span class="sd">    } &quot;]&quot;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Multiple <code class="docutils literal notranslate"><span class="pre">%lark</span></code> blocks may appear in the same rule. Nested grammars may use every feature of the
+top-level grammar, including further nesting and <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code> references.</p>
+</section>
+<section id="special-tokens">
+<h2>Special Tokens<a class="headerlink" href="#special-tokens" title="Permalink to this heading">¶</a></h2>
+<p>Special-token elements match exactly one token from the model’s vocabulary, rather than text.
+They may only be used in rules, not in terminals.</p>
+<p><strong>Numeric token sets</strong> reference tokens by ID and do not require tokenizer metadata (except for
+the wildcard):</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &lt;[128010]&gt;            // exactly token 128010
+start: &lt;[128000-128255]&gt;     // one token in the inclusive range
+start: &lt;[1,3-8,10]&gt;          // union of IDs and ranges (duplicates are merged)
+start: &lt;[^1,3-8]&gt;            // any token NOT in the set
+start: &lt;[*]&gt;                 // any token (requires tokenizer_info)
+</pre></div>
+</div>
+<p>A range whose endpoints differ by more than 1,000,000 is rejected, as is the negated wildcard
+<code class="docutils literal notranslate"><span class="pre">&lt;[^*]&gt;</span></code>.</p>
+<p><strong>Named special tokens</strong> are resolved against the tokenizer’s decoded vocabulary by exact string
+match and therefore require <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="p">([</span><span class="s2">&quot;a&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;|tool|&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span><span class="p">])</span>
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span><span class="s2">&quot;start: &lt;|tool|&gt;&quot;</span><span class="p">,</span> <span class="n">tokenizer_info</span><span class="o">=</span><span class="n">tokenizer_info</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The reference matches every vocabulary entry whose decoded text equals the written form,
+including the angle brackets. A name that matches no vocabulary entry is an error.</p>
+</section>
+<section id="named-grammars">
+<h2>Named Grammars<a class="headerlink" href="#named-grammars" title="Permalink to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">named_grammars</span></code> passes external grammars into the Lark source, referenced with <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code>.
+Dictionary keys do not include the leading <code class="docutils literal notranslate"><span class="pre">&#64;</span></code>; values are either <code class="docutils literal notranslate"><span class="pre">Grammar</span></code> objects or Lark
+source strings.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">arguments</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_json_schema</span><span class="p">(</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;city&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+        <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;city&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;additionalProperties&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+    <span class="s1">&#39;start: &quot;&lt;tool_call&gt;&quot; @arguments &quot;&lt;/tool_call&gt;&quot; &quot;:&quot; @status&#39;</span><span class="p">,</span>
+    <span class="n">named_grammars</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="n">arguments</span><span class="p">,</span>
+        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s1">&#39;start: &quot;ok&quot; | &quot;cancelled&quot;&#39;</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Names may contain letters, digits, underscores, and hyphens, and must be unique.</p></li>
+<li><p>String values are complete Lark grammars with their own <code class="docutils literal notranslate"><span class="pre">start</span></code> rule, their own terminals, and
+their own <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> declarations. They may reference other entries of the same mapping with
+<code class="docutils literal notranslate"><span class="pre">&#64;name</span></code>; circular references are reported as errors with the reference chain.</p></li>
+<li><p>The same named grammar may be referenced multiple times and from inside nested <code class="docutils literal notranslate"><span class="pre">%lark</span></code> blocks.
+Each named grammar is compiled once and shared.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;name</span></code> references may only appear in rules, not in terminals.</p></li>
+</ul>
+</section>
+<section id="dynamic-tool-call-dispatch">
+<h2>Dynamic Tool-Call Dispatch<a class="headerlink" href="#dynamic-tool-call-dispatch" title="Permalink to this heading">¶</a></h2>
+<p>A common pattern for tool calling lets the model produce free text until a trigger string (such
+as <code class="docutils literal notranslate"><span class="pre">&lt;tool_call&gt;</span></code>) appears, then switches to a strict argument grammar, and returns to free text
+after the call completes. XGrammar recognizes this pattern and compiles it into an efficient
+token-level dispatch structure:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    start: tool* tail</span>
+<span class="sd">    tail: TEXT</span>
+
+<span class="sd">    tool_head[lazy]: TEXT &quot;&lt;tool_call&gt;&quot;</span>
+<span class="sd">    tool: tool_head %json {</span>
+<span class="sd">      &quot;type&quot;: &quot;object&quot;,</span>
+<span class="sd">      &quot;properties&quot;: {&quot;x&quot;: {&quot;type&quot;: &quot;integer&quot;}},</span>
+<span class="sd">      &quot;required&quot;: [&quot;x&quot;],</span>
+<span class="sd">      &quot;additionalProperties&quot;: false</span>
+<span class="sd">    } &quot;&lt;/tool_call&gt;&quot;</span>
+
+<span class="sd">    TEXT: /(\n|.)*/</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>This accepts plain text with no tool call, one tool call, or several tool calls separated by free
+text. A partial trigger (for example a final <code class="docutils literal notranslate"><span class="pre">&lt;tool_cal</span></code>) still counts as free text. Once the
+complete trigger has been produced, the payload and the end tag become mandatory.</p>
+<section id="the-recognized-pattern">
+<h3>The Recognized Pattern<a class="headerlink" href="#the-recognized-pattern" title="Permalink to this heading">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">start</span></code> rule must have the shape</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: tool* tail            // or: start: (tool_a | tool_b | ...)* tail
+tail: TEXT
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">TEXT</span></code> is an <strong>any-text terminal</strong>: a terminal whose body is one of the regexes
+<code class="docutils literal notranslate"><span class="pre">/(.|\n)*/</span></code>, <code class="docutils literal notranslate"><span class="pre">/(\n|.)*/</span></code>, <code class="docutils literal notranslate"><span class="pre">/(?:.|\n)*/</span></code>, <code class="docutils literal notranslate"><span class="pre">/(?:\n|.)*/</span></code>, <code class="docutils literal notranslate"><span class="pre">/[\s\S]*/</span></code>, <code class="docutils literal notranslate"><span class="pre">/(?s:.*)/</span></code>, or <code class="docutils literal notranslate"><span class="pre">/.*/s</span></code>
+(possibly through another terminal name).</p>
+<p>Each tool rule starts with a trigger and continues with an ordinary grammar for the payload. The
+trigger is written in one of these equivalent head forms:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>head[lazy]: TEXT &quot;&lt;tool&gt;&quot;          // any text, then a fixed trigger string
+head[lazy]: TEXT &lt;|tool_token|&gt;    // any text, then a special token (requires tokenizer_info)
+head[lazy]: /(\n|.)*&lt;tool&gt;/        // the same trigger written as a regex suffix
+head[suffix=&quot;&lt;tool&gt;&quot;]: TEXT        // the same trigger written as a suffix attribute
+tool: TEXT &lt;|tool_token|&gt; ...      // token trigger written inline, without a head rule
+</pre></div>
+</div>
+<p>For the regex-suffix form, the pattern must be one of the any-text regexes followed by a fixed
+literal (escapes such as <code class="docutils literal notranslate"><span class="pre">\n</span></code> or <code class="docutils literal notranslate"><span class="pre">\.</span></code> are allowed; alternation, repetition, and other variable
+constructs are not).</p>
+</section>
+<section id="multiple-tools">
+<h3>Multiple Tools<a class="headerlink" href="#multiple-tools" title="Permalink to this heading">¶</a></h3>
+<p>Different tools may use different triggers, or share one trigger and differentiate on the text
+that follows:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    start: (foo | bar)* tail</span>
+<span class="sd">    tail: TEXT</span>
+
+<span class="sd">    foo_head[lazy]: TEXT &quot;&lt;function&quot;</span>
+<span class="sd">    foo: foo_head &quot;=foo&gt;&quot; /[a-z]+/ &quot;&lt;/function&gt;&quot;</span>
+
+<span class="sd">    bar_head[lazy]: TEXT &quot;&lt;function&quot;</span>
+<span class="sd">    bar: bar_head &quot;=bar&gt;&quot; /[0-9]+/ &quot;&lt;/function&gt;&quot;</span>
+
+<span class="sd">    TEXT: /(\n|.)*/</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>After <code class="docutils literal notranslate"><span class="pre">&lt;function</span></code> is produced, the output must continue with <code class="docutils literal notranslate"><span class="pre">=foo&gt;</span></code> or <code class="docutils literal notranslate"><span class="pre">=bar&gt;</span></code> and the matching
+payload. All triggers within one grammar must be at the same level: either all trigger strings or
+all special tokens. Negated token sets cannot be used as triggers.</p>
+</section>
+<section id="standalone-lazy-rules">
+<h3>Standalone Lazy Rules<a class="headerlink" href="#standalone-lazy-rules" title="Permalink to this heading">¶</a></h3>
+<p>Outside of the dispatch pattern, a lazy head of the form <code class="docutils literal notranslate"><span class="pre">head[lazy]:</span> <span class="pre">TEXT</span> <span class="pre">&quot;&lt;end&gt;&quot;</span></code> (or with a
+special-token trigger) may also be used on its own:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: head
+head[lazy]: TEXT &quot;&lt;end&gt;&quot;
+TEXT: /(\n|.)*/
+</pre></div>
+</div>
+<p>This matches arbitrary text and completes as soon as the trigger appears; nothing may follow the
+trigger. Text that never produces the trigger is also accepted. The regex-suffix and
+<code class="docutils literal notranslate"><span class="pre">suffix=&quot;...&quot;</span></code> head forms are only accepted inside the full dispatch pattern, and general lazy
+rules over other bodies (for example <code class="docutils literal notranslate"><span class="pre">value[lazy]:</span> <span class="pre">/[a-z]+/</span></code>) are rejected.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="javascript_api.html" class="btn btn-neutral float-right" title="JavaScript API" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="serialization.html" class="btn btn-neutral float-left" title="Serialization" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+
+<div id="button" class="backtop"><img src="../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>
