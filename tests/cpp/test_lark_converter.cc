@@ -144,9 +144,14 @@ TEST(LarkConverterTest, ErrorsContainSourceLocations) {
       "circular reference in terminal"
   );
   XGRAMMAR_EXPECT_THROW(
-      Grammar::FromLark("start[capture]: \"a\""),
+      Grammar::FromLark("start[budget=10]: \"a\""),
       XGrammarError,
-      "attribute 'capture' is not supported"
+      "attribute 'budget' is not supported"
+  );
+  XGRAMMAR_EXPECT_THROW(
+      Grammar::FromLark("start[capture=\"a b\"]: \"a\""),
+      XGrammarError,
+      "capture name must only contain letters, digits"
   );
   XGRAMMAR_EXPECT_THROW(
       Grammar::FromLark("start: A & B\nA: \"a\"\nB: \"b\""),

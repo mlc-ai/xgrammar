@@ -522,6 +522,8 @@ struct Definition {
   Location suffix_location;
   std::optional<int32_t> max_tokens;
   Location max_tokens_location;
+  std::optional<std::string> capture_name;
+  Location capture_location;
   Node body;
   Location location;
 };
@@ -709,6 +711,41 @@ class LarkParser {
         }
         definition->max_tokens = value;
         definition->max_tokens_location = key.location;
+      } else if (key.text == "capture") {
+        std::string capture_name;
+        Location capture_location = key.location;
+        if (Match(TokenType::kEquals)) {
+          Token name_token = Consume(TokenType::kString, "expected string literal after capture=");
+          Node name_node = ParseStringNode(name_token);
+          if (!name_node.flags.empty()) {
+            RaiseLarkError(
+                source_, name_node.location, "case-insensitive flags are not supported on capture"
+            );
+          }
+          capture_name = std::move(name_node.text);
+          capture_location = name_node.location;
+        } else {
+          capture_name = definition->name;
+        }
+        if (capture_name.empty()) {
+          RaiseLarkError(source_, capture_location, "capture name must not be empty");
+        }
+        for (char c : capture_name) {
+          bool valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                       c == '_' || c == '-' || c == '.';
+          if (!valid) {
+            RaiseLarkError(
+                source_,
+                capture_location,
+                "capture name must only contain letters, digits, '_', '-' and '.'"
+            );
+          }
+        }
+        if (definition->capture_name.has_value()) {
+          RaiseLarkError(source_, key.location, "capture attribute is specified more than once");
+        }
+        definition->capture_name = std::move(capture_name);
+        definition->capture_location = capture_location;
       } else if (key.text == "suffix") {
         Consume(TokenType::kEquals, "expected '=' after suffix attribute");
         Token suffix_token = Consume(TokenType::kString, "expected string literal after suffix=");
@@ -1223,6 +1260,13 @@ class LarkCompiler {
               "max_tokens is not supported on rules consumed by dynamic dispatch"
           );
         }
+        if (definition.capture_name.has_value()) {
+          RaiseLarkError(
+              source_,
+              definition.capture_location,
+              "capture is not supported on rules consumed by dynamic dispatch"
+          );
+        }
         builder_.UpdateRuleBody(rule_ids_.at(definition.name), builder_.AddEmptyStr());
         continue;
       }
@@ -1255,6 +1299,9 @@ class LarkCompiler {
         body_expr_id = CompileNode(definition.body, definition.name, false);
       }
       builder_.UpdateRuleBody(rule_ids_.at(definition.name), body_expr_id);
+      if (definition.capture_name.has_value()) {
+        builder_.UpdateCaptureName(rule_ids_.at(definition.name), definition.capture_name.value());
+      }
     }
 
     auto start_it = rule_ids_.find("start");

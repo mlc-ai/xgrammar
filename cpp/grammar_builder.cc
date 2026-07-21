@@ -281,6 +281,18 @@ void GrammarBuilder::UpdateMaxTokens(std::string rule_name, int32_t max_tokens) 
   UpdateMaxTokens(rule_id, max_tokens);
 }
 
+void GrammarBuilder::UpdateCaptureName(int32_t rule_id, const std::string& capture_name) {
+  XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  grammar_->rules_[rule_id].capture_name = capture_name;
+}
+
+void GrammarBuilder::UpdateCaptureName(std::string rule_name, const std::string& capture_name) {
+  int32_t rule_id = GetRuleId(rule_name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
+  UpdateCaptureName(rule_id, capture_name);
+}
+
 std::string GrammarBuilder::GetNewRuleName(const std::string& name_hint) {
   if (rule_name_to_id_.count(name_hint) == 0) {
     return name_hint;

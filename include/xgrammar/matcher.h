@@ -150,6 +150,24 @@ class GrammarMatcher {
   void Rollback(int num_tokens = 1);
 
   /*!
+   * \brief Get the capture groups recorded so far, ordered by completion position.
+   * \param deduplicate The Earley parser explores parse hypotheses in parallel, so one
+   * occurrence of a captured rule may complete at several candidate end positions (e.g. a
+   * /[0-9]+/ body completes after every digit). If true (default), only the last (longest)
+   * completion of each occurrence is kept. Distinct occurrences — repeated matches of the same
+   * rule at different positions — are always kept. If false, the raw completion events are
+   * returned.
+   * \return A list of (capture_name, matched_bytes) pairs. Rules gain a capture name via the
+   * Lark attribute rule[capture] / rule[capture="name"] or the EBNF form rule[capture="name"]
+   * ::= ... The bytes are the input span that the rule matched.
+   * \note Captures are recorded when a rule is completed during AcceptToken / AcceptString, and
+   * are rolled back together with Rollback. Mask computation never records captures. Completions
+   * on parse paths that are later abandoned may still be recorded; for unambiguous grammars
+   * whose captured rules have unambiguous boundaries, the deduplicated result is exact.
+   */
+  std::vector<std::pair<std::string, std::string>> GetCaptures(bool deduplicate = true) const;
+
+  /*!
    * \brief Check if the matcher has accepted the stop token and terminated.
    * \sa AcceptToken
    */

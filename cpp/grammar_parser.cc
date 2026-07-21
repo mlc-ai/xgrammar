@@ -142,9 +142,11 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
     };
   }
 
-  // A rule definition may carry a token-budget attribute: name[max_tokens=N] ::= ... The
-  // bracket group is treated as an attribute only when followed by "::="; otherwise it is left
-  // to be lexed as a character class.
+  // A rule definition may carry an attribute block before ::=, e.g.
+  // name[max_tokens=10] ::= ..., name[capture] ::= ..., name[capture="x"] ::= ..., or a
+  // comma-separated combination: name[max_tokens=10, capture="x"] ::= ... The bracket group is
+  // treated as an attribute block only when it is followed by "::="; otherwise it is left to be
+  // lexed as a character class.
   if (*cur_ == '[') {
     int delta = 1;
     auto skip_space = [&]() {
@@ -152,59 +154,111 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
         ++delta;
       }
     };
-    skip_space();
-    constexpr const char kKeyword[] = "max_tokens";
-    bool matched = true;
-    for (int i = 0; kKeyword[i] != '\0'; ++i) {
-      if (Peek(delta + i) != kKeyword[i]) {
-        matched = false;
-        break;
-      }
-    }
-    if (matched) {
-      delta += 10;
-      skip_space();
-      int64_t value = -1;
-      if (Peek(delta) == '=') {
-        ++delta;
-        skip_space();
-        value = 0;
-        int digits = 0;
-        while (Peek(delta) >= '0' && Peek(delta) <= '9' && digits < 10) {
-          value = value * 10 + (Peek(delta) - '0');
-          ++delta;
-          ++digits;
+    // Match the keyword at the current position and advance delta past it on success.
+    auto match_keyword = [&](const char* keyword) {
+      int len = 0;
+      while (keyword[len] != '\0') {
+        if (Peek(delta + len) != keyword[len]) {
+          return false;
         }
-        if (digits == 0 || (Peek(delta) >= '0' && Peek(delta) <= '9')) {
+        ++len;
+      }
+      delta += len;
+      return true;
+    };
+    bool matched = true;
+    bool has_max_tokens = false;
+    bool has_capture = false;
+    int64_t max_tokens_value = -1;
+    std::string capture_value;
+    // Parse a comma-separated attribute list. Each attribute may appear at most once.
+    while (matched) {
+      skip_space();
+      if (!has_max_tokens && match_keyword("max_tokens")) {
+        has_max_tokens = true;
+        skip_space();
+        if (Peek(delta) == '=') {
+          ++delta;
+          skip_space();
+          max_tokens_value = 0;
+          int digits = 0;
+          while (Peek(delta) >= '0' && Peek(delta) <= '9' && digits < 10) {
+            max_tokens_value = max_tokens_value * 10 + (Peek(delta) - '0');
+            ++delta;
+            ++digits;
+          }
+          if (digits == 0 || (Peek(delta) >= '0' && Peek(delta) <= '9')) {
+            matched = false;
+          }
+        } else {
           matched = false;
+        }
+      } else if (!has_capture && match_keyword("capture")) {
+        has_capture = true;
+        skip_space();
+        if (Peek(delta) == '=') {
+          ++delta;
+          skip_space();
+          if (Peek(delta) != '"') {
+            matched = false;
+          } else {
+            ++delta;
+            while (matched && Peek(delta) != '"') {
+              char c = Peek(delta);
+              if (c == '\0' || c == '\n' || c == '\r' || c == '\\') {
+                matched = false;
+                break;
+              }
+              capture_value.push_back(c);
+              ++delta;
+            }
+            if (matched) {
+              ++delta;
+            }
+          }
+        } else {
+          capture_value = identifier;
         }
       } else {
         matched = false;
       }
-      if (matched) {
-        skip_space();
-        if (Peek(delta) == ']') {
-          ++delta;
-        } else {
-          matched = false;
-        }
+      if (!matched) {
+        break;
       }
-      if (matched) {
-        int after_bracket = delta;
-        while (Peek(after_bracket) == ' ' || Peek(after_bracket) == '\t') {
-          ++after_bracket;
-        }
-        if (!(Peek(after_bracket) == ':' && Peek(after_bracket + 1) == ':' &&
-              Peek(after_bracket + 2) == '=')) {
-          matched = false;
-        }
+      skip_space();
+      if (Peek(delta) == ',') {
+        ++delta;
+        continue;
       }
-      if (matched) {
-        Consume(delta);
-        Token token{TokenType::Identifier, identifier, identifier, start_line, start_column};
-        token.max_tokens = static_cast<int32_t>(value);
-        return token;
+      break;
+    }
+    if (matched) {
+      skip_space();
+      if (Peek(delta) == ']') {
+        ++delta;
+      } else {
+        matched = false;
       }
+    }
+    if (matched) {
+      int after_bracket = delta;
+      while (Peek(after_bracket) == ' ' || Peek(after_bracket) == '\t') {
+        ++after_bracket;
+      }
+      if (!(Peek(after_bracket) == ':' && Peek(after_bracket + 1) == ':' &&
+            Peek(after_bracket + 2) == '=')) {
+        matched = false;
+      }
+    }
+    if (matched) {
+      if (has_capture && capture_value.empty()) {
+        ReportLexerError("The capture name must not be empty", start_line, start_column);
+      }
+      Consume(delta);
+      Token token{TokenType::Identifier, identifier, identifier, start_line, start_column};
+      token.max_tokens = static_cast<int32_t>(max_tokens_value);
+      token.capture_name = capture_value;
+      return token;
     }
   }
 
@@ -1254,6 +1308,7 @@ EBNFParser::Rule EBNFParser::ParseRule() {
   }
   cur_rule_name_ = std::any_cast<std::string>(Peek().value);
   int32_t max_tokens = Peek().max_tokens;
+  std::string capture_name = Peek().capture_name;
   Consume();
 
   PeekAndConsume(TokenType::Assign, "Expect ::=");
@@ -1267,6 +1322,7 @@ EBNFParser::Rule EBNFParser::ParseRule() {
 
   Rule rule{cur_rule_name_, body_id, lookahead_id};
   rule.max_tokens = max_tokens;
+  rule.capture_name = capture_name;
   return rule;
 }
 
@@ -1307,6 +1363,7 @@ Grammar EBNFParser::Parse(
     builder_.UpdateRuleBody(new_rule.name, new_rule.body_expr_id);
     builder_.UpdateLookaheadAssertion(new_rule.name, new_rule.lookahead_assertion_id);
     builder_.UpdateMaxTokens(new_rule.name, new_rule.max_tokens);
+    builder_.UpdateCaptureName(new_rule.name, new_rule.capture_name);
   }
 
   return builder_.Get(root_rule_name);

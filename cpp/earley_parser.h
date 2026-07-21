@@ -240,6 +240,19 @@ class RepeatDetector {
   void Clear();
 };
 
+/*!
+ * \brief A completion event of a captured rule, recorded when the rule is completed during
+ * parsing. The matched span is [start_pos, r) in input positions, where r is the position (i.e.
+ * the history row) at which the event is recorded.
+ */
+struct CaptureEvent {
+  /*! \brief The id of the completed rule. */
+  int32_t rule_id;
+  /*! \brief The position where the rule started matching. kNoPrevInputPos means position 0 (the
+   * rule acts as the root). */
+  int32_t start_pos;
+};
+
 class EarleyParser {
   /*!
    * \brief Here is an article about Earley Parser.
@@ -317,6 +330,35 @@ class EarleyParser {
     }
     int32_t deadline = current_token_index_ + own;
     return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
+  }
+
+  /*! \brief Whether any rule of the grammar has a capture name. Fixed at construction. When
+   * false, the capture machinery is fully disabled and has no overhead. */
+  bool capture_tracking_ = false;
+
+  /*!
+   * \brief Whether capture events are currently recorded in Complete(). Only enabled during
+   * definitive advances (accepting a token or string), not during speculative exploration
+   * (mask computation, jump-forward search, lookahead checks), so that speculative completions
+   * never produce capture events.
+   */
+  bool capture_recording_ = false;
+
+  /*!
+   * \brief The history of capture events. capture_event_history_[i] stores the events recorded
+   * when input position i was created. Kept aligned with scanable_state_history_ row-by-row
+   * whenever capture_tracking_ is true, so PopLastStates rolls back events automatically.
+   */
+  Compact2DArray<CaptureEvent> capture_event_history_;
+
+  /*! \brief Returns true if the rule exists and has a capture name. */
+  bool RuleHasCapture(int32_t rule_id) const {
+    return capture_tracking_ && rule_id >= 0 && !grammar_->GetRule(rule_id).capture_name.empty();
+  }
+
+  /*! \brief Record a capture event for a completed captured rule in the current row. */
+  void RecordCaptureEvent(const ParserState& state) {
+    capture_event_history_.PushBackInLatestRow({state.rule_id, state.rule_start_pos});
   }
 
   /*!
@@ -527,7 +569,33 @@ class EarleyParser {
     rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
     is_completed_.push_back(is_completed_.back());
     scanable_state_history_.PushBack(&state, 1);
+    if (capture_tracking_) {
+      capture_event_history_.PushBack(std::vector<CaptureEvent>());
+    }
     return;
+  }
+
+  /*! \brief Whether the grammar has any captured rule. */
+  bool IsCaptureTrackingEnabled() const { return capture_tracking_; }
+
+  /*! \brief Copy the capture events of the latest input position. */
+  std::vector<CaptureEvent> CopyLastCaptureRow() const {
+    if (!capture_tracking_) {
+      return {};
+    }
+    auto row = capture_event_history_[capture_event_history_.size() - 1];
+    return std::vector<CaptureEvent>(row.begin(), row.end());
+  }
+
+  /*!
+   * \brief Push a new row of capture events. Used when a new input position is created outside
+   * of Advance / AdvanceAtomicToken (e.g. when merging parallel advance results), to keep the
+   * capture history aligned with the state history.
+   */
+  void PushCaptureRow(const std::vector<CaptureEvent>& events) {
+    if (capture_tracking_) {
+      capture_event_history_.PushBack(events);
+    }
   }
 
   std::string PrintStates() const {

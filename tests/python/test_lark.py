@@ -855,10 +855,25 @@ def test_lark_large_choice_grammar() -> None:
             id="terminal-references-rule",
         ),
         pytest.param(
-            'start[capture]: "a"', "attribute 'capture' is not supported", id="capture-attribute"
+            'start[budget=10]: "a"',
+            "attribute 'budget' is not supported",
+            id="unknown-attribute",
         ),
         pytest.param(
             'start[stop="x"]: "a"', "attribute 'stop' is not supported", id="stop-attribute"
+        ),
+        pytest.param(
+            'start[capture=""]: "a"', "capture name must not be empty", id="empty-capture-name"
+        ),
+        pytest.param(
+            'start[capture="a b"]: "a"',
+            "capture name must only contain letters, digits",
+            id="invalid-capture-name",
+        ),
+        pytest.param(
+            'start[capture, capture]: "a"',
+            "capture attribute is specified more than once",
+            id="duplicate-capture-attribute",
         ),
         pytest.param(
             "TOKEN[lazy]: /a/\nstart: TOKEN",
@@ -1396,3 +1411,164 @@ def test_lark_max_tokens_works_without_tokenizer_info() -> None:
     assert matcher.accept_token(0) and matcher.accept_token(0)
     assert _allowed_token_ids(matcher, tokenizer_info) == [1]
     assert matcher.accept_token(1) and matcher.is_terminated()
+
+
+def _get_captures(
+    grammar: str, value: str, tokenizer_info: Optional[xgr.TokenizerInfo] = None
+) -> list:
+    compiled = _compile_lark(grammar, tokenizer_info)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string(value)
+    return matcher.get_captures()
+
+
+def test_lark_capture_simple() -> None:
+    assert _get_captures('start: "a" v "b"\nv[capture]: /[0-9]+/', "a123b") == [("v", b"123")]
+
+
+def test_lark_capture_named_and_nested() -> None:
+    grammar = 'start: outer\nouter[capture="o"]: "x" inner "!"\ninner[capture="i"]: /[a-z]+/'
+    assert _get_captures(grammar, "xabc!") == [("i", b"abc"), ("o", b"xabc!")]
+
+
+def test_lark_capture_repeated_occurrences() -> None:
+    grammar = 'start: (item ",")* item\nitem[capture]: /[0-9]+/'
+    assert _get_captures(grammar, "1,22,333") == [("item", b"1"), ("item", b"22"), ("item", b"333")]
+
+
+def test_lark_capture_right_recursion() -> None:
+    # The right-recursion optimization elides parent completions; it must be disabled for
+    # captured rules so that every recursion level still records its span.
+    grammar = 'start: lst\nlst[capture]: ITEM "," lst | ITEM\nITEM: /[0-9]+/'
+    assert _get_captures(grammar, "1,2,3") == [("lst", b"3"), ("lst", b"2,3"), ("lst", b"1,2,3")]
+
+
+def test_lark_capture_on_root_rule() -> None:
+    assert _get_captures('start[capture="all"]: "a" /[0-9]+/ "b"', "a12b") == [("all", b"a12b")]
+
+
+def test_lark_capture_raw_events_and_coalescing() -> None:
+    compiled = _compile_lark('start: "a" v "b"\nv[capture]: /[0-9]+/')
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string("a123b")
+    # The /[0-9]+/ body completes after every digit; deduplication keeps the longest
+    # completion of the occurrence, the raw event list keeps all of them.
+    assert matcher.get_captures() == [("v", b"123")]
+    assert matcher.get_captures(deduplicate=False) == [("v", b"1"), ("v", b"12"), ("v", b"123")]
+
+
+def test_lark_capture_dynamic_tool_call() -> None:
+    grammar = r"""
+        start: tool* tail
+        tail: TEXT
+
+        tool_head[lazy]: TEXT "<tool_call>"
+        tool: tool_head arg "</tool_call>"
+        arg[capture]: /[0-9]+/
+
+        TEXT: /(\n|.)*/
+    """
+    value = "before<tool_call>42</tool_call>mid<tool_call>7</tool_call>after"
+    assert _get_captures(grammar, value) == [("arg", b"42"), ("arg", b"7")]
+
+
+def test_lark_capture_special_token_atomic_path() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["a", "<|tool|>", "b", "</s>"], stop_token_ids=[3])
+    compiled = _compile_lark('start: wrap\nwrap[capture]: "a" <|tool|> "b"', tokenizer_info)
+    matcher = xgr.GrammarMatcher(compiled)
+    for token_id in [0, 1, 2]:
+        assert matcher.accept_token(token_id)
+    assert matcher.get_captures() == [("wrap", b"a<|tool|>b")]
+    # Rollback across the atomic special-token row and re-accept.
+    matcher.rollback(2)
+    assert matcher.get_captures() == []
+    for token_id in [1, 2]:
+        assert matcher.accept_token(token_id)
+    assert matcher.get_captures() == [("wrap", b"a<|tool|>b")]
+
+
+def test_lark_capture_rollback_and_reaccept() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["a", "1", "2", "b", "</s>"], stop_token_ids=[4])
+    compiled = _compile_lark('start: "a" v "b"\nv[capture]: /[0-9]+/', tokenizer_info)
+    matcher = xgr.GrammarMatcher(compiled)
+    for token_id in [0, 1, 3]:
+        assert matcher.accept_token(token_id)
+    assert matcher.get_captures() == [("v", b"1")]
+    matcher.rollback(2)
+    for token_id in [2, 3]:
+        assert matcher.accept_token(token_id)
+    assert matcher.get_captures() == [("v", b"2")]
+
+
+def test_lark_capture_mask_computation_records_nothing() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["a", "1", "b", "</s>"], stop_token_ids=[3])
+    compiled = _compile_lark('start: "a" v "b"\nv[capture]: /[0-9]+/', tokenizer_info)
+    matcher = xgr.GrammarMatcher(compiled)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.accept_token(0)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert matcher.get_captures(deduplicate=False) == []
+    assert matcher.accept_token(1)
+    matcher.fill_next_token_bitmask(bitmask)
+    before = matcher.get_captures(deduplicate=False)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert matcher.get_captures(deduplicate=False) == before
+    assert matcher.accept_token(2)
+    assert matcher.get_captures() == [("v", b"1")]
+
+
+def test_lark_capture_reset_and_fork() -> None:
+    compiled = _compile_lark('start: "a" v "b"\nv[capture]: /[0-9]+/')
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string("a5b")
+    forked = matcher.fork()
+    assert forked.get_captures() == [("v", b"5")]
+    matcher.reset()
+    assert matcher.get_captures() == []
+    assert matcher.accept_string("a6b")
+    assert matcher.get_captures() == [("v", b"6")]
+    assert forked.get_captures() == [("v", b"5")]
+
+
+def test_lark_capture_survives_ebnf_round_trip_and_cache() -> None:
+    grammar = xgr.Grammar.from_lark('start: "a" v "b"\nv[capture="num"]: /[0-9]+/')
+    ebnf = str(grammar)
+    assert 'v[capture="num"] ::=' in ebnf
+
+    tokenizer_info = xgr.TokenizerInfo([])
+    reparsed = xgr.Grammar.from_ebnf(ebnf)
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(reparsed)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string("a77b")
+    assert matcher.get_captures() == [("num", b"77")]
+
+    # The cached compile path re-parses the grammar from its ToString() form.
+    cached_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=True)
+    compiled_cached = cached_compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_cached, terminate_without_stop_token=True)
+    assert matcher.accept_string("a88b")
+    assert matcher.get_captures() == [("num", b"88")]
+
+
+def test_lark_capture_serialization_round_trip() -> None:
+    grammar = xgr.Grammar.from_lark('start: "a" v "b"\nv[capture="num"]: /[0-9]+/')
+    deserialized = xgr.Grammar.deserialize_json(grammar.serialize_json())
+    assert 'v[capture="num"] ::=' in str(deserialized)
+
+
+def test_lark_capture_on_dispatch_consumed_rule_is_rejected() -> None:
+    grammar = r"""
+        start: tool* tail
+        tail: TEXT
+        tool_head[lazy]: TEXT "<t>"
+        tool[capture]: tool_head /[0-9]+/ "</t>"
+        TEXT: /(\n|.)*/
+    """
+    _assert_lark_error(grammar, "capture is not supported on rules consumed by dynamic dispatch")
+
+
+def test_lark_capture_no_capture_grammar_returns_empty() -> None:
+    compiled = _compile_lark('start: "ab"')
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string("ab")
+    assert matcher.get_captures() == []

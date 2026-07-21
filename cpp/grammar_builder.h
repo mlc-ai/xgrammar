@@ -209,6 +209,18 @@ class GrammarBuilder {
   void UpdateMaxTokens(std::string rule_name, int32_t max_tokens);
 
   /*!
+   * \brief Update the capture group name of the rule referred by the given rule_id. An empty
+   * string means no capture.
+   */
+  void UpdateCaptureName(int32_t rule_id, const std::string& capture_name);
+
+  /*!
+   * \brief Update the capture group name of the rule referred by the given name. An empty string
+   * means no capture.
+   */
+  void UpdateCaptureName(std::string rule_name, const std::string& capture_name);
+
+  /*!
    * \brief Find a name for a new rule starting with the given name hint. Some integer suffix (_1,
    * _2, ...) may be added to avoid name conflict.
    */

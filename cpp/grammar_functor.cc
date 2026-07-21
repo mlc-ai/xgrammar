@@ -70,6 +70,7 @@ class SubGrammarAdderImpl : public GrammarMutator {
       auto new_lookahead_assertion_id = VisitLookaheadAssertion(rule.lookahead_assertion_id);
       builder_->UpdateLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
       builder_->UpdateMaxTokens(new_rule_ids_names[i].first, rule.max_tokens);
+      builder_->UpdateCaptureName(new_rule_ids_names[i].first, rule.capture_name);
     }
     return new_rule_ids_names[base_grammar_->GetRootRuleId()].first;
   }
@@ -275,6 +276,7 @@ class StructureNormalizerImpl : public GrammarMutator {
       builder_->UpdateRuleBody(i, new_body_expr_id);
       builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       builder_->UpdateMaxTokens(i, rule.max_tokens);
+      builder_->UpdateCaptureName(i, rule.capture_name);
     }
     return builder_->Get(base_grammar_->GetRootRule().name);
   }
@@ -619,8 +621,10 @@ class RuleInlinerImpl : public GrammarMutator {
    */
   bool CheckIfRuleCanBeInlined(int32_t rule_id) {
     auto rule = base_grammar_->GetRule(rule_id);
-    // Inlining a budgeted rule would erase the rule its token budget applies to.
-    if (rule.max_tokens >= 0) {
+    // Inlining a budgeted rule would erase the rule its token budget applies to. Inlining a
+    // captured rule would eliminate its completion events, so its capture would never be
+    // recorded.
+    if (rule.max_tokens >= 0 || !rule.capture_name.empty()) {
       return false;
     }
     auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
@@ -725,6 +729,7 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
           rule_id_map_[rule_id], VisitLookaheadAssertion(rule.lookahead_assertion_id)
       );
       builder_->UpdateMaxTokens(rule_id_map_[rule_id], rule.max_tokens);
+      builder_->UpdateCaptureName(rule_id_map_[rule_id], rule.capture_name);
     }
     XGRAMMAR_CHECK(rule_id_map_.count(grammar->GetRootRuleId()) > 0);
     return builder_->Get(rule_id_map_[grammar->GetRootRuleId()]);

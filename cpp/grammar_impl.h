@@ -84,6 +84,10 @@ class Grammar::Impl {
      * occurrence of this rule to at most max_tokens LLM tokens, forcing it to end at the
      * earliest possible position once the budget is exhausted. -1 means no budget. */
     int32_t max_tokens = -1;
+    /*! \brief The capture group name of the rule. When non-empty, the matcher records the input
+     * span matched by this rule on every completion, retrievable via GrammarMatcher::GetCaptures.
+     * Empty means no capture. */
+    std::string capture_name = {};
   };
 
   /*! \brief Get the number of rules. */
@@ -358,7 +362,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::Rule::body_expr_id,
     &Grammar::Impl::Rule::lookahead_assertion_id,
     &Grammar::Impl::Rule::is_exact_lookahead,
-    &Grammar::Impl::Rule::max_tokens
+    &Grammar::Impl::Rule::max_tokens,
+    &Grammar::Impl::Rule::capture_name
 );
 
 XGRAMMAR_MEMBER_TABLE(

@@ -26,7 +26,7 @@ std::size_t MemorySize(const Grammar::Impl& impl) {
   /// TODO: Now, we evaluatve memory size of rule strings as sizeof(std::string),
   /// with an assumption that the string is small.
   /// This should be improved in the future.
-  return impl.rules_.size() * sizeof(std::string) + MemorySize(impl.grammar_expr_data_) +
+  return impl.rules_.size() * sizeof(Grammar::Impl::Rule) + MemorySize(impl.grammar_expr_data_) +
          MemorySize(impl.grammar_expr_indptr_) + MemorySize(impl.complete_fsm) +
          MemorySize(impl.per_rule_fsms) + MemorySize(impl.allow_empty_rule_ids);
 }
