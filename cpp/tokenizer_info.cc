@@ -282,7 +282,12 @@ TokenizerInfo::Impl::Impl(
         (stop_token_ids &&
          std::find(stop_token_ids->begin(), stop_token_ids->end(), i) != stop_token_ids->end())) {
       stop_token_ids_.push_back(i);
-    } else if (IsSpecialToken(token)) {
+    }
+    // A stop token is kept in the matchable vocabulary as well: it may be a terminal that the
+    // grammar must consume (e.g. harmony's <|return|>, which closes the final-message tag).
+    // Whether a stop token may actually be emitted at a given position is decided by the matcher,
+    // which is the only layer that knows the effective stop token set (override_stop_tokens).
+    if (IsSpecialToken(token)) {
       special_token_ids_.push_back(i);
     } else {
       sorted_decoded_vocab_.push_back({i, token});
