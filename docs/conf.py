@@ -91,7 +91,22 @@ autodoc_pydantic_settings_show_json = False
 
 templates_path = []
 
-redirects = {}
+# Redirects for pages moved in the docs restructure. Keys are old docnames;
+# values are the new locations relative to the old page.
+redirects = {
+    "tutorials/constrained_decoding": "../start/constrained_decoding.html",
+    "tutorials/workflow_of_xgrammar": "../using_xgrammar/workflow_of_xgrammar.html",
+    "tutorials/advanced_topics": "../using_xgrammar/workflow_of_xgrammar.html",
+    "tutorials/engine_integration": "../using_xgrammar/engine_integration.html",
+    "tutorials/json_generation": "../defining_structures/json_generation.html",
+    "tutorials/ebnf_guided_generation": "../defining_structures/ebnf_grammar.html",
+    "xgrammar_features/ebnf_grammar": "../defining_structures/ebnf_grammar.html",
+    "xgrammar_features/runtime_safeguards": "../using_xgrammar/runtime_safeguards.html",
+    "xgrammar_features/serialization": "../using_xgrammar/serialization.html",
+    "xgrammar_features/lark_grammar": "../defining_structures/lark_grammar.html",
+    "xgrammar_features/javascript_api": "../using_xgrammar/javascript_api.html",
+    "structural_tag/structural_tag_api": "structural_tag.html",
+}
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 
