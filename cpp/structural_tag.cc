@@ -1818,7 +1818,7 @@ Grammar StructuralTagGrammarConverter::AddRootRuleAndGetGrammar(int ref_rule_id)
   auto sequence_expr = grammar_builder_.AddSequence({expr});
   auto choices_expr = grammar_builder_.AddChoices({sequence_expr});
   auto root_rule_id = grammar_builder_.AddRuleWithHint("root", choices_expr);
-  return grammar_builder_.Get(root_rule_id);
+  return grammar_builder_.Get(root_rule_id, /*normalize=*/true);
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::Visit(const Format& format) {
@@ -1866,19 +1866,19 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
       format.any_order
   );
   auto sub_grammar = Grammar::FromEBNF(ebnf);
-  auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
+  auto added_root_rule_id = grammar_builder_.AddSubGrammar(sub_grammar);
   return ResultOk(added_root_rule_id);
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const GrammarFormat& format) {
   auto sub_grammar = Grammar::FromEBNF(format.grammar);
-  auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
+  auto added_root_rule_id = grammar_builder_.AddSubGrammar(sub_grammar);
   return ResultOk(added_root_rule_id);
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const RegexFormat& format) {
   auto sub_grammar = Grammar::FromRegex(format.pattern);
-  auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
+  auto added_root_rule_id = grammar_builder_.AddSubGrammar(sub_grammar);
   return ResultOk(added_root_rule_id);
 }
 
@@ -1936,12 +1936,12 @@ int StructuralTagGrammarConverter::BuildBeginExpr(const TagFormat& tag) {
   if (std::holds_alternative<std::string>(tag.begin)) {
     return grammar_builder_.AddByteString(std::get<std::string>(tag.begin));
   }
-  return grammar_builder_.AddTokenSet({std::get<TokenFormat>(tag.begin).resolved_token_id_});
+  return grammar_builder_.AddToken({std::get<TokenFormat>(tag.begin).resolved_token_id_});
 }
 
 int StructuralTagGrammarConverter::BuildEndExpr(const TagFormat& tag) {
   if (std::holds_alternative<TokenFormat>(tag.end)) {
-    return grammar_builder_.AddTokenSet({std::get<TokenFormat>(tag.end).resolved_token_id_});
+    return grammar_builder_.AddToken({std::get<TokenFormat>(tag.end).resolved_token_id_});
   }
   const auto& ends = std::get<std::vector<std::string>>(tag.end);
   if (ends.size() == 1) {
@@ -2225,7 +2225,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const StarFormat& 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TokenFormat& format) {
   XGRAMMAR_DCHECK(format.resolved_token_id_ >= 0)
       << "TokenFormat must be resolved before conversion";
-  auto token_set_expr = grammar_builder_.AddTokenSet({format.resolved_token_id_});
+  auto token_set_expr = grammar_builder_.AddToken({format.resolved_token_id_});
   auto seq = grammar_builder_.AddSequence({token_set_expr});
   auto choices = grammar_builder_.AddChoices({seq});
   return ResultOk(grammar_builder_.AddRuleWithHint("token", choices));
@@ -2236,7 +2236,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ExcludeToken
   for (auto tid : format.detected_end_token_ids_) {
     all_excludes.push_back(tid);
   }
-  int expr = grammar_builder_.AddExcludeTokenSet(all_excludes);
+  int expr = grammar_builder_.AddExcludeToken(all_excludes);
   auto seq = grammar_builder_.AddSequence({expr});
   auto choices = grammar_builder_.AddChoices({seq});
   return ResultOk(grammar_builder_.AddRuleWithHint("exclude_token", choices));
@@ -2247,7 +2247,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTokensFor
   for (auto tid : format.detected_end_token_ids_) {
     all_excludes.push_back(tid);
   }
-  int exclude_expr = grammar_builder_.AddExcludeTokenSet(all_excludes);
+  int exclude_expr = grammar_builder_.AddExcludeToken(all_excludes);
   int exclude_seq = grammar_builder_.AddSequence({exclude_expr});
   int exclude_choices = grammar_builder_.AddChoices({exclude_seq});
   int inner_rule = grammar_builder_.AddRuleWithHint("any_tokens_inner", exclude_choices);
@@ -2430,11 +2430,12 @@ Result<Grammar, StructuralTagError> StructuralTagToGrammar(
     return ResultErr(std::move(err).value());
   }
 
+  // The result grammar is already normalized by the grammar builder.
   auto result = StructuralTagGrammarConverter::Convert(structural_tag);
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
   }
-  return ResultOk(GrammarNormalizer::Apply(std::move(result).Unwrap()));
+  return ResultOk(std::move(result).Unwrap());
 }
 
 }  // namespace xgrammar

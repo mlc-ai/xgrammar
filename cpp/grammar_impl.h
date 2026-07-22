@@ -172,24 +172,101 @@ class Grammar::Impl {
     return {type, data_ptr, data_len};
   }
 
-  /******************* GrammarExpr Getters *******************/
+  /******************* Typed representations of GrammarExprs *******************/
 
-  /*! \brief Get the string of the byte string grammar expr. */
-  std::string GetByteString(const GrammarExpr& grammar_expr) const {
-    std::string str;
-    str.reserve(grammar_expr.size());
-    for (int i = 0; i < grammar_expr.size(); ++i) {
-      str.push_back(static_cast<char>(static_cast<uint8_t>(grammar_expr[i])));
+  /*!
+   * \details Every composite GrammarExprType has a typed representation and a pair of const
+   * getters (one accepting a GrammarExpr, one accepting an expr id). GrammarBuilder provides
+   * symmetric Add* methods accepting the same representations.
+   *
+   * Performance notes: the typed representations are designed to be zero-cost. Most of them are
+   * non-owning views (pointer + length into the grammar buffer) or small trivially-copyable
+   * structs, so the getters never allocate. Owning containers are only created on demand via
+   * ToString()/ToVector(). The only exceptions are GetTagDispatch and GetTokenTagDispatch, which
+   * materialize vectors/strings; they should only be used on cold paths (compilation, printing,
+   * grammar transforms).
+   *
+   * Like GrammarExpr, the views point into the grammar buffer and are invalidated when new
+   * exprs are added to the grammar.
+   */
+
+  /*! \brief A non-owning view of a contiguous int32_t array in the grammar buffer, e.g. the
+   * sub-expr ids of a sequence/choices expr, or the token ids of a token expr. */
+  struct Int32Span {
+    const int32_t* data = nullptr;
+    int32_t data_len = 0;
+
+    int32_t size() const { return data_len; }
+    int32_t operator[](int i) const {
+      XGRAMMAR_DCHECK(i >= 0 && i < data_len) << "Index " << i << " is out of bound";
+      return data[i];
     }
-    return str;
-  }
+    const int32_t* begin() const { return data; }
+    const int32_t* end() const { return data + data_len; }
+    std::vector<int32_t> ToVector() const { return {data, data + data_len}; }
+  };
 
-  /*! \brief Get the string of the byte string grammar expr. */
-  std::string GetByteString(int32_t grammar_expr_id) const {
-    return GetByteString(GetGrammarExpr(grammar_expr_id));
-  }
+  /*! \brief A non-owning view of a byte string expr. Each element is a byte (0~255) stored as
+   * int32_t in the grammar buffer. */
+  struct ByteStringView {
+    const int32_t* data = nullptr;
+    int32_t data_len = 0;
 
-  /*! \brief The object representing a tag dispatch. */
+    int32_t size() const { return data_len; }
+    char operator[](int i) const {
+      XGRAMMAR_DCHECK(i >= 0 && i < data_len) << "Index " << i << " is out of bound";
+      return static_cast<char>(static_cast<uint8_t>(data[i]));
+    }
+    std::string ToString() const {
+      std::string str;
+      str.reserve(data_len);
+      for (int i = 0; i < data_len; ++i) {
+        str.push_back((*this)[i]);
+      }
+      return str;
+    }
+  };
+
+  /*! \brief One element of a character class: an inclusive range of unicode codepoints. */
+  struct CharacterClassElement {
+    int32_t lower;
+    int32_t upper;
+  };
+
+  /*! \brief A non-owning view of a character class (or character class star) expr. */
+  struct CharacterClassView {
+    bool is_negative = false;
+    /*! \brief The ranges, flattened as [lower0, upper0, lower1, upper1, ...]. */
+    const int32_t* ranges_data = nullptr;
+    int32_t num_ranges = 0;
+
+    int32_t size() const { return num_ranges; }
+    CharacterClassElement operator[](int i) const {
+      XGRAMMAR_DCHECK(i >= 0 && i < num_ranges) << "Index " << i << " is out of bound";
+      return {ranges_data[2 * i], ranges_data[2 * i + 1]};
+    }
+    std::vector<CharacterClassElement> ToVector() const {
+      std::vector<CharacterClassElement> result;
+      result.reserve(num_ranges);
+      for (int i = 0; i < num_ranges; ++i) {
+        result.push_back((*this)[i]);
+      }
+      return result;
+    }
+  };
+
+  /*! \brief The typed representation of a repeat expr. */
+  struct Repeat {
+    /*! \brief The id of the repeated rule. */
+    int32_t rule_id;
+    /*! \brief The minimum repeat count (inclusive). */
+    int32_t min_repeat_count;
+    /*! \brief The maximum repeat count (inclusive), or -1 for unbounded. */
+    int32_t max_repeat_count;
+  };
+
+  /*! \brief The typed representation of a tag dispatch. Owning: materialized by
+   * GetTagDispatch, so only use it on cold paths. */
   struct TagDispatch {
     /*! \brief The tag and rule id pairs. */
     std::vector<std::pair<std::string, int32_t>> tag_rule_pairs;
@@ -200,8 +277,106 @@ class Grammar::Impl {
     static const int kTagDispatchExtraParameter = 2;
   };
 
-  /*! \brief Get the tag dispatch from the grammar expr. */
-  TagDispatch GetTagDispatch(const GrammarExpr& grammar_expr) {
+  /*! \brief The typed representation of a token tag dispatch. Owning: materialized by
+   * GetTokenTagDispatch, so only use it on cold paths. */
+  struct TokenTagDispatch {
+    /*! \brief The trigger token id and rule id pairs. */
+    std::vector<std::pair<int32_t, int32_t>> trigger_rule_pairs;
+    /*! \brief If true, the token tag dispatch will loop after dispatching. */
+    bool loop_after_dispatch;
+    /*! \brief The token ids that are excluded by the token tag dispatch. */
+    std::vector<int32_t> excludes;
+  };
+
+  /******************* GrammarExpr Getters *******************/
+
+  /*! \brief Get the view of a byte string expr. */
+  ByteStringView GetByteString(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kByteString)
+        << "GrammarExpr is not a byte string";
+    return {grammar_expr.data, grammar_expr.data_len};
+  }
+  ByteStringView GetByteString(int32_t grammar_expr_id) const {
+    return GetByteString(GetGrammarExpr(grammar_expr_id));
+  }
+
+  /*! \brief Get the view of a character class or character class star expr. */
+  CharacterClassView GetCharacterClass(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(
+        grammar_expr.type == GrammarExprType::kCharacterClass ||
+        grammar_expr.type == GrammarExprType::kCharacterClassStar
+    ) << "GrammarExpr is not a character class";
+    XGRAMMAR_DCHECK(grammar_expr.data_len % 2 == 1);
+    return {
+        static_cast<bool>(grammar_expr[0]), grammar_expr.data + 1, (grammar_expr.data_len - 1) / 2
+    };
+  }
+  CharacterClassView GetCharacterClass(int32_t grammar_expr_id) const {
+    return GetCharacterClass(GetGrammarExpr(grammar_expr_id));
+  }
+
+  /*! \brief Get the rule id referenced by a rule ref expr. */
+  int32_t GetRuleRef(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kRuleRef)
+        << "GrammarExpr is not a rule ref";
+    return grammar_expr[0];
+  }
+  int32_t GetRuleRef(int32_t grammar_expr_id) const {
+    return GetRuleRef(GetGrammarExpr(grammar_expr_id));
+  }
+
+  /*! \brief Get the sub-expr ids of a sequence expr. */
+  Int32Span GetSequence(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence)
+        << "GrammarExpr is not a sequence";
+    return {grammar_expr.data, grammar_expr.data_len};
+  }
+  Int32Span GetSequence(int32_t grammar_expr_id) const {
+    return GetSequence(GetGrammarExpr(grammar_expr_id));
+  }
+
+  /*! \brief Get the sub-expr ids of a choices expr. */
+  Int32Span GetChoices(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kChoices)
+        << "GrammarExpr is not a choices";
+    return {grammar_expr.data, grammar_expr.data_len};
+  }
+  Int32Span GetChoices(int32_t grammar_expr_id) const {
+    return GetChoices(GetGrammarExpr(grammar_expr_id));
+  }
+
+  /*! \brief Get the typed representation of a repeat expr. */
+  Repeat GetRepeat(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kRepeat) << "GrammarExpr is not a repeat";
+    XGRAMMAR_DCHECK(grammar_expr.data_len == 3);
+    return {grammar_expr[0], grammar_expr[1], grammar_expr[2]};
+  }
+  Repeat GetRepeat(int32_t grammar_expr_id) const {
+    return GetRepeat(GetGrammarExpr(grammar_expr_id));
+  }
+
+  /*! \brief Get the token ids of a token expr. */
+  Int32Span GetToken(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kToken) << "GrammarExpr is not a token";
+    return {grammar_expr.data, grammar_expr.data_len};
+  }
+  Int32Span GetToken(int32_t grammar_expr_id) const {
+    return GetToken(GetGrammarExpr(grammar_expr_id));
+  }
+
+  /*! \brief Get the token ids of an exclude token expr. */
+  Int32Span GetExcludeToken(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kExcludeToken)
+        << "GrammarExpr is not an exclude token";
+    return {grammar_expr.data, grammar_expr.data_len};
+  }
+  Int32Span GetExcludeToken(int32_t grammar_expr_id) const {
+    return GetExcludeToken(GetGrammarExpr(grammar_expr_id));
+  }
+
+  /*! \brief Get the typed representation of a tag dispatch expr. Materializes the tag strings;
+   * only use it on cold paths. */
+  TagDispatch GetTagDispatch(const GrammarExpr& grammar_expr) const {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kTagDispatch)
         << "GrammarExpr is not a tag dispatch";
 
@@ -214,7 +389,7 @@ class Grammar::Impl {
     for (int i = 0; i < grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter; i += 2) {
       auto tag_expr_id = grammar_expr[i];
       auto rule_id = grammar_expr[i + 1];
-      result.tag_rule_pairs.push_back({GetByteString(tag_expr_id), rule_id});
+      result.tag_rule_pairs.push_back({GetByteString(tag_expr_id).ToString(), rule_id});
     }
 
     result.loop_after_dispatch = static_cast<bool>(
@@ -227,29 +402,23 @@ class Grammar::Impl {
     XGRAMMAR_DCHECK(exclude_str_expr.type == GrammarExprType::kChoices);
     result.excludes.reserve(exclude_str_expr.size());
     for (int j = 0; j < exclude_str_expr.size(); j++) {
-      result.excludes.push_back(GetByteString(exclude_str_expr[j]));
+      result.excludes.push_back(GetByteString(exclude_str_expr[j]).ToString());
     }
     return result;
   }
-
-  /*! \brief Get the tag dispatch from the grammar expr with the given id. */
-  TagDispatch GetTagDispatch(int32_t grammar_expr_id) {
+  TagDispatch GetTagDispatch(int32_t grammar_expr_id) const {
     return GetTagDispatch(GetGrammarExpr(grammar_expr_id));
   }
 
-  /*! \brief The object representing a token tag dispatch. */
-  struct TokenTagDispatch {
-    std::vector<std::pair<int32_t, int32_t>> trigger_rule_pairs;  // token_id → rule_id
-    bool loop_after_dispatch;
-    std::vector<int32_t> excludes;
-  };
-
-  /*! \brief Decode a kTokenTagDispatch expr into the TokenTagDispatch struct. */
-  TokenTagDispatch GetTokenTagDispatch(const GrammarExpr& grammar_expr) {
-    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kTokenTagDispatch);
+  /*! \brief Get the typed representation of a token tag dispatch expr. Materializes vectors;
+   * only use it on cold paths. */
+  TokenTagDispatch GetTokenTagDispatch(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kTokenTagDispatch)
+        << "GrammarExpr is not a token tag dispatch";
     TokenTagDispatch result;
     int pos = 0;
     int32_t trigger_count = grammar_expr[pos++];
+    result.trigger_rule_pairs.reserve(trigger_count);
     for (int i = 0; i < trigger_count; ++i) {
       auto token_id = grammar_expr[pos++];
       auto rule_id = grammar_expr[pos++];
@@ -257,15 +426,14 @@ class Grammar::Impl {
     }
     result.loop_after_dispatch = static_cast<bool>(grammar_expr[pos++]);
     int32_t exclude_count = grammar_expr[pos++];
+    result.excludes.reserve(exclude_count);
     for (int i = 0; i < exclude_count; ++i) {
       result.excludes.push_back(grammar_expr[pos++]);
     }
     XGRAMMAR_DCHECK(pos == grammar_expr.size());
     return result;
   }
-
-  /*! \brief Get the token tag dispatch from the grammar expr with the given id. */
-  TokenTagDispatch GetTokenTagDispatch(int32_t grammar_expr_id) {
+  TokenTagDispatch GetTokenTagDispatch(int32_t grammar_expr_id) const {
     return GetTokenTagDispatch(GetGrammarExpr(grammar_expr_id));
   }
 
