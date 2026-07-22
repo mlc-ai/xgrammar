@@ -56,6 +56,14 @@ class GrammarBuilder {
    */
   Grammar Get(int32_t root_rule_id);
 
+  /*!
+   * \brief Attach a dynamic-tag name-matching constraint to the grammar.
+   *
+   * Repeated calls must use the same syntax. This also lets grammar mutators preserve the
+   * constraint while rebuilding rules.
+   */
+  void SetDynamicTagMatcherConfig(const DynamicTagMatcherConfig& config);
+
   /****************** GrammarExpr handling ******************/
 
   /*! \brief Add a grammar_expr and return the grammar_expr id. */

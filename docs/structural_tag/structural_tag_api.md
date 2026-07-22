@@ -152,8 +152,9 @@ Matches content that conforms to a JSON Schema.
 | Field | Type | Default |
 | --- | --- | --- |
 | `json_schema` | `object` | (required) |
-| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"deepseek_xml"` \| `"glm_xml"` | `"json"` |
+| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"minimax_m3_xml"` \| `"deepseek_xml"` \| `"glm_xml"` | `"json"` |
 | `any_order` | `bool` | `false` |
+| `max_whitespace_cnt` | `int` \| `null` | `null` |
 
 - **Use it when**: the structured part is naturally expressed as schema-constrained data
 
@@ -162,11 +163,22 @@ Matches content that conforms to a JSON Schema.
 - `"json"`: standard JSON
 - `"qwen_xml"`: Qwen-style XML parameters, such as `<parameter=name>value</parameter>`
 - `"minimax_xml"`: MiniMax-style XML parameters, such as `<parameter name="name">value</parameter>`
+- `"minimax_m3_xml"`: MiniMax-M3 namespace-prefixed XML. Nested objects use property-name
+  elements recursively, and arrays use repeated `]<]minimax[>[<item>...</item>` elements.
 - `"deepseek_xml"`: DeepSeek-v3.2 XML parameter format
 - `"glm_xml"`: GLM-style XML parameter format, such as `<arg_key>name</arg_key><arg_value>value</arg_value>`
 
 `any_order` relaxes object property ordering (see [below](#property-ordering-with-any_order)). It
 works with every `style`.
+
+`"minimax_m3_xml"` supports runtime property names from `additionalProperties`,
+`patternProperties`, `propertyNames`, and unconstrained schemas. The generated CFG constrains the
+key language and value schema, while `GrammarMatcher` keeps a stack of opening element names and
+intersects the token mask with the byte-for-byte matching closing name. This state is preserved by
+fork, rollback, reset, and compiled-grammar serialization. String value `pattern`, recognized
+`format`, and length constraints remain unsupported because they cannot yet be combined with the
+MiniMax namespace-marker exclusion. Dynamic names may contain spaces, non-leading `/`, and Unicode;
+they must be nonblank, cannot begin with `/`, and cannot contain `>`.
 
 ```json
 {

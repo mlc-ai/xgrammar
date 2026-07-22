@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <thread>
 #include <utility>
@@ -19,6 +20,7 @@
 #include <vector>
 
 #include "compiled_grammar_impl.h"
+#include "dynamic_tag_matcher.h"
 #include "earley_parser.h"
 #include "grammar_impl.h"
 #include "support/dynamic_bitset.h"
@@ -446,6 +448,40 @@ void ApplyTokenBitmaskInplaceCPU(
 /* \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcher::Impl : public EarleyParser {
  public:
+  struct DynamicTagState {
+    explicit DynamicTagState(const DynamicTagMatcher& initial_matcher) : matcher(initial_matcher) {}
+
+    // Token ids are mask-generation scratch and intentionally start empty in a fork.
+    DynamicTagState(const DynamicTagState& other)
+        : matcher(other.matcher), checkpoints(other.checkpoints) {}
+
+    struct Checkpoint {
+      size_t token_index;
+      DynamicTagMatcher matcher;
+    };
+
+    void Commit(DynamicTagMatcher&& next_matcher, size_t token_index) {
+      if (matcher.HasSameState(next_matcher)) {
+        return;
+      }
+      // Most plain-text tokens do not change this state, so rollback history stays sparse.
+      checkpoints.push_back(Checkpoint{token_index, std::move(matcher)});
+      matcher = std::move(next_matcher);
+    }
+
+    void Rollback(size_t token_index) {
+      if (checkpoints.empty() || checkpoints.back().token_index != token_index) {
+        return;
+      }
+      matcher = std::move(checkpoints.back().matcher);
+      checkpoints.pop_back();
+    }
+
+    DynamicTagMatcher matcher;
+    std::vector<Checkpoint> checkpoints;
+    std::vector<int32_t> allowed_token_ids;
+  };
+
   Impl(
       const CompiledGrammar& compiled_grammar,
       std::optional<std::vector<int>> override_stop_tokens = std::nullopt,
@@ -461,7 +497,28 @@ class GrammarMatcher::Impl : public EarleyParser {
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
+    if (compiled_grammar->dynamic_tag_matcher_config.has_value()) {
+      XGRAMMAR_DCHECK(compiled_grammar->dynamic_tag_token_indexes);
+      dynamic_tag_state_ = std::make_unique<DynamicTagState>(
+          compiled_grammar->dynamic_tag_token_indexes->initial_matcher
+      );
+    }
   }
+
+  Impl(const Impl& other)
+      : EarleyParser(other),
+        compiled_grammar_(other.compiled_grammar_),
+        tokenizer_info_(other.tokenizer_info_),
+        stop_token_ids_(other.stop_token_ids_),
+        terminate_without_stop_token_(other.terminate_without_stop_token_),
+        token_length_history(other.token_length_history),
+        dynamic_tag_state_(
+            other.dynamic_tag_state_ ? std::make_unique<DynamicTagState>(*other.dynamic_tag_state_)
+                                     : nullptr
+        ),
+        tmp_accepted_bitset_(other.tmp_accepted_bitset_),
+        tmp_rejected_indices_(other.tmp_rejected_indices_),
+        tmp_rejected_indices_delta_(other.tmp_rejected_indices_delta_) {}
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
 
@@ -475,7 +532,12 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   bool IsTerminated() const;
 
-  void Reset() { EarleyParser::Reset(); }
+  bool IsCompleted() const {
+    return EarleyParser::IsCompleted() &&
+           (!dynamic_tag_state_ || dynamic_tag_state_->matcher.CanTerminate());
+  }
+
+  void Reset();
 
   int GetMaxRollbackTokens() const { return -1; }
 
@@ -520,6 +582,9 @@ class GrammarMatcher::Impl : public EarleyParser {
   /*! \brief Check if the token bitmask is all-true. */
   bool IsTokenBitmaskAllTrue(int32_t* bitmask_data_ptr);
 
+  /*! \brief Intersect a CFG-produced token mask with the dynamic tag-name constraint. */
+  void ApplyDynamicTagMatcherBitmask(int32_t* bitmask_data_ptr);
+
   std::string PrintBitmask(int32_t* bitmask_data_ptr, const TokenizerInfo& tokenizer_info);
 
   CompiledGrammar compiled_grammar_;
@@ -527,6 +592,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::vector<int> stop_token_ids_;
   bool terminate_without_stop_token_;
   std::deque<int> token_length_history;
+  std::unique_ptr<DynamicTagState> dynamic_tag_state_;
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
   DynamicBitset tmp_accepted_bitset_;
@@ -633,6 +699,12 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   // Handle the stop token
   if (std::find(stop_token_ids_.begin(), stop_token_ids_.end(), token_id) !=
       stop_token_ids_.end()) {
+    if (dynamic_tag_state_ && !dynamic_tag_state_->matcher.CanTerminate()) {
+      if (debug_print) {
+        XGRAMMAR_LOG(INFO) << "The stop token is rejected by the dynamic-tag matcher.";
+      }
+      return false;
+    }
     bool accepted = AcceptStopToken();
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: " << accepted;
@@ -650,6 +722,17 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   }
 
   const auto& token = tokenizer_info_.GetDecodedVocab()[token_id];
+  std::optional<DynamicTagMatcher> next_dynamic_tag_matcher;
+  if (dynamic_tag_state_ && dynamic_tag_state_->matcher.NeedsStateUpdate(token)) {
+    next_dynamic_tag_matcher = dynamic_tag_state_->matcher;
+    if (!next_dynamic_tag_matcher->Accept(token)) {
+      if (debug_print) {
+        XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << EscapeString(token)
+                           << "> rejected by the dynamic-tag matcher.";
+      }
+      return false;
+    }
+  }
 
   // Phase 1: Try atomic token path (from current state, before byte path)
   std::vector<ParserState> atomic_states;
@@ -736,6 +819,11 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << EscapeString(token) << "> accepted.";
   }
+  if (next_dynamic_tag_matcher.has_value()) {
+    dynamic_tag_state_->Commit(
+        std::move(*next_dynamic_tag_matcher), token_length_history.size() - 1
+    );
+  }
   return true;
 }
 
@@ -750,6 +838,18 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
     XGRAMMAR_LOG(INFO) << "Trying to accept string \"" << EscapeString(input_str)
                        << "\". Current state:\n"
                        << PrintStates();
+  }
+
+  std::optional<DynamicTagMatcher> next_dynamic_tag_matcher;
+  if (dynamic_tag_state_ && dynamic_tag_state_->matcher.NeedsStateUpdate(input_str)) {
+    next_dynamic_tag_matcher = dynamic_tag_state_->matcher;
+    if (!next_dynamic_tag_matcher->Accept(input_str)) {
+      if (debug_print) {
+        XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str)
+                           << "\" is rejected by the dynamic-tag matcher.";
+      }
+      return false;
+    }
   }
 
   int accepted_cnt = 0;
@@ -769,6 +869,11 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
     ++accepted_cnt;
   }
   token_length_history.push_back(input_str.size());
+  if (next_dynamic_tag_matcher.has_value()) {
+    dynamic_tag_state_->Commit(
+        std::move(*next_dynamic_tag_matcher), token_length_history.size() - 1
+    );
+  }
 
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str) << "\" is accepted.";
@@ -804,6 +909,91 @@ bool GrammarMatcher::Impl::IsTokenBitmaskAllTrue(int32_t* bitmask_data_ptr) {
       tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
   );
   return next_token_bitset.All();
+}
+
+void GrammarMatcher::Impl::ApplyDynamicTagMatcherBitmask(int32_t* bitmask_data_ptr) {
+  if (!dynamic_tag_state_) {
+    return;
+  }
+  XGRAMMAR_DCHECK(compiled_grammar_->dynamic_tag_token_indexes);
+  auto& dynamic_tag_matcher = dynamic_tag_state_->matcher;
+
+  DynamicBitset next_token_bitset(
+      tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
+  );
+  const auto& decoded_vocab = tokenizer_info_.GetDecodedVocab();
+  // Dynamic indexes are built from sorted_decoded_vocab, which excludes stop and special tokens.
+  // SetTokenBitmask handles those separately using the dynamic-aware IsCompleted result.
+  const auto validate_token = [&](int32_t token_id) {
+    if (!next_token_bitset[token_id]) {
+      return;
+    }
+    const auto& token = decoded_vocab[token_id];
+    if (!dynamic_tag_matcher.CanAccept(token)) {
+      next_token_bitset.Set(token_id, false);
+    }
+  };
+
+  const auto validate_tokens = [&](const std::vector<int32_t>& token_ids) {
+    for (int32_t token_id : token_ids) {
+      validate_token(token_id);
+    }
+  };
+  const auto validate_first_byte = [&](uint8_t byte) {
+    const auto [begin, end] = compiled_grammar_->dynamic_tag_token_indexes->first_byte_ranges[byte];
+    if (begin == -1) {
+      return;
+    }
+    const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+    for (int32_t index = begin; index < end; ++index) {
+      validate_token(sorted_decoded_vocab[index].first);
+    }
+  };
+
+  using TokenMaskMode = DynamicTagMatcher::TokenMaskMode;
+  switch (dynamic_tag_matcher.GetTokenMaskMode()) {
+    case TokenMaskMode::kFullPrefix:
+      validate_tokens(compiled_grammar_->dynamic_tag_token_indexes->full_prefix_token_ids);
+      return;
+    case TokenMaskMode::kPrefixCompletion:
+      validate_tokens(compiled_grammar_->dynamic_tag_token_indexes->prefix_completion_token_ids);
+      return;
+    case TokenMaskMode::kAfterPrefix:
+      validate_tokens(compiled_grammar_->dynamic_tag_token_indexes->suffix_token_ids);
+      validate_first_byte(
+          static_cast<uint8_t>(compiled_grammar_->dynamic_tag_matcher_config->close_marker.front())
+      );
+      return;
+    case TokenMaskMode::kTagSuffix:
+      validate_tokens(compiled_grammar_->dynamic_tag_token_indexes->suffix_token_ids);
+      return;
+    case TokenMaskMode::kValidateAccepted:
+      next_token_bitset &=
+          compiled_grammar_->dynamic_tag_token_indexes->content_boundary_candidate_bitset;
+      validate_tokens(compiled_grammar_->dynamic_tag_token_indexes->content_boundary_token_ids);
+      return;
+    case TokenMaskMode::kRequiredByte:
+      break;
+  }
+
+  auto& allowed_token_ids = dynamic_tag_state_->allowed_token_ids;
+  allowed_token_ids.clear();
+  const uint8_t required_byte = dynamic_tag_matcher.GetRequiredNextByte();
+  const auto [begin, end] =
+      compiled_grammar_->dynamic_tag_token_indexes->first_byte_ranges[required_byte];
+  if (begin != -1) {
+    const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+    for (int32_t index = begin; index < end; ++index) {
+      int32_t token_id = sorted_decoded_vocab[index].first;
+      if (next_token_bitset[token_id] && dynamic_tag_matcher.CanAccept(decoded_vocab[token_id])) {
+        allowed_token_ids.push_back(token_id);
+      }
+    }
+  }
+  next_token_bitset.Reset();
+  for (int32_t token_id : allowed_token_ids) {
+    next_token_bitset.Set(token_id, true);
+  }
 }
 
 bool GrammarMatcher::Impl::FillNextTokenBitmask(
@@ -955,6 +1145,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   SetTokenBitmask(
       bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end, false
   );
+  ApplyDynamicTagMatcherBitmask(bitmask_data_ptr);
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }
@@ -969,36 +1160,60 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
   std::string result;
   int num_accepted_chars = 0;
   bool can_find_next_char = true;
+  std::optional<DynamicTagMatcher> next_dynamic_tag_matcher;
+  if (dynamic_tag_state_) {
+    next_dynamic_tag_matcher = dynamic_tag_state_->matcher;
+  }
 
   while (can_find_next_char) {
     const auto& states = scanable_state_history_[scanable_state_history_.size() - 1];
 
     // The state comes to the end of the grammar
-    if (IsCompleted()) {
+    if (EarleyParser::IsCompleted() &&
+        (!next_dynamic_tag_matcher.has_value() || next_dynamic_tag_matcher->CanTerminate())) {
       can_find_next_char = false;
       break;
     }
 
-    // 1. Check that for every leaf ParserState, the next possible char is unique and the same
-    // -1 means not found yet; 0~255 means the next char
+    // 1. Find a byte that is forced by the CFG and the optional dynamic constraint.
+    // -1 means not found yet; 0~255 means the next char.
     int next_char = -1;
-    for (const auto& state : states) {
-      XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
-      const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
-      const auto& current_edges = fsm.GetFsm().GetFsm().GetEdges(state.element_id);
-      for (const auto& edge : current_edges) {
-        if (!edge.IsCharRange()) {
-          continue;
+    if (next_dynamic_tag_matcher.has_value() &&
+        next_dynamic_tag_matcher->GetTokenMaskMode() ==
+            DynamicTagMatcher::TokenMaskMode::kRequiredByte) {
+      const int required_byte = next_dynamic_tag_matcher->GetRequiredNextByte();
+      for (const auto& state : states) {
+        XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
+        const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
+        for (const auto& edge : fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
+          if (edge.IsCharRange() && edge.min <= required_byte && required_byte <= edge.max) {
+            next_char = required_byte;
+            break;
+          }
         }
-        if (edge.min != edge.max) {
-          can_find_next_char = false;
+        if (next_char != -1) {
           break;
         }
-        if (next_char == -1) {
-          next_char = edge.min;
-        } else if (next_char != edge.min) {
-          can_find_next_char = false;
-          break;
+      }
+    } else {
+      for (const auto& state : states) {
+        XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
+        const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
+        const auto& current_edges = fsm.GetFsm().GetFsm().GetEdges(state.element_id);
+        for (const auto& edge : current_edges) {
+          if (!edge.IsCharRange()) {
+            continue;
+          }
+          if (edge.min != edge.max) {
+            can_find_next_char = false;
+            break;
+          }
+          if (next_char == -1) {
+            next_char = edge.min;
+          } else if (next_char != edge.min) {
+            can_find_next_char = false;
+            break;
+          }
         }
       }
     }
@@ -1009,6 +1224,12 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
 
     // 2. If found, accept the char and iterate to the next position
     if (can_find_next_char) {
+      const char next_byte = static_cast<char>(next_char);
+      if (next_dynamic_tag_matcher.has_value() &&
+          !next_dynamic_tag_matcher->Accept(std::string_view(&next_byte, 1))) {
+        can_find_next_char = false;
+        break;
+      }
       result += static_cast<uint8_t>(next_char);
       Advance(next_char);
       ++num_accepted_chars;
@@ -1028,7 +1249,23 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
     int steps = token_length_history.back();
     PopLastStates(steps);
     token_length_history.pop_back();
+    if (dynamic_tag_state_) {
+      dynamic_tag_state_->Rollback(token_length_history.size());
+    }
     --num_tokens;
+  }
+}
+
+void GrammarMatcher::Impl::Reset() {
+  EarleyParser::Reset();
+  token_length_history.clear();
+  if (compiled_grammar_->dynamic_tag_matcher_config.has_value()) {
+    XGRAMMAR_DCHECK(dynamic_tag_state_);
+    dynamic_tag_state_->matcher = compiled_grammar_->dynamic_tag_token_indexes->initial_matcher;
+    dynamic_tag_state_->checkpoints.clear();
+    dynamic_tag_state_->allowed_token_ids.clear();
+  } else {
+    XGRAMMAR_DCHECK(!dynamic_tag_state_);
   }
 }
 

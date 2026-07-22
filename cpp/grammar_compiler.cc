@@ -1048,8 +1048,11 @@ class GrammarCompilerSub {
 
 CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
+  compiled_grammar_impl->dynamic_tag_matcher_config =
+      grammar_unoptimized->GetDynamicTagMatcherConfig();
   compiled_grammar_impl->grammar = GrammarOptimizer::Apply(grammar_unoptimized);
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
+  compiled_grammar_impl->InitializeDynamicTagTokenIndexes();
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
@@ -1268,8 +1271,14 @@ class GrammarCompilerCacheKeys {
   struct GrammarKey {
     std::string ebnf_str;
     std::string root_rule_name;
+    std::optional<DynamicTagMatcherConfig> dynamic_tag_matcher_config;
 
-    XGRAMMAR_EQUAL_BY_MEMBERS(GrammarKey, &GrammarKey::ebnf_str, &GrammarKey::root_rule_name);
+    XGRAMMAR_EQUAL_BY_MEMBERS(
+        GrammarKey,
+        &GrammarKey::ebnf_str,
+        &GrammarKey::root_rule_name,
+        &GrammarKey::dynamic_tag_matcher_config
+    );
   };
 
   struct RegexKey {
@@ -1287,6 +1296,16 @@ class GrammarCompilerCacheKeys {
 };
 
 }  // namespace xgrammar
+
+XGRAMMAR_HASH_BY_MEMBERS(
+    xgrammar::DynamicTagMatcherConfig,
+    &xgrammar::DynamicTagMatcherConfig::element_prefix,
+    &xgrammar::DynamicTagMatcherConfig::close_marker,
+    &xgrammar::DynamicTagMatcherConfig::tag_suffix,
+    &xgrammar::DynamicTagMatcherConfig::attribute_tag_name,
+    &xgrammar::DynamicTagMatcherConfig::attribute_tag_parent,
+    &xgrammar::DynamicTagMatcherConfig::attribute_tag_parent_depth
+);
 
 XGRAMMAR_HASH_BY_MEMBERS(
     xgrammar::GrammarCompilerCacheKeys::SchemaKey,
@@ -1307,7 +1326,8 @@ XGRAMMAR_HASH_BY_MEMBERS(
 XGRAMMAR_HASH_BY_MEMBERS(
     xgrammar::GrammarCompilerCacheKeys::GrammarKey,
     &xgrammar::GrammarCompilerCacheKeys::GrammarKey::ebnf_str,
-    &xgrammar::GrammarCompilerCacheKeys::GrammarKey::root_rule_name
+    &xgrammar::GrammarCompilerCacheKeys::GrammarKey::root_rule_name,
+    &xgrammar::GrammarCompilerCacheKeys::GrammarKey::dynamic_tag_matcher_config
 );
 
 XGRAMMAR_HASH_BY_MEMBERS(
@@ -1418,8 +1438,14 @@ CompiledGrammar GrammarCompiler::Impl::Compute(const UnionKey& key) {
       [this](const auto& key) -> CompiledGrammar {
         using KeyType = std::decay_t<decltype(key)>;
         if constexpr (std::is_same_v<KeyType, GrammarKey>) {
-          const auto& [ebnf_str, root_rule_name] = key;
-          return this->no_cache_compiler_.CompileGrammar(ebnf_str, root_rule_name);
+          const auto& [ebnf_str, root_rule_name, dynamic_tag_matcher_config] = key;
+          auto grammar = Grammar::FromEBNF(ebnf_str, root_rule_name);
+          if (dynamic_tag_matcher_config.has_value()) {
+            GrammarBuilder builder(grammar);
+            builder.SetDynamicTagMatcherConfig(*dynamic_tag_matcher_config);
+            grammar = builder.Get(root_rule_name);
+          }
+          return this->no_cache_compiler_.CompileGrammar(grammar);
         } else if constexpr (std::is_same_v<KeyType, SchemaKey>) {
           const auto& [schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order] =
               key;
@@ -1487,7 +1513,11 @@ CompiledGrammar GrammarCompiler::Impl::CompileGrammar(const Grammar& grammar) {
   if (!cache_enabled_) {
     return no_cache_compiler_.CompileGrammar(grammar);
   }
-  return grammar_level_cache_.Get(GrammarKey{grammar.ToString(), grammar->GetRootRule().name});
+  return grammar_level_cache_.Get(GrammarKey{
+      grammar.ToString(),
+      grammar->GetRootRule().name,
+      grammar->GetDynamicTagMatcherConfig(),
+  });
 }
 
 CompiledGrammar GrammarCompiler::Impl::CompileGrammar(
@@ -1496,7 +1526,7 @@ CompiledGrammar GrammarCompiler::Impl::CompileGrammar(
   if (!cache_enabled_) {
     return no_cache_compiler_.CompileGrammar(ebnf_str, root_rule_name);
   }
-  return grammar_level_cache_.Get(GrammarKey{ebnf_str, root_rule_name});
+  return grammar_level_cache_.Get(GrammarKey{ebnf_str, root_rule_name, std::nullopt});
 }
 
 void GrammarCompiler::Impl::ClearCache() {

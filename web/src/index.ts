@@ -6,6 +6,7 @@ export type {
   ConstStringFormat,
   GrammarFormat,
   JSONSchemaFormat,
+  JSONSchemaStyle,
   OrFormat,
   QwenXMLParameterFormat,
   RegexFormat,

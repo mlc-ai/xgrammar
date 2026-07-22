@@ -17,9 +17,8 @@ namespace xgrammar {
 /*!
  * \brief Converter for XML Tool Calling format (e.g., Qwen style).
  *
- * This converter generates EBNF where:
- * - The outermost object uses XML format: <parameter=name>value</parameter>
- * - Inner values use standard JSON format
+ * The concrete XML dialect controls whether only the outermost object is XML-encoded or objects
+ * and arrays are encoded recursively.
  */
 class XMLToolCallingConverter : public JSONSchemaConverter {
  public:
@@ -36,6 +35,9 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   /*! \brief Convert SchemaSpec to EBNF with XML format for root object. Note that this function is
    * not thread-safe.*/
   std::string Convert(const SchemaSpecPtr& spec);
+
+  /*! \brief Whether the generated grammar contains runtime-generated recursive XML tag names. */
+  bool RequiresDynamicTagMatcher() const { return requires_dynamic_tag_matcher_; }
 
  protected:
   // Override methods for XML format
@@ -62,6 +64,14 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       const std::string& rule_name,
       const std::string& rule_name_suffix
   ) override;
+  std::string FormatPatternProperty(
+      const std::string& key_regex,
+      const std::string& value_rule,
+      const std::string& rule_name,
+      const std::string& rule_name_suffix
+  ) override;
+  std::string CreatePropertyNameRule(const SchemaSpecPtr& spec, const std::string& rule_name_hint)
+      override;
 
   std::string GetKeyPattern() const override;
   std::string GetBasicAnyRuleName() const override;
@@ -75,25 +85,51 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
 
   void AddCache(const std::string& key, const std::string& value) override;
   std::optional<std::string> GetCache(const std::string& key) const override;
+  int GetRefCacheDomain() const override;
 
  private:
-  // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
-  struct XMLWrapper {
-    std::string key_wrapper_prefix;
-    std::string key_wrapper_suffix;
-    std::string value_wrapper_prefix;
-    std::string parameter_suffix;
+  struct ElementSyntax {
+    std::string open_prefix;
+    std::string open_suffix;
+    std::string value_prefix;
+    std::string close_prefix;
+    std::string close_suffix;
+    bool close_repeats_key = false;
   };
 
-  static const std::unordered_map<JSONFormat, XMLWrapper> kKeyWrapperMap;
+  struct XMLDialectConfig {
+    ElementSyntax property;
+    bool recursive = false;
+    std::string array_item_name;
+    bool pad_values_with_whitespace = true;
+    std::string string_terminator;
+    std::string variable_name_pattern;
+  };
+
+  static const std::unordered_map<JSONFormat, XMLDialectConfig> kDialectConfigMap;
   static const std::string kXMLString;
   static const std::string kXMLAny;
   static const std::string kXMLObject;
   static const std::string kXMLVariableName;
 
-  // Track if we're at the root object level
+  bool IsXMLLayer() const;
+  bool IsInnerCacheLayer() const;
+  std::string FormatElement(
+      const ElementSyntax& syntax, const std::string& key, const std::string& value_rule
+  ) const;
+  std::string GenerateRepeatedElementArray(const ArraySpec& spec, const std::string& rule_name);
+  std::string GenerateLiteral(const picojson::value& value) const;
+  void AddRootOnlyXMLBasicRules();
+  void AddRecursiveXMLBasicRules();
+  void ValidateRecursiveObject(const ObjectSpec& spec) const;
+  void ValidateElementName(const std::string& name) const;
+
   int nested_object_level_ = 0;
-  const XMLWrapper xml_wrapper_;
+  bool generating_property_name_ = false;
+  mutable bool requires_dynamic_tag_matcher_ = false;
+  // The dialect table is immutable and has static lifetime. Keep a reference so each conversion
+  // does not copy its protocol strings.
+  const XMLDialectConfig& dialect_;
 };
 
 }  // namespace xgrammar

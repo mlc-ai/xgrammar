@@ -8,13 +8,17 @@
 
 #include <xgrammar/grammar.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "dynamic_tag_matcher.h"
 #include "earley_parser.h"
 #include "support/dynamic_bitset.h"
 #include "support/reflection.h"
@@ -106,6 +110,32 @@ XGRAMMAR_MEMBER_TABLE(
  */
 class CompiledGrammar::Impl {
  public:
+  struct DynamicTagTokenIndexes {
+    DynamicTagTokenIndexes(const DynamicTagMatcherConfig& config, int32_t vocab_size)
+        : initial_matcher(config), content_boundary_candidate_bitset(vocab_size) {}
+
+    /*! \brief Initial matcher whose immutable definition is shared by request-local copies. */
+    DynamicTagMatcher initial_matcher;
+
+    /*! \brief Token ids containing the final byte of the dynamic element prefix. */
+    std::vector<int32_t> prefix_completion_token_ids;
+
+    /*! \brief Token ids containing a complete dynamic element prefix. */
+    std::vector<int32_t> full_prefix_token_ids;
+
+    /*! \brief Token ids containing the dynamic opening/closing tag suffix byte. */
+    std::vector<int32_t> suffix_token_ids;
+
+    /*! \brief Tokens containing the first prefix byte and requiring boundary validation. */
+    std::vector<int32_t> content_boundary_token_ids;
+
+    /*! \brief Tokens that can be whitespace or begin a child/closing tag at a content boundary. */
+    DynamicBitset content_boundary_candidate_bitset;
+
+    /*! \brief Half-open ranges in sorted_decoded_vocab grouped by first decoded byte. */
+    std::array<std::pair<int32_t, int32_t>, 256> first_byte_ranges;
+  };
+
   /*! \brief The grammar for the GrammarMatcher. */
   Grammar grammar{NullObj{}};
 
@@ -117,6 +147,14 @@ class CompiledGrammar::Impl {
 
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache> adaptive_token_mask_cache;
+
+  /*! \brief Optional runtime constraint for matching dynamic opening and closing tag names. */
+  std::optional<DynamicTagMatcherConfig> dynamic_tag_matcher_config;
+
+  /*! \brief Immutable indexes allocated only for grammars with a dynamic-tag constraint. */
+  std::shared_ptr<const DynamicTagTokenIndexes> dynamic_tag_token_indexes;
+
+  void InitializeDynamicTagTokenIndexes();
 
   Grammar GetGrammar() const { return grammar; }
 

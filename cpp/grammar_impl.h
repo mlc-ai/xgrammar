@@ -10,9 +10,11 @@
 #include <xgrammar/xgrammar.h>
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "dynamic_tag_matcher.h"
 #include "fsm.h"
 #include "support/logging.h"
 #include "support/reflection.h"
@@ -308,6 +310,15 @@ class Grammar::Impl {
 
   /*! \brief Whether the grammar is optimized. */
   bool optimized = false;
+
+  /*!
+   * \brief Optional non-CFG constraint for markup with runtime-generated matching tag names.
+   */
+  std::optional<DynamicTagMatcherConfig> dynamic_tag_matcher_config;
+
+  const std::optional<DynamicTagMatcherConfig>& GetDynamicTagMatcherConfig() const {
+    return dynamic_tag_matcher_config;
+  }
 
   friend class GrammarBuilder;
   friend class GrammarCompiler;
