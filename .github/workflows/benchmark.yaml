@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           # Keep the transformers bound in sync with pyproject.toml.
-          pip install torch "transformers>=4.38.0,!=5.0.*,!=5.13.0" datasets tqdm requests
+          pip install torch "transformers>=4.38.0" datasets tqdm requests
 
       - name: Run benchmark
         id: benchmark

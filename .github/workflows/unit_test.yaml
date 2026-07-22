@@ -84,7 +84,7 @@ jobs:
         if: matrix.os == 'macos-14' && !endsWith(matrix.python, 't')
         run: |
           # Keep the transformers bound in sync with pyproject.toml.
-          pip install mlx-lm "transformers>=4.38.0,!=5.0.*,!=5.13.0"
+          pip install mlx-lm "transformers>=4.38.0"
 
       - name: Run C++ tests
         run: |

@@ -18,15 +18,13 @@ dependencies = [
   "apache-tvm-ffi>=0.1.9",
   "pydantic",
   "torch>=1.10.0",
-  # Standardized transformers bound; keep in sync with docs/requirements.txt and the CI
-  # workflows. 5.0 fails to initialize several remote-code tiktoken tokenizers
-  # (e.g. Qwen-7B-Chat, Phi-3-small: "has no attribute mergeable_ranks"); fixed in 5.1+.
-  # 5.13.0 breaks `import mlx_lm` (AutoTokenizer.register with a string config class;
-  # fixed in transformers 5.13.1, see https://github.com/ml-explore/mlx-lm/issues/1458).
+  # Keep the transformers bound in sync with docs/requirements.txt and the CI workflows.
+  # Note: transformers 5.0.0 cannot initialize remote-code tiktoken tokenizers and 5.13.0
+  # breaks `import mlx_lm`; both are fixed in the following release, and pip normally
+  # resolves to newer releases, so they are not excluded explicitly. No upper bound: an
+  # upper cap here would force resolver conflicts on downstream packages.
   # v5 requires Python >=3.10, so on Python 3.8/3.9 pip resolves to v4.
-  # No upper bound: an upper cap here would force resolver conflicts on downstream
-  # packages.
-  "transformers>=4.38.0,!=5.0.*,!=5.13.0",
+  "transformers>=4.38.0",
   "triton; platform_system == 'Linux' and platform_machine == 'x86_64'",
   "numpy",
   "typing-extensions>=4.9.0",
