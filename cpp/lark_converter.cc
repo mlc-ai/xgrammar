@@ -26,6 +26,7 @@
 #include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "support/encoding.h"
+#include "support/logging.h"
 
 namespace xgrammar {
 namespace {
@@ -519,6 +520,8 @@ struct Definition {
   bool lazy = false;
   std::optional<std::string> suffix;
   Location suffix_location;
+  std::optional<int32_t> max_tokens;
+  Location max_tokens_location;
   Node body;
   Location location;
 };
@@ -691,6 +694,21 @@ class LarkParser {
       Token key = Consume(TokenType::kName, "expected rule attribute");
       if (key.text == "lazy" && Peek().type != TokenType::kEquals) {
         definition->lazy = true;
+      } else if (key.text == "max_tokens") {
+        Consume(TokenType::kEquals, "expected '=' after max_tokens attribute");
+        Location value_location = Peek().location;
+        int32_t value = ParseInteger();
+        if (value <= 0) {
+          RaiseLarkError(source_, value_location, "max_tokens must be positive");
+        }
+        if (value > 1'000'000) {
+          RaiseLarkError(source_, value_location, "max_tokens is too large");
+        }
+        if (definition->max_tokens.has_value()) {
+          RaiseLarkError(source_, key.location, "max_tokens attribute is specified more than once");
+        }
+        definition->max_tokens = value;
+        definition->max_tokens_location = key.location;
       } else if (key.text == "suffix") {
         Consume(TokenType::kEquals, "expected '=' after suffix attribute");
         Token suffix_token = Consume(TokenType::kString, "expected string literal after suffix=");
@@ -1198,13 +1216,29 @@ class LarkCompiler {
         continue;
       }
       if (dynamic_unused_rules_.count(definition.name)) {
+        if (definition.max_tokens.has_value()) {
+          RaiseLarkError(
+              source_,
+              definition.max_tokens_location,
+              "max_tokens is not supported on rules consumed by dynamic dispatch"
+          );
+        }
         builder_.UpdateRuleBody(rule_ids_.at(definition.name), builder_.AddEmptyStr());
         continue;
       }
       int32_t body_expr_id;
       if (definition.name == "start") {
         if (dynamic_start_body.has_value()) {
+          if (definition.max_tokens.has_value()) {
+            RaiseLarkError(
+                source_,
+                definition.max_tokens_location,
+                "max_tokens is not supported on a dynamic dispatch start rule"
+            );
+          }
           body_expr_id = dynamic_start_body.value();
+        } else if (definition.max_tokens.has_value()) {
+          body_expr_id = CompileMaxTokensRule(definition);
         } else if (HasLazySemantics(definition)) {
           body_expr_id = CompileLazyRule(definition);
         } else {
@@ -1213,6 +1247,8 @@ class LarkCompiler {
         if (allow_initial_skip_ && skip_rule_id_ != -1) {
           body_expr_id = builder_.AddSequence({builder_.AddRuleRef(skip_rule_id_), body_expr_id});
         }
+      } else if (definition.max_tokens.has_value()) {
+        body_expr_id = CompileMaxTokensRule(definition);
       } else if (HasLazySemantics(definition)) {
         body_expr_id = CompileLazyRule(definition);
       } else {
@@ -1619,6 +1655,112 @@ class LarkCompiler {
       return expression;
     }
     return builder_.AddSequence({expression, builder_.AddRuleRef(skip_rule_id_)});
+  }
+
+  /*!
+   * \brief Collect the fixed content that directly follows a reference to the rule named
+   * target_name in a sequence: string literals contribute string triggers, special tokens
+   * contribute token ids. Used to exclude the terminator content from an any-text max_tokens
+   * region, so that producing the terminator always exits the region.
+   */
+  void CollectMaxTokensTriggers(
+      const Node& node,
+      const std::string& target_name,
+      std::vector<std::string>* string_triggers,
+      std::vector<int32_t>* excluded_token_ids
+  ) const {
+    if (node.kind == Node::Kind::kSequence) {
+      for (size_t i = 0; i + 1 < node.children.size(); ++i) {
+        const Node* child = UnwrapSingle(&node.children[i]);
+        if (child->kind != Node::Kind::kName || child->text != target_name) {
+          continue;
+        }
+        const Node* next = UnwrapSingle(&node.children[i + 1]);
+        if (next->kind == Node::Kind::kString && next->flags.empty() && !next->text.empty()) {
+          string_triggers->push_back(next->text);
+        } else if (next->kind == Node::Kind::kSpecialToken) {
+          SpecialTokenSet token_set = ResolveSpecialToken(next->text, next->location);
+          if (!token_set.excluded) {
+            excluded_token_ids->insert(
+                excluded_token_ids->end(), token_set.token_ids.begin(), token_set.token_ids.end()
+            );
+          }
+        }
+      }
+    }
+    for (const auto& child : node.children) {
+      CollectMaxTokensTriggers(child, target_name, string_triggers, excluded_token_ids);
+    }
+  }
+
+  /*!
+   * \brief Compile a rule with the max_tokens attribute. An arbitrary-text body (with
+   * tokenizer_info available) is compiled into a bounded repetition of a token wildcard, which
+   * bounds the region exactly; tokens containing the fixed content following the rule are
+   * excluded so producing the terminator exits the region. Any other body compiles normally
+   * and records the budget on the rule; the matcher then bounds each occurrence, forcing it to
+   * end at the earliest possible position once the budget is exhausted.
+   */
+  int32_t CompileMaxTokensRule(const Definition& definition) {
+    if (definition.lazy || definition.suffix.has_value()) {
+      RaiseLarkError(
+          source_,
+          definition.max_tokens_location,
+          "max_tokens cannot be combined with lazy or suffix"
+      );
+    }
+    if (!IsAnyText(definition.body) || !tokenizer_info_.has_value()) {
+      if (!IsAnyText(definition.body)) {
+        XGRAMMAR_LOG(WARNING) << "max_tokens on rule '" << definition.name
+                              << "' is best-effort: the budget may be exceeded when the rule "
+                                 "cannot end at the position where it runs out.";
+      }
+      builder_.UpdateMaxTokens(rule_ids_.at(definition.name), definition.max_tokens.value());
+      return CompileNode(definition.body, definition.name, false);
+    }
+
+    std::vector<std::string> string_triggers;
+    std::vector<int32_t> excluded_token_ids;
+    for (const auto& other : document_.definitions) {
+      if (!other.is_terminal) {
+        CollectMaxTokensTriggers(
+            other.body, definition.name, &string_triggers, &excluded_token_ids
+        );
+      }
+    }
+    if (!string_triggers.empty()) {
+      const auto& decoded_vocab = tokenizer_info_->GetDecodedVocab();
+      for (int32_t token_id = 0; token_id < static_cast<int32_t>(decoded_vocab.size());
+           ++token_id) {
+        const std::string& token = decoded_vocab[token_id];
+        for (const std::string& trigger : string_triggers) {
+          if (token.find(trigger) != std::string::npos) {
+            excluded_token_ids.push_back(token_id);
+            break;
+          }
+        }
+      }
+    }
+    std::sort(excluded_token_ids.begin(), excluded_token_ids.end());
+    excluded_token_ids.erase(
+        std::unique(excluded_token_ids.begin(), excluded_token_ids.end()), excluded_token_ids.end()
+    );
+
+    int32_t token_expr;
+    if (excluded_token_ids.empty()) {
+      std::vector<int32_t> all_token_ids;
+      all_token_ids.reserve(tokenizer_info_->GetVocabSize());
+      for (int32_t token_id = 0; token_id < tokenizer_info_->GetVocabSize(); ++token_id) {
+        all_token_ids.push_back(token_id);
+      }
+      token_expr = builder_.AddTokenSet(all_token_ids);
+    } else {
+      token_expr = builder_.AddExcludeTokenSet(excluded_token_ids);
+    }
+    int32_t repeat_expr = builder_.AddRepeatFromExpr(
+        definition.name + "_max_tokens", token_expr, 0, definition.max_tokens.value()
+    );
+    return AppendSkip(repeat_expr);
   }
 
   SpecialTokenSet ResolveSpecialToken(const std::string& token, const Location& location) const {

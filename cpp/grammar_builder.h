@@ -202,6 +202,12 @@ class GrammarBuilder {
    */
   void UpdateLookaheadAssertion(std::string rule_name, int32_t lookahead_assertion_id);
 
+  /*! \brief Update the token budget of the rule referred by the given rule_id. -1 means none. */
+  void UpdateMaxTokens(int32_t rule_id, int32_t max_tokens);
+
+  /*! \brief Update the token budget of the rule referred by the given name. -1 means none. */
+  void UpdateMaxTokens(std::string rule_name, int32_t max_tokens);
+
   /*!
    * \brief Find a name for a new rule starting with the given name hint. Some integer suffix (_1,
    * _2, ...) may be added to avoid name conflict.

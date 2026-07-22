@@ -142,6 +142,72 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
     };
   }
 
+  // A rule definition may carry a token-budget attribute: name[max_tokens=N] ::= ... The
+  // bracket group is treated as an attribute only when followed by "::="; otherwise it is left
+  // to be lexed as a character class.
+  if (*cur_ == '[') {
+    int delta = 1;
+    auto skip_space = [&]() {
+      while (Peek(delta) == ' ' || Peek(delta) == '\t') {
+        ++delta;
+      }
+    };
+    skip_space();
+    constexpr const char kKeyword[] = "max_tokens";
+    bool matched = true;
+    for (int i = 0; kKeyword[i] != '\0'; ++i) {
+      if (Peek(delta + i) != kKeyword[i]) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) {
+      delta += 10;
+      skip_space();
+      int64_t value = -1;
+      if (Peek(delta) == '=') {
+        ++delta;
+        skip_space();
+        value = 0;
+        int digits = 0;
+        while (Peek(delta) >= '0' && Peek(delta) <= '9' && digits < 10) {
+          value = value * 10 + (Peek(delta) - '0');
+          ++delta;
+          ++digits;
+        }
+        if (digits == 0 || (Peek(delta) >= '0' && Peek(delta) <= '9')) {
+          matched = false;
+        }
+      } else {
+        matched = false;
+      }
+      if (matched) {
+        skip_space();
+        if (Peek(delta) == ']') {
+          ++delta;
+        } else {
+          matched = false;
+        }
+      }
+      if (matched) {
+        int after_bracket = delta;
+        while (Peek(after_bracket) == ' ' || Peek(after_bracket) == '\t') {
+          ++after_bracket;
+        }
+        if (!(Peek(after_bracket) == ':' && Peek(after_bracket + 1) == ':' &&
+              Peek(after_bracket + 2) == '=')) {
+          matched = false;
+        }
+      }
+      if (matched) {
+        Consume(delta);
+        Token token{TokenType::Identifier, identifier, identifier, start_line, start_column};
+        token.max_tokens = static_cast<int32_t>(value);
+        return token;
+      }
+    }
+  }
+
   // Otherwise it's an identifier
   return {TokenType::Identifier, identifier, identifier, start_line, start_column};
 }
@@ -1187,6 +1253,7 @@ EBNFParser::Rule EBNFParser::ParseRule() {
     ReportParseError("Expect rule name");
   }
   cur_rule_name_ = std::any_cast<std::string>(Peek().value);
+  int32_t max_tokens = Peek().max_tokens;
   Consume();
 
   PeekAndConsume(TokenType::Assign, "Expect ::=");
@@ -1198,7 +1265,9 @@ EBNFParser::Rule EBNFParser::ParseRule() {
     lookahead_id = ParseLookaheadAssertion();
   }
 
-  return {cur_rule_name_, body_id, lookahead_id};
+  Rule rule{cur_rule_name_, body_id, lookahead_id};
+  rule.max_tokens = max_tokens;
+  return rule;
 }
 
 void EBNFParser::InitRuleNames() {
@@ -1237,6 +1306,7 @@ Grammar EBNFParser::Parse(
     auto new_rule = ParseRule();
     builder_.UpdateRuleBody(new_rule.name, new_rule.body_expr_id);
     builder_.UpdateLookaheadAssertion(new_rule.name, new_rule.lookahead_assertion_id);
+    builder_.UpdateMaxTokens(new_rule.name, new_rule.max_tokens);
   }
 
   return builder_.Get(root_rule_name);

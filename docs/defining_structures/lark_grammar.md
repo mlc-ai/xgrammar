@@ -447,3 +447,49 @@ This matches arbitrary text and completes as soon as the trigger appears; nothin
 trigger. Text that never produces the trigger is also accepted. The regex-suffix and
 `suffix="..."` head forms are only accepted inside the full dispatch pattern, and general lazy
 rules over other bodies (for example `value[lazy]: /[a-z]+/`) are rejected.
+
+## Token Budgets
+
+A rule can be given a token budget with the `max_tokens` attribute:
+
+```text
+start: <think> reasoning </think> answer
+reasoning[max_tokens=512]: TEXT
+answer: /[0-9]+/
+TEXT: /(\n|.)*/
+```
+
+Each occurrence of the rule may then consume at most `max_tokens` LLM tokens. Once the budget
+is exhausted, the token mask only allows leaving the rule, which bounds the length of free-text
+segments such as reasoning blocks while the rest of the output stays grammar-constrained.
+
+Two compilation strategies are used:
+
+- **Arbitrary-text bodies** (the forms accepted by lazy heads, with `tokenizer_info`
+  available): the body is compiled into a bounded repetition of a token wildcard — an exact
+  budget at the grammar level. When the rule is directly followed by a fixed string literal or
+  a special token, tokens containing that terminator are excluded from the region, so producing
+  the terminator exits the region immediately. This region advances token-by-token
+  (`accept_token`), not byte-by-byte.
+- **Any other body** (e.g. `/(\S*\s)+/`, or any-text without `tokenizer_info`): a
+  **best-effort budget**. The body compiles normally and every predicted occurrence of the rule
+  carries a deadline: the index of the last token its derivation may consume. Once the deadline
+  passes, each mask forces the rule to end if ending is possible at the current position;
+  otherwise the budget is relaxed for one step and enforcement is retried, so the rule ends at
+  the earliest possible position and the output always stays grammar-valid. A compile-time
+  warning marks best-effort rules.
+
+The budget applies **per occurrence**: in `(r ",")* r` every element gets its own budget, and
+to bound a whole loop the budget goes on a wrapper rule (`list[max_tokens=N]: item+`). Nested
+budgets combine by taking the minimum. Rules inside a budgeted rule may also be used outside of
+it — the budget follows the derivation, not the rule.
+
+`accept_token` returns an `AcceptTokenResult` flag value: `BUDGET_EXCEEDED` is set on every
+accept in which a token was consumed by a derivation past its budget, and `BUDGET_RELAXED`
+reports that an exhausted budget could not be enforced since the previous accept. The budget
+state lives in the parser state, so `rollback()` restores it exactly and speculative decoding
+keeps working. `accept_string` advances without token boundaries and is not counted (budgets
+constrain mask-driven generation, not validation/prefill).
+
+`max_tokens` must be positive and cannot be combined with `lazy` or `suffix`, used on
+terminals, or on rules consumed by the dynamic dispatch pattern.

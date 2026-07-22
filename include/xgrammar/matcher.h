@@ -64,6 +64,19 @@ void ApplyTokenBitmaskInplaceCPU(
  * matcher->Rollback(1);
  * \endcode
  */
+/*!
+ * \brief Bit flags returned by GrammarMatcher::AcceptTokenWithFlags.
+ * kAcceptTokenBudgetExceeded is set on every accept in which a token was consumed by a
+ * derivation past its token budget. kAcceptTokenBudgetRelaxed reports that since the previous
+ * accept, an exhausted budget could not be enforced (the budgeted rule could not end) and was
+ * relaxed for one step.
+ */
+enum AcceptTokenFlag : int32_t {
+  kAcceptTokenAccepted = 1,
+  kAcceptTokenBudgetExceeded = 2,
+  kAcceptTokenBudgetRelaxed = 4,
+};
+
 class GrammarMatcher {
  public:
   /*!
@@ -90,6 +103,12 @@ class GrammarMatcher {
    * using Rollback().
    */
   bool AcceptToken(int32_t token_id, bool debug_print = false);
+
+  /*!
+   * \brief Same as AcceptToken, but returns a combination of AcceptTokenFlag bits carrying
+   * token-budget information in addition to the acceptance result.
+   */
+  int32_t AcceptTokenWithFlags(int32_t token_id, bool debug_print = false);
 
   /*!
    * \brief Accept a string and update the state of the matcher. The whole string is considered

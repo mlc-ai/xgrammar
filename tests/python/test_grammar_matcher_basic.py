@@ -301,7 +301,7 @@ def test_termination():
 
     assert matcher.is_terminated()
 
-    assert matcher.accept_token(0) is False
+    assert not matcher.accept_token(0)
 
     with pytest.raises(RuntimeError):
         matcher.fill_next_token_bitmask(token_bitmask)

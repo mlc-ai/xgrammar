@@ -2,6 +2,7 @@
 token.
 """
 
+import enum
 import math
 import warnings
 from typing import List, Literal, Optional, Tuple, Union
@@ -202,6 +203,20 @@ def apply_token_bitmask_inplace(
         )
 
 
+class AcceptTokenResult(enum.IntFlag):
+    """Result of GrammarMatcher.accept_token. Truthy iff the token was accepted, so it can be
+    used as a boolean. The budget flags carry token-budget (max_tokens) information:
+    BUDGET_EXCEEDED is set on every accept in which a token was consumed by a derivation past
+    its token budget; BUDGET_RELAXED reports that since the previous accept, an exhausted
+    budget could not be enforced (the budgeted rule could not end there) and was relaxed for
+    one step."""
+
+    REJECTED = 0
+    ACCEPTED = 1
+    BUDGET_EXCEEDED = 2
+    BUDGET_RELAXED = 4
+
+
 class GrammarMatcher(XGRObject):
     """Match the output of the LLM to the specified grammar, then generate the mask for the next
     token. This is the core class in the grammar-guided generation.
@@ -271,7 +286,7 @@ class GrammarMatcher(XGRObject):
             )
         )
 
-    def accept_token(self, token_id: int, *, debug_print: bool = False) -> bool:
+    def accept_token(self, token_id: int, *, debug_print: bool = False) -> AcceptTokenResult:
         """Accept one token and update the state of the matcher.
 
         In the following cases, the matcher will not accept the token and return False:
@@ -296,10 +311,11 @@ class GrammarMatcher(XGRObject):
 
         Returns
         -------
-        accepted : bool
-            Whether the token is accepted.
+        result : AcceptTokenResult
+            Truthy iff the token is accepted; carries additional token-budget flags. Existing
+            boolean usage (``if matcher.accept_token(...)``) keeps working unchanged.
         """
-        return self._handle.accept_token(token_id, debug_print)
+        return AcceptTokenResult(self._handle.accept_token(token_id, debug_print))
 
     def accept_string(self, input_str: Union[str, bytes], *, debug_print: bool = False) -> bool:
         """Accept a string and update the state of the matcher. The whole string is considered

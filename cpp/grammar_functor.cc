@@ -69,6 +69,7 @@ class SubGrammarAdderImpl : public GrammarMutator {
       builder_->UpdateRuleBody(new_rule_ids_names[i].first, new_body_expr_id);
       auto new_lookahead_assertion_id = VisitLookaheadAssertion(rule.lookahead_assertion_id);
       builder_->UpdateLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
+      builder_->UpdateMaxTokens(new_rule_ids_names[i].first, rule.max_tokens);
     }
     return new_rule_ids_names[base_grammar_->GetRootRuleId()].first;
   }
@@ -273,6 +274,7 @@ class StructureNormalizerImpl : public GrammarMutator {
       auto new_body_expr_id = VisitRuleBody(grammar_expr);
       builder_->UpdateRuleBody(i, new_body_expr_id);
       builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
+      builder_->UpdateMaxTokens(i, rule.max_tokens);
     }
     return builder_->Get(base_grammar_->GetRootRule().name);
   }
@@ -617,6 +619,10 @@ class RuleInlinerImpl : public GrammarMutator {
    */
   bool CheckIfRuleCanBeInlined(int32_t rule_id) {
     auto rule = base_grammar_->GetRule(rule_id);
+    // Inlining a budgeted rule would erase the rule its token budget applies to.
+    if (rule.max_tokens >= 0) {
+      return false;
+    }
     auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
     if (grammar_expr.type != GrammarExprType::kChoices) {
       return false;
@@ -718,6 +724,7 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
       builder_->UpdateLookaheadAssertion(
           rule_id_map_[rule_id], VisitLookaheadAssertion(rule.lookahead_assertion_id)
       );
+      builder_->UpdateMaxTokens(rule_id_map_[rule_id], rule.max_tokens);
     }
     XGRAMMAR_CHECK(rule_id_map_.count(grammar->GetRootRuleId()) > 0);
     return builder_->Get(rule_id_map_[grammar->GetRootRuleId()]);
@@ -1865,7 +1872,9 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   int32_t grammar_expr_id = builder_->AddRuleRef(rule_id);
   const auto& ref_rule = base_grammar_->GetRule(rule_id);
   const auto& ref_rule_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
-  if (ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
+  // Keep the reference to budgeted rules: replacing it with the rule's content would erase the
+  // rule the token budget applies to.
+  if (ref_rule.max_tokens < 0 && ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
       ref_rule_body.size() == 1) {
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
     if (ref_choice.size() == 1) {
