@@ -1,5 +1,6 @@
 autodoc-pydantic
 autodocsumm
+furo
 ipykernel
 ipywidgets
 jupyter_client
@@ -15,19 +16,15 @@ pillow
 pydantic
 sentencepiece
 setuptools==81.0.0
-sphinx==5.2.3
+sphinx>=8.2
 sphinx-autobuild
-sphinx-book-theme
 sphinx-copybutton
-sphinx-reredirects==0.1.2
-sphinx-rtd-theme
-sphinx-tabs == 3.4.1
-sphinx-toolbox == 3.4.0
+sphinx-reredirects
+sphinx-tabs
+sphinx-toolbox
 sphinxcontrib-mermaid
-sphinxcontrib-napoleon==0.7
-sphinxcontrib_httpdomain==1.8.1
+sphinxcontrib_httpdomain
 tiktoken
-tlcpack-sphinx-addon==0.2.2
 tomli
 torch
 transformers>=4.38.0
