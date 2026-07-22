@@ -1,7 +1,6 @@
-{% extends "basic-ng/components/view-this-page.html" %}
-{% from "basic-ng/components/view-this-page.html" import determine_page_view_link with context %}
+{% extends "!components/view-this-page.html" %}
 
-{%- macro furo_view_button(url) -%}
+{%- macro github_button() -%}
 <div class="view-this-page github-repository">
   <a class="muted-link" href="https://github.com/mlc-ai/xgrammar" title="XGrammar on GitHub">
     <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -10,21 +9,14 @@
     <span class="visually-hidden">XGrammar on GitHub</span>
   </a>
 </div>
-<div class="view-this-page">
-  <a class="muted-link" href="{{ url }}" title="{{ _("View this page") }}">
-    <svg><use href="#svg-eye"></use></svg>
-    <span class="visually-hidden">{{ _("View this page") }}</span>
-  </a>
-</div>
 {%- endmacro -%}
 
 {% block link_available -%}
-{{ furo_view_button(determine_page_view_link()) }}
+{{ github_button() }}
+{{ super() }}
 {%- endblock %}
 
-{% block link_not_available %}
-{%- if READTHEDOCS and conf_py_path and page_source_suffix and github_user != "None" and github_repo != "None" and github_version and pagename and page_source_suffix %}
-  {% set url = "https://github.com/" + github_user + "/" + github_repo + "/blob/" + github_version + conf_py_path + pagename + page_source_suffix + "?plain=true" %}
-  {{ furo_view_button(url) }}
-{%- endif -%}
-{% endblock %}
+{% block link_not_available -%}
+{{ github_button() }}
+{{ super() }}
+{%- endblock %}
