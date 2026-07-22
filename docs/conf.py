@@ -127,9 +127,9 @@ html_title = f"XGrammar {__version__}"
 
 html_static_path = ["_static"]
 
-html_logo = "_static/img/logo.png"
-
 html_theme_options = {
+    "light_logo": "img/logo.png",
+    "dark_logo": "img/logo_dark.svg",
     "source_repository": "https://github.com/mlc-ai/xgrammar",
     "source_branch": "main",
     "source_directory": "docs/",
