@@ -603,7 +603,7 @@ window.runMermaid = runMermaid;</script>
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">FrozenSet</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span>
 
 <span class="k">try</span><span class="p">:</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">sentencepiece</span>
@@ -649,6 +649,27 @@ window.runMermaid = runMermaid;</script>
 <span class="sd">    This kind of tokenizer includes meta-llama/Meta-Llama-3-8B-Instruct,</span>
 <span class="sd">    meta-llama/Meta-Llama-3.1-8B-Instruct, etc.</span>
 <span class="sd">    &quot;&quot;&quot;</span></div>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_byte_level_charset</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">FrozenSet</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The 256 characters used by the byte-to-unicode conversion of byte-level BPE tokenizers.</span>
+<span class="sd">    See VocabType.BYTE_LEVEL for the conversion reference.&quot;&quot;&quot;</span>
+    <span class="n">kept_bytes</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">ord</span><span class="p">(</span><span class="s2">&quot;!&quot;</span><span class="p">),</span> <span class="nb">ord</span><span class="p">(</span><span class="s2">&quot;~&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mh">0xA1</span><span class="p">,</span> <span class="mh">0xAC</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+        <span class="o">+</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mh">0xAE</span><span class="p">,</span> <span class="mh">0xFF</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="p">)</span>
+    <span class="n">chars</span> <span class="o">=</span> <span class="p">[</span><span class="nb">chr</span><span class="p">(</span><span class="n">byte</span><span class="p">)</span> <span class="k">for</span> <span class="n">byte</span> <span class="ow">in</span> <span class="n">kept_bytes</span><span class="p">]</span>
+    <span class="n">kept_bytes_set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">kept_bytes</span><span class="p">)</span>
+    <span class="n">num_shifted</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">byte</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">byte</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kept_bytes_set</span><span class="p">:</span>
+            <span class="n">chars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">chr</span><span class="p">(</span><span class="mi">256</span> <span class="o">+</span> <span class="n">num_shifted</span><span class="p">))</span>
+            <span class="n">num_shifted</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="nb">frozenset</span><span class="p">(</span><span class="n">chars</span><span class="p">)</span>
+
+
+<span class="n">_BYTE_LEVEL_CHARSET</span> <span class="o">=</span> <span class="n">_build_byte_level_charset</span><span class="p">()</span>
 
 
 <div class="viewcode-block" id="TokenizerInfo"><a class="viewcode-back" href="../../api/python/tokenizer_info.html#xgrammar.TokenizerInfo">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TokenizerInfo</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
@@ -746,6 +767,52 @@ window.runMermaid = runMermaid;</script>
         <span class="n">token</span> <span class="o">=</span> <span class="n">new_tokens</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="c1"># the tokenizer has a BPE-like whitespace conversion</span>
         <span class="k">return</span> <span class="n">token</span> <span class="o">==</span> <span class="s2">&quot;Ġ&quot;</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_detect_vocab_type_from_vocab</span><span class="p">(</span><span class="n">vocab_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">VocabType</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Detect the vocabulary type from the vocabulary itself. Returns None when the</span>
+<span class="sd">        vocabulary clearly matches neither byte encoding.</span>
+
+<span class="sd">        A byte-fallback vocabulary contains the 256 byte pieces &quot;&lt;0x00&gt;&quot;..&quot;&lt;0xFF&gt;&quot;. A byte-level</span>
+<span class="sd">        vocabulary spells every token with the 256-character byte-to-unicode alphabet and</span>
+<span class="sd">        contains most of that alphabet as single-character tokens. Both are properties of the</span>
+<span class="sd">        vocabulary itself, so they stay valid when the serialized backend tokenizer does not</span>
+<span class="sd">        describe the vocabulary faithfully.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">num_byte_pieces</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&lt;0x</span><span class="si">{</span><span class="n">byte</span><span class="si">:</span><span class="s2">02X</span><span class="si">}</span><span class="s2">&gt;&quot;</span> <span class="ow">in</span> <span class="n">vocab_dict</span> <span class="k">for</span> <span class="n">byte</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">num_byte_pieces</span> <span class="o">&gt;=</span> <span class="mi">128</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">VocabType</span><span class="o">.</span><span class="n">BYTE_FALLBACK</span>
+
+        <span class="n">num_single_chars</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">char</span> <span class="ow">in</span> <span class="n">vocab_dict</span> <span class="k">for</span> <span class="n">char</span> <span class="ow">in</span> <span class="n">_BYTE_LEVEL_CHARSET</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">num_single_chars</span> <span class="o">&lt;</span> <span class="mi">128</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+        <span class="c1"># Added tokens (e.g. chat-template markers) may contain characters outside the</span>
+        <span class="c1"># alphabet, so tolerate a small fraction of such tokens.</span>
+        <span class="n">num_charset_tokens</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span>
+            <span class="nb">all</span><span class="p">(</span><span class="n">char</span> <span class="ow">in</span> <span class="n">_BYTE_LEVEL_CHARSET</span> <span class="k">for</span> <span class="n">char</span> <span class="ow">in</span> <span class="n">token</span><span class="p">)</span> <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">vocab_dict</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">num_charset_tokens</span> <span class="o">&gt;=</span> <span class="mf">0.99</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">vocab_dict</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">VocabType</span><span class="o">.</span><span class="n">BYTE_LEVEL</span>
+
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_detect_add_prefix_space_by_encoding</span><span class="p">(</span>
+        <span class="n">tokenizer</span><span class="p">:</span> <span class="n">PreTrainedTokenizerBase</span><span class="p">,</span> <span class="n">vocab_type</span><span class="p">:</span> <span class="n">VocabType</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Detect whether the tokenizer prepends a space by encoding a one-character text and</span>
+<span class="sd">        inspecting the first produced token. This reflects the tokenizer&#39;s actual runtime</span>
+<span class="sd">        behavior, which is what grammar matching must align with.&quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">token_ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">&quot;a&quot;</span><span class="p">,</span> <span class="n">add_special_tokens</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">tokens</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">convert_ids_to_tokens</span><span class="p">(</span><span class="n">token_ids</span><span class="p">)</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">AttributeError</span><span class="p">,</span> <span class="ne">TypeError</span><span class="p">,</span> <span class="ne">ValueError</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tokens</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">tokens</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">prefix</span> <span class="o">=</span> <span class="s2">&quot;▁&quot;</span> <span class="k">if</span> <span class="n">vocab_type</span> <span class="o">==</span> <span class="n">VocabType</span><span class="o">.</span><span class="n">BYTE_FALLBACK</span> <span class="k">else</span> <span class="s2">&quot;Ġ&quot;</span>
+        <span class="k">return</span> <span class="n">tokens</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">prefix</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_sentencepiece_tokenizer</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">:</span> <span class="n">PreTrainedTokenizerBase</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
@@ -865,6 +932,25 @@ window.runMermaid = runMermaid;</script>
                         <span class="s2">&quot;It will be automatically detected.&quot;</span>
                     <span class="p">)</span>
             <span class="n">metadata</span> <span class="o">=</span> <span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">_detect_metadata_from_hf</span><span class="p">(</span><span class="n">backend_str</span><span class="p">)</span>
+
+            <span class="c1"># The serialized backend tokenizer may not describe the vocabulary faithfully:</span>
+            <span class="c1"># transformers v5 sometimes reconstructs a tokenizer from the SentencePiece model</span>
+            <span class="c1"># file, dropping or replacing the decoder that the detection above relies on. The</span>
+            <span class="c1"># vocabulary is decisive evidence for its own encoding, so when the two disagree,</span>
+            <span class="c1"># trust the vocabulary and re-derive add_prefix_space from the tokenizer&#39;s observed</span>
+            <span class="c1"># encoding behavior.</span>
+            <span class="n">vocab_type_from_vocab</span> <span class="o">=</span> <span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">_detect_vocab_type_from_vocab</span><span class="p">(</span><span class="n">vocab_dict</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span>
+                <span class="n">vocab_type_from_vocab</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="ow">and</span> <span class="n">vocab_type_from_vocab</span> <span class="o">!=</span> <span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;vocab_type&quot;</span><span class="p">]</span>
+            <span class="p">):</span>
+                <span class="n">metadata</span> <span class="o">=</span> <span class="p">{</span>
+                    <span class="s2">&quot;vocab_type&quot;</span><span class="p">:</span> <span class="n">vocab_type_from_vocab</span><span class="p">,</span>
+                    <span class="s2">&quot;add_prefix_space&quot;</span><span class="p">:</span> <span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">_detect_add_prefix_space_by_encoding</span><span class="p">(</span>
+                        <span class="n">tokenizer</span><span class="p">,</span> <span class="n">vocab_type_from_vocab</span>
+                    <span class="p">),</span>
+                <span class="p">}</span>
+
             <span class="k">return</span> <span class="n">TokenizerInfo</span><span class="p">(</span>
                 <span class="n">encoded_vocab</span><span class="p">,</span>
                 <span class="n">vocab_type</span><span class="o">=</span><span class="n">metadata</span><span class="p">[</span><span class="s2">&quot;vocab_type&quot;</span><span class="p">],</span>
