@@ -120,7 +120,7 @@ class Grammar::Impl {
     // data format: [grammar_expr_id0, grammar_expr_id1, ...]
     kChoices,
     // data format: [tag_expr0, rule_id0, tag_expr1, rule_id1, ..., loop_after_dispatch,
-    // excluded_str_expr_id]
+    // excluded_str_expr_id, max_tokens, max_chars]
     kTagDispatch,
     // data format: [rule_id, min_repeat_count, max_repeat_count]
     kRepeat,
@@ -197,7 +197,20 @@ class Grammar::Impl {
     bool loop_after_dispatch;
     /*! \brief The strings that are excluded by the tag dispatch. */
     std::vector<std::string> excludes;
-    static const int kTagDispatchExtraParameter = 2;
+    /*!
+     * \brief Max number of whole tokens this tag dispatch may consume before it must complete;
+     * -1 = unbounded. The counter is tracked per parser state (see ParserState::repeat_count),
+     * so multiple budgeted regions and re-entry are supported.
+     */
+    int32_t max_tokens = -1;
+    /*!
+     * \brief Max number of Unicode characters this tag dispatch may consume before it must
+     * complete; -1 = unbounded.
+     */
+    int32_t max_chars = -1;
+    // Trailing (non tag/rule-pair) parameters in the kTagDispatch grammar expr, in order:
+    //   [loop_after_dispatch, excludes_choices_id, max_tokens, max_chars].
+    static const int kTagDispatchExtraParameter = 4;
   };
 
   /*! \brief Get the tag dispatch from the grammar expr. */
@@ -229,6 +242,11 @@ class Grammar::Impl {
     for (int j = 0; j < exclude_str_expr.size(); j++) {
       result.excludes.push_back(GetByteString(exclude_str_expr[j]));
     }
+
+    result.max_tokens =
+        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 2];
+    result.max_chars =
+        grammar_expr[grammar_expr.size() - TagDispatch::kTagDispatchExtraParameter + 3];
     return result;
   }
 
@@ -303,6 +321,18 @@ class Grammar::Impl {
    */
   std::vector<std::vector<std::pair<int32_t, int32_t>>> per_rule_fsm_new_state_ids;
 
+  /*!
+   * \brief Per-rule token budget (TagDispatch::max_tokens) for budgeted TagDispatch rules;
+   * -1 if the rule has no token budget. Empty if the grammar has no budgeted rule at all.
+   * Built by GrammarFSMBuilder. Used by the Earley parser for O(1) budget lookup.
+   */
+  std::vector<int32_t> per_rule_budget_max_tokens;
+
+  /*!
+   * \brief Per-rule character budget (TagDispatch::max_chars); see per_rule_budget_max_tokens.
+   */
+  std::vector<int32_t> per_rule_budget_max_chars;
+
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;
 
@@ -338,6 +368,10 @@ XGRAMMAR_MEMBER_TABLE(
     &Grammar::Impl::complete_fsm,
     "per_rule_fsms",
     &Grammar::Impl::per_rule_fsms,
+    "per_rule_budget_max_tokens",
+    &Grammar::Impl::per_rule_budget_max_tokens,
+    "per_rule_budget_max_chars",
+    &Grammar::Impl::per_rule_budget_max_chars,
     "allow_empty_rule_ids",
     &Grammar::Impl::allow_empty_rule_ids,
     "optimized",

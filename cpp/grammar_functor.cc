@@ -91,6 +91,8 @@ class SubGrammarAdderImpl : public GrammarMutator {
     }
     new_tag_dispatch.loop_after_dispatch = old_tag_dispatch.loop_after_dispatch;
     new_tag_dispatch.excludes = old_tag_dispatch.excludes;
+    new_tag_dispatch.max_tokens = old_tag_dispatch.max_tokens;
+    new_tag_dispatch.max_chars = old_tag_dispatch.max_chars;
     return builder_->AddTagDispatch(new_tag_dispatch);
   }
 
@@ -1052,12 +1054,29 @@ class GrammarFSMBuilderImpl {
     FSM complete_fsm;
     std::vector<std::optional<FSMWithStartEndWithSize>> per_rule_fsms((*grammar)->NumRules());
     std::vector<int> state_mapping;
+    // Per-rule budget lookup for budgeted TagDispatch rules (see Grammar::Impl); only
+    // materialized if some rule carries a budget.
+    std::vector<int32_t> budget_max_tokens;
+    std::vector<int32_t> budget_max_chars;
+    auto set_budget = [&](int rule_id, int32_t max_tokens, int32_t max_chars) {
+      if (max_tokens == -1 && max_chars == -1) {
+        return;
+      }
+      if (budget_max_tokens.empty()) {
+        budget_max_tokens.assign((*grammar)->NumRules(), -1);
+        budget_max_chars.assign((*grammar)->NumRules(), -1);
+      }
+      budget_max_tokens[rule_id] = max_tokens;
+      budget_max_chars[rule_id] = max_chars;
+    };
 
     for (int i = 0; i < (*grammar)->NumRules(); ++i) {
       auto rule = (*grammar)->GetRule(i);
       auto grammar_expr = (*grammar)->GetGrammarExpr(rule.body_expr_id);
       if (grammar_expr.type == Grammar::Impl::GrammarExprType::kTagDispatch) {
-        auto rule_fsm = TagDispatch((*grammar)->GetTagDispatch(grammar_expr));
+        auto tag_dispatch = (*grammar)->GetTagDispatch(grammar_expr);
+        set_budget(i, tag_dispatch.max_tokens, tag_dispatch.max_chars);
+        auto rule_fsm = TagDispatch(tag_dispatch);
         XGRAMMAR_CHECK(rule_fsm.has_value()) << "Failed to build tag dispatch fsm for rule " << i;
         per_rule_fsms[i] = rule_fsm->AddToCompleteFSM(&complete_fsm, &state_mapping);
       } else if (grammar_expr.type == Grammar::Impl::GrammarExprType::kTokenTagDispatch) {
@@ -1100,6 +1119,8 @@ class GrammarFSMBuilderImpl {
 
     (*grammar)->complete_fsm = std::move(compact_complete_fsm);
     (*grammar)->per_rule_fsms = std::move(compact_per_rule_fsms);
+    (*grammar)->per_rule_budget_max_tokens = std::move(budget_max_tokens);
+    (*grammar)->per_rule_budget_max_chars = std::move(budget_max_chars);
   }
 
   /* Basic Building functions.*/

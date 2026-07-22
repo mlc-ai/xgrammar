@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <variant>
 #include <vector>
@@ -934,7 +935,7 @@ int32_t EBNFParser::ParseTagDispatch() {
   Grammar::Impl::TagDispatch tag_dispatch;
 
   static const std::unordered_set<std::string> kValidNamedArgs = {
-      "loop_after_dispatch", "excludes"
+      "loop_after_dispatch", "excludes", "max_tokens", "max_chars"
   };
   for (const auto& [name, _] : args.named_arguments) {
     if (kValidNamedArgs.count(name) == 0) {
@@ -994,6 +995,28 @@ int32_t EBNFParser::ParseTagDispatch() {
       }
       tag_dispatch.excludes.push_back(str_node->value);
     }
+  }
+
+  // max_tokens / max_chars — optional non-negative integer budgets
+  auto parse_budget = [&](const char* name, int32_t* out) {
+    if (auto it = args.named_arguments.find(name); it != args.named_arguments.end()) {
+      auto int_node = std::get_if<MacroIR::IntegerNode>(it->second.get());
+      if (int_node == nullptr || int_node->value < 0 ||
+          int_node->value > std::numeric_limits<int32_t>::max()) {
+        ReportParseError(
+            std::string(name) + " must be a non-negative integer literal", delta_element
+        );
+      }
+      *out = static_cast<int32_t>(int_node->value);
+    }
+  };
+  parse_budget("max_tokens", &tag_dispatch.max_tokens);
+  parse_budget("max_chars", &tag_dispatch.max_chars);
+  if ((tag_dispatch.max_tokens != -1 || tag_dispatch.max_chars != -1) &&
+      !tag_dispatch.tag_rule_pairs.empty()) {
+    ReportParseError(
+        "max_tokens / max_chars are only supported for TagDispatch without triggers", delta_element
+    );
   }
 
   // Well-formedness checks: string excludes vs string triggers

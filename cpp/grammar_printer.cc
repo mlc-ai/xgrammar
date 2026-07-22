@@ -147,7 +147,14 @@ std::string GrammarPrinter::PrintTagDispatch(const GrammarExpr& grammar_expr) {
     if (i > 0) result += ", ";
     result += PrintString(tag_dispatch.excludes[i]);
   }
-  result += ")\n)";
+  result += ")";
+  if (tag_dispatch.max_tokens != -1) {
+    result += ",\n" + indent + "max_tokens=" + std::to_string(tag_dispatch.max_tokens);
+  }
+  if (tag_dispatch.max_chars != -1) {
+    result += ",\n" + indent + "max_chars=" + std::to_string(tag_dispatch.max_chars);
+  }
+  result += "\n)";
   return result;
 }
 

@@ -264,6 +264,8 @@ Matches arbitrary text.
 | Field | Type | Default |
 | --- | --- | --- |
 | `excludes` | `string[]` | `[]` |
+| `max_tokens` | `int \| null` | `null` |
+| `max_chars` | `int \| null` | `null` |
 
 - **Use it when**: the content should remain free-form until some enclosing boundary is reached
 
@@ -276,6 +278,23 @@ Matches arbitrary text.
 
 When `any_text` appears inside a string-level `tag`, the enclosing end string is automatically
 treated as a stop condition.
+
+`max_tokens` (default `null`) caps how many **whole tokens** the region may consume. Once the
+budget is reached, the region is forced to end: its enclosing end tag becomes the only valid
+continuation. Unlike `any_tokens`, it also works when the end marker spans multiple tokens. For
+example, a token budget on a reasoning/think section:
+
+```json
+{
+    "type": "tag",
+    "begin": "<think>",
+    "content": {"type": "any_text", "excludes": ["</think>"], "max_tokens": 256},
+    "end": "</think>"
+}
+```
+
+`max_chars` (default `null`) similarly caps how many **Unicode characters** (codepoints, not
+bytes) the region may consume. Both budgets may be combined; each is then enforced independently.
 
 ### Composition Formats
 
@@ -640,6 +659,7 @@ Matches zero or more tokens, excluding those in `exclude_tokens`.
 | Field | Type | Default |
 | --- | --- | --- |
 | `exclude_tokens` | `(int \| string)[]` | `[]` |
+| `max_tokens` | `int \| null` | `null` |
 
 - **Use it when**: content should remain unconstrained until a token-level boundary is reached
 
@@ -648,6 +668,18 @@ Matches zero or more tokens, excluding those in `exclude_tokens`.
 ```
 
 Semantically, `any_tokens` is equivalent to `star(exclude_token(...))`.
+
+`max_tokens` (default `null`) caps how many tokens this format may consume. When set to a
+non-negative integer `N`, the region matches **at most** `N` tokens (each of which still excludes
+the values in `exclude_tokens`), giving an exact token-count budget; when `null`, there is no
+limit. This is useful for bounding an otherwise-unlimited region, e.g. a token budget on a
+think/reasoning section whose end marker is a single token:
+
+```json
+{"type": "any_tokens", "exclude_tokens": ["<|eos|>"], "max_tokens": 256}
+```
+
+With `max_tokens` set, `any_tokens` is equivalent to `repeat(exclude_token(...), min=0, max=N)`.
 
 #### `token_triggered_tags`
 

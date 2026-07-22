@@ -48,7 +48,8 @@ struct ParserState {
       const int32_t& rule_start_pos,
       const int32_t& sub_element_id,
       const int32_t& repeat_count = 0,
-      const int32_t& partial_codepoint = 0
+      const int32_t& partial_codepoint = 0,
+      const int32_t& budget_char_count = 0
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
@@ -56,7 +57,8 @@ struct ParserState {
         rule_start_pos(rule_start_pos),
         sub_element_id(sub_element_id),
         repeat_count(repeat_count),
-        partial_codepoint(partial_codepoint) {}
+        partial_codepoint(partial_codepoint),
+        budget_char_count(budget_char_count) {}
 
   /*!
    * \brief A sequence_id value of kUnexpandedRuleStartSequenceId means a rule hasn't been
@@ -90,11 +92,21 @@ struct ParserState {
   /*! \brief The id of the sub element in the current selement of the sequence. */
   int32_t sub_element_id = 0;
 
-  /*! \brief The number of times the element is repeated. It will be used in kRepeat.*/
+  /*!
+   * \brief The number of times the element is repeated. It is used in kRepeat. For a
+   * token-budgeted TagDispatch rule (TagDispatch::max_tokens != -1, which never has kRepeatRef
+   * edges), it is reused as the number of whole tokens the region has consumed so far.
+   */
   int32_t repeat_count = 0;
 
   /*! \brief Partial codepoint accumulated during UTF-8 decoding for positive character classes. */
   int32_t partial_codepoint = 0;
+
+  /*!
+   * \brief For a character-budgeted TagDispatch rule (TagDispatch::max_chars != -1): the number
+   * of Unicode characters the region has consumed so far. Always 0 otherwise.
+   */
+  int32_t budget_char_count = 0;
 
   /*! \brief The element is invalid when sequence_id is -1. */
   bool IsInvalid() const { return sequence_id == -1; }
@@ -132,6 +144,9 @@ struct ParserState {
     if (partial_codepoint != 0) {
       result += ", partial_codepoint=" + std::to_string(partial_codepoint);
     }
+    if (budget_char_count != 0) {
+      result += ", budget_char_count=" + std::to_string(budget_char_count);
+    }
     result += ")";
     return result;
   }
@@ -145,7 +160,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &ParserState::rule_start_pos,
     &ParserState::sub_element_id,
     &ParserState::repeat_count,
-    &ParserState::partial_codepoint
+    &ParserState::partial_codepoint,
+    &ParserState::budget_char_count
 );
 
 /*!
@@ -168,7 +184,8 @@ class StateEqualForParsing {
     return lhs.rule_id == rhs.rule_id && lhs.sequence_id == rhs.sequence_id &&
            lhs.element_id == rhs.element_id && lhs.rule_start_pos == rhs.rule_start_pos &&
            lhs.sub_element_id == rhs.sub_element_id && lhs.repeat_count == rhs.repeat_count &&
-           lhs.partial_codepoint == rhs.partial_codepoint;
+           lhs.partial_codepoint == rhs.partial_codepoint &&
+           lhs.budget_char_count == rhs.budget_char_count;
   }
 };
 
@@ -186,7 +203,8 @@ class StateHashForParsing {
         state.rule_start_pos,
         state.sub_element_id,
         state.repeat_count,
-        state.partial_codepoint
+        state.partial_codepoint,
+        state.budget_char_count
     );
   }
 };
@@ -275,6 +293,31 @@ class EarleyParser {
 
   /*! \brief Check if the stop token is accepted. */
   bool stop_token_is_accepted_ = false;
+
+  /*!
+   * \brief Whether TagDispatch token/character budgets (max_tokens / max_chars) are enforced,
+   * and the grammar has at least one budgeted rule. Budgets are enforced at runtime (in the
+   * matcher's parser); they must NOT be enforced when computing the adaptive token mask cache,
+   * so that cache entries stay budget-agnostic and can be shared across all budget counter
+   * values (the cache key ignores the counters) and across bounded/unbounded rules with the
+   * same FSM.
+   */
+  bool enforce_budgets_ = true;
+
+  /*! \brief Set by the constructor: whether the grammar has any budgeted TagDispatch rule. */
+  bool has_budgets_ = false;
+
+  /*!
+   * \brief enforce_budgets_ && has_budgets_, precombined into the single flag that the byte-level
+   * hot paths (AdvanceFsm / ScanAtomicToken) branch on.
+   */
+  bool budget_checks_enabled_ = false;
+
+  /*! \brief Disable budget enforcement (used by the token mask cache generator). */
+  void SetEnforceBudgets(bool enforce) {
+    enforce_budgets_ = enforce;
+    budget_checks_enabled_ = enforce_budgets_ && has_budgets_;
+  }
 
   /*!
    * \brief Check if the state has been added into the queue.
@@ -467,6 +510,29 @@ class EarleyParser {
    * parser with the root rule.
    */
   void Reset();
+
+  /*!
+   * \brief Notify the parser that a whole token boundary has been crossed: increment the token
+   * budget counter of every latest scanable state that belongs to a token-budgeted TagDispatch
+   * rule (saturating at the rule's max_tokens). A region instance only consumes budget if it
+   * already existed before this token. Called by the matcher after each accepted token.
+   * The counters live in the state history, so rollback / fork restore them automatically.
+   * \param rows_pushed The number of state rows the accepted token pushed (>= 1).
+   */
+  void AdvanceTokenBoundary(int32_t rows_pushed);
+
+  /*!
+   * \brief Get the (max_tokens, max_chars) budget of the rule, or (-1, -1) if the rule has no
+   * budget. Only valid for rule_id >= 0.
+   */
+  std::pair<int32_t, int32_t> GetRuleBudget(int32_t rule_id) const {
+    if (!has_budgets_) {
+      return {-1, -1};
+    }
+    return {
+        grammar_->per_rule_budget_max_tokens[rule_id], grammar_->per_rule_budget_max_chars[rule_id]
+    };
+  }
 
   /*!
    * \brief Get the current scanable states.

@@ -54,7 +54,14 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
         tag_dispatch_rule_id_to_second_slicing_bitset_(tag_dispatch_rule_id_to_second_slicing_bitset
         ),
         tokenizer_info_(tokenizer_info),
-        rule_level_cache_(rule_level_cache) {}
+        rule_level_cache_(rule_level_cache) {
+    // The adaptive token mask cache entries must be budget-agnostic: the cache key ignores the
+    // per-state budget counters, so one entry per position is shared across all counter values
+    // (and across bounded/unbounded rules with the same FSM in the rule-level cache). Budgets are
+    // enforced at runtime by the matcher's parser instead (skip / live-check in
+    // FillNextTokenBitmask, and AdvanceFsm during AcceptToken).
+    SetEnforceBudgets(false);
+  }
   /*!
    * \brief Get the adaptive token mask for the given ParserState.
    * \param is_root_rule Whether to consider the parent rule. If false, there will be

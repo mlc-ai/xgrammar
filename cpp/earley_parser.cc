@@ -296,6 +296,8 @@ EarleyParser::EarleyParser(
     const Grammar& grammar, const ParserState& init_state, const bool need_expand
 )
     : grammar_(grammar) {
+  has_budgets_ = !grammar_->per_rule_budget_max_tokens.empty();
+  budget_checks_enabled_ = enforce_budgets_ && has_budgets_;
   if (!grammar->optimized) {
     XGRAMMAR_LOG(FATAL) << "The grammar is not optimized. Please optimize the grammar before using "
                            "the Earley parser.";
@@ -883,12 +885,33 @@ void EarleyParser::AdvanceCharacterClassStar(
 void EarleyParser::AdvanceFsm(const ParserState& state, const uint8_t ch) {
   XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
   const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
+  // Token / character budget of a budgeted TagDispatch rule. When a budget is exhausted, the
+  // state cannot consume any more input bytes; the hypothesis either completes here (already
+  // reported completable at an end node, so the parent's continuation stays scanable) or dies.
+  int32_t budget_char_delta = 0;
+  if (budget_checks_enabled_) {
+    const auto [max_tokens, max_chars] = GetRuleBudget(state.rule_id);
+    if (max_tokens >= 0 && state.repeat_count >= max_tokens) {
+      return;
+    }
+    if (max_chars >= 0) {
+      // Count Unicode characters: only a non-continuation byte starts a new character;
+      // continuation bytes of an already-counted character are always allowed.
+      if ((ch & 0xC0) != 0x80) {
+        if (state.budget_char_count >= max_chars) {
+          return;
+        }
+        budget_char_delta = 1;
+      }
+    }
+  }
   for (const auto& edge : current_fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
     if ((!edge.IsCharRange()) || ch < edge.min || ch > edge.max) {
       continue;
     }
     auto new_state = state;
     new_state.element_id = edge.target;
+    new_state.budget_char_count += budget_char_delta;
     if ((!current_fsm.GetFsm().IsNonTerminalState(edge.target)) &&
         (!current_fsm.GetFsm().IsEndState(edge.target) &&
          current_fsm.GetFsm().IsScanableState(edge.target))) {
@@ -902,6 +925,15 @@ void EarleyParser::AdvanceFsm(const ParserState& state, const uint8_t ch) {
 void EarleyParser::ScanAtomicToken(const ParserState& state, int32_t token_id) {
   if (state.rule_id == -1) return;
   XGRAMMAR_DCHECK(grammar_->per_rule_fsms[state.rule_id].has_value());
+  // Budgeted TagDispatch rules only have CharRange edges today; this guard keeps the budget
+  // semantics if token edges are ever combined with budgets.
+  if (budget_checks_enabled_) {
+    const auto [max_tokens, max_chars] = GetRuleBudget(state.rule_id);
+    if ((max_tokens >= 0 && state.repeat_count >= max_tokens) ||
+        (max_chars >= 0 && state.budget_char_count >= max_chars)) {
+      return;
+    }
+  }
   const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
   for (const auto& edge : current_fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
     bool matched = false;
@@ -953,6 +985,41 @@ bool EarleyParser::AdvanceAtomicToken(int32_t token_id, bool debug_print) {
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
   return true;
+}
+
+void EarleyParser::AdvanceTokenBoundary(int32_t rows_pushed) {
+  if (!budget_checks_enabled_) {
+    return;
+  }
+  const int32_t latest = scanable_state_history_.size() - 1;
+  const int32_t prev = latest - rows_pushed;
+  XGRAMMAR_DCHECK(prev >= 0);
+  const auto prev_row = scanable_state_history_[prev];
+  auto row = scanable_state_history_.MutableRowAt(latest);
+  for (auto& state : row) {
+    if (state.rule_id == -1) {
+      continue;
+    }
+    const int32_t max_tokens = grammar_->per_rule_budget_max_tokens[state.rule_id];
+    // Saturate at max_tokens: only "budget left" vs "budget exhausted" matters afterwards.
+    if (max_tokens < 0 || state.repeat_count >= max_tokens) {
+      continue;
+    }
+    // A token counts against the budget only if this region instance (same rule predicted at the
+    // same position) already existed before the token. A region freshly entered during this token
+    // (e.g. a token that ends with the region's begin tag) has not consumed a whole token yet.
+    bool existed_before = false;
+    for (const auto& prev_state : prev_row) {
+      if (prev_state.rule_id == state.rule_id &&
+          prev_state.rule_start_pos == state.rule_start_pos) {
+        existed_before = true;
+        break;
+      }
+    }
+    if (existed_before) {
+      ++state.repeat_count;
+    }
+  }
 }
 
 bool RepeatDetector::IsVisited(const ParserState& state) const {
