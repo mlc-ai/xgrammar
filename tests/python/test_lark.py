@@ -1817,3 +1817,89 @@ def test_lark_lazy_non_terminal_like_bodies_are_rejected() -> None:
     ):
         with pytest.raises(RuntimeError, match="terminal-like"):
             xgr.GrammarCompiler(LAZY_TOKENIZER, cache_enabled=False).compile_grammar(grammar_obj)
+
+
+# Tokens: 0 "<", 1 ">", 2 "a", 3 "b", 4 "ab", 5 "a>", 6 "ab>", 7 "b>", 8 "bb", 9 " "
+LAZY_MASK_TOKENIZER = xgr.TokenizerInfo(["<", ">", "a", "b", "ab", "a>", "ab>", "b>", "bb", " "])
+
+
+def _lazy_mask_matcher(grammar_obj: xgr.Grammar) -> xgr.GrammarMatcher:
+    compiled = xgr.GrammarCompiler(LAZY_MASK_TOKENIZER, cache_enabled=False).compile_grammar(
+        grammar_obj
+    )
+    return xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+
+def _mask_allowed_token_ids(matcher: xgr.GrammarMatcher) -> list:
+    bitmask = xgr.allocate_token_bitmask(1, LAZY_MASK_TOKENIZER.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    return [
+        i
+        for i in range(LAZY_MASK_TOKENIZER.vocab_size)
+        if (int(bitmask[0, i // 32]) >> (i % 32)) & 1
+    ]
+
+
+def test_lark_lazy_mask_commit_inside_token() -> None:
+    # A token may cross the commit point: the region char commits the rule mid-token and the
+    # rest of the token must match what follows the rule.
+    grammar_obj = xgr.Grammar.from_lark('start: "<" r ">"\nr[lazy]: /[a-z]+/')
+    matcher = _lazy_mask_matcher(grammar_obj)
+    assert matcher.accept_token(0)
+    # "a", "b" open the region; "a>"/"b>" commit mid-token and exit. "ab" and "ab>" would
+    # extend the region past the commit; ">" needs a non-empty region first.
+    assert _mask_allowed_token_ids(matcher) == [2, 3, 5, 7]
+    # Refilling must give the identical mask.
+    assert _mask_allowed_token_ids(matcher) == [2, 3, 5, 7]
+    assert matcher.accept_token(5) and matcher.is_terminated()
+
+
+def test_lark_lazy_mask_exit_only_after_commit() -> None:
+    grammar_obj = xgr.Grammar.from_lark('start: "<" r ">"\nr[lazy]: /[a-z]+/')
+    matcher = _lazy_mask_matcher(grammar_obj)
+    assert matcher.accept_token(0) and matcher.accept_token(2)
+    assert _mask_allowed_token_ids(matcher) == [1]
+    assert matcher.accept_token(1) and matcher.is_terminated()
+
+
+def test_lark_lazy_mask_greedy_control() -> None:
+    # The same grammar without lazy: region tokens may extend freely.
+    grammar_obj = xgr.Grammar.from_lark('start: "<" r ">"\nr: /[a-z]+/')
+    matcher = _lazy_mask_matcher(grammar_obj)
+    assert matcher.accept_token(0)
+    assert _mask_allowed_token_ids(matcher) == [2, 3, 4, 5, 6, 7, 8]
+    assert matcher.accept_token(2)
+    assert _mask_allowed_token_ids(matcher) == [1, 2, 3, 4, 5, 6, 7, 8]
+
+
+def test_lark_lazy_mask_choices_commit_kills_longer_alternative() -> None:
+    # After "<a", "b" completes the "ab" alternative and the commit removes the "abb" branch
+    # of the same occurrence: "bb" must be masked out, "b"/"b>" stay legal.
+    grammar_obj = xgr.Grammar.from_lark('start: "<" r ">"\nr[lazy]: "ab" | "abb"')
+    matcher = _lazy_mask_matcher(grammar_obj)
+    assert matcher.accept_token(0) and matcher.accept_token(2)
+    assert _mask_allowed_token_ids(matcher) == [3, 7]
+    assert not matcher.accept_token(8)
+    assert matcher.accept_token(7) and matcher.is_terminated()
+
+
+def test_lark_lazy_mask_fresh_budget_per_occurrence() -> None:
+    grammar_obj = xgr.Grammar.from_lark('start: r " " r\nr[lazy]: /[a-z]+/')
+    matcher = _lazy_mask_matcher(grammar_obj)
+    # First occurrence commits after one char: only the separator remains.
+    assert matcher.accept_token(2)
+    assert _mask_allowed_token_ids(matcher) == [9]
+    # The second occurrence is fresh: region chars are allowed again, but still commit at one
+    # char ("ab" spans two region chars and stays masked out).
+    assert matcher.accept_token(9)
+    assert _mask_allowed_token_ids(matcher) == [2, 3]
+    assert matcher.accept_token(3) and matcher.is_terminated()
+
+
+def test_ebnf_lazy_mask_matches_lark_form() -> None:
+    grammar_obj = xgr.Grammar.from_ebnf('root ::= "<" r ">"\nr[lazy] ::= [a-z] [a-z]*')
+    matcher = _lazy_mask_matcher(grammar_obj)
+    assert matcher.accept_token(0)
+    assert _mask_allowed_token_ids(matcher) == [2, 3, 5, 7]
+    assert matcher.accept_token(2)
+    assert _mask_allowed_token_ids(matcher) == [1]
