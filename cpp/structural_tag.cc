@@ -543,10 +543,10 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     if (it != obj.end() && it->second.is<std::string>()) {
       style = it->second.get<std::string>();
       if (style != "json" && style != "qwen_xml" && style != "minimax_xml" &&
-          style != "deepseek_xml" && style != "glm_xml") {
+          style != "deepseek_xml" && style != "glm_xml" && style != "gemma") {
         return ResultErr<ISTError>(
-            "style must be \"json\", \"qwen_xml\", \"minimax_xml\", \"deepseek_xml\", or "
-            "\"glm_xml\""
+            "style must be \"json\", \"qwen_xml\", \"minimax_xml\", \"deepseek_xml\", "
+            "\"glm_xml\", or \"gemma\""
         );
       }
     }

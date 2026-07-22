@@ -196,6 +196,7 @@ enum class JSONFormat : int {
   kMiniMaxXML = 2,
   kDeepSeekXML = 3,
   kGlmXML = 4,
+  kGemma = 5,
 };
 
 /*!
@@ -330,6 +331,16 @@ class JSONSchemaConverter {
       const std::string& value_rule,
       const std::string& rule_name,
       const std::string& rule_name_suffix
+  );
+
+  /*! \brief Format an object key constrained by a regex (patternProperties).
+   * Override for formats whose keys are not JSON-quoted. */
+  virtual std::string FormatPatternKey(const std::string& pattern);
+
+  /*! \brief Build the key pattern for propertyNames-constrained keys.
+   * Override for formats whose keys are not JSON strings. */
+  virtual std::string CreatePropertyNamesKeyRule(
+      const SchemaSpecPtr& property_names, const std::string& rule_name_hint
   );
 
   /*! \brief Get the basic string rule name. Override for different formats. */

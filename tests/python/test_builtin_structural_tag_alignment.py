@@ -1,9 +1,12 @@
 """Validate builtin structural tags against official chat templates.
 
-Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4)
-to render model outputs, then checks that xgrammar structural tag grammars
-accept them. Requires encoding_dsv32.py and encoding_dsv4.py in the same
-directory.
+Uses tokenizer.apply_chat_template (or local encoders for DeepSeek V3.2/V4
+and Gemma-4) to render model outputs, then checks that xgrammar structural
+tag grammars accept them. Requires encoding_dsv32.py, encoding_dsv4.py and
+encoding_gemma4.py in the same directory.
+
+ENCODER: model ids render without transformers, so those cases run in
+tokenless environments and are not marked hf_token_required.
 """
 
 import json
@@ -65,7 +68,6 @@ PARALLEL_TOOL_SCENARIOS = [(2, "auto", 2), (2, "required", 2)]
 # (stag_key, model_id, reasoning, template_kwargs)
 # Excluded:
 #   - Llama-4: pythonic tool call format, needs separate structural tag
-#   - gemma_4: tool calls use <|"|> quoting, not JSON
 #   - deepseek_r1 thinking=True: template drops <think> in history rendering,
 #     prompt diff extraction doesn't work
 #   - Kimi-K2-Thinking thinking=False: model always outputs <think></think>,
@@ -96,10 +98,30 @@ MODEL_CONFIGS = [
     ("glm_4_7", "zai-org/GLM-4.7-Flash", False, {"enable_thinking": False}),
     ("deepseek_v4", "ENCODER:dsv4", True, {"thinking_mode": "thinking"}),
     ("deepseek_v4", "ENCODER:dsv4", False, {"thinking_mode": "chat"}),
+    ("gemma_4", "ENCODER:gemma4_e2b", True, {"enable_thinking": True}),
+    ("gemma_4", "ENCODER:gemma4_e2b", False, {"enable_thinking": False}),
+    ("gemma_4", "ENCODER:gemma4_31b", True, {"enable_thinking": True}),
+    ("gemma_4", "ENCODER:gemma4_31b", False, {"enable_thinking": False}),
 ]
 
-# DeepSeek V3.2 encoder rejects empty reasoning + no tool calls.
-SKIP_EMPTY_REASONING = {"ENCODER:dsv32", "MiniMaxAI/MiniMax-M2.5"}
+# DeepSeek V3.2 encoder rejects empty reasoning + no tool calls. Gemma-4 templates
+# drop the thought channel entirely when reasoning content is empty.
+SKIP_EMPTY_REASONING = {
+    "ENCODER:dsv32",
+    "MiniMaxAI/MiniMax-M2.5",
+    "ENCODER:gemma4_e2b",
+    "ENCODER:gemma4_31b",
+}
+
+# Templates that render the thought channel in history only alongside tool calls;
+# text-only reasoning outputs cannot be reconstructed via prompt diff, so those
+# scenarios are skipped.
+SKIP_REASONING_WITHOUT_TOOL_CALLS = set()
+
+# Templates that pre-render an empty thought block in the generation prompt when
+# thinking is disabled; history rendering omits it, so it is stripped before diffing.
+PRERENDERED_EMPTY_THOUGHT_MODELS = {"ENCODER:gemma4_31b"}
+PRERENDERED_EMPTY_THOUGHT = "<|channel>thought\n<channel|>"
 
 # Models where tool call format in template doesn't match structural tag.
 SKIP_TOOLS = set()
@@ -133,11 +155,18 @@ EOS_SUFFIXES = {
     "glm_4_7": [],
     "deepseek_v3_2": ["<｜end▁of▁sentence｜>"],
     "deepseek_v4": ["<｜end▁of▁sentence｜>"],
+    # <|tool_response> is the halt signal the template appends after a tool call.
+    "gemma_4": ["<turn|>", "<|tool_response>"],
 }
 
 
 @lru_cache(maxsize=None)
 def load_tokenizer(model_id):
+    if model_id.startswith("ENCODER:gemma4"):
+        from encoding_gemma4 import GemmaTemplateRenderer
+
+        return GemmaTemplateRenderer(model_id.split(":")[1])
+
     from transformers import AutoTokenizer
 
     return AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
@@ -216,6 +245,9 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
         [USER_MSG, assistant_msg], add_generation_prompt=False, **kwargs
     )
 
+    if model_id in PRERENDERED_EMPTY_THOUGHT_MODELS and not full.startswith(prompt):
+        prompt = prompt.removesuffix(PRERENDERED_EMPTY_THOUGHT)
+
     if model_id in STRIP_THINK_MODELS and assistant_msg.get("reasoning_content") is not None:
         if not full.startswith(prompt):
             base = prompt.removesuffix("<think>\n").removesuffix("<think>")
@@ -271,9 +303,11 @@ def extract_output_encoder(encoder_name, stag_key, assistant_msg, tools, templat
 
 
 def extract_model_output(stag_key, model_id, assistant_msg, tools, template_kwargs):
-    if model_id.startswith("ENCODER:"):
-        encoder_name = model_id.split(":")[1]
+    encoder_name = model_id.split(":")[1] if model_id.startswith("ENCODER:") else None
+    if encoder_name in ("dsv32", "dsv4"):
         return extract_output_encoder(encoder_name, stag_key, assistant_msg, tools, template_kwargs)
+    # gemma4_* encoders mimic apply_chat_template, so they reuse the tokenizer
+    # path (prompt diff, prerendered-thought stripping, EOS stripping).
     return extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_kwargs)
 
 
@@ -295,6 +329,8 @@ def generate_test_cases():
             if num_tools > 0 and model_id in SKIP_TOOLS:
                 continue
             if num_tool_calls > 1 and model_id in SKIP_PARALLEL_TOOLS:
+                continue
+            if reasoning and num_tool_calls == 0 and model_id in SKIP_REASONING_WITHOUT_TOOL_CALLS:
                 continue
             if reasoning:
                 cases.append(
@@ -335,7 +371,16 @@ def generate_test_cases():
                         num_tool_calls,
                     )
                 )
-    return cases
+    # ENCODER: cases render locally without transformers or a HF token, so
+    # only tokenizer-based cases carry the hf_token_required marker.
+    return [
+        pytest.param(
+            case,
+            id=case_id(case),
+            marks=[] if case[1].startswith("ENCODER:") else [pytest.mark.hf_token_required],
+        )
+        for case in cases
+    ]
 
 
 def case_id(case):
@@ -362,8 +407,7 @@ def case_id(case):
 TEST_CASES = generate_test_cases()
 
 
-@pytest.mark.hf_token_required
-@pytest.mark.parametrize("case", TEST_CASES, ids=[case_id(c) for c in TEST_CASES])
+@pytest.mark.parametrize("case", TEST_CASES)
 def test_reasoning_stag(case):
     (
         stag_key,
@@ -380,6 +424,54 @@ def test_reasoning_stag(case):
     assistant_msg = make_assistant_msg(stag_key, reasoning_content, num_tool_calls)
     model_output = extract_model_output(stag_key, model_id, assistant_msg, tools, template_kwargs)
     validate_output(stag_key, tools, tool_choice, reasoning, model_output)
+
+
+# Official model ids for the vendored gemma-4 templates (drift guard below).
+GEMMA4_OFFICIAL_MODELS = {
+    "gemma4_e2b": "google/gemma-4-E2B-it",
+    "gemma4_31b": "google/gemma-4-31B-it",
+}
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("variant", sorted(GEMMA4_OFFICIAL_MODELS))
+def test_gemma_4_vendored_template_matches_official(variant):
+    """The vendored gemma-4 templates must render exactly like the official ones.
+
+    Guards against upstream chat-template updates drifting from the vendored
+    copies used by the ENCODER:gemma4_* cases. Loading the official tokenizer
+    requires transformers >= 5.5 (gemma-4 support), so this only runs where
+    that is available.
+    """
+    import transformers
+
+    major, minor = (int(p) for p in transformers.__version__.split(".")[:2])
+    if (major, minor) < (5, 5):
+        pytest.skip("gemma-4 tokenizer requires transformers >= 5.5")
+
+    from encoding_gemma4 import GemmaTemplateRenderer
+
+    tokenizer = load_tokenizer(GEMMA4_OFFICIAL_MODELS[variant])
+    renderer = GemmaTemplateRenderer(variant)
+
+    assistant_tool_calls = make_assistant_msg("gemma_4", REASONING_CONTENT, 2)
+    assistant_text = make_assistant_msg("gemma_4", None, 0)
+    for enable_thinking in (True, False):
+        for messages in ([USER_MSG], [USER_MSG, assistant_tool_calls], [USER_MSG, assistant_text]):
+            for tools in (None, [TOOL_A], [TOOL_A, TOOL_B]):
+                for add_generation_prompt in (True, False):
+                    kwargs = {
+                        "tools": tools,
+                        "add_generation_prompt": add_generation_prompt,
+                        "enable_thinking": enable_thinking,
+                    }
+                    official = tokenizer.apply_chat_template(messages, tokenize=False, **kwargs)
+                    vendored = renderer.apply_chat_template(messages, tokenize=False, **kwargs)
+                    assert official == vendored, (
+                        f"Vendored template drifted (enable_thinking={enable_thinking}, "
+                        f"messages={len(messages)}, tools={len(tools or [])}, "
+                        f"add_generation_prompt={add_generation_prompt})"
+                    )
 
 
 if __name__ == "__main__":

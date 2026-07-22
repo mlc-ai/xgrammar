@@ -1,7 +1,7 @@
 /*!
  *  Copyright (c) 2024 by Contributors
  * \file xgrammar/json_schema_converter_ext.h
- * \brief Extended format converters for JSON Schema, including XML Tool Calling format.
+ * \brief Extended tool-calling format converters for JSON Schema (XML styles, Gemma).
  */
 
 #ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
@@ -94,6 +94,61 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   // Track if we're at the root object level
   int nested_object_level_ = 0;
   const XMLWrapper xml_wrapper_;
+};
+
+/*!
+ * \brief Converter for Gemma Tool Calling format.
+ *
+ * This converter generates EBNF where the whole value space (all nesting levels)
+ * uses Gemma's custom format instead of JSON:
+ * - Object keys are unquoted: {key:value,key2:value2}
+ * - Strings are delimited by <|"|> instead of ", with no escape sequences:
+ *   <|"|>any text<|"|>
+ * - Numbers, booleans, arrays and objects otherwise follow JSON syntax.
+ */
+class GemmaToolCallingConverter : public JSONSchemaConverter {
+ public:
+  GemmaToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false
+  );
+
+ protected:
+  std::string GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  std::string GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
+  std::string GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
+
+  std::string FormatPropertyKey(const std::string& key) override;
+  std::string GetKeyPattern() const override;
+  std::string GetKeyPatternExcluding(
+      const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+  ) override;
+  std::string FormatPatternKey(const std::string& pattern) override;
+  std::string CreatePropertyNamesKeyRule(
+      const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+  ) override;
+
+  void AddBasicRules() override;
+
+ private:
+  // The Gemma string delimiter that replaces the JSON double quote.
+  static const std::string kGemmaStringDelim;
+  // Rule matching any text that does not contain the string delimiter.
+  static const std::string kGemmaStringContent;
+  // Rule matching an unquoted property key.
+  static const std::string kGemmaVariableName;
+  // Rule matching exactly one character that cannot start the string delimiter.
+  // Used for length-constrained strings where repetition counts must stay exact.
+  static const std::string kGemmaBoundedChar;
+
+  /*! \brief Serialize a JSON value into Gemma's tool call argument format. */
+  static std::string SerializeJSON(const picojson::value& value);
+  /*! \brief Parse a JSON-serialized value and return its Gemma serialization as an EBNF literal. */
+  static std::string ValueToEBNFLiteral(const std::string& json_value);
 };
 
 }  // namespace xgrammar

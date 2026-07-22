@@ -1820,7 +1820,7 @@ void JSONSchemaConverter::AddBasicRules() {
   // basic_string - cache_key matches SchemaParser::ComputeCacheKey for {"type": "string"}
   constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
   auto str_spec = SchemaSpec::Make(StringSpec{}, kStringCacheKey, kBasicString);
-  std::string str_body = "[\"] " + kBasicStringSub;
+  std::string str_body = GenerateString(std::get<StringSpec>(str_spec->spec), kBasicString);
   ebnf_script_creator_.AddRule(kBasicString, str_body);
   AddCache(kStringCacheKey, kBasicString);
 
@@ -2319,6 +2319,16 @@ std::string JSONSchemaConverter::FormatOtherProperty(
   return key_pattern + " " + colon_pattern_ + " " + value_rule;
 }
 
+std::string JSONSchemaConverter::FormatPatternKey(const std::string& pattern) {
+  return "\"\\\"\"" + RegexToEBNF(pattern, false) + "\"\\\"\"";
+}
+
+std::string JSONSchemaConverter::CreatePropertyNamesKeyRule(
+    const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+) {
+  return CreateRule(property_names, rule_name_hint);
+}
+
 std::string JSONSchemaConverter::GetPropertyWithNumberConstraints(
     const std::string& pattern, int min_properties, int max_properties, int already_repeated_times
 ) {
@@ -2793,8 +2803,7 @@ std::string JSONSchemaConverter::GenerateObject(
       for (size_t i = 0; i < spec.pattern_properties.size(); ++i) {
         const auto& pp = spec.pattern_properties[i];
         std::string value = CreateRule(pp.schema, rule_name + "_pp_" + std::to_string(i));
-        std::string pp_single = "\"\\\"\"" + RegexToEBNF(pp.pattern, false) + "\"\\\"\" " +
-                                colon_pattern_ + " " + value;
+        std::string pp_single = FormatPatternKey(pp.pattern) + " " + colon_pattern_ + " " + value;
         if (i != 0) pp_body += " | ";
         pp_body += pp_single;
       }
@@ -2816,7 +2825,7 @@ std::string JSONSchemaConverter::GenerateObject(
       // propertyNames constrains keys of additional properties.
       // Only apply when additional properties are allowed — when additionalProperties
       // is false, no extra keys beyond named properties should be permitted.
-      auto key_pattern = CreateRule(spec.property_names, rule_name + "_name");
+      auto key_pattern = CreatePropertyNamesKeyRule(spec.property_names, rule_name + "_name");
       std::string val_rule = CreateRule(effective_additional, rule_name + "_" + effective_suffix);
       pp_override = key_pattern + " " + colon_pattern_ + " " + val_rule;
       effective_suffix = "pn";
@@ -2843,8 +2852,8 @@ std::string JSONSchemaConverter::GenerateObject(
         for (size_t i = 0; i < spec.pattern_properties.size(); ++i) {
           const auto& pp = spec.pattern_properties[i];
           std::string value = CreateRule(pp.schema, rule_name + "_prop_" + std::to_string(i));
-          std::string property_pattern = "\"\\\"\"" + RegexToEBNF(pp.pattern, false) + "\"\\\"\" " +
-                                         colon_pattern_ + " " + value;
+          std::string property_pattern =
+              FormatPatternKey(pp.pattern) + " " + colon_pattern_ + " " + value;
           if (i != 0) {
             property_rule_body += " | ";
           }
@@ -2852,7 +2861,7 @@ std::string JSONSchemaConverter::GenerateObject(
         }
         property_rule_body += ")";
       } else {
-        auto key_pattern = CreateRule(spec.property_names, rule_name + "_name");
+        auto key_pattern = CreatePropertyNamesKeyRule(spec.property_names, rule_name + "_name");
         property_rule_body +=
             beg_seq + " " + key_pattern + " " + colon_pattern_ + " " + GetBasicAnyRuleName() + ")";
       }
@@ -4000,6 +4009,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"minimax_xml", JSONFormat::kMiniMaxXML},
       {"deepseek_xml", JSONFormat::kDeepSeekXML},
       {"glm_xml", JSONFormat::kGlmXML},
+      {"gemma", JSONFormat::kGemma},
   };
   auto it = kNameToFormat.find(format);
   if (it == kNameToFormat.end()) {
@@ -4080,6 +4090,12 @@ std::string JSONSchemaToEBNF(
           ref_resolver,
           json_format,
           any_order
+      );
+      return converter.Convert(spec);
+    }
+    case JSONFormat::kGemma: {
+      GemmaToolCallingConverter converter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
       return converter.Convert(spec);
     }

@@ -1815,10 +1815,8 @@ def get_glm_4_7_structural_tag(
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
-# TODO: We are dropping Gemma support because its parameter format is special and not supported
-# yet: the string are wrapped by <|"|> instead of ". We will support it later and get it back.
-# @register_model_structural_tag("gemma_4")
-def _get_gemma_4_structural_tag(
+@register_model_structural_tag("gemma_4")
+def get_gemma_4_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
@@ -1848,8 +1846,9 @@ def _get_gemma_4_structural_tag(
       ``function`` object containing ``name`` and ``parameters`` fields.
     - ``reasoning``: whether to enable reasoning mode. If ``False``, the
       reasoning channel is omitted.
-    - ``tool_choice``: ``"auto"`` or ``"required"``. ``"required"`` forces at
-      least one tool call.
+    - ``tool_choice``: ``"auto"``, ``"required"``, or ``"forced"``. ``"required"``
+      forces at least one tool call; ``"forced"`` forces exactly the single
+      resolved tool.
 
     Supported models:
 
@@ -1869,7 +1868,15 @@ def _get_gemma_4_structural_tag(
     TOOL_CALL_TRIGGER = "<|tool_call>"
     THINK_TAG_BEGIN = "<|channel>thought\n"
     THINK_TAG_END = "<channel|>"
-    GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>"]
+    # <|tool_response> is deliberately not excluded: the model emits it as its halt
+    # signal after a tool call, so it must be handled as a stop sequence, not blocked.
+    # The triggered free text must NOT exclude <|tool_call>: it is the trigger, and
+    # excluding it would block the dispatch into the tool-call tags entirely.
+    TEXT_EXCLUDES = ["<|channel>", "<channel|>"]
+    # <|tool_call> is excluded from the thought channel (and from free text when no
+    # tools are available) so the model cannot start a tool call there: that content
+    # is free-form text and not constrained by the tool-call grammar.
+    REASONING_EXCLUDES = TEXT_EXCLUDES + [TOOL_CALL_TRIGGER]
 
     tools = tools or []
     builtin_tools = builtin_tools or []
@@ -1884,6 +1891,7 @@ def _get_gemma_4_structural_tag(
                     begin=TOOL_CALL_BEGIN_PREFIX + name,
                     content=JSONSchemaFormat(
                         json_schema=parameters,
+                        style="gemma",
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
                     ),
@@ -1895,11 +1903,11 @@ def _get_gemma_4_structural_tag(
             suffix_tag = TriggeredTagsFormat(
                 triggers=[TOOL_CALL_TRIGGER],
                 tags=tags,
-                excludes=_text_excludes(exclude_special_tokens, GEMMA4_EXCLUDE_TOKENS),
+                excludes=_text_excludes(exclude_special_tokens, TEXT_EXCLUDES),
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens, GEMMA4_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, REASONING_EXCLUDES)
             )
 
     elif tool_choice == "forced":
@@ -1910,6 +1918,7 @@ def _get_gemma_4_structural_tag(
             begin=TOOL_CALL_BEGIN_PREFIX + function.name,
             content=JSONSchemaFormat(
                 json_schema=_get_function_parameters(function),
+                style="gemma",
                 any_order=any_order,
                 max_whitespace_cnt=max_whitespace_cnt,
             ),
@@ -1927,6 +1936,7 @@ def _get_gemma_4_structural_tag(
                     begin=TOOL_CALL_BEGIN_PREFIX + name,
                     content=JSONSchemaFormat(
                         json_schema=parameters,
+                        style="gemma",
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
                     ),
@@ -1944,7 +1954,11 @@ def _get_gemma_4_structural_tag(
     if not reasoning:
         return StructuralTag(format=suffix_tag)
 
-    prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
+    prefix_tag = TagFormat(
+        begin=THINK_TAG_BEGIN,
+        content=AnyTextFormat(excludes=_text_excludes(exclude_special_tokens, REASONING_EXCLUDES)),
+        end=THINK_TAG_END,
+    )
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
