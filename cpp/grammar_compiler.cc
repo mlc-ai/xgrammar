@@ -63,6 +63,18 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   AdaptiveTokenMask GetAdaptiveTokenMask(bool is_root_rule);
 
   /*!
+   * \brief Whether init_rule_id_ is a token-budgeted any_text region (a TagDispatch with
+   * max_tokens != -1). For such a rule the fast-accept paths are disabled so every candidate token
+   * is live-simulated at runtime, where the matcher's budget suppression in AdvanceFsm governs it.
+   */
+  bool IsBoundedRule() {
+    const auto& rule = grammar_->GetRule(init_rule_id_);
+    const auto& body = grammar_->GetGrammarExpr(rule.body_expr_id);
+    return body.type == Grammar::Impl::GrammarExprType::kTagDispatch &&
+           grammar_->GetTagDispatch(rule.body_expr_id).max_tokens != -1;
+  }
+
+  /*!
    * \brief Get the token mask for the given ParserState.
    * \param first_char_mask The first character mask.
    * \param is_root_rule Whether to consider the parent rule. If false, there will be
@@ -433,6 +445,13 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
   // If the initial rule is a tag dispatch, we will check if it can achieve its initial state.
   const auto& rule = grammar_->GetRule(init_rule_id_);
   const auto& rule_body = grammar_->GetGrammarExpr(rule.body_expr_id);
+  // A token-budgeted TagDispatch must not use the speculative fast-accept: every candidate token
+  // has to be live-simulated at runtime so the budget suppression in AdvanceFsm can reject
+  // over-budget content tokens.
+  if (rule_body.type == GrammarExprType::kTagDispatch &&
+      grammar_->GetTagDispatch(rule.body_expr_id).max_tokens != -1) {
+    return {false, std::bitset<256>{}};
+  }
   if (rule_body.type == GrammarExprType::kTagDispatch) {
     std::bitset<256> speculative_mask;
     XGRAMMAR_DCHECK(grammar_->per_rule_fsms[init_rule_id_].has_value());
@@ -518,6 +537,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 
   XGRAMMAR_DCHECK(init_rule_id_ != -1 && grammar_->per_rule_fsms[init_rule_id_].has_value());
   auto [speculative_calculation, speculative_mask] = GetSpeculativeCalculation();
+  const bool is_bounded_rule = IsBoundedRule();
 
   int prev_matched_size = 0;
   int last_rejected_range = 0;
@@ -637,12 +657,19 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       bool can_reach_end = tmp_can_reach_end_prefix_or_stack_.back();
 
       if (accepted) {
-        tmp_accepted_indices_.push_back(i);
+        // For a token-budgeted region, a token that advances the loop must stay UNCERTAIN so the
+        // runtime live-check (where the budget suppression applies) decides it, instead of being
+        // fast-accepted here (which would bypass the budget).
+        if (is_bounded_rule) {
+          tmp_uncertain_indices_.push_back(i);
+        } else {
+          tmp_accepted_indices_.push_back(i);
+        }
       } else if (can_reach_end && prev_matched_size > 0) {
         auto [lookahead_accepted, lookahead_completed] =
             IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_);
         if ((!is_root_rule) && lookahead_accepted) {
-          if (lookahead_completed || !is_exact_lookahead) {
+          if (lookahead_completed || !is_exact_lookahead || is_bounded_rule) {
             tmp_uncertain_indices_.push_back(i);
           } else {
             tmp_accepted_indices_.push_back(i);
@@ -790,9 +817,12 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   tmp_can_reach_end_stack_.push_back(false);
   tmp_can_reach_end_prefix_or_stack_.push_back(false);
 
-  // Try to get the crossing cache.
-  bool rule_level_cache_is_available =
-      rule_level_cache_.has_value() && grammar_->per_rule_fsm_hashes[init_rule_id_].has_value();
+  // Try to get the crossing cache. A token-budgeted region must NOT share the rule-level (FSM-hash)
+  // cache: its FSM is identical to an unbounded TagDispatch with the same excludes, so reuse would
+  // serve an unbounded (fast-accept) mask and silently bypass the budget.
+  bool rule_level_cache_is_available = rule_level_cache_.has_value() &&
+                                       grammar_->per_rule_fsm_hashes[init_rule_id_].has_value() &&
+                                       !IsBoundedRule();
   std::optional<uint64_t> fsm_hash = std::nullopt;
   int32_t new_state_id = -1;
   std::optional<AdaptiveTokenMask> crossing_cache = std::nullopt;
@@ -1055,6 +1085,24 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   }
   std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
   TagDispatchOptimization(compiled_grammar_impl, &tag_dispatch_rule_id_to_second_slicing_bitset);
+
+  // Detect the single bounded any_text region (a TagDispatch carrying max_tokens != -1) so the
+  // matcher can enforce its token budget. v1 supports at most one such region per grammar.
+  for (int32_t rule_id = 0; rule_id < compiled_grammar_impl->grammar->NumRules(); ++rule_id) {
+    const auto& rule = compiled_grammar_impl->grammar->GetRule(rule_id);
+    const auto& body = compiled_grammar_impl->grammar->GetGrammarExpr(rule.body_expr_id);
+    if (body.type != Grammar::Impl::GrammarExprType::kTagDispatch) {
+      continue;
+    }
+    auto td = compiled_grammar_impl->grammar->GetTagDispatch(rule.body_expr_id);
+    if (td.max_tokens < 0) {
+      continue;
+    }
+    XGRAMMAR_CHECK(compiled_grammar_impl->bounded_tag_dispatch_rule_id == -1)
+        << "Only a single bounded any_text region (max_tokens) is supported per grammar.";
+    compiled_grammar_impl->bounded_tag_dispatch_rule_id = rule_id;
+    compiled_grammar_impl->bounded_tag_dispatch_max_tokens = td.max_tokens;
+  }
 
   // If the compiler is cache-enabled, then we hash the grammars for crossing-grammar caching.
   if (rule_level_cache_.has_value()) {

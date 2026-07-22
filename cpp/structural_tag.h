@@ -119,7 +119,11 @@ struct RegexFormat {
 struct AnyTextFormat {
   static constexpr const char* type = "any_text";
   std::vector<std::string> excludes;
-  AnyTextFormat(std::vector<std::string> excluded_strs) : excludes(std::move(excluded_strs)) {}
+  // Max number of whole tokens this region may consume; -1 = unbounded. Enforced atomically at
+  // token granularity by the matcher (the region is forced to end once the budget is reached).
+  int32_t max_tokens = -1;
+  AnyTextFormat(std::vector<std::string> excluded_strs, int32_t max_tokens = -1)
+      : excludes(std::move(excluded_strs)), max_tokens(max_tokens) {}
   picojson::value ToJSON() const;
 
  private:
@@ -163,8 +167,14 @@ struct ExcludeTokenFormat {
 struct AnyTokensFormat {
   static constexpr const char* type = "any_tokens";
   std::vector<std::variant<int32_t, std::string>> exclude_tokens;
-  AnyTokensFormat(std::vector<std::variant<int32_t, std::string>> exclude_tokens)
-      : exclude_tokens(std::move(exclude_tokens)) {}
+  // If set, match at most max_tokens tokens (each excluding exclude_tokens), giving an exact
+  // token-count budget. If std::nullopt, the number of tokens is unbounded.
+  std::optional<int> max_tokens = std::nullopt;
+  AnyTokensFormat(
+      std::vector<std::variant<int32_t, std::string>> exclude_tokens,
+      std::optional<int> max_tokens = std::nullopt
+  )
+      : exclude_tokens(std::move(exclude_tokens)), max_tokens(max_tokens) {}
   picojson::value ToJSON() const;
 
  private:

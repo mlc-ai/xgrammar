@@ -6,7 +6,14 @@ import pytest
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.structural_tag import JSONSchemaFormat, SequenceFormat, StructuralTag, TagFormat
+from xgrammar.structural_tag import (
+    AnyTextFormat,
+    AnyTokensFormat,
+    JSONSchemaFormat,
+    SequenceFormat,
+    StructuralTag,
+    TagFormat,
+)
 from xgrammar.testing import _is_grammar_accept_string
 
 
@@ -3582,6 +3589,289 @@ root ::= ((any_tokens))
     )
 
 
+def test_any_tokens_format_max_tokens():
+    """max_tokens bounds the per-token star to {0, N} (an exact token-count budget)."""
+    check_stag_with_grammar(
+        {"type": "any_tokens", "exclude_tokens": [5, 10], "max_tokens": 3},
+        r"""any_tokens_inner ::= ((ExcludeToken(5, 10)))
+any_tokens ::= ((any_tokens_inner{0, 3}))
+root ::= ((any_tokens))
+""",
+    )
+
+
+def test_any_tokens_format_max_tokens_enforced():
+    """End-to-end: max_tokens=N accepts at most N tokens (each excluding exclude_tokens),
+    then the section must end. Each token counts exactly once."""
+    # raw vocab: a=0, b=1, c=2, X=3
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c", "X"])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    spec = {
+        "type": "structural_tag",
+        "format": {
+            "type": "sequence",
+            "elements": [
+                {"type": "any_tokens", "exclude_tokens": ["X"], "max_tokens": 2},
+                {"type": "const_string", "value": "X"},
+            ],
+        },
+    }
+    compiled = compiler.compile_structural_tag(spec)
+    A, B, C, X = 0, 1, 2, 3
+
+    def accepts(tokens):
+        matcher = xgr.GrammarMatcher(compiled)
+        for token_id in tokens:
+            if not matcher.accept_token(token_id):
+                return False
+        return matcher.is_completed()
+
+    assert accepts([X])  # 0 budget tokens, then end
+    assert accepts([A, X])  # 1 budget token
+    assert accepts([A, B, X])  # 2 budget tokens (budget full), then end
+    assert not accepts([A, B, C])  # 3rd budget token exceeds max_tokens -> rejected
+    assert not accepts([A, B, C, X])
+
+
+def test_any_tokens_format_max_tokens_zero_grammar():
+    """max_tokens=0 produces a {0, 0} repetition (zero tokens), distinct from the unbounded star."""
+    check_stag_with_grammar(
+        {"type": "any_tokens", "exclude_tokens": [5], "max_tokens": 0},
+        r"""any_tokens_inner ::= ((ExcludeToken(5)))
+any_tokens ::= ((any_tokens_inner{0, 0}))
+root ::= ((any_tokens))
+""",
+    )
+
+
+def test_any_tokens_format_max_tokens_one_grammar():
+    """Boundary max_tokens=1 produces {0, 1} (optional single token)."""
+    check_stag_with_grammar(
+        {"type": "any_tokens", "exclude_tokens": [5], "max_tokens": 1},
+        r"""any_tokens_inner ::= ((ExcludeToken(5)))
+any_tokens ::= ((any_tokens_inner{0, 1}))
+root ::= ((any_tokens))
+""",
+    )
+
+
+def test_any_tokens_format_max_tokens_no_exclude_tokens_grammar():
+    """max_tokens applies even with an empty exclude set (ExcludeToken())."""
+    check_stag_with_grammar(
+        {"type": "any_tokens", "max_tokens": 2},
+        r"""any_tokens_inner ::= ((ExcludeToken()))
+any_tokens ::= ((any_tokens_inner{0, 2}))
+root ::= ((any_tokens))
+""",
+    )
+
+
+def _any_tokens_budget_accepts(max_tokens, exclude_tokens, vocab, prefix_end="X"):
+    """Helper: compile [any_tokens(exclude_tokens, max_tokens), const_string(prefix_end)] and
+    return an accepts(token_ids) closure."""
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    spec = {
+        "type": "structural_tag",
+        "format": {
+            "type": "sequence",
+            "elements": [
+                {"type": "any_tokens", "exclude_tokens": exclude_tokens, "max_tokens": max_tokens},
+                {"type": "const_string", "value": prefix_end},
+            ],
+        },
+    }
+    compiled = compiler.compile_structural_tag(spec)
+
+    def accepts(token_ids):
+        matcher = xgr.GrammarMatcher(compiled)
+        for token_id in token_ids:
+            if not matcher.accept_token(token_id):
+                return False
+        return matcher.is_completed()
+
+    return accepts
+
+
+def test_any_tokens_format_max_tokens_zero_enforced():
+    """max_tokens=0: no budget token may be consumed; only the immediate end is valid."""
+    accepts = _any_tokens_budget_accepts(0, ["X"], ["a", "b", "X"])
+    A, _, X = 0, 1, 2
+    assert accepts([X])
+    assert not accepts([A, X])
+    assert not accepts([A])
+
+
+def test_any_tokens_format_max_tokens_one_enforced():
+    """max_tokens=1: zero or exactly one budget token, then forced end."""
+    accepts = _any_tokens_budget_accepts(1, ["X"], ["a", "b", "X"])
+    A, B, X = 0, 1, 2
+    assert accepts([X])
+    assert accepts([A, X])
+    assert not accepts([A, B, X])
+    assert not accepts([A, B])
+
+
+def test_any_tokens_format_max_tokens_with_exclude_tokens_enforced():
+    """max_tokens AND exclude_tokens both enforced: excluded token rejected mid-budget; each
+    non-excluded token counts against the budget."""
+    accepts = _any_tokens_budget_accepts(3, ["c"], ["a", "b", "c", "X"])
+    A, B, C, X = 0, 1, 2, 3
+    assert accepts([A, B, X])  # 2 of 3 budget, c never used
+    assert accepts([A, B, A, X])  # 3 budget tokens, none excluded
+    assert not accepts([A, C, X])  # C excluded mid-budget
+    assert not accepts([A, B, A, A, X])  # 4th budget token exceeds max_tokens
+
+
+def test_any_tokens_format_max_tokens_negative_raises_in_grammar():
+    """A negative max_tokens (as a JSON integer in a dict) is rejected at grammar build."""
+    stag = {
+        "type": "structural_tag",
+        "format": {"type": "any_tokens", "exclude_tokens": [5], "max_tokens": -1},
+    }
+    with pytest.raises(Exception, match="non-negative integer"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_any_tokens_format_max_tokens_non_numeric_raises():
+    """A present-but-non-numeric max_tokens is an error, not silently treated as unbounded."""
+    stag = {
+        "type": "structural_tag",
+        "format": {"type": "any_tokens", "exclude_tokens": [5], "max_tokens": "2"},
+    }
+    with pytest.raises(Exception, match="non-negative integer"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_any_tokens_format_max_tokens_overflow_raises():
+    """A max_tokens above INT_MAX is rejected rather than silently truncated."""
+    stag = {"type": "structural_tag", "format": {"type": "any_tokens", "max_tokens": 10**12}}
+    with pytest.raises(Exception, match="non-negative integer"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_any_tokens_format_max_tokens_negative_rejected_by_pydantic():
+    """The pydantic model rejects a negative max_tokens at construction (defense in depth)."""
+    with pytest.raises(Exception):
+        AnyTokensFormat(exclude_tokens=[5], max_tokens=-1)
+
+
+def test_any_tokens_format_max_tokens_roundtrip_json():
+    """Round-trip through the pydantic model preserves max_tokens and exclude_tokens."""
+    m = AnyTokensFormat(exclude_tokens=[5, 10], max_tokens=3)
+    dumped = m.model_dump()
+    assert dumped["max_tokens"] == 3 and dumped["exclude_tokens"] == [5, 10]
+    m2 = AnyTokensFormat.model_validate_json(m.model_dump_json())
+    assert m2.max_tokens == 3 and m2.exclude_tokens == [5, 10]
+    # the re-serialized form recompiles to the same {0, 3} grammar
+    check_stag_with_grammar(
+        {"type": "any_tokens", "exclude_tokens": [5, 10], "max_tokens": 3},
+        r"""any_tokens_inner ::= ((ExcludeToken(5, 10)))
+any_tokens ::= ((any_tokens_inner{0, 3}))
+root ::= ((any_tokens))
+""",
+    )
+
+
+def test_any_tokens_format_max_tokens_none_uses_unbounded_star():
+    """When max_tokens is unset it serializes as None and the grammar uses the unbounded star
+    (NOT the {0, N} form), distinguishing it from max_tokens=0."""
+    m = AnyTokensFormat(exclude_tokens=[5])
+    assert m.model_dump()["max_tokens"] is None
+    check_stag_with_grammar(
+        {"type": "any_tokens", "exclude_tokens": [5]},
+        r"""any_tokens_inner ::= ((ExcludeToken(5)))
+any_tokens ::= ("" | (any_tokens_inner any_tokens))
+root ::= ((any_tokens))
+""",
+    )
+
+
+def test_any_tokens_max_tokens_inside_tag_grammar():
+    """Think-style: AnyTokensFormat with max_tokens nested in a TagFormat with token begin/end.
+    The parent end token is auto-detected and folded into ExcludeToken while {0, N} is preserved."""
+    check_stag_with_grammar(
+        {
+            "type": "tag",
+            "begin": {"type": "token", "token": 1},
+            "content": {"type": "any_tokens", "exclude_tokens": [5], "max_tokens": 3},
+            "end": {"type": "token", "token": 99},
+        },
+        r"""any_tokens_inner ::= ((ExcludeToken(5, 99)))
+any_tokens ::= ((any_tokens_inner{0, 3}))
+tag ::= ((Token(1) any_tokens Token(99)))
+root ::= ((tag))
+""",
+    )
+
+
+def test_any_tokens_max_tokens_inside_tag_enforced():
+    """Think-style enforcement: end reachable after 0..N content tokens (early end allowed),
+    end forced once the budget is reached, and content cannot exceed N tokens."""
+    # vocab: B=0 (begin), x=1 (content), y=2 (content), E=3 (end)
+    tokenizer_info = xgr.TokenizerInfo(["<b>", "x", "y", "</e>"])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    spec = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": {"type": "token", "token": 0},
+            "content": {"type": "any_tokens", "exclude_tokens": [], "max_tokens": 3},
+            "end": {"type": "token", "token": 3},
+        },
+    }
+    compiled = compiler.compile_structural_tag(spec)
+    B, X, E = 0, 1, 3
+
+    def accepts(token_ids):
+        matcher = xgr.GrammarMatcher(compiled)
+        for token_id in token_ids:
+            if not matcher.accept_token(token_id):
+                return False
+        return matcher.is_completed()
+
+    assert accepts([B, E])  # 0 content tokens
+    assert accepts([B, X, E])  # 1 content token
+    assert accepts([B, X, X, X, E])  # exactly N=3 content tokens
+    assert not accepts([B, X, X, X, X, E])  # 4 content tokens > N
+
+    # end is FORCED once budget is reached
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_token(B)
+    for _ in range(3):
+        assert matcher.accept_token(X)
+    assert not matcher.accept_token(X)  # 4th content token rejected
+    assert matcher.accept_token(E)  # only the end is allowed
+    assert matcher.is_completed()
+
+
+def test_any_tokens_max_tokens_zero_inside_tag_forces_immediate_end():
+    """max_tokens=0 inside a begin/end tag forces the end token immediately after begin."""
+    tokenizer_info = xgr.TokenizerInfo(["<b>", "x", "</e>"])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    spec = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": {"type": "token", "token": 0},
+            "content": {"type": "any_tokens", "exclude_tokens": [], "max_tokens": 0},
+            "end": {"type": "token", "token": 2},
+        },
+    }
+    compiled = compiler.compile_structural_tag(spec)
+    B, X, E = 0, 1, 2
+
+    def accepts(token_ids):
+        matcher = xgr.GrammarMatcher(compiled)
+        for token_id in token_ids:
+            if not matcher.accept_token(token_id):
+                return False
+        return matcher.is_completed()
+
+    assert accepts([B, E])
+    assert not accepts([B, X, E])
+
+
 def test_any_tokens_detects_end_from_parent_tag():
     """AnyTokensFormat inside a tag with token end should auto-detect end token IDs."""
     check_stag_with_grammar(
@@ -4215,6 +4505,44 @@ def test_structural_tag_max_whitespace_cnt_compile_cache():
     g_bounded = compiler.compile_structural_tag(_ws_stag(max_whitespace_cnt=2)).grammar
     assert _is_grammar_accept_string(g_unbounded, _ws_instance(5))
     assert not _is_grammar_accept_string(g_bounded, _ws_instance(5))
+
+
+def test_any_text_max_tokens_builds_tag_dispatch():
+    """A bounded any_text (with or without excludes) compiles to a TagDispatch that carries the
+    budget; the budget itself is enforced by the matcher (see test_grammar_matcher_structural_tag).
+    """
+    for fmt in (
+        {"type": "any_text", "excludes": ["</think>"], "max_tokens": 4},
+        {"type": "any_text", "max_tokens": 4},  # no excludes, but bounded -> still a TagDispatch
+    ):
+        grammar_str = str(
+            xgr.Grammar.from_structural_tag({"type": "structural_tag", "format": fmt})
+        )
+        assert "TagDispatch" in grammar_str
+    # unbounded no-excludes stays a plain character-class star (no regression)
+    assert "[\\0-\\U0010ffff]*" in str(
+        xgr.Grammar.from_structural_tag({"type": "structural_tag", "format": {"type": "any_text"}})
+    )
+
+
+def test_any_text_max_tokens_model_roundtrip():
+    model = AnyTextFormat(excludes=["</think>"], max_tokens=8)
+    assert model.model_dump()["max_tokens"] == 8
+    assert AnyTextFormat.model_validate_json(model.model_dump_json()).max_tokens == 8
+    # unset -> None (unbounded), distinct from 0
+    assert AnyTextFormat(excludes=["</think>"]).model_dump()["max_tokens"] is None
+
+
+@pytest.mark.parametrize("bad", [-1, "2", 2.5, 10**12])
+def test_any_text_max_tokens_invalid_raises(bad):
+    stag = {"type": "structural_tag", "format": {"type": "any_text", "max_tokens": bad}}
+    with pytest.raises(Exception):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_any_text_max_tokens_negative_rejected_by_pydantic():
+    with pytest.raises(Exception):
+        AnyTextFormat(excludes=["</think>"], max_tokens=-1)
 
 
 if __name__ == "__main__":

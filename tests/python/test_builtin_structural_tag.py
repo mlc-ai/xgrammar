@@ -25,7 +25,7 @@ from xgrammar.builtin_structural_tag import (
     normalize_tool_choice,
 )
 from xgrammar.openai_tool_call_schema import BuiltinToolParam, FunctionToolParam
-from xgrammar.structural_tag import JSONSchemaFormat, StructuralTag, TagFormat
+from xgrammar.structural_tag import AnyTextFormat, JSONSchemaFormat, StructuralTag, TagFormat
 from xgrammar.testing import _is_grammar_accept_string
 
 
@@ -1540,3 +1540,88 @@ def test_get_model_structural_tag_max_whitespace_cnt_propagates():
     )
     assert nodes_bounded
     assert all(n.max_whitespace_cnt == 2 for n in nodes_bounded)
+
+
+# ---------- Test: reasoning_max_tokens (think budget) ----------
+
+# Reasoning models whose think span is closed by one of these markers.
+_THINK_REGION_ENDS = {"</think>", "<channel|>"}
+
+# Registered reasoning models whose think region is a ``</think>``-terminated tag.
+_REASONING_MODELS = [
+    "deepseek_r1",
+    "deepseek_v3_1",
+    "deepseek_v3_2",
+    "deepseek_v4",
+    "qwen_3",
+    "qwen_3_5",
+    "kimi",
+    "minimax",
+    "glm_4_7",
+]
+
+
+def _collect_anytext_max_tokens(structural_tag: StructuralTag) -> List[Optional[int]]:
+    """Collect ``max_tokens`` from every nested AnyTextFormat node."""
+
+    return [
+        format_obj.max_tokens
+        for format_obj in _walk_structural_format(structural_tag.format)
+        if isinstance(format_obj, AnyTextFormat)
+    ]
+
+
+def _collect_think_region_max_tokens(structural_tag: StructuralTag) -> List[Optional[int]]:
+    """``max_tokens`` of the AnyText content nested inside a reasoning/think tag."""
+
+    return [
+        format_obj.content.max_tokens
+        for format_obj in _walk_structural_format(structural_tag.format)
+        if isinstance(format_obj, TagFormat)
+        and format_obj.end in _THINK_REGION_ENDS
+        and isinstance(format_obj.content, AnyTextFormat)
+    ]
+
+
+@pytest.mark.parametrize("model", _REASONING_MODELS)
+def test_reasoning_max_tokens_bounds_think_region(model: str):
+    """``reasoning_max_tokens`` bounds the think region only; nothing else gets a budget."""
+    st = get_model_structural_tag(model, tools=None, reasoning_max_tokens=8)
+    think = _collect_think_region_max_tokens(st)
+    all_max_tokens = _collect_anytext_max_tokens(st)
+    assert think and all(mt == 8 for mt in think)
+    # Only the think region(s) carry the budget; e.g. the free text after </think> stays unbounded.
+    assert all_max_tokens.count(8) == len(think)
+    assert all(mt in (8, None) for mt in all_max_tokens)
+
+
+@pytest.mark.parametrize("model", _REASONING_MODELS + ["harmony", "llama"])
+def test_reasoning_max_tokens_defaults_to_unbounded(model: str):
+    """Without ``reasoning_max_tokens`` every AnyText region stays unbounded (unchanged)."""
+    st = get_model_structural_tag(model, tools=None)
+    assert all(mt is None for mt in _collect_anytext_max_tokens(st))
+
+
+def test_reasoning_max_tokens_harmony_bounds_analysis_only():
+    """For harmony only the analysis (reasoning) channel is budgeted, not the final channel."""
+    st = get_model_structural_tag("harmony", tools=None, reasoning_max_tokens=8)
+    max_tokens = _collect_anytext_max_tokens(st)
+    assert max_tokens.count(8) == 1
+    assert max_tokens.count(None) >= 1
+
+
+def test_reasoning_max_tokens_ignored_without_reasoning():
+    """A think budget has no effect when reasoning is off or the model has no reasoning part."""
+    st = get_model_structural_tag(
+        "deepseek_r1", tools=None, reasoning=False, reasoning_max_tokens=8
+    )
+    assert all(mt is None for mt in _collect_anytext_max_tokens(st))
+    # Llama has no reasoning part: it accepts the argument and ignores it.
+    st_llama = get_model_structural_tag("llama", tools=None, reasoning_max_tokens=8)
+    assert all(mt is None for mt in _collect_anytext_max_tokens(st_llama))
+
+
+def test_reasoning_max_tokens_compiles_to_grammar():
+    """A think-budgeted structural tag still compiles to a grammar."""
+    st = get_model_structural_tag("deepseek_r1", tools=None, reasoning_max_tokens=4)
+    assert xgr.Grammar.from_structural_tag(st) is not None

@@ -91,6 +91,7 @@ class SubGrammarAdderImpl : public GrammarMutator {
     }
     new_tag_dispatch.loop_after_dispatch = old_tag_dispatch.loop_after_dispatch;
     new_tag_dispatch.excludes = old_tag_dispatch.excludes;
+    new_tag_dispatch.max_tokens = old_tag_dispatch.max_tokens;
     return builder_->AddTagDispatch(new_tag_dispatch);
   }
 

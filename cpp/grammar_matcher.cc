@@ -461,6 +461,8 @@ class GrammarMatcher::Impl : public EarleyParser {
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
+    bounded_rule_id_ = compiled_grammar_->bounded_tag_dispatch_rule_id;
+    bounded_max_tokens_ = compiled_grammar_->bounded_tag_dispatch_max_tokens;
   }
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
@@ -475,7 +477,12 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   bool IsTerminated() const;
 
-  void Reset() { EarleyParser::Reset(); }
+  void Reset() {
+    EarleyParser::Reset();
+    token_length_history.clear();
+    bounded_region_consumed_ = 0;
+    bounded_consumed_history_.clear();
+  }
 
   int GetMaxRollbackTokens() const { return -1; }
 
@@ -522,11 +529,46 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   std::string PrintBitmask(int32_t* bitmask_data_ptr, const TokenizerInfo& tokenizer_info);
 
+  /*!
+   * \brief Whether the parser currently sits inside the bounded any_text region (some live
+   * scanable state belongs to the budgeted TagDispatch rule).
+   */
+  bool InBoundedRegion() const {
+    if (bounded_rule_id_ < 0) {
+      return false;
+    }
+    for (const auto& s : GetLatestScanableStates()) {
+      if (s.rule_id == bounded_rule_id_) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /*! \brief Push one in-region token-count delta, kept in lockstep with token_length_history. */
+  void PushBoundedDelta(int delta) {
+    bounded_consumed_history_.push_back(delta);
+    bounded_region_consumed_ += delta;
+  }
+
+  /*! \brief Tell the parser whether the bounded region's budget is exhausted (drives AdvanceFsm).
+   */
+  void RefreshBudgetSuppression() {
+    const bool exhausted = bounded_rule_id_ >= 0 && bounded_region_consumed_ >= bounded_max_tokens_;
+    SetBudgetExhaustedRule(exhausted ? bounded_rule_id_ : -1);
+  }
+
   CompiledGrammar compiled_grammar_;
   TokenizerInfo tokenizer_info_;
   std::vector<int> stop_token_ids_;
   bool terminate_without_stop_token_;
   std::deque<int> token_length_history;
+  // Token budget for the single bounded any_text region (-1 = none). bounded_region_consumed_
+  // counts content tokens; bounded_consumed_history_ mirrors token_length_history for rollback.
+  int32_t bounded_rule_id_ = -1;
+  int32_t bounded_max_tokens_ = -1;
+  int bounded_region_consumed_ = 0;
+  std::deque<int> bounded_consumed_history_;
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
   DynamicBitset tmp_accepted_bitset_;
@@ -593,6 +635,7 @@ bool GrammarMatcher::Impl::AcceptStopToken() {
   }
   XGRAMMAR_DCHECK(!stop_token_is_accepted_);
   token_length_history.push_back(0);
+  PushBoundedDelta(0);  // stop token never counts toward the region budget
   stop_token_is_accepted_ = true;
   return true;
 }
@@ -619,6 +662,12 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
                           << tokenizer_info_.GetVocabSize() << "). Rejecting the token.";
     return false;
   }
+
+  // Token budget: snapshot whether the parser is inside the bounded any_text region before this
+  // token, and tell the parser to suppress further loop consumption if the budget is exhausted (so
+  // the byte/atomic advances below obey the same rule the mask advertised).
+  const bool in_region_before = InBoundedRegion();
+  RefreshBudgetSuppression();
 
   if (debug_print) {
     std::string states_str;
@@ -689,8 +738,10 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     PopLastStates(pos);
     AdvanceAtomicToken(token_id, debug_print);
     token_length_history.push_back(1);
+    PushBoundedDelta(in_region_before ? 1 : 0);
   } else if (byte_path_success && !atomic_success) {
     token_length_history.push_back(token.size());
+    PushBoundedDelta(in_region_before ? 1 : 0);
   } else {
     // Both paths succeeded — merge atomic token states into byte path
     if (token.empty()) {
@@ -699,6 +750,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       rule_id_to_completable_states_.PushBack(atomic_completable);
       is_completed_.push_back(atomic_completed);
       token_length_history.push_back(1);
+      PushBoundedDelta(in_region_before ? 1 : 0);
     } else {
       auto byte_states = GetLatestScanableStates();
       std::vector<ParserState> merged = byte_states;
@@ -730,6 +782,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       rule_id_to_completable_states_.PushBack(merged_completable);
       is_completed_.push_back(byte_completed || atomic_completed);
       token_length_history.push_back(token.size());
+      PushBoundedDelta(in_region_before ? 1 : 0);
     }
   }
 
@@ -769,6 +822,9 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
     ++accepted_cnt;
   }
   token_length_history.push_back(input_str.size());
+  // AcceptString is used for forced/jump-forward continuations, which do not occur inside the
+  // open-ended bounded region; push 0 to keep the rollback ledgers in lockstep.
+  PushBoundedDelta(0);
 
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str) << "\" is accepted.";
@@ -812,6 +868,10 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   XGRAMMAR_CHECK(!IsStopTokenAccepted())
       << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
          "find the next token mask";
+  // Token budget: if the bounded region is exhausted, the parser must suppress further loop
+  // consumption so the per-candidate live walk below rejects over-budget content tokens, leaving
+  // only the region's end tag valid.
+  RefreshBudgetSuppression();
   int32_t* bitmask_data_ptr =
       CheckAndGetBitmaskPtr(*next_token_bitmask, tokenizer_info_.GetVocabSize(), index);
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
@@ -1028,6 +1088,11 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
     int steps = token_length_history.back();
     PopLastStates(steps);
     token_length_history.pop_back();
+    // Keep the bounded-region counter in lockstep with the rollback ledger.
+    if (!bounded_consumed_history_.empty()) {
+      bounded_region_consumed_ -= bounded_consumed_history_.back();
+      bounded_consumed_history_.pop_back();
+    }
     --num_tokens;
   }
 }

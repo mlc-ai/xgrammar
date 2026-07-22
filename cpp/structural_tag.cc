@@ -128,6 +128,9 @@ picojson::value AnyTextFormat::ToJSON() const {
   obj["type"] = picojson::value(type);
   obj["excludes"] = StringVectorToJSONArray(excludes);
   obj["detected_end_strs"] = StringVectorToJSONArray(detected_end_strs_);
+  if (max_tokens != -1) {
+    obj["max_tokens"] = picojson::value(static_cast<double>(max_tokens));
+  }
   return picojson::value(std::move(obj));
 }
 
@@ -199,6 +202,9 @@ picojson::value AnyTokensFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
   obj["exclude_tokens"] = IntOrStringVectorToJSONArray(exclude_tokens);
+  if (max_tokens.has_value()) {
+    obj["max_tokens"] = picojson::value(static_cast<double>(max_tokens.value()));
+  }
   return picojson::value(std::move(obj));
 }
 
@@ -573,14 +579,40 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
   );
 }
 
+// Reads an optional non-negative integer "max_tokens" field. Returns -1 if absent or null
+// (unbounded). A present-but-invalid value is an error rather than silently unbounded.
+static Result<int32_t, ISTError> ParseAnyTextMaxTokens(const picojson::object& obj) {
+  auto it = obj.find("max_tokens");
+  if (it == obj.end() || it->second.is<picojson::null>()) {
+    return ResultOk<int32_t>(-1);
+  }
+  if (!it->second.is<double>()) {
+    return ResultErr<ISTError>("max_tokens in any_text must be a non-negative integer or null.");
+  }
+  double raw = it->second.get<double>();
+  if (raw < 0 || raw > static_cast<double>(std::numeric_limits<int>::max()) ||
+      raw != std::floor(raw)) {
+    return ResultErr<ISTError>(
+        "max_tokens in any_text must be a non-negative integer in [0, INT_MAX]."
+    );
+  }
+  return ResultOk<int32_t>(static_cast<int32_t>(raw));
+}
+
 Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const picojson::object& obj
 ) {
+  auto mt = ParseAnyTextMaxTokens(obj);
+  if (mt.IsErr()) {
+    return ResultErr<ISTError>(std::move(mt).UnwrapErr());
+  }
+  int32_t max_tokens = std::move(mt).Unwrap();
+
   auto excluded_strs_it = obj.find("excludes");
   if (excluded_strs_it == obj.end()) {
     if ((obj.find("type") == obj.end())) {
       return ResultErr<ISTError>("Any text format should not have any fields other than type");
     }
-    return ResultOk<AnyTextFormat>(std::vector<std::string>{});
+    return ResultOk<AnyTextFormat>(std::vector<std::string>{}, max_tokens);
   }
   if (!excluded_strs_it->second.is<picojson::array>()) {
     return ResultErr<ISTError>("AnyText format's excluded_strs field must be an array");
@@ -594,7 +626,7 @@ Result<AnyTextFormat, ISTError> StructuralTagParser::ParseAnyTextFormat(const pi
     }
     excluded_strs.push_back(excluded_str.get<std::string>());
   }
-  return ResultOk<AnyTextFormat>(std::move(excluded_strs));
+  return ResultOk<AnyTextFormat>(std::move(excluded_strs), max_tokens);
 }
 
 Result<GrammarFormat, ISTError> StructuralTagParser::ParseGrammarFormat(const picojson::object& obj
@@ -994,7 +1026,26 @@ Result<AnyTokensFormat, ISTError> StructuralTagParser::ParseAnyTokensFormat(
     }
     exclude_tokens = std::move(parsed).Unwrap();
   }
-  return ResultOk<AnyTokensFormat>(std::move(exclude_tokens));
+  std::optional<int> max_tokens = std::nullopt;
+  auto mt_it = obj.find("max_tokens");
+  if (mt_it != obj.end() && !mt_it->second.is<picojson::null>()) {
+    // A present-but-non-numeric / out-of-range max_tokens is an error rather than being silently
+    // ignored (which would degrade the budget to "unbounded"). Range-check the double before
+    // casting to int to avoid the UB of static_cast<int> on an out-of-range value.
+    if (!mt_it->second.is<double>()) {
+      return ResultErr<ISTError>("max_tokens in any_tokens must be a non-negative integer or null."
+      );
+    }
+    double raw = mt_it->second.get<double>();
+    if (raw < 0 || raw > static_cast<double>(std::numeric_limits<int>::max()) ||
+        raw != std::floor(raw)) {
+      return ResultErr<ISTError>(
+          "max_tokens in any_tokens must be a non-negative integer in [0, INT_MAX]."
+      );
+    }
+    max_tokens = static_cast<int>(raw);
+  }
+  return ResultOk<AnyTokensFormat>(std::move(exclude_tokens), max_tokens);
 }
 
 Result<TokenTriggeredTagsFormat, ISTError> StructuralTagParser::ParseTokenTriggeredTagsFormat(
@@ -1889,9 +1940,15 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTextForma
       all_excludes.push_back(s);
     }
   }
-  if (!all_excludes.empty()) {
-    auto tag_dispatch_expr =
-        grammar_builder_.AddTagDispatch(Grammar::Impl::TagDispatch{{}, false, all_excludes});
+  if (!all_excludes.empty() || format.max_tokens != -1) {
+    // With excludes, or with a token budget, the region is a TagDispatch (an Aho-Corasick scan).
+    // The token budget is carried on the TagDispatch and enforced by the matcher: once max_tokens
+    // content tokens are consumed the region is forced to complete (its end tag becomes the only
+    // continuation). An empty exclude set is fine (matches any text). This is the path used even
+    // for a budget without excludes, so the single enforcement mechanism covers both.
+    auto tag_dispatch_expr = grammar_builder_.AddTagDispatch(
+        Grammar::Impl::TagDispatch{{}, false, all_excludes, format.max_tokens}
+    );
     return ResultOk(grammar_builder_.AddRuleWithHint("any_text", tag_dispatch_expr));
   } else {
     auto any_text_expr = grammar_builder_.AddCharacterClassStar({{0, 0x10FFFF}}, false);
@@ -2251,6 +2308,12 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const AnyTokensFor
   int exclude_seq = grammar_builder_.AddSequence({exclude_expr});
   int exclude_choices = grammar_builder_.AddChoices({exclude_seq});
   int inner_rule = grammar_builder_.AddRuleWithHint("any_tokens_inner", exclude_choices);
+  // Each `inner_rule` matches exactly one token, so when max_tokens is set we bound the
+  // repetition to at most max_tokens, giving an exact token-count budget.
+  if (format.max_tokens.has_value()) {
+    int repeat_expr = grammar_builder_.AddRepeat(inner_rule, 0, format.max_tokens.value());
+    return ResultOk(grammar_builder_.AddRuleWithHint("any_tokens", repeat_expr));
+  }
   auto inner_ref = grammar_builder_.AddRuleRef(inner_rule);
   auto star_rule_id = grammar_builder_.AddEmptyRuleWithHint("any_tokens");
   auto star_ref = grammar_builder_.AddRuleRef(star_rule_id);
