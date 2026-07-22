@@ -21,7 +21,6 @@ from .exception import (
 )
 from .grammar import Grammar, StructuralTagItem
 from .matcher import (
-    AcceptTokenResult,
     BatchGrammarMatcher,
     GrammarMatcher,
     allocate_token_bitmask,
@@ -50,7 +49,6 @@ __all__ = [
     "InvalidStructuralTagError",
     "Grammar",
     "StructuralTagItem",
-    "AcceptTokenResult",
     "BatchGrammarMatcher",
     "GrammarMatcher",
     "allocate_token_bitmask",

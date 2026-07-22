@@ -1181,38 +1181,35 @@ BUDGET_GRAMMAR = r"""
 def test_lark_budget_enforced_at_closable_position() -> None:
     compiled = _compile_lark(BUDGET_GRAMMAR, MAX_TOKENS_TOKENIZER)
     matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
-    R = xgr.AcceptTokenResult
-    assert matcher.accept_token(5) == R.ACCEPTED
-    assert matcher.accept_token(0) == R.ACCEPTED
-    assert matcher.accept_token(0) == R.ACCEPTED
+    assert matcher.accept_token(5)
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(0)
     # Budget exhausted and the region can end here (trailing space): only the terminator is
     # allowed. Refilling is idempotent.
     assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [3]
     assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [3]
-    assert matcher.accept_token(3) == R.ACCEPTED
-    assert matcher.accept_token(4) == R.ACCEPTED
+    assert matcher.accept_token(3)
+    assert matcher.accept_token(4)
     assert matcher.is_terminated()
 
 
 def test_lark_budget_relaxed_when_region_cannot_end() -> None:
     compiled = _compile_lark(BUDGET_GRAMMAR, MAX_TOKENS_TOKENIZER)
     matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
-    R = xgr.AcceptTokenResult
     assert matcher.accept_token(5)
-    assert matcher.accept_token(1) == R.ACCEPTED
-    assert matcher.accept_token(1) == R.ACCEPTED
+    assert matcher.accept_token(1)
+    assert matcher.accept_token(1)
     # Mid-group at exhaustion: the region cannot end, so the budget is relaxed for this step.
     allowed = _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER)
     assert 3 not in allowed and 1 in allowed and 2 in allowed
-    result = matcher.accept_token(2)
-    assert result == R.ACCEPTED | R.BUDGET_EXCEEDED | R.BUDGET_RELAXED
+    assert matcher.accept_token(2)
     # Earliest closable position: enforced right after the group terminates.
     assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [3]
-    assert matcher.accept_token(3) == R.ACCEPTED
+    assert matcher.accept_token(3)
     assert matcher.accept_token(4) and matcher.is_terminated()
 
 
-def test_lark_budget_exceeded_flag_on_every_accept_while_over() -> None:
+def test_lark_budget_relaxed_over_multiple_steps() -> None:
     grammar = r"""
         start: "<t>" r "</t>" ans
         r[max_tokens=1]: /([a-z]* )+/
@@ -1220,32 +1217,28 @@ def test_lark_budget_exceeded_flag_on_every_accept_while_over() -> None:
     """
     compiled = _compile_lark(grammar, MAX_TOKENS_TOKENIZER)
     matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
-    R = xgr.AcceptTokenResult
     assert matcher.accept_token(5)
-    assert matcher.accept_token(1) == R.ACCEPTED
+    assert matcher.accept_token(1)
     bitmask = xgr.allocate_token_bitmask(1, MAX_TOKENS_TOKENIZER.vocab_size)
+    # The rule cannot end mid-word: the budget stays relaxed step after step until it can.
     matcher.fill_next_token_bitmask(bitmask)
-    r1 = matcher.accept_token(6)
-    assert r1 == R.ACCEPTED | R.BUDGET_EXCEEDED | R.BUDGET_RELAXED
+    assert matcher.accept_token(6)
     matcher.fill_next_token_bitmask(bitmask)
-    r2 = matcher.accept_token(6)
-    assert r2 == R.ACCEPTED | R.BUDGET_EXCEEDED | R.BUDGET_RELAXED
-    r3 = matcher.accept_token(2)
-    assert r3 & R.BUDGET_EXCEEDED
+    assert matcher.accept_token(6)
+    assert matcher.accept_token(2)
     assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [3]
 
 
 def test_lark_budget_rollback_across_close() -> None:
     compiled = _compile_lark(BUDGET_GRAMMAR, MAX_TOKENS_TOKENIZER)
     matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
-    R = xgr.AcceptTokenResult
     for token_id in [5, 0, 0]:
         assert matcher.accept_token(token_id)
     assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [3]
     assert matcher.accept_token(3)
     matcher.rollback(2)
-    assert matcher.accept_token(1) == R.ACCEPTED
-    assert matcher.accept_token(2) & R.BUDGET_EXCEEDED
+    assert matcher.accept_token(1)
+    assert matcher.accept_token(2)
     assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [3]
     assert matcher.accept_token(3) and matcher.accept_token(4) and matcher.is_terminated()
 
@@ -1279,9 +1272,8 @@ def test_lark_budget_per_occurrence() -> None:
     grammar = 'start: r+ "1"\nr[max_tokens=2]: /[a-z]+ /'
     compiled = _compile_lark(grammar, MAX_TOKENS_TOKENIZER)
     matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
-    R = xgr.AcceptTokenResult
     for _ in range(5):
-        assert matcher.accept_token(0) == R.ACCEPTED
+        assert matcher.accept_token(0)
     allowed = _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER)
     assert 0 in allowed and 4 in allowed
     assert matcher.accept_token(4) and matcher.is_terminated()
@@ -1290,8 +1282,7 @@ def test_lark_budget_per_occurrence() -> None:
     assert matcher.accept_token(1) and matcher.accept_token(1)
     allowed = _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER)
     assert 4 not in allowed
-    result = matcher.accept_token(2)
-    assert result & R.BUDGET_EXCEEDED and result & R.BUDGET_RELAXED
+    assert matcher.accept_token(2)
     assert 4 in _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER)
 
 

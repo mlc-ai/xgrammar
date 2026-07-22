@@ -655,9 +655,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def(
           "accept_token",
           [](GrammarMatcherObj* o, int64_t token_id, bool debug_print) {
-            return static_cast<int64_t>(
-                o->value.AcceptTokenWithFlags(static_cast<int32_t>(token_id), debug_print)
-            );
+            return o->value.AcceptToken(static_cast<int32_t>(token_id), debug_print);
           }
       )
       .def(

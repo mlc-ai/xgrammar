@@ -484,12 +484,11 @@ to bound a whole loop the budget goes on a wrapper rule (`list[max_tokens=N]: it
 budgets combine by taking the minimum. Rules inside a budgeted rule may also be used outside of
 it — the budget follows the derivation, not the rule.
 
-`accept_token` returns an `AcceptTokenResult` flag value: `BUDGET_EXCEEDED` is set on every
-accept in which a token was consumed by a derivation past its budget, and `BUDGET_RELAXED`
-reports that an exhausted budget could not be enforced since the previous accept. The budget
-state lives in the parser state, so `rollback()` restores it exactly and speculative decoding
-keeps working. `accept_string` advances without token boundaries and is not counted (budgets
-constrain mask-driven generation, not validation/prefill).
+The first time a budget is exceeded (a token is consumed by a derivation past its budget), a
+warning is logged, once per matcher. The budget state lives in the parser state, so
+`rollback()` restores it exactly and speculative decoding keeps working. `accept_string`
+advances without token boundaries and is not counted (budgets constrain mask-driven
+generation, not validation/prefill).
 
 `max_tokens` must be positive and cannot be combined with `lazy` or `suffix`, used on
 terminals, or on rules consumed by the dynamic dispatch pattern.
