@@ -7,6 +7,7 @@
 #ifndef XGRAMMAR_EARLEY_PARSER_H_
 #define XGRAMMAR_EARLEY_PARSER_H_
 #include <cstdint>
+#include <optional>
 #include <ostream>
 #include <queue>
 #include <unordered_set>
@@ -59,18 +60,10 @@ struct ParserState {
         partial_codepoint(partial_codepoint) {}
 
   /*!
-   * \brief A sequence_id value of kUnexpandedRuleStartSequenceId means a rule hasn't been
-   * expanded.
-   */
-  static constexpr int32_t kUnexpandedRuleStartSequenceId = 128000;
-
-  /*!
-   * \brief A parent_id value of kNoParent means this ParserState is the root of the parsing stack.
+   * \brief A rule_start_pos value of kNoPrevInputPos means this ParserState is the root of the
+   * parsing stack.
    */
   static constexpr int32_t kNoPrevInputPos = -1;
-
-  /*! \brief A sequence_id value of kInvalid means the ParserState is invalid. */
-  static constexpr int32_t kInvalidSequenceId = -1;
 
   /*! \brief The rule's id. */
   int32_t rule_id = -1;
@@ -87,7 +80,7 @@ struct ParserState {
   /*! \brief The position of the state, i.e. from which position, the rule starts. */
   int32_t rule_start_pos = -1;
 
-  /*! \brief The id of the sub element in the current selement of the sequence. */
+  /*! \brief The id of the sub element in the current element of the sequence. */
   int32_t sub_element_id = 0;
 
   /*! \brief The number of times the element is repeated. It will be used in kRepeat.*/
@@ -96,23 +89,18 @@ struct ParserState {
   /*! \brief Partial codepoint accumulated during UTF-8 decoding for positive character classes. */
   int32_t partial_codepoint = 0;
 
-  /*! \brief The element is invalid when sequence_id is -1. */
-  bool IsInvalid() const { return sequence_id == -1; }
-
-  static ParserState GetInvalidState() { return {-1, -1, -1, -1, -1}; }
-
-  bool operator==(const ParserState& other) const {
-    return rule_id == other.rule_id && sequence_id == other.sequence_id &&
-           element_id == other.element_id && sub_element_id == other.sub_element_id;
-  }
-
+  /*!
+   * \brief Lexicographic order over all fields. It is only used to sort the states for
+   * deterministic serialization, and is not needed during parsing.
+   */
   bool operator<(const ParserState& other) const {
     if (rule_id != other.rule_id) return rule_id < other.rule_id;
     if (sequence_id != other.sequence_id) return sequence_id < other.sequence_id;
     if (element_id != other.element_id) return element_id < other.element_id;
     if (rule_start_pos != other.rule_start_pos) return rule_start_pos < other.rule_start_pos;
     if (sub_element_id != other.sub_element_id) return sub_element_id < other.sub_element_id;
-    return repeat_count < other.repeat_count;
+    if (repeat_count != other.repeat_count) return repeat_count < other.repeat_count;
+    return partial_codepoint < other.partial_codepoint;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
@@ -149,12 +137,26 @@ XGRAMMAR_MEMBER_ARRAY(
 );
 
 /*!
- * \brief When getting the mask of the state, we don't need to consider the rule_start_pos.
+ * \brief Hash of a state used as the key of the adaptive token mask cache. The token mask of a
+ * state does not depend on rule_start_pos, repeat_count or partial_codepoint, so they are
+ * ignored. Pairs with StateEqualForCache.
  */
 class StateHashForCache {
  public:
   size_t operator()(const ParserState& state) const {
     return HashCombine(state.rule_id, state.sequence_id, state.element_id, state.sub_element_id);
+  }
+};
+
+/*!
+ * \brief Equality of states used as the key of the adaptive token mask cache. Compares the same
+ * fields as StateHashForCache hashes.
+ */
+class StateEqualForCache {
+ public:
+  bool operator()(const ParserState& lhs, const ParserState& rhs) const {
+    return lhs.rule_id == rhs.rule_id && lhs.sequence_id == rhs.sequence_id &&
+           lhs.element_id == rhs.element_id && lhs.sub_element_id == rhs.sub_element_id;
   }
 };
 
@@ -262,7 +264,7 @@ class EarleyParser {
   Compact2DArray<ParserState> scanable_state_history_;
 
   /*!
-   * \brief A temperate vector only used in Advance, used to add states in the
+   * \brief A temporary vector only used in Advance, used to add states in the
    * scanable_state_history.
    */
   std::vector<ParserState> tmp_states_to_be_added_;
@@ -311,12 +313,8 @@ class EarleyParser {
    */
   std::pair<bool, bool> Predict(const ParserState& state, bool debug_print = false);
 
-  /*!
-   * \brief Handle the unexpanded rule, used for pushing initial state.
-   * \param state The state to be handled.
-   * \return True if the rule is unexpanded, false otherwise.
-   */
-  bool ExpandAndEnqueueUnexpandedState(const ParserState& state);
+  /*! \brief The initial state expanded from the root rule of the grammar. */
+  ParserState RootInitialState() const;
 
   /*!
    * \brief Expand the rule, used for RuleRef and kTagDispatch.
@@ -348,7 +346,7 @@ class EarleyParser {
    * \param state The state to be advanced.
    * \param ch The character to be advanced.
    * \param sub_sequence The sub sequence to be checked.
-   * \return The next state, Invalid state if the character is not accepted.
+   * \note The advanced states are enqueued; nothing is enqueued if the character is not accepted.
    */
   void AdvanceCharacterClass(
       const ParserState& state, const uint8_t ch, const GrammarExpr& sub_sequence
@@ -359,7 +357,7 @@ class EarleyParser {
    * \param state The state to be advanced.
    * \param ch The character to be advanced.
    * \param sub_sequence The sub sequence to be checked.
-   * \return The next state, Invalid state if the character is not accepted.
+   * \note The advanced states are enqueued; nothing is enqueued if the character is not accepted.
    */
   void AdvanceByteString(
       const ParserState& state, const uint8_t ch, const GrammarExpr& sub_sequence
@@ -370,7 +368,7 @@ class EarleyParser {
    * \param state The state to be advanced.
    * \param ch The character to be advanced.
    * \param sub_sequence The sub sequence to be checked.
-   * \return The next state, Invalid state if the character is not accepted.
+   * \note The advanced states are enqueued; nothing is enqueued if the character is not accepted.
    */
   void AdvanceCharacterClassStar(
       const ParserState& state, const uint8_t ch, const GrammarExpr& sub_sequence
@@ -380,8 +378,7 @@ class EarleyParser {
    * \brief Advance the parser to the next state, with the sequence is kTagDispatch.
    * \param state The state to be advanced.
    * \param ch The character to be advanced.
-   * \param cur_sequence The sequence of the current state.
-   * \return The next state, Invalid state if the character is not accepted.
+   * \note The advanced states are enqueued; nothing is enqueued if the character is not accepted.
    */
   void AdvanceFsm(const ParserState& state, const uint8_t ch);
 
@@ -425,11 +422,12 @@ class EarleyParser {
  public:
   /*!
    * \brief Constructor of the Earley parser.
-   * \param grammar The grammar to be parsed.
-   * \param initial_state The initial state to be pushed into the parser.
+   * \param grammar The grammar to be parsed. It must be optimized.
+   * \param initial_state The state to start parsing from. If not provided, parsing starts
+   * from the root rule of the grammar.
    */
-  EarleyParser(
-      const Grammar& grammar, const ParserState& initial_state, const bool need_expand = true
+  explicit EarleyParser(
+      const Grammar& grammar, std::optional<ParserState> initial_state = std::nullopt
   );
 
   /*!
