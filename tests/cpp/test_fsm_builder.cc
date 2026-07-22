@@ -437,3 +437,33 @@ TEST(XGrammarFSMBuilderTest, TestGrammarFSMBuilderRegex) {
   // Invalid patterns report an error.
   EXPECT_TRUE(GrammarFSMBuilder::Regex("+a").IsErr());
 }
+
+TEST(XGrammarFSMBuilderTest, TestRegexRepeatZero) {
+  // {0} / {0,0} matches exactly the empty string (ECMA-262 semantics, and consistent
+  // with the EBNF parser and the CFG fallback path).
+  auto fsm_wse = RegexFSMBuilder::Build("a{0}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+
+  fsm_wse = RegexFSMBuilder::Build("a{0,0}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+
+  fsm_wse = RegexFSMBuilder::Build("(ab){0}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("ab"));
+
+  // In a concatenation the {0} element contributes nothing.
+  fsm_wse = RegexFSMBuilder::Build("ba{0}c").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("bc"));
+  EXPECT_FALSE(fsm_wse.AcceptString("bac"));
+
+  // The empty-string FSM survives the simplification passes.
+  fsm_wse = GrammarFSMBuilder::Regex("ba{0}c").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("bc"));
+  EXPECT_FALSE(fsm_wse.AcceptString("bac"));
+
+  // A lower bound larger than the upper bound is an error in every regex dialect.
+  EXPECT_TRUE(RegexFSMBuilder::Build("a{3,1}").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("a{1,0}").IsErr());
+}

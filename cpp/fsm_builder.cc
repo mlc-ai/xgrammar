@@ -180,6 +180,9 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
     return ResultErr("Invalid repeat format4");
   }
   upper_bound = std::stoi(num_str);
+  if (upper_bound < lower_bound) {
+    return ResultErr("Invalid repeat: the lower bound is larger than the upper bound");
+  }
   while (static_cast<size_t>(start) < regex.size() && regex[start] == ' ') {
     start++;
   }
@@ -279,6 +282,13 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   if (state.states.size() != 1) {
     return ResultErr("Invalid repeat");
   }
+  bool has_upper_bound = state.upper_bound != RegexIR::kRepeatNoUpperBound;
+  if (has_upper_bound && state.upper_bound == 0) {
+    // {0} / {0,0}: matches exactly the empty string. The general path below cannot express
+    // this: it starts from one copy of the child whose end states stay accepting.
+    FSM empty_fsm(1);
+    return ResultOk(FSMWithStartEnd(empty_fsm, 0, {0}, false));
+  }
   Result<FSMWithStartEnd> child_result =
       std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, state.states[0]);
   if (child_result.IsErr()) {
@@ -288,7 +298,6 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   FSMWithStartEnd result = child.Copy();
   std::unordered_set<int> new_ends;
 
-  bool has_upper_bound = state.upper_bound != RegexIR::kRepeatNoUpperBound;
   if (state.lower_bound <= 1 && (!has_upper_bound || state.upper_bound >= 1)) {
     // A single copy is accepting when the lower bound is at most 1.
     for (int end = 0; end < result.NumStates(); ++end) {
