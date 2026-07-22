@@ -6,10 +6,8 @@ alternatives, repetition, and recursion. Grammars are constructed with
 [`xgr.Grammar.from_ebnf`](xgrammar.Grammar.from_ebnf), or by passing the grammar string directly
 to [`xgr.GrammarCompiler.compile_grammar`](xgrammar.GrammarCompiler.compile_grammar).
 
-Rules are written as `name ::= expression`. Besides the standard EBNF constructs (string
-literals, character classes, alternatives, grouping, repetition), the format supports repetition
-ranges (`{m,n}`), lookahead assertions (`(=...)`), and macros for tool-call dispatch and
-token-level matching (`TagDispatch`, `Token`, `ExcludeToken`, `TokenTagDispatch`).
+The syntax is compatible with the GBNF (GGML BNF) format used by
+[llama.cpp](https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md).
 
 EBNF is also XGrammar's common intermediate representation: every other frontend (JSON Schema,
 regular expressions, structural tags, Lark) is converted to it internally, and printing any
@@ -179,32 +177,6 @@ root       ::= identifier ("," identifier){0,4}
 identifier ::= [a-zA-Z_] [a-zA-Z0-9_]*
 ```
 
-## Lookahead Assertions
-
-A rule definition may end with a lookahead assertion `(= ...)`, which declares what is expected
-to follow the rule:
-
-```text
-root  ::= name "=" value
-name  ::= [a-z]+ (= "=")
-value ::= [0-9]+
-```
-
-The assertion does not change which strings the grammar accepts. It refines **token mask
-generation**: an LLM token often crosses a rule boundary (for example the token `a=` covers the
-end of `name` and the following `=`), and the assertion lets XGrammar decide precisely whether
-such a token is allowed, making the mask more accurate and faster to compute.
-
-Restrictions:
-
-- At most one assertion per rule, placed after the rule body.
-- The assertion body must be a sequence of elements. Alternatives (`|`) inside the assertion are
-  not supported.
-
-Lookahead assertions are optional in practice: during compilation, XGrammar automatically derives
-an assertion for every rule whose following context can be determined from the grammar structure.
-Write one explicitly only when you know the continuation and want to help mask generation.
-
 ## TagDispatch
 
 `TagDispatch` is a macro for the common tool-calling pattern: the model produces free text until
@@ -314,10 +286,6 @@ escaped strings.
 
 ## Relation to Other Grammar Formats
 
-- The syntax is compatible with the GBNF (GGML BNF) format of
-  [llama.cpp](https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md): GBNF
-  grammars can be used directly, and the repetition ranges, lookahead assertions, and macros
-  described above are XGrammar extensions on top of it.
 - `str(grammar)` prints any grammar in this EBNF format. The printed form is normalized (for
   example, `*` and `+` are expanded into recursive rules) and can be parsed again by `from_ebnf`.
 - [`xgr.Grammar.from_json_schema`](xgrammar.Grammar.from_json_schema) and
