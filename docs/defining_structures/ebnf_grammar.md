@@ -285,6 +285,23 @@ escape ::= ["\\/bfnrt] | "u" [0-9A-Fa-f]{4}
 This accepts `"hello"`, `"line1\nline2"`, and `"\u00e9"`, and rejects unterminated or badly
 escaped strings.
 
+As a larger example, the grammar below describes free-form JSON:
+
+```text
+root ::= basic_array | basic_object
+basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= (([\"] basic_string_1 [\"]))
+basic_string_1 ::= "" | [^"\\\x00-\x1F] basic_string_1 | "\\" escape basic_string_1
+escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= "[" ("" | ws basic_any (ws "," ws basic_any)*) ws "]"
+basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
+ws ::= [ \n\t]*
+```
+
 ## Relation to Other Grammar Formats
 
 - `str(grammar)` prints any grammar in this EBNF format. The printed form is normalized (for

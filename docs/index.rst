@@ -10,35 +10,33 @@ The mission of this project is to bring flexible zero-overhead structure generat
 
    start/installation
    start/quick_start
+   start/constrained_decoding
 
 .. toctree::
    :maxdepth: 1
    :caption: Structural Tag
 
-   structural_tag/structural_tag_api
+   structural_tag/structural_tag
    structural_tag/tool_calling_and_reasoning
    structural_tag/advanced_usage
 
 .. toctree::
    :maxdepth: 1
-   :caption: Tutorials
+   :caption: Using XGrammar
 
-   tutorials/constrained_decoding
-   tutorials/workflow_of_xgrammar
-   tutorials/advanced_topics
-   tutorials/engine_integration
-   tutorials/json_generation
-   tutorials/ebnf_guided_generation
+   using_xgrammar/workflow_of_xgrammar
+   using_xgrammar/engine_integration
+   using_xgrammar/serialization
+   using_xgrammar/runtime_safeguards
+   using_xgrammar/javascript_api
 
 .. toctree::
    :maxdepth: 1
-   :caption: XGrammar Features
+   :caption: Defining Structures
 
-   xgrammar_features/runtime_safeguards
-   xgrammar_features/serialization
-   xgrammar_features/ebnf_grammar
-   xgrammar_features/lark_grammar
-   xgrammar_features/javascript_api
+   defining_structures/json_generation
+   defining_structures/ebnf_grammar
+   defining_structures/lark_grammar
 
 .. toctree::
    :maxdepth: 1
@@ -59,4 +57,3 @@ The mission of this project is to bring flexible zero-overhead structure generat
 .. json_schema
 .. supported_models
 .. debugging
-.. rewrite json/ebnf generation, engine_integration
