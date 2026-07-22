@@ -293,6 +293,18 @@ void GrammarBuilder::UpdateCaptureName(std::string rule_name, const std::string&
   UpdateCaptureName(rule_id, capture_name);
 }
 
+void GrammarBuilder::UpdateLazy(int32_t rule_id, bool is_lazy) {
+  XGRAMMAR_CHECK(rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  grammar_->rules_[rule_id].is_lazy = is_lazy;
+}
+
+void GrammarBuilder::UpdateLazy(std::string rule_name, bool is_lazy) {
+  int32_t rule_id = GetRuleId(rule_name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
+  UpdateLazy(rule_id, is_lazy);
+}
+
 std::string GrammarBuilder::GetNewRuleName(const std::string& name_hint) {
   if (rule_name_to_id_.count(name_hint) == 0) {
     return name_hint;

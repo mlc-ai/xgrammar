@@ -445,8 +445,35 @@ TEXT: /(\n|.)*/
 
 This matches arbitrary text and completes as soon as the trigger appears; nothing may follow the
 trigger. Text that never produces the trigger is also accepted. The regex-suffix and
-`suffix="..."` head forms are only accepted inside the full dispatch pattern, and general lazy
-rules over other bodies (for example `value[lazy]: /[a-z]+/`) are rejected.
+`suffix="..."` head forms are only accepted inside the full dispatch pattern.
+
+### General Lazy Rules (Committed-Shortest Matching)
+
+Any other rule may also carry `[lazy]`, which gives it **committed-shortest** matching: at the
+first position where the rule's body can end, it must end — the derivations in which this
+occurrence keeps consuming input are discarded.
+
+```text
+start: "<" name ">" rest
+name[lazy]: /[a-z]+/     // stops at the first position where it can end
+rest: /[a-z]+/
+```
+
+Notes:
+
+- The body must compile to a single terminal-like automaton: strings, character classes,
+  the `+`/`*`/`?` quantifiers over them, and alternations of these. Bodies that need rule
+  references (recursion, general repetition ranges like `{2,5}` over groups) are rejected at
+  compile time.
+- A lazy rule that can match the empty string always matches the empty string (for example
+  `foo[lazy]: /.*/`); the compiler emits a warning for this.
+- Lazy rules are compiled as lexemes: `%ignore` is not woven inside their bodies, and like
+  terminals they take the ignored-token skip after them.
+- Each occurrence of the rule commits independently, and the commit is exact for validation
+  (`accept_string`) as well as mask generation. `rollback`/`fork`/`reset` restore the state
+  across a commit exactly.
+- The same attribute is available in the EBNF frontend: `name[lazy] ::= ...`, and it round-trips
+  through `Grammar.__str__()` / `Grammar.from_ebnf()`.
 
 ## Token Budgets
 

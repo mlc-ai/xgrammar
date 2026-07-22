@@ -62,6 +62,8 @@ class EBNFLexer {
     int32_t max_tokens = -1;
     // The capture name attached to a rule-definition identifier via name[capture="x"], or empty.
     std::string capture_name = {};
+    // Whether the identifier is a rule name carrying the [lazy] attribute, e.g. r[lazy] ::= ...
+    bool is_lazy = false;
   };
 
   EBNFLexer();

@@ -1057,9 +1057,9 @@ def test_lark_large_choice_grammar() -> None:
             id="grammar-options-not-object",
         ),
         pytest.param(
-            "start: thing\nthing[lazy]: /[a-z]+/",
-            "general lazy rules are not supported",
-            id="unsupported-general-lazy",
+            'start: thing\nthing[lazy]: "a" thing | "b"',
+            "terminal cannot reference rule",
+            id="lazy-rule-reference",
         ),
         pytest.param(
             'start: head\nhead[suffix=""]: TEXT\nTEXT: /(\\n|.)*/',
@@ -1681,3 +1681,139 @@ def test_lark_capture_with_max_tokens_round_trip_and_cache() -> None:
     assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [5]
     assert matcher.accept_token(5) and matcher.is_terminated()
     assert matcher.get_captures() == [("r", b"ab cd ")]
+
+
+LAZY_TOKENIZER = xgr.TokenizerInfo(["<", ">", "a", "b", "ab", "abb", " "])
+
+
+def _lazy_matcher(grammar_obj: xgr.Grammar) -> xgr.GrammarMatcher:
+    compiled = xgr.GrammarCompiler(LAZY_TOKENIZER, cache_enabled=False).compile_grammar(grammar_obj)
+    return xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+
+def _lazy_allowed_token_ids(matcher: xgr.GrammarMatcher) -> list:
+    bitmask = xgr.allocate_token_bitmask(1, LAZY_TOKENIZER.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    return [
+        i for i in range(LAZY_TOKENIZER.vocab_size) if (int(bitmask[0, i // 32]) >> (i % 32)) & 1
+    ]
+
+
+def test_lark_lazy_committed_shortest_regex() -> None:
+    _assert_language(
+        'start: "<" r ">"\nr[lazy]: /[a-z]+/', ["<a>", "<b>"], ["<ab>", "<>", "<a", "a>"]
+    )
+    # Greedy control: the same grammar without lazy accepts longer matches.
+    _assert_language('start: "<" r ">"\nr: /[a-z]+/', ["<a>", "<ab>"], ["<>"])
+
+
+def test_lark_lazy_matches_exactly_one_unit() -> None:
+    _assert_language('start: r "a"\nr[lazy]: /[b]+/', ["ba"], ["bba", "a"])
+
+
+def test_lark_lazy_nullable_always_matches_empty() -> None:
+    _assert_language('start: "<" r ">"\nr[lazy]: /[a-z]*/', ["<>"], ["<a>", "<ab>"])
+    _assert_language('start: "<" r ">"\nr[lazy]: /[a-z]?/', ["<>"], ["<a>"])
+
+
+def test_lark_lazy_choices_commit_at_shortest() -> None:
+    _assert_language('start: "<" r ">"\nr[lazy]: "ab" | "abc"', ["<ab>"], ["<abc>"])
+    # Prefix-free alternatives are unaffected by the commit.
+    _assert_language('start: "<" r ">"\nr[lazy]: "aa" | "bb"', ["<aa>", "<bb>"], ["<a>", "<ab>"])
+
+
+def test_lark_lazy_composed_of_terminals() -> None:
+    _assert_language('start: "<" r ">"\nr[lazy]: SUB SUB\nSUB: /[a-z]/', ["<ab>"], ["<a>", "<abc>"])
+
+
+def test_ebnf_lazy_committed_shortest_and_plus_desugar() -> None:
+    for body in ("[a-z] [a-z]*", "[a-z]+"):
+        grammar_obj = xgr.Grammar.from_ebnf(f'root ::= "<" r ">"\nr[lazy] ::= {body}')
+        _assert_grammar_language(grammar_obj, ["<a>"], ["<ab>", "<>"])
+
+
+def test_ebnf_lazy_attribute_round_trips() -> None:
+    grammar_obj = xgr.Grammar.from_lark('start: "<" r ">"\nr[lazy]: /[a-z]+/')
+    printed = str(grammar_obj)
+    assert "r[lazy] ::=" in printed
+    _assert_grammar_language(xgr.Grammar.from_ebnf(printed), ["<a>"], ["<ab>"])
+    deserialized = xgr.Grammar.deserialize_json(grammar_obj.serialize_json())
+    _assert_grammar_language(deserialized, ["<a>"], ["<ab>"])
+    # The compiler cache path re-parses ToString(); the attribute must survive it.
+    compiled = xgr.GrammarCompiler(LAZY_TOKENIZER, cache_enabled=True).compile_grammar(grammar_obj)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert not matcher.accept_string("<ab>")
+
+
+def test_lark_lazy_mask_is_exit_only_after_commit() -> None:
+    # Tokens: 0 "<", 1 ">", 2 "a", 3 "b", 4 "ab", 5 "abb", 6 " "
+    grammar_obj = xgr.Grammar.from_lark('start: "<" r "b"\nr[lazy]: /[ab]+/')
+    matcher = _lazy_matcher(grammar_obj)
+    assert matcher.accept_token(0)
+    allowed = _lazy_allowed_token_ids(matcher)
+    # "ab" = one region char, then the closing literal: allowed. "abb" would extend the
+    # region past the commit point: rejected.
+    assert 4 in allowed and 5 not in allowed
+    assert matcher.accept_token(4) and matcher.is_terminated()
+    # After committing via a single region char, only the closing literal remains.
+    matcher = _lazy_matcher(grammar_obj)
+    assert matcher.accept_token(0) and matcher.accept_token(2)
+    assert _lazy_allowed_token_ids(matcher) == [3]
+
+
+def test_lark_lazy_per_occurrence_commit() -> None:
+    _assert_language('start: r " " r\nr[lazy]: /[a-z]+/', ["a b"], ["ab b", "a bb", "a b c"])
+
+
+def test_lark_lazy_root_anchored_occurrence() -> None:
+    grammar_obj = xgr.Grammar.from_lark('start: "<" r\nr[lazy]: /[a-z]+/')
+    matcher = _lazy_matcher(grammar_obj)
+    assert matcher.accept_token(0) and matcher.accept_token(2)
+    assert _lazy_allowed_token_ids(matcher) == []
+    _assert_grammar_language(grammar_obj, ["<a"], ["<ab", "<"])
+
+
+def test_lark_lazy_rollback_reset_fork() -> None:
+    grammar_obj = xgr.Grammar.from_lark('start: "<" r ">"\nr[lazy]: /[a-z]+/')
+    matcher = _lazy_matcher(grammar_obj)
+    assert matcher.accept_token(0) and matcher.accept_token(2)
+    assert _lazy_allowed_token_ids(matcher) == [1]
+    forked = matcher.fork()
+    matcher.rollback(1)
+    assert 2 in _lazy_allowed_token_ids(matcher)
+    assert _lazy_allowed_token_ids(forked) == [1]
+    matcher.reset()
+    assert matcher.accept_string("<a>")
+
+
+def test_lark_lazy_accept_string_and_tokens_agree() -> None:
+    grammar_obj = xgr.Grammar.from_lark('start: "<" r ">"\nr[lazy]: /[a-z]+/')
+    matcher = _lazy_matcher(grammar_obj)
+    assert not matcher.accept_string("<ab>")
+    matcher.reset()
+    assert matcher.accept_token(0) and matcher.accept_token(2)
+    assert not matcher.accept_token(3)
+    assert matcher.accept_token(1) and matcher.is_terminated()
+
+
+def test_lark_lazy_ignore_is_not_woven_into_lazy_rules() -> None:
+    grammar = 'start: "<" r ">"\nr[lazy]: /[a-z]+/\n%ignore " "'
+    _assert_language(grammar, ["<a>", "< a >"], ["<ab>"])
+
+
+def test_lark_lazy_dispatch_subset_keeps_tag_dispatch() -> None:
+    grammar_obj = xgr.Grammar.from_lark('start: head\nhead[lazy]: TEXT "<end>"\nTEXT: /(\\n|.)*/')
+    printed = str(grammar_obj)
+    assert "TagDispatch" in printed
+    assert "[lazy]" not in printed
+
+
+def test_lark_lazy_non_terminal_like_bodies_are_rejected() -> None:
+    _assert_lark_error('start: "<" r ">"\nr[lazy]: "a" r | "b"', "terminal cannot reference rule")
+    _assert_lark_error("start: r\nR[lazy]: /[a-z]+/\nr: R", "attributes are only supported")
+    for grammar_obj in (
+        xgr.Grammar.from_lark('start: "<" r ">"\nr[lazy]: /([a-z]+ )+/'),
+        xgr.Grammar.from_ebnf('root ::= "<" r ">"\nr[lazy] ::= sub\nsub ::= sub [a-z] | [a-z]'),
+    ):
+        with pytest.raises(RuntimeError, match="terminal-like"):
+            xgr.GrammarCompiler(LAZY_TOKENIZER, cache_enabled=False).compile_grammar(grammar_obj)

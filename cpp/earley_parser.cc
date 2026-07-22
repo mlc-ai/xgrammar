@@ -44,6 +44,9 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print) {
   if (capture_recording_ && RuleHasCapture(state.rule_id)) {
     RecordCaptureEvent(state);
   }
+  if (state.rule_id != -1 && grammar_->GetRule(state.rule_id).is_lazy) {
+    tmp_completed_lazy_occurrences_.emplace_back(state.rule_id, state.rule_start_pos);
+  }
   // Check if a rule is completed.
   if (state.rule_start_pos == ParserState::kNoPrevInputPos) {
     // assert: if a root rule can achieve here, then it must be completed.
@@ -273,6 +276,7 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
   tmp_accept_stop_token_ = false;
+  tmp_completed_lazy_occurrences_.clear();
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   // Scan all the scanable states.
   for (const auto& state : latest_states) {
@@ -305,9 +309,27 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   }
 
   // Check if the grammar is completed, and add the scannable states to the history.
+  if (!tmp_completed_lazy_occurrences_.empty()) {
+    RemoveCommittedLazyStates();
+  }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
   return true;
+}
+
+void EarleyParser::RemoveCommittedLazyStates() {
+  auto is_committed = [&](const ParserState& state) {
+    for (const auto& [rule_id, rule_start_pos] : tmp_completed_lazy_occurrences_) {
+      if (state.rule_id == rule_id && state.rule_start_pos == rule_start_pos) {
+        return true;
+      }
+    }
+    return false;
+  };
+  tmp_states_to_be_added_.erase(
+      std::remove_if(tmp_states_to_be_added_.begin(), tmp_states_to_be_added_.end(), is_committed),
+      tmp_states_to_be_added_.end()
+  );
 }
 
 EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> initial_state)
@@ -347,6 +369,7 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   tmp_states_visited_in_queue_.Clear();
   tmp_accept_stop_token_ = false;
   tmp_states_to_be_added_.clear();
+  tmp_completed_lazy_occurrences_.clear();
   Enqueue(state);
   rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
   if (capture_tracking_) {
@@ -362,6 +385,9 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
     if (scanable) {
       tmp_states_to_be_added_.push_back(state);
     }
+  }
+  if (!tmp_completed_lazy_occurrences_.empty()) {
+    RemoveCommittedLazyStates();
   }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
@@ -937,6 +963,7 @@ bool EarleyParser::AdvanceAtomicToken(int32_t token_id, bool debug_print) {
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
   tmp_accept_stop_token_ = false;
+  tmp_completed_lazy_occurrences_.clear();
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   for (const auto& state : latest_states) {
     if (skip_expired_states_ && IsExpiredState(state)) {
@@ -961,6 +988,9 @@ bool EarleyParser::AdvanceAtomicToken(int32_t token_id, bool debug_print) {
     if (scanable) {
       tmp_states_to_be_added_.push_back(state);
     }
+  }
+  if (!tmp_completed_lazy_occurrences_.empty()) {
+    RemoveCommittedLazyStates();
   }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);

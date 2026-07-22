@@ -71,6 +71,7 @@ class SubGrammarAdderImpl : public GrammarMutator {
       builder_->UpdateLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
       builder_->UpdateMaxTokens(new_rule_ids_names[i].first, rule.max_tokens);
       builder_->UpdateCaptureName(new_rule_ids_names[i].first, rule.capture_name);
+      builder_->UpdateLazy(new_rule_ids_names[i].first, rule.is_lazy);
     }
     return new_rule_ids_names[base_grammar_->GetRootRuleId()].first;
   }
@@ -277,6 +278,7 @@ class StructureNormalizerImpl : public GrammarMutator {
       builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       builder_->UpdateMaxTokens(i, rule.max_tokens);
       builder_->UpdateCaptureName(i, rule.capture_name);
+      builder_->UpdateLazy(i, rule.is_lazy);
     }
     return builder_->Get(base_grammar_->GetRootRule().name);
   }
@@ -623,8 +625,8 @@ class RuleInlinerImpl : public GrammarMutator {
     auto rule = base_grammar_->GetRule(rule_id);
     // Inlining a budgeted rule would erase the rule its token budget applies to. Inlining a
     // captured rule would eliminate its completion events, so its capture would never be
-    // recorded.
-    if (rule.max_tokens >= 0 || !rule.capture_name.empty()) {
+    // recorded. Inlining a lazy rule would erase its committed-shortest semantics.
+    if (rule.max_tokens >= 0 || !rule.capture_name.empty() || rule.is_lazy) {
       return false;
     }
     auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
@@ -730,6 +732,7 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
       );
       builder_->UpdateMaxTokens(rule_id_map_[rule_id], rule.max_tokens);
       builder_->UpdateCaptureName(rule_id_map_[rule_id], rule.capture_name);
+      builder_->UpdateLazy(rule_id_map_[rule_id], rule.is_lazy);
     }
     XGRAMMAR_CHECK(rule_id_map_.count(grammar->GetRootRuleId()) > 0);
     return builder_->Get(rule_id_map_[grammar->GetRootRuleId()]);
@@ -1877,9 +1880,10 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   int32_t grammar_expr_id = builder_->AddRuleRef(rule_id);
   const auto& ref_rule = base_grammar_->GetRule(rule_id);
   const auto& ref_rule_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
-  // Keep the reference to budgeted rules: replacing it with the rule's content would erase the
-  // rule the token budget applies to.
-  if (ref_rule.max_tokens < 0 && ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
+  // Keep the reference to budgeted and lazy rules: replacing it with the rule's content would
+  // erase the rule the token budget or lazy semantics applies to.
+  if (ref_rule.max_tokens < 0 && !ref_rule.is_lazy &&
+      ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
       ref_rule_body.size() == 1) {
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
     if (ref_choice.size() == 1) {
@@ -2015,19 +2019,231 @@ class RepetitionNormalizerImpl {
   }
 };
 
+/*!
+ * \brief Rewrite lazy rule bodies into their terminal-like form where possible: unwrap the
+ * single-reference chains produced by regex conversion, and flatten the right-recursive plus
+ * pattern (x ::= cc x | cc) into (cc cc*). Grammars without lazy rules are returned unchanged.
+ */
+class LazyBodyFlattenerImpl : public GrammarMutator {
+ public:
+  using GrammarMutator::GrammarMutator;
+
+  Grammar Apply(const Grammar& grammar) final {
+    bool has_lazy_rule = false;
+    for (int i = 0; i < grammar->NumRules(); ++i) {
+      has_lazy_rule = has_lazy_rule || grammar->GetRule(i).is_lazy;
+    }
+    if (!has_lazy_rule) {
+      return grammar;
+    }
+    InitGrammar(grammar);
+    InitBuilder();
+    for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+      builder_->AddEmptyRule(base_grammar_->GetRule(i).name);
+    }
+    for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+      auto rule = base_grammar_->GetRule(i);
+      cur_rule_name_ = rule.name;
+      int32_t new_body_expr_id =
+          rule.is_lazy ? BuildFlattenedLazyBody(rule.body_expr_id) : VisitExpr(rule.body_expr_id);
+      builder_->UpdateRuleBody(i, new_body_expr_id);
+      builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
+      builder_->UpdateLazy(i, rule.is_lazy);
+    }
+    return builder_->Get(base_grammar_->GetRootRule().name);
+  }
+
+ private:
+  int32_t BuildFlattenedLazyBody(int32_t body_expr_id) {
+    // Unwrap chains of single rule references (r ::= (x), x ::= (y), ...) produced by regex
+    // conversion, and detect the plus-desugar pattern at the top level.
+    int32_t cur_body_id = body_expr_id;
+    int32_t cur_rule_id = -1;
+    for (int depth = 0; depth < 64; ++depth) {
+      const auto& body = base_grammar_->GetGrammarExpr(cur_body_id);
+      if (body.type != GrammarExprType::kChoices || body.size() != 1) {
+        break;
+      }
+      const auto& choice = base_grammar_->GetGrammarExpr(body[0]);
+      if (choice.type != GrammarExprType::kSequence || choice.size() != 1) {
+        break;
+      }
+      const auto& element = base_grammar_->GetGrammarExpr(choice[0]);
+      if (element.type != GrammarExprType::kRuleRef || base_grammar_->GetRule(element[0]).is_lazy) {
+        break;
+      }
+      cur_rule_id = element[0];
+      cur_body_id = base_grammar_->GetRule(cur_rule_id).body_expr_id;
+    }
+
+    const auto& body = base_grammar_->GetGrammarExpr(cur_body_id);
+    if (body.type != GrammarExprType::kChoices) {
+      return VisitExpr(cur_body_id);
+    }
+    std::vector<int32_t> plus_elements;
+    if (cur_rule_id != -1 && TryEmitPlusPattern(body, cur_rule_id, &plus_elements)) {
+      return builder_->AddChoices({builder_->AddSequence(plus_elements)});
+    }
+    std::vector<int32_t> new_choice_ids;
+    for (auto choice_id : body) {
+      const auto& choice = base_grammar_->GetGrammarExpr(choice_id);
+      if (choice.type != GrammarExprType::kSequence) {
+        new_choice_ids.push_back(VisitExpr(choice_id));
+        continue;
+      }
+      std::vector<int32_t> elements;
+      if (!FlattenSequenceInto(choice, &elements, 0)) {
+        // Not flattenable; copy as is and let the terminal-like validation report the error.
+        return VisitExpr(cur_body_id);
+      }
+      new_choice_ids.push_back(builder_->AddSequence(elements));
+    }
+    return builder_->AddChoices(new_choice_ids);
+  }
+
+  /*! \brief Append the flattened elements of the sequence, splicing rule references whose body
+   * is a single terminal-like sequence or the plus-desugar pattern. Returns false if some
+   * element cannot be flattened. */
+  bool FlattenSequenceInto(const GrammarExpr& seq, std::vector<int32_t>* elements, int depth) {
+    if (depth > 64) {
+      return false;
+    }
+    for (auto element_id : seq) {
+      const auto& element = base_grammar_->GetGrammarExpr(element_id);
+      if (element.type == GrammarExprType::kByteString ||
+          element.type == GrammarExprType::kCharacterClass ||
+          element.type == GrammarExprType::kCharacterClassStar) {
+        elements->push_back(builder_->AddGrammarExpr(element));
+        continue;
+      }
+      if (element.type != GrammarExprType::kRuleRef) {
+        return false;
+      }
+      const auto& ref_rule = base_grammar_->GetRule(element[0]);
+      if (ref_rule.is_lazy) {
+        return false;
+      }
+      const auto& ref_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
+      if (TryEmitPlusPattern(ref_body, element[0], elements)) {
+        continue;
+      }
+      if (ref_body.type == GrammarExprType::kChoices && ref_body.size() == 1) {
+        const auto& only_choice = base_grammar_->GetGrammarExpr(ref_body[0]);
+        if (only_choice.type == GrammarExprType::kEmptyStr) {
+          continue;
+        }
+        if (only_choice.type == GrammarExprType::kSequence &&
+            FlattenSequenceInto(only_choice, elements, depth + 1)) {
+          continue;
+        }
+      }
+      return false;
+    }
+    return true;
+  }
+
+  /*! \brief If the body matches the plus-desugar pattern (self ::= e self | e) with a
+   * star-expressible e (a character class, or a single-byte string), append (e e*) to the
+   * elements and return true. */
+  bool TryEmitPlusPattern(
+      const GrammarExpr& body, int32_t self_rule_id, std::vector<int32_t>* elements
+  ) {
+    if (body.type != GrammarExprType::kChoices || body.size() != 2) {
+      return false;
+    }
+    for (int recursive_pos = 0; recursive_pos < 2; ++recursive_pos) {
+      const auto& recursive = base_grammar_->GetGrammarExpr(body[recursive_pos]);
+      const auto& base = base_grammar_->GetGrammarExpr(body[1 - recursive_pos]);
+      if (recursive.type != GrammarExprType::kSequence || recursive.size() != 2 ||
+          base.type != GrammarExprType::kSequence || base.size() != 1) {
+        continue;
+      }
+      const auto& element = base_grammar_->GetGrammarExpr(recursive[0]);
+      const auto& tail = base_grammar_->GetGrammarExpr(recursive[1]);
+      const auto& base_element = base_grammar_->GetGrammarExpr(base[0]);
+      if (tail.type != GrammarExprType::kRuleRef || tail[0] != self_rule_id ||
+          element.type != base_element.type || element.size() != base_element.size() ||
+          !std::equal(element.begin(), element.end(), base_element.begin())) {
+        continue;
+      }
+      std::vector<GrammarBuilder::CharacterClassElement> character_ranges;
+      bool is_negative = false;
+      if (element.type == GrammarExprType::kCharacterClass) {
+        is_negative = static_cast<bool>(element[0]);
+        for (int i = 1; i < static_cast<int>(element.size()); i += 2) {
+          character_ranges.push_back({element[i], element[i + 1]});
+        }
+      } else if (element.type == GrammarExprType::kByteString && element.size() == 1) {
+        character_ranges.push_back({element[0], element[0]});
+      } else {
+        continue;
+      }
+      elements->push_back(builder_->AddGrammarExpr(element));
+      elements->push_back(builder_->AddCharacterClassStar(character_ranges, is_negative));
+      return true;
+    }
+    return false;
+  }
+};
+
 class GrammarOptimizerImpl {
  public:
   static Grammar Apply(const Grammar& grammar) {
     auto result = ByteStringFuser::Apply(grammar);
     result = RuleInliner::Apply(result);
     result = RepetitionRangeExpander::Apply(result);
+    result = LazyBodyFlattenerImpl().Apply(result);
     result = DeadCodeEliminator::Apply(result);
     result = LookaheadAssertionAnalyzer::Apply(result);
     result->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(result);
+    ValidateLazyRules(result);
     RepetitionNormalizer::Apply(&result);
     GrammarFSMBuilder::Apply(&result);
     result->optimized = true;
     return result;
+  }
+
+ private:
+  /*!
+   * \brief Committed-shortest (lazy) matching requires the whole rule body to compile into a
+   * single per-rule FSM without rule references, so that the states of one occurrence are exactly
+   * the states with the rule's id. Also warn on lazy rules that can match empty: they commit at
+   * entry and always match the empty string.
+   */
+  static void ValidateLazyRules(const Grammar& grammar) {
+    for (int32_t i = 0; i < grammar->NumRules(); ++i) {
+      const auto& rule = grammar->GetRule(i);
+      if (!rule.is_lazy) {
+        continue;
+      }
+      const auto& body = grammar->GetGrammarExpr(rule.body_expr_id);
+      XGRAMMAR_CHECK(body.type == Grammar::Impl::GrammarExprType::kChoices)
+          << "lazy rule '" << rule.name << "' must have a terminal-like body";
+      for (auto choice_id : body) {
+        const auto& choice = grammar->GetGrammarExpr(choice_id);
+        if (choice.type == Grammar::Impl::GrammarExprType::kEmptyStr) {
+          continue;
+        }
+        for (auto element_id : choice) {
+          const auto& element = grammar->GetGrammarExpr(element_id);
+          XGRAMMAR_CHECK(
+              element.type == Grammar::Impl::GrammarExprType::kByteString ||
+              element.type == Grammar::Impl::GrammarExprType::kCharacterClass ||
+              element.type == Grammar::Impl::GrammarExprType::kCharacterClassStar
+          ) << "lazy rule '"
+            << rule.name
+            << "' must have a terminal-like body (strings, character classes, and regexes that "
+               "compile to a single FSM); rule references and repetition ranges are not supported";
+        }
+      }
+      if (std::binary_search(
+              grammar->allow_empty_rule_ids.begin(), grammar->allow_empty_rule_ids.end(), i
+          )) {
+        XGRAMMAR_LOG(WARNING) << "The lazy rule '" << rule.name
+                              << "' can match the empty string, so it always matches the empty "
+                                 "string (committed-shortest matching).";
+      }
+    }
   }
 };
 
