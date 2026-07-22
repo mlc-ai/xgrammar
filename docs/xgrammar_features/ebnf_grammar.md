@@ -6,13 +6,14 @@ alternatives, repetition, and recursion. Grammars are constructed with
 [`xgr.Grammar.from_ebnf`](xgrammar.Grammar.from_ebnf), or by passing the grammar string directly
 to [`xgr.GrammarCompiler.compile_grammar`](xgrammar.GrammarCompiler.compile_grammar).
 
-The syntax is compatible with the GBNF (GGML BNF) format used by
-[llama.cpp](https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md).
-
 EBNF is also XGrammar's common intermediate representation: every other frontend (JSON Schema,
 regular expressions, structural tags, Lark) is converted to it internally, and printing any
 [`xgr.Grammar`](xgrammar.Grammar) with `str(grammar)` produces an equivalent grammar in this
 format that can be parsed again.
+
+The syntax is compatible with the GBNF (GGML BNF) format used by
+[llama.cpp](https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md), with many
+extensions, such as repetition ranges and macros.
 
 ```python
 import xgrammar as xgr
