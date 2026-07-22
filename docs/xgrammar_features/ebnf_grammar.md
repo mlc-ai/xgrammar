@@ -6,11 +6,10 @@ alternatives, repetition, and recursion. Grammars are constructed with
 [`xgr.Grammar.from_ebnf`](xgrammar.Grammar.from_ebnf), or by passing the grammar string directly
 to [`xgr.GrammarCompiler.compile_grammar`](xgrammar.GrammarCompiler.compile_grammar).
 
-The syntax follows the GBNF (GGML BNF) format of
-[llama.cpp](https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md), with several
-extensions: repetition ranges (`{m,n}`), lookahead assertions (`(=...)`), and macros for
-tool-call dispatch and token-level matching (`TagDispatch`, `Token`, `ExcludeToken`,
-`TokenTagDispatch`).
+Rules are written as `name ::= expression`. Besides the standard EBNF constructs (string
+literals, character classes, alternatives, grouping, repetition), the format supports repetition
+ranges (`{m,n}`), lookahead assertions (`(=...)`), and macros for tool-call dispatch and
+token-level matching (`TagDispatch`, `Token`, `ExcludeToken`, `TokenTagDispatch`).
 
 EBNF is also XGrammar's common intermediate representation: every other frontend (JSON Schema,
 regular expressions, structural tags, Lark) is converted to it internally, and printing any
@@ -315,6 +314,10 @@ escaped strings.
 
 ## Relation to Other Grammar Formats
 
+- The syntax is compatible with the GBNF (GGML BNF) format of
+  [llama.cpp](https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md): GBNF
+  grammars can be used directly, and the repetition ranges, lookahead assertions, and macros
+  described above are XGrammar extensions on top of it.
 - `str(grammar)` prints any grammar in this EBNF format. The printed form is normalized (for
   example, `*` and `+` are expanded into recursive rules) and can be parsed again by `from_ebnf`.
 - [`xgr.Grammar.from_json_schema`](xgrammar.Grammar.from_json_schema) and
