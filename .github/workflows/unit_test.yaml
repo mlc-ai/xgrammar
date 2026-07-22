@@ -85,7 +85,7 @@ jobs:
         run: |
           # transformers >=5.13 breaks `import mlx_lm`
           # (keep in sync with pyproject.toml [project.optional-dependencies].metal).
-          pip install mlx-lm "transformers<5.13"
+          pip install mlx-lm "transformers>=4.38.0,!=5.0.*,<5.13"
 
       - name: Run C++ tests
         run: |

@@ -184,12 +184,15 @@ class TokenizerInfo(XGRObject):
             return VocabType.BYTE_FALLBACK
 
         num_single_chars = sum(char in vocab_dict for char in _BYTE_LEVEL_CHARSET)
+        if num_single_chars < 128:
+            return None
+
         # Added tokens (e.g. chat-template markers) may contain characters outside the
         # alphabet, so tolerate a small fraction of such tokens.
         num_charset_tokens = sum(
             all(char in _BYTE_LEVEL_CHARSET for char in token) for token in vocab_dict
         )
-        if num_single_chars >= 128 and num_charset_tokens >= 0.99 * len(vocab_dict):
+        if num_charset_tokens >= 0.99 * len(vocab_dict):
             return VocabType.BYTE_LEVEL
 
         return None

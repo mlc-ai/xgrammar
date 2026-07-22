@@ -130,8 +130,9 @@ def test_decode_text(
 
     # Some transformers versions reconstruct a tokenizer that is itself lossy (e.g. it drops
     # spaces at encode time). The vocabulary round-trip cannot be verified through such a
-    # tokenizer, no matter how the vocabulary is decoded.
-    if tokenizer.decode(tokenized_text) != text:
+    # tokenizer, no matter how the vocabulary is decoded. Cleanup is disabled so that decode
+    # reflects the raw token stream instead of normalizing whitespace.
+    if tokenizer.decode(tokenized_text, clean_up_tokenization_spaces=False) != text:
         pytest.skip(f"Transformers tokenizer does not round-trip text: {tokenizer_path}")
 
     recovered_text = b"".join(decoded_vocab[token_id] for token_id in tokenized_text).decode(
