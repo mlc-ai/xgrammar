@@ -529,14 +529,14 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::string PrintBitmask(int32_t* bitmask_data_ptr, const TokenizerInfo& tokenizer_info);
 
   /*! \brief Restores skip_expired_states_ to false when the accept call returns. */
-  class SkipExpiredScope {
+  class SkipExpiredGuard {
    public:
-    explicit SkipExpiredScope(Impl* impl, bool enable) : impl_(impl) {
+    explicit SkipExpiredGuard(Impl* impl, bool enable) : impl_(impl) {
       impl_->skip_expired_states_ = enable;
     }
-    ~SkipExpiredScope() { impl_->skip_expired_states_ = false; }
-    SkipExpiredScope(const SkipExpiredScope&) = delete;
-    SkipExpiredScope& operator=(const SkipExpiredScope&) = delete;
+    ~SkipExpiredGuard() { impl_->skip_expired_states_ = false; }
+    SkipExpiredGuard(const SkipExpiredGuard&) = delete;
+    SkipExpiredGuard& operator=(const SkipExpiredGuard&) = delete;
 
    private:
     Impl* impl_;
@@ -544,7 +544,9 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   /*! \brief Fill the bitmask from the current states, optionally excluding the states whose
    * budget deadline has passed. */
-  void FillBitmaskForStates(int32_t* bitmask_data_ptr, bool skip_expired, bool debug_print);
+  void FillBitmaskForStates(
+      int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
+  );
 
   /*! \brief Consume the pending budget decision and warn once when a token budget was
    * exceeded. */
@@ -689,7 +691,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       }
     }
   }
-  SkipExpiredScope skip_expired_scope(this, budget_enforce_pending_);
+  SkipExpiredGuard skip_expired_guard(this, budget_enforce_pending_);
 
   if (debug_print) {
     std::string states_str;
@@ -901,7 +903,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       // Try to force the expired derivations to end here: mask from the other states only. If
       // no token remains, ending is impossible at this position; relax the budget for one step
       // and report it on the next accept.
-      FillBitmaskForStates(bitmask_data_ptr, /*skip_expired=*/true, debug_print);
+      FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/true, debug_print);
       if (BitmaskHasAnyToken(bitmask_data_ptr) || IsCompleted()) {
         budget_enforce_pending_ = true;
         return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
@@ -911,12 +913,12 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       budget_enforce_pending_ = false;
     }
   }
-  FillBitmaskForStates(bitmask_data_ptr, /*skip_expired=*/false, debug_print);
+  FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/false, debug_print);
   return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
 }
 
 void GrammarMatcher::Impl::FillBitmaskForStates(
-    int32_t* bitmask_data_ptr, bool skip_expired, bool debug_print
+    int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
 ) {
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
@@ -942,7 +944,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   tmp_rejected_indices_.assign({-1});
 
   if (debug_print) {
-    XGRAMMAR_LOG(INFO) << "FillNextTokenBitmask: num of states=" << latest_states.size();
+    XGRAMMAR_LOG(INFO) << "FillNextTokenBitmask: index=" << index
+                       << ", num of states=" << latest_states.size();
   }
 
   std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
