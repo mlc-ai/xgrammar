@@ -165,7 +165,7 @@ Matches content that conforms to a JSON Schema.
 - `"deepseek_xml"`: DeepSeek-v3.2 XML parameter format
 - `"glm_xml"`: GLM-style XML parameter format, such as `<arg_key>name</arg_key><arg_value>value</arg_value>`
 
-`any_order` relaxes object property ordering (see [below](#property-ordering-with-any_order)). It
+`any_order` relaxes object property ordering (see [below](#property-ordering-with-any-order)). It
 works with every `style`.
 
 ```json
