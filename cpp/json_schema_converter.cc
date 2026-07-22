@@ -22,6 +22,7 @@
 #include <variant>
 #include <vector>
 
+#include "grammar_parser.h"
 #include "json_schema_converter_ext.h"
 #include "regex_converter.h"
 #include "support/logging.h"
@@ -1761,7 +1762,7 @@ JSONSchemaConverter::JSONSchemaConverter(
   }
 }
 
-std::string JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
+void JSONSchemaConverter::GenerateRules(const SchemaSpecPtr& spec) {
   AddBasicRules();
 
   // Register the root rule for circular reference handling
@@ -1782,8 +1783,16 @@ std::string JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
     std::string root_body = GenerateFromSpec(spec, root_rule_name);
     ebnf_script_creator_.AddRuleWithAllocatedName(root_rule_name, root_body);
   }
+}
 
+std::string JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
+  GenerateRules(spec);
   return ebnf_script_creator_.GetScript();
+}
+
+Grammar JSONSchemaConverter::ConvertToGrammar(const SchemaSpecPtr& spec) {
+  GenerateRules(spec);
+  return ParseEBNFRules(ebnf_script_creator_.GetRules());
 }
 
 void JSONSchemaConverter::AddBasicRules() {
@@ -4032,6 +4041,39 @@ std::string JSONSchemaToEBNF(
       json_format,
       any_order
   );
+}
+
+Grammar JSONSchemaToGrammar(
+    const std::string& schema,
+    bool any_whitespace,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
+    bool any_order
+) {
+  picojson::value schema_value;
+  std::string err = picojson::parse(schema_value, schema);
+  XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
+                              << ". The JSON string is:" << schema;
+
+  SchemaParser parser(schema_value, {strict_mode, JSONFormat::kJSON});
+  auto spec_result = parser.Parse(schema_value, "root");
+  if (spec_result.IsErr()) {
+    XGRAMMAR_LOG(FATAL) << std::move(spec_result).UnwrapErr().what();
+  }
+  auto spec = std::move(spec_result).Unwrap();
+  auto ref_resolver = [&parser](const std::string& uri, const std::string& rule_name_hint) {
+    auto result = parser.ResolveRef(uri, rule_name_hint);
+    if (result.IsErr()) {
+      XGRAMMAR_LOG(FATAL) << std::move(result).UnwrapErr().what();
+    }
+    return std::move(result).Unwrap();
+  };
+  JSONSchemaConverter converter(
+      indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
+  );
+  return converter.ConvertToGrammar(spec);
 }
 
 std::string JSONSchemaToEBNF(

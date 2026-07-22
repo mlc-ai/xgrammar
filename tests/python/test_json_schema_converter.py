@@ -89,6 +89,54 @@ def check_schema_with_instance(
     assert accepted == is_accepted
 
 
+@pytest.mark.parametrize(
+    "schema,kwargs",
+    [
+        (
+            {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "pattern": "^[a-z]+$"},
+                    "items": {
+                        "type": "array",
+                        "prefixItems": [{"type": "integer"}, {"enum": ["x", "y"]}],
+                    },
+                },
+                "required": ["name"],
+                "additionalProperties": False,
+            },
+            {},
+        ),
+        (
+            {
+                "$defs": {
+                    "node": {
+                        "type": "object",
+                        "properties": {"value": {"type": "number"}},
+                        "required": ["value"],
+                    }
+                },
+                "anyOf": [{"$ref": "#/$defs/node"}, {"type": "null"}],
+            },
+            {"any_whitespace": False, "indent": 2},
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"a": {"type": "boolean"}, "b": {"type": "integer"}},
+                "required": ["a"],
+            },
+            {"any_order": True, "max_whitespace_cnt": 3},
+        ),
+    ],
+)
+def test_direct_grammar_frontend_matches_text_ebnf(schema, kwargs):
+    schema_json = json.dumps(schema)
+    direct = xgr.Grammar.from_json_schema(schema_json, **kwargs)
+    text_ebnf = xgr.Grammar.from_json_schema(schema_json, print_converted_ebnf=True, **kwargs)
+    assert str(direct) == str(text_ebnf)
+
+
 def test_basic():
     class MainModel(BaseModel):
         integer_field: int

@@ -10,6 +10,9 @@
 #include <xgrammar/xgrammar.h>
 
 #include <any>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace xgrammar {
 
@@ -81,6 +84,18 @@ class EBNFLexer {
  * \return The parsed grammar.
  */
 Grammar ParseEBNF(const std::string& ebnf_string, const std::string& root_rule_name = "root");
+
+/*!
+ * \brief Parse generated EBNF rules directly into one GrammarBuilder.
+ *
+ * All rule names are registered before parsing any body, so forward references have the same
+ * semantics as ParseEBNF. Parsing one rule at a time avoids materializing a combined script and
+ * retaining its complete token stream.
+ */
+Grammar ParseEBNFRules(
+    const std::vector<std::pair<std::string, std::string>>& rules,
+    const std::string& root_rule_name = "root"
+);
 
 }  // namespace xgrammar
 
