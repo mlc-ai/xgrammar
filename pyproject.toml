@@ -21,10 +21,12 @@ dependencies = [
   # Standardized transformers bound; keep in sync with docs/requirements.txt and the CI
   # workflows. 5.0 fails to initialize several remote-code tiktoken tokenizers
   # (e.g. Qwen-7B-Chat, Phi-3-small: "has no attribute mergeable_ranks"); fixed in 5.1+.
+  # 5.13.0 breaks `import mlx_lm` (AutoTokenizer.register with a string config class;
+  # fixed in transformers 5.13.1, see https://github.com/ml-explore/mlx-lm/issues/1458).
   # v5 requires Python >=3.10, so on Python 3.8/3.9 pip resolves to v4.
   # No upper bound: an upper cap here would force resolver conflicts on downstream
-  # packages; mlx-specific caps live in [project.optional-dependencies].metal.
-  "transformers>=4.38.0,!=5.0.*",
+  # packages.
+  "transformers>=4.38.0,!=5.0.*,!=5.13.0",
   "triton; platform_system == 'Linux' and platform_machine == 'x86_64'",
   "numpy",
   "typing-extensions>=4.9.0",
@@ -36,11 +38,7 @@ GitHub = "https://github.com/mlc-ai/xgrammar"
 
 [project.optional-dependencies]
 test = ["huggingface-hub[cli]", "protobuf", "pytest", "sentencepiece", "tiktoken"]
-metal = [
-  # transformers >=5.13 breaks `import mlx_lm`.
-  "mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'",
-  "transformers<5.13; platform_system == 'Darwin' and platform_machine == 'arm64'",
-]
+metal = ["mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'"]
 
 [build-system]
 requires = ["scikit-build-core>=0.10.0", "apache-tvm-ffi>=0.1.9"]
