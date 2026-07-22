@@ -88,7 +88,7 @@ autodoc_pydantic_settings_show_json = False
 
 # -- Other Options --------------------------------------------------------
 
-templates_path = []
+templates_path = ["_templates"]
 
 # Redirects for pages moved in the docs restructure. Keys are old docnames;
 # values are the new locations relative to the old page.
