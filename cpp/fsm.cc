@@ -1267,14 +1267,18 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
     for (const auto& edge : edges) {
       in_degree[edge.target]++;
       if (edge.IsEpsilon()) {
-        if (edges.size() == 1 && !has_exclude_token[i] && !has_exclude_token[edge.target]) {
-          // a -- epsilon --> b, and a doesn't have other outward edges.
+        // a -- epsilon --> b, and a doesn't have other outward edges. Do not merge an
+        // accepting a into a non-accepting b: the merged state would be accepting, so other
+        // paths reaching b would be wrongly accepted. (If b is accepting, a effectively
+        // accepts already via the epsilon edge, so merging is safe.)
+        if (edges.size() == 1 && !has_exclude_token[i] && !has_exclude_token[edge.target] &&
+            (!IsEndState(i) || IsEndState(edge.target))) {
           union_find_set.Add(i);
           union_find_set.Add(edge.target);
           union_find_set.Union(i, edge.target);
           in_degree[edge.target]--;  // Remove the inward edge since a and b are merged.
         } else {
-          // a has other outward edges, we store it to check for another case.
+          // Otherwise, we store it to check for the second merge rule.
           epsilon_edges.emplace_back(i, edge.target);
         }
       }

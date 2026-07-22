@@ -50,6 +50,8 @@ std::string GrammarPrinter::PrintGrammarExpr(const GrammarExpr& grammar_expr) {
       return PrintExcludeToken(grammar_expr);
     case GrammarExprType::kTokenTagDispatch:
       return PrintTokenTagDispatch(grammar_expr);
+    case GrammarExprType::kRegex:
+      return PrintRegex(grammar_expr);
     default:
       XGRAMMAR_LOG(FATAL) << "Unexpected GrammarExpr type: " << static_cast<int>(grammar_expr.type);
       XGRAMMAR_UNREACHABLE();
@@ -125,6 +127,14 @@ std::string GrammarPrinter::PrintChoices(const GrammarExpr& grammar_expr) {
   }
   result += ")";
   return result;
+}
+
+std::string GrammarPrinter::PrintRegex(const GrammarExpr& grammar_expr) {
+  std::string result = "Regex(" + PrintString(grammar_->GetRegexString(grammar_expr));
+  if (grammar_->GetRegexIsJSONString(grammar_expr)) {
+    result += ", json_string=true";
+  }
+  return result + ")";
 }
 
 std::string GrammarPrinter::PrintString(const std::string& str) {

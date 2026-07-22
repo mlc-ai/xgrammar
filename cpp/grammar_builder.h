@@ -75,6 +75,16 @@ class GrammarBuilder {
   int32_t AddByteString(const std::string& str);
 
   /*!
+   * \brief Add a GrammarExpr for a regex. The pattern is stored as-is and compiled into an
+   * automaton by GrammarFSMBuilder.
+   * \param regex_str The regex pattern string.
+   * \param json_string Whether the regex matches the body of a JSON string literal. If true,
+   * the characters that must be escaped in a JSON string (the control characters, '"' and
+   * '\\') are excluded from every character match of the compiled automaton.
+   */
+  int32_t AddRegex(const std::string& regex_str, bool json_string = false);
+
+  /*!
    * \brief Add a GrammarExpr for a character class.
    * \param elements A vector of CharacterClassElement, each containing a lower and a upper bound.
    * \param is_negative Whether the character class is negated.

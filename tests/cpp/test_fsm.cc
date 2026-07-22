@@ -523,6 +523,59 @@ TEST(XGrammarFSMTest, MergeEquivalentStatesNoCrossRuleChaining) {
   EXPECT_FALSE(merged.AcceptString("ybn"));
 }
 
+TEST(XGrammarFSMTest, SimplifyEpsilonPreservesAcceptance) {
+  // (ab)+ : the accepting state's only edge is an epsilon back to the non-accepting start.
+  // Merging the two states would wrongly make the start state accepting.
+  auto fsm_wse = RegexFSMBuilder::Build("(ab)+").Unwrap();
+  fsm_wse = fsm_wse.SimplifyEpsilon();
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("ab"));
+  EXPECT_TRUE(fsm_wse.AcceptString("abab"));
+
+  fsm_wse = RegexFSMBuilder::Build("a+").Unwrap();
+  fsm_wse = fsm_wse.SimplifyEpsilon();
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("aaa"));
+
+  // Hand-built: accepting state 1 has a single epsilon edge to non-accepting state 2, and
+  // state 2 is also reachable via another path (0 -b-> 2). Merging 1 and 2 would wrongly
+  // accept "b". The language is {"a", "ac", "bc"}.
+  FSMWithStartEnd manual_fsm;
+  for (int i = 0; i < 4; i++) {
+    manual_fsm.AddState();
+  }
+  manual_fsm.SetStartState(0);
+  manual_fsm.AddEndState(1);
+  manual_fsm.AddEndState(3);
+  manual_fsm.GetFsm().AddEdge(0, 1, 'a', 'a');
+  manual_fsm.GetFsm().AddEpsilonEdge(1, 2);
+  manual_fsm.GetFsm().AddEdge(0, 2, 'b', 'b');
+  manual_fsm.GetFsm().AddEdge(2, 3, 'c', 'c');
+  manual_fsm = manual_fsm.SimplifyEpsilon();
+  EXPECT_TRUE(manual_fsm.AcceptString("a"));
+  EXPECT_TRUE(manual_fsm.AcceptString("ac"));
+  EXPECT_TRUE(manual_fsm.AcceptString("bc"));
+  EXPECT_FALSE(manual_fsm.AcceptString("b"));
+  EXPECT_FALSE(manual_fsm.AcceptString(""));
+
+  // The safe direction still merges: non-accepting state with a single epsilon edge into an
+  // accepting state.
+  FSMWithStartEnd mergeable_fsm;
+  for (int i = 0; i < 3; i++) {
+    mergeable_fsm.AddState();
+  }
+  mergeable_fsm.SetStartState(0);
+  mergeable_fsm.AddEndState(2);
+  mergeable_fsm.GetFsm().AddEdge(0, 1, 'a', 'a');
+  mergeable_fsm.GetFsm().AddEpsilonEdge(1, 2);
+  mergeable_fsm = mergeable_fsm.SimplifyEpsilon();
+  EXPECT_EQ(mergeable_fsm.GetFsm().NumStates(), 2);
+  EXPECT_TRUE(mergeable_fsm.AcceptString("a"));
+  EXPECT_FALSE(mergeable_fsm.AcceptString(""));
+}
+
 TEST(XGrammarFSMTest, EpsilonSimplificationTest) {
   FSMWithStartEnd fsm_wse;
   for (int i = 0; i < 10; i++) {

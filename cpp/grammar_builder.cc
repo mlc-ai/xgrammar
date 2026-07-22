@@ -68,6 +68,16 @@ int32_t GrammarBuilder::AddByteString(const std::string& str) {
   );
 }
 
+int32_t GrammarBuilder::AddRegex(const std::string& regex_str, bool json_string) {
+  std::vector<int32_t> data;
+  data.reserve(regex_str.size() + 1);
+  data.push_back(static_cast<int32_t>(json_string));
+  for (char c : regex_str) {
+    data.push_back(static_cast<int32_t>(static_cast<uint8_t>(c)));
+  }
+  return AddGrammarExpr({GrammarExprType::kRegex, data.data(), static_cast<int32_t>(data.size())});
+}
+
 int32_t GrammarBuilder::AddCharacterClass(
     const std::vector<CharacterClassElement>& elements, bool is_negative
 ) {

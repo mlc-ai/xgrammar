@@ -5,6 +5,7 @@
 #ifndef XGRAMMAR_FSM_BUILDER_H_
 #define XGRAMMAR_FSM_BUILDER_H_
 
+#include <bitset>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -25,6 +26,18 @@ class RegexFSMBuilder {
    * \return The FSM with start and end states.
    */
   static Result<FSMWithStartEnd> Build(const std::string& regex);
+
+  /*!
+   * \brief Converts a regex string to a FSM, then removes the forbidden characters from every
+   * character transition. The result accepts the intersection of the regex language and the
+   * set of strings that contain no forbidden character. The result language may be empty.
+   * \param regex The regex string.
+   * \param forbidden_chars The forbidden characters.
+   * \return The FSM with start and end states.
+   */
+  static Result<FSMWithStartEnd> BuildWithForbiddenChars(
+      const std::string& regex, const std::bitset<256>& forbidden_chars
+  );
 };
 
 /*!

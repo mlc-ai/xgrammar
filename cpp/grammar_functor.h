@@ -9,6 +9,7 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -16,6 +17,7 @@
 #include "compiled_grammar_impl.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
+#include "support/utils.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -143,6 +145,8 @@ class GrammarFunctor {
         return VisitExcludeToken(grammar_expr);
       case GrammarExprType::kTokenTagDispatch:
         return VisitTokenTagDispatch(grammar_expr);
+      case GrammarExprType::kRegex:
+        return VisitRegex(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
         XGRAMMAR_UNREACHABLE();
@@ -236,6 +240,9 @@ class GrammarFunctor {
   virtual T VisitTokenTagDispatch(const GrammarExpr& grammar_expr) {
     return VisitElement(grammar_expr);
   }
+
+  /*! \brief Visit a regex GrammarExpr. It is a leaf: the pattern string is carried as-is. */
+  virtual T VisitRegex(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
 
   /*! \brief The grammar to visit or mutate. */
   Grammar base_grammar_{NullObj{}};
@@ -373,6 +380,16 @@ class GrammarFSMBuilder {
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
+  /*!
+   * \brief Build the automaton of a regex pattern. Returns the error message on failure.
+   * \param regex The regex pattern string.
+   * \param json_string Whether the regex matches the body of a JSON string literal. If true,
+   * the characters in JSONStringForbiddenChars() are excluded from every character match.
+   */
+  static Result<FSMWithStartEnd> Regex(const std::string& regex, bool json_string = false);
+  /*! \brief The characters that must be escaped inside a JSON string literal: the control
+   * characters 0x00-0x1F, the quote '"' and the backslash '\\'. */
+  static const std::bitset<256>& JSONStringForbiddenChars();
 };
 
 /*!
