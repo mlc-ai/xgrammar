@@ -1,11 +1,12 @@
 import logging
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pytest
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 import xgrammar as xgr
+from xgrammar.tokenizer_info import _BYTE_LEVEL_CHARSET
 
 
 @pytest.fixture(scope="module")
@@ -123,7 +124,16 @@ def test_decode_text(
     )
     tokenizer, tokenizer_info = tokenizer_info_storage[tokenizer_path]
     decoded_vocab = tokenizer_info.decoded_vocab
-    tokenized_text = tokenizer.encode(text)
+    # Special tokens are excluded: some transformers versions append end-of-turn markers to
+    # encode() output, and the vocabulary round-trip below only concerns real text tokens.
+    tokenized_text = tokenizer.encode(text, add_special_tokens=False)
+
+    # Some transformers versions reconstruct a tokenizer that is itself lossy (e.g. it drops
+    # spaces at encode time). The vocabulary round-trip cannot be verified through such a
+    # tokenizer, no matter how the vocabulary is decoded. Cleanup is disabled so that decode
+    # reflects the raw token stream instead of normalizing whitespace.
+    if tokenizer.decode(tokenized_text, clean_up_tokenization_spaces=False) != text:
+        pytest.skip(f"Transformers tokenizer does not round-trip text: {tokenizer_path}")
 
     recovered_text = b"".join(decoded_vocab[token_id] for token_id in tokenized_text).decode(
         "utf-8"
@@ -131,7 +141,8 @@ def test_decode_text(
 
     trial_text = "a"
     trial_text_roundtrip = b"".join(
-        decoded_vocab[token_id] for token_id in tokenizer.encode(trial_text)
+        decoded_vocab[token_id]
+        for token_id in tokenizer.encode(trial_text, add_special_tokens=False)
     ).decode("utf-8")
     assert trial_text_roundtrip[-1] == "a"
     detected_prefix = trial_text_roundtrip[:-1]
@@ -140,6 +151,30 @@ def test_decode_text(
         len(detected_prefix) > 0 and detected_prefix[-1] == " "
     )
     assert detected_prefix + text == recovered_text
+
+
+byte_fallback_vocab = {f"<0x{byte:02X}>": byte for byte in range(256)}
+byte_fallback_vocab.update({"▁hello": 256, "▁world": 257, "你好": 258})
+byte_level_vocab = {char: i for i, char in enumerate(sorted(_BYTE_LEVEL_CHARSET))}
+byte_level_vocab.update({"Ġhello": 256, "ä½ł": 257, "<|endoftext|>": 258})
+# A large multilingual byte-fallback vocabulary may contain the whole byte-level alphabet as
+# ordinary pieces (e.g. gemma); the byte pieces must take precedence.
+mixed_vocab = {**byte_level_vocab, **{k: v + 300 for k, v in byte_fallback_vocab.items()}}
+# A plain-text vocabulary (e.g. WordPiece) matches neither encoding.
+raw_vocab = {"hello": 0, "##ing": 1, "你": 2, "好": 3, "a": 4, "!": 5}
+
+
+@pytest.mark.parametrize(
+    "vocab, expected",
+    [
+        (byte_fallback_vocab, xgr.VocabType.BYTE_FALLBACK),
+        (byte_level_vocab, xgr.VocabType.BYTE_LEVEL),
+        (mixed_vocab, xgr.VocabType.BYTE_FALLBACK),
+        (raw_vocab, None),
+    ],
+)
+def test_detect_vocab_type_from_vocab(vocab: Dict[str, int], expected: Optional[xgr.VocabType]):
+    assert xgr.TokenizerInfo._detect_vocab_type_from_vocab(vocab) == expected
 
 
 tokenizer_path__token_ids__raw_tokens = [
