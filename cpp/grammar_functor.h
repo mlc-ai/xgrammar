@@ -322,10 +322,10 @@ class StructureNormalizer {
 /*************************** Grammar Optimizer ***************************/
 
 /*!
- * \brief Fuse adjacent byte string elements in sequences, in place.
- * \details If any rewrite is needed, the grammar handle is first replaced with a copy so that
- * other holders of the same grammar are unaffected. If nothing needs rewriting, the pass is a
- * read-only scan.
+ * \brief Fuse adjacent byte string elements in sequences.
+ * \details If nothing needs rewriting, the pass is a read-only scan and the grammar is left
+ * unchanged. Otherwise the grammar handle is replaced with a rewritten copy, so other holders of
+ * the same grammar are unaffected.
  */
 class ByteStringFuser {
  public:
@@ -341,10 +341,10 @@ class AllowEmptyRuleAnalyzer {
 };
 
 /*!
- * \brief Inline the rule references in the grammar, in place.
- * \details If any rewrite is needed, the grammar handle is first replaced with a copy so that
- * other holders of the same grammar are unaffected. If nothing needs rewriting, the pass is a
- * read-only scan.
+ * \brief Inline the rule references in the grammar.
+ * \details If nothing needs rewriting, the pass is a read-only scan and the grammar is left
+ * unchanged. Otherwise the grammar handle is replaced with a rewritten copy, so other holders of
+ * the same grammar are unaffected.
  */
 class RuleInliner {
  public:

@@ -874,7 +874,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def(
           "xgrammar.tvm_ffi_binding.testing.grammar_functor.byte_string_fuser",
           [](O grammar_ref) {
-            // The pass copies the grammar before its first rewrite, so the input is unaffected.
+            // The pass rewrites a copy if needed, so the input grammar is unaffected.
             Grammar grammar = grammar_ref.as<GrammarObj>()->value;
             ByteStringFuser::Apply(&grammar);
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(grammar));
@@ -883,7 +883,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def(
           "xgrammar.tvm_ffi_binding.testing.grammar_functor.rule_inliner",
           [](O grammar_ref) {
-            // The pass copies the grammar before its first rewrite, so the input is unaffected.
+            // The pass rewrites a copy if needed, so the input grammar is unaffected.
             Grammar grammar = grammar_ref.as<GrammarObj>()->value;
             RuleInliner::Apply(&grammar);
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(grammar));

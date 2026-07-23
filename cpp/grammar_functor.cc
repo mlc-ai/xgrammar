@@ -554,129 +554,119 @@ class GrammarNormalizerImpl {
 /*************************** Impl of grammar optimizers ***************************/
 
 /*!
+ * \brief Redirect all references to replaced exprs according to the replacement map: rule bodies,
+ * lookahead assertions, and the children of sequence and choices exprs.
+ */
+static void RedirectExprReferences(
+    GrammarBuilder* builder, const std::unordered_map<int32_t, int32_t>& replacement
+) {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  for (int32_t rule_id = 0; rule_id < builder->NumRules(); ++rule_id) {
+    const auto& rule = builder->GetRule(rule_id);
+    if (auto it = replacement.find(rule.body_expr_id); it != replacement.end()) {
+      builder->UpdateRuleBody(rule_id, it->second);
+    }
+    if (auto it = replacement.find(rule.lookahead_assertion_id); it != replacement.end()) {
+      builder->UpdateLookaheadAssertion(rule_id, it->second);
+    }
+  }
+  for (int32_t expr_id = 0; expr_id < builder->NumGrammarExprs(); ++expr_id) {
+    auto expr = builder->GetGrammarExpr(expr_id);
+    if (expr.type != GrammarExprType::kSequence && expr.type != GrammarExprType::kChoices) {
+      continue;
+    }
+    for (int32_t i = 0; i < expr.size(); ++i) {
+      if (auto it = replacement.find(expr[i]); it != replacement.end()) {
+        expr.SetData(i, it->second);
+      }
+    }
+  }
+}
+
+/*!
  * \brief Inline rules that can be inlined.
  *
  * Now we only inline rule references that:
  * 1. at the beginning of a sequence
  * 2. The rule should be a sequence of choices, cannot be empty, cannot refer to other rules
- */
-/*!
- * \brief Inline rule references in place.
- * \details The pass scans every choices expr. When a choice's sequence starts with a reference to
- * an inlinable rule, the expanded sequences and the new choices record are appended to the
- * grammar's expr storage, and all references to the old choices id are redirected. Before the
- * first rewrite, the grammar handle is replaced with a copy so that other holders of the same
- * grammar are unaffected. Stale records left behind are removed later by DeadCodeEliminator.
+ *
+ * \details The pass first scans the grammar; if nothing can be inlined, the grammar is left
+ * unchanged. Otherwise the grammar is copied into a GrammarBuilder, the expanded sequences and
+ * choices are added as new exprs (expr ids are preserved by the copy), and all references to the
+ * replaced choices are redirected. Stale exprs are removed later by DeadCodeEliminator.
  */
 class RuleInlinerImpl {
  public:
   using GrammarExprType = Grammar::Impl::GrammarExprType;
 
   void Apply(Grammar* grammar) {
-    auto& grammar_ref = *grammar;
-    bool owned = false;
-    const int32_t original_num_exprs = grammar_ref->NumGrammarExprs();
+    const Grammar& original = *grammar;
+    const int32_t num_exprs = original->NumGrammarExprs();
+
+    bool needs_inlining = false;
+    for (int32_t expr_id = 0; expr_id < num_exprs && !needs_inlining; ++expr_id) {
+      auto expr = original->GetGrammarExpr(expr_id);
+      needs_inlining =
+          expr.type == GrammarExprType::kChoices && ChoicesNeedInlining(original, expr);
+    }
+    if (!needs_inlining) {
+      return;
+    }
+
+    GrammarBuilder builder(original);
     std::unordered_map<int32_t, int32_t> choices_replacement;
-    std::vector<int32_t> choice_ids;
-    for (int32_t expr_id = 0; expr_id < original_num_exprs; ++expr_id) {
-      {
-        auto expr = grammar_ref->GetGrammarExpr(expr_id);
-        if (expr.type != GrammarExprType::kChoices) {
-          continue;
-        }
-        bool needs_inlining = false;
-        for (int32_t choice_id : expr) {
-          auto choice_expr = grammar_ref->GetGrammarExpr(choice_id);
-          if (choice_expr.type != GrammarExprType::kSequence || choice_expr.size() == 0) {
-            continue;
-          }
-          auto first_element = grammar_ref->GetGrammarExpr(choice_expr[0]);
-          if (first_element.type == GrammarExprType::kRuleRef &&
-              CanRuleBeInlined(grammar_ref, first_element[0])) {
-            needs_inlining = true;
-            break;
-          }
-        }
-        if (!needs_inlining) {
-          continue;
-        }
-        choice_ids.assign(expr.begin(), expr.end());
+    for (int32_t expr_id = 0; expr_id < num_exprs; ++expr_id) {
+      auto expr = original->GetGrammarExpr(expr_id);
+      if (expr.type != GrammarExprType::kChoices || !ChoicesNeedInlining(original, expr)) {
+        continue;
       }
-
-      if (!owned) {
-        // Copy before the first rewrite so that other holders of this grammar are unaffected.
-        grammar_ref = GrammarBuilder(grammar_ref).Get(grammar_ref->GetRootRuleId());
-        owned = true;
-      }
-
       std::vector<int32_t> new_choice_ids;
-      std::vector<int32_t> new_sequence;
-      for (int32_t choice_id : choice_ids) {
-        auto choice_expr = grammar_ref->GetGrammarExpr(choice_id);
+      for (int32_t choice_id : expr) {
+        auto choice_expr = original->GetGrammarExpr(choice_id);
         if (choice_expr.type == GrammarExprType::kEmptyStr) {
           new_choice_ids.push_back(choice_id);
           continue;
         }
         XGRAMMAR_ICHECK(choice_expr.type == GrammarExprType::kSequence);
-        auto first_element = grammar_ref->GetGrammarExpr(choice_expr[0]);
+        auto first_element = original->GetGrammarExpr(choice_expr[0]);
         if (first_element.type != GrammarExprType::kRuleRef ||
-            !CanRuleBeInlined(grammar_ref, first_element[0])) {
+            !CanRuleBeInlined(original, first_element[0])) {
           new_choice_ids.push_back(choice_id);
           continue;
         }
-
-        // Do inlining. The element ids are copied out first because appending new records may
-        // reallocate the storage the expr views point into.
-        const std::vector<int32_t> other_elements(choice_expr.begin() + 1, choice_expr.end());
-        auto ref_body =
-            grammar_ref->GetGrammarExpr(grammar_ref->GetRule(first_element[0]).body_expr_id);
-        const std::vector<int32_t> ref_choice_ids(ref_body.begin(), ref_body.end());
-        for (int32_t ref_choice_id : ref_choice_ids) {
-          {
-            auto ref_choice_expr = grammar_ref->GetGrammarExpr(ref_choice_id);
-            XGRAMMAR_ICHECK(ref_choice_expr.type == GrammarExprType::kSequence);
-            new_sequence.assign(ref_choice_expr.begin(), ref_choice_expr.end());
-          }
-          new_sequence.insert(new_sequence.end(), other_elements.begin(), other_elements.end());
-          new_choice_ids.push_back(
-              grammar_ref->AddGrammarExpr(GrammarExprType::kSequence, new_sequence)
-          );
+        // Do inlining: prepend each choice of the referenced rule to the rest of this sequence.
+        auto ref_body = original->GetGrammarExpr(original->GetRule(first_element[0]).body_expr_id);
+        for (int32_t ref_choice_id : ref_body) {
+          auto ref_choice_expr = original->GetGrammarExpr(ref_choice_id);
+          XGRAMMAR_ICHECK(ref_choice_expr.type == GrammarExprType::kSequence);
+          std::vector<int32_t> new_sequence(ref_choice_expr.begin(), ref_choice_expr.end());
+          new_sequence.insert(new_sequence.end(), choice_expr.begin() + 1, choice_expr.end());
+          new_choice_ids.push_back(builder.AddSequence(new_sequence));
         }
       }
-      choices_replacement[expr_id] =
-          grammar_ref->AddGrammarExpr(GrammarExprType::kChoices, new_choice_ids);
+      choices_replacement[expr_id] = builder.AddChoices(new_choice_ids);
     }
 
-    if (choices_replacement.empty()) {
-      return;
-    }
-
-    // Redirect all references to the replaced choices records.
-    for (int32_t rule_id = 0; rule_id < grammar_ref->NumRules(); ++rule_id) {
-      auto& rule = grammar_ref->GetRule(rule_id);
-      if (auto it = choices_replacement.find(rule.body_expr_id); it != choices_replacement.end()) {
-        rule.body_expr_id = it->second;
-      }
-      if (auto it = choices_replacement.find(rule.lookahead_assertion_id);
-          it != choices_replacement.end()) {
-        rule.lookahead_assertion_id = it->second;
-      }
-    }
-    const int32_t total_num_exprs = grammar_ref->NumGrammarExprs();
-    for (int32_t expr_id = 0; expr_id < total_num_exprs; ++expr_id) {
-      auto expr = grammar_ref->GetGrammarExpr(expr_id);
-      if (expr.type != GrammarExprType::kSequence && expr.type != GrammarExprType::kChoices) {
-        continue;
-      }
-      for (int32_t i = 0; i < expr.size(); ++i) {
-        if (auto it = choices_replacement.find(expr[i]); it != choices_replacement.end()) {
-          expr.SetData(i, it->second);
-        }
-      }
-    }
+    RedirectExprReferences(&builder, choices_replacement);
+    *grammar = builder.Get(original->GetRootRuleId());
   }
 
  private:
+  bool ChoicesNeedInlining(const Grammar& grammar, const Grammar::Impl::GrammarExpr& expr) {
+    for (int32_t choice_id : expr) {
+      auto choice_expr = grammar->GetGrammarExpr(choice_id);
+      if (choice_expr.type != GrammarExprType::kSequence || choice_expr.size() == 0) {
+        continue;
+      }
+      auto first_element = grammar->GetGrammarExpr(choice_expr[0]);
+      if (first_element.type == GrammarExprType::kRuleRef &&
+          CanRuleBeInlined(grammar, first_element[0])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * The rule should be: a sequence of choices, cannot be empty, cannot refer to other rules
    */
@@ -2090,91 +2080,81 @@ class GrammarOptimizerImpl {
 };
 
 /*!
- * \brief Fuse adjacent byte string elements in sequences, in place.
- * \details Fused byte strings are appended to the grammar's expr storage and each rewritten
- * sequence record is shrunk in place (records are self-describing, so the trailing words simply
- * become unused). Before the first rewrite, the grammar handle is replaced with a copy so that
- * other holders of the same grammar are unaffected. Stale records left behind are removed later
- * by DeadCodeEliminator.
+ * \brief Fuse adjacent byte string elements in sequences.
+ * \details The pass first scans the grammar; if no sequence contains adjacent byte strings, the
+ * grammar is left unchanged. Otherwise the grammar is copied into a GrammarBuilder, the fused
+ * byte strings and the rewritten sequences are added as new exprs (expr ids are preserved by the
+ * copy), and all references to the replaced sequences are redirected. Stale exprs are removed
+ * later by DeadCodeEliminator.
  */
 class ByteStringFuserImpl {
  public:
   using GrammarExprType = Grammar::Impl::GrammarExprType;
 
   static void Apply(Grammar* grammar) {
-    auto& grammar_ref = *grammar;
-    bool owned = false;
-    const int32_t num_exprs = grammar_ref->NumGrammarExprs();
-    std::vector<int32_t> element_ids;
-    std::vector<int32_t> new_element_ids;
-    std::vector<int32_t> fused_bytes;
-    for (int32_t expr_id = 0; expr_id < num_exprs; ++expr_id) {
-      {
-        auto expr = grammar_ref->GetGrammarExpr(expr_id);
-        if (expr.type != GrammarExprType::kSequence) {
-          continue;
-        }
-        bool needs_fusing = false;
-        bool previous_is_byte_string = false;
-        for (int32_t element_id : expr) {
-          bool current_is_byte_string =
-              grammar_ref->GetGrammarExpr(element_id).type == GrammarExprType::kByteString;
-          if (previous_is_byte_string && current_is_byte_string) {
-            needs_fusing = true;
-            break;
-          }
-          previous_is_byte_string = current_is_byte_string;
-        }
-        if (!needs_fusing) {
-          continue;
-        }
-        // The element ids are copied out first because appending new records may reallocate the
-        // storage the expr view points into.
-        element_ids.assign(expr.begin(), expr.end());
-      }
+    const Grammar& original = *grammar;
+    const int32_t num_exprs = original->NumGrammarExprs();
 
-      if (!owned) {
-        // Copy before the first rewrite so that other holders of this grammar are unaffected.
-        grammar_ref = GrammarBuilder(grammar_ref).Get(grammar_ref->GetRootRuleId());
-        owned = true;
-      }
-
-      new_element_ids.clear();
-      const int32_t element_count = static_cast<int32_t>(element_ids.size());
-      int32_t run_begin = -1;
-      for (int32_t i = 0; i <= element_count; ++i) {
-        bool is_byte_string =
-            i < element_count &&
-            grammar_ref->GetGrammarExpr(element_ids[i]).type == GrammarExprType::kByteString;
-        if (is_byte_string) {
-          if (run_begin == -1) {
-            run_begin = i;
-          }
-          continue;
-        }
-        if (run_begin != -1) {
-          if (i - run_begin == 1) {
-            new_element_ids.push_back(element_ids[run_begin]);
-          } else {
-            fused_bytes.clear();
-            for (int32_t j = run_begin; j < i; ++j) {
-              auto byte_string_expr = grammar_ref->GetGrammarExpr(element_ids[j]);
-              fused_bytes.insert(
-                  fused_bytes.end(), byte_string_expr.begin(), byte_string_expr.end()
-              );
-            }
-            new_element_ids.push_back(
-                grammar_ref->AddGrammarExpr(GrammarExprType::kByteString, fused_bytes)
-            );
-          }
-          run_begin = -1;
-        }
-        if (i < element_count) {
-          new_element_ids.push_back(element_ids[i]);
-        }
-      }
-      grammar_ref->ShrinkGrammarExprData(expr_id, new_element_ids);
+    bool needs_fusing = false;
+    for (int32_t expr_id = 0; expr_id < num_exprs && !needs_fusing; ++expr_id) {
+      auto expr = original->GetGrammarExpr(expr_id);
+      needs_fusing = expr.type == GrammarExprType::kSequence && SequenceNeedsFusing(original, expr);
     }
+    if (!needs_fusing) {
+      return;
+    }
+
+    GrammarBuilder builder(original);
+    std::unordered_map<int32_t, int32_t> sequence_replacement;
+    for (int32_t expr_id = 0; expr_id < num_exprs; ++expr_id) {
+      auto expr = original->GetGrammarExpr(expr_id);
+      if (expr.type != GrammarExprType::kSequence || !SequenceNeedsFusing(original, expr)) {
+        continue;
+      }
+      std::vector<int32_t> new_element_ids;
+      std::vector<int32_t> fused_bytes;
+      for (int32_t i = 0; i < expr.size(); ++i) {
+        if (original->GetGrammarExpr(expr[i]).type != GrammarExprType::kByteString) {
+          new_element_ids.push_back(expr[i]);
+          continue;
+        }
+        // Find the run of adjacent byte strings starting at i.
+        int32_t run_end = i + 1;
+        while (run_end < expr.size() &&
+               original->GetGrammarExpr(expr[run_end]).type == GrammarExprType::kByteString) {
+          ++run_end;
+        }
+        if (run_end - i == 1) {
+          new_element_ids.push_back(expr[i]);
+        } else {
+          fused_bytes.clear();
+          for (int32_t j = i; j < run_end; ++j) {
+            auto byte_string_expr = original->GetGrammarExpr(expr[j]);
+            fused_bytes.insert(fused_bytes.end(), byte_string_expr.begin(), byte_string_expr.end());
+          }
+          new_element_ids.push_back(builder.AddByteString(fused_bytes));
+        }
+        i = run_end - 1;
+      }
+      sequence_replacement[expr_id] = builder.AddSequence(new_element_ids);
+    }
+
+    RedirectExprReferences(&builder, sequence_replacement);
+    *grammar = builder.Get(original->GetRootRuleId());
+  }
+
+ private:
+  static bool SequenceNeedsFusing(const Grammar& grammar, const Grammar::Impl::GrammarExpr& expr) {
+    bool previous_is_byte_string = false;
+    for (int32_t element_id : expr) {
+      bool current_is_byte_string =
+          grammar->GetGrammarExpr(element_id).type == GrammarExprType::kByteString;
+      if (previous_is_byte_string && current_is_byte_string) {
+        return true;
+      }
+      previous_is_byte_string = current_is_byte_string;
+    }
+    return false;
   }
 };
 
