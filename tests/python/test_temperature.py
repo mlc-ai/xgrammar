@@ -24,6 +24,10 @@ def _compile_lark(
     )
 
 
+def _compile_ebnf(grammar: str) -> xgr.CompiledGrammar:
+    return xgr.GrammarCompiler(TOKENIZER_INFO).compile_grammar(xgr.Grammar.from_ebnf(grammar))
+
+
 def test_temperature_defaults_to_none() -> None:
     compiled_grammar = _compile_lark('start: "a"')
     matcher = xgr.GrammarMatcher(compiled_grammar)
@@ -58,6 +62,32 @@ def test_lark_temperature_number_forms(temperature: float, expected: float) -> N
     matcher = xgr.GrammarMatcher(compiled_grammar, default_temperature=0.5)
 
     assert matcher.temperature == pytest.approx(expected)
+
+
+def test_ebnf_temperature_enters_and_leaves_rule() -> None:
+    compiled_grammar = _compile_ebnf('root ::= "a" value "z"\nvalue[temperature=0.6] ::= "x"+')
+    matcher = xgr.GrammarMatcher(compiled_grammar, default_temperature=0.1)
+
+    assert matcher.temperature == pytest.approx(0.1)
+    assert matcher.accept_string("a")
+    assert matcher.temperature == pytest.approx(0.6)
+    assert matcher.accept_string("xx")
+    assert matcher.temperature == pytest.approx(0.6)
+    assert matcher.accept_string("z")
+    assert matcher.temperature == pytest.approx(0.1)
+
+
+@pytest.mark.parametrize(
+    "grammar, message",
+    [
+        ('root[temperature=-0.1] ::= "a"', "finite non-negative"),
+        ('root[temperature=1e999] ::= "a"', "Invalid number"),
+        ('root[temperature=abc] ::= "a"', "temperature="),
+    ],
+)
+def test_invalid_ebnf_temperature(grammar: str, message: str) -> None:
+    with pytest.raises(RuntimeError, match=message):
+        xgr.Grammar.from_ebnf(grammar)
 
 
 def test_temperature_enters_and_leaves_named_subgrammar() -> None:
