@@ -1,51 +1,987 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
+        <link rel="prefetch" href="../../_static/img/logo.png" as="image">
+        <link rel="prefetch" href="../../_static/img/logo_dark.svg" as="image">
 
-
-
-
-
-
-<!DOCTYPE html>
-<html class="writer-html5" lang="en" >
-<head>
-  <meta charset="utf-8">
-  
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <title>xgrammar.structural_tag &mdash; XGrammar 0.2.5 documentation</title>
-  
-
-  
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
-  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/autodoc_pydantic.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
-
-  
-  
-
-  
-  
-  
-  
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>xgrammar.structural_tag - XGrammar 0.2.5</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
-      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
-        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
-        <script src="../../_static/jquery.js"></script>
-        <script src="../../_static/underscore.js"></script>
-        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
-        <script src="../../_static/doctools.js"></script>
-        <script src="../../_static/sphinx_highlight.js"></script>
-        <script src="../../_static/clipboard.min.js"></script>
-        <script src="../../_static/copybutton.js"></script>
-        <script src="../../_static/tabs.js"></script>
-        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
-        <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">XGrammar 0.2.5</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../_static/img/logo.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../_static/img/logo_dark.svg" alt="Dark Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">XGrammar 0.2.5</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../start/constrained_decoding.html">Constrained Decoding</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../structural_tag/structural_tag.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../structural_tag/tool_calling_and_reasoning.html">Tool Calling and Reasoning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../structural_tag/advanced_usage.html">Advanced Topics of Structural Tag</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Using XGrammar</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../using_xgrammar/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../using_xgrammar/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../using_xgrammar/serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../using_xgrammar/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../using_xgrammar/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Defining Structures</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../defining_structures/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../defining_structures/ebnf_grammar.html">EBNF Grammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../defining_structures/lark_grammar.html">Lark Grammar</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../api/python/index.html">XGrammar Python API</a><input aria-label="Toggle navigation of XGrammar Python API" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/grammar.html">xgr.Grammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/tokenizer_info.html">xgr.TokenizerInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/grammar_compiler.html">xgr.GrammarCompiler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/compiled_grammar.html">xgr.CompiledGrammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/grammar_matcher.html">xgr.GrammarMatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/testing.html">xgr.testing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/structural_tag.html">Structural Tag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/builtin_structural_tag.html">Builtin Structural Tag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/openai_tool_call_schema.html">OpenAI Tool Call Schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/bitmask_ops.html">Bitmask Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/config.html">Config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../api/python/exception.html">Exception</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for xgrammar.structural_tag</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Defines all structural tag formats.&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="c1"># Python 3.9+</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="c1"># Python 3.8</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">typing_extensions</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Field</span>
+
+<span class="c1"># ---------- Basic Formats ----------</span>
+
+
+<div class="viewcode-block" id="ConstStringFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.ConstStringFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ConstStringFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a constant string.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;const_string&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;const_string&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">value</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The constant string.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="JSONSchemaFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.JSONSchemaFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">JSONSchemaFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a JSON schema.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;json_schema&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json_schema&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">json_schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON schema.&quot;&quot;&quot;</span>
+    <span class="n">style</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;json&quot;</span><span class="p">,</span> <span class="s2">&quot;qwen_xml&quot;</span><span class="p">,</span> <span class="s2">&quot;minimax_xml&quot;</span><span class="p">,</span> <span class="s2">&quot;deepseek_xml&quot;</span><span class="p">,</span> <span class="s2">&quot;glm_xml&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;How to parse the content. Valid values: \&quot;json\&quot; (standard JSON), \&quot;qwen_xml\&quot; (Qwen XML:</span>
+<span class="sd">    &lt;parameter=key&gt;value&lt;/parameter&gt;), \&quot;minimax_xml\&quot; (MiniMax XML: &lt;parameter name=\&quot;key\&quot;&gt;value&lt;/parameter&gt;),</span>
+<span class="sd">    \&quot;deepseek_xml\&quot; (DeepSeek XML(DeepSeek-v3.2): &lt;{dsml_token}parameter name=\&quot;key\&quot; string=\&quot;true|false\&quot;&gt;value&lt;/{dsml_token}parameter&gt;),</span>
+<span class="sd">    \&quot;glm_xml\&quot; (GLM XML: &lt;arg_key&gt;key&lt;/arg_key&gt;&lt;arg_value&gt;value&lt;/arg_value&gt;).&quot;&quot;&quot;</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether object properties may appear in any order.</span>
+
+<span class="sd">    - False (default): properties follow the schema&#39;s declared order, fully validated (required</span>
+<span class="sd">      keys present, no duplicates).</span>
+<span class="sd">    - True: properties may appear in any order; only key validity and each key&#39;s value schema are</span>
+<span class="sd">      enforced. Key presence and uniqueness are not checked, so required keys may be missing and</span>
+<span class="sd">      keys may repeat. The entry count is bounded to ``[max(minProperties, n_required),</span>
+<span class="sd">      maxProperties]`` (unbounded when maxProperties is unset).</span>
+
+<span class="sd">    Applies to every object, nested included.&quot;&quot;&quot;</span>
+    <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Max consecutive whitespace characters in this content. None means no limit.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="AnyTextFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.AnyTextFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AnyTextFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches any text.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;any_text&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;any_text&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">excludes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that should not appear in the matched text.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="TokenFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TokenFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">TokenFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a single token by ID or string representation.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;token&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">token</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The token ID (int) or token string (str).&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="ExcludeTokenFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.ExcludeTokenFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ExcludeTokenFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a single token, excluding those in the given set.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;exclude_token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;exclude_token&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="AnyTokensFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.AnyTokensFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AnyTokensFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches zero or more tokens, excluding those in the given set.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;any_tokens&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;any_tokens&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="GrammarFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.GrammarFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">GrammarFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches an ebnf grammar.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;grammar&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;grammar&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">grammar</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The ebnf grammar.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="RegexFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.RegexFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">RegexFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a regex pattern.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;regex&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;regex&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+
+    <span class="n">pattern</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The regex pattern.&quot;&quot;&quot;</span></div>
+
+
+
+<span class="c1"># ---------- Combinatorial Formats ----------</span>
+
+
+<div class="viewcode-block" id="SequenceFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.SequenceFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SequenceFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a sequence of formats.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;sequence&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;sequence&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">elements</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;Format&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The elements of the sequence.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="OrFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.OrFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">OrFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches one of the formats.&quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;or&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;or&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">elements</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;Format&quot;</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The elements of the or.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="TagFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TagFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">TagFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a tag: ``begin content end``.</span>
+
+<span class="sd">    The ``end`` field can be a single string or a list of possible end strings.</span>
+<span class="sd">    When multiple end strings are provided, any of them will be accepted as a valid</span>
+<span class="sd">    ending for the tag.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+
+<span class="sd">    Single end string:</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        TagFormat(begin=&quot;&lt;response&gt;&quot;, content=..., end=&quot;&lt;/response&gt;&quot;)</span>
+
+<span class="sd">    Multiple end strings:</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        TagFormat(begin=&quot;&lt;response&gt;&quot;, content=..., end=[&quot;&lt;/response&gt;&quot;, &quot;&lt;/answer&gt;&quot;])</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;tag&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;tag&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">begin</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">TokenFormat</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag. Can be a string or a TokenFormat.&quot;&quot;&quot;</span>
+    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The content of the tag. It can be any of the formats.&quot;&quot;&quot;</span>
+    <span class="n">end</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">TokenFormat</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag(s). Can be a string, list of strings, or a TokenFormat.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="TriggeredTagsFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TriggeredTagsFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">TriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches triggered tags. It can allow any output until a trigger is</span>
+<span class="sd">    encountered, then dispatch to the corresponding tag; when the end tag is encountered, the</span>
+<span class="sd">    grammar will allow any following output, until the next trigger is encountered.</span>
+
+<span class="sd">    Each tag should be matched by exactly one trigger. &quot;matching&quot; means the trigger should be a</span>
+<span class="sd">    prefix of the begin tag.</span>
+
+<span class="sd">    Tags must use **string** ``begin`` fields, not ``TokenFormat``.</span>
+<span class="sd">    For token-level dispatch, use ``TokenTriggeredTagsFormat`` instead.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        structural_tag = TriggeredTagsFormat(</span>
+<span class="sd">            triggers=[&quot;&lt;function=&quot;],</span>
+<span class="sd">            tags=[</span>
+<span class="sd">                TagFormat(</span>
+<span class="sd">                    begin=&quot;&lt;function=func1&gt;&quot;,</span>
+<span class="sd">                    content=JSONSchemaFormat(json_schema=...),</span>
+<span class="sd">                    end=&quot;&lt;/function&gt;&quot;,</span>
+<span class="sd">                ),</span>
+<span class="sd">                TagFormat(</span>
+<span class="sd">                    begin=&quot;&lt;function=func2&gt;&quot;,</span>
+<span class="sd">                    content=JSONSchemaFormat(json_schema=...),</span>
+<span class="sd">                    end=&quot;&lt;/function&gt;&quot;,</span>
+<span class="sd">                ),</span>
+<span class="sd">            ],</span>
+<span class="sd">            at_least_one=False,</span>
+<span class="sd">            stop_after_first=False,</span>
+<span class="sd">        )</span>
+
+<span class="sd">    The above structural tag can accept the following outputs::</span>
+
+<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;</span>
+<span class="sd">        &lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;</span>
+<span class="sd">        any_text&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;any_text1&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;any_text2</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;triggered_tags&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;triggered_tags&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The triggers of the triggered tags.&quot;&quot;&quot;</span>
+    <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagFormat</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The tags of the triggered tags.&quot;&quot;&quot;</span>
+    <span class="n">at_least_one</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether at least one of the tags must be generated.&quot;&quot;&quot;</span>
+    <span class="n">stop_after_first</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is generated.&quot;&quot;&quot;</span>
+    <span class="n">excludes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that should not appear in the matched text.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="TokenTriggeredTagsFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TokenTriggeredTagsFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">TokenTriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that dispatches to tags based on token-level triggers.</span>
+
+<span class="sd">    Similar to TriggeredTagsFormat but uses token IDs instead of string triggers.</span>
+<span class="sd">    Tags must use ``TokenFormat`` ``begin`` fields, not strings.</span>
+<span class="sd">    For string-level dispatch, use ``TriggeredTagsFormat`` instead.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;token_triggered_tags&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;token_triggered_tags&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">trigger_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The trigger token IDs or strings.&quot;&quot;&quot;</span>
+    <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagFormat</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The tags to dispatch to.&quot;&quot;&quot;</span>
+    <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span>
+    <span class="n">at_least_one</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether at least one tag must be generated.&quot;&quot;&quot;</span>
+    <span class="n">stop_after_first</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is generated.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="TagsWithSeparatorFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TagsWithSeparatorFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a tags with separator. It can match zero, one, or more tags, separated</span>
+<span class="sd">    by the separator, with no other text allowed.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        structural_tag = TagsWithSeparatorFormat(</span>
+<span class="sd">            tags=[</span>
+<span class="sd">                TagFormat(begin=&quot;&lt;function=func1&gt;&quot;, content=JSONSchemaFormat(json_schema=...), end=&quot;&lt;/function&gt;&quot;),</span>
+<span class="sd">                TagFormat(begin=&quot;&lt;function=func2&gt;&quot;, content=JSONSchemaFormat(json_schema=...), end=&quot;&lt;/function&gt;&quot;),</span>
+<span class="sd">            ],</span>
+<span class="sd">            separator=&quot;,&quot;,</span>
+<span class="sd">            at_least_one=False,</span>
+<span class="sd">            stop_after_first=False,</span>
+<span class="sd">        )</span>
+
+<span class="sd">    The above structural tag can accept an empty string, or the following outputs::</span>
+
+<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;</span>
+<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;,&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;</span>
+<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;,&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;,&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;tags_with_separator&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;tags_with_separator&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagFormat</span><span class="p">]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The tags of the tags with separator.&quot;&quot;&quot;</span>
+    <span class="n">separator</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The separator of the tags with separator.&quot;&quot;&quot;</span>
+    <span class="n">at_least_one</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether at least one of the tags must be matched.&quot;&quot;&quot;</span>
+    <span class="n">stop_after_first</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is matched.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="OptionalFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.OptionalFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">OptionalFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 0 or 1 time (EBNF optional).</span>
+
+<span class="sd">    Semantics: the inner format may appear once or not at all.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;optional&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;optional&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that may appear 0 or 1 time.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="PlusFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.PlusFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">PlusFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 1 or more times (EBNF plus).</span>
+
+<span class="sd">    Semantics: the inner format must appear at least once.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;plus&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;plus&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that must appear at least once.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="StarFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StarFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StarFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 0 or more times (EBNF star).</span>
+
+<span class="sd">    Semantics: the inner format may appear any number of times.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;star&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;star&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that may appear 0 or more times.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="RepeatFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.RepeatFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">RepeatFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content between min and max times (inclusive).</span>
+
+<span class="sd">    Use max=-1 for unbounded upper limit (e.g. &quot;at least min times&quot;).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;repeat&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;repeat&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="nb">min</span><span class="p">:</span> <span class="nb">int</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Minimum number of occurrences (inclusive).&quot;&quot;&quot;</span>
+    <span class="nb">max</span><span class="p">:</span> <span class="nb">int</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Maximum number of occurrences (inclusive). Use -1 for unbounded.&quot;&quot;&quot;</span>
+    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that is repeated.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="DispatchFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.DispatchFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">DispatchFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Matches certain patterns in free-form text.</span>
+<span class="sd">    When certain strings are generated, the following content must follow the corresponding format.</span>
+<span class="sd">    Certain strings can be excluded from being generated in the free-form part.</span>
+
+<span class="sd">    The user specifies a list of (pattern, formats). The LLM can generate any free-form text, but</span>
+<span class="sd">    when a pattern is matched in the text, the following output must follow the corresponding format.</span>
+<span class="sd">    The ``loop`` field controls whether the matching of this structure ends after accepting the first</span>
+<span class="sd">    pattern and format. If False, it ends. If true, the matching continues, and this format will</span>
+<span class="sd">    continue to allow free-form text and detect the next pattern to be generated.</span>
+<span class="sd">    The ``excludes`` field controls the strings that cannot be generated in the free-form text.</span>
+<span class="sd">    It can also control the end of the format:</span>
+<span class="sd">    ``SequenceFormat(DispatchFormat(..., excludes=&quot;&quot;), ConstStringFormat(&quot;&quot;))``</span>
+<span class="sd">    or</span>
+<span class="sd">    ``TagFormat(begin=..., content=DispatchFormat(..., excludes=&quot;&quot;), end=&quot;&quot;)``</span>
+<span class="sd">    ends the matching of the format when LLM generates &lt;end&gt;.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;dispatch&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;dispatch&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">rules</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;Format&quot;</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of ``(pattern, content format)`` pairs.&quot;&quot;&quot;</span>
+    <span class="n">loop</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;If true, after handling one dispatched format, it will continue to allow free-form text</span>
+<span class="sd">    and match the next pattern. Otherwise, the matching of this format ends after handling the</span>
+<span class="sd">    first dispatched format.&quot;&quot;&quot;</span>
+    <span class="n">excludes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that must not appear in the free-form text.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="TokenDispatchFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TokenDispatchFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">TokenDispatchFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Matches certain patterns in free-form text.</span>
+<span class="sd">    When certain tokens are generated, the following content must follow the corresponding format.</span>
+<span class="sd">    Certain tokens can be excluded from being generated in the free-form part.</span>
+
+<span class="sd">    The user specifies a list of (pattern token, formats). The LLM can generate any free-form text, but</span>
+<span class="sd">    when a pattern is matched in the text, the following output must follow the corresponding format.</span>
+<span class="sd">    The ``loop`` field controls whether the matching of this structure ends after accepting the first</span>
+<span class="sd">    pattern and format. If False, it ends. If true, the matching continues, and this format will</span>
+<span class="sd">    continue to allow free-form text and detect the next pattern to be generated.</span>
+<span class="sd">    The ``excludes`` field controls the strings that cannot be generated in the free-form text.</span>
+<span class="sd">    It can also control the end of the format:</span>
+<span class="sd">    ``SequenceFormat(DispatchFormat(..., excludes=&quot;&quot;), ConstStringFormat(&quot;&quot;))``</span>
+<span class="sd">    or</span>
+<span class="sd">    ``TagFormat(begin=..., content=DispatchFormat(..., excludes=&quot;&quot;), end=&quot;&quot;)``</span>
+<span class="sd">    ends the matching of the format when LLM generates &lt;end&gt;.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;token_dispatch&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;token_dispatch&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
+    <span class="n">rules</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="s2">&quot;Format&quot;</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of ``(pattern token, content format)`` pairs. Pattern is token ID or token string.&quot;&quot;&quot;</span>
+    <span class="n">loop</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;If true, after one dispatched format, it will continue to allow free-form text</span>
+<span class="sd">    and match the next pattern. Otherwise, the matching of this format ends after handling the</span>
+<span class="sd">    first dispatched format.&quot;&quot;&quot;</span>
+    <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of tokens that must not appear in the free-form text.&quot;&quot;&quot;</span></div>
+
+
+
+<span class="c1"># ---------- Deprecated Formats ----------</span>
+
+
+<div class="viewcode-block" id="QwenXMLParameterFormat">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.QwenXMLParameterFormat">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Deprecated. Use :class:`JSONSchemaFormat` with ``style=&quot;qwen_xml&quot;`` instead.</span>
+
+<span class="sd">    This format remains available so existing serialized structural tags with</span>
+<span class="sd">    ``{&quot;type&quot;: &quot;qwen_xml_parameter&quot;}`` can still be loaded.</span>
+
+<span class="sd">    Examples</span>
+<span class="sd">    --------</span>
+<span class="sd">    Use the replacement format for new structural tags:</span>
+
+<span class="sd">    .. code-block:: python</span>
+
+<span class="sd">        structural_tag = JSONSchemaFormat(</span>
+<span class="sd">            json_schema={</span>
+<span class="sd">                &quot;type&quot;: &quot;object&quot;,</span>
+<span class="sd">                &quot;properties&quot;: {&quot;name&quot;: {&quot;type&quot;: &quot;string&quot;}, &quot;age&quot;: {&quot;type&quot;: &quot;integer&quot;}},</span>
+<span class="sd">                &quot;required&quot;: [&quot;name&quot;, &quot;age&quot;],</span>
+<span class="sd">            },</span>
+<span class="sd">            style=&quot;qwen_xml&quot;,</span>
+<span class="sd">        )</span>
+
+<span class="sd">    The above structural tag can accept the following outputs::</span>
+
+<span class="sd">        &lt;parameter=name&gt;Bob&lt;/parameter&gt;&lt;parameter=age&gt;100&lt;/parameter&gt;</span>
+<span class="sd">        &lt;parameter=name&gt;&quot;Bob&amp;lt;&quot;&lt;/parameter&gt;&lt;parameter=age&gt;100&lt;/parameter&gt;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;qwen_xml_parameter&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;qwen_xml_parameter&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the deprecated format.&quot;&quot;&quot;</span>
+
+    <span class="n">json_schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON schema for the parameters of the function calling.&quot;&quot;&quot;</span></div>
+
+
+
+<span class="c1"># ---------- Discriminated Union ----------</span>
+
+
+<span class="n">Format</span> <span class="o">=</span> <span class="n">Annotated</span><span class="p">[</span>
+    <span class="n">Union</span><span class="p">[</span>
+        <span class="n">AnyTextFormat</span><span class="p">,</span>
+        <span class="n">ConstStringFormat</span><span class="p">,</span>
+        <span class="n">JSONSchemaFormat</span><span class="p">,</span>
+        <span class="n">GrammarFormat</span><span class="p">,</span>
+        <span class="n">RegexFormat</span><span class="p">,</span>
+        <span class="n">QwenXMLParameterFormat</span><span class="p">,</span>
+        <span class="n">OrFormat</span><span class="p">,</span>
+        <span class="n">SequenceFormat</span><span class="p">,</span>
+        <span class="n">TagFormat</span><span class="p">,</span>
+        <span class="n">TriggeredTagsFormat</span><span class="p">,</span>
+        <span class="n">TokenTriggeredTagsFormat</span><span class="p">,</span>
+        <span class="n">TagsWithSeparatorFormat</span><span class="p">,</span>
+        <span class="n">OptionalFormat</span><span class="p">,</span>
+        <span class="n">PlusFormat</span><span class="p">,</span>
+        <span class="n">StarFormat</span><span class="p">,</span>
+        <span class="n">TokenFormat</span><span class="p">,</span>
+        <span class="n">ExcludeTokenFormat</span><span class="p">,</span>
+        <span class="n">AnyTokensFormat</span><span class="p">,</span>
+        <span class="n">RepeatFormat</span><span class="p">,</span>
+        <span class="n">DispatchFormat</span><span class="p">,</span>
+        <span class="n">TokenDispatchFormat</span><span class="p">,</span>
+    <span class="p">],</span>
+    <span class="n">Field</span><span class="p">(</span><span class="n">discriminator</span><span class="o">=</span><span class="s2">&quot;type&quot;</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="sd">&quot;&quot;&quot;Union of all structural tag formats.&quot;&quot;&quot;</span>
+
+
+<span class="c1"># Solve forward references</span>
+<span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="s2">&quot;model_rebuild&quot;</span><span class="p">):</span>
+    <span class="n">SequenceFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">TagFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">TriggeredTagsFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">TokenTriggeredTagsFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">TagsWithSeparatorFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">OptionalFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">PlusFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">StarFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">RepeatFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">DispatchFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+    <span class="n">TokenDispatchFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
+<span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="s2">&quot;update_forward_refs&quot;</span><span class="p">):</span>
+    <span class="n">SequenceFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">TagFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">TriggeredTagsFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">TokenTriggeredTagsFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">TagsWithSeparatorFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">OptionalFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">PlusFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">StarFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">RepeatFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">DispatchFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+    <span class="n">TokenDispatchFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Unsupported pydantic version&quot;</span><span class="p">)</span>
+
+
+<span class="c1"># ---------- Top Level ----------</span>
+
+
+<div class="viewcode-block" id="StructuralTagItem">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTagItem">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StructuralTagItem</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Deprecated. Definition of a structural tag item.</span>
+
+<span class="sd">    See :meth:`xgrammar.Grammar.from_structural_tag` for more details.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">begin</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag.&quot;&quot;&quot;</span>
+    <span class="n">schema_</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">alias</span><span class="o">=</span><span class="s2">&quot;schema&quot;</span><span class="p">)</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The schema.&quot;&quot;&quot;</span>
+    <span class="n">end</span><span class="p">:</span> <span class="nb">str</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag.&quot;&quot;&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="StructuralTag">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTag">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StructuralTag</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Describes a complete structural tag structure. It corresponds to</span>
+<span class="sd">    ``&quot;response_format&quot;: {&quot;type&quot;: &quot;structural_tag&quot;, &quot;format&quot;: {...}}`` in API.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;structural_tag&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;structural_tag&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type must be &quot;structural_tag&quot;.&quot;&quot;&quot;</span>
+    <span class="nb">format</span><span class="p">:</span> <span class="n">Format</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format of the structural tag. Could be any of the structural tag formats.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="StructuralTag.from_legacy_structural_tag">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTag.from_legacy_structural_tag">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_legacy_structural_tag</span><span class="p">(</span>
+        <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;StructuralTag&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a legacy structural tag item to a structural tag.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span>
+            <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;structural_tag&quot;</span><span class="p">,</span>
+            <span class="nb">format</span><span class="o">=</span><span class="n">TriggeredTagsFormat</span><span class="p">(</span>
+                <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;triggered_tags&quot;</span><span class="p">,</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="n">triggers</span><span class="p">,</span>
+                <span class="n">tags</span><span class="o">=</span><span class="p">[</span>
+                    <span class="n">TagFormat</span><span class="p">(</span>
+                        <span class="n">begin</span><span class="o">=</span><span class="n">tag</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span>
+                        <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                            <span class="n">json_schema</span><span class="o">=</span><span class="p">(</span>
+                                <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">)</span>
+                                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
+                                <span class="k">else</span> <span class="p">(</span>
+                                    <span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="o">.</span><span class="n">model_json_schema</span><span class="p">()</span>
+                                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span>
+                                    <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">)</span>
+                                    <span class="k">else</span> <span class="n">tag</span><span class="o">.</span><span class="n">schema_</span>
+                                <span class="p">)</span>
+                            <span class="p">)</span>
+                        <span class="p">),</span>
+                        <span class="n">end</span><span class="o">=</span><span class="n">tag</span><span class="o">.</span><span class="n">end</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span>
+                <span class="p">],</span>
+            <span class="p">),</span>
+        <span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="StructuralTag.from_json">
+<a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTag.from_json">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_json</span><span class="p">(</span><span class="n">json_str</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="s2">&quot;StructuralTag&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a JSON string to a structural tag.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">json_str</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">StructuralTag</span><span class="o">.</span><span class="n">model_validate_json</span><span class="p">(</span><span class="n">json_str</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">json_str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">StructuralTag</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">json_str</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid JSON string or dictionary&quot;</span><span class="p">)</span></div>
+</div>
+
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;ConstStringFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;JSONSchemaFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;QwenXMLParameterFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;AnyTextFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;GrammarFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;RegexFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TokenFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;ExcludeTokenFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;AnyTokensFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;SequenceFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;OrFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TagFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TriggeredTagsFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TokenTriggeredTagsFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;TagsWithSeparatorFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;OptionalFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;PlusFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;StarFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;RepeatFormat&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;Format&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;StructuralTagItem&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;StructuralTag&quot;</span><span class="p">,</span>
+<span class="p">]</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024-2026, XGrammar Contributors
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=cb850272"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.esm.min.mjs";
 
 
 
@@ -402,844 +1338,6 @@ mermaid.initialize(
 window.addEventListener("load", load);
 window.runMermaid = runMermaid;</script>
     
-    <script type="text/javascript" src="../../_static/js/theme.js"></script>
-
-    
-    <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
-    <link rel="index" title="Index" href="../../genindex.html" />
-    <link rel="search" title="Search" href="../../search.html" /> 
-</head>
-
-<body class="wy-body-for-nav">
-
-   
-  <div class="wy-grid-for-nav">
-    
-    
-<header class="header">
-    <div class="innercontainer">
-      <div class="headerInner d-flex justify-content-between align-items-center">
-          <div class="headerLogo">
-          </div>
-
-          <div id="headMenu" class="headerNav">
-            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../../_static/img/close-icon.svg" alt="Close"></button>
-             <ul class="nav">
-                <li class="nav-item">
-                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
-                </li>
-                <li class="nav-item">
-                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
-                </li>
-                <li class="nav-item">
-                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
-                </li>
-                <li class="nav-item">
-                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
-                </li>
-             </ul>
-          </div>
-          </div>
-       </div>
-    </div>
- </header>
- 
-    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
-      <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
-          
-
-          
-            <a href="../../index.html">
-          
-
-          
-            
-            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
-          
-          </a>
-
-          
-            
-            
-                <div class="version">
-                  0.2.5
-                </div>
-            
-          
-
-          
-<div role="search">
-  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
-    <input type="hidden" name="check_keywords" value="yes" />
-    <input type="hidden" name="area" value="default" />
-  </form>
-</div>
-
-          
-        </div>
-
-        
-        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-          
-            
-            
-              
-            
-            
-              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../../start/installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../start/constrained_decoding.html">Constrained Decoding</a></li>
-</ul>
-<p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../../structural_tag/structural_tag.html">Structural Tag Usage</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../structural_tag/tool_calling_and_reasoning.html">Tool Calling and Reasoning</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../structural_tag/advanced_usage.html">Advanced Topics of Structural Tag</a></li>
-</ul>
-<p class="caption" role="heading"><span class="caption-text">Using XGrammar</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../../using_xgrammar/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../using_xgrammar/engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../using_xgrammar/serialization.html">Serialization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../using_xgrammar/runtime_safeguards.html">Runtime Safeguards</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../using_xgrammar/javascript_api.html">JavaScript API</a></li>
-</ul>
-<p class="caption" role="heading"><span class="caption-text">Defining Structures</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../../defining_structures/json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../defining_structures/ebnf_grammar.html">EBNF Grammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../defining_structures/lark_grammar.html">Lark Grammar</a></li>
-</ul>
-<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage</a></li>
-</ul>
-<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../../api/python/index.html">XGrammar Python API</a></li>
-</ul>
-
-            
-          
-        </div>
-        
-      </div>
-    </nav>
-
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
-      
-      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
-        
-            <div class="togglemenu">
-
-            </div>
-            <div class="nav-content">
-              <!-- XGrammar -->
-              Table of Contents
-            </div>
-        
-      </nav>
-
-
-      <div class="wy-nav-content">
-        
-        <div class="rst-content">
-        
-
-          
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div role="navigation" aria-label="breadcrumbs navigation">
-
-  <ul class="wy-breadcrumbs">
-    
-      <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
-        
-          <li><a href="../index.html">Module code</a> <span class="br-arrow">></span></li>
-        
-      <li>xgrammar.structural_tag</li>
-    
-    
-    
-      <li class="wy-breadcrumbs-aside">
-        
-      </li>
-    
-  </ul>
-
-  
-  <hr/>
-</div>
-          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
-           <div itemprop="articleBody">
-            
-  <h1>Source code for xgrammar.structural_tag</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Defines all structural tag formats.&quot;&quot;&quot;</span>
-
-<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
-
-<span class="k">try</span><span class="p">:</span>
-    <span class="c1"># Python 3.9+</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span>
-<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
-    <span class="c1"># Python 3.8</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">typing_extensions</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span>
-
-<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span><span class="p">,</span> <span class="n">Field</span>
-
-<span class="c1"># ---------- Basic Formats ----------</span>
-
-
-<div class="viewcode-block" id="ConstStringFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.ConstStringFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">ConstStringFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a constant string.&quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;const_string&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;const_string&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">value</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The constant string.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="JSONSchemaFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.JSONSchemaFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">JSONSchemaFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a JSON schema.&quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;json_schema&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json_schema&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">json_schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON schema.&quot;&quot;&quot;</span>
-    <span class="n">style</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;json&quot;</span><span class="p">,</span> <span class="s2">&quot;qwen_xml&quot;</span><span class="p">,</span> <span class="s2">&quot;minimax_xml&quot;</span><span class="p">,</span> <span class="s2">&quot;deepseek_xml&quot;</span><span class="p">,</span> <span class="s2">&quot;glm_xml&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;How to parse the content. Valid values: \&quot;json\&quot; (standard JSON), \&quot;qwen_xml\&quot; (Qwen XML:</span>
-<span class="sd">    &lt;parameter=key&gt;value&lt;/parameter&gt;), \&quot;minimax_xml\&quot; (MiniMax XML: &lt;parameter name=\&quot;key\&quot;&gt;value&lt;/parameter&gt;),</span>
-<span class="sd">    \&quot;deepseek_xml\&quot; (DeepSeek XML(DeepSeek-v3.2): &lt;{dsml_token}parameter name=\&quot;key\&quot; string=\&quot;true|false\&quot;&gt;value&lt;/{dsml_token}parameter&gt;),</span>
-<span class="sd">    \&quot;glm_xml\&quot; (GLM XML: &lt;arg_key&gt;key&lt;/arg_key&gt;&lt;arg_value&gt;value&lt;/arg_value&gt;).&quot;&quot;&quot;</span>
-    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether object properties may appear in any order.</span>
-
-<span class="sd">    - False (default): properties follow the schema&#39;s declared order, fully validated (required</span>
-<span class="sd">      keys present, no duplicates).</span>
-<span class="sd">    - True: properties may appear in any order; only key validity and each key&#39;s value schema are</span>
-<span class="sd">      enforced. Key presence and uniqueness are not checked, so required keys may be missing and</span>
-<span class="sd">      keys may repeat. The entry count is bounded to ``[max(minProperties, n_required),</span>
-<span class="sd">      maxProperties]`` (unbounded when maxProperties is unset).</span>
-
-<span class="sd">    Applies to every object, nested included.&quot;&quot;&quot;</span>
-    <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Max consecutive whitespace characters in this content. None means no limit.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="AnyTextFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.AnyTextFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AnyTextFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches any text.&quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;any_text&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;any_text&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-
-    <span class="n">excludes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that should not appear in the matched text.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="TokenFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TokenFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TokenFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a single token by ID or string representation.&quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;token&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-
-    <span class="n">token</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The token ID (int) or token string (str).&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="ExcludeTokenFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.ExcludeTokenFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">ExcludeTokenFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a single token, excluding those in the given set.&quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;exclude_token&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;exclude_token&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-
-    <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="AnyTokensFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.AnyTokensFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AnyTokensFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches zero or more tokens, excluding those in the given set.&quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;any_tokens&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;any_tokens&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-
-    <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="GrammarFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.GrammarFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GrammarFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches an ebnf grammar.&quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;grammar&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;grammar&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-
-    <span class="n">grammar</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The ebnf grammar.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="RegexFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.RegexFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">RegexFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a regex pattern.&quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;regex&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;regex&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-
-    <span class="n">pattern</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The regex pattern.&quot;&quot;&quot;</span></div>
-
-
-<span class="c1"># ---------- Combinatorial Formats ----------</span>
-
-
-<div class="viewcode-block" id="SequenceFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.SequenceFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">SequenceFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a sequence of formats.&quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;sequence&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;sequence&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">elements</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;Format&quot;</span><span class="p">]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The elements of the sequence.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="OrFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.OrFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">OrFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches one of the formats.&quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;or&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;or&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">elements</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;Format&quot;</span><span class="p">]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The elements of the or.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="TagFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TagFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TagFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a tag: ``begin content end``.</span>
-
-<span class="sd">    The ``end`` field can be a single string or a list of possible end strings.</span>
-<span class="sd">    When multiple end strings are provided, any of them will be accepted as a valid</span>
-<span class="sd">    ending for the tag.</span>
-
-<span class="sd">    Examples</span>
-<span class="sd">    --------</span>
-
-<span class="sd">    Single end string:</span>
-
-<span class="sd">    .. code-block:: python</span>
-
-<span class="sd">        TagFormat(begin=&quot;&lt;response&gt;&quot;, content=..., end=&quot;&lt;/response&gt;&quot;)</span>
-
-<span class="sd">    Multiple end strings:</span>
-
-<span class="sd">    .. code-block:: python</span>
-
-<span class="sd">        TagFormat(begin=&quot;&lt;response&gt;&quot;, content=..., end=[&quot;&lt;/response&gt;&quot;, &quot;&lt;/answer&gt;&quot;])</span>
-
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;tag&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;tag&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">begin</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">TokenFormat</span><span class="p">]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag. Can be a string or a TokenFormat.&quot;&quot;&quot;</span>
-    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The content of the tag. It can be any of the formats.&quot;&quot;&quot;</span>
-    <span class="n">end</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">TokenFormat</span><span class="p">]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag(s). Can be a string, list of strings, or a TokenFormat.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="TriggeredTagsFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TriggeredTagsFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches triggered tags. It can allow any output until a trigger is</span>
-<span class="sd">    encountered, then dispatch to the corresponding tag; when the end tag is encountered, the</span>
-<span class="sd">    grammar will allow any following output, until the next trigger is encountered.</span>
-
-<span class="sd">    Each tag should be matched by exactly one trigger. &quot;matching&quot; means the trigger should be a</span>
-<span class="sd">    prefix of the begin tag.</span>
-
-<span class="sd">    Tags must use **string** ``begin`` fields, not ``TokenFormat``.</span>
-<span class="sd">    For token-level dispatch, use ``TokenTriggeredTagsFormat`` instead.</span>
-
-<span class="sd">    Examples</span>
-<span class="sd">    --------</span>
-
-<span class="sd">    .. code-block:: python</span>
-
-<span class="sd">        structural_tag = TriggeredTagsFormat(</span>
-<span class="sd">            triggers=[&quot;&lt;function=&quot;],</span>
-<span class="sd">            tags=[</span>
-<span class="sd">                TagFormat(</span>
-<span class="sd">                    begin=&quot;&lt;function=func1&gt;&quot;,</span>
-<span class="sd">                    content=JSONSchemaFormat(json_schema=...),</span>
-<span class="sd">                    end=&quot;&lt;/function&gt;&quot;,</span>
-<span class="sd">                ),</span>
-<span class="sd">                TagFormat(</span>
-<span class="sd">                    begin=&quot;&lt;function=func2&gt;&quot;,</span>
-<span class="sd">                    content=JSONSchemaFormat(json_schema=...),</span>
-<span class="sd">                    end=&quot;&lt;/function&gt;&quot;,</span>
-<span class="sd">                ),</span>
-<span class="sd">            ],</span>
-<span class="sd">            at_least_one=False,</span>
-<span class="sd">            stop_after_first=False,</span>
-<span class="sd">        )</span>
-
-<span class="sd">    The above structural tag can accept the following outputs::</span>
-
-<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;</span>
-<span class="sd">        &lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;</span>
-<span class="sd">        any_text&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;any_text1&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;any_text2</span>
-
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;triggered_tags&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;triggered_tags&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The triggers of the triggered tags.&quot;&quot;&quot;</span>
-    <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagFormat</span><span class="p">]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The tags of the triggered tags.&quot;&quot;&quot;</span>
-    <span class="n">at_least_one</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether at least one of the tags must be generated.&quot;&quot;&quot;</span>
-    <span class="n">stop_after_first</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is generated.&quot;&quot;&quot;</span>
-    <span class="n">excludes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that should not appear in the matched text.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="TokenTriggeredTagsFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TokenTriggeredTagsFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TokenTriggeredTagsFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that dispatches to tags based on token-level triggers.</span>
-
-<span class="sd">    Similar to TriggeredTagsFormat but uses token IDs instead of string triggers.</span>
-<span class="sd">    Tags must use ``TokenFormat`` ``begin`` fields, not strings.</span>
-<span class="sd">    For string-level dispatch, use ``TriggeredTagsFormat`` instead.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;token_triggered_tags&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;token_triggered_tags&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">trigger_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The trigger token IDs or strings.&quot;&quot;&quot;</span>
-    <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagFormat</span><span class="p">]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The tags to dispatch to.&quot;&quot;&quot;</span>
-    <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of token IDs or strings to exclude.&quot;&quot;&quot;</span>
-    <span class="n">at_least_one</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether at least one tag must be generated.&quot;&quot;&quot;</span>
-    <span class="n">stop_after_first</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is generated.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="TagsWithSeparatorFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TagsWithSeparatorFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches a tags with separator. It can match zero, one, or more tags, separated</span>
-<span class="sd">    by the separator, with no other text allowed.</span>
-
-<span class="sd">    Examples</span>
-<span class="sd">    --------</span>
-
-<span class="sd">    .. code-block:: python</span>
-
-<span class="sd">        structural_tag = TagsWithSeparatorFormat(</span>
-<span class="sd">            tags=[</span>
-<span class="sd">                TagFormat(begin=&quot;&lt;function=func1&gt;&quot;, content=JSONSchemaFormat(json_schema=...), end=&quot;&lt;/function&gt;&quot;),</span>
-<span class="sd">                TagFormat(begin=&quot;&lt;function=func2&gt;&quot;, content=JSONSchemaFormat(json_schema=...), end=&quot;&lt;/function&gt;&quot;),</span>
-<span class="sd">            ],</span>
-<span class="sd">            separator=&quot;,&quot;,</span>
-<span class="sd">            at_least_one=False,</span>
-<span class="sd">            stop_after_first=False,</span>
-<span class="sd">        )</span>
-
-<span class="sd">    The above structural tag can accept an empty string, or the following outputs::</span>
-
-<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;</span>
-<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;,&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;</span>
-<span class="sd">        &lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;,&lt;function=func2&gt;{&quot;name&quot;: &quot;Jane&quot;, &quot;age&quot;: 25}&lt;/function&gt;,&lt;function=func1&gt;{&quot;name&quot;: &quot;John&quot;, &quot;age&quot;: 30}&lt;/function&gt;</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;tags_with_separator&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;tags_with_separator&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagFormat</span><span class="p">]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The tags of the tags with separator.&quot;&quot;&quot;</span>
-    <span class="n">separator</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The separator of the tags with separator.&quot;&quot;&quot;</span>
-    <span class="n">at_least_one</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether at least one of the tags must be matched.&quot;&quot;&quot;</span>
-    <span class="n">stop_after_first</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Whether to stop after the first tag is matched.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="OptionalFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.OptionalFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">OptionalFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 0 or 1 time (EBNF optional).</span>
-
-<span class="sd">    Semantics: the inner format may appear once or not at all.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;optional&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;optional&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that may appear 0 or 1 time.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="PlusFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.PlusFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">PlusFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 1 or more times (EBNF plus).</span>
-
-<span class="sd">    Semantics: the inner format must appear at least once.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;plus&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;plus&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that must appear at least once.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="StarFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StarFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StarFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content 0 or more times (EBNF star).</span>
-
-<span class="sd">    Semantics: the inner format may appear any number of times.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;star&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;star&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that may appear 0 or more times.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="RepeatFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.RepeatFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">RepeatFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A format that matches the content between min and max times (inclusive).</span>
-
-<span class="sd">    Use max=-1 for unbounded upper limit (e.g. &quot;at least min times&quot;).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;repeat&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;repeat&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="nb">min</span><span class="p">:</span> <span class="nb">int</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Minimum number of occurrences (inclusive).&quot;&quot;&quot;</span>
-    <span class="nb">max</span><span class="p">:</span> <span class="nb">int</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Maximum number of occurrences (inclusive). Use -1 for unbounded.&quot;&quot;&quot;</span>
-    <span class="n">content</span><span class="p">:</span> <span class="s2">&quot;Format&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format that is repeated.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="DispatchFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.DispatchFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">DispatchFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Matches certain patterns in free-form text.</span>
-<span class="sd">    When certain strings are generated, the following content must follow the corresponding format.</span>
-<span class="sd">    Certain strings can be excluded from being generated in the free-form part.</span>
-
-<span class="sd">    The user specifies a list of (pattern, formats). The LLM can generate any free-form text, but</span>
-<span class="sd">    when a pattern is matched in the text, the following output must follow the corresponding format.</span>
-<span class="sd">    The ``loop`` field controls whether the matching of this structure ends after accepting the first</span>
-<span class="sd">    pattern and format. If False, it ends. If true, the matching continues, and this format will</span>
-<span class="sd">    continue to allow free-form text and detect the next pattern to be generated.</span>
-<span class="sd">    The ``excludes`` field controls the strings that cannot be generated in the free-form text.</span>
-<span class="sd">    It can also control the end of the format:</span>
-<span class="sd">    ``SequenceFormat(DispatchFormat(..., excludes=&quot;&quot;), ConstStringFormat(&quot;&quot;))``</span>
-<span class="sd">    or</span>
-<span class="sd">    ``TagFormat(begin=..., content=DispatchFormat(..., excludes=&quot;&quot;), end=&quot;&quot;)``</span>
-<span class="sd">    ends the matching of the format when LLM generates &lt;end&gt;.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;dispatch&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;dispatch&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">rules</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="s2">&quot;Format&quot;</span><span class="p">]]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of ``(pattern, content format)`` pairs.&quot;&quot;&quot;</span>
-    <span class="n">loop</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;If true, after handling one dispatched format, it will continue to allow free-form text</span>
-<span class="sd">    and match the next pattern. Otherwise, the matching of this format ends after handling the</span>
-<span class="sd">    first dispatched format.&quot;&quot;&quot;</span>
-    <span class="n">excludes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of strings that must not appear in the free-form text.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="TokenDispatchFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.TokenDispatchFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">TokenDispatchFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Matches certain patterns in free-form text.</span>
-<span class="sd">    When certain tokens are generated, the following content must follow the corresponding format.</span>
-<span class="sd">    Certain tokens can be excluded from being generated in the free-form part.</span>
-
-<span class="sd">    The user specifies a list of (pattern token, formats). The LLM can generate any free-form text, but</span>
-<span class="sd">    when a pattern is matched in the text, the following output must follow the corresponding format.</span>
-<span class="sd">    The ``loop`` field controls whether the matching of this structure ends after accepting the first</span>
-<span class="sd">    pattern and format. If False, it ends. If true, the matching continues, and this format will</span>
-<span class="sd">    continue to allow free-form text and detect the next pattern to be generated.</span>
-<span class="sd">    The ``excludes`` field controls the strings that cannot be generated in the free-form text.</span>
-<span class="sd">    It can also control the end of the format:</span>
-<span class="sd">    ``SequenceFormat(DispatchFormat(..., excludes=&quot;&quot;), ConstStringFormat(&quot;&quot;))``</span>
-<span class="sd">    or</span>
-<span class="sd">    ``TagFormat(begin=..., content=DispatchFormat(..., excludes=&quot;&quot;), end=&quot;&quot;)``</span>
-<span class="sd">    ends the matching of the format when LLM generates &lt;end&gt;.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;token_dispatch&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;token_dispatch&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the format.&quot;&quot;&quot;</span>
-    <span class="n">rules</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="s2">&quot;Format&quot;</span><span class="p">]]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of ``(pattern token, content format)`` pairs. Pattern is token ID or token string.&quot;&quot;&quot;</span>
-    <span class="n">loop</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;If true, after one dispatched format, it will continue to allow free-form text</span>
-<span class="sd">    and match the next pattern. Otherwise, the matching of this format ends after handling the</span>
-<span class="sd">    first dispatched format.&quot;&quot;&quot;</span>
-    <span class="n">exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;List of tokens that must not appear in the free-form text.&quot;&quot;&quot;</span></div>
-
-
-<span class="c1"># ---------- Deprecated Formats ----------</span>
-
-
-<div class="viewcode-block" id="QwenXMLParameterFormat"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.QwenXMLParameterFormat">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">QwenXMLParameterFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Deprecated. Use :class:`JSONSchemaFormat` with ``style=&quot;qwen_xml&quot;`` instead.</span>
-
-<span class="sd">    This format remains available so existing serialized structural tags with</span>
-<span class="sd">    ``{&quot;type&quot;: &quot;qwen_xml_parameter&quot;}`` can still be loaded.</span>
-
-<span class="sd">    Examples</span>
-<span class="sd">    --------</span>
-<span class="sd">    Use the replacement format for new structural tags:</span>
-
-<span class="sd">    .. code-block:: python</span>
-
-<span class="sd">        structural_tag = JSONSchemaFormat(</span>
-<span class="sd">            json_schema={</span>
-<span class="sd">                &quot;type&quot;: &quot;object&quot;,</span>
-<span class="sd">                &quot;properties&quot;: {&quot;name&quot;: {&quot;type&quot;: &quot;string&quot;}, &quot;age&quot;: {&quot;type&quot;: &quot;integer&quot;}},</span>
-<span class="sd">                &quot;required&quot;: [&quot;name&quot;, &quot;age&quot;],</span>
-<span class="sd">            },</span>
-<span class="sd">            style=&quot;qwen_xml&quot;,</span>
-<span class="sd">        )</span>
-
-<span class="sd">    The above structural tag can accept the following outputs::</span>
-
-<span class="sd">        &lt;parameter=name&gt;Bob&lt;/parameter&gt;&lt;parameter=age&gt;100&lt;/parameter&gt;</span>
-<span class="sd">        &lt;parameter=name&gt;&quot;Bob&amp;lt;&quot;&lt;/parameter&gt;&lt;parameter=age&gt;100&lt;/parameter&gt;</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;qwen_xml_parameter&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;qwen_xml_parameter&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type of the deprecated format.&quot;&quot;&quot;</span>
-
-    <span class="n">json_schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The JSON schema for the parameters of the function calling.&quot;&quot;&quot;</span></div>
-
-
-<span class="c1"># ---------- Discriminated Union ----------</span>
-
-
-<span class="n">Format</span> <span class="o">=</span> <span class="n">Annotated</span><span class="p">[</span>
-    <span class="n">Union</span><span class="p">[</span>
-        <span class="n">AnyTextFormat</span><span class="p">,</span>
-        <span class="n">ConstStringFormat</span><span class="p">,</span>
-        <span class="n">JSONSchemaFormat</span><span class="p">,</span>
-        <span class="n">GrammarFormat</span><span class="p">,</span>
-        <span class="n">RegexFormat</span><span class="p">,</span>
-        <span class="n">QwenXMLParameterFormat</span><span class="p">,</span>
-        <span class="n">OrFormat</span><span class="p">,</span>
-        <span class="n">SequenceFormat</span><span class="p">,</span>
-        <span class="n">TagFormat</span><span class="p">,</span>
-        <span class="n">TriggeredTagsFormat</span><span class="p">,</span>
-        <span class="n">TokenTriggeredTagsFormat</span><span class="p">,</span>
-        <span class="n">TagsWithSeparatorFormat</span><span class="p">,</span>
-        <span class="n">OptionalFormat</span><span class="p">,</span>
-        <span class="n">PlusFormat</span><span class="p">,</span>
-        <span class="n">StarFormat</span><span class="p">,</span>
-        <span class="n">TokenFormat</span><span class="p">,</span>
-        <span class="n">ExcludeTokenFormat</span><span class="p">,</span>
-        <span class="n">AnyTokensFormat</span><span class="p">,</span>
-        <span class="n">RepeatFormat</span><span class="p">,</span>
-        <span class="n">DispatchFormat</span><span class="p">,</span>
-        <span class="n">TokenDispatchFormat</span><span class="p">,</span>
-    <span class="p">],</span>
-    <span class="n">Field</span><span class="p">(</span><span class="n">discriminator</span><span class="o">=</span><span class="s2">&quot;type&quot;</span><span class="p">),</span>
-<span class="p">]</span>
-<span class="sd">&quot;&quot;&quot;Union of all structural tag formats.&quot;&quot;&quot;</span>
-
-
-<span class="c1"># Solve forward references</span>
-<span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="s2">&quot;model_rebuild&quot;</span><span class="p">):</span>
-    <span class="n">SequenceFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
-    <span class="n">TagFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
-    <span class="n">TriggeredTagsFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
-    <span class="n">TokenTriggeredTagsFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
-    <span class="n">TagsWithSeparatorFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
-    <span class="n">OptionalFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
-    <span class="n">PlusFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
-    <span class="n">StarFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
-    <span class="n">RepeatFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
-    <span class="n">DispatchFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
-    <span class="n">TokenDispatchFormat</span><span class="o">.</span><span class="n">model_rebuild</span><span class="p">()</span>
-<span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">,</span> <span class="s2">&quot;update_forward_refs&quot;</span><span class="p">):</span>
-    <span class="n">SequenceFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
-    <span class="n">TagFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
-    <span class="n">TriggeredTagsFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
-    <span class="n">TokenTriggeredTagsFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
-    <span class="n">TagsWithSeparatorFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
-    <span class="n">OptionalFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
-    <span class="n">PlusFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
-    <span class="n">StarFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
-    <span class="n">RepeatFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
-    <span class="n">DispatchFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
-    <span class="n">TokenDispatchFormat</span><span class="o">.</span><span class="n">update_forward_refs</span><span class="p">()</span>
-<span class="k">else</span><span class="p">:</span>
-    <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Unsupported pydantic version&quot;</span><span class="p">)</span>
-
-
-<span class="c1"># ---------- Top Level ----------</span>
-
-
-<div class="viewcode-block" id="StructuralTagItem"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTagItem">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTagItem</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Deprecated. Definition of a structural tag item.</span>
-
-<span class="sd">    See :meth:`xgrammar.Grammar.from_structural_tag` for more details.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="n">begin</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The begin tag.&quot;&quot;&quot;</span>
-    <span class="n">schema_</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">alias</span><span class="o">=</span><span class="s2">&quot;schema&quot;</span><span class="p">)</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The schema.&quot;&quot;&quot;</span>
-    <span class="n">end</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The end tag.&quot;&quot;&quot;</span></div>
-
-
-<div class="viewcode-block" id="StructuralTag"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTag">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">StructuralTag</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Describes a complete structural tag structure. It corresponds to</span>
-<span class="sd">    ``&quot;response_format&quot;: {&quot;type&quot;: &quot;structural_tag&quot;, &quot;format&quot;: {...}}`` in API.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-
-    <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;structural_tag&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;structural_tag&quot;</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The type must be &quot;structural_tag&quot;.&quot;&quot;&quot;</span>
-    <span class="nb">format</span><span class="p">:</span> <span class="n">Format</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The format of the structural tag. Could be any of the structural tag formats.&quot;&quot;&quot;</span>
-
-<div class="viewcode-block" id="StructuralTag.from_legacy_structural_tag"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTag.from_legacy_structural_tag">[docs]</a>    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">from_legacy_structural_tag</span><span class="p">(</span>
-        <span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;StructuralTag&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a legacy structural tag item to a structural tag.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span>
-            <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;structural_tag&quot;</span><span class="p">,</span>
-            <span class="nb">format</span><span class="o">=</span><span class="n">TriggeredTagsFormat</span><span class="p">(</span>
-                <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;triggered_tags&quot;</span><span class="p">,</span>
-                <span class="n">triggers</span><span class="o">=</span><span class="n">triggers</span><span class="p">,</span>
-                <span class="n">tags</span><span class="o">=</span><span class="p">[</span>
-                    <span class="n">TagFormat</span><span class="p">(</span>
-                        <span class="n">begin</span><span class="o">=</span><span class="n">tag</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span>
-                        <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
-                            <span class="n">json_schema</span><span class="o">=</span><span class="p">(</span>
-                                <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">)</span>
-                                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span>
-                                <span class="k">else</span> <span class="p">(</span>
-                                    <span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="o">.</span><span class="n">model_json_schema</span><span class="p">()</span>
-                                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span>
-                                    <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">schema_</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">)</span>
-                                    <span class="k">else</span> <span class="n">tag</span><span class="o">.</span><span class="n">schema_</span>
-                                <span class="p">)</span>
-                            <span class="p">)</span>
-                        <span class="p">),</span>
-                        <span class="n">end</span><span class="o">=</span><span class="n">tag</span><span class="o">.</span><span class="n">end</span><span class="p">,</span>
-                    <span class="p">)</span>
-                    <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span>
-                <span class="p">],</span>
-            <span class="p">),</span>
-        <span class="p">)</span></div>
-
-<div class="viewcode-block" id="StructuralTag.from_json"><a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.StructuralTag.from_json">[docs]</a>    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">from_json</span><span class="p">(</span><span class="n">json_str</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="s2">&quot;StructuralTag&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert a JSON string to a structural tag.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">json_str</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-            <span class="k">return</span> <span class="n">StructuralTag</span><span class="o">.</span><span class="n">model_validate_json</span><span class="p">(</span><span class="n">json_str</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">json_str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-            <span class="k">return</span> <span class="n">StructuralTag</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">json_str</span><span class="p">)</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid JSON string or dictionary&quot;</span><span class="p">)</span></div></div>
-
-
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="s2">&quot;ConstStringFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;JSONSchemaFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;QwenXMLParameterFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;AnyTextFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;GrammarFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;RegexFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;TokenFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;ExcludeTokenFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;AnyTokensFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;SequenceFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;OrFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;TagFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;TriggeredTagsFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;TokenTriggeredTagsFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;TagsWithSeparatorFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;OptionalFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;PlusFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;StarFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;RepeatFormat&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;Format&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;StructuralTagItem&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;StructuralTag&quot;</span><span class="p">,</span>
-<span class="p">]</span>
-</pre></div>
-
-           </div>
-           
-          </div>
-          
-
-<footer>
-
-<div id="button" class="backtop"><img src="../../_static/img/right.svg" alt="backtop"/> </div>
-<section class="footerSec">
-    <div class="footerHeader">
-      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
-        <div class="copywrite d-flex align-items-center">
-          <h5 id="copy-right-info">© 2024 XGrammar</h5>
-        </div>
-      </div>
-
-    </div>
-
-    <div>
-      <div class="footernote"> </div>
-    </div>
-
-</section>
-</footer>
-        </div>
-      </div>
-
-    </section>
-
-  </div>
-  
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
-
-  
-    <!-- RunLLM Widget Script -->
-    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
-    
-</body>
-  <script type="text/javascript">
-      jQuery(function () {
-          SphinxRtdTheme.Navigation.enable(true);
-      });
-  </script>
-
-  
-  
-    
-   
-
-
     <!-- RunLLM Widget Script -->
     <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
     

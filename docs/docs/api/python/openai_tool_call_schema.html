@@ -1,140 +1,204 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html"><link rel="next" title="Bitmask Operations" href="bitmask_ops.html"><link rel="prev" title="Builtin Structural Tag" href="builtin_structural_tag.html">
+        <link rel="prefetch" href="../../_static/img/logo.png" as="image">
+        <link rel="prefetch" href="../../_static/img/logo_dark.svg" as="image">
 
-
-
-
-
-
-<!DOCTYPE html>
-<html class="writer-html5" lang="en" >
-<head>
-  <meta charset="utf-8">
-  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
-
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <title>OpenAI Tool Call Schema &mdash; XGrammar 0.2.5 documentation</title>
-  
-
-  
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
-  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/autodoc_pydantic.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
-
-  
-  
-
-  
-  
-  
-  
-    
-      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
-        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
-        <script src="../../_static/jquery.js"></script>
-        <script src="../../_static/underscore.js"></script>
-        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
-        <script src="../../_static/doctools.js"></script>
-        <script src="../../_static/sphinx_highlight.js"></script>
-        <script src="../../_static/clipboard.min.js"></script>
-        <script src="../../_static/copybutton.js"></script>
-        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
-    
-    <script type="text/javascript" src="../../_static/js/theme.js"></script>
-
-    
-    <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
-    <link rel="index" title="Index" href="../../genindex.html" />
-    <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Bitmask Operations" href="bitmask_ops.html" />
-    <link rel="prev" title="Builtin Structural Tag" href="builtin_structural_tag.html" /> 
-</head>
-
-<body class="wy-body-for-nav">
-
-   
-  <div class="wy-grid-for-nav">
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>OpenAI Tool Call Schema - XGrammar 0.2.5</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
-<header class="header">
-    <div class="innercontainer">
-      <div class="headerInner d-flex justify-content-between align-items-center">
-          <div class="headerLogo">
-          </div>
 
-          <div id="headMenu" class="headerNav">
-            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../../_static/img/close-icon.svg" alt="Close"></button>
-             <ul class="nav">
-                <li class="nav-item">
-                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
-                </li>
-                <li class="nav-item">
-                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
-                </li>
-                <li class="nav-item">
-                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
-                </li>
-                <li class="nav-item">
-                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
-                </li>
-             </ul>
-          </div>
-          </div>
-       </div>
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
     </div>
- </header>
- 
-    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
-      <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
-          
-
-          
-            <a href="../../index.html">
-          
-
-          
-            
-            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
-          
-          </a>
-
-          
-            
-            
-                <div class="version">
-                  0.2.5
-                </div>
-            
-          
-
-          
-<div role="search">
-  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
-    <input type="hidden" name="check_keywords" value="yes" />
-    <input type="hidden" name="area" value="default" />
-  </form>
-</div>
-
-          
-        </div>
-
-        
-        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-          
-            
-            
-              
-            
-            
-              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">XGrammar 0.2.5</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../_static/img/logo.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../_static/img/logo_dark.svg" alt="Dark Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">XGrammar 0.2.5</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../start/installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
@@ -167,7 +231,7 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="reference internal" href="index.html">XGrammar Python API</a><ul class="current">
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">XGrammar Python API</a><input aria-label="Toggle navigation of XGrammar Python API" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="grammar.html">xgr.Grammar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tokenizer_info.html">xgr.TokenizerInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a></li>
@@ -176,68 +240,7 @@
 <li class="toctree-l2"><a class="reference internal" href="testing.html">xgr.testing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structural_tag.html">Structural Tag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="builtin_structural_tag.html">Builtin Structural Tag</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">OpenAI Tool Call Schema</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.name"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition.name</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.description"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition.description</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.parameters"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition.parameters</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.strict"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition.strict</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.model_config"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition.model_config</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionToolParam"><code class="docutils literal notranslate"><span class="pre">FunctionToolParam</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.type"><code class="docutils literal notranslate"><span class="pre">FunctionToolParam.type</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.function"><code class="docutils literal notranslate"><span class="pre">FunctionToolParam.function</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.model_config"><code class="docutils literal notranslate"><span class="pre">FunctionToolParam.model_config</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam"><code class="docutils literal notranslate"><span class="pre">BuiltinToolParam</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.type"><code class="docutils literal notranslate"><span class="pre">BuiltinToolParam.type</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.name"><code class="docutils literal notranslate"><span class="pre">BuiltinToolParam.name</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.parameters"><code class="docutils literal notranslate"><span class="pre">BuiltinToolParam.parameters</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.model_config"><code class="docutils literal notranslate"><span class="pre">BuiltinToolParam.model_config</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.ToolParam"><code class="docutils literal notranslate"><span class="pre">ToolParam</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceFunction</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.name"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceFunction.name</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.model_config"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceFunction.model_config</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceParam</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.type"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceParam.type</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.function"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceParam.function</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.model_config"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceParam.model_config</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam"><code class="docutils literal notranslate"><span class="pre">BuiltinToolChoiceParam</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.model_config"><code class="docutils literal notranslate"><span class="pre">BuiltinToolChoiceParam.model_config</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.type"><code class="docutils literal notranslate"><span class="pre">BuiltinToolChoiceParam.type</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.name"><code class="docutils literal notranslate"><span class="pre">BuiltinToolChoiceParam.name</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef"><code class="docutils literal notranslate"><span class="pre">AllowedToolRef</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.model_config"><code class="docutils literal notranslate"><span class="pre">AllowedToolRef.model_config</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.type"><code class="docutils literal notranslate"><span class="pre">AllowedToolRef.type</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.function"><code class="docutils literal notranslate"><span class="pre">AllowedToolRef.function</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.name"><code class="docutils literal notranslate"><span class="pre">AllowedToolRef.name</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam"><code class="docutils literal notranslate"><span class="pre">AllowedToolsParam</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.model_config"><code class="docutils literal notranslate"><span class="pre">AllowedToolsParam.model_config</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.mode"><code class="docutils literal notranslate"><span class="pre">AllowedToolsParam.mode</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.tools"><code class="docutils literal notranslate"><span class="pre">AllowedToolsParam.tools</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam"><code class="docutils literal notranslate"><span class="pre">AllowedToolChoiceParam</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.model_config"><code class="docutils literal notranslate"><span class="pre">AllowedToolChoiceParam.model_config</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.type"><code class="docutils literal notranslate"><span class="pre">AllowedToolChoiceParam.type</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.allowed_tools"><code class="docutils literal notranslate"><span class="pre">AllowedToolChoiceParam.allowed_tools</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.ToolChoiceOptionParam"><code class="docutils literal notranslate"><span class="pre">ToolChoiceOptionParam</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">OpenAI Tool Call Schema</a></li>
 <li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="config.html">Config</a></li>
 <li class="toctree-l2"><a class="reference internal" href="exception.html">Exception</a></li>
@@ -245,94 +248,61 @@
 </li>
 </ul>
 
-            
-          
-        </div>
-        
-      </div>
-    </nav>
-
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
-      
-      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
-        
-            <div class="togglemenu">
-
-            </div>
-            <div class="nav-content">
-              <!-- XGrammar -->
-              Table of Contents
-            </div>
-        
-      </nav>
-
-
-      <div class="wy-nav-content">
-        
-        <div class="rst-content">
-        
-
-          
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div role="navigation" aria-label="breadcrumbs navigation">
-
-  <ul class="wy-breadcrumbs">
-    
-      <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
-        
-          <li><a href="index.html">XGrammar Python API</a> <span class="br-arrow">></span></li>
-        
-      <li>OpenAI Tool Call Schema</li>
-    
-    
-      
-      
-    
-    
-      <li class="wy-breadcrumbs-aside">
-        
-            
-            
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/openai_tool_call_schema.rst" class="fa fa-github"> Edit on GitHub</a>
-            
-          
-        
-      </li>
-    
-  </ul>
-
-  
-  <hr/>
 </div>
-          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
-           <div itemprop="articleBody">
-            
-  <section id="openai-tool-call-schema">
-<h1>OpenAI Tool Call Schema<a class="headerlink" href="#openai-tool-call-schema" title="Permalink to this heading">¶</a></h1>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page github-repository">
+  <a class="muted-link" href="https://github.com/mlc-ai/xgrammar" title="XGrammar on GitHub">
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path fill="currentColor" fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path>
+    </svg>
+    <span class="visually-hidden">XGrammar on GitHub</span>
+  </a>
+</div>
+<div class="view-this-page">
+  <a class="muted-link" href="https://github.com/mlc-ai/xgrammar/blob/main/docs/api/python/openai_tool_call_schema.rst?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/openai_tool_call_schema.rst" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="openai-tool-call-schema">
+<h1>OpenAI Tool Call Schema<a class="headerlink" href="#openai-tool-call-schema" title="Link to this heading">¶</a></h1>
 <p>This page contains the API reference for tool and tool choice schema models used by builtin
 structural tag APIs.</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.FunctionDefinition">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">FunctionDefinition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#FunctionDefinition"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">FunctionDefinition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">description</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">strict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#FunctionDefinition"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
 <p>A JSON-Schema-based function definition.</p>
 <p>Corresponds to <code class="docutils literal notranslate"><span class="pre">openai.types.shared_params.FunctionDefinition</span></code>.</p>
@@ -342,7 +312,7 @@ flat on the tool object itself and correspond to
 <code class="docutils literal notranslate"><span class="pre">openai.types.responses.FunctionToolParam</span></code>.</p>
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.FunctionDefinition.name">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></em><em class="property"> <span class="pre">[Required]</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.name" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span><span class="property"> <span class="pre">[Required]</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.name" title="Link to this definition">¶</a></dt>
 <dd><p>The name of the function to be called.</p>
 <p>Must be a-z, A-Z, 0-9, or contain underscores and dashes, with a maximum
 length of 64.</p>
@@ -350,21 +320,21 @@ length of 64.</p>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.FunctionDefinition.description">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">description</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.description" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">description</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.description" title="Link to this definition">¶</a></dt>
 <dd><p>A description of what the function does, used by the model to choose when and
 how to call the function.</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.FunctionDefinition.parameters">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">parameters</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.parameters" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">parameters</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.parameters" title="Link to this definition">¶</a></dt>
 <dd><p>The parameters the functions accepts, described as a JSON Schema object.</p>
 <p>If omitted or set to <code class="docutils literal notranslate"><span class="pre">None</span></code>, the generated function arguments will be unconstrained.</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.FunctionDefinition.strict">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">strict</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.strict" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">strict</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.strict" title="Link to this definition">¶</a></dt>
 <dd><p>Whether to enable strict schema adherence when generating the function call.</p>
 <p>If set to true, the model will follow the exact schema defined in the
 <code class="docutils literal notranslate"><span class="pre">parameters</span></code> field.</p>
@@ -372,7 +342,7 @@ how to call the function.</p>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.FunctionDefinition.model_config">
-<span class="sig-name descname"><span class="pre">model_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.model_config" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">model_config</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.model_config" title="Link to this definition">¶</a></dt>
 <dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
 </dd></dl>
 
@@ -380,7 +350,7 @@ how to call the function.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.FunctionToolParam">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">FunctionToolParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'function'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'function'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition" title="xgrammar.openai_tool_call_schema.FunctionDefinition"><span class="pre">FunctionDefinition</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#FunctionToolParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionToolParam" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">FunctionToolParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'function'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'function'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition" title="xgrammar.openai_tool_call_schema.FunctionDefinition"><span class="pre">FunctionDefinition</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#FunctionToolParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionToolParam" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
 <p>A function tool that can be used to generate a response.</p>
 <p>Corresponds to <code class="docutils literal notranslate"><span class="pre">openai.types.chat.ChatCompletionFunctionToolParam</span></code>.</p>
@@ -395,19 +365,19 @@ how to call the function.</p>
 </div>
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.FunctionToolParam.type">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'function'</span></span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'function'</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.type" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'function'</span></span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'function'</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.type" title="Link to this definition">¶</a></dt>
 <dd><p>The type of the tool. Currently, only <code class="docutils literal notranslate"><span class="pre">function</span></code> is supported.</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.FunctionToolParam.function">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">function</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition" title="xgrammar.openai_tool_call_schema.FunctionDefinition"><span class="pre">FunctionDefinition</span></a></em><em class="property"> <span class="pre">[Required]</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.function" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">function</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition" title="xgrammar.openai_tool_call_schema.FunctionDefinition"><span class="pre">FunctionDefinition</span></a></span><span class="property"> <span class="pre">[Required]</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.function" title="Link to this definition">¶</a></dt>
 <dd><p>The function definition.</p>
 </dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.FunctionToolParam.model_config">
-<span class="sig-name descname"><span class="pre">model_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.model_config" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">model_config</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.model_config" title="Link to this definition">¶</a></dt>
 <dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
 </dd></dl>
 
@@ -415,7 +385,7 @@ how to call the function.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.BuiltinToolParam">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">BuiltinToolParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#BuiltinToolParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">BuiltinToolParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">parameters</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#BuiltinToolParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
 <p>A builtin tool whose output should be constrained.</p>
 <p>This mirrors hosted/server tool declarations used by APIs such as OpenAI
@@ -426,13 +396,13 @@ the JSON schema required by XGrammar and serving engines for constrained
 decoding.</p>
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.BuiltinToolParam.type">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></em><em class="property"> <span class="pre">[Required]</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.type" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span><span class="property"> <span class="pre">[Required]</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.type" title="Link to this definition">¶</a></dt>
 <dd><p>The provider-facing builtin tool type.</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.BuiltinToolParam.name">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.name" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.name" title="Link to this definition">¶</a></dt>
 <dd><p>The output tool name for model. XGrammar-specific field.</p>
 <p>Used to constrain the tool name. Use this when the model emits a tool name that
 differs from the provider <code class="docutils literal notranslate"><span class="pre">type</span></code>. For example, an OpenAI-style
@@ -442,7 +412,7 @@ Harmony-style model. Defaults to <code class="docutils literal notranslate"><spa
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.BuiltinToolParam.parameters">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">parameters</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.parameters" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">parameters</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.parameters" title="Link to this definition">¶</a></dt>
 <dd><p>Argument schema for the builtin tool. XGrammar-specific field.</p>
 <p>Hosted/server tool APIs often do not require users to provide this schema,
 but XGrammar and serving engines need it to constrain the arguments emitted
@@ -451,7 +421,7 @@ by the model.</p>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.BuiltinToolParam.model_config">
-<span class="sig-name descname"><span class="pre">model_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.model_config" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">model_config</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.model_config" title="Link to this definition">¶</a></dt>
 <dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
 </dd></dl>
 
@@ -459,14 +429,14 @@ by the model.</p>
 
 <dl class="py data">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.ToolParam">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">ToolParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.ToolParam" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">ToolParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.ToolParam" title="Link to this definition">¶</a></dt>
 <dd><p>A function or builtin tool accepted by builtin structural tag APIs.</p>
-<p>alias of <a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Union</span></code></a>[<a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><code class="xref py py-class docutils literal notranslate"><span class="pre">FunctionToolParam</span></code></a>, <a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><code class="xref py py-class docutils literal notranslate"><span class="pre">BuiltinToolParam</span></code></a>]</p>
+<p>alias of <a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><code class="xref py py-class docutils literal notranslate"><span class="pre">FunctionToolParam</span></code></a> | <a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><code class="xref py py-class docutils literal notranslate"><span class="pre">BuiltinToolParam</span></code></a></p>
 </dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.NamedToolChoiceFunction">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">NamedToolChoiceFunction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#NamedToolChoiceFunction"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">NamedToolChoiceFunction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#NamedToolChoiceFunction"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
 <p>The nested function reference used by Chat Completions named tool choice.</p>
 <p>Corresponds to
@@ -476,13 +446,13 @@ by the model.</p>
 <code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;function&quot;,</span> <span class="pre">&quot;name&quot;:</span> <span class="pre">&quot;...&quot;}</span></code> without this nested object.</p>
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.name">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></em><em class="property"> <span class="pre">[Required]</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.name" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span><span class="property"> <span class="pre">[Required]</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.name" title="Link to this definition">¶</a></dt>
 <dd><p>The name of the function to call.</p>
 </dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.model_config">
-<span class="sig-name descname"><span class="pre">model_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.model_config" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">model_config</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.model_config" title="Link to this definition">¶</a></dt>
 <dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
 </dd></dl>
 
@@ -490,7 +460,7 @@ by the model.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.NamedToolChoiceParam">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">NamedToolChoiceParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'function'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'function'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction" title="xgrammar.openai_tool_call_schema.NamedToolChoiceFunction"><span class="pre">NamedToolChoiceFunction</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#NamedToolChoiceParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">NamedToolChoiceParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'function'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'function'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction" title="xgrammar.openai_tool_call_schema.NamedToolChoiceFunction"><span class="pre">NamedToolChoiceFunction</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#NamedToolChoiceParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
 <p>Specifies a tool the model should use.</p>
 <p>Use to force the model to call a specific function.</p>
@@ -506,19 +476,19 @@ by the model.</p>
 </div>
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.NamedToolChoiceParam.type">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'function'</span></span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'function'</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.type" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'function'</span></span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'function'</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.type" title="Link to this definition">¶</a></dt>
 <dd><p>For function calling, the type is always <code class="docutils literal notranslate"><span class="pre">function</span></code>.</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.NamedToolChoiceParam.function">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">function</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction" title="xgrammar.openai_tool_call_schema.NamedToolChoiceFunction"><span class="pre">NamedToolChoiceFunction</span></a></em><em class="property"> <span class="pre">[Required]</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.function" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">function</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction" title="xgrammar.openai_tool_call_schema.NamedToolChoiceFunction"><span class="pre">NamedToolChoiceFunction</span></a></span><span class="property"> <span class="pre">[Required]</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.function" title="Link to this definition">¶</a></dt>
 <dd><p>The function to call.</p>
 </dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.NamedToolChoiceParam.model_config">
-<span class="sig-name descname"><span class="pre">model_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.model_config" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">model_config</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.model_config" title="Link to this definition">¶</a></dt>
 <dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
 </dd></dl>
 
@@ -526,7 +496,7 @@ by the model.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">BuiltinToolChoiceParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#BuiltinToolChoiceParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">BuiltinToolChoiceParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#BuiltinToolChoiceParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
 <p>Specifies a builtin tool the model should use.</p>
 <p><code class="docutils literal notranslate"><span class="pre">type</span></code> matches the builtin tool type in <code class="docutils literal notranslate"><span class="pre">tools</span></code>. Matching is based on
@@ -534,19 +504,19 @@ by the model.</p>
 matching.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.model_config">
-<span class="sig-name descname"><span class="pre">model_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.model_config" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">model_config</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.model_config" title="Link to this definition">¶</a></dt>
 <dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.type">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></em><em class="property"> <span class="pre">[Required]</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.type" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span><span class="property"> <span class="pre">[Required]</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.type" title="Link to this definition">¶</a></dt>
 <dd><p>The builtin tool type.</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.name">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.name" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.name" title="Link to this definition">¶</a></dt>
 <dd><p>Optional model-output tool name. Builtin choices are matched by <code class="docutils literal notranslate"><span class="pre">type</span></code>.</p>
 </dd></dl>
 
@@ -554,7 +524,7 @@ matching.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolRef">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">AllowedToolRef</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction" title="xgrammar.openai_tool_call_schema.NamedToolChoiceFunction"><span class="pre">NamedToolChoiceFunction</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#AllowedToolRef"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolRef" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">AllowedToolRef</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction" title="xgrammar.openai_tool_call_schema.NamedToolChoiceFunction"><span class="pre">NamedToolChoiceFunction</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#AllowedToolRef"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolRef" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
 <p>A reference to a function or builtin tool allowed in this turn.</p>
 <p>Corresponds to one item in
@@ -566,25 +536,25 @@ Responses API refs are flat dictionaries in
 <code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;function&quot;,</span> <span class="pre">&quot;name&quot;:</span> <span class="pre">&quot;get_weather&quot;}</span></code>.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolRef.model_config">
-<span class="sig-name descname"><span class="pre">model_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.model_config" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">model_config</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.model_config" title="Link to this definition">¶</a></dt>
 <dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolRef.type">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></em><em class="property"> <span class="pre">[Required]</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.type" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span><span class="property"> <span class="pre">[Required]</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.type" title="Link to this definition">¶</a></dt>
 <dd><p>The allowed tool type.</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolRef.function">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">function</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction" title="xgrammar.openai_tool_call_schema.NamedToolChoiceFunction"><span class="pre">NamedToolChoiceFunction</span></a><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.function" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">function</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction" title="xgrammar.openai_tool_call_schema.NamedToolChoiceFunction"><span class="pre">NamedToolChoiceFunction</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.function" title="Link to this definition">¶</a></dt>
 <dd><p>The function reference when <code class="docutils literal notranslate"><span class="pre">type</span></code> is <code class="docutils literal notranslate"><span class="pre">&quot;function&quot;</span></code>.</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolRef.name">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.name" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.name" title="Link to this definition">¶</a></dt>
 <dd><p>Optional model-output builtin tool name. Builtin refs are matched by <code class="docutils literal notranslate"><span class="pre">type</span></code>.</p>
 </dd></dl>
 
@@ -592,7 +562,7 @@ Responses API refs are flat dictionaries in
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolsParam">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">AllowedToolsParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef" title="xgrammar.openai_tool_call_schema.AllowedToolRef"><span class="pre">AllowedToolRef</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#AllowedToolsParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">AllowedToolsParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef" title="xgrammar.openai_tool_call_schema.AllowedToolRef"><span class="pre">AllowedToolRef</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#AllowedToolsParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
 <p>Constrains the tools available to the model to a pre-defined set.</p>
 <p>Corresponds to <code class="docutils literal notranslate"><span class="pre">openai.types.chat.ChatCompletionAllowedToolsParam</span></code>.
@@ -602,13 +572,13 @@ the equivalent fields are directly on
 <code class="docutils literal notranslate"><span class="pre">openai.types.responses.ToolChoiceAllowedParam</span></code>.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolsParam.model_config">
-<span class="sig-name descname"><span class="pre">model_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.model_config" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">model_config</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.model_config" title="Link to this definition">¶</a></dt>
 <dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolsParam.mode">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">mode</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">]</span></span></em><em class="property"> <span class="pre">[Required]</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.mode" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">mode</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">]</span></span></span><span class="property"> <span class="pre">[Required]</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.mode" title="Link to this definition">¶</a></dt>
 <dd><p>Constrains the tools available to the model to a pre-defined set.</p>
 <p><code class="docutils literal notranslate"><span class="pre">auto</span></code> allows the model to pick from among the allowed tools and generate a
 message.</p>
@@ -617,7 +587,7 @@ message.</p>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolsParam.tools">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">tools</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef" title="xgrammar.openai_tool_call_schema.AllowedToolRef"><span class="pre">AllowedToolRef</span></a><span class="p"><span class="pre">]</span></span></em><em class="property"> <span class="pre">[Required]</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.tools" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">tools</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef" title="xgrammar.openai_tool_call_schema.AllowedToolRef"><span class="pre">AllowedToolRef</span></a><span class="p"><span class="pre">]</span></span></span><span class="property"> <span class="pre">[Required]</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.tools" title="Link to this definition">¶</a></dt>
 <dd><p>A list of tool definitions that the model should be allowed to call.</p>
 <p>For the Chat Completions API, the list of tool definitions might look like:</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">[</span>
@@ -632,7 +602,7 @@ message.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolChoiceParam">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">AllowedToolChoiceParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'allowed_tools'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'allowed_tools'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allowed_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam" title="xgrammar.openai_tool_call_schema.AllowedToolsParam"><span class="pre">AllowedToolsParam</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#AllowedToolChoiceParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">AllowedToolChoiceParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'allowed_tools'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'allowed_tools'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allowed_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam" title="xgrammar.openai_tool_call_schema.AllowedToolsParam"><span class="pre">AllowedToolsParam</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/openai_tool_call_schema.html#AllowedToolChoiceParam"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">BaseModel</span></code></p>
 <p>Constrains the tools available to the model to a pre-defined set.</p>
 <p>Corresponds to <code class="docutils literal notranslate"><span class="pre">openai.types.chat.ChatCompletionAllowedToolChoiceParam</span></code>.</p>
@@ -647,19 +617,19 @@ message.</p>
 </div>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.model_config">
-<span class="sig-name descname"><span class="pre">model_config</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.model_config" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">model_config</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><span class="pre">ConfigDict</span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.model_config" title="Link to this definition">¶</a></dt>
 <dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.type">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'allowed_tools'</span></span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'allowed_tools'</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.type" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'allowed_tools'</span></span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'allowed_tools'</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.type" title="Link to this definition">¶</a></dt>
 <dd><p>Allowed tool configuration type. Always <code class="docutils literal notranslate"><span class="pre">allowed_tools</span></code>.</p>
 </dd></dl>
 
 <dl class="py attribute pydantic_field">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.allowed_tools">
-<em class="property"><span class="pre">field</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">allowed_tools</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam" title="xgrammar.openai_tool_call_schema.AllowedToolsParam"><span class="pre">AllowedToolsParam</span></a></em><em class="property"> <span class="pre">[Required]</span></em><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.allowed_tools" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">allowed_tools</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam" title="xgrammar.openai_tool_call_schema.AllowedToolsParam"><span class="pre">AllowedToolsParam</span></a></span><span class="property"> <span class="pre">[Required]</span></span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.allowed_tools" title="Link to this definition">¶</a></dt>
 <dd><p>Constrains the tools available to the model to a pre-defined set.</p>
 </dd></dl>
 
@@ -667,7 +637,7 @@ message.</p>
 
 <dl class="py data">
 <dt class="sig sig-object py" id="xgrammar.openai_tool_call_schema.ToolChoiceOptionParam">
-<span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">ToolChoiceOptionParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.ToolChoiceOptionParam" title="Permalink to this definition">¶</a></dt>
+<span class="sig-prename descclassname"><span class="pre">xgrammar.openai_tool_call_schema.</span></span><span class="sig-name descname"><span class="pre">ToolChoiceOptionParam</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#xgrammar.openai_tool_call_schema.ToolChoiceOptionParam" title="Link to this definition">¶</a></dt>
 <dd><p>Controls which (if any) tool is called by the model.</p>
 <p><code class="docutils literal notranslate"><span class="pre">none</span></code> means the model will not call any tool and instead generates a message.</p>
 <p><code class="docutils literal notranslate"><span class="pre">auto</span></code> means the model can pick between generating a message or calling one or
@@ -677,73 +647,145 @@ more tools.</p>
 <code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;function&quot;,</span> <span class="pre">&quot;function&quot;:</span> <span class="pre">{&quot;name&quot;:</span> <span class="pre">&quot;my_function&quot;}}</span></code> forces the model
 to call that tool.</p>
 <p>Corresponds to openai.types.chat.ChatCompletionToolChoiceOptionParam.</p>
-<p>alias of <a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Union</span></code></a>[<a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Literal</span></code></a>[‘none’, ‘auto’, ‘required’], <a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam" title="xgrammar.openai_tool_call_schema.NamedToolChoiceParam"><code class="xref py py-class docutils literal notranslate"><span class="pre">NamedToolChoiceParam</span></code></a>, <a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam" title="xgrammar.openai_tool_call_schema.AllowedToolChoiceParam"><code class="xref py py-class docutils literal notranslate"><span class="pre">AllowedToolChoiceParam</span></code></a>, <a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam" title="xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam"><code class="xref py py-class docutils literal notranslate"><span class="pre">BuiltinToolChoiceParam</span></code></a>]</p>
+<p>alias of <a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Literal</span></code></a>[‘none’, ‘auto’, ‘required’] | <a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam" title="xgrammar.openai_tool_call_schema.NamedToolChoiceParam"><code class="xref py py-class docutils literal notranslate"><span class="pre">NamedToolChoiceParam</span></code></a> | <a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam" title="xgrammar.openai_tool_call_schema.AllowedToolChoiceParam"><code class="xref py py-class docutils literal notranslate"><span class="pre">AllowedToolChoiceParam</span></code></a> | <a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam" title="xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam"><code class="xref py py-class docutils literal notranslate"><span class="pre">BuiltinToolChoiceParam</span></code></a></p>
 </dd></dl>
 
 </section>
 
-
-           </div>
-           
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="bitmask_ops.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Bitmask Operations</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="builtin_structural_tag.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Builtin Structural Tag</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024-2026, XGrammar Contributors
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
           </div>
-          
-
-<footer>
-
-    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-      
-        <a href="bitmask_ops.html" class="btn btn-neutral float-right" title="Bitmask Operations" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
-      
-      
-        <a href="builtin_structural_tag.html" class="btn btn-neutral float-left" title="Builtin Structural Tag" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
-      
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
     </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">OpenAI Tool Call Schema</a><ul>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition</span></code></a><ul>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.name"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition.name</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.description"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition.description</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.parameters"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition.parameters</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.strict"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition.strict</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionDefinition.model_config"><code class="docutils literal notranslate"><span class="pre">FunctionDefinition.model_config</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionToolParam"><code class="docutils literal notranslate"><span class="pre">FunctionToolParam</span></code></a><ul>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.type"><code class="docutils literal notranslate"><span class="pre">FunctionToolParam.type</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.function"><code class="docutils literal notranslate"><span class="pre">FunctionToolParam.function</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.FunctionToolParam.model_config"><code class="docutils literal notranslate"><span class="pre">FunctionToolParam.model_config</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam"><code class="docutils literal notranslate"><span class="pre">BuiltinToolParam</span></code></a><ul>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.type"><code class="docutils literal notranslate"><span class="pre">BuiltinToolParam.type</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.name"><code class="docutils literal notranslate"><span class="pre">BuiltinToolParam.name</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.parameters"><code class="docutils literal notranslate"><span class="pre">BuiltinToolParam.parameters</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolParam.model_config"><code class="docutils literal notranslate"><span class="pre">BuiltinToolParam.model_config</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.ToolParam"><code class="docutils literal notranslate"><span class="pre">ToolParam</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceFunction</span></code></a><ul>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.name"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceFunction.name</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceFunction.model_config"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceFunction.model_config</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceParam</span></code></a><ul>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.type"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceParam.type</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.function"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceParam.function</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.NamedToolChoiceParam.model_config"><code class="docutils literal notranslate"><span class="pre">NamedToolChoiceParam.model_config</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam"><code class="docutils literal notranslate"><span class="pre">BuiltinToolChoiceParam</span></code></a><ul>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.model_config"><code class="docutils literal notranslate"><span class="pre">BuiltinToolChoiceParam.model_config</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.type"><code class="docutils literal notranslate"><span class="pre">BuiltinToolChoiceParam.type</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam.name"><code class="docutils literal notranslate"><span class="pre">BuiltinToolChoiceParam.name</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef"><code class="docutils literal notranslate"><span class="pre">AllowedToolRef</span></code></a><ul>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.model_config"><code class="docutils literal notranslate"><span class="pre">AllowedToolRef.model_config</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.type"><code class="docutils literal notranslate"><span class="pre">AllowedToolRef.type</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.function"><code class="docutils literal notranslate"><span class="pre">AllowedToolRef.function</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolRef.name"><code class="docutils literal notranslate"><span class="pre">AllowedToolRef.name</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam"><code class="docutils literal notranslate"><span class="pre">AllowedToolsParam</span></code></a><ul>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.model_config"><code class="docutils literal notranslate"><span class="pre">AllowedToolsParam.model_config</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.mode"><code class="docutils literal notranslate"><span class="pre">AllowedToolsParam.mode</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolsParam.tools"><code class="docutils literal notranslate"><span class="pre">AllowedToolsParam.tools</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam"><code class="docutils literal notranslate"><span class="pre">AllowedToolChoiceParam</span></code></a><ul>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.model_config"><code class="docutils literal notranslate"><span class="pre">AllowedToolChoiceParam.model_config</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.type"><code class="docutils literal notranslate"><span class="pre">AllowedToolChoiceParam.type</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam.allowed_tools"><code class="docutils literal notranslate"><span class="pre">AllowedToolChoiceParam.allowed_tools</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#xgrammar.openai_tool_call_schema.ToolChoiceOptionParam"><code class="docutils literal notranslate"><span class="pre">ToolChoiceOptionParam</span></code></a></li>
+</ul>
+</li>
+</ul>
 
-<div id="button" class="backtop"><img src="../../_static/img/right.svg" alt="backtop"/> </div>
-<section class="footerSec">
-    <div class="footerHeader">
-      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
-        <div class="copywrite d-flex align-items-center">
-          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+          </div>
         </div>
       </div>
-
-    </div>
-
-    <div>
-      <div class="footernote"> </div>
-    </div>
-
-</section>
-</footer>
-        </div>
-      </div>
-
-    </section>
-
+      
+      
+    </aside>
   </div>
-  
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
-
-  
-    <!-- RunLLM Widget Script -->
-    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+</div><script src="../../_static/documentation_options.js?v=cb850272"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
     
-</body>
-  <script type="text/javascript">
-      jQuery(function () {
-          SphinxRtdTheme.Navigation.enable(true);
-      });
-  </script>
-
-  
-  
-    
-   
-
-
     <!-- RunLLM Widget Script -->
     <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
     

@@ -1,140 +1,204 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html"><link rel="next" title="xgr.GrammarCompiler" href="grammar_compiler.html"><link rel="prev" title="xgr.Grammar" href="grammar.html">
+        <link rel="prefetch" href="../../_static/img/logo.png" as="image">
+        <link rel="prefetch" href="../../_static/img/logo_dark.svg" as="image">
 
-
-
-
-
-
-<!DOCTYPE html>
-<html class="writer-html5" lang="en" >
-<head>
-  <meta charset="utf-8">
-  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
-
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <title>xgr.TokenizerInfo &mdash; XGrammar 0.2.5 documentation</title>
-  
-
-  
-  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
-  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/autodoc_pydantic.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
-  <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
-
-  
-  
-
-  
-  
-  
-  
-    
-      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
-        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
-        <script src="../../_static/jquery.js"></script>
-        <script src="../../_static/underscore.js"></script>
-        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
-        <script src="../../_static/doctools.js"></script>
-        <script src="../../_static/sphinx_highlight.js"></script>
-        <script src="../../_static/clipboard.min.js"></script>
-        <script src="../../_static/copybutton.js"></script>
-        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
-    
-    <script type="text/javascript" src="../../_static/js/theme.js"></script>
-
-    
-    <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
-    <link rel="index" title="Index" href="../../genindex.html" />
-    <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="xgr.GrammarCompiler" href="grammar_compiler.html" />
-    <link rel="prev" title="xgr.Grammar" href="grammar.html" /> 
-</head>
-
-<body class="wy-body-for-nav">
-
-   
-  <div class="wy-grid-for-nav">
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>xgr.TokenizerInfo - XGrammar 0.2.5</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
-<header class="header">
-    <div class="innercontainer">
-      <div class="headerInner d-flex justify-content-between align-items-center">
-          <div class="headerLogo">
-          </div>
 
-          <div id="headMenu" class="headerNav">
-            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../../_static/img/close-icon.svg" alt="Close"></button>
-             <ul class="nav">
-                <li class="nav-item">
-                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
-                </li>
-                <li class="nav-item">
-                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
-                </li>
-                <li class="nav-item">
-                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
-                </li>
-                <li class="nav-item">
-                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
-                </li>
-             </ul>
-          </div>
-          </div>
-       </div>
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
     </div>
- </header>
- 
-    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
-      <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
-          
-
-          
-            <a href="../../index.html">
-          
-
-          
-            
-            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
-          
-          </a>
-
-          
-            
-            
-                <div class="version">
-                  0.2.5
-                </div>
-            
-          
-
-          
-<div role="search">
-  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
-    <input type="hidden" name="check_keywords" value="yes" />
-    <input type="hidden" name="area" value="default" />
-  </form>
-</div>
-
-          
-        </div>
-
-        
-        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-          
-            
-            
-              
-            
-            
-              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">XGrammar 0.2.5</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../../_static/img/logo.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../../_static/img/logo_dark.svg" alt="Dark Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">XGrammar 0.2.5</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../start/installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
@@ -167,33 +231,9 @@
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul class="current">
-<li class="toctree-l1 current"><a class="reference internal" href="index.html">XGrammar Python API</a><ul class="current">
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">XGrammar Python API</a><input aria-label="Toggle navigation of XGrammar Python API" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="grammar.html">xgr.Grammar</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">xgr.TokenizerInfo</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.VocabType"><code class="docutils literal notranslate"><span class="pre">VocabType</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.VocabType.RAW"><code class="docutils literal notranslate"><span class="pre">VocabType.RAW</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.VocabType.BYTE_FALLBACK"><code class="docutils literal notranslate"><span class="pre">VocabType.BYTE_FALLBACK</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.VocabType.BYTE_LEVEL"><code class="docutils literal notranslate"><span class="pre">VocabType.BYTE_LEVEL</span></code></a></li>
-</ul>
-</li>
-<li class="toctree-l3"><a class="reference internal" href="#xgrammar.TokenizerInfo"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.__init__"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.__init__()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.from_huggingface"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.from_huggingface()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_type"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.vocab_type</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_size"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.vocab_size</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.add_prefix_space"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.add_prefix_space</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.prepend_space_in_tokenization"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.prepend_space_in_tokenization</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.decoded_vocab"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.decoded_vocab</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.stop_token_ids"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.stop_token_ids</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.special_token_ids"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.special_token_ids</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.dump_metadata"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.dump_metadata()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.from_vocab_and_metadata"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.from_vocab_and_metadata()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.serialize_json"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.serialize_json()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#xgrammar.TokenizerInfo.deserialize_json"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.deserialize_json()</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">xgr.TokenizerInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="compiled_grammar.html">xgr.CompiledGrammar</a></li>
 <li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a></li>
@@ -208,96 +248,64 @@
 </li>
 </ul>
 
-            
-          
-        </div>
-        
-      </div>
-    </nav>
-
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
-      
-      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
-        
-            <div class="togglemenu">
-
-            </div>
-            <div class="nav-content">
-              <!-- XGrammar -->
-              Table of Contents
-            </div>
-        
-      </nav>
-
-
-      <div class="wy-nav-content">
-        
-        <div class="rst-content">
-        
-
-          
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<div role="navigation" aria-label="breadcrumbs navigation">
-
-  <ul class="wy-breadcrumbs">
-    
-      <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
-        
-          <li><a href="index.html">XGrammar Python API</a> <span class="br-arrow">></span></li>
-        
-      <li>xgr.TokenizerInfo</li>
-    
-    
-      
-      
-    
-    
-      <li class="wy-breadcrumbs-aside">
-        
-            
-            
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/tokenizer_info.rst" class="fa fa-github"> Edit on GitHub</a>
-            
-          
-        
-      </li>
-    
-  </ul>
-
-  
-  <hr/>
 </div>
-          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
-           <div itemprop="articleBody">
-            
-  <section id="xgr-tokenizerinfo">
-<h1>xgr.TokenizerInfo<a class="headerlink" href="#xgr-tokenizerinfo" title="Permalink to this heading">¶</a></h1>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page github-repository">
+  <a class="muted-link" href="https://github.com/mlc-ai/xgrammar" title="XGrammar on GitHub">
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path fill="currentColor" fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path>
+    </svg>
+    <span class="visually-hidden">XGrammar on GitHub</span>
+  </a>
+</div>
+<div class="view-this-page">
+  <a class="muted-link" href="https://github.com/mlc-ai/xgrammar/blob/main/docs/api/python/tokenizer_info.rst?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/tokenizer_info.rst" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="xgr-tokenizerinfo">
+<h1>xgr.TokenizerInfo<a class="headerlink" href="#xgr-tokenizerinfo" title="Link to this heading">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.VocabType">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">VocabType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">names=&lt;not</span> <span class="pre">given&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">qualname=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">type=None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">start=1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">boundary=None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#VocabType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.VocabType" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">VocabType</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">values</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#VocabType"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.VocabType" title="Link to this definition">¶</a></dt>
 <dd><p>Bases: <a class="reference external" href="https://docs.python.org/3.12/library/enum.html#enum.Enum" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Enum</span></code></a></p>
 <p>The type of the vocabulary. Used in TokenizerInfo. XGrammar supports three types of
 vocabularies: RAW, BYTE_FALLBACK, BYTE_LEVEL.</p>
 <p><strong>Attributes:</strong></p>
+<div class="table-wrapper autosummary longtable docutils container">
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.VocabType.RAW" title="xgrammar.VocabType.RAW"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RAW</span></code></a></p></td>
@@ -311,9 +319,10 @@ vocabularies: RAW, BYTE_FALLBACK, BYTE_LEVEL.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.VocabType.RAW">
-<span class="sig-name descname"><span class="pre">RAW</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></em><a class="headerlink" href="#xgrammar.VocabType.RAW" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">RAW</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="headerlink" href="#xgrammar.VocabType.RAW" title="Link to this definition">¶</a></dt>
 <dd><p>The vocabulary is in the raw format.</p>
 <p>The tokens in the vocabulary are kept in their original form without any processing. This kind
 of tokenizer includes the tiktoken tokenizer, e.g. microsoft/Phi-3-small-8k-instruct,
@@ -322,16 +331,16 @@ Qwen/Qwen-7B-Chat, etc.</p>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.VocabType.BYTE_FALLBACK">
-<span class="sig-name descname"><span class="pre">BYTE_FALLBACK</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></em><a class="headerlink" href="#xgrammar.VocabType.BYTE_FALLBACK" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">BYTE_FALLBACK</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">1</span></span><a class="headerlink" href="#xgrammar.VocabType.BYTE_FALLBACK" title="Link to this definition">¶</a></dt>
 <dd><p>The vocabulary used in the byte fallback BPE tokenizer.</p>
 <p>The tokens are encoded through the byte-fallback conversion. E.g. “u001b” -&gt; “&lt;0x1B&gt;”,
-” apple” -&gt; “▁apple”. This kind of tokenizer includes meta-llama/Llama-2-7b-chat,
+“ apple” -&gt; “▁apple”. This kind of tokenizer includes meta-llama/Llama-2-7b-chat,
 microsoft/Phi-3.5-mini-instruct, etc.</p>
 </dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="xgrammar.VocabType.BYTE_LEVEL">
-<span class="sig-name descname"><span class="pre">BYTE_LEVEL</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></em><a class="headerlink" href="#xgrammar.VocabType.BYTE_LEVEL" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">BYTE_LEVEL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">2</span></span><a class="headerlink" href="#xgrammar.VocabType.BYTE_LEVEL" title="Link to this definition">¶</a></dt>
 <dd><p>The vocabulary used in the byte level BPE tokenizer.</p>
 <p>The tokens are encoded through the byte-to-unicode conversion, as in
 <a class="reference external" href="https://github.com/huggingface/transformers/blob/87be06ca77166e6a6215eee5a990ab9f07238a18/src/transformers/models/gpt2/tokenization_gpt2.py#L38-L59">https://github.com/huggingface/transformers/blob/87be06ca77166e6a6215eee5a990ab9f07238a18/src/transformers/models/gpt2/tokenization_gpt2.py#L38-L59</a></p>
@@ -343,30 +352,31 @@ meta-llama/Meta-Llama-3.1-8B-Instruct, etc.</p>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">TokenizerInfo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">encoded_vocab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#bytes" title="(in Python v3.12)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.tokenizer_info.VocabType"><span class="pre">VocabType</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">VocabType.RAW</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_token_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_prefix_space</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">xgrammar.</span></span><span class="sig-name descname"><span class="pre">TokenizerInfo</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">encoded_vocab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#bytes" title="(in Python v3.12)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.tokenizer_info.VocabType"><span class="pre">VocabType</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">VocabType.RAW</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_token_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_prefix_space</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo" title="Link to this definition">¶</a></dt>
 <dd><p>The tokenizer info contains the vocabulary, the type of the vocabulary, and necessary
 information for the grammar-guided generation.</p>
 <p>Note that although some tokenizers will encode the tokens in a special format, e.g.
-“&lt;0x1B&gt;” for “” in the ByteFallback tokenizer, and “Ġ” for ” ” in the Byte-Level BPE
+“&lt;0x1B&gt;” for “” in the ByteFallback tokenizer, and “Ġ” for “ “ in the Byte-Level BPE
 tokenizer, TokenizerInfo always decodes the vocabulary to the original format (e.g. “”
-and ” “).</p>
+and “ “).</p>
 <p>Also note that some models (e.g. Phi-3 and Deepseek-V2) may pad the vocabulary to a multiple
 of 32. In this case, the model’s vocab_size is larger than the tokenizer’s vocabulary size.
 Please pass the model’s vocab_size to the vocab_size parameter in the constructor, because
 this information is used to determine the size of the token mask.</p>
 <p><strong>Methods:</strong></p>
+<div class="table-wrapper autosummary longtable docutils container">
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.__init__" title="xgrammar.TokenizerInfo.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(encoded_vocab[, vocab_type, ...])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.__init__" title="xgrammar.TokenizerInfo.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(encoded_vocab[, vocab_type, ...])</p></td>
 <td><p>Construct the tokenizer info.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.from_huggingface" title="xgrammar.TokenizerInfo.from_huggingface"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_huggingface</span></code></a>(tokenizer, *[, vocab_size, ...])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.from_huggingface" title="xgrammar.TokenizerInfo.from_huggingface"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_huggingface</span></code></a>(tokenizer, *[, vocab_size, ...])</p></td>
 <td><p>Construct the tokenizer info from the huggingface tokenizer.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.dump_metadata" title="xgrammar.TokenizerInfo.dump_metadata"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dump_metadata</span></code></a>()</p></td>
 <td><p>Dump the metadata of the tokenizer to a json string.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.from_vocab_and_metadata" title="xgrammar.TokenizerInfo.from_vocab_and_metadata"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_vocab_and_metadata</span></code></a>(encoded_vocab, metadata)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.from_vocab_and_metadata" title="xgrammar.TokenizerInfo.from_vocab_and_metadata"><code class="xref py py-obj docutils literal notranslate"><span class="pre">from_vocab_and_metadata</span></code></a>(encoded_vocab, metadata)</p></td>
 <td><p>Construct the tokenizer info from the vocabulary and the metadata string in json format.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.serialize_json" title="xgrammar.TokenizerInfo.serialize_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">serialize_json</span></code></a>()</p></td>
@@ -377,7 +387,9 @@ this information is used to determine the size of the token mask.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p><strong>Attributes:</strong></p>
+<div class="table-wrapper autosummary longtable docutils container">
 <table class="autosummary longtable docutils align-default">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_type" title="xgrammar.TokenizerInfo.vocab_type"><code class="xref py py-obj docutils literal notranslate"><span class="pre">vocab_type</span></code></a></p></td>
@@ -403,9 +415,10 @@ this information is used to determine the size of the token mask.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">encoded_vocab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#bytes" title="(in Python v3.12)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.tokenizer_info.VocabType"><span class="pre">VocabType</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">VocabType.RAW</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_token_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_prefix_space</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.__init__" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">encoded_vocab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#bytes" title="(in Python v3.12)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.tokenizer_info.VocabType"><span class="pre">VocabType</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">VocabType.RAW</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_token_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">add_prefix_space</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.__init__" title="Link to this definition">¶</a></dt>
 <dd><p>Construct the tokenizer info.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -423,7 +436,7 @@ be correct).</p></li>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.from_huggingface">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_huggingface</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tokenizer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">transformers.PreTrainedTokenizerBase</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_token_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.from_huggingface"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.from_huggingface" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_huggingface</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tokenizer</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">transformers.PreTrainedTokenizerBase</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_token_ids</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.from_huggingface"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.from_huggingface" title="Link to this definition">¶</a></dt>
 <dd><p>Construct the tokenizer info from the huggingface tokenizer. This constructor supports
 various tokenizer backends, including the huggingface fast tokenizer and tiktoken tokenizer.
 Necessary information is automatically detected from the tokenizer.</p>
@@ -466,26 +479,26 @@ set to the tokenizer’s vocabulary size.</p>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.vocab_type">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">vocab_type</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.tokenizer_info.VocabType"><span class="pre">VocabType</span></a></em><a class="headerlink" href="#xgrammar.TokenizerInfo.vocab_type" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">vocab_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#xgrammar.VocabType" title="xgrammar.tokenizer_info.VocabType"><span class="pre">VocabType</span></a></span><a class="headerlink" href="#xgrammar.TokenizerInfo.vocab_type" title="Link to this definition">¶</a></dt>
 <dd><p>The type of the vocabulary.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.vocab_size">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">vocab_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></em><a class="headerlink" href="#xgrammar.TokenizerInfo.vocab_size" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">vocab_size</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span><a class="headerlink" href="#xgrammar.TokenizerInfo.vocab_size" title="Link to this definition">¶</a></dt>
 <dd><p>The size of the vocabulary.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.add_prefix_space">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">add_prefix_space</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></em><a class="headerlink" href="#xgrammar.TokenizerInfo.add_prefix_space" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">add_prefix_space</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><a class="headerlink" href="#xgrammar.TokenizerInfo.add_prefix_space" title="Link to this definition">¶</a></dt>
 <dd><p>Whether the tokenizer will prepend a space before the text in the tokenization
 process.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.prepend_space_in_tokenization">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">prepend_space_in_tokenization</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></em><a class="headerlink" href="#xgrammar.TokenizerInfo.prepend_space_in_tokenization" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">prepend_space_in_tokenization</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><a class="headerlink" href="#xgrammar.TokenizerInfo.prepend_space_in_tokenization" title="Link to this definition">¶</a></dt>
 <dd><p>Whether the tokenizer will prepend a space before the text in the tokenization
 process.</p>
 <p>This property is deprecated. Use add_prefix_space instead.</p>
@@ -493,7 +506,7 @@ process.</p>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.decoded_vocab">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">decoded_vocab</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#bytes" title="(in Python v3.12)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.decoded_vocab" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">decoded_vocab</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#bytes" title="(in Python v3.12)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#xgrammar.TokenizerInfo.decoded_vocab" title="Link to this definition">¶</a></dt>
 <dd><p>The decoded vocabulary of the tokenizer. This converts the tokens in the LLM’s
 vocabulary back to the original format of the input text. E.g. for type ByteFallback,
 the token &lt;0x1B&gt; is converted back to “”.</p>
@@ -501,27 +514,27 @@ the token &lt;0x1B&gt; is converted back to “”.</p>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.stop_token_ids">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">stop_token_ids</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.stop_token_ids" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">stop_token_ids</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#xgrammar.TokenizerInfo.stop_token_ids" title="Link to this definition">¶</a></dt>
 <dd><p>The stop token ids.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.special_token_ids">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">special_token_ids</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#xgrammar.TokenizerInfo.special_token_ids" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">special_token_ids</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#xgrammar.TokenizerInfo.special_token_ids" title="Link to this definition">¶</a></dt>
 <dd><p>The special token ids. Special tokens include control tokens, reserved tokens,
 padded tokens, etc. Now it is automatically detected from the vocabulary.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.dump_metadata">
-<span class="sig-name descname"><span class="pre">dump_metadata</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.dump_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.dump_metadata" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">dump_metadata</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.dump_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.dump_metadata" title="Link to this definition">¶</a></dt>
 <dd><p>Dump the metadata of the tokenizer to a json string. It can be used to construct the
 tokenizer info from the vocabulary and the metadata string.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.from_vocab_and_metadata">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">from_vocab_and_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">encoded_vocab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#bytes" title="(in Python v3.12)"><span class="pre">bytes</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.from_vocab_and_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.from_vocab_and_metadata" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">from_vocab_and_metadata</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">encoded_vocab</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#bytes" title="(in Python v3.12)"><span class="pre">bytes</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.from_vocab_and_metadata"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.from_vocab_and_metadata" title="Link to this definition">¶</a></dt>
 <dd><p>Construct the tokenizer info from the vocabulary and the metadata string in json
 format.</p>
 <dl class="field-list simple">
@@ -536,7 +549,7 @@ format.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.serialize_json">
-<span class="sig-name descname"><span class="pre">serialize_json</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.serialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.serialize_json" title="Permalink to this definition">¶</a></dt>
+<span class="sig-name descname"><span class="pre">serialize_json</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.serialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.serialize_json" title="Link to this definition">¶</a></dt>
 <dd><p>Serialize the tokenizer info to a JSON string.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
@@ -550,7 +563,7 @@ format.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="xgrammar.TokenizerInfo.deserialize_json">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">deserialize_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">json_string</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.deserialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.deserialize_json" title="Permalink to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">deserialize_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">json_string</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#xgrammar.TokenizerInfo" title="xgrammar.tokenizer_info.TokenizerInfo"><span class="pre">TokenizerInfo</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/tokenizer_info.html#TokenizerInfo.deserialize_json"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.TokenizerInfo.deserialize_json" title="Link to this definition">¶</a></dt>
 <dd><p>Deserialize a tokenizer info from a JSON string.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -576,68 +589,103 @@ format.</p>
 
 </section>
 
-
-           </div>
-           
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="grammar_compiler.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">xgr.GrammarCompiler</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="grammar.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">xgr.Grammar</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024-2026, XGrammar Contributors
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
           </div>
-          
-
-<footer>
-
-    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-      
-        <a href="grammar_compiler.html" class="btn btn-neutral float-right" title="xgr.GrammarCompiler" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
-      
-      
-        <a href="grammar.html" class="btn btn-neutral float-left" title="xgr.Grammar" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
-      
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
     </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">xgr.TokenizerInfo</a><ul>
+<li><a class="reference internal" href="#xgrammar.VocabType"><code class="docutils literal notranslate"><span class="pre">VocabType</span></code></a><ul>
+<li><a class="reference internal" href="#xgrammar.VocabType.RAW"><code class="docutils literal notranslate"><span class="pre">VocabType.RAW</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.VocabType.BYTE_FALLBACK"><code class="docutils literal notranslate"><span class="pre">VocabType.BYTE_FALLBACK</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.VocabType.BYTE_LEVEL"><code class="docutils literal notranslate"><span class="pre">VocabType.BYTE_LEVEL</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo</span></code></a><ul>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.__init__"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.__init__()</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.from_huggingface"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.from_huggingface()</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_type"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.vocab_type</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.vocab_size"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.vocab_size</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.add_prefix_space"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.add_prefix_space</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.prepend_space_in_tokenization"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.prepend_space_in_tokenization</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.decoded_vocab"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.decoded_vocab</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.stop_token_ids"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.stop_token_ids</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.special_token_ids"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.special_token_ids</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.dump_metadata"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.dump_metadata()</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.from_vocab_and_metadata"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.from_vocab_and_metadata()</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.serialize_json"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.serialize_json()</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.TokenizerInfo.deserialize_json"><code class="docutils literal notranslate"><span class="pre">TokenizerInfo.deserialize_json()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
 
-<div id="button" class="backtop"><img src="../../_static/img/right.svg" alt="backtop"/> </div>
-<section class="footerSec">
-    <div class="footerHeader">
-      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
-        <div class="copywrite d-flex align-items-center">
-          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+          </div>
         </div>
       </div>
-
-    </div>
-
-    <div>
-      <div class="footernote"> </div>
-    </div>
-
-</section>
-</footer>
-        </div>
-      </div>
-
-    </section>
-
+      
+      
+    </aside>
   </div>
-  
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
-
-  
-    <!-- RunLLM Widget Script -->
-    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+</div><script src="../../_static/documentation_options.js?v=cb850272"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../_static/copybutton.js?v=f281be69"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
     
-</body>
-  <script type="text/javascript">
-      jQuery(function () {
-          SphinxRtdTheme.Navigation.enable(true);
-      });
-  </script>
-
-  
-  
-    
-   
-
-
     <!-- RunLLM Widget Script -->
     <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
     
