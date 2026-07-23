@@ -7,12 +7,16 @@
 
 #include <picojson.h>
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <optional>
 #include <stack>
 #include <string>
+#include <string_view>
+#ifdef XGRAMMAR_PROFILE_COMPILE
 #include <unordered_map>
+#endif
 #include <variant>
 #include <vector>
 
@@ -320,6 +324,134 @@ TokenizerInfo::Impl::Impl(
     trie_subtree_nodes_range_[top_pair.second] = sorted_decoded_vocab_.size();
     prefix_stack.pop();
   }
+
+  // Tokens that cross from a whitespace loop into its parent continuation are a dominant runtime
+  // cost. Store their arbitrary suffixes once per tokenizer, ordered so all matchers can traverse
+  // the shared suffix trie without sorting or copying token strings.
+  std::vector<std::pair<int32_t, int32_t>> mixed_whitespace_suffixes;
+  mixed_whitespace_suffixes.reserve(sorted_decoded_vocab_.size() / 2);
+  for (int32_t sorted_vocab_index = 0;
+       sorted_vocab_index < static_cast<int32_t>(sorted_decoded_vocab_.size());
+       ++sorted_vocab_index) {
+    const auto& token = sorted_decoded_vocab_[sorted_vocab_index].second;
+    int32_t suffix_offset = 0;
+    while (suffix_offset < static_cast<int32_t>(token.size())) {
+      const uint8_t byte = token[suffix_offset];
+      if (byte != 0x09 && byte != 0x0A && byte != 0x0B && byte != 0x0C && byte != 0x0D &&
+          byte != 0x20) {
+        break;
+      }
+      ++suffix_offset;
+    }
+    if (suffix_offset > 0 && suffix_offset < static_cast<int32_t>(token.size())) {
+      mixed_whitespace_suffixes.emplace_back(sorted_vocab_index, suffix_offset);
+    }
+  }
+  std::sort(
+      mixed_whitespace_suffixes.begin(),
+      mixed_whitespace_suffixes.end(),
+      [&](const auto& lhs, const auto& rhs) {
+        const auto& lhs_token = sorted_decoded_vocab_[lhs.first].second;
+        const auto& rhs_token = sorted_decoded_vocab_[rhs.first].second;
+        const std::string_view lhs_suffix(
+            lhs_token.data() + lhs.second, lhs_token.size() - lhs.second
+        );
+        const std::string_view rhs_suffix(
+            rhs_token.data() + rhs.second, rhs_token.size() - rhs.second
+        );
+        if (lhs_suffix != rhs_suffix) {
+          return lhs_suffix < rhs_suffix;
+        }
+        return lhs.first < rhs.first;
+      }
+  );
+  mixed_whitespace_suffix_sorted_indices_.reserve(mixed_whitespace_suffixes.size());
+  mixed_whitespace_suffix_offsets_.reserve(mixed_whitespace_suffixes.size());
+  mixed_whitespace_suffix_lcp_with_previous_.reserve(mixed_whitespace_suffixes.size());
+  std::string_view previous_suffix;
+  for (size_t entry_index = 0; entry_index < mixed_whitespace_suffixes.size(); ++entry_index) {
+    const auto [sorted_vocab_index, suffix_offset] = mixed_whitespace_suffixes[entry_index];
+    const auto& token = sorted_decoded_vocab_[sorted_vocab_index].second;
+    const std::string_view suffix(token.data() + suffix_offset, token.size() - suffix_offset);
+    int32_t lcp_length = 0;
+    if (entry_index != 0) {
+      const int32_t limit = std::min<int32_t>(suffix.size(), previous_suffix.size());
+      while (lcp_length < limit && suffix[lcp_length] == previous_suffix[lcp_length]) {
+        ++lcp_length;
+      }
+    }
+    mixed_whitespace_suffix_sorted_indices_.push_back(sorted_vocab_index);
+    mixed_whitespace_suffix_offsets_.push_back(suffix_offset);
+    mixed_whitespace_suffix_lcp_with_previous_.push_back(lcp_length);
+    previous_suffix = suffix;
+  }
+
+#ifdef XGRAMMAR_PROFILE_COMPILE
+  std::unordered_map<std::string_view, std::pair<int32_t, int32_t>> token_by_bytes;
+  token_by_bytes.reserve(sorted_decoded_vocab_.size() * 2);
+  for (int32_t sorted_vocab_index = 0;
+       sorted_vocab_index < static_cast<int32_t>(sorted_decoded_vocab_.size());
+       ++sorted_vocab_index) {
+    const auto& [token_id, token] = sorted_decoded_vocab_[sorted_vocab_index];
+    token_by_bytes.emplace(std::string_view(token), std::make_pair(sorted_vocab_index, token_id));
+  }
+  // Resolve every non-empty token suffix to one byte-equivalent vocabulary token. These tables
+  // are only used by the compile profiler's suffix-certificate counterfactual.
+  suffix_lookup_indptr_.reserve(sorted_decoded_vocab_.size() + 1);
+  suffix_lookup_indptr_.push_back(0);
+  for (const auto& [token_id, token] : sorted_decoded_vocab_) {
+    static_cast<void>(token_id);
+    suffix_lookup_indptr_.push_back(
+        suffix_lookup_indptr_.back() + static_cast<int32_t>(token.size())
+    );
+    for (size_t suffix_offset = 0; suffix_offset < token.size(); ++suffix_offset) {
+      const auto suffix_it = token_by_bytes.find(std::string_view(token).substr(suffix_offset));
+      if (suffix_it == token_by_bytes.end()) {
+        suffix_lookup_sorted_indices_.push_back(-1);
+        suffix_lookup_token_ids_.push_back(-1);
+      } else {
+        suffix_lookup_sorted_indices_.push_back(suffix_it->second.first);
+        suffix_lookup_token_ids_.push_back(suffix_it->second.second);
+      }
+    }
+  }
+
+  // Store the end of the lexicographically contiguous vocabulary interval sharing each
+  // non-empty token prefix. The flat layout matches the suffix CSR entries above.
+  std::vector<int32_t> prefix_node_ids;
+  prefix_node_ids.reserve(suffix_lookup_token_ids_.size());
+  std::vector<int32_t> prefix_node_ends;
+  std::vector<int32_t> prefix_node_ids_by_depth;
+  const std::string* previous_token = nullptr;
+  for (int32_t sorted_vocab_index = 0;
+       sorted_vocab_index < static_cast<int32_t>(sorted_decoded_vocab_.size());
+       ++sorted_vocab_index) {
+    const auto& token = sorted_decoded_vocab_[sorted_vocab_index].second;
+    size_t lcp_length = 0;
+    if (previous_token != nullptr) {
+      lcp_length =
+          std::mismatch(token.begin(), token.end(), previous_token->begin(), previous_token->end())
+              .first -
+          token.begin();
+    }
+    while (prefix_node_ids_by_depth.size() > lcp_length) {
+      prefix_node_ends[prefix_node_ids_by_depth.back()] = sorted_vocab_index;
+      prefix_node_ids_by_depth.pop_back();
+    }
+    for (size_t prefix_length = lcp_length + 1; prefix_length <= token.size(); ++prefix_length) {
+      prefix_node_ids_by_depth.push_back(prefix_node_ends.size());
+      prefix_node_ends.push_back(sorted_decoded_vocab_.size());
+    }
+    prefix_node_ids.insert(
+        prefix_node_ids.end(), prefix_node_ids_by_depth.begin(), prefix_node_ids_by_depth.end()
+    );
+    previous_token = &token;
+  }
+  suffix_prefix_range_ends_.resize(prefix_node_ids.size());
+  for (size_t flat_index = 0; flat_index < prefix_node_ids.size(); ++flat_index) {
+    suffix_prefix_range_ends_[flat_index] = prefix_node_ends[prefix_node_ids[flat_index]];
+  }
+#endif
 }
 
 std::string TokenizerInfo::Impl::DumpMetadata() const {

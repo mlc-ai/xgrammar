@@ -6,7 +6,9 @@
 
 #ifndef XGRAMMAR_EARLEY_PARSER_H_
 #define XGRAMMAR_EARLEY_PARSER_H_
+#include <array>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <ostream>
 #include <queue>
@@ -193,6 +195,54 @@ class StateHashForParsing {
   }
 };
 
+/*!
+ * \brief Immutable Earley-parser metadata derived solely from an optimized grammar.
+ *
+ * A compiled grammar creates thousands of short-lived EarleyParser instances while building
+ * adaptive token masks. Keeping these tables in each parser repeats the same state classification,
+ * nullable-rule initialization, and deterministic byte-transition construction for every mask
+ * task. Build them once and share them between compile-time tasks and runtime matchers.
+ */
+struct EarleyParserGrammarMetadata {
+  enum FsmStateFlag : uint8_t {
+    kFsmStateInitialized = 1 << 0,
+    kFsmStateScanable = 1 << 1,
+    kFsmStateNonTerminal = 1 << 2,
+    kFsmStateEnd = 1 << 3,
+    kFsmStateHasEdges = 1 << 4,
+  };
+
+  /*! \brief Precomputed FSM state properties, indexed by complete-FSM state id. */
+  std::vector<uint8_t> fsm_state_flags;
+
+  /*! \brief Whether each rule can match the empty string. */
+  std::vector<uint8_t> rule_is_nullable;
+
+  /*!
+   * \brief Whether a rule or any transitively referenced rule can observe an atomic token ID.
+   */
+  std::vector<uint8_t> rule_has_atomic_token_edges;
+
+  /*!
+   * \brief State-to-table mapping for deterministic states with several character edges.
+   * A value of -1 means AdvanceFsm should scan the state's edges.
+   */
+  std::vector<int32_t> deterministic_byte_transition_ids;
+
+  /*! \brief Dense byte transitions selected by deterministic_byte_transition_ids. */
+  std::vector<std::array<int32_t, 256>> deterministic_byte_transitions;
+
+  EarleyParserGrammarMetadata() = default;
+  explicit EarleyParserGrammarMetadata(const Grammar& grammar);
+
+  friend std::size_t MemorySize(const EarleyParserGrammarMetadata& metadata) {
+    return MemorySize(metadata.fsm_state_flags) + MemorySize(metadata.rule_is_nullable) +
+           MemorySize(metadata.rule_has_atomic_token_edges) +
+           MemorySize(metadata.deterministic_byte_transition_ids) +
+           MemorySize(metadata.deterministic_byte_transitions);
+  }
+};
+
 /*! \brief This class is used to detect the repeated states. */
 class RepeatDetector {
  private:
@@ -203,6 +253,11 @@ class RepeatDetector {
   std::unordered_set<ParserState, StateHashForParsing, StateEqualForParsing> visited_set_;
 
   int size_ = 0;
+  bool using_set_ = false;
+
+  const ParserState* InsertInSet(const ParserState& state);
+
+  void ClearSet();
 
  public:
   RepeatDetector(const int transition_threshold = 50)
@@ -210,20 +265,54 @@ class RepeatDetector {
     visited_vector_.resize(transition_threshold_);
   }
 
-  /*!
-   * \brief Check if the element is visited.
-   * \return True if visited, false otherwise.
-   */
-  bool IsVisited(const ParserState& state) const;
+  /*! \brief Insert a state only if absent and return its stable address, or nullptr. */
+  const ParserState* InsertIfAbsent(const ParserState& state) {
+    if (!using_set_ && size_ < transition_threshold_) {
+      for (int i = 0; i < size_; ++i) {
+        if (StateEqualForParsing()(state, visited_vector_[i])) {
+          return nullptr;
+        }
+      }
+      visited_vector_[size_] = state;
+      return &visited_vector_[size_++];
+    }
+    return InsertInSet(state);
+  }
 
-  /*!
-   * \brief Add the state into the visited states.
-   * \param state The state to be added.
-   */
-  void Insert(const ParserState& state);
+  /*! \brief Insert a copy of an FSM state with a new element id. */
+  const ParserState* InsertFsmTransitionIfAbsent(
+      const ParserState& state, int32_t target_element_id
+  ) {
+    if (!using_set_ && size_ < transition_threshold_) {
+      for (int i = 0; i < size_; ++i) {
+        const ParserState& existing = visited_vector_[i];
+        if (existing.rule_id == state.rule_id && existing.sequence_id == state.sequence_id &&
+            existing.element_id == target_element_id &&
+            existing.rule_start_pos == state.rule_start_pos &&
+            existing.sub_element_id == state.sub_element_id &&
+            existing.repeat_count == state.repeat_count &&
+            existing.partial_codepoint == state.partial_codepoint) {
+          return nullptr;
+        }
+      }
+      ParserState* inserted = &visited_vector_[size_++];
+      *inserted = state;
+      inserted->element_id = target_element_id;
+      return inserted;
+    }
+    ParserState transitioned = state;
+    transitioned.element_id = target_element_id;
+    return InsertInSet(transitioned);
+  }
 
   /*! \brief Reset the detector. */
-  void Clear();
+  void Clear() {
+    if (using_set_) {
+      ClearSet();
+    }
+    size_ = 0;
+    using_set_ = false;
+  }
 };
 
 class EarleyParser {
@@ -245,11 +334,17 @@ class EarleyParser {
   /*! \brief The grammar to be parsed. */
   Grammar grammar_;
 
+  /*! \brief Direct access to the shared complete-FSM edge table. */
+  const Compact2DArray<FSMEdge>* complete_fsm_edges_;
+
+  /*! \brief Grammar-only metadata shared by all parsers for one compiled grammar. */
+  const EarleyParserGrammarMetadata* grammar_metadata_;
+
   /*! \brief In this round of advancing, check if the stop token can be accepted. */
   bool tmp_accept_stop_token_ = false;
 
   /*! \brief store when accepting i characters, if the stop token can be accepted. */
-  std::vector<bool> is_completed_;
+  std::vector<uint8_t> is_completed_;
 
   /*!
    * \brief rule_id_to_completable_states[i][j] is the i pos j rule_id states. Earley
@@ -267,10 +362,10 @@ class EarleyParser {
    * \brief A temporary vector only used in Advance, used to add states in the
    * scanable_state_history.
    */
-  std::vector<ParserState> tmp_states_to_be_added_;
+  std::vector<const ParserState*> tmp_states_to_be_added_;
 
-  /*! \brief It's the processing queue of the earley parser. */
-  std::queue<ParserState> tmp_process_state_queue_;
+  /*! \brief Stable pointers to visited states awaiting prediction/completion. */
+  std::queue<const ParserState*> tmp_process_state_queue_;
 
   /*! \brief The class is used to check if a state has been added into the queue. */
   RepeatDetector tmp_states_visited_in_queue_;
@@ -278,45 +373,46 @@ class EarleyParser {
   /*! \brief Check if the stop token is accepted. */
   bool stop_token_is_accepted_ = false;
 
-  enum FsmStateFlag : uint8_t {
-    kFsmStateInitialized = 1 << 0,
-    kFsmStateScanable = 1 << 1,
-    kFsmStateNonTerminal = 1 << 2,
-    kFsmStateEnd = 1 << 3,
-    kFsmStateHasEdges = 1 << 4,
+  using FsmStateFlag = EarleyParserGrammarMetadata::FsmStateFlag;
+  static constexpr uint8_t kFsmStateInitialized = EarleyParserGrammarMetadata::kFsmStateInitialized;
+  static constexpr uint8_t kFsmStateScanable = EarleyParserGrammarMetadata::kFsmStateScanable;
+  static constexpr uint8_t kFsmStateNonTerminal = EarleyParserGrammarMetadata::kFsmStateNonTerminal;
+  static constexpr uint8_t kFsmStateEnd = EarleyParserGrammarMetadata::kFsmStateEnd;
+  static constexpr uint8_t kFsmStateHasEdges = EarleyParserGrammarMetadata::kFsmStateHasEdges;
+
+  struct ByteTransitionCacheSlot {
+    int32_t state_id = -1;
+    const std::array<int32_t, 256>* targets = nullptr;
   };
 
-  /*! \brief Lazily-computed FSM state properties, indexed by rule id and state id. */
-  std::vector<std::vector<uint8_t>> fsm_state_flags_cache_;
+  /*! \brief Parser-local pointer front-end for the shared deterministic transition tables. */
+  std::array<ByteTransitionCacheSlot, 64> byte_transition_direct_cache_{};
 
-  /*! \brief Whether each rule can match the empty string. */
-  std::vector<uint8_t> rule_is_nullable_;
-
-  /*! \brief Compute and cache properties for a state in a per-rule FSM. */
-  uint8_t InitializeFsmStateFlags(int32_t rule_id, int32_t state_id);
-
-  /*! \brief Return cached properties for a state in a per-rule FSM. */
-  uint8_t GetFsmStateFlags(int32_t rule_id, int32_t state_id) {
-    XGRAMMAR_DCHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(fsm_state_flags_cache_.size()));
-    auto& flags_cache = fsm_state_flags_cache_[rule_id];
-    if (!flags_cache.empty()) {
-      XGRAMMAR_DCHECK(state_id >= 0 && state_id < static_cast<int32_t>(flags_cache.size()));
-      if (flags_cache[state_id] != 0) {
-        return flags_cache[state_id];
-      }
+  const std::array<int32_t, 256>* GetDeterministicByteTransitions(int32_t state_id) {
+    auto& slot = byte_transition_direct_cache_
+        [static_cast<uint32_t>(state_id) % byte_transition_direct_cache_.size()];
+    if (slot.state_id == state_id) {
+      return slot.targets;
     }
-    return InitializeFsmStateFlags(rule_id, state_id);
+    const int32_t transition_id = grammar_metadata_->deterministic_byte_transition_ids[state_id];
+    const auto* targets = transition_id >= 0
+                              ? &grammar_metadata_->deterministic_byte_transitions[transition_id]
+                              : nullptr;
+    slot = {state_id, targets};
+    return targets;
   }
 
-  bool IsRuleNullable(int32_t rule_id) const { return rule_is_nullable_[rule_id] != 0; }
+  /*! \brief Return precomputed properties for a state in a per-rule FSM. */
+  uint8_t GetFsmStateFlags(int32_t rule_id, int32_t state_id) const {
+    XGRAMMAR_DCHECK(rule_id >= 0 && rule_id < grammar_->NumRules());
+    XGRAMMAR_DCHECK(
+        state_id >= 0 && state_id < static_cast<int32_t>(grammar_metadata_->fsm_state_flags.size())
+    );
+    return grammar_metadata_->fsm_state_flags[state_id];
+  }
 
-  /*!
-   * \brief Check if the state has been added into the queue.
-   * \param state The state to check.
-   * \return True if in the vector, false otherwise.
-   */
-  bool IsStateVisitedInQueue(const ParserState& state) const {
-    return tmp_states_visited_in_queue_.IsVisited(state);
+  bool IsRuleNullable(int32_t rule_id) const {
+    return grammar_metadata_->rule_is_nullable[rule_id] != 0;
   }
 
   /*!
@@ -434,9 +530,8 @@ class EarleyParser {
    * \details The state is enqueued if it is not visited in the queue.
    */
   void Enqueue(const ParserState& state) {
-    if (!IsStateVisitedInQueue(state)) {
-      tmp_process_state_queue_.push(state);
-      tmp_states_visited_in_queue_.Insert(state);
+    if (const ParserState* inserted = tmp_states_visited_in_queue_.InsertIfAbsent(state)) {
+      tmp_process_state_queue_.push(inserted);
     }
   }
 
@@ -445,9 +540,22 @@ class EarleyParser {
    * \param state The state to be enqueued.
    */
   void EnqueueWithoutProcessing(const ParserState& state) {
-    if (!IsStateVisitedInQueue(state)) {
-      tmp_states_visited_in_queue_.Insert(state);
-      tmp_states_to_be_added_.push_back(state);
+    if (const ParserState* inserted = tmp_states_visited_in_queue_.InsertIfAbsent(state)) {
+      tmp_states_to_be_added_.push_back(inserted);
+    }
+  }
+
+  void EnqueueFsmTransition(const ParserState& state, int32_t target_element_id) {
+    if (const ParserState* inserted =
+            tmp_states_visited_in_queue_.InsertFsmTransitionIfAbsent(state, target_element_id)) {
+      tmp_process_state_queue_.push(inserted);
+    }
+  }
+
+  void EnqueueFsmTransitionWithoutProcessing(const ParserState& state, int32_t target_element_id) {
+    if (const ParserState* inserted =
+            tmp_states_visited_in_queue_.InsertFsmTransitionIfAbsent(state, target_element_id)) {
+      tmp_states_to_be_added_.push_back(inserted);
     }
   }
 
@@ -458,8 +566,11 @@ class EarleyParser {
    * \param initial_state The state to start parsing from. If not provided, parsing starts
    * from the root rule of the grammar.
    */
-  explicit EarleyParser(
-      const Grammar& grammar, std::optional<ParserState> initial_state = std::nullopt
+  EarleyParser(
+      const Grammar& grammar,
+      const EarleyParserGrammarMetadata& grammar_metadata,
+      std::optional<ParserState> initial_state = std::nullopt,
+      bool need_expand = true
   );
 
   /*!
@@ -515,10 +626,22 @@ class EarleyParser {
    * \param state The state to be pushed.
    */
   void PushOneStateToCheck(const ParserState& state) {
-    rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+    rule_id_to_completable_states_.PushBackEmpty();
     is_completed_.push_back(is_completed_.back());
     scanable_state_history_.PushBack(&state, 1);
     return;
+  }
+
+  /*! \brief Push several already-expanded states as one parser frontier. */
+  void PushStatesToCheck(const std::vector<ParserState>& states) {
+    XGRAMMAR_DCHECK(!states.empty());
+    rule_id_to_completable_states_.PushBackEmpty();
+    is_completed_.push_back(is_completed_.back());
+    scanable_state_history_.PushBack(states);
+  }
+
+  bool HasLatestScanableStates() const {
+    return scanable_state_history_[scanable_state_history_.size() - 1].size() != 0;
   }
 
   std::string PrintStates() const {

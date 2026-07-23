@@ -28,7 +28,8 @@ std::size_t MemorySize(const Grammar::Impl& impl) {
   /// This should be improved in the future.
   return impl.rules_.size() * sizeof(std::string) + MemorySize(impl.grammar_expr_data_) +
          MemorySize(impl.grammar_expr_indptr_) + MemorySize(impl.complete_fsm) +
-         MemorySize(impl.per_rule_fsms) + MemorySize(impl.allow_empty_rule_ids);
+         MemorySize(impl.per_rule_fsms) + MemorySize(impl.per_rule_fsm_state_cache_keys) +
+         MemorySize(impl.allow_empty_rule_ids);
 }
 
 /******************* Grammar *******************/
