@@ -10,6 +10,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include <any>
+#include <optional>
 
 namespace xgrammar {
 
@@ -73,6 +74,8 @@ class EBNFLexer {
     std::string stop_capture_name = {};
     // Whether the identifier is a rule name carrying the [lazy] attribute, e.g. r[lazy] ::= ...
     bool is_lazy = false;
+    // The sampling temperature attached to a rule-definition identifier via name[temperature=T].
+    std::optional<float> temperature = std::nullopt;
   };
 
   EBNFLexer();

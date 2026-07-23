@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -92,6 +93,8 @@ class Grammar::Impl {
     /*! \brief Whether the rule matches with committed-shortest (lazy) semantics: at the first
      * position where the body can complete, it must complete. */
     bool is_lazy = false;
+    /*! \brief The sampling temperature to use while matching this rule. */
+    std::optional<float> temperature = std::nullopt;
   };
 
   /*! \brief Sparse per-rule metadata used to materialize suffix and stop captures. */
@@ -402,7 +405,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::Rule::is_exact_lookahead,
     &Grammar::Impl::Rule::max_tokens,
     &Grammar::Impl::Rule::capture_name,
-    &Grammar::Impl::Rule::is_lazy
+    &Grammar::Impl::Rule::is_lazy,
+    &Grammar::Impl::Rule::temperature
 );
 
 XGRAMMAR_MEMBER_ARRAY(

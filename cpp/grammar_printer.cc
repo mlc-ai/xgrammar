@@ -7,6 +7,10 @@
 
 #include <picojson.h>
 
+#include <iomanip>
+#include <limits>
+#include <sstream>
+
 #include "support/encoding.h"
 
 namespace xgrammar {
@@ -15,7 +19,7 @@ std::string GrammarPrinter::PrintRule(const Rule& rule, const SuffixStopInfo* su
   std::string res = rule.name;
   // Print the attributes as one comma-separated bracket group, re-parseable by the EBNF lexer.
   if (rule.max_tokens >= 0 || !rule.capture_name.empty() || suffix_stop_info != nullptr ||
-      rule.is_lazy) {
+      rule.is_lazy || rule.temperature.has_value()) {
     std::string attributes;
     auto append_attribute = [&](const std::string& attribute) {
       if (!attributes.empty()) {
@@ -52,6 +56,12 @@ std::string GrammarPrinter::PrintRule(const Rule& rule, const SuffixStopInfo* su
     }
     if (rule.is_lazy) {
       append_attribute("lazy");
+    }
+    if (rule.temperature.has_value()) {
+      std::ostringstream temperature;
+      temperature << std::setprecision(std::numeric_limits<float>::max_digits10)
+                  << rule.temperature.value();
+      append_attribute("temperature=" + temperature.str());
     }
     res += "[" + attributes + "]";
   }

@@ -901,11 +901,6 @@ def test_lark_large_choice_grammar() -> None:
             'start[budget=10]: "a"', "attribute 'budget' is not supported", id="unknown-attribute"
         ),
         pytest.param(
-            'start[temperature=0.7]: "a"',
-            "attribute 'temperature' is not supported",
-            id="temperature-attribute",
-        ),
-        pytest.param(
             'start[capture=""]: "a"', "capture name must not be empty", id="empty-capture-name"
         ),
         pytest.param(

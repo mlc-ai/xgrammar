@@ -99,6 +99,11 @@ void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_pres
   );
 }
 
+int32_t EarleyParser::ResolveActiveTemperatureRule(int32_t rule_id, int32_t inherited_rule_id)
+    const {
+  return grammar_->GetRule(rule_id).temperature.has_value() ? rule_id : inherited_rule_id;
+}
+
 void EarleyParser::PopLastStates(int32_t cnt) {
   stop_token_is_accepted_ = false;
   if (cnt >= static_cast<int32_t>(rule_id_to_completable_states_.size())) {
@@ -159,7 +164,11 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             parent_state.sequence_id,
             parent_state.element_id + 1,
             parent_state.rule_start_pos,
-            parent_state.budget_deadline
+            parent_state.budget_deadline,
+            0,
+            0,
+            0,
+            parent_state.active_temperature_rule_id
         });
         continue;
       }
@@ -177,7 +186,11 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             parent_state.sequence_id,
             parent_state.element_id + 1,
             parent_state.rule_start_pos,
-            parent_state.budget_deadline
+            parent_state.budget_deadline,
+            0,
+            0,
+            0,
+            parent_state.active_temperature_rule_id
         });
       }
       // If the repeat count is less than the max repeat count, we can continue to
@@ -206,7 +219,11 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             parent_state.sequence_id,
             edge.target,
             parent_state.rule_start_pos,
-            parent_state.budget_deadline
+            parent_state.budget_deadline,
+            0,
+            0,
+            0,
+            parent_state.active_temperature_rule_id
         });
       }
       if (new_count < info.Upper()) {
@@ -217,7 +234,9 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             parent_state.rule_start_pos,
             parent_state.budget_deadline,
             0,
-            new_count
+            new_count,
+            0,
+            parent_state.active_temperature_rule_id
         });
       }
       break;
@@ -263,7 +282,11 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             state.sequence_id,
             state.element_id + 1,
             state.rule_start_pos,
-            state.budget_deadline
+            state.budget_deadline,
+            0,
+            0,
+            0,
+            state.active_temperature_rule_id
         });
       }
       return std::make_pair(true, false);
@@ -281,7 +304,11 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             state.sequence_id,
             state.element_id + 1,
             state.rule_start_pos,
-            state.budget_deadline
+            state.budget_deadline,
+            0,
+            0,
+            0,
+            state.active_temperature_rule_id
         });
       }
       return std::make_pair(false, false);
@@ -443,7 +470,11 @@ ParserState EarleyParser::RootInitialState() const {
       grammar_->GetRule(root_rule_id).body_expr_id,
       grammar_->per_rule_fsms[root_rule_id]->GetFsm().GetStart(),
       ParserState::kNoPrevInputPos,
-      DeadlineForRule(root_rule_id, -1)
+      DeadlineForRule(root_rule_id, -1),
+      0,
+      0,
+      0,
+      ResolveActiveTemperatureRule(root_rule_id, -1)
   );
 }
 
@@ -557,7 +588,11 @@ void EarleyParser::ExpandNextRuleRefElement(
         state.sequence_id,
         state.element_id + 1,
         state.rule_start_pos,
-        state.budget_deadline
+        state.budget_deadline,
+        0,
+        0,
+        0,
+        state.active_temperature_rule_id
     });
   }
 
@@ -573,7 +608,11 @@ void EarleyParser::ExpandNextRuleRefElement(
       ref_fsm.GetFsm().GetStart(),
       right_recursion_to_root ? ParserState::kNoPrevInputPos
                               : int32_t(rule_id_to_completable_states_.size() - 1),
-      DeadlineForRule(ref_rule_id, state.budget_deadline)
+      DeadlineForRule(ref_rule_id, state.budget_deadline),
+      0,
+      0,
+      0,
+      ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id)
   });
 }
 
@@ -585,7 +624,15 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
   for (const auto& edge : fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
     if (edge.IsEpsilon()) {
       Enqueue(ParserState{
-          state.rule_id, state.sequence_id, edge.target, state.rule_start_pos, state.budget_deadline
+          state.rule_id,
+          state.sequence_id,
+          edge.target,
+          state.rule_start_pos,
+          state.budget_deadline,
+          0,
+          0,
+          0,
+          state.active_temperature_rule_id
       });
       continue;
     }
@@ -606,7 +653,15 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
 
       if (state.repeat_count >= repeat_info.Lower()) {
         Enqueue(ParserState{
-            state.rule_id, state.sequence_id, target, state.rule_start_pos, state.budget_deadline
+            state.rule_id,
+            state.sequence_id,
+            target,
+            state.rule_start_pos,
+            state.budget_deadline,
+            0,
+            0,
+            0,
+            state.active_temperature_rule_id
         });
       }
       if (state.repeat_count >= repeat_info.Upper()) {
@@ -666,7 +721,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  state.rule_start_pos,
                  state.budget_deadline,
                  0,
-                 state.repeat_count
+                 state.repeat_count,
+                 0,
+                 state.active_temperature_rule_id
              }}
         );
       } else {
@@ -678,7 +735,11 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  state.sequence_id,
                  target,
                  state.rule_start_pos,
-                 state.budget_deadline
+                 state.budget_deadline,
+                 0,
+                 0,
+                 0,
+                 state.active_temperature_rule_id
              }}
         );
       }
@@ -691,7 +752,15 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                           ref_rule_id
                       )) {
       Enqueue(ParserState{
-          state.rule_id, state.sequence_id, target, state.rule_start_pos, state.budget_deadline
+          state.rule_id,
+          state.sequence_id,
+          target,
+          state.rule_start_pos,
+          state.budget_deadline,
+          0,
+          0,
+          0,
+          state.active_temperature_rule_id
       });
     }
 
@@ -707,7 +776,11 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
         ref_fsm.GetFsm().GetStart(),
         right_recursion_to_root ? ParserState::kNoPrevInputPos
                                 : int32_t(rule_id_to_completable_states_.size() - 1),
-        DeadlineForRule(ref_rule_id, state.budget_deadline)
+        DeadlineForRule(ref_rule_id, state.budget_deadline),
+        0,
+        0,
+        0,
+        ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id)
     });
   }
 }

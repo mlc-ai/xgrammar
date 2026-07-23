@@ -11,7 +11,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <thread>
@@ -57,6 +59,7 @@ bool TraverseDraftTreeRecursive(
     const int64_t* draft_tokens,
     GrammarMatcher& matcher,
     DLTensor* token_bitmask,
+    float* temperatures,
     double time_threshold,
     const TimePoint& start_time
 ) {
@@ -98,6 +101,10 @@ bool TraverseDraftTreeRecursive(
     if (token_accepted) {
       if (!matcher.IsTerminated()) {
         matcher.FillNextTokenBitmask(token_bitmask, current_position);
+        if (temperatures != nullptr) {
+          temperatures[current_position] =
+              matcher.GetTemperature().value_or(std::numeric_limits<float>::quiet_NaN());
+        }
 
         if (retrieve_next_token[current_position] != -1) {
           bool success = TraverseDraftTreeRecursive(
@@ -108,6 +115,7 @@ bool TraverseDraftTreeRecursive(
               draft_tokens,
               matcher,
               token_bitmask,
+              temperatures,
               time_threshold,
               start_time
           );
@@ -141,6 +149,7 @@ bool TraverseDraftTreeRecursive(
         draft_tokens,
         matcher,
         token_bitmask,
+        temperatures,
         time_threshold,
         start_time
     );
@@ -454,13 +463,15 @@ class GrammarMatcher::Impl : public EarleyParser {
       std::optional<std::vector<int>> override_stop_tokens = std::nullopt,
       bool terminate_without_stop_token = false,
       // max_rollback_tokens_ is deprecated and not used.
-      int max_rollback_tokens = -1
+      int max_rollback_tokens = -1,
+      std::optional<float> default_temperature = std::nullopt
   )
       : EarleyParser(compiled_grammar->grammar),
         compiled_grammar_(compiled_grammar),
         tokenizer_info_(compiled_grammar->tokenizer_info),
         stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
         terminate_without_stop_token_(terminate_without_stop_token),
+        default_temperature_(default_temperature),
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
@@ -477,6 +488,10 @@ class GrammarMatcher::Impl : public EarleyParser {
         }
       }
     }
+    XGRAMMAR_CHECK(
+        !default_temperature_.has_value() ||
+        (std::isfinite(default_temperature_.value()) && default_temperature_.value() >= 0)
+    ) << "The default_temperature must be a finite non-negative number";
   }
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
@@ -484,6 +499,8 @@ class GrammarMatcher::Impl : public EarleyParser {
   bool AcceptString(const std::string& input_str, bool debug_print = false);
 
   bool FillNextTokenBitmask(DLTensor* next_token_bitmask, int index, bool debug_print = false);
+
+  std::optional<float> GetTemperature() const;
 
   std::string FindJumpForwardString();
 
@@ -645,6 +662,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   TokenizerInfo tokenizer_info_;
   std::vector<int> stop_token_ids_;
   bool terminate_without_stop_token_;
+  std::optional<float> default_temperature_;
   std::deque<int> token_length_history;
 
   /*! \brief Set by the last mask computation when an exhausted budget could be enforced: the
@@ -701,7 +719,7 @@ class BatchGrammarMatcher::Impl {
     }
   }
 
-  void BatchFillNextTokenBitmask(
+  std::vector<std::optional<float>> BatchFillNextTokenBitmask(
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       const std::optional<std::vector<int32_t>>& indices,
@@ -877,6 +895,21 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
   is_completed_.back() = tmp_accept_stop_token_;
   return true;
+}
+
+std::optional<float> GrammarMatcher::Impl::GetTemperature() const {
+  std::optional<float> syntax_temperature = std::nullopt;
+  for (const auto& state : GetLatestScanableStates()) {
+    if (state.active_temperature_rule_id == -1) {
+      continue;
+    }
+    const auto& temperature = grammar_->GetRule(state.active_temperature_rule_id).temperature;
+    XGRAMMAR_DCHECK(temperature.has_value());
+    if (!syntax_temperature.has_value() || temperature.value() > syntax_temperature.value()) {
+      syntax_temperature = temperature;
+    }
+  }
+  return syntax_temperature.has_value() ? syntax_temperature : default_temperature_;
 }
 
 // TODO(yixin): Polish verbose logging
@@ -1861,7 +1894,7 @@ int GrammarMatcher::Impl::GetNextUncertainToken(
   }
 }
 
-void BatchGrammarMatcher::Impl::BatchFillNextTokenBitmask(
+std::vector<std::optional<float>> BatchGrammarMatcher::Impl::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
     const std::optional<std::vector<int32_t>>& indices,
@@ -1870,6 +1903,7 @@ void BatchGrammarMatcher::Impl::BatchFillNextTokenBitmask(
   XGRAMMAR_CHECK(!indices.has_value() || indices->size() == matchers->size())
       << "The size of indices (" << (indices.has_value() ? indices->size() : 0)
       << ") should be the same as the size of matchers (" << matchers->size() << ").";
+  std::vector<std::optional<float>> temperatures(matchers->size());
   // Initialize the thread pool if needed. It should be initialized each time,
   // because ThreadPool cannot be reused after Join().
   if (max_threads_ > 1) {
@@ -1883,6 +1917,7 @@ void BatchGrammarMatcher::Impl::BatchFillNextTokenBitmask(
           << "The index " << index << " is out of range [0, " << next_token_bitmask->shape[0]
           << ") for batch_id " << i << ".";
       matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
+      temperatures[i] = matcher->GetTemperature();
     }
   } else {
     auto fill_next_token_mask = [&](int32_t batch_id) {
@@ -1892,12 +1927,14 @@ void BatchGrammarMatcher::Impl::BatchFillNextTokenBitmask(
           << "The index " << index << " is out of range [0, " << next_token_bitmask->shape[0]
           << ") for batch_id " << batch_id << ".";
       matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
+      temperatures[batch_id] = matcher->GetTemperature();
     };
     for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
       thread_pool_->Execute([fill_next_token_mask, i]() { fill_next_token_mask(i); });
     }
     thread_pool_->Join();
   }
+  return temperatures;
 }
 
 std::vector<uint8_t> BatchGrammarMatcher::Impl::BatchAcceptString(
@@ -1945,10 +1982,15 @@ GrammarMatcher::GrammarMatcher(
     const CompiledGrammar& compiled_grammar,
     std::optional<std::vector<int>> override_stop_tokens,
     bool terminate_without_stop_token,
-    int max_rollback_tokens
+    int max_rollback_tokens,
+    std::optional<float> default_temperature
 )
     : pimpl_(std::make_shared<GrammarMatcher::Impl>(
-          compiled_grammar, override_stop_tokens, terminate_without_stop_token, max_rollback_tokens
+          compiled_grammar,
+          override_stop_tokens,
+          terminate_without_stop_token,
+          max_rollback_tokens,
+          default_temperature
       )) {}
 
 bool GrammarMatcher::AcceptToken(int32_t token_id, bool debug_print) {
@@ -1970,7 +2012,8 @@ bool GrammarMatcher::TraverseDraftTree(
     const DLTensor* retrieve_next_sibling,
     const DLTensor* draft_tokens,
     DLTensor* token_bitmask,
-    double time_threshold
+    double time_threshold,
+    DLTensor* temperatures
 ) {
   auto check_cpu = [](const DLTensor* tensor, const char* name) {
     XGRAMMAR_CHECK(
@@ -1996,11 +2039,20 @@ bool GrammarMatcher::TraverseDraftTree(
       token_bitmask->ndim == 2 && token_bitmask->dtype.code == kDLInt &&
       token_bitmask->dtype.bits == 32
   ) << "The token_bitmask tensor must be a 2D int32 tensor";
+  if (temperatures != nullptr) {
+    XGRAMMAR_CHECK(
+        temperatures->ndim == 1 && temperatures->dtype.code == kDLFloat &&
+        temperatures->dtype.bits == 32
+    ) << "The temperatures tensor must be a 1D float32 tensor";
+  }
 
   check_cpu(retrieve_next_token, "retrieve_next_token");
   check_cpu(retrieve_next_sibling, "retrieve_next_sibling");
   check_cpu(draft_tokens, "draft_tokens");
   check_cpu(token_bitmask, "token_bitmask");
+  if (temperatures != nullptr) {
+    check_cpu(temperatures, "temperatures");
+  }
 
   XGRAMMAR_CHECK(retrieve_next_token->shape[0] == retrieve_next_sibling->shape[0])
       << "The retrieve_next_token and retrieve_next_sibling tensors must have the same length";
@@ -2008,6 +2060,15 @@ bool GrammarMatcher::TraverseDraftTree(
       << "The retrieve_next_token and draft_tokens tensors must have the same length";
   XGRAMMAR_CHECK(retrieve_next_token->shape[0] == token_bitmask->shape[0])
       << "The token_bitmask batch size must match the number of nodes in the tree";
+  if (temperatures != nullptr) {
+    XGRAMMAR_CHECK(retrieve_next_token->shape[0] == temperatures->shape[0])
+        << "The temperatures size must match the number of nodes in the tree";
+    std::fill_n(
+        reinterpret_cast<float*>(temperatures->data),
+        temperatures->shape[0],
+        std::numeric_limits<float>::quiet_NaN()
+    );
+  }
   XGRAMMAR_CHECK(retrieve_next_sibling->shape[0] > 0 && retrieve_next_sibling->data != nullptr)
       << "The draft tree must not be empty";
   XGRAMMAR_CHECK(reinterpret_cast<const int64_t*>(retrieve_next_sibling->data)[0] == -1)
@@ -2021,6 +2082,7 @@ bool GrammarMatcher::TraverseDraftTree(
       reinterpret_cast<const int64_t*>(draft_tokens->data),
       *this,
       token_bitmask,
+      temperatures == nullptr ? nullptr : reinterpret_cast<float*>(temperatures->data),
       time_threshold,
       details::Clock::now()
   );
@@ -2047,6 +2109,8 @@ GrammarMatcher GrammarMatcher::Fork() const {
 
 int GrammarMatcher::GetMaxRollbackTokens() const { return pimpl_->GetMaxRollbackTokens(); }
 
+std::optional<float> GrammarMatcher::GetTemperature() const { return pimpl_->GetTemperature(); }
+
 const std::vector<int>& GrammarMatcher::GetStopTokenIds() const {
   return pimpl_->GetStopTokenIds();
 }
@@ -2055,7 +2119,7 @@ std::string GrammarMatcher::_DebugPrintInternalState() const {
   return pimpl_->_DebugPrintInternalState();
 }
 
-void BatchGrammarMatcher::BatchFillNextTokenBitmask(
+std::vector<std::optional<float>> BatchGrammarMatcher::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
     const std::optional<std::vector<int32_t>>& indices,

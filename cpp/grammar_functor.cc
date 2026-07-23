@@ -80,6 +80,7 @@ class SubGrammarAdderImpl : public GrammarMutator {
         builder_->UpdateSuffixStopInfo(new_rule_ids_names[i].first, remapped_info);
       }
       builder_->UpdateLazy(new_rule_ids_names[i].first, rule.is_lazy);
+      builder_->UpdateRuleTemperature(new_rule_ids_names[i].first, rule.temperature);
     }
     return new_rule_ids_names[base_grammar_->GetRootRuleId()].first;
   }
@@ -290,6 +291,7 @@ class StructureNormalizerImpl : public GrammarMutator {
         builder_->UpdateSuffixStopInfo(i, *suffix_stop_info);
       }
       builder_->UpdateLazy(i, rule.is_lazy);
+      builder_->UpdateRuleTemperature(i, rule.temperature);
     }
     return builder_->Get(base_grammar_->GetRootRule().name);
   }
@@ -637,8 +639,10 @@ class RuleInlinerImpl : public GrammarMutator {
     // Inlining a budgeted rule would erase the rule its token budget applies to. Inlining a
     // capture-relevant rule would eliminate its completion events, so its capture or hidden span
     // would never be recorded. Inlining a lazy rule would erase its committed-shortest semantics.
+    // Inlining a temperature rule would erase the rule its sampling temperature applies to.
     if (rule.max_tokens >= 0 || !rule.capture_name.empty() ||
-        base_grammar_->GetSuffixStopInfo(rule_id) != nullptr || rule.is_lazy) {
+        base_grammar_->GetSuffixStopInfo(rule_id) != nullptr || rule.is_lazy ||
+        rule.temperature.has_value()) {
       return false;
     }
     auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
@@ -758,6 +762,7 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
         builder_->UpdateSuffixStopInfo(rule_id_map_[rule_id], remapped_info);
       }
       builder_->UpdateLazy(rule_id_map_[rule_id], rule.is_lazy);
+      builder_->UpdateRuleTemperature(rule_id_map_[rule_id], rule.temperature);
     }
     XGRAMMAR_CHECK(rule_id_map_.count(grammar->GetRootRuleId()) > 0);
     return builder_->Get(rule_id_map_[grammar->GetRootRuleId()]);
@@ -1905,10 +1910,11 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   int32_t grammar_expr_id = builder_->AddRuleRef(rule_id);
   const auto& ref_rule = base_grammar_->GetRule(rule_id);
   const auto& ref_rule_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
-  // Keep the reference to budgeted, suffix/stop, and lazy rules: replacing it with the rule's
-  // content would erase the rule that the runtime semantics apply to.
+  // Keep the reference to budgeted, suffix/stop, lazy, and temperature rules: replacing it with
+  // the rule's content would erase the rule that the runtime semantics apply to.
   if (ref_rule.max_tokens < 0 && base_grammar_->GetSuffixStopInfo(rule_id) == nullptr &&
-      !ref_rule.is_lazy && ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
+      !ref_rule.is_lazy && !ref_rule.temperature.has_value() &&
+      ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
       ref_rule_body.size() == 1) {
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
     if (ref_choice.size() == 1) {

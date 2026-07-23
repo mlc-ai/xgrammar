@@ -348,6 +348,33 @@ grammar = xgr.Grammar.from_lark(
   Each named grammar is compiled once and shared.
 - `@name` references may only appear in rules, not in terminals.
 
+## Sampling Temperature
+
+The `temperature` rule attribute selects the sampling temperature while a terminal-like rule or
+named subgrammar is active:
+
+```python
+grammar = xgr.Grammar.from_lark(
+    """
+    start: "answer:" value
+    value[temperature=0.7]: /[a-z]+/
+    """
+)
+compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+matcher = xgr.GrammarMatcher(compiled, default_temperature=0.2)
+```
+
+`temperature` must be a finite non-negative number. It is supported on rules that can be compiled
+as terminals and on rules whose body is a `%json`, `%lark`, or `@name` subgrammar. An inner
+explicit temperature overrides an inherited outer temperature. When ambiguous parse paths have
+different active temperatures, `matcher.temperature` returns the maximum. If no active rule has a
+temperature, it returns `default_temperature`; if neither is configured, it returns `None`.
+
+`BatchGrammarMatcher.batch_fill_next_token_bitmask` returns one optional temperature per matcher.
+For speculative decoding, pass a one-dimensional CPU `float32` tensor through the
+`temperatures` argument of `GrammarMatcher.traverse_draft_tree`. The tensor receives one value per
+tree node; `NaN` marks a node with no configured temperature or a node that was not visited.
+
 ## Dynamic Tool-Call Dispatch
 
 A common pattern for tool calling lets the model produce free text until a trigger string (such
