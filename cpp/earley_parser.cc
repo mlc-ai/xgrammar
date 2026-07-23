@@ -33,9 +33,17 @@ void EarleyParser::PopLastStates(int32_t cnt) {
   rule_id_to_completable_states_.PopBack(cnt);
   is_completed_.erase(is_completed_.end() - cnt, is_completed_.end());
   scanable_state_history_.PopBack(cnt);
+  if (capture_tracking_) {
+    capture_event_history_.PopBack(cnt);
+  }
 }
 
 void EarleyParser::Complete(const ParserState& state, bool debug_print) {
+  // Record the capture event for captured rules. This is only enabled during definitive
+  // advances; speculative completions (mask computation, lookahead) never record events.
+  if (capture_recording_ && RuleHasCapture(state.rule_id)) {
+    RecordCaptureEvent(state);
+  }
   // Check if a rule is completed.
   if (state.rule_start_pos == ParserState::kNoPrevInputPos) {
     // assert: if a root rule can achieve here, then it must be completed.
@@ -281,6 +289,9 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
 
   // execute Predict and Complete for all states in the queue until empty.
   rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+  if (capture_tracking_) {
+    capture_event_history_.PushBack(std::vector<CaptureEvent>());
+  }
   while (!tmp_process_state_queue_.empty()) {
     const auto state = std::move(tmp_process_state_queue_.front());
     tmp_process_state_queue_.pop();
@@ -311,6 +322,12 @@ EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> in
       break;
     }
   }
+  for (int32_t i = 0; i < grammar_->NumRules(); ++i) {
+    if (!grammar_->GetRule(i).capture_name.empty()) {
+      capture_tracking_ = true;
+      break;
+    }
+  }
   PushStateAndExpand(initial_state.has_value() ? *initial_state : RootInitialState());
 }
 
@@ -332,6 +349,9 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   tmp_states_to_be_added_.clear();
   Enqueue(state);
   rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+  if (capture_tracking_) {
+    capture_event_history_.PushBack(std::vector<CaptureEvent>());
+  }
   while (!tmp_process_state_queue_.empty()) {
     const auto state = tmp_process_state_queue_.front();
     tmp_process_state_queue_.pop();
@@ -352,6 +372,10 @@ void EarleyParser::Reset() {
   scanable_state_history_.PopBack(scanable_state_history_.size());
   is_completed_.clear();
   stop_token_is_accepted_ = false;
+  if (capture_tracking_) {
+    capture_event_history_.PopBack(capture_event_history_.size());
+  }
+  capture_recording_ = false;
   XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
   PushStateAndExpand(RootInitialState());
 }
@@ -378,9 +402,13 @@ void EarleyParser::ExpandNextRuleRefElement(
   }
 
   bool right_recursion_to_root = false;
+  // The right-recursion optimization elides the completion of the parent rule (and, in the
+  // to-root case, corrupts the start position of the child rule), so it must be disabled when
+  // either rule is captured; otherwise their capture events would be lost.
   if (state.element_id != grammar_expr.size() - 1 ||
       sub_grammar_expr->type == GrammarExprType::kRepeat ||
-      (state.rule_start_pos == rule_id_to_completable_states_.size() - 1)) {
+      (state.rule_start_pos == rule_id_to_completable_states_.size() - 1) ||
+      RuleHasCapture(state.rule_id) || RuleHasCapture(ref_rule_id)) {
     // It's not the right recursion, or it's the root rule.
     rule_id_to_completable_states_.PushBackInLatestRow(std::make_pair(ref_rule_id, state));
   } else {
@@ -487,8 +515,10 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
     }
     if (!is_repeat && (fsm.GetFsm().GetFsm().GetEdges(target).size() == 0) &&
         fsm.GetFsm().IsEndState(target) &&
-        state.rule_start_pos != static_cast<int32_t>(rule_id_to_completable_states_.size() - 1)) {
-      // It's a right recursion. We can optimize it.
+        state.rule_start_pos != static_cast<int32_t>(rule_id_to_completable_states_.size() - 1) &&
+        !RuleHasCapture(state.rule_id) && !RuleHasCapture(ref_rule_id)) {
+      // It's a right recursion. We can optimize it. The optimization elides the completion of
+      // the parent rule, so it is disabled when either rule is captured.
       // If it's the right recursion, we need to add the ancestors of the parent state.
       if (state.rule_start_pos == ParserState::kNoPrevInputPos) {
         // In this case, we can mark the new state as the root state to speed up.
@@ -918,6 +948,9 @@ bool EarleyParser::AdvanceAtomicToken(int32_t token_id, bool debug_print) {
     return false;
   }
   rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+  if (capture_tracking_) {
+    capture_event_history_.PushBack(std::vector<CaptureEvent>());
+  }
   while (!tmp_process_state_queue_.empty()) {
     const auto state = std::move(tmp_process_state_queue_.front());
     tmp_process_state_queue_.pop();

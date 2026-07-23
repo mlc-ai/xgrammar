@@ -480,8 +480,12 @@ class GrammarMatcher::Impl : public EarleyParser {
     current_token_index_ = -1;
     budget_enforce_pending_ = false;
     budget_exceeded_warned_ = false;
+    accepted_bytes_.clear();
+    row_byte_end_.assign(1, 0);
     EarleyParser::Reset();
   }
+
+  std::vector<std::pair<std::string, std::string>> GetCaptures(bool deduplicate) const;
 
   int GetMaxRollbackTokens() const { return -1; }
 
@@ -542,6 +546,26 @@ class GrammarMatcher::Impl : public EarleyParser {
     Impl* impl_;
   };
 
+  /*!
+   * \brief RAII guard that enables capture-event recording in the Earley parser for its
+   * lifetime. Used in the definitive accept paths (AcceptToken / AcceptString) only, so that
+   * speculative advances (mask computation, jump-forward search) never record capture events.
+   */
+  class CaptureRecordingGuard {
+   public:
+    explicit CaptureRecordingGuard(Impl* impl) : impl_(impl) {
+      if (impl_->capture_tracking_) {
+        impl_->capture_recording_ = true;
+      }
+    }
+    ~CaptureRecordingGuard() { impl_->capture_recording_ = false; }
+    CaptureRecordingGuard(const CaptureRecordingGuard&) = delete;
+    CaptureRecordingGuard& operator=(const CaptureRecordingGuard&) = delete;
+
+   private:
+    Impl* impl_;
+  };
+
   /*! \brief Fill the bitmask from the current states, optionally excluding the states whose
    * budget deadline has passed. */
   void FillBitmaskForStates(
@@ -566,12 +590,23 @@ class GrammarMatcher::Impl : public EarleyParser {
     auto bitset = DynamicBitset(
         tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
     );
-    for (int i = 0; i < tokenizer_info_.GetVocabSize(); ++i) {
-      if (bitset[i]) {
-        return true;
-      }
+    return bitset.Any();
+  }
+
+  /*! \brief Record that num_rows new input positions were created, each consuming one byte of
+   * bytes in order. Used for the byte-by-byte advance paths. */
+  void AppendPerByteRows(const std::string& bytes) {
+    for (char c : bytes) {
+      accepted_bytes_.push_back(static_cast<uint8_t>(c));
+      row_byte_end_.push_back(static_cast<int64_t>(accepted_bytes_.size()));
     }
-    return false;
+  }
+
+  /*! \brief Record that one new input position was created, consuming all bytes of the token.
+   * Used for the atomic token advance path. */
+  void AppendAtomicRow(const std::string& bytes) {
+    accepted_bytes_.insert(accepted_bytes_.end(), bytes.begin(), bytes.end());
+    row_byte_end_.push_back(static_cast<int64_t>(accepted_bytes_.size()));
   }
 
   CompiledGrammar compiled_grammar_;
@@ -585,6 +620,12 @@ class GrammarMatcher::Impl : public EarleyParser {
   bool budget_enforce_pending_ = false;
   /*! \brief Whether the one-time budget-exceeded warning has been reported. */
   bool budget_exceeded_warned_ = false;
+
+  /*! \brief The bytes accepted so far. Only maintained when the grammar has captured rules. */
+  std::vector<uint8_t> accepted_bytes_;
+  /*! \brief row_byte_end_[i] is the number of accepted bytes after input position i. Aligned
+   * with the parser's state history. Only maintained when the grammar has captured rules. */
+  std::vector<int64_t> row_byte_end_{0};
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
   DynamicBitset tmp_accepted_bitset_;
@@ -724,15 +765,21 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
 
   const auto& token = tokenizer_info_.GetDecodedVocab()[token_id];
 
+  // Capture events are only recorded on the definitive accept path.
+  CaptureRecordingGuard capture_guard(this);
+  const int32_t size_before_token = rule_id_to_completable_states_.size();
+
   // Phase 1: Try atomic token path (from current state, before byte path)
   std::vector<ParserState> atomic_states;
   std::vector<std::pair<int32_t, ParserState>> atomic_completable;
+  std::vector<CaptureEvent> atomic_capture_row;
   bool atomic_completed = false;
   bool atomic_success = AdvanceAtomicToken(token_id, debug_print);
   if (atomic_success) {
     atomic_states = GetLatestScanableStates();
     auto row = rule_id_to_completable_states_.Back();
     atomic_completable.assign(row.data, row.data + row.data_len);
+    atomic_capture_row = CopyLastCaptureRow();
     atomic_completed = is_completed_.back();
     PopLastStates(1);
   }
@@ -762,8 +809,14 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     PopLastStates(pos);
     AdvanceAtomicToken(token_id, debug_print);
     token_length_history.push_back(1);
+    if (IsCaptureTrackingEnabled()) {
+      AppendAtomicRow(token);
+    }
   } else if (byte_path_success && !atomic_success) {
     token_length_history.push_back(token.size());
+    if (IsCaptureTrackingEnabled()) {
+      AppendPerByteRows(token);
+    }
   } else {
     // Both paths succeeded — merge atomic token states into byte path
     if (token.empty()) {
@@ -771,7 +824,11 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       scanable_state_history_.PushBack(atomic_states);
       rule_id_to_completable_states_.PushBack(atomic_completable);
       is_completed_.push_back(atomic_completed);
+      PushCaptureRow(atomic_capture_row);
       token_length_history.push_back(1);
+      if (IsCaptureTrackingEnabled()) {
+        AppendAtomicRow(token);
+      }
     } else {
       auto byte_states = GetLatestScanableStates();
       std::vector<ParserState> merged = byte_states;
@@ -788,6 +845,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       std::vector<std::pair<int32_t, ParserState>> merged_completable(
           byte_row.data, byte_row.data + byte_row.data_len
       );
+      std::vector<CaptureEvent> merged_capture_row = CopyLastCaptureRow();
       bool byte_completed = is_completed_.back();
       PopLastStates(1);
 
@@ -799,10 +857,32 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
         }
       }
 
+      for (auto event : atomic_capture_row) {
+        // In the atomic path, the after-token position was size_before_token; in the byte path
+        // it is the row being re-pushed. Remap events that started at the after-token position
+        // (empty spans) so that they stay empty in the byte-path numbering.
+        if (event.start_pos == size_before_token) {
+          event.start_pos = rule_id_to_completable_states_.size();
+        }
+        if (std::find_if(
+                merged_capture_row.begin(),
+                merged_capture_row.end(),
+                [&](const CaptureEvent& e) {
+                  return e.rule_id == event.rule_id && e.start_pos == event.start_pos;
+                }
+            ) == merged_capture_row.end()) {
+          merged_capture_row.push_back(event);
+        }
+      }
+
       scanable_state_history_.PushBack(merged);
       rule_id_to_completable_states_.PushBack(merged_completable);
       is_completed_.push_back(byte_completed || atomic_completed);
+      PushCaptureRow(merged_capture_row);
       token_length_history.push_back(token.size());
+      if (IsCaptureTrackingEnabled()) {
+        AppendPerByteRows(token);
+      }
     }
   }
 
@@ -827,6 +907,9 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
 
   current_token_index_ = static_cast<int32_t>(token_length_history.size());
 
+  // Capture events are only recorded on the definitive accept path.
+  CaptureRecordingGuard capture_guard(this);
+
   int accepted_cnt = 0;
   for (auto char_value : input_str) {
     if (!Advance(char_value, debug_print)) {
@@ -844,6 +927,9 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
     ++accepted_cnt;
   }
   token_length_history.push_back(input_str.size());
+  if (IsCaptureTrackingEnabled()) {
+    AppendPerByteRows(input_str);
+  }
 
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str) << "\" is accepted.";
@@ -893,25 +979,29 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   if (has_budget_rules_) {
     const auto& row = scanable_state_history_[scanable_state_history_.size() - 1];
     bool any_expired = false;
+    bool any_alive = false;
     for (const auto& state : row) {
       if (IsExpiredState(state)) {
         any_expired = true;
-        break;
+      } else {
+        any_alive = true;
       }
     }
-    if (any_expired) {
-      // Try to force the expired derivations to end here: mask from the other states only. If
-      // no token remains, ending is impossible at this position; relax the budget for one step
-      // and report it on the next accept.
+    if (any_expired && (any_alive || IsCompleted())) {
+      // The expired derivations can be forced to end here: some other derivation can make
+      // progress (or the grammar can terminate), so mask from the non-expired states only.
+      // Only when the vocabulary cannot encode any of the live states' next bytes does the
+      // mask come out empty; fall through to relaxing then.
       FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/true, debug_print);
       if (BitmaskHasAnyToken(bitmask_data_ptr) || IsCompleted()) {
         budget_enforce_pending_ = true;
         return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
       }
-      budget_enforce_pending_ = false;
-    } else {
-      budget_enforce_pending_ = false;
     }
+    // No enforcement at this position: either no budget has expired, or the expired
+    // derivations cannot end here — relax the budget for one step and report it on the next
+    // accept.
+    budget_enforce_pending_ = false;
   }
   FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/false, debug_print);
   return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
@@ -1144,9 +1234,75 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
     int steps = token_length_history.back();
     PopLastStates(steps);
     token_length_history.pop_back();
+    if (IsCaptureTrackingEnabled() && steps > 0) {
+      row_byte_end_.resize(row_byte_end_.size() - steps);
+      accepted_bytes_.resize(row_byte_end_.back());
+    }
     --num_tokens;
   }
   budget_enforce_pending_ = false;
+}
+
+std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptures(bool deduplicate
+) const {
+  std::vector<std::pair<std::string, std::string>> result;
+  if (!IsCaptureTrackingEnabled()) {
+    return result;
+  }
+  XGRAMMAR_DCHECK(capture_event_history_.size() == static_cast<int32_t>(row_byte_end_.size()))
+      << "The capture history is not aligned with the byte history: "
+      << capture_event_history_.size() << " vs " << row_byte_end_.size();
+
+  // Flatten the event history. Events are ordered by completion position, and by completion
+  // order within a position.
+  struct FlatEvent {
+    int32_t rule_id;
+    int32_t start_row;
+    int32_t end_row;
+  };
+  std::vector<FlatEvent> events;
+  for (int32_t row = 0; row < capture_event_history_.size(); ++row) {
+    for (const auto& event : capture_event_history_[row]) {
+      int32_t start_row = event.start_pos == ParserState::kNoPrevInputPos ? 0 : event.start_pos;
+      XGRAMMAR_DCHECK(start_row <= row);
+      events.push_back({event.rule_id, start_row, row});
+    }
+  }
+
+  // The Earley parser explores all parse hypotheses in parallel, so one occurrence of a rule
+  // (identified by its rule id and start position) may complete at several candidate end
+  // positions before the following input decides the real one. When deduplicate is true, we
+  // keep only the last (longest) completion of each occurrence.
+  std::vector<bool> keep(events.size(), true);
+  if (deduplicate) {
+    std::unordered_map<int64_t, size_t> last_index;
+    for (size_t i = 0; i < events.size(); ++i) {
+      int64_t key = (static_cast<int64_t>(events[i].rule_id) << 32) |
+                    static_cast<uint32_t>(events[i].start_row);
+      auto it = last_index.find(key);
+      if (it != last_index.end()) {
+        keep[it->second] = false;
+        it->second = i;
+      } else {
+        last_index[key] = i;
+      }
+    }
+  }
+
+  for (size_t i = 0; i < events.size(); ++i) {
+    if (!keep[i]) {
+      continue;
+    }
+    const auto& event = events[i];
+    result.emplace_back(
+        grammar_->GetRule(event.rule_id).capture_name,
+        std::string(
+            accepted_bytes_.begin() + row_byte_end_[event.start_row],
+            accepted_bytes_.begin() + row_byte_end_[event.end_row]
+        )
+    );
+  }
+  return result;
 }
 
 void GrammarMatcher::Impl::SetTokenBitmask(
@@ -1399,6 +1555,11 @@ bool GrammarMatcher::TraverseDraftTree(
 std::string GrammarMatcher::FindJumpForwardString() { return pimpl_->FindJumpForwardString(); }
 
 void GrammarMatcher::Rollback(int num_tokens) { pimpl_->Rollback(num_tokens); }
+
+std::vector<std::pair<std::string, std::string>> GrammarMatcher::GetCaptures(bool deduplicate
+) const {
+  return pimpl_->GetCaptures(deduplicate);
+}
 
 bool GrammarMatcher::IsTerminated() const { return pimpl_->IsTerminated(); }
 
