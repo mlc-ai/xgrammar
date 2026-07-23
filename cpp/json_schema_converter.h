@@ -225,6 +225,9 @@ class IndentManager {
   std::string EndSeparator();
   std::string EmptySeparator();
   std::string NextSeparator(bool is_end = false);
+  int64_t GetCacheContext() const {
+    return any_whitespace_ || !enable_newline_ ? 0 : total_indent_;
+  }
 
  private:
   bool any_whitespace_;

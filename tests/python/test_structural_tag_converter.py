@@ -4236,5 +4236,22 @@ def test_structural_tag_max_whitespace_cnt_compile_cache():
     assert not _is_grammar_accept_string(g_bounded, _ws_instance(5))
 
 
+def test_structural_tag_reuses_identical_format_rules():
+    structural_tag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "sequence",
+            "elements": [
+                {"type": "const_string", "value": "same"},
+                {"type": "const_string", "value": "same"},
+            ],
+        },
+    }
+
+    grammar_text = str(xgr.Grammar.from_structural_tag(structural_tag))
+    assert "const_string ::=" in grammar_text
+    assert "const_string_1 ::=" not in grammar_text
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

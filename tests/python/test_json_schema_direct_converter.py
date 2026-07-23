@@ -144,3 +144,70 @@ def test_direct_converter_recursive_reference(text: str, expected: bool):
 )
 def test_direct_converter_builtin_string_format(text: str, expected: bool):
     assert _accepts({"type": "string", "format": "email"}, text) is expected
+
+
+def test_direct_converter_reuses_identical_schema_rules():
+    repeated_schema = {"type": "string", "minLength": 2, "maxLength": 8}
+    schema = {
+        "type": "object",
+        "properties": {"first": repeated_schema, "second": repeated_schema},
+        "required": ["first", "second"],
+        "additionalProperties": False,
+    }
+
+    grammar_text = str(xgr.Grammar.from_json_schema(json.dumps(schema)))
+    assert "root_prop_0 ::=" in grammar_text
+    assert "root_prop_1 ::=" not in grammar_text
+
+
+def test_direct_converter_reuses_cached_reference_targets():
+    repeated_schema = {"type": "string", "minLength": 2, "maxLength": 8}
+    schema = {
+        "$defs": {"shared": repeated_schema},
+        "type": "object",
+        "properties": {"inline": repeated_schema, "referenced": {"$ref": "#/$defs/shared"}},
+        "required": ["inline", "referenced"],
+        "additionalProperties": False,
+    }
+
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema))
+    assert _is_grammar_accept_string(grammar, '{"inline":"ab","referenced":"cd"}')
+    assert "defs_shared ::=" not in str(grammar)
+
+
+def test_direct_converter_keeps_indented_rules_at_different_depths_separate():
+    repeated_schema = {
+        "type": "object",
+        "properties": {"value": {"type": "string", "minLength": 2}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    schema = {
+        "type": "object",
+        "properties": {
+            "first": repeated_schema,
+            "wrapper": {
+                "type": "object",
+                "properties": {"second": repeated_schema},
+                "required": ["second"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["first", "wrapper"],
+        "additionalProperties": False,
+    }
+    text = (
+        "{\n"
+        '  "first": {\n'
+        '    "value": "ab"\n'
+        "  },\n"
+        '  "wrapper": {\n'
+        '    "second": {\n'
+        '      "value": "cd"\n'
+        "    }\n"
+        "  }\n"
+        "}"
+    )
+
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema), any_whitespace=False, indent=2)
+    assert _is_grammar_accept_string(grammar, text)
