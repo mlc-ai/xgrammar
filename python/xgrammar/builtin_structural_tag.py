@@ -2081,6 +2081,117 @@ def get_deepseek_v4_structural_tag(
     return StructuralTag(format=sequence_format)
 
 
+@register_model_structural_tag("cohere")
+def get_cohere_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: bool = True,
+    any_order: bool = False,
+    exclude_special_tokens: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get Cohere style structural tag format.
+
+    Corresponding model key: ``"cohere"``.
+
+    Supported models:
+
+    - Cohere Command models using XML tool calls.
+    """
+    TOOL_CALL_BEGIN_PREFIX = "<cofl:tool_call id="
+    TOOL_CALL_NAME_PREFIX = " name="
+    TOOL_CALL_BEGIN_SUFFIX = ">"
+    TOOL_CALL_END = "</cofl:tool_call>"
+    TOOL_CALLS_PREFIX = ""
+    TOOL_CALLS_BEGIN = "<cofl:tool_calls>\n"
+    TOOL_CALLS_END = "\n</cofl:tool_calls>"
+    TOOL_CALLS_TRIGGER = "<cofl:tool_calls>"
+    THINK_TAG_END = "<|END_THINKING|>"
+    THINK_EXCLUDE_TOKENS = ["<|START_THINKING|>", "<|END_THINKING|>"]
+    XML_STYLE = "cohere_xml"
+
+    def make_tool_call_tag(function: FunctionDefinition) -> TagFormat:
+        return TagFormat(
+            begin=TOOL_CALL_BEGIN_PREFIX,
+            content=SequenceFormat(
+                elements=[
+                    RegexFormat(pattern=r"\d+"),
+                    ConstStringFormat(
+                        value=(
+                            TOOL_CALL_NAME_PREFIX + function.name + TOOL_CALL_BEGIN_SUFFIX
+                        )
+                    ),
+                    JSONSchemaFormat(
+                        json_schema=_get_function_parameters(function),
+                        style=XML_STYLE,
+                        any_order=any_order,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
+                ]
+            ),
+            end=TOOL_CALL_END,
+        )
+
+    tools = tools or []
+    builtin_tools = builtin_tools or []
+    if tool_choice == "auto":
+        tags = [make_tool_call_tag(tool.function) for tool in tools]
+
+        if len(tags) > 0:
+            tool_calls = TagFormat(
+                begin=TOOL_CALLS_BEGIN,
+                content=TagsWithSeparatorFormat(
+                    tags=tags,
+                    separator="\n",
+                    at_least_one=True,
+                ),
+                end=TOOL_CALLS_END,
+            )
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[TOOL_CALLS_TRIGGER],
+                tags=[tool_calls],
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+            )
+        else:
+            suffix_tag = AnyTextFormat(
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
+            )
+
+    elif tool_choice == "forced":
+        if not tools:
+            raise ValueError("Forced tool choice must resolve to exactly one tool.")
+        suffix_tag = SequenceFormat(
+            elements=[
+                ConstStringFormat(value=TOOL_CALLS_PREFIX + TOOL_CALLS_BEGIN),
+                make_tool_call_tag(tools[0].function),
+                ConstStringFormat(value=TOOL_CALLS_END),
+            ]
+        )
+
+    elif tool_choice == "required":
+        tags = [make_tool_call_tag(tool.function) for tool in tools]
+        assert len(tags) > 0
+        suffix_tag = SequenceFormat(
+            elements=[
+                ConstStringFormat(value=TOOL_CALLS_PREFIX + TOOL_CALLS_BEGIN),
+                TagsWithSeparatorFormat(
+                    tags=tags,
+                    separator="\n",
+                    at_least_one=True,
+                ),
+                ConstStringFormat(value=TOOL_CALLS_END),
+            ]
+        )
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
+    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+
+
 # Backward-compatible alias
 get_builtin_structural_tag = get_model_structural_tag
 """Alias for :func:`get_model_structural_tag`. Deprecated."""
