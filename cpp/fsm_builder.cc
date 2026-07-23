@@ -180,6 +180,9 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
     return ResultErr("Invalid repeat format4");
   }
   upper_bound = std::stoi(num_str);
+  if (upper_bound < lower_bound) {
+    return ResultErr("Invalid repeat: the lower bound is larger than the upper bound");
+  }
   while (static_cast<size_t>(start) < regex.size() && regex[start] == ' ') {
     start++;
   }
@@ -255,6 +258,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Symbol& state) const {
     }
     default: {
       XGRAMMAR_LOG(FATAL) << "Unknown regex symbol: " << static_cast<int>(state.symbol);
+      XGRAMMAR_UNREACHABLE();
     }
   }
 }
@@ -278,6 +282,13 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   if (state.states.size() != 1) {
     return ResultErr("Invalid repeat");
   }
+  bool has_upper_bound = state.upper_bound != RegexIR::kRepeatNoUpperBound;
+  if (has_upper_bound && state.upper_bound == 0) {
+    // {0} / {0,0}: matches exactly the empty string. The general path below cannot express
+    // this: it starts from one copy of the child whose end states stay accepting.
+    FSM empty_fsm(1);
+    return ResultOk(FSMWithStartEnd(empty_fsm, 0, {0}, false));
+  }
   Result<FSMWithStartEnd> child_result =
       std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, state.states[0]);
   if (child_result.IsErr()) {
@@ -287,8 +298,8 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   FSMWithStartEnd result = child.Copy();
   std::unordered_set<int> new_ends;
 
-  if (state.lower_bound == 1) {
-    // Insert the first end state.
+  if (state.lower_bound <= 1 && (!has_upper_bound || state.upper_bound >= 1)) {
+    // A single copy is accepting when the lower bound is at most 1.
     for (int end = 0; end < result.NumStates(); ++end) {
       if (result.IsEndState(end)) {
         new_ends.insert(end);
@@ -296,8 +307,18 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
     }
   }
 
+  // Add a fresh accepting start state so that zero repetitions match. A fresh state is
+  // required: making the original start accepting would also accept strings that merely
+  // loop back to the start inside the first copy.
+  auto allow_zero_repetitions = [](FSMWithStartEnd* fsm) {
+    int new_start = fsm->AddState();
+    fsm->GetFsm().AddEpsilonEdge(new_start, fsm->GetStart());
+    fsm->SetStartState(new_start);
+    fsm->AddEndState(new_start);
+  };
+
   // Handling {n,}
-  if (state.upper_bound == RegexIR::kRepeatNoUpperBound) {
+  if (!has_upper_bound) {
     for (int i = 2; i < state.lower_bound; i++) {
       result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
     }
@@ -316,6 +337,12 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
         result.GetFsm().AddEpsilonEdge(end, end_state_of_lower_bound_fsm);
       }
     }
+    for (const auto& end : new_ends) {
+      result.AddEndState(end);
+    }
+    if (state.lower_bound == 0) {
+      allow_zero_repetitions(&result);
+    }
     return ResultOk(std::move(result));
   }
   // Handling {n, m} or {n}
@@ -331,6 +358,9 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   }
   for (const auto& end : new_ends) {
     result.AddEndState(end);
+  }
+  if (state.lower_bound == 0) {
+    allow_zero_repetitions(&result);
   }
   return ResultOk(std::move(result));
 }
@@ -773,6 +803,39 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
     ir.states.push_back(std::move(union_state));
   }
   return ir.Build();
+}
+
+Result<FSMWithStartEnd> RegexFSMBuilder::BuildWithForbiddenChars(
+    const std::string& regex, const std::bitset<256>& forbidden_chars
+) {
+  auto build_result = Build(regex);
+  if (build_result.IsErr() || forbidden_chars.none()) {
+    return build_result;
+  }
+  auto fsm_wse = std::move(build_result).Unwrap();
+  const auto& fsm = fsm_wse.GetFsm();
+  FSM new_fsm(fsm_wse.NumStates());
+  for (int state = 0; state < fsm_wse.NumStates(); ++state) {
+    for (const auto& edge : fsm.GetEdges(state)) {
+      if (!edge.IsCharRange()) {
+        new_fsm.AddEdge(state, edge.target, edge.min, edge.max);
+        continue;
+      }
+      // Split the character range into the maximal sub-ranges of allowed characters.
+      int range_start = -1;
+      for (int c = edge.min; c <= edge.max + 1; ++c) {
+        if (c <= edge.max && !forbidden_chars[c]) {
+          if (range_start == -1) {
+            range_start = c;
+          }
+        } else if (range_start != -1) {
+          new_fsm.AddEdge(state, edge.target, range_start, c - 1);
+          range_start = -1;
+        }
+      }
+    }
+  }
+  return ResultOk(FSMWithStartEnd(new_fsm, fsm_wse.GetStart(), fsm_wse.GetEnds()));
 }
 
 class TrieFSMBuilderImpl {

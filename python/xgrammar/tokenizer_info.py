@@ -3,7 +3,7 @@
 import json
 import warnings
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, FrozenSet, List, Optional, Union
 
 try:
     import sentencepiece
@@ -49,6 +49,27 @@ class VocabType(Enum):
     This kind of tokenizer includes meta-llama/Meta-Llama-3-8B-Instruct,
     meta-llama/Meta-Llama-3.1-8B-Instruct, etc.
     """
+
+
+def _build_byte_level_charset() -> FrozenSet[str]:
+    """The 256 characters used by the byte-to-unicode conversion of byte-level BPE tokenizers.
+    See VocabType.BYTE_LEVEL for the conversion reference."""
+    kept_bytes = (
+        list(range(ord("!"), ord("~") + 1))
+        + list(range(0xA1, 0xAC + 1))
+        + list(range(0xAE, 0xFF + 1))
+    )
+    chars = [chr(byte) for byte in kept_bytes]
+    kept_bytes_set = set(kept_bytes)
+    num_shifted = 0
+    for byte in range(256):
+        if byte not in kept_bytes_set:
+            chars.append(chr(256 + num_shifted))
+            num_shifted += 1
+    return frozenset(chars)
+
+
+_BYTE_LEVEL_CHARSET = _build_byte_level_charset()
 
 
 class TokenizerInfo(XGRObject):
@@ -146,6 +167,52 @@ class TokenizerInfo(XGRObject):
         token = new_tokens[0]
         # the tokenizer has a BPE-like whitespace conversion
         return token == "Ġ"
+
+    @staticmethod
+    def _detect_vocab_type_from_vocab(vocab_dict: Dict[str, int]) -> Optional[VocabType]:
+        """Detect the vocabulary type from the vocabulary itself. Returns None when the
+        vocabulary clearly matches neither byte encoding.
+
+        A byte-fallback vocabulary contains the 256 byte pieces "<0x00>".."<0xFF>". A byte-level
+        vocabulary spells every token with the 256-character byte-to-unicode alphabet and
+        contains most of that alphabet as single-character tokens. Both are properties of the
+        vocabulary itself, so they stay valid when the serialized backend tokenizer does not
+        describe the vocabulary faithfully.
+        """
+        num_byte_pieces = sum(f"<0x{byte:02X}>" in vocab_dict for byte in range(256))
+        if num_byte_pieces >= 128:
+            return VocabType.BYTE_FALLBACK
+
+        num_single_chars = sum(char in vocab_dict for char in _BYTE_LEVEL_CHARSET)
+        if num_single_chars < 128:
+            return None
+
+        # Added tokens (e.g. chat-template markers) may contain characters outside the
+        # alphabet, so tolerate a small fraction of such tokens.
+        num_charset_tokens = sum(
+            all(char in _BYTE_LEVEL_CHARSET for char in token) for token in vocab_dict
+        )
+        if num_charset_tokens >= 0.99 * len(vocab_dict):
+            return VocabType.BYTE_LEVEL
+
+        return None
+
+    @staticmethod
+    def _detect_add_prefix_space_by_encoding(
+        tokenizer: PreTrainedTokenizerBase, vocab_type: VocabType
+    ) -> bool:
+        """Detect whether the tokenizer prepends a space by encoding a one-character text and
+        inspecting the first produced token. This reflects the tokenizer's actual runtime
+        behavior, which is what grammar matching must align with."""
+        try:
+            token_ids = tokenizer.encode("a", add_special_tokens=False)
+            tokens = tokenizer.convert_ids_to_tokens(token_ids)
+        except (AttributeError, TypeError, ValueError):
+            return False
+        if not tokens or not tokens[0]:
+            return False
+        prefix = "▁" if vocab_type == VocabType.BYTE_FALLBACK else "Ġ"
+        return tokens[0].startswith(prefix)
 
     @staticmethod
     def _is_sentencepiece_tokenizer(tokenizer: PreTrainedTokenizerBase) -> bool:
@@ -265,6 +332,25 @@ class TokenizerInfo(XGRObject):
                         "It will be automatically detected."
                     )
             metadata = TokenizerInfo._detect_metadata_from_hf(backend_str)
+
+            # The serialized backend tokenizer may not describe the vocabulary faithfully:
+            # transformers v5 sometimes reconstructs a tokenizer from the SentencePiece model
+            # file, dropping or replacing the decoder that the detection above relies on. The
+            # vocabulary is decisive evidence for its own encoding, so when the two disagree,
+            # trust the vocabulary and re-derive add_prefix_space from the tokenizer's observed
+            # encoding behavior.
+            vocab_type_from_vocab = TokenizerInfo._detect_vocab_type_from_vocab(vocab_dict)
+            if (
+                vocab_type_from_vocab is not None
+                and vocab_type_from_vocab != metadata["vocab_type"]
+            ):
+                metadata = {
+                    "vocab_type": vocab_type_from_vocab,
+                    "add_prefix_space": TokenizerInfo._detect_add_prefix_space_by_encoding(
+                        tokenizer, vocab_type_from_vocab
+                    ),
+                }
+
             return TokenizerInfo(
                 encoded_vocab,
                 vocab_type=metadata["vocab_type"],

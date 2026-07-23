@@ -3,7 +3,6 @@ import os
 import sys
 from datetime import datetime
 
-import tlcpack_sphinx_addon
 import tomli
 
 # -- General configuration ------------------------------------------------
@@ -62,7 +61,7 @@ myst_enable_extensions = [
     "substitution",
 ]
 
-myst_heading_anchors = 3
+myst_heading_anchors = 5
 myst_ref_domains = ["std", "py"]
 myst_all_links_external = False
 
@@ -89,9 +88,24 @@ autodoc_pydantic_settings_show_json = False
 
 # -- Other Options --------------------------------------------------------
 
-templates_path = []
+templates_path = ["_templates"]
 
-redirects = {}
+# Redirects for pages moved in the docs restructure. Keys are old docnames;
+# values are the new locations relative to the old page.
+redirects = {
+    "tutorials/constrained_decoding": "../start/constrained_decoding.html",
+    "tutorials/workflow_of_xgrammar": "../start/workflow_of_xgrammar.html",
+    "tutorials/advanced_topics": "../start/workflow_of_xgrammar.html",
+    "tutorials/engine_integration": "../using_xgrammar/engine_integration.html",
+    "tutorials/json_generation": "../defining_structures/json_generation.html",
+    "tutorials/ebnf_guided_generation": "../defining_structures/ebnf_grammar.html",
+    "xgrammar_features/ebnf_grammar": "../defining_structures/ebnf_grammar.html",
+    "xgrammar_features/runtime_safeguards": "../using_xgrammar/runtime_safeguards.html",
+    "xgrammar_features/serialization": "../using_xgrammar/serialization.html",
+    "xgrammar_features/lark_grammar": "../defining_structures/lark_grammar.html",
+    "xgrammar_features/javascript_api": "../using_xgrammar/javascript_api.html",
+    "structural_tag/structural_tag_api": "structural_tag.html",
+}
 
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 
@@ -99,9 +113,7 @@ language = "en"
 
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "README.md"]
 
-# The name of the Pygments (syntax highlighting) style to use.
-pygments_style = "sphinx"
-suppress_warnings = ["misc.highlighting_failure"]
+suppress_warnings = ["misc.highlighting_failure", "autodoc.mocked_object"]
 
 # A list of ignored prefixes for module index sorting.
 # If true, `todo` and `todoList` produce output, else they produce nothing.
@@ -109,50 +121,16 @@ todo_include_todos = False
 
 # -- Options for HTML output ----------------------------------------------
 
-# The theme is set by the make target
-import sphinx_rtd_theme
+html_theme = "furo"
 
-html_theme = "sphinx_rtd_theme"
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+html_title = f"XGrammar {__version__}"
 
 html_static_path = ["_static"]
 
-# Add custom CSS files to fix text selection issues
-html_css_files = ["css/fix_text_selection.css"]
-
-footer_copyright = "© 2024 XGrammar"
-footer_note = " "
-
-# html_logo = "_static/img/logo.png"
-# html_theme_options = {"logo_only": True}
-
-header_links = [
-    ("Home", "https://xgrammar.mlc.ai/"),
-    ("Docs", "https://xgrammar.mlc.ai/docs/"),
-    ("Github", "https://github.com/mlc-ai/xgrammar"),
-    ("Blog", "https://blog.mlc.ai/"),
-]
-
-html_context = {
-    "footer_copyright": footer_copyright,
-    "footer_note": footer_note,
-    "header_links": header_links,
-    "display_github": True,
-    "github_user": "mlc-ai",
-    "github_repo": "xgrammar",
-    "github_version": "main/docs/",
-    "theme_vcs_pageview_mode": "edit",
-    # Set the logo in left sidebar
-    "logo": "img/logo.png",
-    "theme_logo_only": True,
-    # "header_logo": "_static/img/logo.png",
-    # "header_logo_link": "",
-    # "version_selecter": "",
+html_theme_options = {
+    "light_logo": "img/logo.png",
+    "dark_logo": "img/logo_dark.svg",
+    "source_repository": "https://github.com/mlc-ai/xgrammar",
+    "source_branch": "main",
+    "source_directory": "docs/",
 }
-
-# add additional overrides
-templates_path += [tlcpack_sphinx_addon.get_templates_path()]
-html_static_path += [tlcpack_sphinx_addon.get_static_path()]
-
-
-# Some scripts to override a certain field in the documentation

@@ -166,7 +166,7 @@ Matches content that conforms to a JSON Schema.
 - `"glm_xml"`: GLM-style XML parameter format, such as `<arg_key>name</arg_key><arg_value>value</arg_value>`
 - `"cohere_xml"`: Cohere-style XML parameters, such as `<cofl:tool_param name=name>value</cofl:tool_param>`
 
-`any_order` relaxes object property ordering (see [below](#property-ordering-with-any_order)). It
+`any_order` relaxes object property ordering (see [below](#property-ordering-with-any-order)). It
 works with every `style`.
 
 ```json

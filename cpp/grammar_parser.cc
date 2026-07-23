@@ -493,6 +493,7 @@ class EBNFParser {
   int32_t ParseTokenSet();
   int32_t ParseExcludeToken();
   int32_t ParseTokenTagDispatch();
+  int32_t ParseRegexMacro();
 
   // Helper functions
 
@@ -544,6 +545,7 @@ const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>>
         {"Token", [](EBNFParser* parser) { return parser->ParseTokenSet(); }},
         {"ExcludeToken", [](EBNFParser* parser) { return parser->ParseExcludeToken(); }},
         {"TokenTagDispatch", [](EBNFParser* parser) { return parser->ParseTokenTagDispatch(); }},
+        {"Regex", [](EBNFParser* parser) { return parser->ParseRegexMacro(); }},
 };
 
 const EBNFParser::Token& EBNFParser::Peek(int delta) const { return *(current_token_ + delta); }
@@ -1008,6 +1010,36 @@ int32_t EBNFParser::ParseTagDispatch() {
   }
 
   return builder_.AddTagDispatch(tag_dispatch);
+}
+
+int32_t EBNFParser::ParseRegexMacro() {
+  Consume();  // Consume Regex operator
+  auto start = current_token_;
+  auto args = ParseMacroArguments();
+  auto delta_element = start - current_token_;  // Used to report parse errors
+
+  if (args.arguments.size() != 1) {
+    ReportParseError("Regex expects exactly one string argument", delta_element);
+  }
+  auto pattern_node = std::get_if<MacroIR::StringNode>(args.arguments[0].get());
+  if (pattern_node == nullptr) {
+    ReportParseError("Regex pattern must be a string literal", delta_element);
+  }
+
+  bool json_string = false;
+  for (const auto& [name, _] : args.named_arguments) {
+    if (name != "json_string") {
+      ReportParseError("Regex does not support the named argument " + name, delta_element);
+    }
+  }
+  if (auto it = args.named_arguments.find("json_string"); it != args.named_arguments.end()) {
+    auto bool_node = std::get_if<MacroIR::BooleanNode>(it->second.get());
+    if (bool_node == nullptr) {
+      ReportParseError("json_string must be a boolean", delta_element);
+    }
+    json_string = bool_node->value;
+  }
+  return builder_.AddRegex(pattern_node->value, json_string);
 }
 
 int32_t EBNFParser::ParseTokenSet() {

@@ -34,7 +34,8 @@ from transformers import AutoTokenizer, AutoConfig
 all its vocabulary. There are several ways of instantiating it, and the most convenient way
 is using an `AutoTokenizer`. Note that for some models, `AutoConfig.vocab_size` can be larger
 than `AutoTokenizer.vocab_size` due to paddings, with the former being the shape of the model's
-logits. To be safe, always pass in the former when instantiating `xgr.TokenizerInfo`.
+logits. To be safe, always pass in the former when instantiating `xgr.TokenizerInfo`. See
+[Workflow of XGrammar](../start/workflow_of_xgrammar.md) for details.
 
 ```python
 # Get tokenizer info
@@ -63,7 +64,8 @@ compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
 
 Then, using the `xgr.GrammarCompiler`, we can compile a grammar, with the result being an
 `xgr.CompiledGrammar`. Here we use a built-in JSON grammar. For other grammars, see
-[JSON Generation](json_generation.md) and [EBNF-Guided Generation](ebnf_guided_generation.md).
+[JSON Generation](../defining_structures/json_generation.md) and
+[EBNF Grammar](../defining_structures/ebnf_grammar.md).
 Every thing we have seen up to now are per-model (rather than per-generation).
 
 ```python
@@ -226,3 +228,37 @@ for i in range(batch_size):
     # Reset to be ready for the next generation
     matchers[i].reset()
 ```
+
+## Generate Token Masks in a Batch
+
+XGrammar provides a new class [`xgr.BatchGrammarMatcher`](xgrammar.BatchGrammarMatcher) for users to generate token masks in a batch.
+
+```python
+batch_grammar_matcher = xgr.BatchGrammarMatcher(max_threads=8)
+```
+
+`BatchGrammarMatcher` needs a parameter `max_threads` to initialize. It represents the maximum threads in `batch_fill_next_token_bitmask`. If not set, it will use std::thread::hardware_concurrency() / 2 as the default value.
+
+`BatchGrammarMatcher` has three methods: `batch_fill_next_token_bitmask`, `batch_accept_token`, and `batch_accept_string` to handle the mask generation tasks. Here is an example to use `batch_fill_next_token_bitmask`:
+
+```python
+matchers = [grammar_matcher_1, grammar_matcher_2, grammar_matcher_3, ...]
+batch_size = len(matchers)
+token_bitmask = xgr.allocate_token_bitmask(batch_size, tokenizer_info.vocab_size)
+batch_grammar_matcher = xgr.BatchGrammarMatcher(max_threads=8)
+batch_grammar_matcher.batch_fill_next_token_bitmask(matchers, token_bitmask)
+```
+
+Each matcher will store its token mask in the corresponding tensor. For `batch_accept_token` and `batch_accept_string`, each matcher will try to accept the corresponding token_id/str.
+
+```python
+    inputs = [token_id_1, token_id_2, token_id_3, ...]
+    results = xgr.BatchGrammarMatcher.batch_accept_token(matchers, inputs) # List[Bool]
+```
+
+```python
+    inputs = [str_1, str_2, str_3, ...]
+    results = xgr.BatchGrammarMatcher.batch_accept_string(matchers, inputs) # List[Bool]
+```
+
+Each boolean value in `results` represents whether the input is accepted by the corresponding matcher.

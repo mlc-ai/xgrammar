@@ -3392,14 +3392,14 @@ root_prop_0 ::= ("0" | "-"? [1-9] [0-9]*)
 
     # Ordered: the required props are emitted in fixed declared order (a, then b).
     assert ordered == prefix + (
-        r"""root_part_0 ::= [ \n\t]* "<parameter=b>" [ \n\t]* xml_string [ \n\t]* "</parameter>" ""
+        r"""root_part_0 ::= [ \n\t]* "<parameter=b>" xml_string "</parameter>" ""
 root ::=  [ \n\t]* (("<parameter=a>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
 """
     )
 
     # any_order: one "item" alternation repeated [n=#required=2, m=unbounded] times.
     assert any_order == prefix + (
-        r"""root_item ::= "<parameter=a>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" | "<parameter=b>" [ \n\t]* xml_string [ \n\t]* "</parameter>"
+        r"""root_item ::= "<parameter=a>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" | "<parameter=b>" xml_string "</parameter>"
 root ::=  [ \n\t]* (root_item ([ \n\t]* root_item){1,} ) [ \n\t]*
 """
     )
