@@ -52,7 +52,7 @@
     <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Structural Tag Usage" href="../structural_tag/structural_tag_api.html" />
+    <link rel="next" title="Constrained Decoding" href="constrained_decoding.html" />
     <link rel="prev" title="Installation" href="installation.html" /> 
 </head>
 
@@ -145,29 +145,27 @@
 <li class="toctree-l2"><a class="reference internal" href="#what-to-do-next">What to Do Next</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="constrained_decoding.html">Constrained Decoding</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../structural_tag/structural_tag_api.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../structural_tag/structural_tag.html">Structural Tag Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../structural_tag/tool_calling_and_reasoning.html">Tool Calling and Reasoning</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../structural_tag/advanced_usage.html">Advanced Topics of Structural Tag</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<p class="caption" role="heading"><span class="caption-text">Using XGrammar</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/advanced_topics.html">Advanced Topics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/javascript_api.html">JavaScript API</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<p class="caption" role="heading"><span class="caption-text">Defining Structures</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/serialization.html">Serialization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/ebnf_grammar.html">EBNF Grammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/lark_grammar.html">Lark Grammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../defining_structures/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../defining_structures/ebnf_grammar.html">EBNF Grammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../defining_structures/lark_grammar.html">Lark Grammar</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
 <ul>
@@ -260,9 +258,22 @@
             
   <section class="tex2jax_ignore mathjax_ignore" id="quick-start">
 <h1>Quick Start<a class="headerlink" href="#quick-start" title="Permalink to this heading">¶</a></h1>
-<p>This guide introduces how to use XGrammar with HuggingFace <code class="docutils literal notranslate"><span class="pre">transformers</span></code> in Python to generate
-structured outputs. It focuses on JSON generation – the most important use case of structured
-generation. You should have already <a class="reference internal" href="installation.html"><span class="doc std std-doc">installed XGrammar</span></a>.</p>
+<p>XGrammar guarantees that the LLM output follows a specified structure through
+<a class="reference internal" href="constrained_decoding.html"><span class="doc std std-doc">constrained decoding</span></a>. It supports several ways to describe the structure:</p>
+<ul class="simple">
+<li><p><strong><a class="reference internal" href="../structural_tag/structural_tag.html"><span class="doc std std-doc">Structural Tag</span></a></strong>: describe outputs that mix reasoning,
+free-form text, and tool calls. It supports tool calling for all common models (Llama, Qwen,
+DeepSeek, Kimi, OpenAI Harmony, etc.) via
+<a class="reference internal" href="../structural_tag/tool_calling_and_reasoning.html"><span class="doc std std-doc">built-in model styles</span></a>.</p></li>
+<li><p><strong><a class="reference internal" href="../defining_structures/json_generation.html"><span class="doc std std-doc">JSON Schema</span></a></strong>: constrain the output to be a valid
+JSON, or a JSON that conforms to a given schema.</p></li>
+<li><p><strong><a class="reference internal" href="../defining_structures/ebnf_grammar.html"><span class="doc std std-doc">EBNF</span></a></strong>: describe arbitrary structures with a
+context-free grammar in the extended BNF format.</p></li>
+<li><p><strong><a class="reference internal" href="../defining_structures/lark_grammar.html"><span class="doc std std-doc">Lark</span></a></strong>: describe arbitrary structures in the compact and
+readable Lark grammar language.</p></li>
+</ul>
+<p>This guide walks through the most common use case: generating a valid JSON with HuggingFace
+<code class="docutils literal notranslate"><span class="pre">transformers</span></code> in Python. You should have already <a class="reference internal" href="installation.html"><span class="doc std std-doc">installed XGrammar</span></a>.</p>
 <section id="preparation">
 <h2>Preparation<a class="headerlink" href="#preparation" title="Permalink to this heading">¶</a></h2>
 <p>Instantiate a model, a tokenizer, and inputs to the LLM.</p>
@@ -292,8 +303,7 @@ generation. You should have already <a class="reference internal" href="installa
 <h2>Compile Grammar<a class="headerlink" href="#compile-grammar" title="Permalink to this heading">¶</a></h2>
 <p>Construct a <code class="docutils literal notranslate"><span class="pre">GrammarCompiler</span></code> and compile the grammar.</p>
 <p>The grammar can be a built-in JSON grammar, a JSON schema string, or an EBNF string. EBNF provides
-more flexibility for customization. See
-<a class="reference external" href="https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md">GBNF documentation</a> for
+more flexibility for customization. See <a class="reference internal" href="../defining_structures/ebnf_grammar.html"><span class="doc std std-doc">EBNF Grammar</span></a> for
 specification.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">from_huggingface</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">,</span> <span class="n">vocab_size</span><span class="o">=</span><span class="n">config</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span>
 <span class="n">grammar_compiler</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">)</span>
@@ -324,8 +334,15 @@ specification.</p>
 <section id="what-to-do-next">
 <h2>What to Do Next<a class="headerlink" href="#what-to-do-next" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
-<li><p>Check out <a class="reference internal" href="../tutorials/json_generation.html"><span class="std std-doc">JSON Generation Guide</span></a> and other How-To guides for the detailed usage guide of XGrammar.</p></li>
-<li><p>Report any problem or ask any question: open new issues in our <a class="reference external" href="https://github.com/mlc-ai/xgrammar/issues">GitHub repo</a>.</p></li>
+<li><p>To understand how constrained decoding works, see <a class="reference internal" href="constrained_decoding.html"><span class="doc std std-doc">Constrained Decoding</span></a>.</p></li>
+<li><p>To learn the core concepts and APIs of XGrammar, see
+<a class="reference internal" href="../using_xgrammar/workflow_of_xgrammar.html"><span class="doc std std-doc">Workflow of XGrammar</span></a>.</p></li>
+<li><p>To integrate XGrammar into an LLM engine, see
+<a class="reference internal" href="../using_xgrammar/engine_integration.html"><span class="doc std std-doc">Integration with LLM Engine</span></a>.</p></li>
+<li><p>To constrain tool calling and reasoning outputs, see
+<a class="reference internal" href="../structural_tag/structural_tag.html"><span class="doc std std-doc">Structural Tag</span></a>.</p></li>
+<li><p>Report any problem or ask any question: open new issues in our
+<a class="reference external" href="https://github.com/mlc-ai/xgrammar/issues">GitHub repo</a>.</p></li>
 </ul>
 </section>
 </section>
@@ -340,7 +357,7 @@ specification.</p>
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../structural_tag/structural_tag_api.html" class="btn btn-neutral float-right" title="Structural Tag Usage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="constrained_decoding.html" class="btn btn-neutral float-right" title="Constrained Decoding" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="installation.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

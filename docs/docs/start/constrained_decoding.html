@@ -12,7 +12,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Building Docs &mdash; XGrammar 0.2.5 documentation</title>
+  <title>Constrained Decoding &mdash; XGrammar 0.2.5 documentation</title>
   
 
   
@@ -45,6 +45,8 @@
         <script src="../_static/clipboard.min.js"></script>
         <script src="../_static/copybutton.js"></script>
         <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script>window.MathJax = {"tex": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true}, "options": {"ignoreHtmlClass": "tex2jax_ignore|mathjax_ignore|document", "processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+        <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     
     <script type="text/javascript" src="../_static/js/theme.js"></script>
 
@@ -52,8 +54,8 @@
     <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Code Coverage" href="code_coverage.html" />
-    <link rel="prev" title="Lark Grammar" href="../defining_structures/lark_grammar.html" /> 
+    <link rel="next" title="Structural Tag Usage" href="../structural_tag/structural_tag.html" />
+    <link rel="prev" title="Quick Start" href="quick_start.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -135,10 +137,14 @@
             
             
               <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../start/constrained_decoding.html">Constrained Decoding</a></li>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Quick Start</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Constrained Decoding</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#xgrammar-s-implementation">XGrammar’s Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
 <ul>
@@ -161,14 +167,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../defining_structures/lark_grammar.html">Lark Grammar</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
-<ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Building Docs</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#building-docs-locally">Building Docs Locally</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#deploying-docs-on-github-pages">Deploying Docs on GitHub Pages</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#best-practices-for-writing-docs">Best Practices for Writing Docs</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="code_coverage.html">Code Coverage</a></li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/code_coverage.html">Code Coverage</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -229,7 +230,7 @@
     
       <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>Building Docs</li>
+      <li>Constrained Decoding</li>
     
     
       
@@ -240,7 +241,7 @@
         
             
             
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/developer_guide/building_docs.md" class="fa fa-github"> Edit on GitHub</a>
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/start/constrained_decoding.md" class="fa fa-github"> Edit on GitHub</a>
             
           
         
@@ -254,39 +255,31 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section class="tex2jax_ignore mathjax_ignore" id="building-docs">
-<h1>Building Docs<a class="headerlink" href="#building-docs" title="Permalink to this heading">¶</a></h1>
-<p>XGrammar uses Sphinx to build the documentation, and the documentation is hosted on GitHub Pages.
-The document can be written in Markdown (<code class="docutils literal notranslate"><span class="pre">.md</span></code>, preferred) or reStructuredText (<code class="docutils literal notranslate"><span class="pre">.rst</span></code>).</p>
-<section id="building-docs-locally">
-<h2>Building Docs Locally<a class="headerlink" href="#building-docs-locally" title="Permalink to this heading">¶</a></h2>
-<p>Install the dependencies:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># For non-Debian-based systems or Conda environments, use your package manager to install ruby.</span>
-sudo<span class="w"> </span>apt<span class="w"> </span>update
-sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>ruby-full
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>docs/requirements.txt
-gem<span class="w"> </span>install<span class="w"> </span>jekyll<span class="w"> </span>jekyll-remote-theme
-</pre></div>
-</div>
-<p>Build the docs locally:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>scripts/local_deploy_site.sh
-</pre></div>
-</div>
-<p>This will build the website and the docs, and host them locally at <code class="docutils literal notranslate"><span class="pre">http://localhost:8888</span></code>.</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="constrained-decoding">
+<h1>Constrained Decoding<a class="headerlink" href="#constrained-decoding" title="Permalink to this heading">¶</a></h1>
+<p>Constrained decoding is a technique used by XGrammar to generate structured outputs.</p>
+<p>In each step of LLM inference, XGrammar will provide a token mask to the LLM. The mask allows the LLM to generate tokens that follow the grammar, and prohibits those not.  The mask is a binary mask of the same length as the vocabulary size. In the sampling stage of LLM inference, the mask is used so that the sampled tokens must be valid in the mask.</p>
+<p><img alt="Constrained Decoding" src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/tutorials/constrained_decoding.png" /></p>
+<p>Let’s take a closer look. The binary mask applies to the logits of the LLM. It sets the logits of the tokens that are not allowed to <span class="math notranslate nohighlight">\(-\infty\)</span>, so that their probability will be <span class="math notranslate nohighlight">\(0\)</span> after softmax. Then the sampler will sample from the vaild tokens with probability <span class="math notranslate nohighlight">\(&gt;0\)</span>.</p>
+<p><img alt="Constrained Decoding Logits" src="https://raw.githubusercontent.com/mlc-ai/XGrammar-web-assets/refs/heads/main/tutorials/constrained_decoding_logits.png" /></p>
+<p>By ensuring that each token generated by the LLM conforms to the given structure step by step, we can guarantee that the entire generation adheres to the specified structure.</p>
+<p>Constrained decoding provides these benefits to LLM applications:</p>
+<ol class="arabic simple">
+<li><p><strong>Increase generation quality.</strong> Sometimes an LLM can generate output that is nearly correct but makes mistakes in the details. For example, it might output a JSON integer field like 1.23 as a string (“1.23”), or even get the type completely wrong. Constrained decoding can ensure the output always follow the given structure.</p></li>
+<li><p><strong>Easy to parse and process.</strong> Constrained decoding ensures that the output of the LLM is clean, without extraneous text or syntax errors. This makes its output directly parsable and seamlessly integrable with downstream applications.</p></li>
+<li><p><strong>Ensure safety and avoid unexpected outputs.</strong> We can control the content generated by the LLM to prevent unexpected erroneous outputs. There have been <a class="reference external" href="https://protectai.com/blog/mcp-security-101">many recent reports</a> about safety issues in agent applications, and the ability to ensure the correctness of generated content is especially valuable for today’s agent use cases.</p></li>
+</ol>
+<p>Constrained decoding has minimal negative impact on LLM generation. This is because if the LLM is already capable of generating correct responses, applying constraints doesn’t do anything. But if the LLM fails to produce a correct answer, the constraints can at least ensure the structure is correct.</p>
+<p><strong>Note:</strong> when applying constrained decoding, it is recommended to also describe the expected output structure in the prompt. This is because constrained decoding only affects the sampling stage, but we want the LLM’s underlying probability distribution to already align with the structure as much as possible.</p>
+<section id="xgrammar-s-implementation">
+<h2>XGrammar’s Implementation<a class="headerlink" href="#xgrammar-s-implementation" title="Permalink to this heading">¶</a></h2>
+<p>In XGrammar, we store the token mask in a compressed bitset format using <code class="docutils literal notranslate"><span class="pre">int32</span></code>. Use <a class="reference internal" href="../api/python/bitmask_ops.html#xgrammar.allocate_token_bitmask" title="xgrammar.allocate_token_bitmask"><span class="xref myst py py-func"><code class="docutils literal notranslate"><span class="pre">xgr.allocate_token_bitmask</span></code></span></a> to allocate a token mask.</p>
+<p>XGrammar uses <a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar</span></code></span></a> to describe the output structure (or, the grammar). It has a compilation step of the grammar to speed up the generation of the mask. The <a class="reference internal" href="../api/python/grammar_compiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarCompiler</span></code></span></a> class compiles a <a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar</span></code></span></a> object into a <a class="reference internal" href="../api/python/compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.CompiledGrammar</span></code></span></a> object.</p>
+<p>The <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher</span></code></span></a> class, constructed from a <a class="reference internal" href="../api/python/compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.CompiledGrammar</span></code></span></a> object, is used to generate the mask. It is a stateful class that can be used to generate the mask for a single step of the generation. For each step, it will accept the last token generated by the LLM with <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.accept_token</span></code></span></a>, and then generate the mask with <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fill_next_token_bitmask" title="xgrammar.GrammarMatcher.fill_next_token_bitmask"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.fill_next_token_bitmask</span></code></span></a>. Then the mask can be used to guide the sampling of the next token.</p>
 </section>
-<section id="deploying-docs-on-github-pages">
-<h2>Deploying Docs on GitHub Pages<a class="headerlink" href="#deploying-docs-on-github-pages" title="Permalink to this heading">¶</a></h2>
-<p>The documentation is built and deployed automatically when you merge your changes into the <code class="docutils literal notranslate"><span class="pre">main</span></code> branch.
-The workflow is defined in <a class="reference external" href="https://github.com/mlc-ai/xgrammar/tree/v0.2.1/.github/workflows/documentation.yaml"><code class="docutils literal notranslate"><span class="pre">.github/workflows/documentation.yaml</span></code></a>.</p>
-<p>The docs will be build locally, uploaded to <a class="reference external" href="https://github.com/mlc-ai/xgrammar/tree/gh-pages"><code class="docutils literal notranslate"><span class="pre">xgrammar/gh-pages</span></code></a> and then deployed to GitHub Pages.</p>
-</section>
-<section id="best-practices-for-writing-docs">
-<h2>Best Practices for Writing Docs<a class="headerlink" href="#best-practices-for-writing-docs" title="Permalink to this heading">¶</a></h2>
-<p>When adding new features to XGrammar, please update the documentation accordingly.</p>
-<p>Each time you make changes to the docs, you need to build the docs locally to see the changes and
-make sure the changes are correct.</p>
-<p>When referencing a code in the repository, make sure you are referring to a specific release version
-of the code, instead of the main branch.</p>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Permalink to this heading">¶</a></h2>
+<p>See <a class="reference internal" href="../using_xgrammar/workflow_of_xgrammar.html"><span class="std std-doc">Workflow of XGrammar</span></a> to learn more about the constrained decoding process.</p>
 </section>
 </section>
 
@@ -300,10 +293,10 @@ of the code, instead of the main branch.</p>
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="code_coverage.html" class="btn btn-neutral float-right" title="Code Coverage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="../structural_tag/structural_tag.html" class="btn btn-neutral float-right" title="Structural Tag Usage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="../defining_structures/lark_grammar.html" class="btn btn-neutral float-left" title="Lark Grammar" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="quick_start.html" class="btn btn-neutral float-left" title="Quick Start" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 

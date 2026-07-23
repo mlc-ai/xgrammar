@@ -12,7 +12,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Building Docs &mdash; XGrammar 0.2.5 documentation</title>
+  <title>JavaScript API &mdash; XGrammar 0.2.5 documentation</title>
   
 
   
@@ -52,8 +52,8 @@
     <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Code Coverage" href="code_coverage.html" />
-    <link rel="prev" title="Lark Grammar" href="../defining_structures/lark_grammar.html" /> 
+    <link rel="next" title="JSON Generation" href="../defining_structures/json_generation.html" />
+    <link rel="prev" title="Runtime Safeguards" href="runtime_safeguards.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -147,12 +147,12 @@
 <li class="toctree-l1"><a class="reference internal" href="../structural_tag/advanced_usage.html">Advanced Topics of Structural Tag</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Using XGrammar</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/serialization.html">Serialization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/runtime_safeguards.html">Runtime Safeguards</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/javascript_api.html">JavaScript API</a></li>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">JavaScript API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Defining Structures</span></p>
 <ul>
@@ -161,14 +161,9 @@
 <li class="toctree-l1"><a class="reference internal" href="../defining_structures/lark_grammar.html">Lark Grammar</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
-<ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Building Docs</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#building-docs-locally">Building Docs Locally</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#deploying-docs-on-github-pages">Deploying Docs on GitHub Pages</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#best-practices-for-writing-docs">Best Practices for Writing Docs</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="code_coverage.html">Code Coverage</a></li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/code_coverage.html">Code Coverage</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -229,7 +224,7 @@
     
       <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>Building Docs</li>
+      <li>JavaScript API</li>
     
     
       
@@ -240,7 +235,7 @@
         
             
             
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/developer_guide/building_docs.md" class="fa fa-github"> Edit on GitHub</a>
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/using_xgrammar/javascript_api.md" class="fa fa-github"> Edit on GitHub</a>
             
           
         
@@ -254,40 +249,17 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section class="tex2jax_ignore mathjax_ignore" id="building-docs">
-<h1>Building Docs<a class="headerlink" href="#building-docs" title="Permalink to this heading">¶</a></h1>
-<p>XGrammar uses Sphinx to build the documentation, and the documentation is hosted on GitHub Pages.
-The document can be written in Markdown (<code class="docutils literal notranslate"><span class="pre">.md</span></code>, preferred) or reStructuredText (<code class="docutils literal notranslate"><span class="pre">.rst</span></code>).</p>
-<section id="building-docs-locally">
-<h2>Building Docs Locally<a class="headerlink" href="#building-docs-locally" title="Permalink to this heading">¶</a></h2>
-<p>Install the dependencies:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># For non-Debian-based systems or Conda environments, use your package manager to install ruby.</span>
-sudo<span class="w"> </span>apt<span class="w"> </span>update
-sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>ruby-full
-python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>docs/requirements.txt
-gem<span class="w"> </span>install<span class="w"> </span>jekyll<span class="w"> </span>jekyll-remote-theme
+  <section class="tex2jax_ignore mathjax_ignore" id="javascript-api">
+<h1>JavaScript API<a class="headerlink" href="#javascript-api" title="Permalink to this heading">¶</a></h1>
+<p>Beside the Python and C++ API, XGrammar also provides JavaScript/TypeScript API.</p>
+<p>The JS SDK uses <a class="reference external" href="https://emscripten.org/">emscripten</a> to compile the C++
+code into WebAssembly. It is designed to be used for LLMs that run in the browser, such as
+<a class="reference external" href="https://github.com/mlc-ai/web-llm">WebLLM</a>.</p>
+<p>To use this SDK, run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>npm<span class="w"> </span>install<span class="w"> </span>@mlc-ai/web-xgrammar
 </pre></div>
 </div>
-<p>Build the docs locally:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>bash<span class="w"> </span>scripts/local_deploy_site.sh
-</pre></div>
-</div>
-<p>This will build the website and the docs, and host them locally at <code class="docutils literal notranslate"><span class="pre">http://localhost:8888</span></code>.</p>
-</section>
-<section id="deploying-docs-on-github-pages">
-<h2>Deploying Docs on GitHub Pages<a class="headerlink" href="#deploying-docs-on-github-pages" title="Permalink to this heading">¶</a></h2>
-<p>The documentation is built and deployed automatically when you merge your changes into the <code class="docutils literal notranslate"><span class="pre">main</span></code> branch.
-The workflow is defined in <a class="reference external" href="https://github.com/mlc-ai/xgrammar/tree/v0.2.1/.github/workflows/documentation.yaml"><code class="docutils literal notranslate"><span class="pre">.github/workflows/documentation.yaml</span></code></a>.</p>
-<p>The docs will be build locally, uploaded to <a class="reference external" href="https://github.com/mlc-ai/xgrammar/tree/gh-pages"><code class="docutils literal notranslate"><span class="pre">xgrammar/gh-pages</span></code></a> and then deployed to GitHub Pages.</p>
-</section>
-<section id="best-practices-for-writing-docs">
-<h2>Best Practices for Writing Docs<a class="headerlink" href="#best-practices-for-writing-docs" title="Permalink to this heading">¶</a></h2>
-<p>When adding new features to XGrammar, please update the documentation accordingly.</p>
-<p>Each time you make changes to the docs, you need to build the docs locally to see the changes and
-make sure the changes are correct.</p>
-<p>When referencing a code in the repository, make sure you are referring to a specific release version
-of the code, instead of the main branch.</p>
-</section>
+<p>For more information, see <a class="reference external" href="https://github.com/mlc-ai/xgrammar/tree/main/web">the code</a>.</p>
 </section>
 
 
@@ -300,10 +272,10 @@ of the code, instead of the main branch.</p>
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="code_coverage.html" class="btn btn-neutral float-right" title="Code Coverage" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="../defining_structures/json_generation.html" class="btn btn-neutral float-right" title="JSON Generation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="../defining_structures/lark_grammar.html" class="btn btn-neutral float-left" title="Lark Grammar" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="runtime_safeguards.html" class="btn btn-neutral float-left" title="Runtime Safeguards" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 

@@ -53,7 +53,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Advanced Topics of Structural Tag" href="advanced_usage.html" />
-    <link rel="prev" title="Structural Tag Usage" href="structural_tag_api.html" /> 
+    <link rel="prev" title="Structural Tag Usage" href="structural_tag.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -138,10 +138,11 @@
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/constrained_decoding.html">Constrained Decoding</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
 <ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="structural_tag_api.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="structural_tag.html">Structural Tag Usage</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Tool Calling and Reasoning</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#introduction">Introduction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#basic-api-get-model-structural-tag">Basic API: <code class="docutils literal notranslate"><span class="pre">get_model_structural_tag</span></code></a><ul>
@@ -164,22 +165,19 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="advanced_usage.html">Advanced Topics of Structural Tag</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<p class="caption" role="heading"><span class="caption-text">Using XGrammar</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/advanced_topics.html">Advanced Topics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/javascript_api.html">JavaScript API</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<p class="caption" role="heading"><span class="caption-text">Defining Structures</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/serialization.html">Serialization</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/ebnf_grammar.html">EBNF Grammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/lark_grammar.html">Lark Grammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../defining_structures/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../defining_structures/ebnf_grammar.html">EBNF Grammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../defining_structures/lark_grammar.html">Lark Grammar</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
 <ul>
@@ -326,7 +324,7 @@
 </ul>
 </li>
 <li><p><strong>reasoning</strong> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, optional): Whether to enable reasoning mode (<code class="docutils literal notranslate"><span class="pre">&lt;think&gt;</span></code>/<code class="docutils literal notranslate"><span class="pre">&lt;/think&gt;</span></code> tags or model-specific equivalents). Default <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
-<li><p><strong>any_order</strong> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, optional): When <code class="docutils literal notranslate"><span class="pre">True</span></code>, applies <code class="docutils literal notranslate"><span class="pre">any_order=True</span></code> to every <code class="docutils literal notranslate"><span class="pre">JSONSchemaFormat</span></code> in the generated structural tag, so each tool’s arguments may be emitted in any property order (see <a class="reference internal" href="structural_tag_api.html"><span class="doc std std-doc"><code class="docutils literal notranslate"><span class="pre">JSONSchemaFormat</span></code></span></a> for the exact semantics). Default <code class="docutils literal notranslate"><span class="pre">False</span></code>, which keeps the declared property order with full validation.</p></li>
+<li><p><strong>any_order</strong> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, optional): When <code class="docutils literal notranslate"><span class="pre">True</span></code>, applies <code class="docutils literal notranslate"><span class="pre">any_order=True</span></code> to every <code class="docutils literal notranslate"><span class="pre">JSONSchemaFormat</span></code> in the generated structural tag, so each tool’s arguments may be emitted in any property order (see <a class="reference internal" href="structural_tag.html"><span class="doc std std-doc"><code class="docutils literal notranslate"><span class="pre">JSONSchemaFormat</span></code></span></a> for the exact semantics). Default <code class="docutils literal notranslate"><span class="pre">False</span></code>, which keeps the declared property order with full validation.</p></li>
 <li><p><strong>max_whitespace_cnt</strong> (<code class="docutils literal notranslate"><span class="pre">Optional[int]</span></code>, optional): Caps the number of consecutive whitespace characters. Setting it (e.g. <code class="docutils literal notranslate"><span class="pre">2</span></code>) bounds runs of whitespace, which avoids the unbounded-whitespace outputs some models emit in bad cases that would otherwise blow up grammar compilation/matching.</p></li>
 </ul>
 <p>Passing an unsupported <code class="docutils literal notranslate"><span class="pre">model</span></code> or an invalid <code class="docutils literal notranslate"><span class="pre">tool_choice</span></code> will raise <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p>
@@ -530,7 +528,7 @@
         <a href="advanced_usage.html" class="btn btn-neutral float-right" title="Advanced Topics of Structural Tag" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="structural_tag_api.html" class="btn btn-neutral float-left" title="Structural Tag Usage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="structural_tag.html" class="btn btn-neutral float-left" title="Structural Tag Usage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 

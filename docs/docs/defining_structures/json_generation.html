@@ -12,7 +12,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Installation &mdash; XGrammar 0.2.5 documentation</title>
+  <title>JSON Generation &mdash; XGrammar 0.2.5 documentation</title>
   
 
   
@@ -52,8 +52,8 @@
     <script type="text/javascript" src="../_static/js/tlcpack_theme.js"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Quick Start" href="quick_start.html" />
-    <link rel="prev" title="👋 Welcome to XGrammar" href="../index.html" /> 
+    <link rel="next" title="EBNF Grammar" href="ebnf_grammar.html" />
+    <link rel="prev" title="JavaScript API" href="../using_xgrammar/javascript_api.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -135,21 +135,10 @@
             
             
               <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
-<ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="#">Installation</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#method-1-prebuilt-package">Method 1: Prebuilt Package</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#method-2-build-xgrammar-python-package-from-source">Method 2: Build XGrammar Python Package from Source</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#optional-run-python-tests">Optional: Run Python Tests</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="#method-3-build-xgrammar-c-library-only">Method 3: Build XGrammar C++ Library Only</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#optional-run-c-tests">Optional: Run C++ Tests</a></li>
-</ul>
-</li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Quick Start</a></li>
-<li class="toctree-l1"><a class="reference internal" href="constrained_decoding.html">Constrained Decoding</a></li>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/constrained_decoding.html">Constrained Decoding</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
 <ul>
@@ -166,10 +155,13 @@
 <li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/javascript_api.html">JavaScript API</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Defining Structures</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="../defining_structures/json_generation.html">JSON Generation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../defining_structures/ebnf_grammar.html">EBNF Grammar</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../defining_structures/lark_grammar.html">Lark Grammar</a></li>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">JSON Generation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#next-steps">Next Steps</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="ebnf_grammar.html">EBNF Grammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="lark_grammar.html">Lark Grammar</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
 <ul>
@@ -235,7 +227,7 @@
     
       <li><a href="../index.html">Docs</a> <span class="br-arrow">></span></li>
         
-      <li>Installation</li>
+      <li>JSON Generation</li>
     
     
       
@@ -246,7 +238,7 @@
         
             
             
-              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/start/installation.md" class="fa fa-github"> Edit on GitHub</a>
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/defining_structures/json_generation.md" class="fa fa-github"> Edit on GitHub</a>
             
           
         
@@ -260,86 +252,77 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <section class="tex2jax_ignore mathjax_ignore" id="installation">
-<h1>Installation<a class="headerlink" href="#installation" title="Permalink to this heading">¶</a></h1>
-<p>XGrammar Python Package can be installed directly from a prebuilt package or built from source.</p>
-<section id="method-1-prebuilt-package">
-<h2>Method 1: Prebuilt Package<a class="headerlink" href="#method-1-prebuilt-package" title="Permalink to this heading">¶</a></h2>
-<p>XGrammar supports various platforms:</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="json-generation">
+<h1>JSON Generation<a class="headerlink" href="#json-generation" title="Permalink to this heading">¶</a></h1>
+<p>One example structure XGrammar supports is JSON and JSON Schema. In this tutorial, we go over how
+to use XGrammar to ensure that an LLM’s output is a valid JSON, or adheres to a customized JSON
+schema.</p>
+<p>First, construct a <a class="reference internal" href="../api/python/grammar_compiler.html#xgrammar.GrammarCompiler" title="xgrammar.GrammarCompiler"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarCompiler</span></code></span></a> from the tokenizer info of
+the model (see <a class="reference internal" href="../using_xgrammar/workflow_of_xgrammar.html"><span class="std std-doc">Workflow of XGrammar</span></a> for details).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xgr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span><span class="p">,</span> <span class="n">AutoConfig</span>
+
+<span class="c1"># Get tokenizer info</span>
+<span class="n">model_id</span> <span class="o">=</span> <span class="s2">&quot;meta-llama/Llama-3.2-1B-Instruct&quot;</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_id</span><span class="p">)</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_id</span><span class="p">)</span>
+<span class="c1"># This can be larger than tokenizer.vocab_size due to paddings</span>
+<span class="n">full_vocab_size</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">vocab_size</span>
+<span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">from_huggingface</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">,</span> <span class="n">vocab_size</span><span class="o">=</span><span class="n">full_vocab_size</span><span class="p">)</span>
+
+<span class="n">compiler</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">,</span> <span class="n">max_threads</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>For JSON generation, there are generally three options for compiling the grammar: using a built-in
+JSON grammar, specify JSON schema with a Pydantic model, or from a JSON schema string. Pick
+one of the three below to run.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Option 1: Compile with a built-in JSON grammar</span>
+<span class="n">compiled_grammar</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">CompiledGrammar</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_builtin_json_grammar</span><span class="p">()</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Option 2: Compile with JSON schema from a pydantic model</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseModel</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Person</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">age</span><span class="p">:</span> <span class="nb">int</span>
+
+<span class="n">compiled_grammar</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_json_schema</span><span class="p">(</span><span class="n">Person</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Option 3: Compile with JSON schema from a JSON schema string</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="n">person_schema</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="s2">&quot;Person&quot;</span><span class="p">,</span>
+  <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+  <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span>
+    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">{</span>
+      <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span>
+    <span class="p">},</span>
+    <span class="s2">&quot;age&quot;</span><span class="p">:</span> <span class="p">{</span>
+      <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;integer&quot;</span><span class="p">,</span>
+    <span class="p">}</span>
+  <span class="p">},</span>
+  <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;age&quot;</span><span class="p">]</span>
+<span class="p">}</span>
+<span class="n">compiled_grammar</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_json_schema</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">person_schema</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>With the compiled grammar, we can instantiate a <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher" title="xgrammar.GrammarMatcher"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher</span></code></span></a>
+and generate the token masks in the generation loop.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarMatcher</span><span class="p">(</span><span class="n">compiled_grammar</span><span class="p">)</span>
+<span class="n">token_bitmask</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">allocate_token_bitmask</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="next-steps">
+<h2>Next Steps<a class="headerlink" href="#next-steps" title="Permalink to this heading">¶</a></h2>
 <ul class="simple">
-<li><p>Operating Systems: Linux, macOS, and Windows</p></li>
-<li><p>Hardware: CPU, NVIDIA GPUs, AMD GPUs, Apple Silicon, TPU, etc.</p></li>
-<li><p>Python: 3.9 and later.</p></li>
+<li><p>For the complete generation loop and batched inference, see
+<a class="reference internal" href="../using_xgrammar/engine_integration.html"><span class="std std-doc">Integration with LLM Engine</span></a>.</p></li>
+<li><p>For an end-to-end runnable example with HF <code class="docutils literal notranslate"><span class="pre">transformers</span></code>, see
+<a class="reference internal" href="../start/quick_start.html"><span class="std std-doc">Quick Start</span></a>.</p></li>
 </ul>
-<p>We provide Python wheels for XGrammar via pip.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>xgrammar
-</pre></div>
-</div>
-<p>For use with MPS on Apple Silicon, install with:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;xgrammar[metal]&quot;</span>
-</pre></div>
-</div>
-<p>We also provide conda packages for XGrammar:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>xgrammar
-</pre></div>
-</div>
-<p>Use the following command to verify installation:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import xgrammar; print(xgrammar)&quot;</span>
-<span class="c1"># Prints: &lt;module &#39;xgrammar&#39; from &#39;/path-to-env/lib/python3.11/site-packages/xgrammar/__init__.py&#39;&gt;</span>
-</pre></div>
-</div>
-</section>
-<section id="method-2-build-xgrammar-python-package-from-source">
-<h2>Method 2: Build XGrammar Python Package from Source<a class="headerlink" href="#method-2-build-xgrammar-python-package-from-source" title="Permalink to this heading">¶</a></h2>
-<p>This option is useful when you want to make modification or obtain a specific version of XGrammar.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--recursive<span class="w"> </span>https://github.com/mlc-ai/xgrammar.git<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>xgrammar
-pre-commit<span class="w"> </span>install
-<span class="c1"># Copy cmake config. You can update the config if needed.</span>
-cp<span class="w"> </span>cmake/config.cmake<span class="w"> </span>.
-<span class="c1"># Install scikit-build-core and apache-tvm-ffi as build dependencies.</span>
-python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>scikit-build-core<span class="w"> </span>apache-tvm-ffi
-python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--no-build-isolation<span class="w"> </span>-e<span class="w"> </span>.
-</pre></div>
-</div>
-<p>XGrammar is a library written in C++ and Python. The editable install will automatically rebuild
-the package when XGrammar is imported in Python.</p>
-<section id="optional-run-python-tests">
-<h3>Optional: Run Python Tests<a class="headerlink" href="#optional-run-python-tests" title="Permalink to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Install the test dependencies</span>
-python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;.[test]&quot;</span>
-
-<span class="c1"># If you have a HuggingFace token, you can run all tests including the ones that have gated models.</span>
-huggingface-cli<span class="w"> </span>login<span class="w"> </span>--token<span class="w"> </span>YOUR_HF_TOKEN
-python3<span class="w"> </span>-m<span class="w"> </span>pytest
-
-<span class="c1"># If you do not have a HuggingFace token, you can run a subset of tests that do not require gated models.</span>
-python3<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;not hf_token_required&quot;</span>
-</pre></div>
-</div>
-</section>
-</section>
-<section id="method-3-build-xgrammar-c-library-only">
-<h2>Method 3: Build XGrammar C++ Library Only<a class="headerlink" href="#method-3-build-xgrammar-c-library-only" title="Permalink to this heading">¶</a></h2>
-<p>XGrammar can also be built as a C++ library. This is useful for using XGrammar in C++ or Rust projects.</p>
-<p>XGrammar uses CMake and Ninja to build the C++ library. To build only the C++ library, you can set -DXGRAMMAR_BUILD_PYTHON_BINDINGS=OFF when running CMake, or modify cmake/config.cmake manually.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--recursive<span class="w"> </span>https://github.com/mlc-ai/xgrammar.git<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>xgrammar
-<span class="c1"># Copy cmake config. You can update the config if needed.</span>
-cp<span class="w"> </span>cmake/config.cmake<span class="w"> </span>.
-mkdir<span class="w"> </span>build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>build
-cmake<span class="w"> </span>-G<span class="w"> </span>Ninja<span class="w"> </span>..
-ninja
-</pre></div>
-</div>
-<section id="optional-run-c-tests">
-<h3>Optional: Run C++ Tests<a class="headerlink" href="#optional-run-c-tests" title="Permalink to this heading">¶</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Run all tests</span>
-bash<span class="w"> </span>scripts/run_ctest.sh
-
-<span class="c1"># Run a subset of tests whose name contains &quot;test_name&quot;</span>
-bash<span class="w"> </span>scripts/run_ctest.sh<span class="w"> </span>test_name
-</pre></div>
-</div>
-</section>
 </section>
 </section>
 
@@ -353,10 +336,10 @@ bash<span class="w"> </span>scripts/run_ctest.sh<span class="w"> </span>test_nam
 
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="quick_start.html" class="btn btn-neutral float-right" title="Quick Start" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="ebnf_grammar.html" class="btn btn-neutral float-right" title="EBNF Grammar" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="../index.html" class="btn btn-neutral float-left" title="👋 Welcome to XGrammar" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="../using_xgrammar/javascript_api.html" class="btn btn-neutral float-left" title="JavaScript API" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
 
