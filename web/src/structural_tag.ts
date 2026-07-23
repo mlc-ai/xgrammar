@@ -12,6 +12,7 @@ export interface ConstStringFormat {
 export interface JSONSchemaFormat {
   type: "json_schema";
   json_schema: JSONSchemaValue;
+  style?: "json" | "qwen_xml" | "minimax_xml" | "deepseek_xml" | "glm_xml" | "cohere_xml";
 }
 
 export interface QwenXMLParameterFormat {

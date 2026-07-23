@@ -31,11 +31,14 @@ class JSONSchemaFormat(BaseModel):
     """The type of the format."""
     json_schema: Union[bool, Dict[str, Any]]
     """The JSON schema."""
-    style: Literal["json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml"] = "json"
+    style: Literal[
+        "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml", "cohere_xml"
+    ] = "json"
     """How to parse the content. Valid values: \"json\" (standard JSON), \"qwen_xml\" (Qwen XML:
     <parameter=key>value</parameter>), \"minimax_xml\" (MiniMax XML: <parameter name=\"key\">value</parameter>),
     \"deepseek_xml\" (DeepSeek XML(DeepSeek-v3.2): <{dsml_token}parameter name=\"key\" string=\"true|false\">value</{dsml_token}parameter>),
-    \"glm_xml\" (GLM XML: <arg_key>key</arg_key><arg_value>value</arg_value>)."""
+    \"glm_xml\" (GLM XML: <arg_key>key</arg_key><arg_value>value</arg_value>),
+    \"cohere_xml\" (Cohere XML: <cofl:tool_param name=key>value</cofl:tool_param>)."""
     any_order: bool = False
     """Whether object properties may appear in any order.
 

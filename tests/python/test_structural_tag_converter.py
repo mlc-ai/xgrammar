@@ -463,6 +463,41 @@ def test_json_schema_style_glm_xml_format(instance: str, is_accepted: bool):
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+cohere_xml_instance_is_accepted = [
+    # Cohere XML: <cofl:tool_param name=key>value</cofl:tool_param>
+    (
+        "<cofl:tool_param name=name>Bob</cofl:tool_param>"
+        "<cofl:tool_param name=age>100</cofl:tool_param>",
+        True,
+    ),
+    # Missing the required age parameter.
+    ("<cofl:tool_param name=name>Bob</cofl:tool_param>", False),
+    # Qwen XML: <parameter=key>value</parameter>
+    ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", False),
+]
+
+
+@pytest.mark.parametrize("instance, is_accepted", cohere_xml_instance_is_accepted)
+def test_json_schema_style_cohere_xml_format(instance: str, is_accepted: bool):
+    """Test JSONSchemaFormat with style='cohere_xml' (<cofl:tool_param name=k>v</cofl:tool_param>)."""
+    stag_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+            "required": ["name", "age"],
+        },
+        "style": "cohere_xml",
+    }
+    structural_tag = {"type": "structural_tag", "format": stag_format}
+    stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    grammar_str = str(stag_grammar)
+    assert "<cofl:tool_param name=" in grammar_str
+    assert "</cofl:tool_param>" in grammar_str
+
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
 ebnf_grammar_stag_grammar = [
     (
         {
@@ -2599,7 +2634,7 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "style": "not_string"}}',
-        'style must be "json", "qwen_xml", "minimax_xml", "deepseek_xml", or "glm_xml"',
+        'style must be "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml", or "cohere_xml"',
     ),
     # RepeatFormat Errors - illegal min/max
     (
@@ -2867,6 +2902,23 @@ basic_structural_tags_instance_is_accepted = [
             style="glm_xml",
         ),
         "<arg_key>name</arg_key><arg_value>value</arg_key>",
+        False,
+    ),
+    # JSONSchemaFormat with style="cohere_xml"
+    (
+        xgr.structural_tag.JSONSchemaFormat(
+            json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
+            style="cohere_xml",
+        ),
+        "<cofl:tool_param name=name>value</cofl:tool_param>",
+        True,
+    ),
+    (
+        xgr.structural_tag.JSONSchemaFormat(
+            json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
+            style="cohere_xml",
+        ),
+        "<cofl:tool_param name=name>value</cofl:tool_param_extra>",
         False,
     ),
     # AnyTextFormat

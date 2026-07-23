@@ -4035,6 +4035,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"minimax_xml", JSONFormat::kMiniMaxXML},
       {"deepseek_xml", JSONFormat::kDeepSeekXML},
       {"glm_xml", JSONFormat::kGlmXML},
+      {"cohere_xml", JSONFormat::kCohereXML},
   };
   auto it = kNameToFormat.find(format);
   if (it == kNameToFormat.end()) {
@@ -4106,7 +4107,8 @@ std::string JSONSchemaToEBNF(
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
     case JSONFormat::kDeepSeekXML:
-    case JSONFormat::kGlmXML: {
+    case JSONFormat::kGlmXML:
+    case JSONFormat::kCohereXML: {
       XMLToolCallingConverter converter(
           indent,
           separators,

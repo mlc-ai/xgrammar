@@ -9,6 +9,7 @@ from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.builtin_structural_tag import (
+    get_cohere_structural_tag,
     get_deepseek_r1_structural_tag,
     get_deepseek_v3_1_structural_tag,
     get_deepseek_v3_2_structural_tag,
@@ -199,6 +200,7 @@ _tools_deepseek_v3_2 = make_tools(["search"])
 _tools_deepseek_v4 = make_tools(["search"])
 _tools_minimax = make_tools(["search"])
 _tools_glm_4_7 = make_tools(["search"])
+_tools_cohere = make_tools(["search"])
 
 # Two distinct tools for tool_choice=required / forced instance tests.
 _tools_llama_pair = make_tools(["t1", "t2"])
@@ -212,6 +214,7 @@ _tools_qwen_3_pair = make_tools(["t1", "t2"])
 _tools_qwen_3_5_pair = make_tools(["run_sql", "run_py"])
 _tools_harmony_pair = make_tools(["comment_tool", "other_tool"])
 _tools_glm_4_7_pair = make_tools(["search", "alt"])
+_tools_cohere_pair = make_tools(["search", "alt"])
 
 
 # ---------- Test: unknown format type ----------
@@ -577,6 +580,71 @@ def test_kimi_auto_requires_tool_calls_section():
     )
 
 
+def test_cohere_required_accepts_multicall_shape():
+    """Cohere required tool calls accept the expected XML block with multiple calls."""
+
+    tools = [
+        {
+            "function": {
+                "name": "online_search",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+            }
+        },
+        {
+            "function": {
+                "name": "get_weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"location": {"type": "string"}},
+                    "required": ["location"],
+                },
+            }
+        },
+    ]
+    structural_tag = get_model_structural_tag(
+        "cohere", tools=tools, tool_choice="required", reasoning=False
+    )
+
+    valid_output = (
+        "<cofl:tool_calls>\n"
+        "<cofl:tool_call id=0 name=online_search>\n"
+        "<cofl:tool_param name=query>"
+        "Why did the 1940s see an influx of new names in the music of Sudan?"
+        "</cofl:tool_param>\n"
+        "</cofl:tool_call>\n"
+        "<cofl:tool_call id=1 name=get_weather>\n"
+        "<cofl:tool_param name=location>London, UK</cofl:tool_param>\n"
+        "</cofl:tool_call>\n"
+        "</cofl:tool_calls>"
+    )
+    wrong_tool_output = valid_output.replace("name=get_weather", "name=get_time", 1)
+
+    check_stag_with_instance(structural_tag, valid_output, True)
+    check_stag_with_instance(structural_tag, wrong_tool_output, False)
+
+
+def test_cohere_reasoning_prefix_uses_end_thinking_token():
+    """Cohere reasoning mode accepts reasoning text before the end-thinking token."""
+
+    structural_tag = get_model_structural_tag(
+        "cohere", tools=_tools_cohere, tool_choice="required", reasoning=True
+    )
+    output = (
+        "I should search first.<|END_THINKING|>"
+        "<cofl:tool_calls>\n"
+        "<cofl:tool_call id=0 name=search>\n"
+        "<cofl:tool_param name=q>v</cofl:tool_param>\n"
+        "</cofl:tool_call>\n"
+        "</cofl:tool_calls>"
+    )
+
+    check_stag_with_instance(structural_tag, output, True)
+
+
 @pytest.mark.parametrize(
     "structural_tag_fn",
     [
@@ -592,6 +660,7 @@ def test_kimi_auto_requires_tool_calls_section():
         get_deepseek_v4_structural_tag,
         get_minimax_structural_tag,
         get_glm_4_7_structural_tag,
+        get_cohere_structural_tag,
     ],
 )
 @pytest.mark.parametrize(
@@ -682,7 +751,11 @@ _EXCLUDE_TOKEN_MODELS = [
     "qwen_3_5",
     "minimax",
     "glm_4_7",
+    "cohere",
 ]
+_EXPECTED_EXCLUDE_TOKENS = {
+    "cohere": ["<|START_THINKING|>", "<|END_THINKING|>"],
+}
 
 
 @pytest.mark.parametrize("model", _EXCLUDE_TOKEN_MODELS)
@@ -693,8 +766,9 @@ def test_exclude_special_tokens_default_excludes_think_tokens(model, tools):
 
     structural_tag = get_model_structural_tag(model, tools=tools, reasoning=True)
     flat = [token for excludes in _collect_excludes(structural_tag) for token in excludes]
-    assert "<think>" in flat
-    assert "</think>" in flat
+    expected_tokens = _EXPECTED_EXCLUDE_TOKENS.get(model, ["<think>", "</think>"])
+    for token in expected_tokens:
+        assert token in flat
     xgr.Grammar.from_structural_tag(structural_tag)
 
 
@@ -816,6 +890,24 @@ def test_exclude_special_tokens_passed_to_specific_function():
         (
             "harmony",
             '<|channel|>commentary to=functions.t2<|constrain|>json<|message|>{"q": "v"}<|call|>',
+            False,
+        ),
+        (
+            "cohere",
+            "<cofl:tool_calls>\n"
+            "<cofl:tool_call id=0 name=t1>\n"
+            '<cofl:tool_param name=q>{"type": "string"}</cofl:tool_param>\n'
+            "</cofl:tool_call>\n"
+            "</cofl:tool_calls>",
+            True,
+        ),
+        (
+            "cohere",
+            "<cofl:tool_calls>\n"
+            "<cofl:tool_call id=0 name=t2>\n"
+            '<cofl:tool_param name=q>{"type": "string"}</cofl:tool_param>\n'
+            "</cofl:tool_call>\n"
+            "</cofl:tool_calls>",
             False,
         ),
     ],
@@ -1150,6 +1242,44 @@ _tool_choice_instance_cases = [
             [True, False],
         ),
         id="glm_4_7-forced",
+    ),
+    pytest.param(
+        "cohere",
+        (
+            {"tools": _tools_cohere_pair, "tool_choice": "required"},
+            [
+                "",
+                "<cofl:tool_calls>\n"
+                "<cofl:tool_call id=0 name=search>\n"
+                "<cofl:tool_param name=q>v</cofl:tool_param>\n"
+                "</cofl:tool_call>\n"
+                "</cofl:tool_calls>",
+            ],
+            False,
+            [False, True],
+        ),
+        id="cohere-required",
+    ),
+    pytest.param(
+        "cohere",
+        (
+            {"tools": _tools_cohere_pair, "tool_choice": "forced", "forced_function_name": "search"},
+            [
+                "<cofl:tool_calls>\n"
+                "<cofl:tool_call id=0 name=search>\n"
+                "<cofl:tool_param name=q>v</cofl:tool_param>\n"
+                "</cofl:tool_call>\n"
+                "</cofl:tool_calls>",
+                "<cofl:tool_calls>\n"
+                "<cofl:tool_call id=0 name=alt>\n"
+                "<cofl:tool_param name=q>v</cofl:tool_param>\n"
+                "</cofl:tool_call>\n"
+                "</cofl:tool_calls>",
+            ],
+            False,
+            [True, False],
+        ),
+        id="cohere-forced",
     ),
 ]
 
