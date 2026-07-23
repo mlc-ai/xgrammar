@@ -110,6 +110,8 @@ class Grammar {
    * \param strict_mode Whether to use strict mode. In strict mode, the generated grammar will not
    * allow properties and items that is not specified in the schema. This is equivalent to
    * setting unevaluatedProperties and unevaluatedItems to false.
+   * \param print_converted_ebnf Whether to print the generated normalized grammar in EBNF format
+   * for debugging. Default: false.
    *
    * This helps LLM to generate accurate output in the grammar-guided generation with JSON
    * schema. Default: true.

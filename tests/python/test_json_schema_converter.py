@@ -89,6 +89,14 @@ def check_schema_with_instance(
     assert accepted == is_accepted
 
 
+def test_print_converted_ebnf(capfd: pytest.CaptureFixture[str]):
+    grammar = xgr.Grammar.from_json_schema(
+        {"type": "object", "properties": {"value": {"type": "integer"}}}, print_converted_ebnf=True
+    )
+
+    assert f"Converted EBNF: {grammar}" in capfd.readouterr().err
+
+
 def test_basic():
     class MainModel(BaseModel):
         integer_field: int

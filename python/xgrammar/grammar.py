@@ -234,7 +234,8 @@ class Grammar(XGRObject):
             It should be a positive integer.
 
         print_converted_ebnf : bool, default: False
-            If True, the converted EBNF string will be printed. For debugging purposes.
+            If True, the generated normalized grammar will be printed in EBNF format. For debugging
+            purposes.
 
         any_order : bool, default: False
             Whether object properties may appear in any order.
