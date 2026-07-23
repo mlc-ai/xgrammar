@@ -361,8 +361,9 @@ matcher = xgr.GrammarMatcher(compiled, default_temperature=0.2)
 `temperature` must be a finite non-negative number. It is supported on rules that can be compiled
 as terminals and on rules whose body is a `%json`, `%lark`, or `@name` subgrammar. An inner
 explicit temperature overrides an inherited outer temperature. When ambiguous parse paths have
-different active temperatures, `matcher.temperature` returns the maximum. If no active rule has a
-temperature, it returns `default_temperature`; if neither is configured, it returns `None`.
+different active temperatures, `matcher.temperature` emits a warning once and returns the maximum.
+If no active rule has a temperature, it returns `default_temperature`; if neither is configured,
+it returns `None`.
 
 `BatchGrammarMatcher.batch_fill_next_token_bitmask` returns one optional temperature per matcher.
 For speculative decoding, pass a one-dimensional CPU `float32` tensor through the

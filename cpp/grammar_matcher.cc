@@ -544,6 +544,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::vector<int> stop_token_ids_;
   bool terminate_without_stop_token_;
   std::optional<float> default_temperature_;
+  mutable bool has_warned_temperature_conflict_ = false;
   std::deque<int> token_length_history;
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
@@ -626,15 +627,25 @@ bool GrammarMatcher::Impl::IsStopTokenAccepted() const { return stop_token_is_ac
 
 std::optional<float> GrammarMatcher::Impl::GetTemperature() const {
   std::optional<float> syntax_temperature = std::nullopt;
+  bool has_temperature_conflict = false;
   for (const auto& state : GetLatestScanableStates()) {
     if (state.active_temperature_rule_id == -1) {
       continue;
     }
     const auto& temperature = grammar_->GetRule(state.active_temperature_rule_id).temperature;
     XGRAMMAR_DCHECK(temperature.has_value());
+    if (syntax_temperature.has_value() && temperature.value() != syntax_temperature.value()) {
+      has_temperature_conflict = true;
+    }
     if (!syntax_temperature.has_value() || temperature.value() > syntax_temperature.value()) {
       syntax_temperature = temperature;
     }
+  }
+  if (has_temperature_conflict && !has_warned_temperature_conflict_) {
+    XGRAMMAR_LOG(WARNING) << "Multiple active grammar paths specify different temperatures. "
+                             "Using the maximum temperature "
+                          << syntax_temperature.value() << ".";
+    has_warned_temperature_conflict_ = true;
   }
   return syntax_temperature.has_value() ? syntax_temperature : default_temperature_;
 }
