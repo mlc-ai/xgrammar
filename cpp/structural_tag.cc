@@ -1855,17 +1855,16 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
   // The whitespace cap comes from the JSONSchemaFormat node (per-tag).
-  std::string ebnf = JSONSchemaToEBNF(
+  Grammar sub_grammar = JSONSchemaToGrammar(
       format.json_schema,
       /*any_whitespace=*/true,
       /*indent=*/std::nullopt,
       /*separators=*/std::nullopt,
       /*strict_mode=*/true,
       /*max_whitespace_cnt=*/format.max_whitespace_cnt,
-      /*json_format=*/*json_format,
-      format.any_order
+      /*any_order=*/format.any_order,
+      /*json_format=*/*json_format
   );
-  auto sub_grammar = Grammar::FromEBNF(ebnf);
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }

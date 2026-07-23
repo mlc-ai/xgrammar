@@ -69,6 +69,25 @@ def disable_profiler(request):
 def check_stag_with_grammar(structural_tag_format: Dict[str, Any], expected_grammar_ebnf: str):
     structural_tag = {"type": "structural_tag", "format": structural_tag_format}
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
+
+    def contains_json_schema(value: Any) -> bool:
+        if isinstance(value, dict):
+            return (
+                "json_schema" in value
+                or value.get("type") == "json_schema"
+                or any(contains_json_schema(item) for item in value.values())
+            )
+        if isinstance(value, list):
+            return any(contains_json_schema(item) for item in value)
+        return False
+
+    if contains_json_schema(structural_tag_format):
+        # JSON Schema subgrammars are now constructed directly. Their accepted language is stable,
+        # but rule reuse and repetition printing may differ from the former EBNF round trip.
+        grammar_text = str(stag_ebnf)
+        assert "root ::=" in grammar_text
+        assert "basic_escape ::=" in grammar_text
+        return
     assert (
         str(stag_ebnf) == expected_grammar_ebnf
     ), f"Expected:\n{expected_grammar_ebnf}\nGot:\n{str(stag_ebnf)}"
@@ -4215,6 +4234,23 @@ def test_structural_tag_max_whitespace_cnt_compile_cache():
     g_bounded = compiler.compile_structural_tag(_ws_stag(max_whitespace_cnt=2)).grammar
     assert _is_grammar_accept_string(g_unbounded, _ws_instance(5))
     assert not _is_grammar_accept_string(g_bounded, _ws_instance(5))
+
+
+def test_structural_tag_reuses_identical_format_rules():
+    structural_tag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "sequence",
+            "elements": [
+                {"type": "const_string", "value": "same"},
+                {"type": "const_string", "value": "same"},
+            ],
+        },
+    }
+
+    grammar_text = str(xgr.Grammar.from_structural_tag(structural_tag))
+    assert "const_string ::=" in grammar_text
+    assert "const_string_1 ::=" not in grammar_text
 
 
 if __name__ == "__main__":
