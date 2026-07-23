@@ -335,6 +335,31 @@ class Grammar::Impl {
    */
   std::vector<std::vector<std::pair<int32_t, int32_t>>> per_rule_fsm_new_state_ids;
 
+  struct FSMStateCacheKey {
+    uint64_t hash;
+    int32_t state_count;
+    int32_t edge_count;
+
+    bool operator==(const FSMStateCacheKey& other) const {
+      return hash == other.hash && state_count == other.state_count &&
+             edge_count == other.edge_count;
+    }
+
+    bool operator<(const FSMStateCacheKey& other) const {
+      if (hash != other.hash) return hash < other.hash;
+      if (state_count != other.state_count) return state_count < other.state_count;
+      return edge_count < other.edge_count;
+    }
+  };
+
+  /*!
+   * \brief A structural cache key for the behavior reachable from each FSM state.
+   * \details Unlike per_rule_fsm_hashes, this excludes states that can only occur before the
+   * selected state. The compiler uses target-state keys to share token-prefix work whose
+   * post-byte continuations are structurally identical.
+   */
+  std::vector<std::vector<std::pair<int32_t, FSMStateCacheKey>>> per_rule_fsm_state_cache_keys;
+
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;
 

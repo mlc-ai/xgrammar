@@ -873,6 +873,30 @@ def test_repeat_ref_range_from_zero():
     assert not _is_grammar_accept_string(grammar, "a" * 201)
 
 
+@pytest.mark.parametrize("upper", [64, 128, 256, 1024])
+@pytest.mark.parametrize(
+    ("character_class", "accepted_char", "rejected_char"), [("[a-z]", "a", "A"), ("[^b]", "é", "b")]
+)
+def test_character_class_repeat_ref_range_from_zero_boundaries(
+    upper: int, character_class: str, accepted_char: str, rejected_char: str
+):
+    """Bounded character classes preserve their bounds and negation across the unzip threshold."""
+    grammar = xgr.Grammar.from_ebnf(f"root ::= {character_class}{{0,{upper}}}")
+    if upper > 128:
+        _assert_repeat_ref_active(grammar)
+    else:
+        tokenizer_info = xgr.TokenizerInfo([])
+        compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+        fsm_str = _print_grammar_fsms(compiler.compile_grammar(grammar).grammar)
+        assert "Repeat(" not in fsm_str
+
+    assert _is_grammar_accept_string(grammar, "")
+    assert _is_grammar_accept_string(grammar, accepted_char)
+    assert _is_grammar_accept_string(grammar, accepted_char * upper)
+    assert not _is_grammar_accept_string(grammar, accepted_char * (upper + 1))
+    assert not _is_grammar_accept_string(grammar, rejected_char)
+
+
 def test_repeat_ref_nested_inner():
     """Test repeat containing a rule with choices (repeat wraps complex rule)."""
     grammar_str = """

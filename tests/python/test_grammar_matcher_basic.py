@@ -176,6 +176,183 @@ def test_token_operations():
     assert result == expected
 
 
+def test_large_crossing_token_mask_matches_string_acceptance():
+    def base26(value: int) -> str:
+        chars = []
+        for _ in range(4):
+            chars.append(chr(ord("a") + value % 26))
+            value //= 26
+        return "".join(reversed(chars))
+
+    def entry(value: int) -> str:
+        opening, closing = [("(", ")"), ("[", "]"), ("{", "}")][value % 3]
+        label = "a" * (value % 4 + 1) + base26(value)
+        return f" {label}:{opening}{base26(1049 - value)}{closing}"
+
+    accepted_tokens = [entry(i) for i in range(1050)]
+    rejected_tokens = [entry(i) + "!" for i in range(64)]
+    vocab = accepted_tokens + rejected_tokens + ['"']
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[])
+    grammar = xgr.Grammar.from_ebnf(
+        r"""
+root ::= "\"" entry{0,3} "\""
+entry ::= " " label ":" payload
+label ::= [a-z]+
+payload ::= "(" word ")" | "[" word "]" | "{" word "}"
+word ::= [a-z]+
+"""
+    )
+    compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=False)
+    compiled_grammar = compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    assert matcher.accept_string('"')
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    repeated_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    matcher.fill_next_token_bitmask(repeated_bitmask)
+    assert torch.equal(bitmask, repeated_bitmask)
+
+    # Fill twice to populate the resolved-mask cache, then fork. The copied cache must read the
+    # fork's Earley rows after the original advances, rather than retaining a pointer to the
+    # original matcher.
+    forked_after_cache = matcher.fork()
+    assert matcher.accept_token(0)
+    forked_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    forked_after_cache.fill_next_token_bitmask(forked_bitmask)
+    assert torch.equal(bitmask, forked_bitmask)
+    matcher.rollback(1)
+    matcher.fill_next_token_bitmask(repeated_bitmask)
+    assert torch.equal(bitmask, repeated_bitmask)
+
+    for token_id, token in enumerate(vocab):
+        expected = matcher.fork().accept_string(token)
+        word = int(bitmask[0, token_id // 32].item())
+        actual = bool(word & (1 << (token_id % 32)))
+        assert actual == expected, token
+
+
+def test_large_crossing_token_low_reuse_cache_falls_back_exactly():
+    prefix_count = 1050
+    accepted_tokens = ["a" + "b" * i for i in range(prefix_count)]
+    vocab = accepted_tokens + ["ac"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[])
+    grammar = xgr.Grammar.from_ebnf(
+        f'root ::= child tail\nchild ::= [a]+\ntail ::= "{"b" * (prefix_count + 1)}"'
+    )
+    compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=False)
+    compiled_grammar = compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    repeated_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    matcher.fill_next_token_bitmask(repeated_bitmask)
+    assert torch.equal(bitmask, repeated_bitmask)
+
+    for token_id in range(prefix_count):
+        word = int(bitmask[0, token_id // 32].item())
+        assert word & (1 << (token_id % 32))
+    rejected_token_id = prefix_count
+    word = int(bitmask[0, rejected_token_id // 32].item())
+    assert not word & (1 << (rejected_token_id % 32))
+
+    assert matcher.accept_string(accepted_tokens[-1])
+    assert not matcher.accept_string("c")
+
+
+def test_large_crossing_token_cache_rechecks_low_reuse_exactly():
+    reusable_tokens = ["a" + "b" * i for i in range(1, 65)]
+    unique_tokens = ["a" + "c" * i for i in range(1, 961)]
+    vocab = reusable_tokens + unique_tokens + ["ad"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[])
+    grammar = xgr.Grammar.from_ebnf(
+        f'root ::= child tail\nchild ::= [a]+\ntail ::= [b]+ | "{"c" * 960}"'
+    )
+    compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=False)
+    compiled_grammar = compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    repeated_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    matcher.fill_next_token_bitmask(repeated_bitmask)
+    assert torch.equal(bitmask, repeated_bitmask)
+
+    for token_id, token in enumerate(vocab):
+        expected = matcher.fork().accept_string(token)
+        word = int(bitmask[0, token_id // 32].item())
+        actual = bool(word & (1 << (token_id % 32)))
+        assert actual == expected, token
+
+
+def test_large_crossing_token_cache_disables_after_steady_fast_path():
+    def base26(value: int) -> str:
+        chars = []
+        for _ in range(4):
+            chars.append(chr(ord("a") + value % 26))
+            value //= 26
+        return "".join(reversed(chars))
+
+    # The loop tokens provide more than 4096 reusable transitions, which moves the continuation
+    # cache onto its steady fast path. The final token then crosses a long literal and exhausts the
+    # 128 canonical-configuration limit. Advancing after that fallback must use EarleyParser rather
+    # than the dense transition row released by Disable().
+    loop_tokens = ["ab" + base26(i) for i in range(5200)]
+    fixed_tail = "b" * 140 + "c"
+    vocab = loop_tokens + ["az:" + fixed_tail]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[])
+    grammar = xgr.Grammar.from_ebnf(
+        f"""
+root ::= child tail
+child ::= [a]+
+tail ::= [a-z]+ ":" "{fixed_tail}"
+"""
+    )
+    compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=False)
+    compiled_grammar = compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    repeated_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    matcher.fill_next_token_bitmask(repeated_bitmask)
+    assert torch.equal(bitmask, repeated_bitmask)
+
+    for token_id in [0, len(loop_tokens) - 1, len(vocab) - 1]:
+        expected = matcher.fork().accept_string(vocab[token_id])
+        word = int(bitmask[0, token_id // 32].item())
+        actual = bool(word & (1 << (token_id % 32)))
+        assert actual == expected, vocab[token_id]
+
+
+def test_large_crossing_token_moderate_reuse_cache_falls_back_exactly():
+    fixed = "cdefghijklmn"
+    repeated_tail = (fixed + "b" * 6) * 100
+    accepted_tokens = ["a" + repeated_tail[:i] for i in range(1, len(repeated_tail) + 1)]
+    vocab = accepted_tokens + ["az"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[])
+    grammar = xgr.Grammar.from_ebnf(
+        f'root ::= child tail\nchild ::= [a]+\ntail ::= segment{{100}}\nsegment ::= "{fixed}" [b]+'
+    )
+    compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=False)
+    compiled_grammar = compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    repeated_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    matcher.fill_next_token_bitmask(repeated_bitmask)
+    assert torch.equal(bitmask, repeated_bitmask)
+
+    sampled_token_ids = [0, 31, 32, 255, 511, 1023, len(accepted_tokens) - 1, len(vocab) - 1]
+    for token_id in sampled_token_ids:
+        expected = matcher.fork().accept_string(vocab[token_id])
+        word = int(bitmask[0, token_id // 32].item())
+        actual = bool(word & (1 << (token_id % 32)))
+        assert actual == expected, vocab[token_id]
+
+
 def test_rollback():
     vocab = [
         # fmt: off

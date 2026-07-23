@@ -1790,6 +1790,8 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
 
 /****************** Repetition range helpers ******************/
 
+constexpr int64_t kRepetitionUnzipThreshold = 128;
+
 int32_t RepetitionRangeExpanderImpl::LegacyHandleRepetitionRange(
     const std::string& cur_rule_name, int32_t grammar_expr_id, int64_t lower, int64_t upper
 ) {
@@ -1869,7 +1871,8 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
       ref_rule_body.size() == 1) {
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
     if (ref_choice.size() == 1) {
-      grammar_expr_id = builder_->AddGrammarExpr(base_grammar_->GetGrammarExpr(ref_choice[0]));
+      const auto& repeated_element = base_grammar_->GetGrammarExpr(ref_choice[0]);
+      grammar_expr_id = builder_->AddGrammarExpr(repeated_element);
     }
   }
 
@@ -1895,13 +1898,13 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
 int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
     const std::string& cur_rule_name, int32_t grammar_expr_id, int64_t lower, int64_t upper
 ) {
-  static const int64_t kUnzipThreshold = 128;
   XGRAMMAR_DCHECK(lower >= 0);
   XGRAMMAR_DCHECK(upper == -1 || upper >= lower);
 
   // Case 1.1 small upper (<=threshold), unzip the repetition.
   // Case 1.2 unbounded upper, and lower is also small (<=threshold), unzip the lower part.
-  if ((upper != -1 && upper <= kUnzipThreshold) || (upper == -1 && lower <= kUnzipThreshold)) {
+  if ((upper != -1 && upper <= kRepetitionUnzipThreshold) ||
+      (upper == -1 && lower <= kRepetitionUnzipThreshold)) {
     return LegacyHandleRepetitionRange(cur_rule_name, grammar_expr_id, lower, upper);
   }
 
@@ -1911,11 +1914,11 @@ int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
   // Case 2.1.1. lower is smaller than threshold, and upper is large. Transform {lower, upper} into:
   // {threshold, upper} | {lower, threshold}
   std::vector<int32_t> choices;
-  if (lower < kUnzipThreshold) {
-    choices.push_back(builder_->AddSequence(
-        {LegacyHandleRepetitionRange(cur_rule_name, grammar_expr_id, lower, kUnzipThreshold - 1)}
-    ));
-    lower = kUnzipThreshold;
+  if (lower < kRepetitionUnzipThreshold) {
+    choices.push_back(builder_->AddSequence({LegacyHandleRepetitionRange(
+        cur_rule_name, grammar_expr_id, lower, kRepetitionUnzipThreshold - 1
+    )}));
+    lower = kRepetitionUnzipThreshold;
   }
 
   std::optional<int32_t> infinite_repetition_id = std::nullopt;
@@ -1945,7 +1948,7 @@ int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
 
   // Handle the {lower, upper} part, where threshold <= lower <= upper.
   const auto repeat_name = cur_rule_name + "_repeat_1";
-  XGRAMMAR_DCHECK(lower >= kUnzipThreshold && upper >= lower);
+  XGRAMMAR_DCHECK(lower >= kRepetitionUnzipThreshold && upper >= lower);
 
   // If we have infinite repetition part, add it to the sequence.
   if (infinite_repetition_id.has_value()) {
@@ -1953,22 +1956,23 @@ int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
   }
 
   // The repetition body.
-  if (upper != kUnzipThreshold) {
-    XGRAMMAR_DCHECK(upper > kUnzipThreshold);
+  if (upper != kRepetitionUnzipThreshold) {
+    XGRAMMAR_DCHECK(upper > kRepetitionUnzipThreshold);
     auto new_grammar_expr_id = builder_->AddChoices({builder_->AddSequence({grammar_expr_id})});
     auto new_rule_id = builder_->AddRuleWithHint(repeat_name, new_grammar_expr_id);
-    auto new_repeated_ref_rule_expr = builder_->AddChoices({builder_->AddSequence(
-        {builder_->AddRepeat(new_rule_id, lower - kUnzipThreshold, upper - kUnzipThreshold)}
-    )});
+    auto new_repeated_ref_rule_expr =
+        builder_->AddChoices({builder_->AddSequence({builder_->AddRepeat(
+            new_rule_id, lower - kRepetitionUnzipThreshold, upper - kRepetitionUnzipThreshold
+        )})});
     auto new_repeated_rule_id =
         builder_->AddRuleWithHint(repeat_name + "_inner", new_repeated_ref_rule_expr);
     repeated_sequence.push_back(builder_->AddRuleRef(new_repeated_rule_id));
-    std::vector<int32_t> repetition_lookahead(kUnzipThreshold, grammar_expr_id);
+    std::vector<int32_t> repetition_lookahead(kRepetitionUnzipThreshold, grammar_expr_id);
     builder_->UpdateLookaheadAssertion(new_rule_id, builder_->AddSequence(repetition_lookahead));
   }
 
   // Add the last threshold grammar_expr_id to the sequence.
-  for (int i = 0; i < kUnzipThreshold; ++i) {
+  for (int i = 0; i < kRepetitionUnzipThreshold; ++i) {
     repeated_sequence.push_back(grammar_expr_id);
   }
 
@@ -2119,6 +2123,11 @@ class GrammarFSMHasherImpl {
    * \brief Get the hash value of a fsm, with a given grammar.
    */
   uint64_t HashFsm(int fsm_index);
+
+  /*!
+   * \brief Get a structural cache key for the continuation reachable from one FSM state.
+   */
+  std::optional<Grammar::Impl::FSMStateCacheKey> HashFsmState(int fsm_index, int32_t start_state);
 
   /*!
    * \brief Find a simple cycle in the reference graph, And hash the
@@ -2340,6 +2349,25 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
   for (const auto& [rule_id, hash_value] : partial_hashed_list) {
     grammar->ImplPtr()->per_rule_fsm_hashes[rule_id] = hash_value;
   }
+
+  grammar->ImplPtr()->per_rule_fsm_state_cache_keys.resize((*grammar)->NumRules());
+  for (int32_t rule_id = 0; rule_id < (*grammar)->NumRules(); ++rule_id) {
+    if (!grammar_->ImplPtr()->per_rule_fsm_hashes[rule_id].has_value() ||
+        !grammar_->ImplPtr()->per_rule_fsms[rule_id].has_value()) {
+      continue;
+    }
+    const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[rule_id]->GetFsm();
+    std::unordered_set<int> reachable_states;
+    fsm.GetReachableStates(&reachable_states);
+    auto& state_cache_keys = grammar_->ImplPtr()->per_rule_fsm_state_cache_keys[rule_id];
+    state_cache_keys.reserve(reachable_states.size());
+    for (int32_t state_id : reachable_states) {
+      auto cache_key = HashFsmState(rule_id, state_id);
+      if (cache_key.has_value()) {
+        state_cache_keys.emplace_back(state_id, *cache_key);
+      }
+    }
+  }
 }
 
 std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index) {
@@ -2559,6 +2587,94 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
   return hash_result;
 }
 
+std::optional<Grammar::Impl::FSMStateCacheKey> GrammarFSMHasherImpl::HashFsmState(
+    int fsm_index, int32_t start_state
+) {
+  XGRAMMAR_DCHECK(
+      fsm_index >= 0 && fsm_index < (*grammar_)->NumRules() &&
+      grammar_->ImplPtr()->per_rule_fsms[fsm_index].has_value() &&
+      grammar_->ImplPtr()->per_rule_fsm_hashes[fsm_index].has_value()
+  );
+  const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[fsm_index]->GetFsm();
+  const auto& complete_fsm = grammar_->ImplPtr()->complete_fsm;
+
+  // Domain-separate state-continuation keys from whole-FSM hashes because both use the same
+  // RuleLevelCache.
+  uint64_t hash_result = 0x53544154455f4653ULL;
+  std::map<int32_t, int32_t> original_state_id_to_new_id;
+  original_state_id_to_new_id[start_state] = 0;
+  std::queue<int32_t> bfs_queue;
+  bfs_queue.push(start_state);
+  int32_t edge_count = 0;
+
+  while (!bfs_queue.empty()) {
+    const int32_t current_old_state_id = bfs_queue.front();
+    bfs_queue.pop();
+    const int32_t current_new_state_id = original_state_id_to_new_id[current_old_state_id];
+    hash_result = HashCombine(
+        hash_result,
+        current_new_state_id,
+        fsm.IsEndState(current_old_state_id) ? kEndStateFlag : kNotEndStateFlag
+    );
+
+    std::vector<std::pair<uint64_t, int32_t>> labeled_targets;
+    labeled_targets.reserve(sorted_edges_[current_old_state_id].size());
+    for (const auto& edge : sorted_edges_[current_old_state_id]) {
+      uint64_t label_hash = HashCombine(uint64_t{0}, edge.min);
+      if (edge.IsRuleRef()) {
+        const int32_t ref_rule_id = edge.GetRefRuleId();
+        if (!grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value()) {
+          return std::nullopt;
+        }
+        label_hash =
+            HashCombine(label_hash, grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value());
+      } else if (edge.IsRepeatRef()) {
+        const auto info = complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+        if (!grammar_->ImplPtr()->per_rule_fsm_hashes[info.RuleId()].has_value()) {
+          return std::nullopt;
+        }
+        label_hash = HashCombine(
+            label_hash,
+            grammar_->ImplPtr()->per_rule_fsm_hashes[info.RuleId()].value(),
+            info.Lower(),
+            info.Upper()
+        );
+      } else if (edge.IsToken()) {
+        const auto info = complete_fsm.GetTokenEdgeInfo(edge.GetAuxIndex());
+        label_hash = HashCombine(label_hash, info.Count());
+        for (int32_t i = 0; i < info.Count(); ++i) {
+          label_hash = HashCombine(label_hash, info.TokenIds()[i]);
+        }
+      } else if (edge.IsExcludeToken()) {
+        const auto info = complete_fsm.GetExcludeTokenEdgeInfo(edge.GetAuxIndex());
+        label_hash = HashCombine(label_hash, info.Count());
+        for (int32_t i = 0; i < info.Count(); ++i) {
+          label_hash = HashCombine(label_hash, info.TokenIds()[i]);
+        }
+      } else {
+        label_hash = HashCombine(label_hash, edge.max);
+      }
+      labeled_targets.emplace_back(label_hash, edge.target);
+    }
+    std::sort(labeled_targets.begin(), labeled_targets.end());
+
+    for (const auto& [label_hash, target] : labeled_targets) {
+      auto [target_it, inserted] = original_state_id_to_new_id.emplace(
+          target, static_cast<int32_t>(original_state_id_to_new_id.size())
+      );
+      if (inserted) {
+        bfs_queue.push(target);
+      }
+      hash_result = HashCombine(hash_result, current_new_state_id, label_hash, target_it->second);
+      ++edge_count;
+    }
+  }
+
+  return Grammar::Impl::FSMStateCacheKey{
+      hash_result, static_cast<int32_t>(original_state_id_to_new_id.size()), edge_count
+  };
+}
+
 std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
     const Grammar& grammar, int32_t sequence_id
 ) {
@@ -2639,6 +2755,10 @@ class RuleLevelCache::Impl {
 
   explicit Impl(size_t max_cache_memory_size) : max_cache_memory_size_(max_cache_memory_size) {}
 
+#ifdef XGRAMMAR_PROFILE_COMPILE
+  ~Impl();
+#endif
+
   std::optional<AdaptiveTokenMask> GetCache(
       const uint64_t& fsm_hash,
       int32_t fsm_new_node_id,
@@ -2688,6 +2808,12 @@ class RuleLevelCache::Impl {
     // The cache map: (fsm_hash, node_id, ...) -> index in cache_list
     List<NodeType> cache_list;
     std::unordered_map<NodeKey, int> cache;
+#ifdef XGRAMMAR_PROFILE_COMPILE
+    uint64_t profile_hits = 0;
+    uint64_t profile_misses = 0;
+    uint64_t profile_additions = 0;
+    uint64_t profile_duplicate_additions = 0;
+#endif
   };
 
   Shard& GetShard(const NodeKey& key) {
@@ -2703,6 +2829,29 @@ class RuleLevelCache::Impl {
   const size_t max_cache_memory_size_;
   std::array<Shard, kNumShards> shards_;
 };
+
+#ifdef XGRAMMAR_PROFILE_COMPILE
+RuleLevelCache::Impl::~Impl() {
+  uint64_t profile_hits = 0;
+  uint64_t profile_misses = 0;
+  uint64_t profile_additions = 0;
+  uint64_t profile_duplicate_additions = 0;
+  size_t entries = 0;
+  int64_t bytes = 0;
+  for (const auto& shard : shards_) {
+    profile_hits += shard.profile_hits;
+    profile_misses += shard.profile_misses;
+    profile_additions += shard.profile_additions;
+    profile_duplicate_additions += shard.profile_duplicate_additions;
+    entries += shard.cache.size();
+    bytes += shard.current_cache_memory_size;
+  }
+  XGRAMMAR_LOG(INFO) << "RuleLevelCacheProfile(hits=" << profile_hits
+                     << ", misses=" << profile_misses << ", additions=" << profile_additions
+                     << ", duplicate_additions=" << profile_duplicate_additions
+                     << ", entries=" << entries << ", bytes=" << bytes << ")";
+}
+#endif
 
 std::optional<AdaptiveTokenMask> RuleLevelCache::GetCache(
     const uint64_t& fsm_hash,
@@ -2749,9 +2898,15 @@ std::optional<AdaptiveTokenMask> RuleLevelCache::Impl::GetCache(
   std::lock_guard<std::mutex> lock(shard.mutex);
   auto it = shard.cache.find(key);
   if (it == shard.cache.end()) {
+#ifdef XGRAMMAR_PROFILE_COMPILE
+    ++shard.profile_misses;
+#endif
     return std::nullopt;
   }
 
+#ifdef XGRAMMAR_PROFILE_COMPILE
+  ++shard.profile_hits;
+#endif
   // Move the node to the back of the list.
   shard.cache_list.MoveBack(it->second);
   return List<NodeType>::iterator(it->second, shard.cache_list)->second;
@@ -2784,6 +2939,9 @@ bool RuleLevelCache::Impl::AddCache(
     return false;
   }
   if (shard.cache.find(key) != shard.cache.end()) {
+#ifdef XGRAMMAR_PROFILE_COMPILE
+    ++shard.profile_duplicate_additions;
+#endif
     // Already exists.
     return false;
   }
@@ -2809,6 +2967,9 @@ bool RuleLevelCache::Impl::AddCache(
   auto new_it = shard.cache_list.PushBack(NodeType(key, std::move(token_mask)));
   shard.current_cache_memory_size += MemorySize(new_it->second);
   shard.cache[key] = new_it.Index();
+#ifdef XGRAMMAR_PROFILE_COMPILE
+  ++shard.profile_additions;
+#endif
   return true;
 }
 

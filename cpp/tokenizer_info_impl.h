@@ -39,6 +39,23 @@ class TokenizerInfo::Impl {
   const std::vector<int32_t>& GetTokenIdToSortedVocabIndex() const {
     return token_id_to_sorted_vocab_index_;
   }
+  const std::vector<int32_t>& GetMixedWhitespaceSuffixSortedIndices() const {
+    return mixed_whitespace_suffix_sorted_indices_;
+  }
+  const std::vector<int32_t>& GetMixedWhitespaceSuffixOffsets() const {
+    return mixed_whitespace_suffix_offsets_;
+  }
+  const std::vector<int32_t>& GetMixedWhitespaceSuffixLcpWithPrevious() const {
+    return mixed_whitespace_suffix_lcp_with_previous_;
+  }
+#ifdef XGRAMMAR_PROFILE_COMPILE
+  const std::vector<int32_t>& GetSuffixLookupIndptr() const { return suffix_lookup_indptr_; }
+  const std::vector<int32_t>& GetSuffixLookupSortedIndices() const {
+    return suffix_lookup_sorted_indices_;
+  }
+  const std::vector<int32_t>& GetSuffixLookupTokenIds() const { return suffix_lookup_token_ids_; }
+  const std::vector<int32_t>& GetSuffixPrefixRangeEnds() const { return suffix_prefix_range_ends_; }
+#endif
 
   std::string DumpMetadata() const;
   picojson::value DumpMetadataValue() const;
@@ -79,6 +96,22 @@ class TokenizerInfo::Impl {
   std::vector<int32_t> special_token_ids_;
   /*! \brief Reverse mapping: token_id -> index in sorted_decoded_vocab_. -1 if not present. */
   std::vector<int32_t> token_id_to_sorted_vocab_index_;
+  /*! \brief Mixed whitespace/text tokens sorted by the suffix after maximal leading whitespace. */
+  std::vector<int32_t> mixed_whitespace_suffix_sorted_indices_;
+  /*! \brief Maximal leading-whitespace length for each entry in the suffix-sorted table. */
+  std::vector<int32_t> mixed_whitespace_suffix_offsets_;
+  /*! \brief Adjacent longest-common-prefix lengths in the suffix-sorted table. */
+  std::vector<int32_t> mixed_whitespace_suffix_lcp_with_previous_;
+#ifdef XGRAMMAR_PROFILE_COMPILE
+  /*! \brief CSR offsets for suffix lookup metadata attached to each vocabulary token. */
+  std::vector<int32_t> suffix_lookup_indptr_;
+  /*! \brief Suffix lookup results as sorted-vocabulary indices, or -1 when absent. */
+  std::vector<int32_t> suffix_lookup_sorted_indices_;
+  /*! \brief Suffix lookup results as token IDs, or -1 when absent. */
+  std::vector<int32_t> suffix_lookup_token_ids_;
+  /*! \brief End of the lexicographic vocabulary interval sharing each token prefix. */
+  std::vector<int32_t> suffix_prefix_range_ends_;
+#endif
 
   /*!
    * \brief The tokens used to detect stop tokens from the vocabulary.

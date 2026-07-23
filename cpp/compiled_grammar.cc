@@ -5,6 +5,8 @@
 
 #include <xgrammar/compiler.h>
 
+#include <algorithm>
+
 #include "compiled_grammar_impl.h"
 #include "support/json_serializer.h"
 #include "testing.h"
@@ -42,6 +44,28 @@ AdaptiveTokenMask::AdaptiveTokenMask(
   }
 
   this->uncertain_indices = uncertain_indices;
+  RebuildDerivedData(vocab_size, sorted_decoded_vocab);
+}
+
+AdaptiveTokenMask::AdaptiveTokenMask(
+    size_t vocab_size,
+    const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
+    std::vector<int32_t>&& accepted_indices,
+    std::vector<int32_t>&& uncertain_indices
+) {
+  const auto size_acc = accepted_indices.size();
+
+  store_type = size_acc >= USE_BITSET_THRESHOLD ? StoreType::kAcceptedBitset : StoreType::kAccepted;
+  if (store_type == StoreType::kAcceptedBitset) {
+    accepted_bitset = DynamicBitset(vocab_size);
+    for (auto idx : accepted_indices) {
+      accepted_bitset.Set(sorted_decoded_vocab[idx].first, true);
+    }
+  } else {
+    this->accepted_indices = std::move(accepted_indices);
+  }
+  this->uncertain_indices = std::move(uncertain_indices);
+  RebuildDerivedData(vocab_size, sorted_decoded_vocab);
 }
 
 AdaptiveTokenMask::AdaptiveTokenMask(
@@ -64,6 +88,39 @@ AdaptiveTokenMask::AdaptiveTokenMask(
     this->accepted_indices = accepted_indices;
   }
   this->uncertain_indices = uncertain_indices;
+  RebuildDerivedData(vocab_size, sorted_decoded_vocab);
+}
+
+void AdaptiveTokenMask::RebuildDerivedData(
+    size_t vocab_size, const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab
+) {
+  max_uncertain_token_length = 0;
+  if (uncertain_indices.size() < UNCERTAIN_BITSET_THRESHOLD) {
+    uncertain_bitset = DynamicBitset();
+    uncertain_lcp_with_previous.clear();
+    return;
+  }
+  uncertain_bitset = DynamicBitset(vocab_size);
+  uncertain_lcp_with_previous.resize(uncertain_indices.size());
+  const std::string* previous_token = nullptr;
+  for (size_t i = 0; i < uncertain_indices.size(); ++i) {
+    auto idx = uncertain_indices[i];
+    uncertain_bitset.Set(sorted_decoded_vocab[idx].first);
+    const auto& token = sorted_decoded_vocab[idx].second;
+    max_uncertain_token_length =
+        std::max(max_uncertain_token_length, static_cast<int32_t>(token.size()));
+    uncertain_lcp_with_previous[i] =
+        previous_token == nullptr
+            ? 0
+            : static_cast<int32_t>(
+                  std::mismatch(
+                      token.begin(), token.end(), previous_token->begin(), previous_token->end()
+                  )
+                      .first -
+                  token.begin()
+              );
+    previous_token = &token;
+  }
 }
 
 std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const {
@@ -168,7 +225,17 @@ picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   auto result = picojson::object{};
   result["grammar"] = AutoSerializeJSONValue(impl.grammar);
   result["tokenizer_metadata"] = impl.tokenizer_info->DumpMetadataValue();
-  result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(impl.adaptive_token_mask_cache);
+  // Preserve the v14 wire format: serialized grammars store one mask value per ParserState even
+  // though the in-memory representation shares structurally identical masks.
+  std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>
+      serialized_adaptive_token_mask_cache;
+  serialized_adaptive_token_mask_cache.reserve(impl.adaptive_token_mask_ids.size());
+  for (const auto& [state, mask_id] : impl.adaptive_token_mask_ids) {
+    XGRAMMAR_DCHECK(mask_id < impl.adaptive_token_masks.size());
+    serialized_adaptive_token_mask_cache.emplace(state, impl.adaptive_token_masks[mask_id]);
+  }
+  result["adaptive_token_mask_cache"] =
+      AutoSerializeJSONValue(serialized_adaptive_token_mask_cache);
   return picojson::value(result);
 }
 
@@ -186,6 +253,7 @@ std::optional<SerializationError> DeserializeJSONValue(
     return ConstructDeserializeError("Expect a 'grammar' field", type_name);
   }
   AutoDeserializeJSONValue(&(impl->grammar), object["grammar"], type_name);
+  impl->earley_parser_metadata = EarleyParserGrammarMetadata(impl->grammar);
   if (object.find("tokenizer_metadata") == object.end()) {
     return ConstructDeserializeError("Expect a 'tokenizer_metadata' field", type_name);
   }
@@ -199,14 +267,29 @@ std::optional<SerializationError> DeserializeJSONValue(
   if (object.find("adaptive_token_mask_cache") == object.end()) {
     return ConstructDeserializeError("Expect a 'adaptive_token_mask_cache' field", type_name);
   }
-  AutoDeserializeJSONValue(&(impl->adaptive_token_mask_cache), object["adaptive_token_mask_cache"]);
+  std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>
+      serialized_adaptive_token_mask_cache;
+  AutoDeserializeJSONValue(
+      &serialized_adaptive_token_mask_cache, object["adaptive_token_mask_cache"]
+  );
+  const auto& sorted_decoded_vocab = tokenizer_info.GetSortedDecodedVocab();
+  const auto vocab_size = tokenizer_info.GetVocabSize();
+  impl->adaptive_token_masks.reserve(serialized_adaptive_token_mask_cache.size());
+  impl->adaptive_token_mask_ids.reserve(serialized_adaptive_token_mask_cache.size());
+  for (auto& [state, mask] : serialized_adaptive_token_mask_cache) {
+    mask.RebuildDerivedData(vocab_size, sorted_decoded_vocab);
+    const uint32_t mask_id = static_cast<uint32_t>(impl->adaptive_token_masks.size());
+    impl->adaptive_token_masks.push_back(std::move(mask));
+    impl->adaptive_token_mask_ids.emplace(state, mask_id);
+  }
   return std::nullopt;
 }
 
 /************** CompiledGrammar **************/
 
 std::size_t MemorySize(const CompiledGrammar::Impl& impl) {
-  return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache);
+  return MemorySize(impl.grammar) + MemorySize(impl.earley_parser_metadata) +
+         MemorySize(impl.adaptive_token_masks) + MemorySize(impl.adaptive_token_mask_ids);
 }
 
 std::size_t CompiledGrammar::MemorySizeBytes() const { return MemorySize(*pimpl_); }
