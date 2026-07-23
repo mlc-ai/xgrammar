@@ -1,23 +1,6 @@
 
 ## Run Benchmark
 
-### Benchmark JSON Schema Conversion
-
-Measure direct grammar AST construction, including representative large schemas from a local
-JSONSchemaBench checkout and two generated stress cases:
-
-```bash
-python3 examples/benchmark/bench_json_schema_conversion.py \
-  --mode direct \
-  --jsonschemabench-root /path/to/jsonschemabench \
-  --synthetic-wide 5000 \
-  --synthetic-refs 2000
-```
-
-Use `--mode legacy` to report the JSON Schema-to-EBNF conversion and EBNF parser time separately.
-`--xgrammar-root` can select a different built checkout, which makes old/new comparisons run in
-separate processes.
-
 ### Benchmark Grammar Compile and Mask Generation
 
 #### Dependencies
