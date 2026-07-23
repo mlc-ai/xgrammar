@@ -14,10 +14,14 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
+
+#include "support/utils.h"
 
 namespace xgrammar {
 
@@ -204,10 +208,37 @@ enum class JSONFormat : int {
 std::optional<JSONFormat> JSONFormatFromString(const std::string& format);
 
 /*!
- * \brief Manage indentation and separators as EBNF expression strings.
- *
- * Formatting remains string-based here; JSONSchemaConverter converts the returned expressions to
- * grammar AST nodes.
+ * \brief Manage the rule generation cache. Wraps key-value cache for schema deduplication.
+ */
+class GenerateCacheManager {
+ public:
+  /*! \brief Add a key-value pair to the cache. */
+  void AddCache(
+      const std::string& key,
+      int format_context,
+      int64_t indentation_context,
+      const std::string& value
+  ) {
+    cache_[{key, format_context, indentation_context}] = value;
+  }
+
+  /*! \brief Get cached value by key. Returns std::nullopt if not found. */
+  std::optional<std::string> GetCache(
+      const std::string& key, int format_context, int64_t indentation_context
+  ) const {
+    auto it = cache_.find({key, format_context, indentation_context});
+    if (it != cache_.end()) {
+      return it->second;
+    }
+    return std::nullopt;
+  }
+
+ private:
+  std::unordered_map<std::tuple<std::string, int, int64_t>, std::string> cache_;
+};
+
+/*!
+ * \brief Manage the indent and separator for the generation of EBNF grammar.
  */
 class IndentManager {
  public:
@@ -237,6 +268,8 @@ class IndentManager {
   int64_t total_indent_;
   std::vector<bool> is_first_;
   std::optional<int> max_whitespace_cnt_;
+
+  friend class JSONSchemaConverter;
 };
 
 /*!
@@ -278,12 +311,30 @@ class JSONSchemaConverter {
   static const std::string kBasicEscape;
   static const std::string kBasicStringSub;
 
+ protected:
   /*! \brief Return the built-in regular expression for a JSON Schema string format. */
   static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
 
  private:
   class Impl;
   std::shared_ptr<Impl> impl_;
+
+  static std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
+  static std::string GenerateFloatRangeRegex(
+      std::optional<double> start,
+      std::optional<double> end,
+      int precision = 6,
+      bool exclusive_start = false,
+      bool exclusive_end = false
+  );
+
+  friend std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
+  friend std::string GenerateFloatRangeRegex(
+      std::optional<double> start,
+      std::optional<double> end,
+      bool exclusive_start,
+      bool exclusive_end
+  );
 };
 
 /*! \brief Convert a JSON Schema string directly to a grammar AST. */
