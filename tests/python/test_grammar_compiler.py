@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
+from xgrammar.base import _core
 from xgrammar.testing import _get_allow_empty_rule_ids
 
 
@@ -460,6 +461,200 @@ def _mask_trace(compiled_grammar: xgr.CompiledGrammar, input_str: str):
     return trace
 
 
+DYNAMIC_COMPILATION_VOCABULARY = [chr(value) for value in range(32, 127)] + [
+    "Ada",
+    "hello",
+    "42",
+    "<call>",
+]
+
+
+def _compile_ebnf_for_dynamic_test(compiler: xgr.GrammarCompiler) -> xgr.CompiledGrammar:
+    return compiler.compile_grammar(
+        """
+root ::= greeting punctuation
+greeting ::= "hello" | "hi"
+punctuation ::= "!" | "?"
+"""
+    )
+
+
+def _compile_json_schema_for_dynamic_test(compiler: xgr.GrammarCompiler) -> xgr.CompiledGrammar:
+    return compiler.compile_json_schema(
+        {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "scores": {"type": "array", "items": {"type": "integer"}},
+            },
+            "required": ["name", "scores"],
+            "additionalProperties": False,
+        },
+        any_whitespace=True,
+    )
+
+
+def _compile_regex_for_dynamic_test(compiler: xgr.GrammarCompiler) -> xgr.CompiledGrammar:
+    return compiler.compile_regex(r"[A-Z][a-z]{2}[0-9]+")
+
+
+def _compile_builtin_json_for_dynamic_test(compiler: xgr.GrammarCompiler) -> xgr.CompiledGrammar:
+    return compiler.compile_builtin_json_grammar()
+
+
+def _compile_structural_tag_for_dynamic_test(compiler: xgr.GrammarCompiler) -> xgr.CompiledGrammar:
+    return compiler.compile_structural_tag(
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "dispatch",
+                "rules": [["<call>", {"type": "const_string", "value": "X"}]],
+                "loop": False,
+                "excludes": [],
+            },
+        }
+    )
+
+
+DYNAMIC_COMPILATION_CASES = [
+    (_compile_ebnf_for_dynamic_test, "hello!"),
+    (_compile_json_schema_for_dynamic_test, '{"name":"Ada","scores":[1,2]}'),
+    (_compile_regex_for_dynamic_test, "Ada42"),
+    (_compile_builtin_json_for_dynamic_test, '{"name":"Ada"}'),
+    (_compile_structural_tag_for_dynamic_test, "prefix<call>X"),
+]
+
+
+def test_grammar_compiler_four_argument_binding_constructor():
+    """Keep the existing four-argument native binding constructor callable."""
+    tokenizer_info = xgr.TokenizerInfo(["a"], stop_token_ids=[])
+    compiler_handle = _core.GrammarCompiler(tokenizer_info._handle, 1, True, -1)
+    compiler_handle.compile_builtin_json_grammar()
+
+
+@pytest.mark.parametrize(
+    "compile_grammar,input_string",
+    DYNAMIC_COMPILATION_CASES,
+    ids=["ebnf", "json-schema", "regex", "builtin-json", "structural-tag"],
+)
+def test_dynamic_compilation_matches_precompiled_masks(compile_grammar, input_string):
+    """Compare every generated mask across all public grammar compilation paths."""
+    tokenizer_info = xgr.TokenizerInfo(DYNAMIC_COMPILATION_VOCABULARY, stop_token_ids=[])
+    precompiled_grammar = compile_grammar(
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=False)
+    )
+    dynamically_compiled_grammar = compile_grammar(
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=True)
+    )
+
+    expected_trace = _mask_trace(precompiled_grammar, input_string)
+    actual_trace = _mask_trace(dynamically_compiled_grammar, input_string)
+    assert len(actual_trace) == len(expected_trace)
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(
+        expected_trace, actual_trace
+    ):
+        assert actual_apply == expected_apply
+        torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+def test_dynamic_compilation_populates_and_reuses_mask_cache():
+    """The first traversal fills reusable entries and the second traversal adds no entries."""
+    tokenizer_info = xgr.TokenizerInfo(DYNAMIC_COMPILATION_VOCABULARY, stop_token_ids=[])
+    dynamic_grammar = _compile_builtin_json_for_dynamic_test(
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=True)
+    )
+    precompiled_grammar = _compile_builtin_json_for_dynamic_test(
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=False)
+    )
+
+    initial_size = dynamic_grammar.memory_size_bytes
+    assert initial_size < precompiled_grammar.memory_size_bytes
+    _mask_trace(dynamic_grammar, '{"name":"Ada"}')
+    populated_size = dynamic_grammar.memory_size_bytes
+    assert populated_size > initial_size
+    _mask_trace(dynamic_grammar, '{"name":"Ada"}')
+    assert dynamic_grammar.memory_size_bytes == populated_size
+
+
+def test_dynamic_compilation_serialization_materializes_cache():
+    """A lazily compiled grammar remains functional after a serialization round trip."""
+    tokenizer_info = xgr.TokenizerInfo(DYNAMIC_COMPILATION_VOCABULARY, stop_token_ids=[])
+    dynamic_grammar = _compile_ebnf_for_dynamic_test(
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=True)
+    )
+    initial_size = dynamic_grammar.memory_size_bytes
+
+    serialized = dynamic_grammar.serialize_json()
+    assert dynamic_grammar.memory_size_bytes > initial_size
+    restored_grammar = xgr.CompiledGrammar.deserialize_json(serialized, tokenizer_info)
+
+    for input_string in ["hello!", "hi?"]:
+        expected_trace = _mask_trace(dynamic_grammar, input_string)
+        actual_trace = _mask_trace(restored_grammar, input_string)
+        for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(
+            expected_trace, actual_trace
+        ):
+            assert actual_apply == expected_apply
+            torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+def test_dynamic_compilation_concurrent_mask_generation():
+    """Generate the same initially uncached masks through concurrently shared grammar state."""
+    tokenizer_info = xgr.TokenizerInfo(DYNAMIC_COMPILATION_VOCABULARY, stop_token_ids=[])
+    dynamic_grammar = _compile_json_schema_for_dynamic_test(
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=True)
+    )
+    input_string = '{"name":"Ada","scores":[1,2]}'
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        traces = list(executor.map(lambda _: _mask_trace(dynamic_grammar, input_string), range(32)))
+
+    expected_trace = traces[0]
+    for actual_trace in traces[1:]:
+        for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(
+            expected_trace, actual_trace
+        ):
+            assert actual_apply == expected_apply
+            torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+def test_dynamic_compilation_with_limited_cache():
+    """Keep compiler-owned cache memory bounded while masks are generated concurrently."""
+    tokenizer_info = xgr.TokenizerInfo(DYNAMIC_COMPILATION_VOCABULARY, stop_token_ids=[])
+    cache_limit = 64 * 1024
+    compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=True,
+        cache_limit_bytes=cache_limit,
+        enable_dynamic_compilation=True,
+    )
+    dynamic_grammar = _compile_builtin_json_for_dynamic_test(compiler)
+
+    # A bounded compiler does not retain a grammar whose size can grow after insertion.
+    assert compiler.get_cache_size_bytes() == 0
+
+    start_barrier = threading.Barrier(9)
+
+    def generate_masks():
+        start_barrier.wait()
+        return _mask_trace(dynamic_grammar, '{"name":"Ada"}')
+
+    def read_cache_sizes():
+        start_barrier.wait()
+        return [compiler.get_cache_size_bytes() for _ in range(100)]
+
+    with ThreadPoolExecutor(max_workers=9) as executor:
+        mask_futures = [executor.submit(generate_masks) for _ in range(8)]
+        size_future = executor.submit(read_cache_sizes)
+        for future in mask_futures:
+            future.result()
+        observed_sizes = size_future.result()
+
+    assert all(0 <= size <= cache_limit for size in observed_sizes)
+    assert 0 <= compiler.get_cache_size_bytes() <= cache_limit
+
+
 @pytest.mark.parametrize(
     "grammar_str,accepted_inputs,rejected_inputs",
     HASHER_GRAPH_CASES,
@@ -480,6 +675,12 @@ def test_grammar_fsm_hasher_worklist_graphs(
         xgr.GrammarCompiler(tokenizer_info, max_threads=8, cache_enabled=True).compile_grammar(
             grammar_str
         ),
+        xgr.GrammarCompiler(
+            tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=True
+        ).compile_grammar(grammar_str),
+        xgr.GrammarCompiler(
+            tokenizer_info, max_threads=8, cache_enabled=True, enable_dynamic_compilation=True
+        ).compile_grammar(grammar_str),
     ]
 
     for compiled in compiled_variants:

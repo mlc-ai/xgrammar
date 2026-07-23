@@ -168,6 +168,10 @@ picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   auto result = picojson::object{};
   result["grammar"] = AutoSerializeJSONValue(impl.grammar);
   result["tokenizer_metadata"] = impl.tokenizer_info->DumpMetadataValue();
+  std::unique_lock<std::mutex> lock(impl.adaptive_token_mask_cache_mutex, std::defer_lock);
+  if (impl.enable_dynamic_compilation) {
+    lock.lock();
+  }
   result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(impl.adaptive_token_mask_cache);
   return picojson::value(result);
 }
@@ -206,7 +210,12 @@ std::optional<SerializationError> DeserializeJSONValue(
 /************** CompiledGrammar **************/
 
 std::size_t MemorySize(const CompiledGrammar::Impl& impl) {
-  return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache);
+  std::unique_lock<std::mutex> lock(impl.adaptive_token_mask_cache_mutex, std::defer_lock);
+  if (impl.enable_dynamic_compilation) {
+    lock.lock();
+  }
+  return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache) +
+         MemorySize(impl.tag_dispatch_rule_id_to_second_slicing_bitset);
 }
 
 std::size_t CompiledGrammar::MemorySizeBytes() const { return MemorySize(*pimpl_); }
@@ -216,7 +225,12 @@ Grammar CompiledGrammar::GetGrammar() const { return pimpl_->GetGrammar(); }
 TokenizerInfo CompiledGrammar::GetTokenizerInfo() const { return pimpl_->GetTokenizerInfo(); }
 
 /*! \brief Return the serialized JSON string of the compiled grammar. */
-std::string CompiledGrammar::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
+std::string CompiledGrammar::SerializeJSON() const {
+  if (pimpl_->enable_dynamic_compilation) {
+    pimpl_->MaterializeAdaptiveTokenMaskCache();
+  }
+  return AutoSerializeJSON(*this, true);
+}
 
 /*! \brief Deserialize a compiled grammar from a JSON string and tokenizer info. */
 std::variant<CompiledGrammar, SerializationError> CompiledGrammar::DeserializeJSON(

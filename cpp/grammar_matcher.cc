@@ -922,7 +922,6 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 ) {
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
-  const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
   // We need to have a copy, because scanable_state_history_ will be modified during the
   // FillNextTokenBitmask process, which can lead to undefined behavior.
   std::vector<ParserState> latest_states;
@@ -948,14 +947,13 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                        << ", num of states=" << latest_states.size();
   }
 
-  std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
-      latest_states_with_masks;
+  std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
-    XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
-    latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
+    const AdaptiveTokenMask* adaptive_token_mask_pointer =
+        &compiled_grammar_->GetAdaptiveTokenMask(state, state.rule_id == grammar_->GetRootRuleId());
+    const auto& adaptive_token_mask = *adaptive_token_mask_pointer;
+    latest_states_with_masks.emplace_back(state, adaptive_token_mask_pointer);
     if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
       tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
     } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
@@ -965,8 +963,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     }
   }
 
-  for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+  for (const auto& [state, adaptive_token_mask_pointer] : latest_states_with_masks) {
+    const auto& adaptive_token_mask = *adaptive_token_mask_pointer;
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
     // rejected list.
