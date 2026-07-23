@@ -51,20 +51,13 @@ Grammar Grammar::FromJSONSchema(
     bool print_converted_ebnf,
     bool any_order
 ) {
-  auto ebnf_string = JSONSchemaToEBNF(
-      schema,
-      any_whitespace,
-      indent,
-      separators,
-      strict_mode,
-      max_whitespace_cnt,
-      JSONFormat::kJSON,
-      any_order
+  auto grammar = JSONSchemaToGrammar(
+      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
   );
   if (print_converted_ebnf) {
-    XGRAMMAR_LOG(INFO) << "Converted EBNF: " << ebnf_string << std::endl;
+    XGRAMMAR_LOG(INFO) << "Converted EBNF: " << grammar.ToString() << std::endl;
   }
-  return FromEBNF(ebnf_string);
+  return grammar;
 }
 
 Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) {
