@@ -1,264 +1,140 @@
 # Integration with LLM Engine
 
-XGrammar enables efficient structured generation. In this tutorial, we go over the key components
-of XGrammar and how to integrate XGrammar into an LLM engine.
+This tutorial covers the key information for integrating XGrammar into an LLM serving engine:
+the lifecycle of XGrammar objects, the integration points in the engine's decoding step,
+batched inference, and speculative decoding. Read
+[Workflow of XGrammar](../start/workflow_of_xgrammar.md) first for the basic usage of each
+component.
 
-We first lay out the concepts in [High-Level Flow](#high-level-flow).
-We then demonstrate how XGrammar enables
-[Structured Generation for Batched Inference](#structured-generation-for-batched-inference).
+## Object Lifecycle in an Engine
 
-The code snippets below are actual runnable code as we simulate the LLM generation.
+XGrammar objects fall into two lifecycle categories in a serving engine.
 
-## Install XGrammar
+**Per-model objects** are constructed once and reused for all requests:
 
-[XGrammar](../start/installation) is available via pip.
-It is always recommended to install it in an isolated conda virtual environment.
+- [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) encapsulates the vocabulary information of the
+  model.
+- [`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) compiles grammars for this model. Keep one
+  persistent compiler per model, so that its compilation cache is shared across requests.
+- [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) is the compilation result. Requests using
+  the same grammar can share one compiled grammar.
 
-## High-Level Flow
+**Per-request objects:**
 
-In this section, we go over the key components of XGrammar when integrating it into an LLM engine
-for structured generation.
+- [`xgr.GrammarMatcher`](xgrammar.GrammarMatcher) maintains the matching state of one request,
+  so each request needs its own matcher. When the request finishes, discard the matcher or
+  [`reset()`](xgrammar.GrammarMatcher.reset) it for reuse.
 
-First, import necessary libraries for the tutorial.
+Compiling a complex grammar can take non-negligible time, so it should not block the engine's
+main loop. Compile the grammar asynchronously when the request arrives, so that compilation
+overlaps with the prefill phase of the request, as shown in the figure in the next section. See
+[Multi-threaded Compilation](../start/workflow_of_xgrammar.md#multi-threaded-compilation) for
+the asynchronous compilation API.
 
-```python
-import xgrammar as xgr
-import torch
-import numpy as np
-from transformers import AutoTokenizer, AutoConfig
-```
+## Integrating into the Engine Step
 
-### xgr.TokenizerInfo
+![Constrained Decoding Pipeline](https://blog.mlc.ai/img/xgrammar/constrained-decoding-pipeline-overlap.png)
 
-`xgr.TokenizerInfo` is a per-model construct that encapsulates tokenizer information, including
-all its vocabulary. There are several ways of instantiating it, and the most convenient way
-is using an `AutoTokenizer`. Note that for some models, `AutoConfig.vocab_size` can be larger
-than `AutoTokenizer.vocab_size` due to paddings, with the former being the shape of the model's
-logits. To be safe, always pass in the former when instantiating `xgr.TokenizerInfo`. See
-[Workflow of XGrammar](../start/workflow_of_xgrammar.md) for details.
+The figure shows how grammar processing fits into the engine's timeline. In the top pipeline,
+grammar processing runs serially with LLM inference. In the bottom pipeline, grammar
+compilation overlaps with prefilling, and mask generation overlaps with the GPU forward pass.
+XGrammar's mask generation runs on the CPU, so a serving engine can hide almost all of its
+latency behind GPU computation.
 
-```python
-# Get tokenizer info
-model_id = "meta-llama/Llama-3.2-1B-Instruct"
-tokenizer = AutoTokenizer.from_pretrained(model_id)
-config = AutoConfig.from_pretrained(model_id)
-# This can be larger than tokenizer.vocab_size due to paddings
-full_vocab_size = config.vocab_size
-tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=full_vocab_size)
-```
+There are three integration points in each decoding step:
 
-### xgr.GrammarCompiler
+1. **Fill the token bitmask.**
+   [`xgr.GrammarMatcher.fill_next_token_bitmask`](xgrammar.GrammarMatcher.fill_next_token_bitmask)
+   computes the mask for the next token on the CPU. It only depends on the matcher state, so it
+   can start as soon as the last token is accepted, running in parallel with the GPU forward
+   pass of the current step. It returns a boolean `need_apply`; if `False`, the mask allows all
+   tokens and the applying step below can be skipped.
 
-With an `xgr.TokenizerInfo`, we can instantiate an `xgr.GrammarCompiler`. This is a construct
-that compiles a grammar according to the model's tokenizer info. Therefore, for each model, you
-can use the same `xgr.GrammarCompiler` persistently, as it can compile different grammars for
-the same `xgr.TokenizerInfo`. Note that the `compiler` behavior can be configured with
-`max_threads` for multithreading, `cache_enabled` (defaults to true) for caching
-compiled grammars, and `cache_limit_bytes` for limiting the cache size.
+2. **Apply the bitmask to the logits.**
+   [`xgr.apply_token_bitmask_inplace`](xgrammar.apply_token_bitmask_inplace) sets the logits of
+   invalid tokens to `-inf` before sampling. Copy the bitmask to the logits' device first; on
+   CUDA devices it launches an optimized kernel. If structured and unstructured requests are
+   mixed in one batch, pass the `indices` parameter to mask only the rows of the structured
+   requests.
 
-```python
-compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
-```
+3. **Accept the sampled token.**
+   [`xgr.GrammarMatcher.accept_token`](xgrammar.GrammarMatcher.accept_token) advances the
+   matcher state after sampling. It returns `False` if the token does not conform to the
+   grammar, which can only happen when the mask was not applied to the logits.
 
-### xgr.CompiledGrammar
+To decide when the structured generation ends, check
+[`xgr.GrammarMatcher.is_terminated`](xgrammar.GrammarMatcher.is_terminated) in the engine's
+stopping condition.
 
-Then, using the `xgr.GrammarCompiler`, we can compile a grammar, with the result being an
-`xgr.CompiledGrammar`. Here we use a built-in JSON grammar. For other grammars, see
-[JSON Generation](../defining_structures/json_generation.md) and
-[EBNF Grammar](../defining_structures/ebnf_grammar.md).
-Every thing we have seen up to now are per-model (rather than per-generation).
+## Batched Inference
 
-```python
-compiled_grammar: xgr.CompiledGrammar = compiler.compile_builtin_json_grammar()
-```
+In a batch, each request has its own matcher, and all requests share one bitmask tensor:
+request `i` fills row `i` of the bitmask, and a single
+[`xgr.apply_token_bitmask_inplace`](xgrammar.apply_token_bitmask_inplace) call masks the whole
+logits batch.
 
-### xgr.GrammarMatcher
-
-With the compiled grammar, we can instantiate a `xgr.GrammarMatcher`. It is the main construct
-an LLM engine interacts with that maintains the state of the structured generation. Note that
-each request should have its own `xgr.GrammarMatcher` since each has a different generation state,
-as we will see in [Structured Generation for Batched Inference](#structured-generation-for-batched-inference).
+[`xgr.BatchGrammarMatcher`](xgrammar.BatchGrammarMatcher) performs the per-request operations
+in one pass on the C++ side with multiple threads, avoiding Python-side loops:
 
 ```python
-# Instantiate grammar matcher with the compiled grammar
-matcher = xgr.GrammarMatcher(compiled_grammar)
-```
-
-### Bitmasking Logits in Auto-regressive Generation
-
-Now we simulate a single-request auto-regressive generation. See later section for
-[Structured Generation for Batched Inference](#structured-generation-for-batched-inference).
-
-First, we pre-allocate a token bitmask with `xgr.allocate_token_bitmask()`. The bitmask
-compresses one bit per token into int32 storage, so it is a `torch.Tensor` of dtype `int32`
-and shape `(batch_size, ceil(vocab_size / 32))`. You can also use your own implementation
-for allocating a bitmask.
-
-In each auto-regressive step, we fill the token bitmask according to the current state
-of the matcher with `xgr.GrammarMatcher.fill_next_token_bitmask()`. Then, we apply the bitmask
-into the model's logits with `xgr.apply_token_bitmask_inplace()`, which calls a CUDA kernel
-if `logits` is on CUDA (recommended), otherwise a CPU implementation.
-
-After masking, the logits for illegal tokens are set to negative infinity, so that
-we will never sample them. After sampling the token, update the `xgr.GrammarMatcher`'s state with
-`xgr.GrammarMatcher.accept_token()`. Finally, use  `xgr.GrammarMatcher.reset()` to prepare
-for the next generation.
-
-```python
-# Here we simulate a valid sampled response
-sim_sampled_response = '{ "library": "xgrammar" }<|end_of_text|>'
-sim_sampled_token_ids = tokenizer.encode(sim_sampled_response, add_special_tokens=False)
-
-# Allocate a token bitmask
-token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-
-# Each loop iteration is a simulated auto-regressive step
-for i, sim_token_id in enumerate(sim_sampled_token_ids):
-    # LLM inference to get logits, here we use randn to simulate.
-    # logits is a tensor of shape (full_vocab_size,) on GPU
-    # logits = LLM.inference()
-    logits = torch.randn(full_vocab_size).cuda()
-
-    # Apply bitmask to logits to mask invalid tokens
-    matcher.fill_next_token_bitmask(token_bitmask)
-    xgr.apply_token_bitmask_inplace(logits, token_bitmask.to(logits.device))
-
-    # Sample next token
-    probs = torch.softmax(logits, dim=-1).cpu().numpy()
-    next_token_id = np.random.choice(list(range(full_vocab_size)), p=probs)
-
-    # Accept token from matcher to update its state, so that the next bitmask
-    # generated will enforce the next token to be generated. Assert to make
-    # sure the token is indeed valid. Here we accept the simulated response
-    # assert matcher.accept_token(next_token_id)
-    assert matcher.accept_token(sim_token_id)
-
-# Since we accepted a stop token `<|end_of_text|>`, we have terminated
-assert matcher.is_terminated()
-
-# Reset to be ready for the next auto-regressive generation
-matcher.reset()
-```
-
-## Structured Generation for Batched Inference
-
-The code snippets above assume a single request generation.
-This section demonstrates how the same concept works with batched generation.
-
-First, follow the exact same steps above for the per-model constructs
-`xgr.TokenizerInfo` and `xgr.GrammarCompiler`. Say each request needs
-to generate a valid JSON.
-
-```python
-import xgrammar as xgr
-import torch
-import numpy as np
-from transformers import AutoTokenizer, AutoConfig
-
-# Get tokenizer info
-model_id = "meta-llama/Llama-3.2-1B-Instruct"
-tokenizer = AutoTokenizer.from_pretrained(model_id)
-config = AutoConfig.from_pretrained(model_id)
-# This can be larger than tokenizer.vocab_size due to paddings
-full_vocab_size = config.vocab_size
-tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=full_vocab_size)
-
-# Compile a JSON grammar
-compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
-compiled_grammar: xgr.CompiledGrammar = compiler.compile_builtin_json_grammar()
-```
-
-Now, we need to maintain an `xgr.GrammarMatcher` for each request in the batch, since
-each has a different generation state. Note that each request in the batch can follow a different
-`xgr.CompiledGrammar`, but here for simplicity, they are all just following the general
-JSON grammar.
-
-```python
-batch_size = 2
-matchers = [
-    xgr.GrammarMatcher(compiled_grammar)
-    for i in range(batch_size)
-]
+matchers = [xgr.GrammarMatcher(compiled_grammar) for _ in range(batch_size)]
 token_bitmask = xgr.allocate_token_bitmask(batch_size, tokenizer_info.vocab_size)
+batch_matcher = xgr.BatchGrammarMatcher(max_threads=8)
+
+# In each decoding step:
+batch_matcher.batch_fill_next_token_bitmask(matchers, token_bitmask)
+xgr.apply_token_bitmask_inplace(logits, token_bitmask.to(logits.device))
+next_token_ids = sample(logits)  # engine-specific sampling
+xgr.BatchGrammarMatcher.batch_accept_token(matchers, next_token_ids)
 ```
 
-We simulate an auto-regressive generation of batched inference. Note that here we
-assume the generation lengths of the two requests are the same for simplicity. But
-it should be easy to generalize based on how your engine supports batched inference.
-The key difference from single-request generation is that, in batched-request generation,
-each request has its own `xgr.GrammarMatcher` to maintain.
+[`batch_fill_next_token_bitmask`](xgrammar.BatchGrammarMatcher.batch_fill_next_token_bitmask)
+also accepts an `indices` parameter to fill only a subset of the bitmask rows, matching the
+`indices` parameter of `apply_token_bitmask_inplace`.
+[`batch_accept_string`](xgrammar.BatchGrammarMatcher.batch_accept_string) and
+[`batch_rollback`](xgrammar.BatchGrammarMatcher.batch_rollback) are the batch versions of the
+corresponding [`xgr.GrammarMatcher`](xgrammar.GrammarMatcher) methods.
 
-```python
-sim_sampled_responses = ['{"name": "a"}<|end_of_text|>', '{"name": "b"}<|end_of_text|>']
-sim_sampled_token_ids = [
-  tokenizer.encode(response, add_special_tokens=False)
-  for response in sim_sampled_responses
-]
+## Speculative Decoding
 
-# Each loop iteration is a simulated auto-regressive step
-for loop_iter in range(len(sim_sampled_token_ids[0])):
-    # LLM batched inference to get logits, here we use randn to simulate
-    # Now, logits is a tensor of shape (batch_size, full_vocab_size) on GPU
-    # logits = LLM.inference()
-    logits = torch.randn(batch_size, full_vocab_size).cuda()
+In speculative decoding, a draft model proposes several draft tokens organized as a chain or a
+tree, and the target model verifies them in one forward pass. For structured generation, the
+engine also needs a token bitmask at every draft position to verify that the draft tokens
+conform to the grammar.
 
-    # This for loop is parallelizable using threading.Thread. But estimate
-    # the overhead in your engine.
-    for i in range(batch_size):
-        matchers[i].fill_next_token_bitmask(token_bitmask, i)
-    xgr.apply_token_bitmask_inplace(logits, token_bitmask.to(logits.device))
+![Overlap of Constrained Decoding and Speculative Decoding](https://blog.mlc.ai/img/xgrammar2/image3.png)
 
-    # Sample next token
-    probs = torch.softmax(logits, dim=-1).cpu().numpy()
-    next_token_ids = [
-        np.random.choice(list(range(full_vocab_size)), p=probs[i])
-        for i in range(batch_size)
-    ]
+**Draft tree traversal.**
+[`xgr.GrammarMatcher.traverse_draft_tree`](xgrammar.GrammarMatcher.traverse_draft_tree)
+traverses a draft token tree once and fills the bitmask for every node. The tree is encoded
+with three int64 tensors: `draft_tokens[i]` is the token id of node `i`,
+`retrieve_next_token[i]` is the first child of node `i`, and `retrieve_next_sibling[i]` is the
+next sibling of node `i` (`-1` means none). The `time_threshold` parameter bounds the traversal
+time: if exceeded, the method stops and returns `False`.
 
-    # Update the matcher for each request
-    for i in range(batch_size):
-        # Here we accept the simulated response
-        # assert matchers[i].accept_token(next_token_ids[i])
-        matchers[i].accept_token(sim_sampled_token_ids[i][loop_iter])
+As the figure shows, the traversal runs on the CPU while the target model verifies the same
+tree on the GPU, so mask generation overlaps with the verification. This draft tree traversal
+API was first proposed by the SGLang team.
 
-# In our simulated case, all requests should have terminated since we accepted
-# a stop token `<|end_of_text|>`
-for i in range(batch_size):
-    assert matchers[i].is_terminated()
-    # Reset to be ready for the next generation
-    matchers[i].reset()
-```
+**Manual state control.** For chain-shaped drafts, or for finer-grained control over the tree,
+the engine can walk the draft manually: fill the bitmask and accept each draft token in turn,
+then roll back the rejected suffix with
+[`xgr.GrammarMatcher.rollback`](xgrammar.GrammarMatcher.rollback) after the verification
+(batched version:
+[`batch_rollback`](xgrammar.BatchGrammarMatcher.batch_rollback)). To explore multiple branches
+with independent states, duplicate the matcher with
+[`xgr.GrammarMatcher.fork`](xgrammar.GrammarMatcher.fork).
 
-## Generate Token Masks in a Batch
+**Jump-forward decoding.**
+[`xgr.GrammarMatcher.find_jump_forward_string`](xgrammar.GrammarMatcher.find_jump_forward_string)
+returns the longest string that certainly follows the current state under the grammar. The
+engine can append this string to the output directly without LLM decoding, saving decoding
+steps.
 
-XGrammar provides a new class [`xgr.BatchGrammarMatcher`](xgrammar.BatchGrammarMatcher) for users to generate token masks in a batch.
+## Real-World Integrations
 
-```python
-batch_grammar_matcher = xgr.BatchGrammarMatcher(max_threads=8)
-```
-
-`BatchGrammarMatcher` needs a parameter `max_threads` to initialize. It represents the maximum threads in `batch_fill_next_token_bitmask`. If not set, it will use std::thread::hardware_concurrency() / 2 as the default value.
-
-`BatchGrammarMatcher` has three methods: `batch_fill_next_token_bitmask`, `batch_accept_token`, and `batch_accept_string` to handle the mask generation tasks. Here is an example to use `batch_fill_next_token_bitmask`:
-
-```python
-matchers = [grammar_matcher_1, grammar_matcher_2, grammar_matcher_3, ...]
-batch_size = len(matchers)
-token_bitmask = xgr.allocate_token_bitmask(batch_size, tokenizer_info.vocab_size)
-batch_grammar_matcher = xgr.BatchGrammarMatcher(max_threads=8)
-batch_grammar_matcher.batch_fill_next_token_bitmask(matchers, token_bitmask)
-```
-
-Each matcher will store its token mask in the corresponding tensor. For `batch_accept_token` and `batch_accept_string`, each matcher will try to accept the corresponding token_id/str.
-
-```python
-    inputs = [token_id_1, token_id_2, token_id_3, ...]
-    results = xgr.BatchGrammarMatcher.batch_accept_token(matchers, inputs) # List[Bool]
-```
-
-```python
-    inputs = [str_1, str_2, str_3, ...]
-    results = xgr.BatchGrammarMatcher.batch_accept_string(matchers, inputs) # List[Bool]
-```
-
-Each boolean value in `results` represents whether the input is accepted by the corresponding matcher.
+XGrammar has been integrated into mainstream LLM serving engines. Their integration code can
+serve as a reference: [SGLang](https://github.com/sgl-project/sglang),
+[vLLM](https://github.com/vllm-project/vllm),
+[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM), and
+[MLC-LLM](https://github.com/mlc-ai/mlc-llm).
