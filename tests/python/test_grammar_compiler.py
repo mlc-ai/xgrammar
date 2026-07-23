@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
+from xgrammar.base import _core
 from xgrammar.testing import _get_allow_empty_rule_ids
 
 
@@ -524,6 +525,13 @@ DYNAMIC_COMPILATION_CASES = [
 ]
 
 
+def test_grammar_compiler_four_argument_binding_constructor():
+    """Keep the existing four-argument native binding constructor callable."""
+    tokenizer_info = xgr.TokenizerInfo(["a"], stop_token_ids=[])
+    compiler_handle = _core.GrammarCompiler(tokenizer_info._handle, 1, True, -1)
+    compiler_handle.compile_builtin_json_grammar()
+
+
 @pytest.mark.parametrize(
     "compile_grammar,input_string",
     DYNAMIC_COMPILATION_CASES,
@@ -580,13 +588,14 @@ def test_dynamic_compilation_serialization_materializes_cache():
     assert dynamic_grammar.memory_size_bytes > initial_size
     restored_grammar = xgr.CompiledGrammar.deserialize_json(serialized, tokenizer_info)
 
-    expected_trace = _mask_trace(dynamic_grammar, "hello!")
-    actual_trace = _mask_trace(restored_grammar, "hello!")
-    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(
-        expected_trace, actual_trace
-    ):
-        assert actual_apply == expected_apply
-        torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+    for input_string in ["hello!", "hi?"]:
+        expected_trace = _mask_trace(dynamic_grammar, input_string)
+        actual_trace = _mask_trace(restored_grammar, input_string)
+        for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(
+            expected_trace, actual_trace
+        ):
+            assert actual_apply == expected_apply
+            torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
 
 
 def test_dynamic_compilation_concurrent_mask_generation():
@@ -607,6 +616,43 @@ def test_dynamic_compilation_concurrent_mask_generation():
         ):
             assert actual_apply == expected_apply
             torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+def test_dynamic_compilation_with_limited_cache():
+    """Keep compiler-owned cache memory bounded while masks are generated concurrently."""
+    tokenizer_info = xgr.TokenizerInfo(DYNAMIC_COMPILATION_VOCABULARY, stop_token_ids=[])
+    cache_limit = 64 * 1024
+    compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=True,
+        cache_limit_bytes=cache_limit,
+        enable_dynamic_compilation=True,
+    )
+    dynamic_grammar = _compile_builtin_json_for_dynamic_test(compiler)
+
+    # A bounded compiler does not retain a grammar whose size can grow after insertion.
+    assert compiler.get_cache_size_bytes() == 0
+
+    start_barrier = threading.Barrier(9)
+
+    def generate_masks():
+        start_barrier.wait()
+        return _mask_trace(dynamic_grammar, '{"name":"Ada"}')
+
+    def read_cache_sizes():
+        start_barrier.wait()
+        return [compiler.get_cache_size_bytes() for _ in range(100)]
+
+    with ThreadPoolExecutor(max_workers=9) as executor:
+        mask_futures = [executor.submit(generate_masks) for _ in range(8)]
+        size_future = executor.submit(read_cache_sizes)
+        for future in mask_futures:
+            future.result()
+        observed_sizes = size_future.result()
+
+    assert all(0 <= size <= cache_limit for size in observed_sizes)
+    assert 0 <= compiler.get_cache_size_bytes() <= cache_limit
 
 
 @pytest.mark.parametrize(
