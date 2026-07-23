@@ -69,6 +69,7 @@ class GrammarFunctor {
         builder_->UpdateRuleBody(i, new_body_expr_id);
         // Handle lookahead assertion
         builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
+        builder_->UpdateMaxTokens(i, rule.max_tokens);
       }
       return builder_->Get(base_grammar_->GetRootRule().name);
     } else {

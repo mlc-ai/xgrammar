@@ -74,7 +74,7 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print) {
             parent_state.sequence_id,
             parent_state.element_id + 1,
             parent_state.rule_start_pos,
-            0
+            parent_state.budget_deadline
         });
         continue;
       }
@@ -92,7 +92,7 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print) {
             parent_state.sequence_id,
             parent_state.element_id + 1,
             parent_state.rule_start_pos,
-            0
+            parent_state.budget_deadline
         });
       }
       // If the repeat count is less than the max repeat count, we can continue to
@@ -121,8 +121,7 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print) {
             parent_state.sequence_id,
             edge.target,
             parent_state.rule_start_pos,
-            0,
-            0
+            parent_state.budget_deadline
         });
       }
       if (new_count < info.Upper()) {
@@ -131,6 +130,7 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print) {
             parent_state.sequence_id,
             parent_state.element_id,
             parent_state.rule_start_pos,
+            parent_state.budget_deadline,
             0,
             new_count
         });
@@ -174,7 +174,11 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
     case GrammarExprType::kCharacterClassStar: {
       if (state.sub_element_id == 0) {
         Enqueue(ParserState{
-            state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
+            state.rule_id,
+            state.sequence_id,
+            state.element_id + 1,
+            state.rule_start_pos,
+            state.budget_deadline
         });
       }
       return std::make_pair(true, false);
@@ -188,7 +192,11 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
       ExpandNextRuleRefElement(state, grammar_expr, &element_expr, debug_print);
       if (state.repeat_count >= min_repeat_count) {
         Enqueue(ParserState{
-            state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
+            state.rule_id,
+            state.sequence_id,
+            state.element_id + 1,
+            state.rule_start_pos,
+            state.budget_deadline
         });
       }
       return std::make_pair(false, false);
@@ -260,6 +268,9 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   // Scan all the scanable states.
   for (const auto& state : latest_states) {
+    if (skip_expired_states_ && IsExpiredState(state)) {
+      continue;
+    }
     Scan(state, ch);
   }
 
@@ -294,6 +305,12 @@ EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> in
     XGRAMMAR_LOG(FATAL) << "The grammar is not optimized. Please optimize the grammar before using "
                            "the Earley parser.";
   }
+  for (int32_t i = 0; i < grammar_->NumRules(); ++i) {
+    if (grammar_->GetRule(i).max_tokens >= 0) {
+      has_budget_rules_ = true;
+      break;
+    }
+  }
   PushStateAndExpand(initial_state.has_value() ? *initial_state : RootInitialState());
 }
 
@@ -305,7 +322,7 @@ ParserState EarleyParser::RootInitialState() const {
       grammar_->GetRule(root_rule_id).body_expr_id,
       grammar_->per_rule_fsms[root_rule_id]->GetFsm().GetStart(),
       ParserState::kNoPrevInputPos,
-      0
+      DeadlineForRule(root_rule_id, -1)
   );
 }
 
@@ -399,9 +416,13 @@ void EarleyParser::ExpandNextRuleRefElement(
           grammar_->allow_empty_rule_ids.begin(), grammar_->allow_empty_rule_ids.end(), ref_rule_id
       ) != grammar_->allow_empty_rule_ids.end()) {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
-    Enqueue(
-        ParserState{state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0}
-    );
+    Enqueue(ParserState{
+        state.rule_id,
+        state.sequence_id,
+        state.element_id + 1,
+        state.rule_start_pos,
+        state.budget_deadline
+    });
   }
 
   // If the reference rule is not visited, we need to add it to the queue.
@@ -416,7 +437,7 @@ void EarleyParser::ExpandNextRuleRefElement(
       ref_fsm.GetFsm().GetStart(),
       right_recursion_to_root ? ParserState::kNoPrevInputPos
                               : int32_t(rule_id_to_completable_states_.size() - 1),
-      0
+      DeadlineForRule(ref_rule_id, state.budget_deadline)
   });
 }
 
@@ -427,7 +448,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
   // Add the rule reference pairs, and enqueue the epsilon edges.
   for (const auto& edge : fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
     if (edge.IsEpsilon()) {
-      Enqueue(ParserState{state.rule_id, state.sequence_id, edge.target, state.rule_start_pos, 0});
+      Enqueue(ParserState{
+          state.rule_id, state.sequence_id, edge.target, state.rule_start_pos, state.budget_deadline
+      });
       continue;
     }
 
@@ -446,7 +469,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
       ref_rule_id = repeat_info.RuleId();
 
       if (state.repeat_count >= repeat_info.Lower()) {
-        Enqueue(ParserState{state.rule_id, state.sequence_id, target, state.rule_start_pos, 0, 0});
+        Enqueue(ParserState{
+            state.rule_id, state.sequence_id, target, state.rule_start_pos, state.budget_deadline
+        });
       }
       if (state.repeat_count >= repeat_info.Upper()) {
         continue;
@@ -501,6 +526,7 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  state.sequence_id,
                  state.element_id,
                  state.rule_start_pos,
+                 state.budget_deadline,
                  0,
                  state.repeat_count
              }}
@@ -509,7 +535,13 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
         // For kRuleRef: store element_id = target (post-transition state)
         rule_id_to_completable_states_.PushBackInLatestRow(
             {ref_rule_id,
-             ParserState{state.rule_id, state.sequence_id, target, state.rule_start_pos, 0}}
+             ParserState{
+                 state.rule_id,
+                 state.sequence_id,
+                 target,
+                 state.rule_start_pos,
+                 state.budget_deadline
+             }}
         );
       }
     }
@@ -520,7 +552,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                           grammar_->allow_empty_rule_ids.end(),
                           ref_rule_id
                       )) {
-      Enqueue(ParserState{state.rule_id, state.sequence_id, target, state.rule_start_pos, 0});
+      Enqueue(ParserState{
+          state.rule_id, state.sequence_id, target, state.rule_start_pos, state.budget_deadline
+      });
     }
 
     // If the reference rule is not visited, we need to add it to the queue.
@@ -535,7 +569,7 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
         ref_fsm.GetFsm().GetStart(),
         right_recursion_to_root ? ParserState::kNoPrevInputPos
                                 : int32_t(rule_id_to_completable_states_.size() - 1),
-        0
+        DeadlineForRule(ref_rule_id, state.budget_deadline)
     });
   }
 }
@@ -875,6 +909,9 @@ bool EarleyParser::AdvanceAtomicToken(int32_t token_id, bool debug_print) {
   tmp_accept_stop_token_ = false;
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   for (const auto& state : latest_states) {
+    if (skip_expired_states_ && IsExpiredState(state)) {
+      continue;
+    }
     ScanAtomicToken(state, token_id);
   }
   if (tmp_process_state_queue_.empty() && tmp_states_to_be_added_.empty()) {
