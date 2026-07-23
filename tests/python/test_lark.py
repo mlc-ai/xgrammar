@@ -706,6 +706,49 @@ def test_lark_standalone_lazy_rule() -> None:
     _assert_language(grammar, ["", "plain", "<end>", "plain<end>"], ["<end>x", "a<end>b"])
 
 
+def test_lark_lazy_rule_starred_terminal() -> None:
+    grammar = r"""
+        start: head "!"
+        head[lazy]: TEXT* "<end>"
+        TEXT: /[a-z]/
+    """
+    _assert_language(grammar, ["<end>!", "abc<end>!"], ["ABC<end>!", "a<end>b<end>!", "abc<end>"])
+
+
+def test_lark_lazy_rule_starred_any_text() -> None:
+    grammar = r"""
+        start: head "!"
+        head[lazy]: TEXT* "<end>"
+        TEXT: /(\n|.)*/
+    """
+    _assert_language(
+        grammar, ["<end>!", "abc<end>!", "a\nb<end>!", "你好<end>!"], ["a<end>b<end>!"]
+    )
+
+
+def test_lark_lazy_rule_plus_terminal() -> None:
+    grammar = r"""
+        start: head "!"
+        head[lazy]: TEXT+ "<end>"
+        TEXT: /[a-z]/
+    """
+    _assert_language(grammar, ["a<end>!", "abc<end>!"], ["<end>!", "a<end>b<end>!"])
+
+
+def test_lark_lazy_rule_quantified_alternation() -> None:
+    grammar = r"""
+        start: head "!"
+        head[lazy]: AB+ "<end>"
+        AB: "a" | "b"
+    """
+    _assert_language(grammar, ["ab<end>!", "b<end>!"], ["<end>!", "c<end>!", "a<end>b<end>!"])
+    _assert_language(
+        'start: head "!"\nhead[lazy]: ("a"|"b")* "<end>"',
+        ["<end>!", "ba<end>!"],
+        ["c<end>!", "a<end>b<end>!"],
+    )
+
+
 def test_lark_dynamic_special_token_trigger() -> None:
     tokenizer_info = xgr.TokenizerInfo(
         ["plain", "<|tool|>", "{", '"x"', ":", "1", "}", "</tool>", "bad", "</s>"],
@@ -1813,6 +1856,7 @@ def test_lark_lazy_non_terminal_like_bodies_are_rejected() -> None:
     _assert_lark_error("start: r\nR[lazy]: /[a-z]+/\nr: R", "attributes are only supported")
     for grammar_obj in (
         xgr.Grammar.from_lark('start: "<" r ">"\nr[lazy]: /([a-z]+ )+/'),
+        xgr.Grammar.from_lark('start: "<" r ">"\nr[lazy]: T* "x"\nT: /ab/'),
         xgr.Grammar.from_ebnf('root ::= "<" r ">"\nr[lazy] ::= sub\nsub ::= sub [a-z] | [a-z]'),
     ):
         with pytest.raises(RuntimeError, match="terminal-like"):

@@ -461,10 +461,12 @@ rest: /[a-z]+/
 
 Notes:
 
-- The body must compile to a single terminal-like automaton: strings, character classes,
-  the `+`/`*`/`?` quantifiers over them, and alternations of these. Bodies that need rule
-  references (recursion, general repetition ranges like `{2,5}` over groups) are rejected at
-  compile time.
+- The body must compile to a single terminal-like automaton: sequences and alternations of
+  strings and character classes, and the `+`/`*` quantifiers over single-character elements
+  (character classes, single-character strings, and alternations of these — directly or through
+  terminal references like `TEXT*`). Bodies that need rule references (recursion, `?` in the
+  middle of a sequence, quantifiers over multi-character strings, and repetition ranges like
+  `{2,5}`) are rejected at compile time.
 - A lazy rule that can match the empty string always matches the empty string (for example
   `foo[lazy]: /.*/`); the compiler emits a warning for this.
 - Lazy rules are compiled as lexemes: `%ignore` is not woven inside their bodies, and like
