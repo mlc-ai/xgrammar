@@ -96,7 +96,6 @@ redirects = {
     "tutorials/constrained_decoding": "../start/constrained_decoding.html",
     "tutorials/workflow_of_xgrammar": "../start/workflow_of_xgrammar.html",
     "tutorials/advanced_topics": "../start/workflow_of_xgrammar.html",
-    "using_xgrammar/workflow_of_xgrammar": "../start/workflow_of_xgrammar.html",
     "tutorials/engine_integration": "../using_xgrammar/engine_integration.html",
     "tutorials/json_generation": "../defining_structures/json_generation.html",
     "tutorials/ebnf_guided_generation": "../defining_structures/ebnf_grammar.html",
