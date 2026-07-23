@@ -322,11 +322,14 @@ class StructureNormalizer {
 /*************************** Grammar Optimizer ***************************/
 
 /*!
- * \brief Fuse the byte string elements in the grammar.
+ * \brief Fuse adjacent byte string elements in sequences.
+ * \details If nothing needs rewriting, the pass is a read-only scan and the grammar is left
+ * unchanged. Otherwise the grammar handle is replaced with a rewritten copy, so other holders of
+ * the same grammar are unaffected.
  */
 class ByteStringFuser {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
@@ -339,10 +342,13 @@ class AllowEmptyRuleAnalyzer {
 
 /*!
  * \brief Inline the rule references in the grammar.
+ * \details If nothing needs rewriting, the pass is a read-only scan and the grammar is left
+ * unchanged. Otherwise the grammar handle is replaced with a rewritten copy, so other holders of
+ * the same grammar are unaffected.
  */
 class RuleInliner {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
