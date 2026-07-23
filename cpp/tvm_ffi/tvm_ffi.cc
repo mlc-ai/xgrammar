@@ -602,9 +602,20 @@ TVM_FFI_STATIC_INIT_BLOCK() {
               matchers.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
             }
             DLTensor* bitmask = batch_token_bitmask.cast<DLTensor*>();
-            auto temperatures = o->value.BatchFillNextTokenBitmask(
+            o->value.BatchFillNextTokenBitmask(
                 &matchers, bitmask, OptionalInt32VectorFromView(indices), debug_print
             );
+          }
+      )
+      .def_static(
+          "batch_get_temperature",
+          [](ffi::Array<O> matchers_ref) {
+            std::vector<GrammarMatcher> matchers;
+            matchers.reserve(matchers_ref.size());
+            for (int64_t i = 0; i < static_cast<int64_t>(matchers_ref.size()); ++i) {
+              matchers.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
+            }
+            auto temperatures = BatchGrammarMatcher::BatchGetTemperature(matchers);
             ffi::Array<ffi::Any> result;
             for (const auto& temperature : temperatures) {
               result.push_back(OptionalFloatToAny(temperature));

@@ -173,7 +173,7 @@ def test_temperature_survives_serialization_and_cached_compilation() -> None:
 
 
 @pytest.mark.parametrize("max_threads", [1, 2])
-def test_batch_matcher_returns_temperatures(max_threads: int) -> None:
+def test_batch_get_temperature(max_threads: int) -> None:
     grammar_temperature = xgr.GrammarMatcher(
         _compile_lark('start[temperature=0.2]: "a"'), default_temperature=0.8
     )
@@ -182,13 +182,16 @@ def test_batch_matcher_returns_temperatures(max_threads: int) -> None:
     matchers = [grammar_temperature, default_temperature, no_temperature]
     bitmask = xgr.allocate_token_bitmask(3, len(VOCAB))
 
-    temperatures = xgr.BatchGrammarMatcher(max_threads).batch_fill_next_token_bitmask(
+    fill_result = xgr.BatchGrammarMatcher(max_threads).batch_fill_next_token_bitmask(
         matchers, bitmask, indices=[2, 0, 1]
     )
+    temperatures = xgr.BatchGrammarMatcher.batch_get_temperature(matchers)
 
+    assert fill_result is None
     assert temperatures[0] == pytest.approx(0.2)
     assert temperatures[1] == pytest.approx(0.4)
     assert temperatures[2] is None
+    assert xgr.BatchGrammarMatcher.batch_get_temperature([]) == []
 
 
 def test_traverse_draft_tree_fills_temperatures() -> None:
