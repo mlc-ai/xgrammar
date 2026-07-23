@@ -9,6 +9,7 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -178,6 +179,30 @@ class Grammar::Impl {
     auto data_ptr = start_ptr + 2;
     auto data_len = start_ptr[1];
     return {type, data_ptr, data_len};
+  }
+
+  /*!
+   * \brief Append a new grammar expr record and return its id. The data must not alias this
+   * grammar's own storage, because appending may reallocate it.
+   */
+  int32_t AddGrammarExpr(GrammarExprType type, const std::vector<int32_t>& data) {
+    grammar_expr_indptr_.push_back(static_cast<int32_t>(grammar_expr_data_.size()));
+    grammar_expr_data_.push_back(static_cast<int32_t>(type));
+    grammar_expr_data_.push_back(static_cast<int32_t>(data.size()));
+    grammar_expr_data_.insert(grammar_expr_data_.end(), data.begin(), data.end());
+    return static_cast<int32_t>(grammar_expr_indptr_.size()) - 1;
+  }
+
+  /*!
+   * \brief Overwrite the data of an existing grammar expr record in place. Records are stored
+   * back to back and are self-describing, so the new data must not be longer than the existing
+   * data; shrinking simply leaves the trailing words unused.
+   */
+  void ShrinkGrammarExprData(int32_t grammar_expr_id, const std::vector<int32_t>& data) {
+    int start_index = grammar_expr_indptr_[grammar_expr_id];
+    XGRAMMAR_DCHECK(static_cast<int32_t>(data.size()) <= grammar_expr_data_[start_index + 1]);
+    grammar_expr_data_[start_index + 1] = static_cast<int32_t>(data.size());
+    std::copy(data.begin(), data.end(), grammar_expr_data_.begin() + start_index + 2);
   }
 
   /******************* GrammarExpr Getters *******************/
