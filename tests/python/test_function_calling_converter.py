@@ -43,6 +43,11 @@ def _check_glm_grammar(schema: dict, instance: str, accepted: bool):
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 
+def _check_cohere_grammar(schema: dict, instance: str, accepted: bool):
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="cohere_xml")
+    check_grammar_with_instance(ebnf_grammar, instance, accepted)
+
+
 test_string_schema_input_str_accepted = (
     ("<parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>", True),
     ("<parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>", True),
@@ -1360,6 +1365,42 @@ def test_glm_unconstrained_string_whitespace_has_bounded_parser_states():
     assert states_after <= states_before + 1
     assert matcher.accept_string("</arg_value>")
     assert matcher.is_terminated()
+
+
+# ---------- Cohere XML tool calling (json_format="cohere_xml") ----------
+# Format: <cofl:tool_param name=$PARAMETER_NAME>$PARAMETER_VALUE</cofl:tool_param>
+
+
+cohere_reject_wrong_parameter_format_input_str_accepted = (
+    # Cohere XML: <cofl:tool_param name=key>value</cofl:tool_param>
+    (
+        "<cofl:tool_param name=name>Bob</cofl:tool_param>"
+        "<cofl:tool_param name=age>100</cofl:tool_param>",
+        True,
+    ),
+    # Missing the required age parameter.
+    ("<cofl:tool_param name=name>Bob</cofl:tool_param>", False),
+    # Qwen XML: <parameter=key>value</parameter>
+    ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", False),
+)
+
+
+@pytest.mark.parametrize(
+    "input_str, accepted", cohere_reject_wrong_parameter_format_input_str_accepted
+)
+def test_cohere_reject_wrong_parameter_format(input_str: str, accepted: bool):
+    """Cohere grammar must use cofl:tool_param wrappers and reject other XML styles."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["name", "age"],
+    }
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="cohere_xml")
+    grammar_str = str(ebnf_grammar)
+    assert "<cofl:tool_param name=" in grammar_str
+    assert "</cofl:tool_param>" in grammar_str
+
+    _check_cohere_grammar(schema, input_str, accepted)
 
 
 def test_nested_true_schema():
