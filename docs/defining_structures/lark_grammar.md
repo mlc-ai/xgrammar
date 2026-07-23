@@ -240,47 +240,39 @@ The `%ignore` expression may be a terminal name, a string, a regex, or a combina
 first lexeme of the output. Multiple `%grammar_options` declarations are merged; unknown option
 names are rejected.
 
-## Inline JSON Schema
+### `%json`
 
 `%json { ... }` embeds a JSON Schema and behaves like a rule reference: the element matches any
 JSON value conforming to the schema, converted through XGrammar's JSON Schema converter.
 
-```python
-grammar = xgr.Grammar.from_lark(
-    r"""
-    start: "<tool_call>" arguments "</tool_call>"
-    arguments: %json {
-      "type": "object",
-      "properties": {"city": {"type": "string"}},
-      "required": ["city"],
-      "additionalProperties": false
-    }
-    """
-)
+```text
+start: "<tool_call>" arguments "</tool_call>"
+arguments: %json {
+  "type": "object",
+  "properties": {"city": {"type": "string"}},
+  "required": ["city"],
+  "additionalProperties": false
+}
 ```
 
 `%json` may appear inside sequences, alternatives, and repetition. Whitespace outside the JSON
 value is controlled by the surrounding Lark grammar; whitespace inside the value follows the JSON
 Schema converter's normal behavior. `%json` cannot be used inside terminals.
 
-## Nested Grammars
+### `%lark`
 
 `%lark { ... }` embeds a complete Lark grammar as one element. The nested grammar has its own
 independent namespace: it must define its own `start` rule, and it may declare its own imports,
 `%ignore`, and `%grammar_options` without affecting the outer grammar. Rule names may be reused
 across the boundary.
 
-```python
-grammar = xgr.Grammar.from_lark(
-    r"""
-    start: "[" %lark {
-      %import common.WS
-      %ignore WS
-      start: item ":" %json {"type": "integer"}
-      item: "x" | "(" item ")"
-    } "]"
-    """
-)
+```text
+start: "[" %lark {
+  %import common.WS
+  %ignore WS
+  start: item ":" %json {"type": "integer"}
+  item: "x" | "(" item ")"
+} "]"
 ```
 
 Multiple `%lark` blocks may appear in the same rule. Nested grammars may use every feature of the
@@ -348,7 +340,9 @@ grammar = xgr.Grammar.from_lark(
   Each named grammar is compiled once and shared.
 - `@name` references may only appear in rules, not in terminals.
 
-## Sampling Temperature
+## Rule Options
+
+### Sampling Temperature
 
 The `temperature` rule attribute selects the sampling temperature while a terminal-like rule or
 named subgrammar is active:
