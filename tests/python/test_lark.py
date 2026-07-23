@@ -855,9 +855,7 @@ def test_lark_large_choice_grammar() -> None:
             id="terminal-references-rule",
         ),
         pytest.param(
-            'start[budget=10]: "a"',
-            "attribute 'budget' is not supported",
-            id="unknown-attribute",
+            'start[budget=10]: "a"', "attribute 'budget' is not supported", id="unknown-attribute"
         ),
         pytest.param(
             'start[stop="x"]: "a"', "attribute 'stop' is not supported", id="stop-attribute"
@@ -1572,3 +1570,114 @@ def test_lark_capture_no_capture_grammar_returns_empty() -> None:
     matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
     assert matcher.accept_string("ab")
     assert matcher.get_captures() == []
+
+
+CAPTURE_BUDGET_ANY_TEXT_GRAMMAR = r"""
+    start: r "<t>"
+    r[max_tokens=3, capture]: TEXT
+    TEXT: /(\n|.)*/
+"""
+
+
+def test_lark_capture_with_max_tokens_any_text() -> None:
+    # Both attributes on one rule, arbitrary-text body (exact token-wildcard strategy): the
+    # budget masks to the terminator and the capture spans the whole region.
+    compiled = _compile_lark(CAPTURE_BUDGET_ANY_TEXT_GRAMMAR, MAX_TOKENS_TOKENIZER)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    for token_id in [0, 1, 2]:
+        assert matcher.accept_token(token_id)
+    assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [5]
+    assert matcher.accept_token(5) and matcher.is_terminated()
+    assert matcher.get_captures() == [("r", b"ab cd ")]
+
+
+def test_lark_capture_with_max_tokens_cfg_body() -> None:
+    # Both attributes on one rule, CFG body (runtime-deadline strategy), plus a captured rule
+    # after the budgeted region.
+    grammar = r"""
+        start: "<t>" r "</t>" ans
+        r[max_tokens=2, capture="think"]: /([a-z]* )+/
+        ans[capture]: "1"
+    """
+    compiled = _compile_lark(grammar, MAX_TOKENS_TOKENIZER)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    for token_id in [5, 0, 0]:
+        assert matcher.accept_token(token_id)
+    assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [3]
+    assert matcher.accept_token(3) and matcher.accept_token(4) and matcher.is_terminated()
+    assert matcher.get_captures() == [("think", b"ab ab "), ("ans", b"1")]
+
+
+def test_lark_capture_inside_max_tokens_region() -> None:
+    # The captured rule is nested inside the budgeted rule: the budget follows the outer
+    # derivation while the capture records the inner span.
+    grammar = r"""
+        start: outer "1"
+        outer[max_tokens=3]: "x" inner
+        inner[capture]: /([a-z]* )+/
+    """
+    compiled = _compile_lark(grammar, MAX_TOKENS_TOKENIZER)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    for token_id in [6, 0, 0]:
+        assert matcher.accept_token(token_id)
+    assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [4]
+    assert matcher.accept_token(4) and matcher.is_terminated()
+    assert matcher.get_captures() == [("inner", b"ab ab ")]
+
+
+def test_lark_capture_with_max_tokens_per_occurrence() -> None:
+    # Each loop occurrence gets its own budget and its own capture.
+    grammar = 'start: r+ "1"\nr[capture, max_tokens=2]: /[a-z]+ /'
+    compiled = _compile_lark(grammar, MAX_TOKENS_TOKENIZER)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    for _ in range(5):
+        assert matcher.accept_token(0)
+    assert matcher.accept_token(4) and matcher.is_terminated()
+    assert matcher.get_captures() == [("r", b"ab ")] * 5
+    # A single occurrence exceeding its budget mid-word: the budget is relaxed until the
+    # region can close, and the capture still reports the full span.
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(1) and matcher.accept_token(1)
+    assert 4 not in _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER)
+    assert matcher.accept_token(2)
+    assert 4 in _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER)
+    assert matcher.accept_token(4) and matcher.is_terminated()
+    assert matcher.get_captures() == [("r", b"cdcd ")]
+
+
+def test_lark_capture_with_max_tokens_rollback() -> None:
+    grammar = r"""
+        start: "<t>" r "</t>" ans
+        r[max_tokens=2, capture]: /([a-z]* )+/
+        ans: "1"
+    """
+    compiled = _compile_lark(grammar, MAX_TOKENS_TOKENIZER)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    for token_id in [5, 0, 0]:
+        assert matcher.accept_token(token_id)
+    assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [3]
+    assert matcher.accept_token(3)
+    matcher.rollback(2)
+    assert matcher.accept_token(1) and matcher.accept_token(2)
+    assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [3]
+    assert matcher.accept_token(3) and matcher.accept_token(4) and matcher.is_terminated()
+    assert matcher.get_captures() == [("r", b"ab cd ")]
+
+
+def test_lark_capture_with_max_tokens_round_trip_and_cache() -> None:
+    # Both attributes must survive the printer -> EBNF-lexer round trip together, since the
+    # cached compile path re-parses the grammar from its ToString() form.
+    grammar = xgr.Grammar.from_lark(
+        CAPTURE_BUDGET_ANY_TEXT_GRAMMAR, tokenizer_info=MAX_TOKENS_TOKENIZER
+    )
+    ebnf = str(grammar)
+    assert 'r[max_tokens=3, capture="r"] ::=' in ebnf
+    assert 'r[max_tokens=3, capture="r"] ::=' in str(xgr.Grammar.from_ebnf(ebnf))
+    compiler = xgr.GrammarCompiler(MAX_TOKENS_TOKENIZER, cache_enabled=True)
+    compiled = compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    for token_id in [0, 1, 2]:
+        assert matcher.accept_token(token_id)
+    assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [5]
+    assert matcher.accept_token(5) and matcher.is_terminated()
+    assert matcher.get_captures() == [("r", b"ab cd ")]
