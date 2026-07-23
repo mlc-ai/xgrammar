@@ -216,13 +216,21 @@ class BatchGrammarMatcher {
     of the bitmask tensor. If not provided, all matchers will write to the corresponding
     indices(matchers[i] to next_token_bitmask[i]).
     \param debug_print Whether to print debug information. Default is false.
-    \return The effective sampling temperature for each matcher.
   */
-  std::vector<std::optional<float>> BatchFillNextTokenBitmask(
+  void BatchFillNextTokenBitmask(
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       const std::optional<std::vector<int32_t>>& indices = std::nullopt,
       bool debug_print = false
+  );
+
+  /*!
+   * \brief Get the effective sampling temperature for each matcher.
+   * \param matchers The array of GrammarMatcher objects.
+   * \return The effective sampling temperature for each matcher.
+   */
+  static std::vector<std::optional<float>> BatchGetTemperature(
+      const std::vector<GrammarMatcher>& matchers
   );
 
   /*!

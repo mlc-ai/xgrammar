@@ -577,7 +577,7 @@ class BatchGrammarMatcher::Impl {
     }
   }
 
-  std::vector<std::optional<float>> BatchFillNextTokenBitmask(
+  void BatchFillNextTokenBitmask(
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       const std::optional<std::vector<int32_t>>& indices,
@@ -1158,7 +1158,7 @@ int GrammarMatcher::Impl::GetNextUncertainToken(
   }
 }
 
-std::vector<std::optional<float>> BatchGrammarMatcher::Impl::BatchFillNextTokenBitmask(
+void BatchGrammarMatcher::Impl::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
     const std::optional<std::vector<int32_t>>& indices,
@@ -1167,7 +1167,6 @@ std::vector<std::optional<float>> BatchGrammarMatcher::Impl::BatchFillNextTokenB
   XGRAMMAR_CHECK(!indices.has_value() || indices->size() == matchers->size())
       << "The size of indices (" << (indices.has_value() ? indices->size() : 0)
       << ") should be the same as the size of matchers (" << matchers->size() << ").";
-  std::vector<std::optional<float>> temperatures(matchers->size());
   // Initialize the thread pool if needed. It should be initialized each time,
   // because ThreadPool cannot be reused after Join().
   if (max_threads_ > 1) {
@@ -1181,7 +1180,6 @@ std::vector<std::optional<float>> BatchGrammarMatcher::Impl::BatchFillNextTokenB
           << "The index " << index << " is out of range [0, " << next_token_bitmask->shape[0]
           << ") for batch_id " << i << ".";
       matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
-      temperatures[i] = matcher->GetTemperature();
     }
   } else {
     auto fill_next_token_mask = [&](int32_t batch_id) {
@@ -1191,14 +1189,12 @@ std::vector<std::optional<float>> BatchGrammarMatcher::Impl::BatchFillNextTokenB
           << "The index " << index << " is out of range [0, " << next_token_bitmask->shape[0]
           << ") for batch_id " << batch_id << ".";
       matcher->FillNextTokenBitmask(next_token_bitmask, index, debug_print);
-      temperatures[batch_id] = matcher->GetTemperature();
     };
     for (int i = 0; i < static_cast<int32_t>(matchers->size()); i++) {
       thread_pool_->Execute([fill_next_token_mask, i]() { fill_next_token_mask(i); });
     }
     thread_pool_->Join();
   }
-  return temperatures;
 }
 
 std::vector<uint8_t> BatchGrammarMatcher::Impl::BatchAcceptString(
@@ -1378,13 +1374,24 @@ std::string GrammarMatcher::_DebugPrintInternalState() const {
   return pimpl_->_DebugPrintInternalState();
 }
 
-std::vector<std::optional<float>> BatchGrammarMatcher::BatchFillNextTokenBitmask(
+void BatchGrammarMatcher::BatchFillNextTokenBitmask(
     std::vector<GrammarMatcher>* matchers,
     DLTensor* next_token_bitmask,
     const std::optional<std::vector<int32_t>>& indices,
     bool debug_print
 ) {
-  return pimpl_->BatchFillNextTokenBitmask(matchers, next_token_bitmask, indices, debug_print);
+  pimpl_->BatchFillNextTokenBitmask(matchers, next_token_bitmask, indices, debug_print);
+}
+
+std::vector<std::optional<float>> BatchGrammarMatcher::BatchGetTemperature(
+    const std::vector<GrammarMatcher>& matchers
+) {
+  std::vector<std::optional<float>> temperatures;
+  temperatures.reserve(matchers.size());
+  for (const auto& matcher : matchers) {
+    temperatures.push_back(matcher.GetTemperature());
+  }
+  return temperatures;
 }
 
 std::vector<uint8_t> BatchGrammarMatcher::BatchAcceptString(

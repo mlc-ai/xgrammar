@@ -538,7 +538,7 @@ class BatchGrammarMatcher(XGRObject):
         bitmask: ArrayLike,
         indices: Optional[List[int]] = None,
         debug_print: bool = False,
-    ) -> List[Optional[float]]:
+    ) -> None:
         """Fill the next token bitmask for multiple matchers.
 
         Parameters
@@ -559,21 +559,30 @@ class BatchGrammarMatcher(XGRObject):
         debug_print : bool, default: False
             Whether to print information about generated bitmask. Helpful for debugging.
 
-        Returns
-        -------
-        temperatures : List[Optional[float]]
-            The effective sampling temperature for each matcher.
-
         Raises
         ------
         RuntimeError
             If the bitmask is invalid (not on CPU, not int32, shape mismatch).
         """
         matcher_handles = [matcher._handle for matcher in matchers]
+        self._handle.batch_fill_next_token_bitmask(matcher_handles, bitmask, indices, debug_print)
 
-        result = self._handle.batch_fill_next_token_bitmask(
-            matcher_handles, bitmask, indices, debug_print
-        )
+    @staticmethod
+    def batch_get_temperature(matchers: List["GrammarMatcher"]) -> List[Optional[float]]:
+        """Get the effective sampling temperature for multiple matchers.
+
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            The list of matchers to query.
+
+        Returns
+        -------
+        temperatures : List[Optional[float]]
+            The effective sampling temperature for each matcher.
+        """
+        matcher_handles = [matcher._handle for matcher in matchers]
+        result = _core.BatchGrammarMatcher.batch_get_temperature(matcher_handles)
         return [None if value is None else float(value) for value in result]
 
     @staticmethod

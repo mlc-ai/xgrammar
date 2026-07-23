@@ -365,10 +365,10 @@ different active temperatures, `matcher.temperature` emits a warning once and re
 If no active rule has a temperature, it returns `default_temperature`; if neither is configured,
 it returns `None`.
 
-`BatchGrammarMatcher.batch_fill_next_token_bitmask` returns one optional temperature per matcher.
-For speculative decoding, pass a one-dimensional CPU `float32` tensor through the
-`temperatures` argument of `GrammarMatcher.traverse_draft_tree`. The tensor receives one value per
-tree node; `NaN` marks a node with no configured temperature or a node that was not visited.
+`BatchGrammarMatcher.batch_get_temperature` returns one optional temperature per matcher. For
+speculative decoding, pass a one-dimensional CPU `float32` tensor through the `temperatures`
+argument of `GrammarMatcher.traverse_draft_tree`. The tensor receives one value per tree node;
+`NaN` marks a node with no configured temperature or a node that was not visited.
 
 ## Dynamic Tool-Call Dispatch
 

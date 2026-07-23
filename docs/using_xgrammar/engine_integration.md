@@ -239,7 +239,7 @@ batch_grammar_matcher = xgr.BatchGrammarMatcher(max_threads=8)
 
 `BatchGrammarMatcher` needs a parameter `max_threads` to initialize. It represents the maximum threads in `batch_fill_next_token_bitmask`. If not set, it will use std::thread::hardware_concurrency() / 2 as the default value.
 
-`BatchGrammarMatcher` has three methods: `batch_fill_next_token_bitmask`, `batch_accept_token`, and `batch_accept_string` to handle the mask generation tasks. Here is an example to use `batch_fill_next_token_bitmask`:
+`BatchGrammarMatcher` provides `batch_fill_next_token_bitmask`, `batch_get_temperature`, `batch_accept_token`, and `batch_accept_string` for batched grammar matching. Here is an example using `batch_fill_next_token_bitmask`:
 
 ```python
 matchers = [grammar_matcher_1, grammar_matcher_2, grammar_matcher_3, ...]
@@ -247,6 +247,7 @@ batch_size = len(matchers)
 token_bitmask = xgr.allocate_token_bitmask(batch_size, tokenizer_info.vocab_size)
 batch_grammar_matcher = xgr.BatchGrammarMatcher(max_threads=8)
 batch_grammar_matcher.batch_fill_next_token_bitmask(matchers, token_bitmask)
+temperatures = xgr.BatchGrammarMatcher.batch_get_temperature(matchers)
 ```
 
 Each matcher will store its token mask in the corresponding tensor. For `batch_accept_token` and `batch_accept_string`, each matcher will try to accept the corresponding token_id/str.
