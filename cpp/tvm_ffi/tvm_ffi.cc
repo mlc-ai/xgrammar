@@ -195,13 +195,15 @@ class GrammarCompilerObj : public ffi::Object {
       ffi::ObjectRef tokenizer_ref,
       int64_t max_threads,
       bool cache_enabled,
-      int64_t max_memory_bytes
+      int64_t max_memory_bytes,
+      bool enable_dynamic_compilation
   )
       : value(
             tokenizer_ref.as<TokenizerInfoObj>()->value,
             static_cast<int>(max_threads),
             cache_enabled,
-            max_memory_bytes
+            max_memory_bytes,
+            enable_dynamic_compilation
         ) {}
 
   static constexpr bool _type_mutable = true;
@@ -499,9 +501,10 @@ TVM_FFI_STATIC_INIT_BLOCK() {
         XGRAMMAR_FFI_TRY_END();
       });
 
-  // GrammarCompiler: init(tokenizer_info, max_threads, cache_enabled, max_memory_bytes)
+  // GrammarCompiler: init(tokenizer_info, max_threads, cache_enabled, max_memory_bytes,
+  // enable_dynamic_compilation)
   refl::ObjectDef<GrammarCompilerObj>()
-      .def(refl::init<O, int64_t, bool, int64_t>())
+      .def(refl::init<O, int64_t, bool, int64_t, bool>())
       .def(
           "compile_json_schema",
           [](GrammarCompilerObj* o,
