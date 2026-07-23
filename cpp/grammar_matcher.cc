@@ -590,12 +590,7 @@ class GrammarMatcher::Impl : public EarleyParser {
     auto bitset = DynamicBitset(
         tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
     );
-    for (int i = 0; i < tokenizer_info_.GetVocabSize(); ++i) {
-      if (bitset[i]) {
-        return true;
-      }
-    }
-    return false;
+    return bitset.Any();
   }
 
   /*! \brief Record that num_rows new input positions were created, each consuming one byte of
@@ -984,25 +979,29 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   if (has_budget_rules_) {
     const auto& row = scanable_state_history_[scanable_state_history_.size() - 1];
     bool any_expired = false;
+    bool any_alive = false;
     for (const auto& state : row) {
       if (IsExpiredState(state)) {
         any_expired = true;
-        break;
+      } else {
+        any_alive = true;
       }
     }
-    if (any_expired) {
-      // Try to force the expired derivations to end here: mask from the other states only. If
-      // no token remains, ending is impossible at this position; relax the budget for one step
-      // and report it on the next accept.
+    if (any_expired && (any_alive || IsCompleted())) {
+      // The expired derivations can be forced to end here: some other derivation can make
+      // progress (or the grammar can terminate), so mask from the non-expired states only.
+      // Only when the vocabulary cannot encode any of the live states' next bytes does the
+      // mask come out empty; fall through to relaxing then.
       FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/true, debug_print);
       if (BitmaskHasAnyToken(bitmask_data_ptr) || IsCompleted()) {
         budget_enforce_pending_ = true;
         return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
       }
-      budget_enforce_pending_ = false;
-    } else {
-      budget_enforce_pending_ = false;
     }
+    // No enforcement at this position: either no budget has expired, or the expired
+    // derivations cannot end here — relax the budget for one step and report it on the next
+    // accept.
+    budget_enforce_pending_ = false;
   }
   FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/false, debug_print);
   return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
