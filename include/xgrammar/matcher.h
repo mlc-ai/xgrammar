@@ -71,12 +71,17 @@ class GrammarMatcher {
    * CompiledGrammar.
    * \param compiled_grammar The compiled grammar. It is obtained through
    * CreateCompiledGrammar as a result of preprocessing the grammar and tokenizer.
+   * \param override_stop_tokens Optional stop token ids that replace those from the tokenizer.
+   * \param terminate_without_stop_token Whether to terminate when the root rule is complete.
+   * \param max_rollback_tokens Deprecated and unused.
+   * \param default_temperature The temperature used when no active rule specifies one.
    */
   GrammarMatcher(
       const CompiledGrammar& compiled_grammar,
       std::optional<std::vector<int>> override_stop_tokens = std::nullopt,
       bool terminate_without_stop_token = false,
-      int max_rollback_tokens = -1
+      int max_rollback_tokens = -1,
+      std::optional<float> default_temperature = std::nullopt
   );
 
   /*!
@@ -125,6 +130,8 @@ class GrammarMatcher {
    * \param time_threshold Maximum allowed time in seconds for the DFS traversal.
    *        If the traversal exceeds this threshold, it returns false.
    *        A value <= 0 disables the timeout (default: -1.0).
+   * \param temperatures Optional DLTensor to store the effective temperature for each node
+   *        (1D float32 with num_nodes elements). NaN represents no effective temperature.
    * \return true if the traversal completed successfully, false if it timed out.
    */
   bool TraverseDraftTree(
@@ -132,7 +139,8 @@ class GrammarMatcher {
       const DLTensor* retrieve_next_sibling,
       const DLTensor* draft_tokens,
       DLTensor* token_bitmask,
-      double time_threshold = -1.0
+      double time_threshold = -1.0,
+      DLTensor* temperatures = nullptr
   );
 
   /*!
@@ -174,6 +182,9 @@ class GrammarMatcher {
   /*! \brief Get the maximum number of rollback tokens allowed. */
   int GetMaxRollbackTokens() const;
 
+  /*! \brief Get the effective sampling temperature for the next token. */
+  std::optional<float> GetTemperature() const;
+
   const std::vector<int>& GetStopTokenIds() const;
 
   /*! \brief Print the internal state of the matcher. This is only used for debugging. The
@@ -205,8 +216,9 @@ class BatchGrammarMatcher {
     of the bitmask tensor. If not provided, all matchers will write to the corresponding
     indices(matchers[i] to next_token_bitmask[i]).
     \param debug_print Whether to print debug information. Default is false.
+    \return The effective sampling temperature for each matcher.
   */
-  void BatchFillNextTokenBitmask(
+  std::vector<std::optional<float>> BatchFillNextTokenBitmask(
       std::vector<GrammarMatcher>* matchers,
       DLTensor* next_token_bitmask,
       const std::optional<std::vector<int32_t>>& indices = std::nullopt,

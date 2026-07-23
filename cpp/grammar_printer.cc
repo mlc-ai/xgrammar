@@ -7,12 +7,23 @@
 
 #include <picojson.h>
 
+#include <iomanip>
+#include <limits>
+#include <sstream>
+
 #include "support/encoding.h"
 
 namespace xgrammar {
 
 std::string GrammarPrinter::PrintRule(const Rule& rule) {
-  std::string res = rule.name + " ::= " + PrintGrammarExpr(rule.body_expr_id);
+  std::string res = rule.name;
+  if (rule.temperature.has_value()) {
+    std::ostringstream temperature;
+    temperature << std::setprecision(std::numeric_limits<float>::max_digits10)
+                << rule.temperature.value();
+    res += "[temperature=" + temperature.str() + "]";
+  }
+  res += " ::= " + PrintGrammarExpr(rule.body_expr_id);
   if (rule.lookahead_assertion_id != -1) {
     res += " (=" + PrintGrammarExpr(rule.lookahead_assertion_id) + ")";
   }

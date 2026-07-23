@@ -79,6 +79,16 @@ static std::optional<bool> OptionalBoolFromView(ffi::AnyView v) {
   return static_cast<bool>(v.cast<int64_t>());
 }
 
+static std::optional<float> OptionalFloatFromView(ffi::AnyView v) {
+  if (v == nullptr) return std::nullopt;
+  return static_cast<float>(v.cast<double>());
+}
+
+static ffi::Any OptionalFloatToAny(const std::optional<float>& value) {
+  if (!value.has_value()) return ffi::Any(nullptr);
+  return ffi::Any(static_cast<double>(value.value()));
+}
+
 static std::optional<std::vector<int32_t>> OptionalInt32VectorFromView(ffi::AnyView v) {
   if (v == nullptr) return std::nullopt;
   ffi::Array<int64_t> array = v.cast<ffi::Array<int64_t>>();
@@ -220,13 +230,15 @@ class GrammarMatcherObj : public ffi::Object {
       ffi::ObjectRef compiled_grammar_ref,
       ffi::AnyView override_stop_tokens_opt,
       bool terminate_without_stop_token,
-      int64_t max_rollback_tokens
+      int64_t max_rollback_tokens,
+      ffi::AnyView default_temperature_opt
   )
       : value(
             compiled_grammar_ref.as<CompiledGrammarObj>()->value,
             OptionalIntVectorFromView(override_stop_tokens_opt),
             terminate_without_stop_token,
-            static_cast<int>(max_rollback_tokens)
+            static_cast<int>(max_rollback_tokens),
+            OptionalFloatFromView(default_temperature_opt)
         ) {}
 
   static constexpr bool _type_mutable = true;
@@ -590,9 +602,14 @@ TVM_FFI_STATIC_INIT_BLOCK() {
               matchers.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
             }
             DLTensor* bitmask = batch_token_bitmask.cast<DLTensor*>();
-            o->value.BatchFillNextTokenBitmask(
+            auto temperatures = o->value.BatchFillNextTokenBitmask(
                 &matchers, bitmask, OptionalInt32VectorFromView(indices), debug_print
             );
+            ffi::Array<ffi::Any> result;
+            for (const auto& temperature : temperatures) {
+              result.push_back(OptionalFloatToAny(temperature));
+            }
+            return result;
           }
       )
       .def_static(
@@ -649,9 +666,9 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       });
 
   // GrammarMatcher: init(compiled_grammar, override_stop_tokens_opt, terminate_without_stop,
-  // max_rollback_tokens)
+  // max_rollback_tokens, default_temperature)
   refl::ObjectDef<GrammarMatcherObj>()
-      .def(refl::init<O, ffi::AnyView, bool, int64_t>())
+      .def(refl::init<O, ffi::AnyView, bool, int64_t, ffi::AnyView>())
       .def(
           "accept_token",
           [](GrammarMatcherObj* o, int64_t token_id, bool debug_print) {
@@ -686,17 +703,21 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              ffi::AnyView retrieve_next_sibling,
              ffi::AnyView draft_tokens,
              ffi::AnyView token_bitmask,
-             double time_threshold) {
+             double time_threshold,
+             ffi::AnyView temperatures) {
             DLTensor* retrieve_next_token_ptr = retrieve_next_token.cast<DLTensor*>();
             DLTensor* retrieve_next_sibling_ptr = retrieve_next_sibling.cast<DLTensor*>();
             DLTensor* draft_tokens_ptr = draft_tokens.cast<DLTensor*>();
             DLTensor* token_bitmask_ptr = token_bitmask.cast<DLTensor*>();
+            DLTensor* temperatures_ptr =
+                temperatures == nullptr ? nullptr : temperatures.cast<DLTensor*>();
             return o->value.TraverseDraftTree(
                 retrieve_next_token_ptr,
                 retrieve_next_sibling_ptr,
                 draft_tokens_ptr,
                 token_bitmask_ptr,
-                time_threshold
+                time_threshold,
+                temperatures_ptr
             );
           }
       )
@@ -724,6 +745,10 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           [](const GrammarMatcherObj* o) {
             return static_cast<int64_t>(o->value.GetMaxRollbackTokens());
           }
+      )
+      .def(
+          "temperature",
+          [](const GrammarMatcherObj* o) { return OptionalFloatToAny(o->value.GetTemperature()); }
       )
       .def(
           "stop_token_ids",

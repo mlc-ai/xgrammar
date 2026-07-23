@@ -261,6 +261,12 @@ void GrammarBuilder::UpdateLookaheadExact(int32_t rule_id, bool is_exact) {
   grammar_->rules_[rule_id].is_exact_lookahead = is_exact;
 }
 
+void GrammarBuilder::UpdateRuleTemperature(int32_t rule_id, std::optional<float> temperature) {
+  XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  grammar_->rules_[rule_id].temperature = temperature;
+}
+
 void GrammarBuilder::UpdateLookaheadAssertion(
     std::string rule_name, int32_t lookahead_assertion_id
 ) {

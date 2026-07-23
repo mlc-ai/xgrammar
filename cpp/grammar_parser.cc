@@ -8,7 +8,9 @@
 #include <picojson.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <variant>
 #include <vector>
@@ -48,13 +50,14 @@ class EBNFLexer::Impl {
   Token ParseIdentifierOrBooleanToken();
   Token ParseStringToken();
   std::vector<Token> ParseCharClassToken();
-  Token ParseIntegerToken();
+  Token ParseNumberToken();
   [[noreturn]] void ReportLexerError(const std::string& msg, int line = -1, int column = -1);
   char Peek(int delta = 0) const;
   void Consume(int cnt = 1);
   void ConsumeSpace();
   std::string ParseIdentifierToken();
   void ConvertIdentifierToRuleName(std::vector<Token>* tokens);
+  bool IsRuleAttribute() const;
   static bool IsNameChar(char c, bool is_first = false);
 };
 
@@ -255,34 +258,75 @@ std::vector<EBNFLexer::Token> EBNFLexer::Impl::ParseCharClassToken() {
   return tokens;
 }
 
-// Parse integer
-EBNFLexer::Token EBNFLexer::Impl::ParseIntegerToken() {
+// Parse integer or floating-point number.
+EBNFLexer::Token EBNFLexer::Impl::ParseNumberToken() {
   int start_line = cur_line_;
   int start_column = cur_column_;
   const char* start_pos = cur_;
-  bool is_negative = false;
 
-  if (Peek() == '-') {
-    is_negative = true;
-    Consume();
-  } else if (Peek() == '+') {
+  if (Peek() == '-' || Peek() == '+') {
     Consume();
   }
 
-  int64_t num = 0;
+  bool is_float = false;
   while (Peek() && isdigit(Peek())) {
-    num = num * 10 + (Peek() - '0');
     Consume();
-    if (num > kMaxIntegerInGrammar) {
-      ReportLexerError(
-          "Integer is too large: parsed " + std::to_string(num) + ", max allowed is " +
-          std::to_string(kMaxIntegerInGrammar)
-      );
+  }
+  if (Peek() == '.' && Peek(1) != '.') {
+    is_float = true;
+    Consume();
+    while (Peek() && isdigit(Peek())) {
+      Consume();
+    }
+  }
+  if (Peek() == 'e' || Peek() == 'E') {
+    is_float = true;
+    Consume();
+    if (Peek() == '-' || Peek() == '+') {
+      Consume();
+    }
+    if (!isdigit(Peek())) {
+      ReportLexerError("Invalid number");
+    }
+    while (Peek() && isdigit(Peek())) {
+      Consume();
     }
   }
 
   std::string lexeme(start_pos, cur_ - start_pos);
-  return {TokenType::IntegerLiteral, lexeme, is_negative ? -num : num, start_line, start_column};
+  try {
+    if (is_float) {
+      return {TokenType::FloatLiteral, lexeme, std::stod(lexeme), start_line, start_column};
+    }
+    int64_t value = std::stoll(lexeme);
+    if (value < -kMaxIntegerInGrammar || value > kMaxIntegerInGrammar) {
+      ReportLexerError(
+          "Integer is too large: parsed " + std::to_string(value) + ", max allowed is " +
+          std::to_string(kMaxIntegerInGrammar)
+      );
+    }
+    return {TokenType::IntegerLiteral, lexeme, value, start_line, start_column};
+  } catch (const std::exception&) {
+    ReportLexerError("Invalid number");
+  }
+}
+
+bool EBNFLexer::Impl::IsRuleAttribute() const {
+  if (Peek() != '[') {
+    return false;
+  }
+  const char* cursor = cur_ + 1;
+  while (*cursor && *cursor != ']' && *cursor != '\n' && *cursor != '\r') {
+    ++cursor;
+  }
+  if (*cursor != ']') {
+    return false;
+  }
+  ++cursor;
+  while (*cursor == ' ' || *cursor == '\t') {
+    ++cursor;
+  }
+  return cursor[0] == ':' && cursor[1] == ':' && cursor[2] == '=';
 }
 
 // Get the next token
@@ -343,12 +387,20 @@ std::variant<EBNFLexer::Token, std::vector<EBNFLexer::Token>> EBNFLexer::Impl::N
     case '"':
       return ParseStringToken();
     case '[':
+      if (IsRuleAttribute()) {
+        Consume();
+        return EBNFLexer::Token{TokenType::LBracket, "[", "", start_line, start_column};
+      }
       return ParseCharClassToken();
+    case ']':
+      Consume();
+      return EBNFLexer::Token{TokenType::RBracket, "]", "", start_line, start_column};
     default:
-      if (IsNameChar(*cur_, true)) {
+      if (isdigit(*cur_) ||
+          ((*cur_ == '-' || *cur_ == '+') && isdigit(static_cast<unsigned char>(Peek(1))))) {
+        return ParseNumberToken();
+      } else if (IsNameChar(*cur_, true)) {
         return ParseIdentifierOrBooleanToken();
-      } else if (isdigit(*cur_) || *cur_ == '-' || *cur_ == '+') {
-        return ParseIntegerToken();
       }
 
       // Unrecognized character, report error
@@ -367,21 +419,35 @@ void EBNFLexer::Impl::ConvertIdentifierToRuleName(std::vector<Token>* tokens) {
             "Assign should not be the first token", tokens->at(i).line, tokens->at(i).column
         );
       }
-      if (tokens->at(i - 1).type != TokenType::Identifier) {
+      int rule_name_index = i - 1;
+      if (tokens->at(rule_name_index).type == TokenType::RBracket) {
+        int depth = 1;
+        --rule_name_index;
+        while (rule_name_index >= 0 && depth > 0) {
+          if (tokens->at(rule_name_index).type == TokenType::RBracket) {
+            ++depth;
+          } else if (tokens->at(rule_name_index).type == TokenType::LBracket) {
+            --depth;
+          }
+          --rule_name_index;
+        }
+      }
+      if (rule_name_index < 0 || tokens->at(rule_name_index).type != TokenType::Identifier) {
         ReportLexerError(
             "Assign should be preceded by an identifier",
             tokens->at(i - 1).line,
             tokens->at(i - 1).column
         );
       }
-      if (i >= 2 && tokens->at(i - 2).line == tokens->at(i - 1).line) {
+      if (rule_name_index >= 1 &&
+          tokens->at(rule_name_index - 1).line == tokens->at(rule_name_index).line) {
         ReportLexerError(
             "The rule name should be at the beginning of the line",
-            tokens->at(i - 1).line,
-            tokens->at(i - 1).column
+            tokens->at(rule_name_index).line,
+            tokens->at(rule_name_index).column
         );
       }
-      tokens->at(i - 1).type = TokenType::RuleName;
+      tokens->at(rule_name_index).type = TokenType::RuleName;
     }
   }
 }
@@ -711,11 +777,9 @@ std::pair<int64_t, int64_t> EBNFParser::ParseRepetitionRange() {
       Consume();
       return {lower, -1};
     }
-    // The grammar printer emits {n, -1} for unbounded upper bounds, and
-    // '-' is a valid identifier-start char (IsNameChar), so the lexer
-    // produces Identifier("-1") rather than IntegerLiteral.  Accept it
-    // as equivalent to {n,}.
-    if (Peek().type == TokenType::Identifier && Peek().lexeme == "-1") {
+    // The grammar printer emits {n, -1} for unbounded upper bounds.
+    if ((Peek().type == TokenType::Identifier && Peek().lexeme == "-1") ||
+        (Peek().type == TokenType::IntegerLiteral && std::any_cast<int64_t>(Peek().value) == -1)) {
       Consume();
       PeekAndConsume(TokenType::RBrace, "Expect }");
       return {lower, -1};
@@ -1189,6 +1253,30 @@ EBNFParser::Rule EBNFParser::ParseRule() {
   cur_rule_name_ = std::any_cast<std::string>(Peek().value);
   Consume();
 
+  std::optional<float> temperature = std::nullopt;
+  if (Peek().type == TokenType::LBracket) {
+    Consume();
+    std::string attribute = ParseIdentifier();
+    if (attribute != "temperature") {
+      ReportParseError("Unknown rule attribute: " + attribute, -1);
+    }
+    PeekAndConsume(TokenType::Equal, "Expect = after temperature");
+    double value;
+    if (Peek().type == TokenType::FloatLiteral) {
+      value = std::any_cast<double>(Peek().value);
+    } else if (Peek().type == TokenType::IntegerLiteral) {
+      value = static_cast<double>(std::any_cast<int64_t>(Peek().value));
+    } else {
+      ReportParseError("Expect a number after temperature=");
+    }
+    if (!std::isfinite(value) || value < 0 || value > std::numeric_limits<float>::max()) {
+      ReportParseError("Temperature must be a finite non-negative number");
+    }
+    temperature = static_cast<float>(value);
+    Consume();
+    PeekAndConsume(TokenType::RBracket, "Expect ] after rule attributes");
+  }
+
   PeekAndConsume(TokenType::Assign, "Expect ::=");
 
   auto body_id = ParseChoices();
@@ -1198,7 +1286,7 @@ EBNFParser::Rule EBNFParser::ParseRule() {
     lookahead_id = ParseLookaheadAssertion();
   }
 
-  return {cur_rule_name_, body_id, lookahead_id};
+  return {cur_rule_name_, body_id, lookahead_id, false, temperature};
 }
 
 void EBNFParser::InitRuleNames() {
@@ -1237,6 +1325,7 @@ Grammar EBNFParser::Parse(
     auto new_rule = ParseRule();
     builder_.UpdateRuleBody(new_rule.name, new_rule.body_expr_id);
     builder_.UpdateLookaheadAssertion(new_rule.name, new_rule.lookahead_assertion_id);
+    builder_.UpdateRuleTemperature(builder_.GetRuleId(new_rule.name), new_rule.temperature);
   }
 
   return builder_.Get(root_rule_name);
