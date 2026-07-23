@@ -10,7 +10,7 @@
 #include "grammar_functor.h"
 #include "grammar_parser.h"
 #include "grammar_printer.h"
-#include "json_schema_converter.h"
+#include "json_schema_grammar_converter.h"
 #include "lark_converter.h"
 #include "regex_converter.h"
 #include "structural_tag.h"
@@ -51,20 +51,13 @@ Grammar Grammar::FromJSONSchema(
     bool print_converted_ebnf,
     bool any_order
 ) {
-  auto ebnf_string = JSONSchemaToEBNF(
-      schema,
-      any_whitespace,
-      indent,
-      separators,
-      strict_mode,
-      max_whitespace_cnt,
-      JSONFormat::kJSON,
-      any_order
+  auto grammar = JSONSchemaToGrammar(
+      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
   );
   if (print_converted_ebnf) {
-    XGRAMMAR_LOG(INFO) << "Converted EBNF: " << ebnf_string << std::endl;
+    XGRAMMAR_LOG(INFO) << "Converted EBNF: " << grammar.ToString() << std::endl;
   }
-  return FromEBNF(ebnf_string);
+  return grammar;
 }
 
 Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) {

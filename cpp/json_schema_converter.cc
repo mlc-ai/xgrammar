@@ -24,6 +24,7 @@
 
 #include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
+#include "json_schema_grammar_converter.h"
 #include "regex_converter.h"
 #include "support/encoding.h"
 #include "support/logging.h"
@@ -4041,6 +4042,46 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
     return std::nullopt;
   }
   return it->second;
+}
+
+Grammar JSONSchemaToGrammar(
+    const std::string& schema,
+    bool any_whitespace,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
+    bool any_order
+) {
+  picojson::value schema_value;
+  std::string error = picojson::parse(schema_value, schema);
+  XGRAMMAR_CHECK(error.empty()) << "Failed to parse JSON: " << error
+                                << ". The JSON string is:" << schema;
+
+  SchemaParser parser(schema_value, {strict_mode, JSONFormat::kJSON});
+  auto spec_result = parser.Parse(schema_value, "root");
+  if (spec_result.IsErr()) {
+    XGRAMMAR_LOG(FATAL) << std::move(spec_result).UnwrapErr().what();
+  }
+  auto spec = std::move(spec_result).Unwrap();
+
+  auto ref_resolver = [&parser](const std::string& uri, const std::string& rule_name_hint) {
+    auto result = parser.ResolveRef(uri, rule_name_hint);
+    if (result.IsErr()) {
+      XGRAMMAR_LOG(FATAL) << std::move(result).UnwrapErr().what();
+    }
+    return std::move(result).Unwrap();
+  };
+
+  JSONSchemaGrammarConverter converter(
+      indent,
+      std::move(separators),
+      any_whitespace,
+      max_whitespace_cnt,
+      std::move(ref_resolver),
+      any_order
+  );
+  return GrammarNormalizer::Apply(converter.Convert(spec));
 }
 
 std::string JSONSchemaToEBNF(

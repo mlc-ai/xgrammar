@@ -430,6 +430,9 @@ class JSONSchemaConverter {
   static const std::string kBasicEscape;
   static const std::string kBasicStringSub;
 
+  /*! \brief Return the built-in regular expression for a JSON Schema string format. */
+  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
+
  protected:
   GenerateCacheManager rule_cache_manager_;
 
@@ -468,8 +471,6 @@ class JSONSchemaConverter {
   static std::string JSONStrToPrintableStr(const std::string& json_str);
 
  protected:
-  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
-
   // Expose for testing
   friend std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
   friend std::string GenerateFloatRangeRegex(
