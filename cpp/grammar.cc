@@ -10,7 +10,7 @@
 #include "grammar_functor.h"
 #include "grammar_parser.h"
 #include "grammar_printer.h"
-#include "json_schema_grammar_converter.h"
+#include "json_schema_converter.h"
 #include "lark_converter.h"
 #include "regex_converter.h"
 #include "structural_tag.h"
