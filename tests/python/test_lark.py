@@ -1152,23 +1152,25 @@ ANY_TEXT_BUDGET_GRAMMAR = r"""
 
 
 def test_lark_max_tokens_any_text_budget() -> None:
-    # An arbitrary-text body compiles into a bounded token wildcard: exact budget, and the
-    # terminator token is excluded from the region so producing it always exits.
+    # An arbitrary-text body can end at every position, so the runtime budget is exact: once
+    # the budget is exhausted the mask only allows leaving the region.
     compiled = _compile_lark(ANY_TEXT_BUDGET_GRAMMAR, MAX_TOKENS_TOKENIZER)
     assert _accepts_and_terminates(compiled, [5])
     assert _accepts_and_terminates(compiled, [0, 1, 2, 5])
-    assert not _accepts_and_terminates(compiled, [0, 1, 2, 0, 5])
     matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
     for token_id in [0, 1, 2]:
         assert matcher.accept_token(token_id)
     assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [5]
+    # The mask enforcement commits: a fourth in-region token is rejected.
+    assert not matcher.accept_token(0)
+    assert matcher.accept_token(5) and matcher.is_terminated()
 
 
-def test_lark_max_tokens_any_text_desugar_form() -> None:
+def test_lark_max_tokens_any_text_keeps_budget_metadata() -> None:
     grammar = xgr.Grammar.from_lark(ANY_TEXT_BUDGET_GRAMMAR, tokenizer_info=MAX_TOKENS_TOKENIZER)
     printed = str(grammar)
-    assert "{0, 3}" in printed and "ExcludeToken(" in printed
-    assert "max_tokens=3] ::=" not in printed
+    assert "r[max_tokens=3] ::=" in printed
+    assert "ExcludeToken(" not in printed
 
 
 BUDGET_GRAMMAR = r"""

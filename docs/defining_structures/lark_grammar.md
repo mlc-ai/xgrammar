@@ -463,21 +463,14 @@ Each occurrence of the rule may then consume at most `max_tokens` LLM tokens. On
 is exhausted, the token mask only allows leaving the rule, which bounds the length of free-text
 segments such as reasoning blocks while the rest of the output stays grammar-constrained.
 
-Two compilation strategies are used:
-
-- **Arbitrary-text bodies** (the forms accepted by lazy heads, with `tokenizer_info`
-  available): the body is compiled into a bounded repetition of a token wildcard — an exact
-  budget at the grammar level. When the rule is directly followed by a fixed string literal or
-  a special token, tokens containing that terminator are excluded from the region, so producing
-  the terminator exits the region immediately. This region advances token-by-token
-  (`accept_token`), not byte-by-byte.
-- **Any other body** (e.g. `/(\S*\s)+/`, or any-text without `tokenizer_info`): a
-  **best-effort budget**. The body compiles normally and every predicted occurrence of the rule
-  carries a deadline: the index of the last token its derivation may consume. Once the deadline
-  passes, each mask forces the rule to end if ending is possible at the current position;
-  otherwise the budget is relaxed for one step and enforcement is retried, so the rule ends at
-  the earliest possible position and the output always stays grammar-valid. A compile-time
-  warning marks best-effort rules.
+The budget is enforced by the matcher at generation time. The body compiles normally and
+every predicted occurrence of the rule carries a deadline: the index of the last token its
+derivation may consume. Once the deadline passes, each mask forces the rule to end if ending
+is possible at the current position; otherwise the budget is relaxed for one step and
+enforcement is retried, so the rule ends at the earliest possible position and the output
+always stays grammar-valid. Bodies that can end at any position — such as the arbitrary-text
+form above — therefore never exceed their budget. For other bodies (e.g. `/(\S*\s)+/`) the
+budget is best-effort and a compile-time warning marks the rule.
 
 The budget applies **per occurrence**: in `(r ",")* r` every element gets its own budget, and
 to bound a whole loop the budget goes on a wrapper rule (`list[max_tokens=N]: item+`). Nested
