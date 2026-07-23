@@ -28,6 +28,7 @@ const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
           // TODO(Linzhang): we do not validate the string's value, and we accept both.
           "</｜DSML｜parameter>"}},
         {JSONFormat::kGlmXML, {"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"}},
+        {JSONFormat::kCohereXML, {"<cofl:tool_param name=", ">", "", "</cofl:tool_param>"}},
 };
 
 XMLToolCallingConverter::XMLToolCallingConverter(
