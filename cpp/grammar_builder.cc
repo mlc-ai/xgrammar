@@ -25,6 +25,15 @@ GrammarBuilder::GrammarBuilder(const Grammar& grammar)
   }
 }
 
+GrammarBuilder GrammarBuilder::FromMutableGrammar(Grammar* grammar) {
+  GrammarBuilder builder;
+  builder.grammar_ = grammar->pimpl_;
+  for (int i = 0; i < static_cast<int>(builder.grammar_->NumRules()); ++i) {
+    builder.rule_name_to_id_[builder.grammar_->GetRule(i).name] = i;
+  }
+  return builder;
+}
+
 Grammar GrammarBuilder::Get(const std::string& root_rule_name) {
   int32_t root_rule_id = GetRuleId(root_rule_name);
   XGRAMMAR_CHECK(root_rule_id != -1)

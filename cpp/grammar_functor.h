@@ -323,9 +323,9 @@ class StructureNormalizer {
 
 /*!
  * \brief Fuse adjacent byte string elements in sequences.
- * \details If nothing needs rewriting, the pass is a read-only scan and the grammar is left
- * unchanged. Otherwise the grammar handle is replaced with a rewritten copy, so other holders of
- * the same grammar are unaffected.
+ * \details Rewrites *grammar in place. Only sequences that actually contain adjacent byte strings
+ * are rewritten; if nothing needs fusing, the grammar is left untouched. The caller must own the
+ * grammar, as the input is mutated directly.
  */
 class ByteStringFuser {
  public:
@@ -342,9 +342,9 @@ class AllowEmptyRuleAnalyzer {
 
 /*!
  * \brief Inline the rule references in the grammar.
- * \details If nothing needs rewriting, the pass is a read-only scan and the grammar is left
- * unchanged. Otherwise the grammar handle is replaced with a rewritten copy, so other holders of
- * the same grammar are unaffected.
+ * \details Rewrites *grammar in place. Only choices with an inlinable leading rule reference are
+ * rewritten; if nothing can be inlined, the grammar is left untouched. The caller must own the
+ * grammar, as the input is mutated directly.
  */
 class RuleInliner {
  public:

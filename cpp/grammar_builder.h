@@ -43,6 +43,13 @@ class GrammarBuilder {
   GrammarBuilder(const Grammar& grammar);
 
   /*!
+   * \brief Create a builder bound to an existing grammar without copying it. Unlike the copy
+   * constructor above, appended exprs and rule updates are written directly into *grammar. The
+   * grammar must outlive the builder.
+   */
+  static GrammarBuilder FromMutableGrammar(Grammar* grammar);
+
+  /*!
    * \brief Get the result grammar. This function will also set the root rule to the rule with the
    * specified name. The rule should be already added to the grammar.
    * \param root_rule_name The name of the root rule. Default is "root".
