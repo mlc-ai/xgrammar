@@ -5,7 +5,7 @@ to use XGrammar to ensure that an LLM's output is a valid JSON, or adheres to a 
 schema.
 
 First, construct a [`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) from the tokenizer info of
-the model (see [Workflow of XGrammar](../using_xgrammar/workflow_of_xgrammar.md) for details).
+the model (see [Workflow of XGrammar](../start/workflow_of_xgrammar.md) for details).
 
 ```python
 import xgrammar as xgr

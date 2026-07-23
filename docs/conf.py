@@ -94,8 +94,8 @@ templates_path = ["_templates"]
 # values are the new locations relative to the old page.
 redirects = {
     "tutorials/constrained_decoding": "../start/constrained_decoding.html",
-    "tutorials/workflow_of_xgrammar": "../using_xgrammar/workflow_of_xgrammar.html",
-    "tutorials/advanced_topics": "../using_xgrammar/workflow_of_xgrammar.html",
+    "tutorials/workflow_of_xgrammar": "../start/workflow_of_xgrammar.html",
+    "tutorials/advanced_topics": "../start/workflow_of_xgrammar.html",
     "tutorials/engine_integration": "../using_xgrammar/engine_integration.html",
     "tutorials/json_generation": "../defining_structures/json_generation.html",
     "tutorials/ebnf_guided_generation": "../defining_structures/ebnf_grammar.html",

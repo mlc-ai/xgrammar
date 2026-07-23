@@ -11,6 +11,7 @@ The mission of this project is to bring flexible zero-overhead structure generat
    start/installation
    start/quick_start
    start/constrained_decoding
+   start/workflow_of_xgrammar
 
 .. toctree::
    :maxdepth: 1
@@ -24,7 +25,6 @@ The mission of this project is to bring flexible zero-overhead structure generat
    :maxdepth: 1
    :caption: Using XGrammar
 
-   using_xgrammar/workflow_of_xgrammar
    using_xgrammar/engine_integration
    using_xgrammar/serialization
    using_xgrammar/runtime_safeguards
