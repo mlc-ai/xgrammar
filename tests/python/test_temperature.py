@@ -107,7 +107,7 @@ def test_inner_temperature_overrides_outer_temperature() -> None:
     assert matcher.temperature == pytest.approx(0.1)
 
 
-def test_ambiguous_paths_use_maximum_temperature() -> None:
+def test_ambiguous_paths_use_maximum_temperature(capfd: pytest.CaptureFixture[str]) -> None:
     compiled_grammar = _compile_lark(
         'start: left | right\nleft[temperature=0.2]: "a"+\n' 'right[temperature=0.9]: "a" "b"'
     )
@@ -118,6 +118,9 @@ def test_ambiguous_paths_use_maximum_temperature() -> None:
     assert matcher.temperature == pytest.approx(0.9)
     assert matcher.accept_string("a")
     assert matcher.temperature == pytest.approx(0.2)
+
+    captured = capfd.readouterr()
+    assert captured.err.count("Multiple active grammar paths specify different temperatures") == 1
 
 
 def test_temperature_works_with_ignored_tokens() -> None:
