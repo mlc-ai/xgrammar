@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "ebnf_script_creator.h"
+#include "xgrammar/grammar.h"
 
 namespace xgrammar {
 
@@ -478,6 +479,7 @@ class JSONSchemaConverter {
       bool exclusive_start,
       bool exclusive_end
   );
+  friend class JSONSchemaASTConverter;
 };
 
 // ==================== Public API functions (backward compatible) ====================
@@ -516,6 +518,19 @@ std::string JSONSchemaToEBNF(
     bool strict_mode = true,
     std::optional<int> max_whitespace_cnt = std::nullopt,
     JSONFormat json_format = JSONFormat::kJSON,
+    bool any_order = false
+);
+
+/*!
+ * \brief Convert a JSON schema directly into the grammar AST without an EBNF round trip.
+ */
+Grammar JSONSchemaToGrammar(
+    const std::string& schema,
+    bool any_whitespace = true,
+    std::optional<int> indent = std::nullopt,
+    std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
+    bool strict_mode = true,
+    std::optional<int> max_whitespace_cnt = std::nullopt,
     bool any_order = false
 );
 

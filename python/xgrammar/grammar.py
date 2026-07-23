@@ -193,7 +193,7 @@ class Grammar(XGRObject):
         set `any_whitespace` to False and use the `indent` and `separators` parameters. The
         meaning and the default values of the parameters follows the convention in json.dumps().
 
-        It internally converts the JSON schema to a EBNF grammar.
+        It constructs the grammar AST directly from the JSON schema.
 
         Parameters
         ----------

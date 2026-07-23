@@ -11,13 +11,227 @@
 
 #include <cstdint>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include "grammar_impl.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
+
+/*!
+ * \brief Nestable build-time descriptions of grammar expression trees.
+ *
+ * These lightweight specs let callers describe an expression tree and materialize it directly
+ * into Grammar's compact AST storage. Existing expression ids can be mixed with specs, and
+ * SelfRef can refer to the rule currently being defined.
+ *
+ * \code
+ * using namespace grammar_spec;
+ * builder.AddRule(
+ *     "root",
+ *     Choices(Sequence(ByteString("abc"), RuleRef(other_rule_id)), ByteString("def"))
+ * );
+ * \endcode
+ */
+namespace grammar_spec {
+
+class GrammarExprSpec;
+struct ExprId;
+struct ByteString;
+struct Regex;
+struct CharacterClass;
+struct CharacterClassStar;
+struct EmptyStr;
+struct RuleRef;
+struct SelfRef;
+struct Token;
+struct ExcludeToken;
+struct Sequence;
+struct Choices;
+struct Repeat;
+
+namespace detail {
+
+template <typename T, typename... Ts>
+inline constexpr bool is_one_of_v = (std::is_same_v<T, Ts> || ...);
+
+template <typename T>
+inline constexpr bool is_spec_arg_v = is_one_of_v<
+                                          std::decay_t<T>,
+                                          GrammarExprSpec,
+                                          ExprId,
+                                          ByteString,
+                                          Regex,
+                                          CharacterClass,
+                                          CharacterClassStar,
+                                          EmptyStr,
+                                          RuleRef,
+                                          SelfRef,
+                                          Token,
+                                          ExcludeToken,
+                                          Grammar::Impl::TagDispatch,
+                                          Grammar::Impl::TokenTagDispatch,
+                                          Sequence,
+                                          Choices,
+                                          Repeat> ||
+                                      std::is_integral_v<std::decay_t<T>>;
+
+}  // namespace detail
+
+/*! \brief Reference an expression that has already been materialized in a GrammarBuilder. */
+struct ExprId {
+  int32_t id;
+  ExprId(int32_t id) : id(id) {}
+};
+
+/*! \brief A UTF-8 byte string expression. */
+struct ByteString {
+  std::string str;
+  explicit ByteString(std::string str) : str(std::move(str)) {}
+};
+
+/*! \brief A regex expression. */
+struct Regex {
+  std::string pattern;
+  bool json_string;
+  explicit Regex(std::string pattern, bool json_string = false)
+      : pattern(std::move(pattern)), json_string(json_string) {}
+};
+
+struct CharacterClassElement {
+  int32_t lower;
+  int32_t upper;
+};
+
+/*! \brief A character class expression. */
+struct CharacterClass {
+  std::vector<CharacterClassElement> elements;
+  bool is_negative;
+  explicit CharacterClass(std::vector<CharacterClassElement> elements, bool is_negative = false)
+      : elements(std::move(elements)), is_negative(is_negative) {}
+};
+
+/*! \brief A repeated character class expression. */
+struct CharacterClassStar {
+  std::vector<CharacterClassElement> elements;
+  bool is_negative;
+  explicit CharacterClassStar(std::vector<CharacterClassElement> elements, bool is_negative = false)
+      : elements(std::move(elements)), is_negative(is_negative) {}
+};
+
+struct EmptyStr {};
+
+/*! \brief Reference an existing rule. */
+struct RuleRef {
+  int32_t rule_id;
+  explicit RuleRef(int32_t rule_id) : rule_id(rule_id) {}
+};
+
+/*! \brief Reference the rule currently being materialized. */
+struct SelfRef {};
+
+/*! \brief Match any one of the listed token ids. */
+struct Token {
+  std::vector<int32_t> token_ids;
+  explicit Token(std::vector<int32_t> token_ids) : token_ids(std::move(token_ids)) {}
+};
+
+/*! \brief Match any token except the listed token ids. */
+struct ExcludeToken {
+  std::vector<int32_t> token_ids;
+  explicit ExcludeToken(std::vector<int32_t> token_ids) : token_ids(std::move(token_ids)) {}
+};
+
+/*! \brief A tag dispatch expression with its referenced rules already allocated. */
+using TagDispatch = Grammar::Impl::TagDispatch;
+
+/*! \brief A token tag dispatch expression with its referenced rules already allocated. */
+using TokenTagDispatch = Grammar::Impl::TokenTagDispatch;
+
+struct Sequence {
+  std::vector<GrammarExprSpec> elements;
+
+  explicit Sequence(std::vector<GrammarExprSpec> elements) : elements(std::move(elements)) {}
+
+  template <
+      typename... Args,
+      typename = std::enable_if_t<
+          (detail::is_spec_arg_v<Args> && ...) &&
+          !(sizeof...(Args) == 1 && (std::is_same_v<std::decay_t<Args>, Sequence> && ...))>>
+  Sequence(Args&&... args) {
+    elements.reserve(sizeof...(Args));
+    (elements.emplace_back(std::forward<Args>(args)), ...);
+  }
+};
+
+struct Choices {
+  std::vector<GrammarExprSpec> choices;
+
+  explicit Choices(std::vector<GrammarExprSpec> choices) : choices(std::move(choices)) {}
+
+  template <
+      typename... Args,
+      typename = std::enable_if_t<
+          (detail::is_spec_arg_v<Args> && ...) &&
+          !(sizeof...(Args) == 1 && (std::is_same_v<std::decay_t<Args>, Choices> && ...))>>
+  Choices(Args&&... args) {
+    choices.reserve(sizeof...(Args));
+    (choices.emplace_back(std::forward<Args>(args)), ...);
+  }
+};
+
+struct Repeat {
+  // GrammarExprSpec is incomplete at this point, so store the single child in a vector.
+  std::vector<GrammarExprSpec> element;
+  int32_t min_repeat_count;
+  int32_t max_repeat_count;
+
+  template <typename T, typename = std::enable_if_t<detail::is_spec_arg_v<T>>>
+  Repeat(T&& element, int32_t min_repeat_count, int32_t max_repeat_count)
+      : min_repeat_count(min_repeat_count), max_repeat_count(max_repeat_count) {
+    this->element.emplace_back(std::forward<T>(element));
+  }
+};
+
+/*! \brief A nestable, build-time description of a grammar expression tree. */
+class GrammarExprSpec {
+ public:
+  using Variant = std::variant<
+      ExprId,
+      ByteString,
+      Regex,
+      CharacterClass,
+      CharacterClassStar,
+      EmptyStr,
+      RuleRef,
+      SelfRef,
+      Token,
+      ExcludeToken,
+      Grammar::Impl::TagDispatch,
+      Grammar::Impl::TokenTagDispatch,
+      Sequence,
+      Choices,
+      Repeat>;
+
+  GrammarExprSpec(int32_t grammar_expr_id) : value(ExprId(grammar_expr_id)) {}
+
+  template <
+      typename T,
+      typename = std::enable_if_t<
+          detail::is_spec_arg_v<T> && !std::is_same_v<std::decay_t<T>, GrammarExprSpec> &&
+          !std::is_integral_v<std::decay_t<T>>>>
+  GrammarExprSpec(T&& value) : value(std::forward<T>(value)) {}
+
+  Variant value;
+};
+
+}  // namespace grammar_spec
+
+using grammar_spec::GrammarExprSpec;
 
 /*!
  * \brief Helper class to build a BNF grammar.
@@ -146,6 +360,14 @@ class GrammarBuilder {
       int32_t max_repeat_count
   );
 
+  /*! \brief Materialize a nested expression description and return its expression id. */
+  int32_t AddExpr(const GrammarExprSpec& spec, const std::string& name_hint = "expr");
+
+  /*! \brief Materialize a nested expression with SelfRef bound to self_rule_id. */
+  int32_t AddExpr(
+      const GrammarExprSpec& spec, int32_t self_rule_id, const std::string& name_hint = "expr"
+  );
+
   /*! \brief Get the number of grammar_exprs. */
   int32_t NumGrammarExprs() const;
 
@@ -160,6 +382,12 @@ class GrammarBuilder {
   int32_t AddRule(const std::string& name, int32_t body_expr_id);
 
   int32_t AddRuleWithHint(const std::string& name_hint, int32_t body_expr_id);
+
+  /*! \brief Add a rule by materializing a nested expression description. */
+  int32_t AddRule(const std::string& name, const GrammarExprSpec& spec);
+
+  /*! \brief Add a uniquely named rule by materializing a nested expression description. */
+  int32_t AddRuleWithHint(const std::string& name_hint, const GrammarExprSpec& spec);
 
   int32_t NumRules() const;
 
@@ -214,6 +442,10 @@ class GrammarBuilder {
   int32_t GetRuleId(const std::string& name) const;
 
  private:
+  int32_t AddExprImpl(
+      const GrammarExprSpec& spec, int32_t self_rule_id, const std::string& name_hint
+  );
+
   // Mutable pointer to the grammar object.
   std::shared_ptr<Grammar::Impl> grammar_;
   // Map from rule name to rule id.

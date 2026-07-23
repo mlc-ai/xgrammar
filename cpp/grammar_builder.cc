@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "support/logging.h"
@@ -203,6 +204,145 @@ int32_t GrammarBuilder::AddRepeatFromExpr(
   return AddRepeat(ref_rule_id, min_repeat_count, max_repeat_count);
 }
 
+int32_t GrammarBuilder::AddExpr(const GrammarExprSpec& spec, const std::string& name_hint) {
+  return AddExprImpl(spec, -1, name_hint);
+}
+
+int32_t GrammarBuilder::AddExpr(
+    const GrammarExprSpec& spec, int32_t self_rule_id, const std::string& name_hint
+) {
+  return AddExprImpl(spec, self_rule_id, name_hint);
+}
+
+int32_t GrammarBuilder::AddExprImpl(
+    const GrammarExprSpec& spec, int32_t self_rule_id, const std::string& name_hint
+) {
+  namespace gs = grammar_spec;
+  struct Visitor {
+    GrammarBuilder* builder;
+    int32_t self_rule_id;
+    const std::string& name_hint;
+
+    int32_t CheckedSelfRuleId() const {
+      XGRAMMAR_CHECK(self_rule_id != -1) << "SelfRef must be materialized while defining a rule";
+      return self_rule_id;
+    }
+
+    int32_t operator()(const gs::ExprId& value) const { return value.id; }
+    int32_t operator()(const gs::ByteString& value) const {
+      return builder->AddByteString(value.str);
+    }
+    int32_t operator()(const gs::Regex& value) const {
+      return builder->AddRegex(value.pattern, value.json_string);
+    }
+    int32_t operator()(const gs::CharacterClass& value) const {
+      std::vector<CharacterClassElement> elements;
+      elements.reserve(value.elements.size());
+      for (const auto& element : value.elements) {
+        elements.push_back({element.lower, element.upper});
+      }
+      return builder->AddCharacterClass(elements, value.is_negative);
+    }
+    int32_t operator()(const gs::CharacterClassStar& value) const {
+      std::vector<CharacterClassElement> elements;
+      elements.reserve(value.elements.size());
+      for (const auto& element : value.elements) {
+        elements.push_back({element.lower, element.upper});
+      }
+      return builder->AddCharacterClassStar(elements, value.is_negative);
+    }
+    int32_t operator()(const gs::EmptyStr&) const { return builder->AddEmptyStr(); }
+    int32_t operator()(const gs::RuleRef& value) const {
+      return builder->AddRuleRef(value.rule_id);
+    }
+    int32_t operator()(const gs::SelfRef&) const {
+      return builder->AddRuleRef(CheckedSelfRuleId());
+    }
+    int32_t operator()(const gs::Token& value) const {
+      return builder->AddTokenSet(value.token_ids);
+    }
+    int32_t operator()(const gs::ExcludeToken& value) const {
+      return builder->AddExcludeTokenSet(value.token_ids);
+    }
+    int32_t operator()(const Grammar::Impl::TagDispatch& value) const {
+      return builder->AddTagDispatch(value);
+    }
+    int32_t operator()(const Grammar::Impl::TokenTagDispatch& value) const {
+      return builder->AddTokenTagDispatch(value);
+    }
+    int32_t operator()(const gs::Sequence& value) const {
+      std::vector<int32_t> elements;
+      elements.reserve(value.elements.size());
+      for (const auto& element : value.elements) {
+        elements.push_back(builder->AddExprImpl(element, self_rule_id, name_hint));
+      }
+      return builder->AddSequence(elements);
+    }
+    int32_t operator()(const gs::Choices& value) const {
+      std::vector<int32_t> choices;
+      choices.reserve(value.choices.size());
+      for (const auto& choice : value.choices) {
+        choices.push_back(builder->AddExprImpl(choice, self_rule_id, name_hint));
+      }
+      return builder->AddChoices(choices);
+    }
+    int32_t operator()(const gs::Repeat& value) const {
+      XGRAMMAR_DCHECK(value.element.size() == 1);
+      const auto& element = value.element[0];
+      bool is_compact_quantifier = (value.min_repeat_count == 0 && value.max_repeat_count == -1) ||
+                                   (value.min_repeat_count == 1 && value.max_repeat_count == -1) ||
+                                   (value.min_repeat_count == 0 && value.max_repeat_count == 1);
+      if (!is_compact_quantifier) {
+        if (const auto* rule_ref = std::get_if<gs::RuleRef>(&element.value)) {
+          return builder->AddRepeat(
+              rule_ref->rule_id, value.min_repeat_count, value.max_repeat_count
+          );
+        }
+        if (std::holds_alternative<gs::SelfRef>(element.value)) {
+          return builder->AddRepeat(
+              CheckedSelfRuleId(), value.min_repeat_count, value.max_repeat_count
+          );
+        }
+      }
+      int32_t element_id = builder->AddExprImpl(element, self_rule_id, name_hint);
+      // Match the EBNF parser's compact quantifier lowering. Keeping these common forms out of
+      // kRepeat avoids carrying repetition ranges into compilation and preserves the established
+      // normalized grammar shape.
+      if (value.min_repeat_count == 0 && value.max_repeat_count == -1) {
+        int32_t rule_id = builder->AddEmptyRule(builder->GetNewRuleName(name_hint));
+        int32_t recursive = builder->AddRuleRef(rule_id);
+        builder->UpdateRuleBody(
+            rule_id,
+            builder->AddChoices(
+                {builder->AddEmptyStr(), builder->AddSequence({element_id, recursive})}
+            )
+        );
+        return builder->AddRuleRef(rule_id);
+      }
+      if (value.min_repeat_count == 1 && value.max_repeat_count == -1) {
+        int32_t rule_id = builder->AddEmptyRule(builder->GetNewRuleName(name_hint));
+        int32_t recursive = builder->AddRuleRef(rule_id);
+        builder->UpdateRuleBody(
+            rule_id,
+            builder->AddChoices({builder->AddSequence({element_id, recursive}), element_id})
+        );
+        return builder->AddRuleRef(rule_id);
+      }
+      if (value.min_repeat_count == 0 && value.max_repeat_count == 1) {
+        int32_t rule_id = builder->AddRule(
+            builder->GetNewRuleName(name_hint),
+            builder->AddChoices({builder->AddEmptyStr(), element_id})
+        );
+        return builder->AddRuleRef(rule_id);
+      }
+      return builder->AddRepeatFromExpr(
+          name_hint, element_id, value.min_repeat_count, value.max_repeat_count
+      );
+    }
+  };
+  return std::visit(Visitor{this, self_rule_id, name_hint}, spec.value);
+}
+
 int32_t GrammarBuilder::NumGrammarExprs() const { return grammar_->NumGrammarExprs(); }
 
 GrammarBuilder::GrammarExpr GrammarBuilder::GetGrammarExpr(int32_t grammar_expr_id) {
@@ -223,6 +363,16 @@ int32_t GrammarBuilder::AddRule(const std::string& name, int32_t body_expr_id) {
 
 int32_t GrammarBuilder::AddRuleWithHint(const std::string& name_hint, int32_t body_expr_id) {
   return AddRule({GetNewRuleName(name_hint), body_expr_id});
+}
+
+int32_t GrammarBuilder::AddRule(const std::string& name, const GrammarExprSpec& spec) {
+  int32_t rule_id = AddEmptyRule(name);
+  UpdateRuleBody(rule_id, AddExprImpl(spec, rule_id, name));
+  return rule_id;
+}
+
+int32_t GrammarBuilder::AddRuleWithHint(const std::string& name_hint, const GrammarExprSpec& spec) {
+  return AddRule(GetNewRuleName(name_hint), spec);
 }
 
 int32_t GrammarBuilder::NumRules() const { return grammar_->NumRules(); }
