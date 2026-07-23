@@ -1,6 +1,6 @@
 # Workflow of XGrammar
 
-This tutorial introduces the workflow of XGrammar, including most of its core components. Please read [constrained decoding](../start/constrained_decoding.md) first to understand how XGrammar achieves structured generation.
+This tutorial introduces the workflow of XGrammar, including most of its core components. Please read [constrained decoding](constrained_decoding.md) first to understand how XGrammar achieves structured generation.
 
 ```python
 import xgrammar as xgr
@@ -204,4 +204,4 @@ Congratulations! You have successfully generated a structured output using XGram
 
 ## Next Steps
 
-Read [integration with LLM engine](engine_integration.md) to learn how to integrate XGrammar into an LLM engine.
+Read [integration with LLM engine](../using_xgrammar/engine_integration.md) to learn how to integrate XGrammar into an LLM engine.

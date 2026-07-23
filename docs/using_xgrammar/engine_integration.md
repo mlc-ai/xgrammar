@@ -35,7 +35,7 @@ all its vocabulary. There are several ways of instantiating it, and the most con
 is using an `AutoTokenizer`. Note that for some models, `AutoConfig.vocab_size` can be larger
 than `AutoTokenizer.vocab_size` due to paddings, with the former being the shape of the model's
 logits. To be safe, always pass in the former when instantiating `xgr.TokenizerInfo`. See
-[Workflow of XGrammar](workflow_of_xgrammar.md) for details.
+[Workflow of XGrammar](../start/workflow_of_xgrammar.md) for details.
 
 ```python
 # Get tokenizer info
