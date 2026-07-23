@@ -63,14 +63,28 @@ class GrammarCompiler {
    * \param max_threads The maximum number of threads to use for compiling grammars.
    * \param cache_enabled Whether to enable the cache.
    * \param max_memory_bytes The maximum memory usage in bytes.
-   * \param enable_dynamic_compilation Whether to generate token mask cache entries on demand.
    */
   GrammarCompiler(
       const TokenizerInfo& tokenizer_info,
       int max_threads = 8,
       bool cache_enabled = true,
-      int64_t max_memory_bytes = -1,  // unlimited
-      bool enable_dynamic_compilation = false
+      int64_t max_memory_bytes = -1  // unlimited
+  );
+
+  /*!
+   * \brief Construct a GrammarCompiler with configurable token mask compilation.
+   * \param tokenizer_info The tokenizer info.
+   * \param max_threads The maximum number of threads to use for compiling grammars.
+   * \param cache_enabled Whether to enable the cache.
+   * \param max_memory_bytes The maximum memory usage in bytes.
+   * \param enable_dynamic_compilation Whether to generate token mask cache entries on demand.
+   */
+  GrammarCompiler(
+      const TokenizerInfo& tokenizer_info,
+      int max_threads,
+      bool cache_enabled,
+      int64_t max_memory_bytes,
+      bool enable_dynamic_compilation
   );
 
   /*! \brief Get the compiled grammar for a JSON schema string. */

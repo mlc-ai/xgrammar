@@ -838,16 +838,8 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    const AdaptiveTokenMask* adaptive_token_mask_pointer;
-    if (compiled_grammar_->enable_dynamic_compilation) {
-      adaptive_token_mask_pointer = &compiled_grammar_->GetAdaptiveTokenMask(
-          state, state.rule_id == grammar_->GetRootRuleId()
-      );
-    } else {
-      auto iterator = compiled_grammar_->adaptive_token_mask_cache.find(state);
-      XGRAMMAR_CHECK(iterator != compiled_grammar_->adaptive_token_mask_cache.end()) << state;
-      adaptive_token_mask_pointer = &iterator->second;
-    }
+    const AdaptiveTokenMask* adaptive_token_mask_pointer =
+        &compiled_grammar_->GetAdaptiveTokenMask(state, state.rule_id == grammar_->GetRootRuleId());
     const auto& adaptive_token_mask = *adaptive_token_mask_pointer;
     latest_states_with_masks.emplace_back(state, adaptive_token_mask_pointer);
     if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
