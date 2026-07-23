@@ -22,6 +22,7 @@ class EBNFLexer {
     StringLiteral,   // e.g.: "tag1", "hello"
     BooleanLiteral,  // true, false
     IntegerLiteral,  // 123
+    FloatLiteral,    // 0.5
     LParen,          // (
     RParen,          // )
     LBrace,          // {

@@ -10,6 +10,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -195,6 +196,9 @@ class GrammarBuilder {
   void UpdateLookaheadAssertion(int32_t rule_id, int32_t lookahead_assertion_id);
 
   void UpdateLookaheadExact(int32_t rule_id, bool is_exact = true);
+
+  /*! \brief Set the sampling temperature associated with a rule. */
+  void UpdateRuleTemperature(int32_t rule_id, std::optional<float> temperature);
 
   /*!
    * \brief Add a lookahead assertion to a rule referred by the given name. The lookahead

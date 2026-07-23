@@ -10,6 +10,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -80,6 +81,8 @@ class Grammar::Impl {
     int32_t lookahead_assertion_id = -1;
     /*! \brief Whether the lookahead assertion is exact. */
     bool is_exact_lookahead = false;
+    /*! \brief The sampling temperature to use while matching this rule. */
+    std::optional<float> temperature = std::nullopt;
   };
 
   /*! \brief Get the number of rules. */
@@ -353,7 +356,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::Rule::name,
     &Grammar::Impl::Rule::body_expr_id,
     &Grammar::Impl::Rule::lookahead_assertion_id,
-    &Grammar::Impl::Rule::is_exact_lookahead
+    &Grammar::Impl::Rule::is_exact_lookahead,
+    &Grammar::Impl::Rule::temperature
 );
 
 XGRAMMAR_MEMBER_TABLE(

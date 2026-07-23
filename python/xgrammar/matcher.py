@@ -227,6 +227,7 @@ class GrammarMatcher(XGRObject):
         override_stop_tokens: Optional[Union[int, List[int]]] = None,
         terminate_without_stop_token: bool = False,
         max_rollback_tokens: int = -1,
+        default_temperature: Optional[float] = None,
     ) -> None:
         """Construct the grammar matcher.
 
@@ -248,6 +249,9 @@ class GrammarMatcher(XGRObject):
 
             The maximum number of rollback tokens allowed. The rollback operation is useful for
             jump-forward decoding and speculative decoding.
+
+        default_temperature : Optional[float], default: None
+            The sampling temperature used when the active grammar rule does not specify one.
         """
         if not isinstance(compiled_grammar, CompiledGrammar):
             raise ValueError("The grammar should be compiled before passing it to GrammarMatcher.")
@@ -268,6 +272,7 @@ class GrammarMatcher(XGRObject):
                 override_stop_tokens,
                 terminate_without_stop_token,
                 max_rollback_tokens,
+                None if default_temperature is None else float(default_temperature),
             )
         )
 
@@ -363,6 +368,7 @@ class GrammarMatcher(XGRObject):
         draft_tokens: torch.Tensor,
         token_bitmask: torch.Tensor,
         time_threshold: float = -1.0,
+        temperatures: Optional[torch.Tensor] = None,
     ) -> bool:
         """Traverse a draft token tree and fill the token bitmask for each node.
 
@@ -382,6 +388,10 @@ class GrammarMatcher(XGRObject):
             Maximum allowed time in seconds for the traversal. If the traversal
             exceeds this threshold, it returns False. A value <= 0 disables the timeout
             (default: -1.0).
+        temperatures : Optional[torch.Tensor], default: None
+            Optional 1D float32 CPU tensor with one element per node. It is filled with the
+            effective temperature for each visited node. ``NaN`` means that no temperature
+            is configured.
 
         Returns
         -------
@@ -389,7 +399,12 @@ class GrammarMatcher(XGRObject):
             True if the traversal completed successfully, False if it timed out.
         """
         return self._handle.traverse_draft_tree(
-            retrieve_next_token, retrieve_next_sibling, draft_tokens, token_bitmask, time_threshold
+            retrieve_next_token,
+            retrieve_next_sibling,
+            draft_tokens,
+            token_bitmask,
+            time_threshold,
+            temperatures,
         )
 
     def find_jump_forward_string(self) -> str:
@@ -470,6 +485,12 @@ class GrammarMatcher(XGRObject):
         return -1
 
     @property
+    def temperature(self) -> Optional[float]:
+        """The effective sampling temperature for the next token."""
+        result = self._handle.temperature()
+        return None if result is None else float(result)
+
+    @property
     def stop_token_ids(self) -> List[int]:
         """The ids of the stop tokens used in the matcher. If specified, the provided stop tokens
         will be used. Otherwise, the stop tokens will be detected from the vocabulary.
@@ -544,8 +565,25 @@ class BatchGrammarMatcher(XGRObject):
             If the bitmask is invalid (not on CPU, not int32, shape mismatch).
         """
         matcher_handles = [matcher._handle for matcher in matchers]
-
         self._handle.batch_fill_next_token_bitmask(matcher_handles, bitmask, indices, debug_print)
+
+    @staticmethod
+    def batch_get_temperature(matchers: List["GrammarMatcher"]) -> List[Optional[float]]:
+        """Get the effective sampling temperature for multiple matchers.
+
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            The list of matchers to query.
+
+        Returns
+        -------
+        temperatures : List[Optional[float]]
+            The effective sampling temperature for each matcher.
+        """
+        matcher_handles = [matcher._handle for matcher in matchers]
+        result = _core.BatchGrammarMatcher.batch_get_temperature(matcher_handles)
+        return [None if value is None else float(value) for value in result]
 
     @staticmethod
     def batch_accept_token(

@@ -178,6 +178,27 @@ root       ::= identifier ("," identifier){0,4}
 identifier ::= [a-zA-Z_] [a-zA-Z0-9_]*
 ```
 
+## Rule Options
+
+### Sampling Temperature
+
+The `temperature` rule option selects the sampling temperature while a rule is active:
+
+```text
+root ::= "answer:" value
+value[temperature=0.7] ::= [a-z]+
+```
+
+`temperature` must be a finite non-negative number. An inner explicit temperature overrides an
+inherited outer temperature. At ambiguous positions, different active temperatures produce a
+warning once and `matcher.temperature` returns the maximum. If no active rule specifies a
+temperature, it returns the matcher's `default_temperature`; if neither is configured, it returns
+`None`.
+
+Use `BatchGrammarMatcher.batch_get_temperature` to query multiple matchers. During speculative
+decoding, the optional `temperatures` tensor passed to `GrammarMatcher.traverse_draft_tree`
+receives the effective temperature for each tree node.
+
 ## TagDispatch
 
 `TagDispatch` is a macro for the common tool-calling pattern: the model produces free text until
