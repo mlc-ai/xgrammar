@@ -188,6 +188,23 @@ struct SchemaSpec {
   }
 };
 
+// ==================== Pattern + length helpers ====================
+
+/*!
+ * \brief Build the EBNF for a string schema's regex content, without the surrounding JSON
+ * quotes. When the schema also has `minLength`/`maxLength` and the pattern is a recognized
+ * anchored single-element shape `^ E Q? $` (E = char class `[...]` | `.` | escape `\x` |
+ * single literal; Q = `*` | `+` | `?` | `{n}` | `{n,}` | `{n,m}`), the length constraints
+ * are merged into the element's repetition range (route C). Otherwise the plain pattern EBNF
+ * is returned and length is not enforced (e.g. alternations fall back).
+ *
+ * Shared by JSONSchemaConverter::GenerateString and XMLToolCallingConverter::GenerateString,
+ * which only differ in whether they wrap the result in quotes.
+ *
+ * \param spec The string spec; \p spec.pattern must have a value.
+ */
+std::string BuildStringPatternEBNF(const StringSpec& spec);
+
 // ==================== JSONFormat Enum ====================
 
 enum class JSONFormat : int {

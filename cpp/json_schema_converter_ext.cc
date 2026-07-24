@@ -151,8 +151,9 @@ std::string XMLToolCallingConverter::GenerateString(
 
     // Check for pattern
     if (spec.pattern.has_value()) {
-      std::string converted_regex = RegexToEBNF(*spec.pattern, false);
-      return converted_regex;
+      // Same route-C merge as the base class, but without the surrounding JSON quotes
+      // (XML string form).
+      return BuildStringPatternEBNF(spec);
     }
 
     // Check for length constraints
