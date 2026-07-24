@@ -62,6 +62,15 @@ class EBNFLexer {
     int32_t max_tokens = -1;
     // The capture name attached to a rule-definition identifier via name[capture="x"], or empty.
     std::string capture_name = {};
+    // Trailing bytes hidden only from the rule's own capture.
+    int32_t capture_hidden_suffix_bytes = 0;
+    // Trailing bytes hidden from the rule and every enclosing capture.
+    int32_t capture_hidden_stop_bytes = 0;
+    // Helper rule ids used to recover a variable-length suffix/stop marker boundary.
+    int32_t capture_hidden_body_rule_id = -1;
+    int32_t capture_hidden_marker_rule_id = -1;
+    // Capture name for the bytes matched by a suffix/stop marker.
+    std::string stop_capture_name = {};
     // Whether the identifier is a rule name carrying the [lazy] attribute, e.g. r[lazy] ::= ...
     bool is_lazy = false;
   };

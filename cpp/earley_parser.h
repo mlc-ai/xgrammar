@@ -240,6 +240,18 @@ class RepeatDetector {
   void Clear();
 };
 
+/*! \brief A concrete occurrence of a captured rule in an Earley parent chain. */
+struct CaptureOccurrence {
+  /*! \brief The id of the captured rule. */
+  int32_t rule_id;
+  /*! \brief The position where the rule occurrence started. */
+  int32_t start_pos;
+
+  bool operator==(const CaptureOccurrence& other) const {
+    return rule_id == other.rule_id && start_pos == other.start_pos;
+  }
+};
+
 /*!
  * \brief A completion event of a captured rule, recorded when the rule is completed during
  * parsing. The matched span is [start_pos, r) in input positions, where r is the position (i.e.
@@ -251,6 +263,17 @@ struct CaptureEvent {
   /*! \brief The position where the rule started matching. kNoPrevInputPos means position 0 (the
    * rule acts as the root). */
   int32_t start_pos;
+  /*! \brief The unadjusted start position of this rule occurrence. This differs from start_pos
+   * for the zero-width event inserted after a dynamic-dispatch marker. */
+  int32_t occurrence_start_pos;
+  /*! \brief Number of trailing bytes hidden only from this rule's own capture for this
+   * completion. */
+  int32_t hidden_suffix_bytes = 0;
+  /*! \brief Number of trailing bytes hidden from every containing capture for this completion. */
+  int32_t hidden_stop_bytes = 0;
+  /*! \brief The captured rule occurrences whose concrete Earley parent chains contain this stop
+   * completion. Includes this rule's occurrence when the rule itself is captured. */
+  std::vector<CaptureOccurrence> stop_capture_targets;
 };
 
 class EarleyParser {
@@ -332,9 +355,12 @@ class EarleyParser {
     return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
   }
 
-  /*! \brief Whether any rule of the grammar has a capture name. Fixed at construction. When
-   * false, the capture machinery is fully disabled and has no overhead. */
+  /*! \brief Whether any rule of the grammar has a capture or stop_capture name. Fixed at
+   * construction. When false, the capture machinery is fully disabled and has no overhead. */
   bool capture_tracking_ = false;
+
+  /*! \brief Whether the grammar contains suffix/stop spans that may affect captures. */
+  bool has_hidden_capture_rules_ = false;
 
   /*!
    * \brief Whether capture events are currently recorded in Complete(). Only enabled during
@@ -356,10 +382,23 @@ class EarleyParser {
     return capture_tracking_ && rule_id >= 0 && !grammar_->GetRule(rule_id).capture_name.empty();
   }
 
-  /*! \brief Record a capture event for a completed captured rule in the current row. */
-  void RecordCaptureEvent(const ParserState& state) {
-    capture_event_history_.PushBackInLatestRow({state.rule_id, state.rule_start_pos});
+  /*! \brief Returns true if completing this rule can hide bytes from a capture. */
+  bool RuleHasHiddenBytes(int32_t rule_id) const {
+    if (!capture_tracking_ || !has_hidden_capture_rules_ || rule_id < 0) {
+      return false;
+    }
+    const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
+    return suffix_stop_info != nullptr &&
+           (suffix_stop_info->hidden_suffix_bytes > 0 || suffix_stop_info->hidden_stop_bytes > 0);
   }
+
+  /*! \brief Returns true if completing this rule must produce a capture-history event. */
+  bool RuleNeedsCaptureEvent(int32_t rule_id) const {
+    return RuleHasCapture(rule_id) || RuleHasHiddenBytes(rule_id);
+  }
+
+  /*! \brief Record a capture or hidden-span event for a completed rule in the current row. */
+  void RecordCaptureEvent(const ParserState& state, bool marker_present);
 
   /*!
    * \brief The lazy rule occurrences (rule_id, rule_start_pos) completed while building the
@@ -394,7 +433,7 @@ class EarleyParser {
    * of the grammar is used to check if the grammar is completed,
    * so it should be added into the next states.
    */
-  void Complete(const ParserState& state, bool debug_print = false);
+  void Complete(const ParserState& state, bool debug_print = false, bool marker_present = true);
 
   /*!
    * \brief The prediction operation of the Earley parser.

@@ -5,8 +5,10 @@
 
 #include "grammar_builder.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "support/logging.h"
@@ -261,6 +263,12 @@ void GrammarBuilder::UpdateLookaheadExact(int32_t rule_id, bool is_exact) {
   grammar_->rules_[rule_id].is_exact_lookahead = is_exact;
 }
 
+void GrammarBuilder::UpdateLookaheadReachesRoot(int32_t rule_id, bool reaches_root) {
+  XGRAMMAR_CHECK(rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  grammar_->rules_[rule_id].lookahead_reaches_root = reaches_root;
+}
+
 void GrammarBuilder::UpdateLookaheadAssertion(
     std::string rule_name, int32_t lookahead_assertion_id
 ) {
@@ -291,6 +299,45 @@ void GrammarBuilder::UpdateCaptureName(std::string rule_name, const std::string&
   int32_t rule_id = GetRuleId(rule_name);
   XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
   UpdateCaptureName(rule_id, capture_name);
+}
+
+void GrammarBuilder::UpdateSuffixStopInfo(int32_t rule_id, const SuffixStopInfo& info) {
+  XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  XGRAMMAR_CHECK(info.hidden_suffix_bytes >= 0 && info.hidden_stop_bytes >= 0)
+      << "The number of hidden suffix/stop bytes must be non-negative.";
+  int32_t num_rules = static_cast<int32_t>(grammar_->rules_.size());
+  XGRAMMAR_CHECK(
+      (info.body_rule_id == -1 && info.marker_rule_id == -1) ||
+      (info.body_rule_id >= 0 && info.body_rule_id < num_rules && info.marker_rule_id >= 0 &&
+       info.marker_rule_id < num_rules)
+  ) << "Capture-hidden helper rule ids must both be -1 or valid rule ids.";
+
+  auto it = std::lower_bound(
+      grammar_->suffix_stop_infos_.begin(),
+      grammar_->suffix_stop_infos_.end(),
+      rule_id,
+      [](const SuffixStopInfo& existing, int32_t id) { return existing.rule_id < id; }
+  );
+  if (info.IsEmpty()) {
+    if (it != grammar_->suffix_stop_infos_.end() && it->rule_id == rule_id) {
+      grammar_->suffix_stop_infos_.erase(it);
+    }
+    return;
+  }
+  SuffixStopInfo updated = info;
+  updated.rule_id = rule_id;
+  if (it != grammar_->suffix_stop_infos_.end() && it->rule_id == rule_id) {
+    *it = std::move(updated);
+  } else {
+    grammar_->suffix_stop_infos_.insert(it, std::move(updated));
+  }
+}
+
+void GrammarBuilder::UpdateSuffixStopInfo(std::string rule_name, const SuffixStopInfo& info) {
+  int32_t rule_id = GetRuleId(rule_name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
+  UpdateSuffixStopInfo(rule_id, info);
 }
 
 void GrammarBuilder::UpdateLazy(int32_t rule_id, bool is_lazy) {

@@ -25,6 +25,7 @@ namespace xgrammar {
 class GrammarBuilder {
  public:
   using Rule = Grammar::Impl::Rule;
+  using SuffixStopInfo = Grammar::Impl::SuffixStopInfo;
   using GrammarExprType = Grammar::Impl::GrammarExprType;
   using GrammarExpr = Grammar::Impl::GrammarExpr;
 
@@ -196,6 +197,9 @@ class GrammarBuilder {
 
   void UpdateLookaheadExact(int32_t rule_id, bool is_exact = true);
 
+  /*! \brief Mark whether a rule's exact lookahead reaches the root rule. */
+  void UpdateLookaheadReachesRoot(int32_t rule_id, bool reaches_root = true);
+
   /*!
    * \brief Add a lookahead assertion to a rule referred by the given name. The lookahead
    * assertion should be a sequence GrammarExpr id. An id of -1 means no lookahead assertion.
@@ -219,6 +223,12 @@ class GrammarBuilder {
    * means no capture.
    */
   void UpdateCaptureName(std::string rule_name, const std::string& capture_name);
+
+  /*! \brief Set or clear the sparse suffix/stop metadata for a rule. */
+  void UpdateSuffixStopInfo(int32_t rule_id, const SuffixStopInfo& info);
+
+  /*! \brief Set or clear sparse suffix/stop metadata on the rule referred by name. */
+  void UpdateSuffixStopInfo(std::string rule_name, const SuffixStopInfo& info);
 
   /*! \brief Set whether the rule referred by the given rule_id is lazy (committed-shortest). */
   void UpdateLazy(int32_t rule_id, bool is_lazy);

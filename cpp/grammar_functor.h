@@ -69,8 +69,13 @@ class GrammarFunctor {
         builder_->UpdateRuleBody(i, new_body_expr_id);
         // Handle lookahead assertion
         builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
+        builder_->UpdateLookaheadExact(i, rule.is_exact_lookahead);
+        builder_->UpdateLookaheadReachesRoot(i, rule.lookahead_reaches_root);
         builder_->UpdateMaxTokens(i, rule.max_tokens);
         builder_->UpdateCaptureName(i, rule.capture_name);
+        if (const auto* suffix_stop_info = base_grammar_->GetSuffixStopInfo(i)) {
+          builder_->UpdateSuffixStopInfo(i, *suffix_stop_info);
+        }
         builder_->UpdateLazy(i, rule.is_lazy);
       }
       return builder_->Get(base_grammar_->GetRootRule().name);
