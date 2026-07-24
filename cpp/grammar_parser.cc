@@ -623,9 +623,15 @@ class EBNFParser {
 
  private:
   using Rule = Grammar::Impl::Rule;
+  using SuffixStopInfo = Grammar::Impl::SuffixStopInfo;
   using GrammarExprType = Grammar::Impl::GrammarExprType;
   using Token = EBNFLexer::Token;
   using TokenType = EBNFLexer::TokenType;
+
+  struct ParsedRule {
+    Rule rule;
+    SuffixStopInfo suffix_stop_info;
+  };
 
   // Parsing different parts of the grammar
   std::string ParseIdentifier();
@@ -639,7 +645,7 @@ class EBNFParser {
   int32_t ParseLookaheadAssertion();
   int32_t ParseSequence();
   int32_t ParseChoices();
-  Rule ParseRule();
+  ParsedRule ParseRule();
 
   // Parser for macro
   class MacroIR {
@@ -1370,7 +1376,7 @@ int32_t EBNFParser::ParseLookaheadAssertion() {
   return result;
 }
 
-EBNFParser::Rule EBNFParser::ParseRule() {
+EBNFParser::ParsedRule EBNFParser::ParseRule() {
   if (Peek().type != TokenType::RuleName) {
     ReportParseError("Expect rule name");
   }
@@ -1394,16 +1400,17 @@ EBNFParser::Rule EBNFParser::ParseRule() {
     lookahead_id = ParseLookaheadAssertion();
   }
 
-  Rule rule{cur_rule_name_, body_id, lookahead_id};
-  rule.max_tokens = max_tokens;
-  rule.capture_name = capture_name;
-  rule.capture_hidden_suffix_bytes = capture_hidden_suffix_bytes;
-  rule.capture_hidden_stop_bytes = capture_hidden_stop_bytes;
-  rule.capture_hidden_body_rule_id = capture_hidden_body_rule_id;
-  rule.capture_hidden_marker_rule_id = capture_hidden_marker_rule_id;
-  rule.stop_capture_name = stop_capture_name;
-  rule.is_lazy = is_lazy;
-  return rule;
+  ParsedRule result;
+  result.rule = Rule{cur_rule_name_, body_id, lookahead_id};
+  result.rule.max_tokens = max_tokens;
+  result.rule.capture_name = capture_name;
+  result.rule.is_lazy = is_lazy;
+  result.suffix_stop_info.hidden_suffix_bytes = capture_hidden_suffix_bytes;
+  result.suffix_stop_info.hidden_stop_bytes = capture_hidden_stop_bytes;
+  result.suffix_stop_info.body_rule_id = capture_hidden_body_rule_id;
+  result.suffix_stop_info.marker_rule_id = capture_hidden_marker_rule_id;
+  result.suffix_stop_info.stop_capture_name = std::move(stop_capture_name);
+  return result;
 }
 
 void EBNFParser::InitRuleNames() {
@@ -1439,18 +1446,14 @@ Grammar EBNFParser::Parse(
 
   // Then parse all the rules
   while (Peek().type != TokenType::EndOfFile) {
-    auto new_rule = ParseRule();
-    builder_.UpdateRuleBody(new_rule.name, new_rule.body_expr_id);
-    builder_.UpdateLookaheadAssertion(new_rule.name, new_rule.lookahead_assertion_id);
-    builder_.UpdateMaxTokens(new_rule.name, new_rule.max_tokens);
-    builder_.UpdateCaptureName(new_rule.name, new_rule.capture_name);
-    builder_.UpdateCaptureHiddenSuffixBytes(new_rule.name, new_rule.capture_hidden_suffix_bytes);
-    builder_.UpdateCaptureHiddenStopBytes(new_rule.name, new_rule.capture_hidden_stop_bytes);
-    builder_.UpdateCaptureHiddenRuleIds(
-        new_rule.name, new_rule.capture_hidden_body_rule_id, new_rule.capture_hidden_marker_rule_id
-    );
-    builder_.UpdateStopCaptureName(new_rule.name, new_rule.stop_capture_name);
-    builder_.UpdateLazy(new_rule.name, new_rule.is_lazy);
+    auto parsed_rule = ParseRule();
+    const auto& rule = parsed_rule.rule;
+    builder_.UpdateRuleBody(rule.name, rule.body_expr_id);
+    builder_.UpdateLookaheadAssertion(rule.name, rule.lookahead_assertion_id);
+    builder_.UpdateMaxTokens(rule.name, rule.max_tokens);
+    builder_.UpdateCaptureName(rule.name, rule.capture_name);
+    builder_.UpdateSuffixStopInfo(rule.name, parsed_rule.suffix_stop_info);
+    builder_.UpdateLazy(rule.name, rule.is_lazy);
   }
 
   return builder_.Get(root_rule_name);

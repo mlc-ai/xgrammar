@@ -27,8 +27,11 @@ bool EarleyParser::IsCompleted() const { return is_completed_.back(); }
 
 void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_present) {
   const auto& rule = grammar_->GetRule(state.rule_id);
-  int32_t hidden_suffix_bytes = rule.capture_hidden_suffix_bytes;
-  int32_t hidden_stop_bytes = rule.capture_hidden_stop_bytes;
+  const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(state.rule_id);
+  int32_t hidden_suffix_bytes =
+      suffix_stop_info == nullptr ? 0 : suffix_stop_info->hidden_suffix_bytes;
+  int32_t hidden_stop_bytes =
+      suffix_stop_info == nullptr ? 0 : suffix_stop_info->hidden_stop_bytes;
   int32_t event_start_pos = state.rule_start_pos;
 
   if (!marker_present) {
@@ -51,7 +54,7 @@ void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_pres
     }
   }
 
-  if (rule.capture_hidden_body_rule_id == state.rule_id) {
+  if (suffix_stop_info != nullptr && suffix_stop_info->body_rule_id == state.rule_id) {
     // A self-referencing body helper marks the zero-width event inserted immediately after a
     // dynamic string trigger. Its capture span is the fixed-length marker that precedes it.
     XGRAMMAR_DCHECK(event_start_pos != ParserState::kNoPrevInputPos);
@@ -385,8 +388,15 @@ EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> in
   }
   for (int32_t i = 0; i < grammar_->NumRules(); ++i) {
     const auto& rule = grammar_->GetRule(i);
-    if (!rule.capture_name.empty() || !rule.stop_capture_name.empty()) {
-      capture_tracking_ = true;
+    const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(i);
+    capture_tracking_ =
+        capture_tracking_ || !rule.capture_name.empty() ||
+        (suffix_stop_info != nullptr && !suffix_stop_info->stop_capture_name.empty());
+    has_hidden_capture_rules_ =
+        has_hidden_capture_rules_ ||
+        (suffix_stop_info != nullptr &&
+         (suffix_stop_info->hidden_suffix_bytes > 0 || suffix_stop_info->hidden_stop_bytes > 0));
+    if (capture_tracking_ && has_hidden_capture_rules_) {
       break;
     }
   }

@@ -2205,13 +2205,14 @@ class LarkCompiler {
     bool marker_has_fixed_byte_length = marker != nullptr && marker->kind == Node::Kind::kString;
     int32_t hidden_bytes =
         marker_has_fixed_byte_length ? static_cast<int32_t>(marker->text.size()) : 1;
+    Grammar::Impl::SuffixStopInfo suffix_stop_info;
     if (definition.suffix.has_value()) {
-      builder_.UpdateCaptureHiddenSuffixBytes(rule_id, hidden_bytes);
+      suffix_stop_info.hidden_suffix_bytes = hidden_bytes;
     } else if (definition.stop.has_value()) {
-      builder_.UpdateCaptureHiddenStopBytes(rule_id, hidden_bytes);
+      suffix_stop_info.hidden_stop_bytes = hidden_bytes;
     }
     if (definition.stop_capture_name.has_value()) {
-      builder_.UpdateStopCaptureName(rule_id, definition.stop_capture_name.value());
+      suffix_stop_info.stop_capture_name = definition.stop_capture_name.value();
     }
     const Node* body = UnwrapSingle(&definition.body);
     if (!definition.suffix.has_value() && !definition.stop.has_value() &&
@@ -2233,8 +2234,10 @@ class LarkCompiler {
       int32_t marker_helper_expr = builder_.AddRegex(marker_pattern.value());
       int32_t marker_helper_rule =
           builder_.AddRuleWithHint(definition.name + "_stop_marker", marker_helper_expr);
-      builder_.UpdateCaptureHiddenRuleIds(rule_id, body_helper_rule, marker_helper_rule);
+      suffix_stop_info.body_rule_id = body_helper_rule;
+      suffix_stop_info.marker_rule_id = marker_helper_rule;
     }
+    builder_.UpdateSuffixStopInfo(rule_id, suffix_stop_info);
     auto trigger = ExtractLazyTrigger(definition);
     if (!trigger.has_value()) {
       // General committed-shortest lazy rule: compiled like a terminal (no skip insertion);
@@ -2345,20 +2348,19 @@ class LarkCompiler {
               int32_t marker_expr = builder_.AddByteString(trigger->string);
               int32_t marker_rule_id =
                   builder_.AddRuleWithHint(head.name + "_dynamic_marker_text", marker_expr);
-              builder_.UpdateCaptureHiddenRuleIds(
-                  marker_event_rule_id, marker_event_rule_id, marker_rule_id
-              );
+              Grammar::Impl::SuffixStopInfo suffix_stop_info;
+              suffix_stop_info.body_rule_id = marker_event_rule_id;
+              suffix_stop_info.marker_rule_id = marker_rule_id;
               int32_t hidden_bytes = static_cast<int32_t>(trigger->string.size());
               if (head.stop.has_value()) {
-                builder_.UpdateCaptureHiddenStopBytes(marker_event_rule_id, hidden_bytes);
+                suffix_stop_info.hidden_stop_bytes = hidden_bytes;
               } else {
-                builder_.UpdateCaptureHiddenSuffixBytes(marker_event_rule_id, hidden_bytes);
+                suffix_stop_info.hidden_suffix_bytes = hidden_bytes;
               }
               if (head.stop_capture_name.has_value()) {
-                builder_.UpdateStopCaptureName(
-                    marker_event_rule_id, head.stop_capture_name.value()
-                );
+                suffix_stop_info.stop_capture_name = head.stop_capture_name.value();
               }
+              builder_.UpdateSuffixStopInfo(marker_event_rule_id, suffix_stop_info);
             }
           }
         }

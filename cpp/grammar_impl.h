@@ -9,6 +9,7 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <vector>
@@ -88,24 +89,31 @@ class Grammar::Impl {
      * span matched by this rule on every completion, retrievable via GrammarMatcher::GetCaptures.
      * Empty means no capture. */
     std::string capture_name = {};
-    /*! \brief Number of trailing bytes hidden from this rule's own capture. This is used by the
-     * Lark suffix attribute; enclosing captures still include these bytes. */
-    int32_t capture_hidden_suffix_bytes = 0;
-    /*! \brief Number of trailing bytes hidden from this rule and every enclosing capture. This is
-     * used by the Lark stop attribute. */
-    int32_t capture_hidden_stop_bytes = 0;
-    /*! \brief Helper rule matching the body before a variable-length suffix/stop marker. Together
-     * with capture_hidden_marker_rule_id, this lets capture materialization recover the exact
-     * marker boundary. A self-reference marks a zero-width capture event immediately following a
-     * fixed dynamic-dispatch marker. -1 when neither case applies. */
-    int32_t capture_hidden_body_rule_id = -1;
-    /*! \brief Helper rule matching a variable-length suffix/stop marker. -1 when unused. */
-    int32_t capture_hidden_marker_rule_id = -1;
-    /*! \brief Capture name for the bytes matched by suffix/stop. Empty means no stop_capture. */
-    std::string stop_capture_name = {};
     /*! \brief Whether the rule matches with committed-shortest (lazy) semantics: at the first
      * position where the body can complete, it must complete. */
     bool is_lazy = false;
+  };
+
+  /*! \brief Sparse per-rule metadata used to materialize suffix and stop captures. */
+  struct SuffixStopInfo {
+    /*! \brief The rule carrying this metadata. */
+    int32_t rule_id = -1;
+    /*! \brief Trailing bytes hidden only from this rule's own capture. */
+    int32_t hidden_suffix_bytes = 0;
+    /*! \brief Trailing bytes hidden from this rule and every enclosing capture. */
+    int32_t hidden_stop_bytes = 0;
+    /*! \brief Helper rule matching the body before a variable-length marker. A self-reference
+     * marks a zero-width event immediately following a fixed dynamic-dispatch marker. */
+    int32_t body_rule_id = -1;
+    /*! \brief Helper rule matching a variable-length marker. */
+    int32_t marker_rule_id = -1;
+    /*! \brief Capture name for the marker bytes. */
+    std::string stop_capture_name = {};
+
+    bool IsEmpty() const {
+      return hidden_suffix_bytes == 0 && hidden_stop_bytes == 0 && body_rule_id == -1 &&
+             marker_rule_id == -1 && stop_capture_name.empty();
+    }
   };
 
   /*! \brief Get the number of rules. */
@@ -120,6 +128,16 @@ class Grammar::Impl {
     XGRAMMAR_DCHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(rules_.size()))
         << "rule_id " << rule_id << " is out of bound";
     return rules_[rule_id];
+  }
+  /*! \brief Get sparse suffix/stop metadata for a rule, or nullptr when none exists. */
+  const SuffixStopInfo* GetSuffixStopInfo(int32_t rule_id) const {
+    auto it = std::lower_bound(
+        suffix_stop_infos_.begin(),
+        suffix_stop_infos_.end(),
+        rule_id,
+        [](const SuffixStopInfo& info, int32_t id) { return info.rule_id < id; }
+    );
+    return it != suffix_stop_infos_.end() && it->rule_id == rule_id ? &*it : nullptr;
   }
   /*! \brief Get the root rule id of the grammar. */
   int32_t GetRootRuleId() const { return root_rule_id_; }
@@ -330,6 +348,8 @@ class Grammar::Impl {
  private:
   /*! \brief The rules of the grammar. rule_id corresponds the index of this vector. */
   std::vector<Rule> rules_;
+  /*! \brief Suffix/stop metadata, sorted by rule_id and omitted for ordinary rules. */
+  std::vector<SuffixStopInfo> suffix_stop_infos_;
   /*! \brief The data of all grammar_exprs. */
   std::vector<int32_t> grammar_expr_data_;
   /*! \brief The start index of every grammar_expr in grammar_expr_data_. grammar_expr_id is the
@@ -382,18 +402,25 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::Rule::is_exact_lookahead,
     &Grammar::Impl::Rule::max_tokens,
     &Grammar::Impl::Rule::capture_name,
-    &Grammar::Impl::Rule::capture_hidden_suffix_bytes,
-    &Grammar::Impl::Rule::capture_hidden_stop_bytes,
-    &Grammar::Impl::Rule::capture_hidden_body_rule_id,
-    &Grammar::Impl::Rule::capture_hidden_marker_rule_id,
-    &Grammar::Impl::Rule::stop_capture_name,
     &Grammar::Impl::Rule::is_lazy
+);
+
+XGRAMMAR_MEMBER_ARRAY(
+    Grammar::Impl::SuffixStopInfo,
+    &Grammar::Impl::SuffixStopInfo::rule_id,
+    &Grammar::Impl::SuffixStopInfo::hidden_suffix_bytes,
+    &Grammar::Impl::SuffixStopInfo::hidden_stop_bytes,
+    &Grammar::Impl::SuffixStopInfo::body_rule_id,
+    &Grammar::Impl::SuffixStopInfo::marker_rule_id,
+    &Grammar::Impl::SuffixStopInfo::stop_capture_name
 );
 
 XGRAMMAR_MEMBER_TABLE(
     Grammar::Impl,
     "rules",
     &Grammar::Impl::rules_,
+    "suffix_stop_infos",
+    &Grammar::Impl::suffix_stop_infos_,
     "grammar_expr_data",
     &Grammar::Impl::grammar_expr_indptr_,
     "grammar_expr_indptr",

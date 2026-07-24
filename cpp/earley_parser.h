@@ -341,6 +341,9 @@ class EarleyParser {
    * construction. When false, the capture machinery is fully disabled and has no overhead. */
   bool capture_tracking_ = false;
 
+  /*! \brief Whether the grammar contains suffix/stop spans that may affect captures. */
+  bool has_hidden_capture_rules_ = false;
+
   /*!
    * \brief Whether capture events are currently recorded in Complete(). Only enabled during
    * definitive advances (accepting a token or string), not during speculative exploration
@@ -363,11 +366,13 @@ class EarleyParser {
 
   /*! \brief Returns true if completing this rule can hide bytes from a capture. */
   bool RuleHasHiddenBytes(int32_t rule_id) const {
-    if (!capture_tracking_ || rule_id < 0) {
+    if (!capture_tracking_ || !has_hidden_capture_rules_ || rule_id < 0) {
       return false;
     }
-    const auto& rule = grammar_->GetRule(rule_id);
-    return rule.capture_hidden_suffix_bytes > 0 || rule.capture_hidden_stop_bytes > 0;
+    const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
+    return suffix_stop_info != nullptr &&
+           (suffix_stop_info->hidden_suffix_bytes > 0 ||
+            suffix_stop_info->hidden_stop_bytes > 0);
   }
 
   /*! \brief Returns true if completing this rule must produce a capture-history event. */

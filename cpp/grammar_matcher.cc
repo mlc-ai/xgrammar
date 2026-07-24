@@ -466,7 +466,9 @@ class GrammarMatcher::Impl : public EarleyParser {
         << "The override_stop_tokens should not be empty";
     for (int32_t rule_id = 0; rule_id < grammar_->NumRules(); ++rule_id) {
       const auto& rule = grammar_->GetRule(rule_id);
-      if (rule.max_tokens >= 0 && rule.capture_hidden_body_rule_id >= 0) {
+      const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
+      if (rule.max_tokens >= 0 && suffix_stop_info != nullptr &&
+          suffix_stop_info->body_rule_id >= 0) {
         has_budget_marker_rules_ = true;
         break;
       }
@@ -739,7 +741,9 @@ bool GrammarMatcher::Impl::CanForceCompleteWithoutMarker(const ParserState& stat
     return false;
   }
   const auto& rule = grammar_->GetRule(state.rule_id);
-  if (rule.max_tokens < 0 || rule.capture_hidden_body_rule_id < 0) {
+  const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(state.rule_id);
+  if (rule.max_tokens < 0 || suffix_stop_info == nullptr ||
+      suffix_stop_info->body_rule_id < 0) {
     return false;
   }
   XGRAMMAR_DCHECK(ShouldTrackAcceptedBytes());
@@ -750,8 +754,8 @@ bool GrammarMatcher::Impl::CanForceCompleteWithoutMarker(const ParserState& stat
   int64_t begin = row_byte_end_[start_row];
   int64_t end = row_byte_end_.back();
 
-  XGRAMMAR_DCHECK(grammar_->per_rule_fsms[rule.capture_hidden_body_rule_id].has_value());
-  const auto& body_fsm = grammar_->per_rule_fsms[rule.capture_hidden_body_rule_id]->GetFsm();
+  XGRAMMAR_DCHECK(grammar_->per_rule_fsms[suffix_stop_info->body_rule_id].has_value());
+  const auto& body_fsm = grammar_->per_rule_fsms[suffix_stop_info->body_rule_id]->GetFsm();
   XGRAMMAR_DCHECK(body_fsm.IsLeaf()) << "A suffix/stop body helper must compile to a leaf FSM";
   std::unordered_set<int> states{body_fsm.GetStart()};
   body_fsm.GetFsm().GetEpsilonClosure(&states);
@@ -1602,24 +1606,26 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
       continue;
     }
     const auto& rule = grammar_->GetRule(event.rule_id);
+    const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(event.rule_id);
+    XGRAMMAR_DCHECK(suffix_stop_info != nullptr);
     int64_t event_start = row_byte_end_[event.start_row];
     int64_t event_end = row_byte_end_[event.end_row];
     event.marker_present = true;
-    if (rule.capture_hidden_body_rule_id == -1) {
+    if (suffix_stop_info->body_rule_id == -1) {
       event.marker_start_byte =
           std::max(event_start, event_end - static_cast<int64_t>(hidden_bytes));
       continue;
     }
 
     XGRAMMAR_DCHECK(
-        rule.capture_hidden_body_rule_id >= 0 && rule.capture_hidden_marker_rule_id >= 0
+        suffix_stop_info->body_rule_id >= 0 && suffix_stop_info->marker_rule_id >= 0
     );
     XGRAMMAR_DCHECK(
-        grammar_->per_rule_fsms[rule.capture_hidden_body_rule_id].has_value() &&
-        grammar_->per_rule_fsms[rule.capture_hidden_marker_rule_id].has_value()
+        grammar_->per_rule_fsms[suffix_stop_info->body_rule_id].has_value() &&
+        grammar_->per_rule_fsms[suffix_stop_info->marker_rule_id].has_value()
     );
-    const auto& body_fsm = grammar_->per_rule_fsms[rule.capture_hidden_body_rule_id]->GetFsm();
-    const auto& marker_fsm = grammar_->per_rule_fsms[rule.capture_hidden_marker_rule_id]->GetFsm();
+    const auto& body_fsm = grammar_->per_rule_fsms[suffix_stop_info->body_rule_id]->GetFsm();
+    const auto& marker_fsm = grammar_->per_rule_fsms[suffix_stop_info->marker_rule_id]->GetFsm();
     std::vector<bool> body_ends = accepted_prefixes(body_fsm, event_start, event_end);
     std::vector<bool> marker_starts = accepted_suffixes(marker_fsm, event_start, event_end);
     bool found = false;
@@ -1669,9 +1675,11 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
     }
     const auto& event = events[i];
     const auto& rule = grammar_->GetRule(event.rule_id);
+    const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(event.rule_id);
     int64_t capture_start = row_byte_end_[event.start_row];
     int64_t capture_end = row_byte_end_[event.end_row];
-    if (event.marker_present && !rule.stop_capture_name.empty()) {
+    if (event.marker_present && suffix_stop_info != nullptr &&
+        !suffix_stop_info->stop_capture_name.empty()) {
       std::string marker_capture;
       if (event.marker_start_byte < capture_end) {
         marker_capture.assign(
@@ -1679,7 +1687,7 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
             static_cast<size_t>(capture_end - event.marker_start_byte)
         );
       }
-      result.emplace_back(rule.stop_capture_name, std::move(marker_capture));
+      result.emplace_back(suffix_stop_info->stop_capture_name, std::move(marker_capture));
     }
     if (rule.capture_name.empty()) {
       continue;

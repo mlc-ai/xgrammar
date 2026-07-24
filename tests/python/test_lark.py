@@ -2578,9 +2578,12 @@ def test_lark_suffix_stop_round_trip_serialization_and_cache(
     assert hidden_field in str(xgr.Grammar.from_ebnf(printed))
 
     serialized = grammar.serialize_json()
-    rules = json.loads(serialized)["rules"]
-    rule = next(item for item in rules if item[0] == "r")
-    assert rule[6 if attribute == "suffix" else 7] == 1
+    serialized_obj = json.loads(serialized)
+    rule_id = next(i for i, item in enumerate(serialized_obj["rules"]) if item[0] == "r")
+    suffix_stop_info = next(
+        item for item in serialized_obj["suffix_stop_infos"] if item[0] == rule_id
+    )
+    assert suffix_stop_info[1 if attribute == "suffix" else 2] == 1
 
     for candidate in (
         grammar,
@@ -2612,10 +2615,13 @@ def test_lark_suffix_stop_variable_marker_round_trip_serialization_and_cache(
     assert 'stop_capture="marker"' in printed
 
     serialized = grammar.serialize_json()
-    rules = json.loads(serialized)["rules"]
-    rule = next(item for item in rules if item[0] == "r")
-    assert rule[8] >= 0 and rule[9] >= 0
-    assert rule[10] == "marker"
+    serialized_obj = json.loads(serialized)
+    rule_id = next(i for i, item in enumerate(serialized_obj["rules"]) if item[0] == "r")
+    suffix_stop_info = next(
+        item for item in serialized_obj["suffix_stop_infos"] if item[0] == rule_id
+    )
+    assert suffix_stop_info[3] >= 0 and suffix_stop_info[4] >= 0
+    assert suffix_stop_info[5] == "marker"
 
     for candidate in (
         grammar,

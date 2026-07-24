@@ -11,12 +11,13 @@
 
 namespace xgrammar {
 
-std::string GrammarPrinter::PrintRule(const Rule& rule) {
+std::string GrammarPrinter::PrintRule(
+    const Rule& rule, const SuffixStopInfo* suffix_stop_info
+) {
   std::string res = rule.name;
   // Print the attributes as one comma-separated bracket group, re-parseable by the EBNF lexer.
-  if (rule.max_tokens >= 0 || !rule.capture_name.empty() || rule.capture_hidden_suffix_bytes > 0 ||
-      rule.capture_hidden_stop_bytes > 0 || rule.capture_hidden_body_rule_id >= 0 ||
-      !rule.stop_capture_name.empty() || rule.is_lazy) {
+  if (rule.max_tokens >= 0 || !rule.capture_name.empty() || suffix_stop_info != nullptr ||
+      rule.is_lazy) {
     std::string attributes;
     auto append_attribute = [&](const std::string& attribute) {
       if (!attributes.empty()) {
@@ -30,26 +31,27 @@ std::string GrammarPrinter::PrintRule(const Rule& rule) {
     if (!rule.capture_name.empty()) {
       append_attribute("capture=\"" + rule.capture_name + "\"");
     }
-    if (rule.capture_hidden_suffix_bytes > 0) {
+    if (suffix_stop_info != nullptr && suffix_stop_info->hidden_suffix_bytes > 0) {
       append_attribute(
-          "capture_hidden_suffix_bytes=" + std::to_string(rule.capture_hidden_suffix_bytes)
+          "capture_hidden_suffix_bytes=" +
+          std::to_string(suffix_stop_info->hidden_suffix_bytes)
       );
     }
-    if (rule.capture_hidden_stop_bytes > 0) {
+    if (suffix_stop_info != nullptr && suffix_stop_info->hidden_stop_bytes > 0) {
       append_attribute(
-          "capture_hidden_stop_bytes=" + std::to_string(rule.capture_hidden_stop_bytes)
+          "capture_hidden_stop_bytes=" + std::to_string(suffix_stop_info->hidden_stop_bytes)
       );
     }
-    if (rule.capture_hidden_body_rule_id >= 0) {
+    if (suffix_stop_info != nullptr && suffix_stop_info->body_rule_id >= 0) {
       append_attribute(
-          "capture_hidden_body_rule_id=" + std::to_string(rule.capture_hidden_body_rule_id)
+          "capture_hidden_body_rule_id=" + std::to_string(suffix_stop_info->body_rule_id)
       );
       append_attribute(
-          "capture_hidden_marker_rule_id=" + std::to_string(rule.capture_hidden_marker_rule_id)
+          "capture_hidden_marker_rule_id=" + std::to_string(suffix_stop_info->marker_rule_id)
       );
     }
-    if (!rule.stop_capture_name.empty()) {
-      append_attribute("stop_capture=\"" + rule.stop_capture_name + "\"");
+    if (suffix_stop_info != nullptr && !suffix_stop_info->stop_capture_name.empty()) {
+      append_attribute("stop_capture=\"" + suffix_stop_info->stop_capture_name + "\"");
     }
     if (rule.is_lazy) {
       append_attribute("lazy");
@@ -64,7 +66,7 @@ std::string GrammarPrinter::PrintRule(const Rule& rule) {
 }
 
 std::string GrammarPrinter::PrintRule(int32_t rule_id) {
-  return PrintRule(grammar_->GetRule(rule_id));
+  return PrintRule(grammar_->GetRule(rule_id), grammar_->GetSuffixStopInfo(rule_id));
 }
 
 std::string GrammarPrinter::PrintGrammarExpr(const GrammarExpr& grammar_expr) {
@@ -258,7 +260,7 @@ std::string GrammarPrinter::ToString() {
   std::string result;
   int num_rules = grammar_->NumRules();
   for (auto i = 0; i < num_rules; ++i) {
-    result += PrintRule(grammar_->GetRule(i)) + "\n";
+    result += PrintRule(i) + "\n";
   }
   return result;
 }
