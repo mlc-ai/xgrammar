@@ -96,7 +96,8 @@ class Grammar::Impl {
     int32_t capture_hidden_stop_bytes = 0;
     /*! \brief Helper rule matching the body before a variable-length suffix/stop marker. Together
      * with capture_hidden_marker_rule_id, this lets capture materialization recover the exact
-     * marker boundary. -1 when the marker has a statically known byte length. */
+     * marker boundary. A self-reference marks a zero-width capture event immediately following a
+     * fixed dynamic-dispatch marker. -1 when neither case applies. */
     int32_t capture_hidden_body_rule_id = -1;
     /*! \brief Helper rule matching a variable-length suffix/stop marker. -1 when unused. */
     int32_t capture_hidden_marker_rule_id = -1;

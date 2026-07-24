@@ -2392,6 +2392,69 @@ def test_lark_dynamic_fixed_string_stop_attribute() -> None:
     )
 
 
+def test_lark_dynamic_stop_preserves_enclosing_capture() -> None:
+    grammar = xgr.Grammar.from_lark(
+        r"""
+        start[capture="outer"]: tool* tail
+        tail: TEXT
+        head[stop="<t>"]: TEXT
+        tool: head "x"
+        TEXT: /(\n|.)*/
+        """
+    )
+    assert "loop_after_dispatch=true" in str(grammar)
+    assert _captures_for_string(grammar, "a<t>xb") == [("outer", b"axb")]
+
+
+@pytest.mark.parametrize(
+    "attribute, expected_outer",
+    [
+        pytest.param("suffix", b"a<t>xb<t>xc", id="suffix"),
+        pytest.param("stop", b"axbxc", id="stop"),
+    ],
+)
+def test_lark_dynamic_suffix_stop_preserves_stop_capture(
+    attribute: str, expected_outer: bytes
+) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="outer"]: tool* tail
+        tail: TEXT
+        head[{attribute}="<t>", stop_capture="marker"]: TEXT
+        tool: head "x"
+        TEXT: /(\\n|.)*/
+        """
+    )
+    assert "loop_after_dispatch=true" in str(grammar)
+    for candidate in (
+        grammar,
+        xgr.Grammar.from_ebnf(str(grammar)),
+        xgr.Grammar.deserialize_json(grammar.serialize_json()),
+    ):
+        assert _captures_for_string(candidate, "a<t>xb<t>xc", cache_enabled=True) == [
+            ("marker", b"<t>"),
+            ("marker", b"<t>"),
+            ("outer", expected_outer),
+        ]
+
+
+def test_lark_dynamic_stop_hides_marker_from_named_grammar_parent_capture() -> None:
+    dynamic = r"""
+        start: tool* tail
+        tail: TEXT
+        head[stop="<t>", stop_capture="marker"]: TEXT
+        tool: head "x"
+        TEXT: /(\n|.)*/
+    """
+    grammar = xgr.Grammar.from_lark(
+        'start[capture="outer"]: @dynamic', named_grammars={"dynamic": dynamic}
+    )
+    assert _captures_for_string(grammar, "a<t>xb") == [
+        ("marker", b"<t>"),
+        ("outer", b"axb"),
+    ]
+
+
 @pytest.mark.parametrize("attribute", ["suffix", "stop"])
 def test_lark_suffix_stop_mask_commit_and_exit(attribute: str) -> None:
     # LAZY_MASK_TOKENIZER: 0 "<", 1 ">", 2 "a", 3 "b", 4 "ab", 5 "a>", 6 "ab>",
@@ -2619,6 +2682,26 @@ def test_lark_suffix_stop_same_rule_max_tokens_without_capture(attribute: str) -
     matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
     assert matcher.accept_token(0) and matcher.accept_token(0)
     assert _allowed_token_ids(matcher, STOP_SUFFIX_COMBINED_TOKENIZER) == [2]
+    assert matcher.accept_token(2) and matcher.is_terminated()
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_max_tokens_closes_expired_parent(attribute: str) -> None:
+    tokenizer_info = xgr.TokenizerInfo(["x", "!", "z", "y"])
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start: outer "z"
+        outer[max_tokens=1]: inner | inner "y"
+        inner[max_tokens=1, {attribute}="!"]: /x*/
+        """,
+        tokenizer_info=tokenizer_info,
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(0)
+    # Forcing inner to close without its marker also reaches outer's deadline. The expired
+    # outer "y" alternative must not survive beside the valid exit to "z".
+    assert _allowed_token_ids(matcher, tokenizer_info) == [2]
     assert matcher.accept_token(2) and matcher.is_terminated()
 
 

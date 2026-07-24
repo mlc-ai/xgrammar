@@ -29,6 +29,7 @@ void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_pres
   const auto& rule = grammar_->GetRule(state.rule_id);
   int32_t hidden_suffix_bytes = rule.capture_hidden_suffix_bytes;
   int32_t hidden_stop_bytes = rule.capture_hidden_stop_bytes;
+  int32_t event_start_pos = state.rule_start_pos;
 
   if (!marker_present) {
     hidden_suffix_bytes = 0;
@@ -50,8 +51,16 @@ void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_pres
     }
   }
 
+  if (rule.capture_hidden_body_rule_id == state.rule_id) {
+    // A self-referencing body helper marks the zero-width event inserted immediately after a
+    // dynamic string trigger. Its capture span is the fixed-length marker that precedes it.
+    XGRAMMAR_DCHECK(event_start_pos != ParserState::kNoPrevInputPos);
+    event_start_pos -= std::max(hidden_suffix_bytes, hidden_stop_bytes);
+    XGRAMMAR_DCHECK(event_start_pos >= 0);
+  }
+
   capture_event_history_.PushBackInLatestRow(
-      {state.rule_id, state.rule_start_pos, hidden_suffix_bytes, hidden_stop_bytes}
+      {state.rule_id, event_start_pos, hidden_suffix_bytes, hidden_stop_bytes}
   );
 }
 

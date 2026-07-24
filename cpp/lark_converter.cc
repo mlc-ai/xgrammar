@@ -1406,6 +1406,7 @@ class LarkCompiler {
   struct DynamicAlternative {
     Trigger trigger;
     Node remainder;
+    int32_t marker_event_rule_id = -1;
   };
 
   static bool HasLazySemantics(const Definition& definition) {
@@ -2323,6 +2324,7 @@ class LarkCompiler {
       }
 
       std::optional<Trigger> trigger;
+      int32_t marker_event_rule_id = -1;
       size_t remainder_begin = 0;
       const Node* first = UnwrapSingle(&tool_elements[0]);
       if (first->kind == Node::Kind::kName) {
@@ -2332,6 +2334,32 @@ class LarkCompiler {
           if (trigger.has_value()) {
             unused_rules.insert(first->text);
             remainder_begin = 1;
+            const Definition& head = *head_it->second;
+            if (head.stop.has_value() || head.stop_capture_name.has_value()) {
+              // The dispatch FSM consumes the trigger before entering the remainder. Insert a
+              // zero-width rule there so capture materialization can recover that preceding
+              // marker without giving up the deterministic dispatch path.
+              int32_t event_expr = builder_.AddEmptyStr();
+              marker_event_rule_id =
+                  builder_.AddRuleWithHint(head.name + "_dynamic_marker", event_expr);
+              int32_t marker_expr = builder_.AddByteString(trigger->string);
+              int32_t marker_rule_id =
+                  builder_.AddRuleWithHint(head.name + "_dynamic_marker_text", marker_expr);
+              builder_.UpdateCaptureHiddenRuleIds(
+                  marker_event_rule_id, marker_event_rule_id, marker_rule_id
+              );
+              int32_t hidden_bytes = static_cast<int32_t>(trigger->string.size());
+              if (head.stop.has_value()) {
+                builder_.UpdateCaptureHiddenStopBytes(marker_event_rule_id, hidden_bytes);
+              } else {
+                builder_.UpdateCaptureHiddenSuffixBytes(marker_event_rule_id, hidden_bytes);
+              }
+              if (head.stop_capture_name.has_value()) {
+                builder_.UpdateStopCaptureName(
+                    marker_event_rule_id, head.stop_capture_name.value()
+                );
+              }
+            }
           }
         }
       }
@@ -2360,7 +2388,9 @@ class LarkCompiler {
       remainder.children.assign(
           tool_elements.begin() + static_cast<std::ptrdiff_t>(remainder_begin), tool_elements.end()
       );
-      alternatives.push_back({std::move(trigger.value()), std::move(remainder)});
+      alternatives.push_back(
+          {std::move(trigger.value()), std::move(remainder), marker_event_rule_id}
+      );
     }
 
     if (alternatives.empty()) {
@@ -2391,9 +2421,14 @@ class LarkCompiler {
       for (const std::string& trigger : trigger_order) {
         std::vector<int32_t> remainder_choices;
         for (const DynamicAlternative* alternative : grouped.at(trigger)) {
-          remainder_choices.push_back(
-              CompileNode(alternative->remainder, "lark_dynamic_body", false)
-          );
+          int32_t remainder =
+              CompileNode(alternative->remainder, "lark_dynamic_body", false);
+          if (alternative->marker_event_rule_id >= 0) {
+            remainder = builder_.AddSequence(
+                {builder_.AddRuleRef(alternative->marker_event_rule_id), remainder}
+            );
+          }
+          remainder_choices.push_back(remainder);
         }
         int32_t body = remainder_choices.size() == 1 ? remainder_choices[0]
                                                      : builder_.AddChoices(remainder_choices);

@@ -812,6 +812,29 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
     RemoveCommittedLazyStates();
   }
 
+  bool any_expired = false;
+  bool any_alive = false;
+  for (const auto& state : tmp_states_to_be_added_) {
+    if (IsExpiredState(state)) {
+      any_expired = true;
+    } else {
+      any_alive = true;
+    }
+  }
+  if (any_expired && (any_alive || tmp_accept_stop_token_)) {
+    // Completing a budgeted suffix/stop rule can expose an already-expired parent alternative.
+    // Apply the same preference as the ordinary max_tokens path: once another derivation can
+    // continue or finish at this boundary, expired derivations may not consume another token.
+    tmp_states_to_be_added_.erase(
+        std::remove_if(
+            tmp_states_to_be_added_.begin(),
+            tmp_states_to_be_added_.end(),
+            [&](const ParserState& state) { return IsExpiredState(state); }
+        ),
+        tmp_states_to_be_added_.end()
+    );
+  }
+
   bool viable = tmp_accept_stop_token_ || !tmp_states_to_be_added_.empty();
   if (!viable) {
     return false;
