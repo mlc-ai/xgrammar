@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#include <set>
 #include <thread>
 #include <utility>
 #include <variant>
@@ -457,10 +458,13 @@ class GrammarMatcher::Impl : public EarleyParser {
         compiled_grammar_(compiled_grammar),
         tokenizer_info_(compiled_grammar->tokenizer_info),
         stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
+        grammar_atomic_token_ids_(),
         terminate_without_stop_token_(terminate_without_stop_token),
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
+
+    InitGrammarAtomicTokenIds();
   }
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
@@ -480,6 +484,8 @@ class GrammarMatcher::Impl : public EarleyParser {
   int GetMaxRollbackTokens() const { return -1; }
 
   const std::vector<int>& GetStopTokenIds() const { return stop_token_ids_; }
+
+  const std::set<int>& GetGrammarAtomicTokenIds() const { return grammar_atomic_token_ids_; }
 
   std::string _DebugPrintInternalState() const { return PrintStates(); }
 
@@ -522,9 +528,30 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   std::string PrintBitmask(int32_t* bitmask_data_ptr, const TokenizerInfo& tokenizer_info);
 
+  void InitGrammarAtomicTokenIds();
+
   CompiledGrammar compiled_grammar_;
   TokenizerInfo tokenizer_info_;
   std::vector<int> stop_token_ids_;
+
+  /*!
+   * \brief Token IDs declared in the grammar as atomic token literals.
+   *
+   * These IDs come from grammar expressions such as Token(...) and
+   * TokenTagDispatch trigger/exclude entries. During AcceptToken(), such a
+   * token must be accepted only via the atomic token path
+   * (AdvanceAtomicToken). It must not fall back to the byte path, even if its
+   * decoded string would match the current JSON/text state byte-by-byte.
+   *
+   * Example (moonshotai/Kimi-K2.5):
+   * - Token(163597) = "<|tool_call_begin|>"
+   * - Token(163599) = "<|tool_call_end|>"
+   *
+   * If JSON is still incomplete, atomic path rejects 163599, but byte path
+   * must not accept it as plain string content inside an open JSON string.
+   */
+  std::set<int> grammar_atomic_token_ids_;
+
   bool terminate_without_stop_token_;
   std::deque<int> token_length_history;
 
@@ -664,6 +691,10 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     PopLastStates(1);
   }
 
+  if (!atomic_success && grammar_atomic_token_ids_.count(token_id)) {
+    return false;
+  }
+
   // Phase 2: Try byte-by-byte path (from the same original state)
   int pos = 0;
   bool byte_path_success = true;
@@ -797,6 +828,26 @@ std::string GrammarMatcher::Impl::PrintBitmask(
      << ",\naccepted_ids=" << PrintTokenByIds(accepted_ids, tokenizer_info, kMaxPrintTokens)
      << ",\nrejected_ids=" << PrintTokenByIds(rejected_ids, tokenizer_info, kMaxPrintTokens) << ")";
   return ss.str();
+}
+
+void GrammarMatcher::Impl::InitGrammarAtomicTokenIds() {
+  for (int32_t expr_id = 0; expr_id < grammar_->NumGrammarExprs(); ++expr_id) {
+    auto expr = grammar_->GetGrammarExpr(expr_id);
+    if (expr.type == GrammarExprType::kToken) {
+      for (int32_t tid : expr) {
+        grammar_atomic_token_ids_.insert(tid);
+      }
+    } else if (expr.type == GrammarExprType::kTokenTagDispatch) {
+      auto ttd = grammar_->GetTokenTagDispatch(expr);
+      for (const auto& [tid, _rule] : ttd.trigger_rule_pairs) {
+        grammar_atomic_token_ids_.insert(tid);
+      }
+
+      for (int32_t tid : ttd.excludes) {
+        grammar_atomic_token_ids_.insert(tid);
+      }
+    }
+  }
 }
 
 bool GrammarMatcher::Impl::IsTokenBitmaskAllTrue(int32_t* bitmask_data_ptr) {

@@ -1632,5 +1632,72 @@ def test_stag_any_tokens_exclude_redispatch():
     assert m.is_terminated()
 
 
+STAG_JSON_ATOMIC_VOCAB = [
+    "<s>",  # 0
+    "</s>",  # 1
+    "<tool>",  # 2
+    "<end>",  # 3
+    '{"',  # 4
+    "queries",  # 5
+    '":["',  # 6
+    "hello",  # 7
+    '","',  # 8
+    "]}",  # 9 invalid continuation inside an open JSON string
+    '"]}',  # 10 valid JSON suffix closing string/array/object
+]
+STAG_JSON_TOOL = 2
+STAG_JSON_END = 3
+
+
+def _stag_json_atomic_matcher(stag_json):
+    ti = xgr.TokenizerInfo(STAG_JSON_ATOMIC_VOCAB)
+    compiler = xgr.GrammarCompiler(ti)
+    compiled = compiler.compile_structural_tag(stag_json)
+    m = xgr.GrammarMatcher(compiled)
+    b = xgr.allocate_token_bitmask(1, ti.vocab_size)
+    return m, b, ti
+
+
+def test_stag_atomic_end_token_rejected_in_open_json_string():
+    """Atomic Token(<end>) must not be accepted via byte path inside open JSON."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "sequence",
+            "elements": [
+                {"type": "token", "token": "<tool>"},
+                {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "type": "object",
+                        "properties": {"queries": {"type": "array", "items": {"type": "string"}}},
+                        "required": ["queries"],
+                    },
+                },
+                {"type": "token", "token": "<end>"},
+            ],
+        },
+    }
+    m, b, ti = _stag_json_atomic_matcher(stag)
+
+    broken_prefix = [
+        STAG_JSON_TOOL,  # <tool>
+        4,  # {"
+        5,  # queries
+        6,  # ":[
+        7,  # hello
+        8,  # ",
+        9,  # ]} inside the still-open second string
+    ]
+    for token_id in broken_prefix:
+        assert m.accept_token(token_id), (
+            f"Failed to accept setup token {token_id} " f"({STAG_JSON_ATOMIC_VOCAB[token_id]!r})"
+        )
+
+    assert not m.accept_token(STAG_JSON_END)
+    assert not m.is_completed()
+    assert not m.is_terminated()
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
