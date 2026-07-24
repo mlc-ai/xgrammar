@@ -26,6 +26,7 @@
 #include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "support/encoding.h"
+#include "support/logging.h"
 
 namespace xgrammar {
 namespace {
@@ -519,6 +520,10 @@ struct Definition {
   bool lazy = false;
   std::optional<std::string> suffix;
   Location suffix_location;
+  std::optional<int32_t> max_tokens;
+  Location max_tokens_location;
+  std::optional<std::string> capture_name;
+  Location capture_location;
   Node body;
   Location location;
 };
@@ -691,6 +696,56 @@ class LarkParser {
       Token key = Consume(TokenType::kName, "expected rule attribute");
       if (key.text == "lazy" && Peek().type != TokenType::kEquals) {
         definition->lazy = true;
+      } else if (key.text == "max_tokens") {
+        Consume(TokenType::kEquals, "expected '=' after max_tokens attribute");
+        Location value_location = Peek().location;
+        int32_t value = ParseInteger();
+        if (value <= 0) {
+          RaiseLarkError(source_, value_location, "max_tokens must be positive");
+        }
+        if (value > 1'000'000) {
+          RaiseLarkError(source_, value_location, "max_tokens is too large");
+        }
+        if (definition->max_tokens.has_value()) {
+          RaiseLarkError(source_, key.location, "max_tokens attribute is specified more than once");
+        }
+        definition->max_tokens = value;
+        definition->max_tokens_location = key.location;
+      } else if (key.text == "capture") {
+        std::string capture_name;
+        Location capture_location = key.location;
+        if (Match(TokenType::kEquals)) {
+          Token name_token = Consume(TokenType::kString, "expected string literal after capture=");
+          Node name_node = ParseStringNode(name_token);
+          if (!name_node.flags.empty()) {
+            RaiseLarkError(
+                source_, name_node.location, "case-insensitive flags are not supported on capture"
+            );
+          }
+          capture_name = std::move(name_node.text);
+          capture_location = name_node.location;
+        } else {
+          capture_name = definition->name;
+        }
+        if (capture_name.empty()) {
+          RaiseLarkError(source_, capture_location, "capture name must not be empty");
+        }
+        for (char c : capture_name) {
+          bool valid = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                       c == '_' || c == '-' || c == '.';
+          if (!valid) {
+            RaiseLarkError(
+                source_,
+                capture_location,
+                "capture name must only contain letters, digits, '_', '-' and '.'"
+            );
+          }
+        }
+        if (definition->capture_name.has_value()) {
+          RaiseLarkError(source_, key.location, "capture attribute is specified more than once");
+        }
+        definition->capture_name = std::move(capture_name);
+        definition->capture_location = capture_location;
       } else if (key.text == "suffix") {
         Consume(TokenType::kEquals, "expected '=' after suffix attribute");
         Token suffix_token = Consume(TokenType::kString, "expected string literal after suffix=");
@@ -1198,13 +1253,36 @@ class LarkCompiler {
         continue;
       }
       if (dynamic_unused_rules_.count(definition.name)) {
+        if (definition.max_tokens.has_value()) {
+          RaiseLarkError(
+              source_,
+              definition.max_tokens_location,
+              "max_tokens is not supported on rules consumed by dynamic dispatch"
+          );
+        }
+        if (definition.capture_name.has_value()) {
+          RaiseLarkError(
+              source_,
+              definition.capture_location,
+              "capture is not supported on rules consumed by dynamic dispatch"
+          );
+        }
         builder_.UpdateRuleBody(rule_ids_.at(definition.name), builder_.AddEmptyStr());
         continue;
       }
       int32_t body_expr_id;
       if (definition.name == "start") {
         if (dynamic_start_body.has_value()) {
+          if (definition.max_tokens.has_value()) {
+            RaiseLarkError(
+                source_,
+                definition.max_tokens_location,
+                "max_tokens is not supported on a dynamic dispatch start rule"
+            );
+          }
           body_expr_id = dynamic_start_body.value();
+        } else if (definition.max_tokens.has_value()) {
+          body_expr_id = CompileMaxTokensRule(definition);
         } else if (HasLazySemantics(definition)) {
           body_expr_id = CompileLazyRule(definition);
         } else {
@@ -1213,12 +1291,17 @@ class LarkCompiler {
         if (allow_initial_skip_ && skip_rule_id_ != -1) {
           body_expr_id = builder_.AddSequence({builder_.AddRuleRef(skip_rule_id_), body_expr_id});
         }
+      } else if (definition.max_tokens.has_value()) {
+        body_expr_id = CompileMaxTokensRule(definition);
       } else if (HasLazySemantics(definition)) {
         body_expr_id = CompileLazyRule(definition);
       } else {
         body_expr_id = CompileNode(definition.body, definition.name, false);
       }
       builder_.UpdateRuleBody(rule_ids_.at(definition.name), body_expr_id);
+      if (definition.capture_name.has_value()) {
+        builder_.UpdateCaptureName(rule_ids_.at(definition.name), definition.capture_name.value());
+      }
     }
 
     auto start_it = rule_ids_.find("start");
@@ -1516,7 +1599,10 @@ class LarkCompiler {
           );
         }
         int32_t result = builder_.AddRuleRef(rule_ids_.at(node.text));
-        return !terminal_mode && definition_it->second->is_terminal ? AppendSkip(result) : result;
+        // Lazy rules are compiled like terminals (lexemes), so they also take a trailing skip.
+        bool skip_after =
+            definition_it->second->is_terminal || HasLazySemantics(*definition_it->second);
+        return !terminal_mode && skip_after ? AppendSkip(result) : result;
       }
       case Node::Kind::kString: {
         int32_t result = CompileStringLiteral(node);
@@ -1619,6 +1705,29 @@ class LarkCompiler {
       return expression;
     }
     return builder_.AddSequence({expression, builder_.AddRuleRef(skip_rule_id_)});
+  }
+
+  /*!
+   * \brief Compile a rule with the max_tokens attribute. The body compiles normally and the
+   * budget is recorded on the rule; the matcher then bounds each occurrence, forcing it to
+   * end at the earliest possible position once the budget is exhausted. Bodies that can end
+   * at any position (such as arbitrary text) therefore never exceed the budget.
+   */
+  int32_t CompileMaxTokensRule(const Definition& definition) {
+    if (definition.lazy || definition.suffix.has_value()) {
+      RaiseLarkError(
+          source_,
+          definition.max_tokens_location,
+          "max_tokens cannot be combined with lazy or suffix"
+      );
+    }
+    if (!IsAnyText(definition.body)) {
+      XGRAMMAR_LOG(WARNING) << "max_tokens on rule '" << definition.name
+                            << "' is best-effort: the budget may be exceeded when the rule "
+                               "cannot end at the position where it runs out.";
+    }
+    builder_.UpdateMaxTokens(rule_ids_.at(definition.name), definition.max_tokens.value());
+    return CompileNode(definition.body, definition.name, false);
   }
 
   SpecialTokenSet ResolveSpecialToken(const std::string& token, const Location& location) const {
@@ -1846,12 +1955,10 @@ class LarkCompiler {
     }
     auto trigger = ExtractLazyTrigger(definition);
     if (!trigger.has_value()) {
-      RaiseLarkError(
-          source_,
-          definition.location,
-          "general lazy rules are not supported; expected ANY_TEXT with a fixed string, token, "
-          "regex suffix, or suffix attribute"
-      );
+      // General committed-shortest lazy rule: compiled like a terminal (no skip insertion);
+      // the terminal-like requirement is validated after grammar optimization.
+      builder_.UpdateLazy(rule_ids_.at(definition.name), true);
+      return CompileNode(definition.body, definition.name, true);
     }
     int32_t empty_rule = builder_.AddRuleWithHint("lark_lazy_end", builder_.AddEmptyStr());
     int32_t result;

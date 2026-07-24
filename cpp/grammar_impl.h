@@ -80,6 +80,17 @@ class Grammar::Impl {
     int32_t lookahead_assertion_id = -1;
     /*! \brief Whether the lookahead assertion is exact. */
     bool is_exact_lookahead = false;
+    /*! \brief The token budget of the rule. When non-negative, the matcher bounds each
+     * occurrence of this rule to at most max_tokens LLM tokens, forcing it to end at the
+     * earliest possible position once the budget is exhausted. -1 means no budget. */
+    int32_t max_tokens = -1;
+    /*! \brief The capture group name of the rule. When non-empty, the matcher records the input
+     * span matched by this rule on every completion, retrievable via GrammarMatcher::GetCaptures.
+     * Empty means no capture. */
+    std::string capture_name = {};
+    /*! \brief Whether the rule matches with committed-shortest (lazy) semantics: at the first
+     * position where the body can complete, it must complete. */
+    bool is_lazy = false;
   };
 
   /*! \brief Get the number of rules. */
@@ -353,7 +364,10 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::Rule::name,
     &Grammar::Impl::Rule::body_expr_id,
     &Grammar::Impl::Rule::lookahead_assertion_id,
-    &Grammar::Impl::Rule::is_exact_lookahead
+    &Grammar::Impl::Rule::is_exact_lookahead,
+    &Grammar::Impl::Rule::max_tokens,
+    &Grammar::Impl::Rule::capture_name,
+    &Grammar::Impl::Rule::is_lazy
 );
 
 XGRAMMAR_MEMBER_TABLE(

@@ -445,5 +445,115 @@ TEXT: /(\n|.)*/
 
 This matches arbitrary text and completes as soon as the trigger appears; nothing may follow the
 trigger. Text that never produces the trigger is also accepted. The regex-suffix and
-`suffix="..."` head forms are only accepted inside the full dispatch pattern, and general lazy
-rules over other bodies (for example `value[lazy]: /[a-z]+/`) are rejected.
+`suffix="..."` head forms are only accepted inside the full dispatch pattern.
+
+### General Lazy Rules (Committed-Shortest Matching)
+
+Any other rule may also carry `[lazy]`, which gives it **committed-shortest** matching: at the
+first position where the rule's body can end, it must end — the derivations in which this
+occurrence keeps consuming input are discarded.
+
+```text
+start: "<" name ">" rest
+name[lazy]: /[a-z]+/     // stops at the first position where it can end
+rest: /[a-z]+/
+```
+
+Notes:
+
+- The body must compile to a single terminal-like automaton: sequences and alternations of
+  strings and character classes, and the `+`/`*` quantifiers over single-character elements
+  (character classes, single-character strings, and alternations of these — directly or through
+  terminal references like `TEXT*`). Bodies that need rule references (recursion, `?` in the
+  middle of a sequence, quantifiers over multi-character strings, and repetition ranges like
+  `{2,5}`) are rejected at compile time.
+- A lazy rule that can match the empty string always matches the empty string (for example
+  `foo[lazy]: /.*/`); the compiler emits a warning for this.
+- Lazy rules are compiled as lexemes: `%ignore` is not woven inside their bodies, and like
+  terminals they take the ignored-token skip after them.
+- Each occurrence of the rule commits independently, and the commit is exact for validation
+  (`accept_string`) as well as mask generation. `rollback`/`fork`/`reset` restore the state
+  across a commit exactly.
+- The same attribute is available in the EBNF frontend: `name[lazy] ::= ...`, and it round-trips
+  through `Grammar.__str__()` / `Grammar.from_ebnf()`.
+
+## Token Budgets
+
+A rule can be given a token budget with the `max_tokens` attribute:
+
+```text
+start: <think> reasoning </think> answer
+reasoning[max_tokens=512]: TEXT
+answer: /[0-9]+/
+TEXT: /(\n|.)*/
+```
+
+Each occurrence of the rule may then consume at most `max_tokens` LLM tokens. Once the budget
+is exhausted, the token mask only allows leaving the rule, which bounds the length of free-text
+segments such as reasoning blocks while the rest of the output stays grammar-constrained.
+
+The budget is enforced by the matcher at generation time. The body compiles normally and
+every predicted occurrence of the rule carries a deadline: the index of the last token its
+derivation may consume. Once the deadline passes, each mask forces the rule to end if ending
+is possible at the current position; otherwise the budget is relaxed for one step and
+enforcement is retried, so the rule ends at the earliest possible position and the output
+always stays grammar-valid. Bodies that can end at any position — such as the arbitrary-text
+form above — therefore never exceed their budget. For other bodies (e.g. `/(\S*\s)+/`) the
+budget is best-effort and a compile-time warning marks the rule.
+
+The budget applies **per occurrence**: in `(r ",")* r` every element gets its own budget, and
+to bound a whole loop the budget goes on a wrapper rule (`list[max_tokens=N]: item+`). Nested
+budgets combine by taking the minimum. Rules inside a budgeted rule may also be used outside of
+it — the budget follows the derivation, not the rule.
+
+The first time a budget is exceeded (a token is consumed by a derivation past its budget), a
+warning is logged, once per matcher. The budget state lives in the parser state, so
+`rollback()` restores it exactly and speculative decoding keeps working. `accept_string`
+advances without token boundaries and is not counted (budgets constrain mask-driven
+generation, not validation/prefill).
+
+`max_tokens` must be positive and cannot be combined with `lazy` or `suffix`, used on
+terminals, or on rules consumed by the dynamic dispatch pattern.
+
+## Capture Groups
+
+A rule can be marked with the `capture` attribute so that the matcher records the input span the
+rule matched:
+
+```text
+start: tool* tail
+tail: TEXT
+
+tool_head[lazy]: TEXT "<tool_call>"
+tool: tool_head arg "</tool_call>"
+arg[capture]: /[0-9]+/
+
+TEXT: /(\n|.)*/
+```
+
+`rule[capture]` uses the rule name as the capture name; `rule[capture="name"]` sets an explicit
+name. Capture names may contain letters, digits, `_`, `-` and `.`. The recorded captures are
+retrieved from the matcher:
+
+```python
+matcher = xgr.GrammarMatcher(compiled)
+matcher.accept_string('x<tool_call>42</tool_call>y<tool_call>7</tool_call>')
+matcher.get_captures()  # [("arg", b"42"), ("arg", b"7")]
+```
+
+Each completion of a captured rule records one capture, so a rule matched repeatedly (for
+example inside a loop or a dispatch pattern) yields one entry per match, in completion order.
+Captures are recorded when tokens or strings are accepted; `fill_next_token_bitmask` never
+records anything, and `rollback` also rolls back the recorded captures.
+
+Since the parser explores parse hypotheses in parallel, one occurrence of a captured rule may
+complete at several candidate end positions (a `/[0-9]+/` body completes after every digit). By
+default `get_captures` keeps only the longest completion of each occurrence, which is exact
+whenever the captured rule's end is determined by a following delimiter that its body cannot
+match (closing tags, quotes, brackets). If the following context can also be matched by the
+rule body itself, the reported span may extend past the span of the finally accepted parse;
+`get_captures(deduplicate=False)` returns the raw completion events instead.
+
+Captures are supported on rules only (not terminals), and not on rules consumed by the dynamic
+dispatch pattern (the head, tool and tail rules themselves); rules referenced from a tool's
+body, like `arg` above, work as expected.

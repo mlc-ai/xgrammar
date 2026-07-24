@@ -33,9 +33,20 @@ void EarleyParser::PopLastStates(int32_t cnt) {
   rule_id_to_completable_states_.PopBack(cnt);
   is_completed_.erase(is_completed_.end() - cnt, is_completed_.end());
   scanable_state_history_.PopBack(cnt);
+  if (capture_tracking_) {
+    capture_event_history_.PopBack(cnt);
+  }
 }
 
 void EarleyParser::Complete(const ParserState& state, bool debug_print) {
+  // Record the capture event for captured rules. This is only enabled during definitive
+  // advances; speculative completions (mask computation, lookahead) never record events.
+  if (capture_recording_ && RuleHasCapture(state.rule_id)) {
+    RecordCaptureEvent(state);
+  }
+  if (state.rule_id != -1 && grammar_->GetRule(state.rule_id).is_lazy) {
+    tmp_completed_lazy_occurrences_.emplace_back(state.rule_id, state.rule_start_pos);
+  }
   // Check if a rule is completed.
   if (state.rule_start_pos == ParserState::kNoPrevInputPos) {
     // assert: if a root rule can achieve here, then it must be completed.
@@ -74,7 +85,7 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print) {
             parent_state.sequence_id,
             parent_state.element_id + 1,
             parent_state.rule_start_pos,
-            0
+            parent_state.budget_deadline
         });
         continue;
       }
@@ -92,7 +103,7 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print) {
             parent_state.sequence_id,
             parent_state.element_id + 1,
             parent_state.rule_start_pos,
-            0
+            parent_state.budget_deadline
         });
       }
       // If the repeat count is less than the max repeat count, we can continue to
@@ -121,8 +132,7 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print) {
             parent_state.sequence_id,
             edge.target,
             parent_state.rule_start_pos,
-            0,
-            0
+            parent_state.budget_deadline
         });
       }
       if (new_count < info.Upper()) {
@@ -131,6 +141,7 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print) {
             parent_state.sequence_id,
             parent_state.element_id,
             parent_state.rule_start_pos,
+            parent_state.budget_deadline,
             0,
             new_count
         });
@@ -174,7 +185,11 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
     case GrammarExprType::kCharacterClassStar: {
       if (state.sub_element_id == 0) {
         Enqueue(ParserState{
-            state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
+            state.rule_id,
+            state.sequence_id,
+            state.element_id + 1,
+            state.rule_start_pos,
+            state.budget_deadline
         });
       }
       return std::make_pair(true, false);
@@ -188,7 +203,11 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
       ExpandNextRuleRefElement(state, grammar_expr, &element_expr, debug_print);
       if (state.repeat_count >= min_repeat_count) {
         Enqueue(ParserState{
-            state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0
+            state.rule_id,
+            state.sequence_id,
+            state.element_id + 1,
+            state.rule_start_pos,
+            state.budget_deadline
         });
       }
       return std::make_pair(false, false);
@@ -257,9 +276,13 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
   tmp_accept_stop_token_ = false;
+  tmp_completed_lazy_occurrences_.clear();
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   // Scan all the scanable states.
   for (const auto& state : latest_states) {
+    if (skip_expired_states_ && IsExpiredState(state)) {
+      continue;
+    }
     Scan(state, ch);
   }
 
@@ -270,6 +293,9 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
 
   // execute Predict and Complete for all states in the queue until empty.
   rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+  if (capture_tracking_) {
+    capture_event_history_.PushBack(std::vector<CaptureEvent>());
+  }
   while (!tmp_process_state_queue_.empty()) {
     const auto state = std::move(tmp_process_state_queue_.front());
     tmp_process_state_queue_.pop();
@@ -283,9 +309,27 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   }
 
   // Check if the grammar is completed, and add the scannable states to the history.
+  if (!tmp_completed_lazy_occurrences_.empty()) {
+    RemoveCommittedLazyStates();
+  }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
   return true;
+}
+
+void EarleyParser::RemoveCommittedLazyStates() {
+  auto is_committed = [&](const ParserState& state) {
+    for (const auto& [rule_id, rule_start_pos] : tmp_completed_lazy_occurrences_) {
+      if (state.rule_id == rule_id && state.rule_start_pos == rule_start_pos) {
+        return true;
+      }
+    }
+    return false;
+  };
+  tmp_states_to_be_added_.erase(
+      std::remove_if(tmp_states_to_be_added_.begin(), tmp_states_to_be_added_.end(), is_committed),
+      tmp_states_to_be_added_.end()
+  );
 }
 
 EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> initial_state)
@@ -293,6 +337,18 @@ EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> in
   if (!grammar->optimized) {
     XGRAMMAR_LOG(FATAL) << "The grammar is not optimized. Please optimize the grammar before using "
                            "the Earley parser.";
+  }
+  for (int32_t i = 0; i < grammar_->NumRules(); ++i) {
+    if (grammar_->GetRule(i).max_tokens >= 0) {
+      has_budget_rules_ = true;
+      break;
+    }
+  }
+  for (int32_t i = 0; i < grammar_->NumRules(); ++i) {
+    if (!grammar_->GetRule(i).capture_name.empty()) {
+      capture_tracking_ = true;
+      break;
+    }
   }
   PushStateAndExpand(initial_state.has_value() ? *initial_state : RootInitialState());
 }
@@ -305,7 +361,7 @@ ParserState EarleyParser::RootInitialState() const {
       grammar_->GetRule(root_rule_id).body_expr_id,
       grammar_->per_rule_fsms[root_rule_id]->GetFsm().GetStart(),
       ParserState::kNoPrevInputPos,
-      0
+      DeadlineForRule(root_rule_id, -1)
   );
 }
 
@@ -313,8 +369,12 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   tmp_states_visited_in_queue_.Clear();
   tmp_accept_stop_token_ = false;
   tmp_states_to_be_added_.clear();
+  tmp_completed_lazy_occurrences_.clear();
   Enqueue(state);
   rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+  if (capture_tracking_) {
+    capture_event_history_.PushBack(std::vector<CaptureEvent>());
+  }
   while (!tmp_process_state_queue_.empty()) {
     const auto state = tmp_process_state_queue_.front();
     tmp_process_state_queue_.pop();
@@ -326,6 +386,9 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
       tmp_states_to_be_added_.push_back(state);
     }
   }
+  if (!tmp_completed_lazy_occurrences_.empty()) {
+    RemoveCommittedLazyStates();
+  }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
 }
@@ -335,6 +398,10 @@ void EarleyParser::Reset() {
   scanable_state_history_.PopBack(scanable_state_history_.size());
   is_completed_.clear();
   stop_token_is_accepted_ = false;
+  if (capture_tracking_) {
+    capture_event_history_.PopBack(capture_event_history_.size());
+  }
+  capture_recording_ = false;
   XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
   PushStateAndExpand(RootInitialState());
 }
@@ -361,9 +428,13 @@ void EarleyParser::ExpandNextRuleRefElement(
   }
 
   bool right_recursion_to_root = false;
+  // The right-recursion optimization elides the completion of the parent rule (and, in the
+  // to-root case, corrupts the start position of the child rule), so it must be disabled when
+  // either rule is captured; otherwise their capture events would be lost.
   if (state.element_id != grammar_expr.size() - 1 ||
       sub_grammar_expr->type == GrammarExprType::kRepeat ||
-      (state.rule_start_pos == rule_id_to_completable_states_.size() - 1)) {
+      (state.rule_start_pos == rule_id_to_completable_states_.size() - 1) ||
+      RuleHasCapture(state.rule_id) || RuleHasCapture(ref_rule_id)) {
     // It's not the right recursion, or it's the root rule.
     rule_id_to_completable_states_.PushBackInLatestRow(std::make_pair(ref_rule_id, state));
   } else {
@@ -399,9 +470,13 @@ void EarleyParser::ExpandNextRuleRefElement(
           grammar_->allow_empty_rule_ids.begin(), grammar_->allow_empty_rule_ids.end(), ref_rule_id
       ) != grammar_->allow_empty_rule_ids.end()) {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSequence);
-    Enqueue(
-        ParserState{state.rule_id, state.sequence_id, state.element_id + 1, state.rule_start_pos, 0}
-    );
+    Enqueue(ParserState{
+        state.rule_id,
+        state.sequence_id,
+        state.element_id + 1,
+        state.rule_start_pos,
+        state.budget_deadline
+    });
   }
 
   // If the reference rule is not visited, we need to add it to the queue.
@@ -416,7 +491,7 @@ void EarleyParser::ExpandNextRuleRefElement(
       ref_fsm.GetFsm().GetStart(),
       right_recursion_to_root ? ParserState::kNoPrevInputPos
                               : int32_t(rule_id_to_completable_states_.size() - 1),
-      0
+      DeadlineForRule(ref_rule_id, state.budget_deadline)
   });
 }
 
@@ -427,7 +502,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
   // Add the rule reference pairs, and enqueue the epsilon edges.
   for (const auto& edge : fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
     if (edge.IsEpsilon()) {
-      Enqueue(ParserState{state.rule_id, state.sequence_id, edge.target, state.rule_start_pos, 0});
+      Enqueue(ParserState{
+          state.rule_id, state.sequence_id, edge.target, state.rule_start_pos, state.budget_deadline
+      });
       continue;
     }
 
@@ -446,7 +523,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
       ref_rule_id = repeat_info.RuleId();
 
       if (state.repeat_count >= repeat_info.Lower()) {
-        Enqueue(ParserState{state.rule_id, state.sequence_id, target, state.rule_start_pos, 0, 0});
+        Enqueue(ParserState{
+            state.rule_id, state.sequence_id, target, state.rule_start_pos, state.budget_deadline
+        });
       }
       if (state.repeat_count >= repeat_info.Upper()) {
         continue;
@@ -462,8 +541,10 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
     }
     if (!is_repeat && (fsm.GetFsm().GetFsm().GetEdges(target).size() == 0) &&
         fsm.GetFsm().IsEndState(target) &&
-        state.rule_start_pos != static_cast<int32_t>(rule_id_to_completable_states_.size() - 1)) {
-      // It's a right recursion. We can optimize it.
+        state.rule_start_pos != static_cast<int32_t>(rule_id_to_completable_states_.size() - 1) &&
+        !RuleHasCapture(state.rule_id) && !RuleHasCapture(ref_rule_id)) {
+      // It's a right recursion. We can optimize it. The optimization elides the completion of
+      // the parent rule, so it is disabled when either rule is captured.
       // If it's the right recursion, we need to add the ancestors of the parent state.
       if (state.rule_start_pos == ParserState::kNoPrevInputPos) {
         // In this case, we can mark the new state as the root state to speed up.
@@ -501,6 +582,7 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  state.sequence_id,
                  state.element_id,
                  state.rule_start_pos,
+                 state.budget_deadline,
                  0,
                  state.repeat_count
              }}
@@ -509,7 +591,13 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
         // For kRuleRef: store element_id = target (post-transition state)
         rule_id_to_completable_states_.PushBackInLatestRow(
             {ref_rule_id,
-             ParserState{state.rule_id, state.sequence_id, target, state.rule_start_pos, 0}}
+             ParserState{
+                 state.rule_id,
+                 state.sequence_id,
+                 target,
+                 state.rule_start_pos,
+                 state.budget_deadline
+             }}
         );
       }
     }
@@ -520,7 +608,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                           grammar_->allow_empty_rule_ids.end(),
                           ref_rule_id
                       )) {
-      Enqueue(ParserState{state.rule_id, state.sequence_id, target, state.rule_start_pos, 0});
+      Enqueue(ParserState{
+          state.rule_id, state.sequence_id, target, state.rule_start_pos, state.budget_deadline
+      });
     }
 
     // If the reference rule is not visited, we need to add it to the queue.
@@ -535,7 +625,7 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
         ref_fsm.GetFsm().GetStart(),
         right_recursion_to_root ? ParserState::kNoPrevInputPos
                                 : int32_t(rule_id_to_completable_states_.size() - 1),
-        0
+        DeadlineForRule(ref_rule_id, state.budget_deadline)
     });
   }
 }
@@ -873,14 +963,21 @@ bool EarleyParser::AdvanceAtomicToken(int32_t token_id, bool debug_print) {
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
   tmp_accept_stop_token_ = false;
+  tmp_completed_lazy_occurrences_.clear();
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   for (const auto& state : latest_states) {
+    if (skip_expired_states_ && IsExpiredState(state)) {
+      continue;
+    }
     ScanAtomicToken(state, token_id);
   }
   if (tmp_process_state_queue_.empty() && tmp_states_to_be_added_.empty()) {
     return false;
   }
   rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+  if (capture_tracking_) {
+    capture_event_history_.PushBack(std::vector<CaptureEvent>());
+  }
   while (!tmp_process_state_queue_.empty()) {
     const auto state = std::move(tmp_process_state_queue_.front());
     tmp_process_state_queue_.pop();
@@ -891,6 +988,9 @@ bool EarleyParser::AdvanceAtomicToken(int32_t token_id, bool debug_print) {
     if (scanable) {
       tmp_states_to_be_added_.push_back(state);
     }
+  }
+  if (!tmp_completed_lazy_occurrences_.empty()) {
+    RemoveCommittedLazyStates();
   }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);

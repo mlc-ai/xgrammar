@@ -431,6 +431,11 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
   using GrammarExprType = Grammar::Impl::GrammarExprType;
   // If the initial rule is a tag dispatch, we will check if it can achieve its initial state.
   const auto& rule = grammar_->GetRule(init_rule_id_);
+  if (rule.is_lazy) {
+    // The fast path assumes greedy self-loop extension is always legal, which does not hold for
+    // committed-shortest rules; they must go through the full per-token simulation.
+    return {false, std::bitset<256>()};
+  }
   const auto& rule_body = grammar_->GetGrammarExpr(rule.body_expr_id);
   if (rule_body.type == GrammarExprType::kTagDispatch) {
     std::bitset<256> speculative_mask;

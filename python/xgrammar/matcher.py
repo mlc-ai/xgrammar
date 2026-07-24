@@ -417,6 +417,31 @@ class GrammarMatcher(XGRObject):
         """
         self._handle.rollback(num_tokens)
 
+    def get_captures(self, *, deduplicate: bool = True) -> List[Tuple[str, bytes]]:
+        """Get the capture groups recorded so far, ordered by completion position.
+
+        A rule gains a capture name via the Lark attribute ``rule[capture]`` or
+        ``rule[capture="name"]``. Each time a captured rule is completed while accepting tokens
+        or strings, the matched input span is recorded. Rollback also rolls back the recorded
+        captures. Mask computation (fill_next_token_bitmask) never records captures.
+
+        Parameters
+        ----------
+        deduplicate : bool, default: True
+            The parser explores parse hypotheses in parallel, so one occurrence of a captured
+            rule may complete at several candidate end positions (e.g. a ``/[0-9]+/`` body
+            completes after every digit). If True, only the last (longest) completion of each
+            occurrence is kept. Distinct occurrences — repeated matches of the same rule at
+            different positions — are always kept. If False, the raw completion events are
+            returned.
+
+        Returns
+        -------
+        captures : List[Tuple[str, bytes]]
+            A list of (capture_name, matched_bytes) pairs.
+        """
+        return [(str(pair[0]), bytes(pair[1])) for pair in self._handle.get_captures(deduplicate)]
+
     def is_terminated(self) -> bool:
         """Check if the matcher has terminated. If terminate_without_stop_token is False, the
         matcher will terminate if it has accepted the stop token. Otherwise, the matcher will

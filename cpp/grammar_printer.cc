@@ -12,7 +12,28 @@
 namespace xgrammar {
 
 std::string GrammarPrinter::PrintRule(const Rule& rule) {
-  std::string res = rule.name + " ::= " + PrintGrammarExpr(rule.body_expr_id);
+  std::string res = rule.name;
+  // Print the attributes as one comma-separated bracket group, re-parseable by the EBNF lexer.
+  if (rule.max_tokens >= 0 || !rule.capture_name.empty() || rule.is_lazy) {
+    std::string attributes;
+    if (rule.max_tokens >= 0) {
+      attributes += "max_tokens=" + std::to_string(rule.max_tokens);
+    }
+    if (!rule.capture_name.empty()) {
+      if (!attributes.empty()) {
+        attributes += ", ";
+      }
+      attributes += "capture=\"" + rule.capture_name + "\"";
+    }
+    if (rule.is_lazy) {
+      if (!attributes.empty()) {
+        attributes += ", ";
+      }
+      attributes += "lazy";
+    }
+    res += "[" + attributes + "]";
+  }
+  res += " ::= " + PrintGrammarExpr(rule.body_expr_id);
   if (rule.lookahead_assertion_id != -1) {
     res += " (=" + PrintGrammarExpr(rule.lookahead_assertion_id) + ")";
   }

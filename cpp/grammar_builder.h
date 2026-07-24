@@ -202,6 +202,30 @@ class GrammarBuilder {
    */
   void UpdateLookaheadAssertion(std::string rule_name, int32_t lookahead_assertion_id);
 
+  /*! \brief Update the token budget of the rule referred by the given rule_id. -1 means none. */
+  void UpdateMaxTokens(int32_t rule_id, int32_t max_tokens);
+
+  /*! \brief Update the token budget of the rule referred by the given name. -1 means none. */
+  void UpdateMaxTokens(std::string rule_name, int32_t max_tokens);
+
+  /*!
+   * \brief Update the capture group name of the rule referred by the given rule_id. An empty
+   * string means no capture.
+   */
+  void UpdateCaptureName(int32_t rule_id, const std::string& capture_name);
+
+  /*!
+   * \brief Update the capture group name of the rule referred by the given name. An empty string
+   * means no capture.
+   */
+  void UpdateCaptureName(std::string rule_name, const std::string& capture_name);
+
+  /*! \brief Set whether the rule referred by the given rule_id is lazy (committed-shortest). */
+  void UpdateLazy(int32_t rule_id, bool is_lazy);
+
+  /*! \brief Set whether the rule referred by the given name is lazy (committed-shortest). */
+  void UpdateLazy(std::string rule_name, bool is_lazy);
+
   /*!
    * \brief Find a name for a new rule starting with the given name hint. Some integer suffix (_1,
    * _2, ...) may be added to avoid name conflict.

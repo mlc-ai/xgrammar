@@ -711,6 +711,20 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           }
       )
       .def(
+          "get_captures",
+          [](const GrammarMatcherObj* o, bool deduplicate) {
+            auto captures = o->value.GetCaptures(deduplicate);
+            ffi::Array<ffi::Any> result;
+            for (const auto& [name, value] : captures) {
+              ffi::Array<ffi::Any> pair;
+              pair.push_back(ffi::String(name));
+              pair.push_back(ffi::Bytes(value));
+              result.push_back(pair);
+            }
+            return result;
+          }
+      )
+      .def(
           "fork",
           [](GrammarMatcherObj* o) {
             return ffi::ObjectRef(ffi::make_object<GrammarMatcherObj>(o->value.Fork()));
