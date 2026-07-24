@@ -1908,8 +1908,7 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   // Keep the reference to budgeted, suffix/stop, and lazy rules: replacing it with the rule's
   // content would erase the rule that the runtime semantics apply to.
   if (ref_rule.max_tokens < 0 && base_grammar_->GetSuffixStopInfo(rule_id) == nullptr &&
-      !ref_rule.is_lazy &&
-      ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
+      !ref_rule.is_lazy && ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
       ref_rule_body.size() == 1) {
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
     if (ref_choice.size() == 1) {

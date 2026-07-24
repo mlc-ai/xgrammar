@@ -497,6 +497,7 @@ class GrammarMatcher::Impl : public EarleyParser {
     budget_enforce_pending_ = false;
     budget_force_close_pending_ = false;
     budget_exceeded_warned_ = false;
+    budget_body_match_cache_.clear();
     accepted_bytes_.clear();
     row_byte_end_.assign(1, 0);
     EarleyParser::Reset();
@@ -596,7 +597,7 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   /*! \brief Whether the bytes consumed by this expired suffix/stop occurrence form a complete
    * match of its body, so max_tokens may end it without consuming the marker. */
-  bool CanForceCompleteWithoutMarker(const ParserState& state) const;
+  bool CanForceCompleteWithoutMarker(const ParserState& state);
 
   /*! \brief Commit the current budget boundary: discard expired states and complete eligible
    * suffix/stop occurrences without their marker. Returns whether a derivation remains viable. */
@@ -655,6 +656,14 @@ class GrammarMatcher::Impl : public EarleyParser {
   bool budget_exceeded_warned_ = false;
   /*! \brief Whether byte history is needed to recognize a budgeted suffix/stop body boundary. */
   bool has_budget_marker_rules_ = false;
+
+  struct BudgetBodyMatchProgress {
+    int64_t begin_byte;
+    int64_t end_byte;
+    std::unordered_set<int> states;
+  };
+  /*! \brief Incremental body-FSM progress keyed by (rule id, occurrence start row). */
+  std::unordered_map<int64_t, BudgetBodyMatchProgress> budget_body_match_cache_;
 
   /*! \brief The bytes accepted so far. Maintained for captures and budgeted marker rules. */
   std::vector<uint8_t> accepted_bytes_;
@@ -740,7 +749,7 @@ bool GrammarMatcher::Impl::IsTerminated() const {
 
 bool GrammarMatcher::Impl::IsStopTokenAccepted() const { return stop_token_is_accepted_; }
 
-bool GrammarMatcher::Impl::CanForceCompleteWithoutMarker(const ParserState& state) const {
+bool GrammarMatcher::Impl::CanForceCompleteWithoutMarker(const ParserState& state) {
   if (!IsExpiredState(state) || state.rule_id < 0) {
     return false;
   }
@@ -763,16 +772,31 @@ bool GrammarMatcher::Impl::CanForceCompleteWithoutMarker(const ParserState& stat
   XGRAMMAR_DCHECK(grammar_->per_rule_fsms[suffix_stop_info->body_rule_id].has_value());
   const auto& body_fsm = grammar_->per_rule_fsms[suffix_stop_info->body_rule_id]->GetFsm();
   XGRAMMAR_DCHECK(body_fsm.IsLeaf()) << "A suffix/stop body helper must compile to a leaf FSM";
-  std::unordered_set<int> states{body_fsm.GetStart()};
-  body_fsm.GetFsm().GetEpsilonClosure(&states);
-  std::unordered_set<int> next_states;
-  for (int64_t offset = begin; offset < end && !states.empty(); ++offset) {
-    body_fsm.GetFsm().Advance(
-        states, accepted_bytes_[offset], &next_states, FSMEdge::EdgeType::kCharRange, true
-    );
-    states = next_states;
+
+  int64_t occurrence =
+      (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
+  auto [it, inserted] = budget_body_match_cache_.try_emplace(
+      occurrence, BudgetBodyMatchProgress{begin, begin, {body_fsm.GetStart()}}
+  );
+  auto& progress = it->second;
+  if (inserted) {
+    body_fsm.GetFsm().GetEpsilonClosure(&progress.states);
+  } else if (progress.begin_byte != begin || progress.end_byte > end) {
+    // This is only expected after restoring external matcher state. Rollback and reset clear the
+    // cache eagerly, but reinitialize defensively if a caller supplies an equivalent history.
+    progress = BudgetBodyMatchProgress{begin, begin, {body_fsm.GetStart()}};
+    body_fsm.GetFsm().GetEpsilonClosure(&progress.states);
   }
-  return std::any_of(states.begin(), states.end(), [&](int state_id) {
+
+  std::unordered_set<int> next_states;
+  for (int64_t offset = progress.end_byte; offset < end && !progress.states.empty(); ++offset) {
+    body_fsm.GetFsm().Advance(
+        progress.states, accepted_bytes_[offset], &next_states, FSMEdge::EdgeType::kCharRange, true
+    );
+    progress.states = next_states;
+  }
+  progress.end_byte = end;
+  return std::any_of(progress.states.begin(), progress.states.end(), [&](int state_id) {
     return body_fsm.IsEndState(state_id);
   });
 }
@@ -1455,6 +1479,7 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
   }
   budget_enforce_pending_ = false;
   budget_force_close_pending_ = false;
+  budget_body_match_cache_.clear();
 }
 
 std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptures(bool deduplicate
@@ -1624,9 +1649,7 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
       continue;
     }
 
-    XGRAMMAR_DCHECK(
-        suffix_stop_info->body_rule_id >= 0 && suffix_stop_info->marker_rule_id >= 0
-    );
+    XGRAMMAR_DCHECK(suffix_stop_info->body_rule_id >= 0 && suffix_stop_info->marker_rule_id >= 0);
     XGRAMMAR_DCHECK(
         grammar_->per_rule_fsms[suffix_stop_info->body_rule_id].has_value() &&
         grammar_->per_rule_fsms[suffix_stop_info->marker_rule_id].has_value()

@@ -11,9 +11,7 @@
 
 namespace xgrammar {
 
-std::string GrammarPrinter::PrintRule(
-    const Rule& rule, const SuffixStopInfo* suffix_stop_info
-) {
+std::string GrammarPrinter::PrintRule(const Rule& rule, const SuffixStopInfo* suffix_stop_info) {
   std::string res = rule.name;
   // Print the attributes as one comma-separated bracket group, re-parseable by the EBNF lexer.
   if (rule.max_tokens >= 0 || !rule.capture_name.empty() || suffix_stop_info != nullptr ||
@@ -33,8 +31,7 @@ std::string GrammarPrinter::PrintRule(
     }
     if (suffix_stop_info != nullptr && suffix_stop_info->hidden_suffix_bytes > 0) {
       append_attribute(
-          "capture_hidden_suffix_bytes=" +
-          std::to_string(suffix_stop_info->hidden_suffix_bytes)
+          "capture_hidden_suffix_bytes=" + std::to_string(suffix_stop_info->hidden_suffix_bytes)
       );
     }
     if (suffix_stop_info != nullptr && suffix_stop_info->hidden_stop_bytes > 0) {

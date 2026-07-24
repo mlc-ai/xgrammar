@@ -2449,10 +2449,7 @@ def test_lark_dynamic_stop_hides_marker_from_named_grammar_parent_capture() -> N
     grammar = xgr.Grammar.from_lark(
         'start[capture="outer"]: @dynamic', named_grammars={"dynamic": dynamic}
     )
-    assert _captures_for_string(grammar, "a<t>xb") == [
-        ("marker", b"<t>"),
-        ("outer", b"axb"),
-    ]
+    assert _captures_for_string(grammar, "a<t>xb") == [("marker", b"<t>"), ("outer", b"axb")]
 
 
 @pytest.mark.parametrize("attribute", ["suffix", "stop"])
@@ -2467,6 +2464,37 @@ def test_lark_suffix_stop_mask_commit_and_exit(attribute: str) -> None:
     assert matcher.accept_token(6)
     assert _mask_allowed_token_ids(matcher) == [3]
     assert matcher.accept_token(3) and matcher.is_terminated()
+
+
+@pytest.mark.parametrize(
+    "marker, value, marker_capture",
+    [
+        pytest.param('"!"', "a!z", b"!", id="fixed-marker"),
+        pytest.param("/!!+/", "a!!z", b"!!", id="regex-marker"),
+    ],
+)
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_atomic_token_crosses_marker_and_following_rule(
+    attribute: str, marker: str, value: str, marker_capture: bytes
+) -> None:
+    tokenizer_info = xgr.TokenizerInfo([value])
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="outer"]: r "z"
+        r[capture="inner", {attribute}={marker}, stop_capture="marker"]: /a*/
+        """,
+        tokenizer_info=tokenizer_info,
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert _allowed_token_ids(matcher, tokenizer_info) == [0]
+    assert matcher.accept_token(0) and matcher.is_terminated()
+    expected_outer = value.encode() if attribute == "suffix" else b"az"
+    assert matcher.get_captures() == [
+        ("marker", marker_capture),
+        ("inner", b"a"),
+        ("outer", expected_outer),
+    ]
 
 
 @pytest.mark.parametrize("attribute", ["suffix", "stop"])

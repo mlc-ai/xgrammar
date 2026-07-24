@@ -2423,8 +2423,7 @@ class LarkCompiler {
       for (const std::string& trigger : trigger_order) {
         std::vector<int32_t> remainder_choices;
         for (const DynamicAlternative* alternative : grouped.at(trigger)) {
-          int32_t remainder =
-              CompileNode(alternative->remainder, "lark_dynamic_body", false);
+          int32_t remainder = CompileNode(alternative->remainder, "lark_dynamic_body", false);
           if (alternative->marker_event_rule_id >= 0) {
             remainder = builder_.AddSequence(
                 {builder_.AddRuleRef(alternative->marker_event_rule_id), remainder}

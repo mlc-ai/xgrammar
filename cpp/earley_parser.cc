@@ -30,8 +30,7 @@ void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_pres
   const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(state.rule_id);
   int32_t hidden_suffix_bytes =
       suffix_stop_info == nullptr ? 0 : suffix_stop_info->hidden_suffix_bytes;
-  int32_t hidden_stop_bytes =
-      suffix_stop_info == nullptr ? 0 : suffix_stop_info->hidden_stop_bytes;
+  int32_t hidden_stop_bytes = suffix_stop_info == nullptr ? 0 : suffix_stop_info->hidden_stop_bytes;
   int32_t event_start_pos = state.rule_start_pos;
 
   if (!marker_present) {

@@ -371,8 +371,7 @@ class EarleyParser {
     }
     const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
     return suffix_stop_info != nullptr &&
-           (suffix_stop_info->hidden_suffix_bytes > 0 ||
-            suffix_stop_info->hidden_stop_bytes > 0);
+           (suffix_stop_info->hidden_suffix_bytes > 0 || suffix_stop_info->hidden_stop_bytes > 0);
   }
 
   /*! \brief Returns true if completing this rule must produce a capture-history event. */
