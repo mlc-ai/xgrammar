@@ -1599,7 +1599,10 @@ class LarkCompiler {
           );
         }
         int32_t result = builder_.AddRuleRef(rule_ids_.at(node.text));
-        return !terminal_mode && definition_it->second->is_terminal ? AppendSkip(result) : result;
+        // Lazy rules are compiled like terminals (lexemes), so they also take a trailing skip.
+        bool skip_after =
+            definition_it->second->is_terminal || HasLazySemantics(*definition_it->second);
+        return !terminal_mode && skip_after ? AppendSkip(result) : result;
       }
       case Node::Kind::kString: {
         int32_t result = CompileStringLiteral(node);
@@ -1952,12 +1955,10 @@ class LarkCompiler {
     }
     auto trigger = ExtractLazyTrigger(definition);
     if (!trigger.has_value()) {
-      RaiseLarkError(
-          source_,
-          definition.location,
-          "general lazy rules are not supported; expected ANY_TEXT with a fixed string, token, "
-          "regex suffix, or suffix attribute"
-      );
+      // General committed-shortest lazy rule: compiled like a terminal (no skip insertion);
+      // the terminal-like requirement is validated after grammar optimization.
+      builder_.UpdateLazy(rule_ids_.at(definition.name), true);
+      return CompileNode(definition.body, definition.name, true);
     }
     int32_t empty_rule = builder_.AddRuleWithHint("lark_lazy_end", builder_.AddEmptyStr());
     int32_t result;

@@ -14,7 +14,7 @@ namespace xgrammar {
 std::string GrammarPrinter::PrintRule(const Rule& rule) {
   std::string res = rule.name;
   // Print the attributes as one comma-separated bracket group, re-parseable by the EBNF lexer.
-  if (rule.max_tokens >= 0 || !rule.capture_name.empty()) {
+  if (rule.max_tokens >= 0 || !rule.capture_name.empty() || rule.is_lazy) {
     std::string attributes;
     if (rule.max_tokens >= 0) {
       attributes += "max_tokens=" + std::to_string(rule.max_tokens);
@@ -24,6 +24,12 @@ std::string GrammarPrinter::PrintRule(const Rule& rule) {
         attributes += ", ";
       }
       attributes += "capture=\"" + rule.capture_name + "\"";
+    }
+    if (rule.is_lazy) {
+      if (!attributes.empty()) {
+        attributes += ", ";
+      }
+      attributes += "lazy";
     }
     res += "[" + attributes + "]";
   }

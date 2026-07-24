@@ -88,6 +88,9 @@ class Grammar::Impl {
      * span matched by this rule on every completion, retrievable via GrammarMatcher::GetCaptures.
      * Empty means no capture. */
     std::string capture_name = {};
+    /*! \brief Whether the rule matches with committed-shortest (lazy) semantics: at the first
+     * position where the body can complete, it must complete. */
+    bool is_lazy = false;
   };
 
   /*! \brief Get the number of rules. */
@@ -363,7 +366,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::Rule::lookahead_assertion_id,
     &Grammar::Impl::Rule::is_exact_lookahead,
     &Grammar::Impl::Rule::max_tokens,
-    &Grammar::Impl::Rule::capture_name
+    &Grammar::Impl::Rule::capture_name,
+    &Grammar::Impl::Rule::is_lazy
 );
 
 XGRAMMAR_MEMBER_TABLE(

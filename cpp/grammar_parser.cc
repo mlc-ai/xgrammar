@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <variant>
 #include <vector>
@@ -143,10 +144,11 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
   }
 
   // A rule definition may carry an attribute block before ::=, e.g.
-  // name[max_tokens=10] ::= ..., name[capture] ::= ..., name[capture="x"] ::= ..., or a
-  // comma-separated combination: name[max_tokens=10, capture="x"] ::= ... The bracket group is
-  // treated as an attribute block only when it is followed by "::="; otherwise it is left to be
-  // lexed as a character class.
+  // name[max_tokens=10] ::= ..., name[capture] ::= ..., name[capture="x"] ::= ...,
+  // name[lazy] ::= ..., or a comma-separated combination:
+  // name[max_tokens=10, capture="x", lazy] ::= ... The bracket group is treated as an attribute
+  // block only when it is followed by "::="; otherwise it is left to be lexed as a character
+  // class.
   if (*cur_ == '[') {
     int delta = 1;
     auto skip_space = [&]() {
@@ -169,6 +171,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
     bool matched = true;
     bool has_max_tokens = false;
     bool has_capture = false;
+    bool has_lazy = false;
     int64_t max_tokens_value = -1;
     std::string capture_value;
     // Parse a comma-separated attribute list. Each attribute may appear at most once.
@@ -219,6 +222,8 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
         } else {
           capture_value = identifier;
         }
+      } else if (!has_lazy && match_keyword("lazy")) {
+        has_lazy = true;
       } else {
         matched = false;
       }
@@ -258,6 +263,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
       Token token{TokenType::Identifier, identifier, identifier, start_line, start_column};
       token.max_tokens = static_cast<int32_t>(max_tokens_value);
       token.capture_name = capture_value;
+      token.is_lazy = has_lazy;
       return token;
     }
   }
@@ -1309,6 +1315,7 @@ EBNFParser::Rule EBNFParser::ParseRule() {
   cur_rule_name_ = std::any_cast<std::string>(Peek().value);
   int32_t max_tokens = Peek().max_tokens;
   std::string capture_name = Peek().capture_name;
+  bool is_lazy = Peek().is_lazy;
   Consume();
 
   PeekAndConsume(TokenType::Assign, "Expect ::=");
@@ -1323,6 +1330,7 @@ EBNFParser::Rule EBNFParser::ParseRule() {
   Rule rule{cur_rule_name_, body_id, lookahead_id};
   rule.max_tokens = max_tokens;
   rule.capture_name = capture_name;
+  rule.is_lazy = is_lazy;
   return rule;
 }
 
@@ -1364,6 +1372,7 @@ Grammar EBNFParser::Parse(
     builder_.UpdateLookaheadAssertion(new_rule.name, new_rule.lookahead_assertion_id);
     builder_.UpdateMaxTokens(new_rule.name, new_rule.max_tokens);
     builder_.UpdateCaptureName(new_rule.name, new_rule.capture_name);
+    builder_.UpdateLazy(new_rule.name, new_rule.is_lazy);
   }
 
   return builder_.Get(root_rule_name);

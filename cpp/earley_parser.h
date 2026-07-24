@@ -362,6 +362,16 @@ class EarleyParser {
   }
 
   /*!
+   * \brief The lazy rule occurrences (rule_id, rule_start_pos) completed while building the
+   * current row. Committed-shortest matching: their remaining states are removed when the row is
+   * finalized, so the occurrence cannot be extended further.
+   */
+  std::vector<std::pair<int32_t, int32_t>> tmp_completed_lazy_occurrences_;
+
+  /*! \brief Remove the states of the lazy occurrences completed in the current row. */
+  void RemoveCommittedLazyStates();
+
+  /*!
    * \brief Check if the state has been added into the queue.
    * \param state The state to check.
    * \return True if in the vector, false otherwise.
