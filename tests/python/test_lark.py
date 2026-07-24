@@ -1947,3 +1947,132 @@ def test_ebnf_lazy_mask_matches_lark_form() -> None:
     assert _mask_allowed_token_ids(matcher) == [2, 3, 5, 7]
     assert matcher.accept_token(2)
     assert _mask_allowed_token_ids(matcher) == [1]
+
+
+# Combined attributes: lazy + max_tokens + capture interacting in one grammar.
+
+COMBINED_TOKENIZER = xgr.TokenizerInfo(["x", "<t>", ">", "a", "b", "ab"])
+
+
+def _combined_allowed_token_ids(matcher: xgr.GrammarMatcher) -> list:
+    bitmask = xgr.allocate_token_bitmask(1, COMBINED_TOKENIZER.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    return [
+        i
+        for i in range(COMBINED_TOKENIZER.vocab_size)
+        if (int(bitmask[0, i // 32]) >> (i % 32)) & 1
+    ]
+
+
+ALL_THREE_GRAMMAR = r"""
+    start: reasoning "<t>" val ">"
+    reasoning[max_tokens=2, capture]: TEXT
+    val[lazy, capture="value"]: /[ab]+/
+    TEXT: /(\n|.)*/
+"""
+
+
+def test_lark_lazy_with_capture_records_committed_span() -> None:
+    # The lazy commit makes the capture exact: the occurrence cannot complete again past the
+    # committed end, so only the shortest span is recorded.
+    grammar = "start: r rest\nr[lazy, capture]: /[a-z]+/\nrest: /[a-z]*/"
+    compiled = _compile_lark(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string("abc")
+    assert matcher.get_captures() == [("r", b"a")]
+    # Greedy control: without lazy, coalescing keeps the longest completion of the occurrence.
+    compiled = _compile_lark("start: r rest\nr[capture]: /[a-z]+/\nrest: /[a-z]*/")
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string("abc")
+    assert matcher.get_captures() == [("r", b"abc")]
+
+
+def test_lark_lazy_with_capture_round_trip_and_cache() -> None:
+    grammar_obj = xgr.Grammar.from_lark(
+        'start: "<" r ">"\nr[lazy, capture="x"]: /[a-z]+/', tokenizer_info=COMBINED_TOKENIZER
+    )
+    printed = str(grammar_obj)
+    assert 'r[capture="x", lazy] ::=' in printed
+    assert 'r[capture="x", lazy] ::=' in str(xgr.Grammar.from_ebnf(printed))
+    deserialized = xgr.Grammar.deserialize_json(grammar_obj.serialize_json())
+    assert str(deserialized) == printed
+    # The compiler cache path re-parses ToString(); both attributes must survive it.
+    compiler = xgr.GrammarCompiler(COMBINED_TOKENIZER, cache_enabled=True)
+    compiled = compiler.compile_grammar(grammar_obj)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert not matcher.accept_string("<ab>")
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string("<a>") and matcher.is_terminated()
+    assert matcher.get_captures() == [("x", b"a")]
+
+
+def test_ebnf_all_three_attributes_round_trip() -> None:
+    # The EBNF frontend round-trips all three attributes in one bracket group, in any order.
+    ebnf = 'root ::= "<" r ">"\nr[max_tokens=3, capture="x", lazy] ::= [a-z] [a-z]*'
+    grammar_obj = xgr.Grammar.from_ebnf(ebnf)
+    assert 'r[max_tokens=3, capture="x", lazy] ::=' in str(grammar_obj)
+    reordered = xgr.Grammar.from_ebnf(
+        'root ::= "<" r ">"\nr[lazy, capture="x", max_tokens=3] ::= [a-z] [a-z]*'
+    )
+    assert str(reordered) == str(grammar_obj)
+    deserialized = xgr.Grammar.deserialize_json(grammar_obj.serialize_json())
+    assert str(deserialized) == str(grammar_obj)
+
+
+def test_lark_all_three_features_in_one_grammar_masks() -> None:
+    # Tokens: 0 "x", 1 "<t>", 2 ">", 3 "a", 4 "b", 5 "ab"
+    compiled = xgr.GrammarCompiler(COMBINED_TOKENIZER, cache_enabled=False).compile_grammar(
+        xgr.Grammar.from_lark(ALL_THREE_GRAMMAR, tokenizer_info=COMBINED_TOKENIZER)
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(0) and matcher.accept_token(0)
+    # Budget of the reasoning region exhausted: the mask only allows leaving it.
+    assert _combined_allowed_token_ids(matcher) == [1]
+    assert matcher.accept_token(1)
+    # Inside the lazy value: single region chars are allowed, "ab" would extend the occurrence
+    # past its commit point.
+    assert _combined_allowed_token_ids(matcher) == [3, 4]
+    assert matcher.accept_token(3)
+    # The lazy commit: only the closing literal remains.
+    assert _combined_allowed_token_ids(matcher) == [2]
+    assert matcher.accept_token(2) and matcher.is_terminated()
+    assert matcher.get_captures() == [("reasoning", b"xx"), ("value", b"a")]
+
+
+def test_lark_all_three_features_rollback_and_fork() -> None:
+    compiled = xgr.GrammarCompiler(COMBINED_TOKENIZER, cache_enabled=False).compile_grammar(
+        xgr.Grammar.from_lark(ALL_THREE_GRAMMAR, tokenizer_info=COMBINED_TOKENIZER)
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    # Generation-style loop: the fill before each accept enforces the budget close.
+    for token_id in [0, 0, 1, 3]:
+        assert token_id in _combined_allowed_token_ids(matcher)
+        assert matcher.accept_token(token_id)
+    forked = matcher.fork()
+    assert _combined_allowed_token_ids(forked) == [2]
+    # Rollback across the lazy commit and the budget close, then replay.
+    matcher.rollback(2)
+    assert _combined_allowed_token_ids(matcher) == [1]
+    assert matcher.accept_token(1) and matcher.accept_token(4)
+    assert matcher.accept_token(2) and matcher.is_terminated()
+    assert matcher.get_captures() == [("reasoning", b"xx"), ("value", b"b")]
+    assert forked.accept_token(2) and forked.is_terminated()
+    assert forked.get_captures() == [("reasoning", b"xx"), ("value", b"a")]
+
+
+def test_lark_all_three_features_serialization_round_trip() -> None:
+    grammar_obj = xgr.Grammar.from_lark(ALL_THREE_GRAMMAR, tokenizer_info=COMBINED_TOKENIZER)
+    printed = str(grammar_obj)
+    assert 'reasoning[max_tokens=2, capture="reasoning"] ::=' in printed
+    assert 'val[capture="value", lazy] ::=' in printed
+    deserialized = xgr.Grammar.deserialize_json(grammar_obj.serialize_json())
+    compiled = xgr.GrammarCompiler(COMBINED_TOKENIZER, cache_enabled=False).compile_grammar(
+        deserialized
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(0) and matcher.accept_token(0)
+    assert _combined_allowed_token_ids(matcher) == [1]
+    for token_id in [1, 3, 2]:
+        assert matcher.accept_token(token_id)
+    assert matcher.is_terminated()
+    assert matcher.get_captures() == [("reasoning", b"xx"), ("value", b"a")]
