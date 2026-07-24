@@ -71,6 +71,12 @@ class GrammarFunctor {
         builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
         builder_->UpdateMaxTokens(i, rule.max_tokens);
         builder_->UpdateCaptureName(i, rule.capture_name);
+        builder_->UpdateCaptureHiddenSuffixBytes(i, rule.capture_hidden_suffix_bytes);
+        builder_->UpdateCaptureHiddenStopBytes(i, rule.capture_hidden_stop_bytes);
+        builder_->UpdateCaptureHiddenRuleIds(
+            i, rule.capture_hidden_body_rule_id, rule.capture_hidden_marker_rule_id
+        );
+        builder_->UpdateStopCaptureName(i, rule.stop_capture_name);
         builder_->UpdateLazy(i, rule.is_lazy);
       }
       return builder_->Get(base_grammar_->GetRootRule().name);

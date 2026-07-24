@@ -901,7 +901,9 @@ def test_lark_large_choice_grammar() -> None:
             'start[budget=10]: "a"', "attribute 'budget' is not supported", id="unknown-attribute"
         ),
         pytest.param(
-            'start[stop="x"]: "a"', "attribute 'stop' is not supported", id="stop-attribute"
+            'start[temperature=0.7]: "a"',
+            "attribute 'temperature' is not supported",
+            id="temperature-attribute",
         ),
         pytest.param(
             'start[capture=""]: "a"', "capture name must not be empty", id="empty-capture-name"
@@ -1110,9 +1112,9 @@ def test_lark_large_choice_grammar() -> None:
             id="empty-suffix",
         ),
         pytest.param(
-            "start: head\nhead[suffix=/x/]: TEXT\nTEXT: /(\\n|.)*/",
-            "expected string literal after suffix=",
-            id="non-string-suffix",
+            "start: head\nhead[suffix=end]: TEXT\nTEXT: /(\\n|.)*/",
+            "suffix terminal name must be uppercase",
+            id="lowercase-suffix-terminal",
         ),
         pytest.param(
             'start: head\nhead[suffix="x",suffix="y"]: TEXT\nTEXT: /(\\n|.)*/',
@@ -1120,14 +1122,60 @@ def test_lark_large_choice_grammar() -> None:
             id="duplicate-suffix",
         ),
         pytest.param(
-            'start: head\nhead[suffix="x"i]: TEXT\nTEXT: /(\\n|.)*/',
-            "case-insensitive flags are not supported on suffix",
-            id="case-insensitive-suffix",
+            "start: head\nhead[suffix=MISSING]: TEXT\nTEXT: /(\\n|.)*/",
+            "unknown name 'MISSING'",
+            id="unknown-suffix-terminal",
         ),
         pytest.param(
-            'start: head\nhead[suffix="x"]: /[a-z]+/',
-            "suffix is only supported on an ANY_TEXT head used by dynamic dispatch",
-            id="suffix-requires-any-text",
+            'start: head\nhead[stop=""]: TEXT\nTEXT: /(\\n|.)*/',
+            "stop must not be empty",
+            id="empty-stop",
+        ),
+        pytest.param(
+            "start: head\nhead[stop=end]: TEXT\nTEXT: /(\\n|.)*/",
+            "stop terminal name must be uppercase",
+            id="lowercase-stop-terminal",
+        ),
+        pytest.param(
+            'start: head\nhead[stop="x",stop="y"]: TEXT\nTEXT: /(\\n|.)*/',
+            "stop attribute is specified more than once",
+            id="duplicate-stop",
+        ),
+        pytest.param(
+            'start: head\nhead[stop_capture="marker"]: TEXT\nTEXT: /(\\n|.)*/',
+            "stop_capture requires stop or suffix",
+            id="stop-capture-without-marker",
+        ),
+        pytest.param(
+            'start: head\nhead[stop="x", stop_capture="bad name"]: TEXT\nTEXT: /(\\n|.)*/',
+            "capture name must only contain",
+            id="invalid-stop-capture-name",
+        ),
+        pytest.param(
+            'start: head\nhead[stop="x", stop_capture=MARKER]: TEXT\nTEXT: /(\\n|.)*/',
+            "expected string literal after stop_capture=",
+            id="non-string-stop-capture",
+        ),
+        pytest.param(
+            'start: head\nhead[stop="x", stop_capture="a", stop_capture="b"]: TEXT\n'
+            "TEXT: /(\\n|.)*/",
+            "stop_capture attribute is specified more than once",
+            id="duplicate-stop-capture",
+        ),
+        pytest.param(
+            'start: head\nhead[stop="x", suffix="y"]: TEXT\nTEXT: /(\\n|.)*/',
+            "suffix cannot be combined with stop",
+            id="stop-then-suffix",
+        ),
+        pytest.param(
+            'start: head\nhead[suffix="y", stop="x"]: TEXT\nTEXT: /(\\n|.)*/',
+            "stop cannot be combined with suffix",
+            id="suffix-then-stop",
+        ),
+        pytest.param(
+            'STOP[stop="x"]: /a/\nstart: STOP',
+            "attributes are only supported on rules",
+            id="stop-on-terminal",
         ),
         pytest.param(
             "start: head\nhead[lazy]: /(\\n|.)*END/",
@@ -1412,16 +1460,6 @@ def test_lark_budget_round_trip_and_cache() -> None:
             id="duplicate",
         ),
         pytest.param(
-            'start[max_tokens=3, lazy]: TEXT "<t>"\nTEXT: /(\\n|.)*/',
-            "max_tokens cannot be combined with lazy",
-            id="combined-with-lazy",
-        ),
-        pytest.param(
-            'start[max_tokens=3, suffix="<t>"]: TEXT\nTEXT: /(\\n|.)*/',
-            "max_tokens cannot be combined with lazy or suffix",
-            id="combined-with-suffix",
-        ),
-        pytest.param(
             'TOK[max_tokens=3]: "a"\nstart: TOK',
             "attributes are only supported on rules",
             id="on-terminal",
@@ -1452,6 +1490,29 @@ def test_lark_max_tokens_works_without_tokenizer_info() -> None:
     assert matcher.accept_token(0) and matcher.accept_token(0)
     assert _allowed_token_ids(matcher, tokenizer_info) == [1]
     assert matcher.accept_token(1) and matcher.is_terminated()
+
+
+def test_lark_max_tokens_with_lazy_marker_or_budget_wins() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["x", "!", "z", "x!"])
+    grammar = xgr.Grammar.from_lark(
+        'start: head "z"\nhead[max_tokens=2, lazy, capture]: TEXT "!"\nTEXT: /(\\n|.)*/',
+        tokenizer_info=tokenizer_info,
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar)
+
+    # The lazy marker arrives first.
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(3)
+    assert _allowed_token_ids(matcher, tokenizer_info) == [2]
+    assert matcher.accept_token(2) and matcher.is_terminated()
+    assert matcher.get_captures() == [("head", b"x!")]
+
+    # Otherwise max_tokens closes the lazy region at its body boundary.
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(0) and matcher.accept_token(0)
+    assert _allowed_token_ids(matcher, tokenizer_info) == [2]
+    assert matcher.accept_token(2) and matcher.is_terminated()
+    assert matcher.get_captures() == [("head", b"xx")]
 
 
 def _get_captures(
@@ -2076,3 +2137,580 @@ def test_lark_all_three_features_serialization_round_trip() -> None:
         assert matcher.accept_token(token_id)
     assert matcher.is_terminated()
     assert matcher.get_captures() == [("reasoning", b"xx"), ("value", b"a")]
+
+
+# General suffix/stop and their interaction with lazy, capture, max_tokens, and TagDispatch.
+
+
+def _captures_for_string(
+    grammar: xgr.Grammar,
+    value: str,
+    tokenizer_info: Optional[xgr.TokenizerInfo] = None,
+    *,
+    cache_enabled: bool = False,
+) -> list:
+    tokenizer_info = tokenizer_info or xgr.TokenizerInfo([])
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=cache_enabled).compile_grammar(
+        grammar
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string(value) and matcher.is_terminated()
+    return matcher.get_captures()
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_general_body_commits_at_first_marker(attribute: str) -> None:
+    # The marker is also in the body's alphabet. Committed-shortest matching must select the
+    # first marker; it is required for general (non-TagDispatch) bodies.
+    grammar = f'start: r "c"\nr[{attribute}="b"]: /[a-z]*/'
+    _assert_language(grammar, ["aabc", "bc"], ["abbc", "aac", "abab", "aab"])
+
+    grammar_obj = xgr.Grammar.from_lark(grammar)
+    printed = str(grammar_obj)
+    assert "r[" in printed and "lazy" in printed
+    assert f"capture_hidden_{attribute}_bytes=1" in printed
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_regex_marker(attribute: str) -> None:
+    grammar = f"""
+        start: "<" r ">"
+        r[{attribute}=/!!+/]: /[a-z]{{1,4}}/
+    """
+    # /!!+/ first becomes accepting after two exclamation marks, so committed-shortest
+    # matching leaves any third exclamation mark outside the rule.
+    _assert_language(grammar, ["<a!!>", "<abcd!!>"], ["<!!>", "<a!>", "<a!!!>", "<abcde!!>"])
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_named_terminal_marker(attribute: str) -> None:
+    grammar = f"""
+        start: "<" r ">"
+        r[{attribute}=END]: /[a-z]+/
+        END: /!!+/ | "??"
+    """
+    _assert_language(grammar, ["<a!!>", "<word??>"], ["<a!>", "<a!!!>", "<word?>", "<word???>"])
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_case_insensitive_string_marker(attribute: str) -> None:
+    grammar = f'start: r "z"\nr[{attribute}="END"i]: /[a-z]*/'
+    _assert_language(grammar, ["abcENDz", "abcendz", "abcEnDz"], ["abcENz", "abcENDENDz"])
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_dotall_regex_marker(attribute: str) -> None:
+    grammar = f'start: r "z"\nr[{attribute}=/X.Y/s]: /[a-z]*/'
+    _assert_language(grammar, ["abcX\nYz", "abcXaYz"], ["abcX\nZz", "abcXYz"])
+
+
+@pytest.mark.parametrize(
+    "attribute, expected_outer",
+    [pytest.param("suffix", b"ab!!z", id="suffix"), pytest.param("stop", b"abz", id="stop")],
+)
+def test_lark_suffix_stop_regex_marker_capture_and_stop_capture(
+    attribute: str, expected_outer: bytes
+) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="outer"]: r "z"
+        r[capture="inner", {attribute}=/!!+/, stop_capture="marker"]: /[a-z]*/
+        """
+    )
+    assert _captures_for_string(grammar, "ab!!z") == [
+        ("marker", b"!!"),
+        ("inner", b"ab"),
+        ("outer", expected_outer),
+    ]
+
+
+@pytest.mark.parametrize(
+    "attribute, expected_outer",
+    [pytest.param("suffix", b"baZ", id="suffix"), pytest.param("stop", b"bZ", id="stop")],
+)
+def test_lark_suffix_stop_regex_marker_recovers_valid_body_split(
+    attribute: str, expected_outer: bytes
+) -> None:
+    # The marker /b?a/ also matches the entire "ba", but that split would leave the required
+    # body "b" empty. Boundary recovery must therefore select b|a rather than |ba.
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="outer"]: r "Z"
+        r[capture="inner", {attribute}=/b?a/, stop_capture="marker"]: "b"
+        """
+    )
+    assert _captures_for_string(grammar, "baZ") == [
+        ("marker", b"a"),
+        ("inner", b"b"),
+        ("outer", expected_outer),
+    ]
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_nullable_regex_marker(attribute: str) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="outer"]: r "z"
+        r[capture="inner", {attribute}=/x?/, stop_capture="marker"]: "a"
+        """
+    )
+    # A regex marker may be nullable even though the special empty string literal marker is not.
+    assert _captures_for_string(grammar, "az") == [
+        ("marker", b""),
+        ("inner", b"a"),
+        ("outer", b"az"),
+    ]
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_terminal_composition(attribute: str) -> None:
+    grammar = f"""
+        start: "<" r ">"
+        r[{attribute}="!"]: AB+
+        AB: "a" | "b"
+    """
+    _assert_language(grammar, ["<a!>", "<ab!>"], ["<!>", "<ab!!>", "<a!b!>"])
+
+
+@pytest.mark.parametrize(
+    "attribute, expected_outer",
+    [
+        pytest.param("suffix", b"xy!z", id="suffix-own-level-only"),
+        pytest.param("stop", b"xyz", id="stop-all-levels"),
+    ],
+)
+def test_lark_suffix_stop_capture_scope(attribute: str, expected_outer: bytes) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="outer"]: r "z"
+        r[capture="inner", {attribute}="!"]: /[a-z]*/
+        """
+    )
+    assert _captures_for_string(grammar, "xy!z") == [("inner", b"xy"), ("outer", expected_outer)]
+
+
+@pytest.mark.parametrize(
+    "attribute, expected_outer",
+    [
+        pytest.param("suffix", "xy💥z".encode(), id="suffix"),
+        pytest.param("stop", b"xyz", id="stop"),
+    ],
+)
+def test_lark_suffix_stop_capture_multibyte_marker(attribute: str, expected_outer: bytes) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="outer"]: r "z"
+        r[capture="inner", {attribute}="💥"]: /[a-z]*/
+        """
+    )
+    assert _captures_for_string(grammar, "xy💥z") == [("inner", b"xy"), ("outer", expected_outer)]
+
+
+@pytest.mark.parametrize(
+    "attribute, expected_outer",
+    [
+        pytest.param("suffix", b"a!b!z", id="suffix-keeps-markers-in-parent"),
+        pytest.param("stop", b"abz", id="stop-hides-markers-in-parent"),
+    ],
+)
+def test_lark_suffix_stop_hidden_events_without_inner_capture(
+    attribute: str, expected_outer: bytes
+) -> None:
+    # A stop rule must produce hidden-span events even without its own capture name. Repetition
+    # also verifies that multiple hidden spans are removed in order and never leak as captures.
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="outer"]: item item "z"
+        item[{attribute}="!"]: /[ab]*/
+        """
+    )
+    assert _captures_for_string(grammar, "a!b!z") == [("outer", expected_outer)]
+
+
+@pytest.mark.parametrize(
+    "attribute, marker_expected, plain_expected",
+    [
+        pytest.param(
+            "suffix",
+            [("inner", b"foo"), ("outer", b"foo<end>")],
+            [("inner", b"plain"), ("outer", b"plain")],
+            id="suffix",
+        ),
+        pytest.param(
+            "stop",
+            [("inner", b"foo"), ("outer", b"foo")],
+            [("inner", b"plain"), ("outer", b"plain")],
+            id="stop",
+        ),
+    ],
+)
+def test_lark_suffix_stop_any_text_tag_dispatch_capture(
+    attribute: str, marker_expected: list, plain_expected: list
+) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="outer"]: r
+        r[capture="inner", {attribute}="<end>"]: TEXT
+        TEXT: /(\\n|.)*/
+        """
+    )
+    printed = str(grammar)
+    assert "TagDispatch" in printed
+    assert "[lazy]" not in printed
+    # The no-marker completion must not blindly subtract marker-length bytes.
+    assert _captures_for_string(grammar, "plain") == plain_expected
+    assert _captures_for_string(grammar, "foo<end>") == marker_expected
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_any_text_tag_dispatch_stop_capture(attribute: str) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start: r
+        r[{attribute}="<end>", stop_capture="marker"]: TEXT
+        TEXT: /(\\n|.)*/
+        """
+    )
+    # stop_capture alone enables capture tracking. The TagDispatch no-marker completion must not
+    # synthesize a capture, while the post-dispatch completion captures exactly the trigger.
+    assert _captures_for_string(grammar, "plain") == []
+    assert _captures_for_string(grammar, "foo<end>") == [("marker", b"<end>")]
+
+
+def test_lark_dynamic_fixed_string_stop_attribute() -> None:
+    grammar = r"""
+        start: tool* tail
+        tail: TEXT
+        head[stop="<tool>"]: TEXT
+        tool: head /[a-z]+/ "</tool>"
+        TEXT: /(\n|.)*/
+    """
+    _assert_language(
+        grammar,
+        ["free", "x<tool>abc</tool>y", "partial <too"],
+        ["<tool>", "<tool>123</tool>", "<tool>abc"],
+    )
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_mask_commit_and_exit(attribute: str) -> None:
+    # LAZY_MASK_TOKENIZER: 0 "<", 1 ">", 2 "a", 3 "b", 4 "ab", 5 "a>", 6 "ab>",
+    # 7 "b>", 8 "bb", 9 " ".
+    grammar = xgr.Grammar.from_lark(f'start: r "b"\nr[{attribute}=">"]: /[ab]*/')
+    matcher = _lazy_mask_matcher(grammar)
+    assert _mask_allowed_token_ids(matcher) == [1, 2, 3, 4, 5, 6, 7, 8]
+    # A token may cross the committed marker. Once it does, only the rule's following literal
+    # remains; suffix and stop are deliberately mask-identical.
+    assert matcher.accept_token(6)
+    assert _mask_allowed_token_ids(matcher) == [3]
+    assert matcher.accept_token(3) and matcher.is_terminated()
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_ignore_is_lexeme_scoped(attribute: str) -> None:
+    grammar = f'start: "<" r "b"\nr[{attribute}=">"]: /[a-z]*/\n%ignore " "'
+    _assert_language(grammar, ["<a>b", "< a> b"], ["<a a>b"])
+
+
+STOP_SUFFIX_ROLLBACK_TOKENIZER = xgr.TokenizerInfo(["a", "b", "!", "z", "a!", "b!"])
+VARIABLE_MARKER_ROLLBACK_TOKENIZER = xgr.TokenizerInfo(["a!!", "b!!", "z", "a!", "!"])
+
+
+@pytest.mark.parametrize(
+    "attribute, first_outer, second_outer",
+    [
+        pytest.param("suffix", b"a!z", b"b!z", id="suffix"),
+        pytest.param("stop", b"az", b"bz", id="stop"),
+    ],
+)
+def test_lark_suffix_stop_capture_rollback_and_fork(
+    attribute: str, first_outer: bytes, second_outer: bytes
+) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="outer"]: r "z"
+        r[capture="inner", lazy, {attribute}="!"]: /[ab]*/
+        """
+    )
+    compiled = xgr.GrammarCompiler(
+        STOP_SUFFIX_ROLLBACK_TOKENIZER, cache_enabled=False
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert 4 in _allowed_token_ids(matcher, STOP_SUFFIX_ROLLBACK_TOKENIZER)
+    assert matcher.accept_token(4)  # "a!" crosses the commit inside one token.
+    forked = matcher.fork()
+
+    matcher.rollback(1)
+    assert matcher.get_captures() == []
+    assert matcher.accept_token(5) and matcher.accept_token(3)
+    assert matcher.is_terminated()
+    assert matcher.get_captures() == [("inner", b"b"), ("outer", second_outer)]
+
+    assert forked.accept_token(3) and forked.is_terminated()
+    assert forked.get_captures() == [("inner", b"a"), ("outer", first_outer)]
+
+
+@pytest.mark.parametrize(
+    "attribute, first_outer, second_outer",
+    [
+        pytest.param("suffix", b"a!!z", b"b!!z", id="suffix"),
+        pytest.param("stop", b"az", b"bz", id="stop"),
+    ],
+)
+def test_lark_suffix_stop_variable_marker_mask_capture_rollback_and_fork(
+    attribute: str, first_outer: bytes, second_outer: bytes
+) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="outer"]: r "z"
+        r[capture="inner", {attribute}=/!!+/, stop_capture="marker"]: /[ab]*/
+        """
+    )
+    compiled = xgr.GrammarCompiler(
+        VARIABLE_MARKER_ROLLBACK_TOKENIZER, cache_enabled=False
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert 0 in _allowed_token_ids(matcher, VARIABLE_MARKER_ROLLBACK_TOKENIZER)
+    assert matcher.accept_token(0)  # "a!!" crosses a variable marker inside one token.
+    assert _allowed_token_ids(matcher, VARIABLE_MARKER_ROLLBACK_TOKENIZER) == [2]
+    forked = matcher.fork()
+
+    matcher.rollback(1)
+    assert matcher.get_captures() == []
+    assert matcher.accept_token(1) and matcher.accept_token(2)
+    assert matcher.is_terminated()
+    assert matcher.get_captures() == [("marker", b"!!"), ("inner", b"b"), ("outer", second_outer)]
+
+    assert forked.accept_token(2) and forked.is_terminated()
+    assert forked.get_captures() == [("marker", b"!!"), ("inner", b"a"), ("outer", first_outer)]
+
+
+@pytest.mark.parametrize(
+    "attribute, expected_outer",
+    [pytest.param("suffix", b"xy!z", id="suffix"), pytest.param("stop", b"xyz", id="stop")],
+)
+@pytest.mark.parametrize("tag_dispatch", [False, True], ids=["general", "tag-dispatch"])
+def test_lark_suffix_stop_round_trip_serialization_and_cache(
+    attribute: str, expected_outer: bytes, tag_dispatch: bool
+) -> None:
+    if tag_dispatch:
+        source = f"""
+            start[capture="outer"]: r
+            r[capture="inner", {attribute}="!"]: TEXT
+            TEXT: /(\\n|.)*/
+        """
+        value = "xy!"
+        expected_outer = b"xy!" if attribute == "suffix" else b"xy"
+    else:
+        source = f"""
+            start[capture="outer"]: r "z"
+            r[capture="inner", {attribute}="!"]: /[a-z]*/
+        """
+        value = "xy!z"
+
+    grammar = xgr.Grammar.from_lark(source)
+    printed = str(grammar)
+    hidden_field = f"capture_hidden_{attribute}_bytes=1"
+    assert hidden_field in printed
+    assert hidden_field in str(xgr.Grammar.from_ebnf(printed))
+
+    serialized = grammar.serialize_json()
+    rules = json.loads(serialized)["rules"]
+    rule = next(item for item in rules if item[0] == "r")
+    assert rule[6 if attribute == "suffix" else 7] == 1
+
+    for candidate in (
+        grammar,
+        xgr.Grammar.from_ebnf(printed),
+        xgr.Grammar.deserialize_json(serialized),
+    ):
+        assert _captures_for_string(candidate, value, cache_enabled=True) == [
+            ("inner", b"xy"),
+            ("outer", expected_outer),
+        ]
+
+
+@pytest.mark.parametrize(
+    "attribute, expected_outer",
+    [pytest.param("suffix", b"xy!!z", id="suffix"), pytest.param("stop", b"xyz", id="stop")],
+)
+def test_lark_suffix_stop_variable_marker_round_trip_serialization_and_cache(
+    attribute: str, expected_outer: bytes
+) -> None:
+    source = f"""
+        start[capture="outer"]: r "z"
+        r[capture="inner", {attribute}=END, stop_capture="marker"]: /[a-z]*/
+        END: /!!+/
+    """
+    grammar = xgr.Grammar.from_lark(source)
+    printed = str(grammar)
+    assert "capture_hidden_body_rule_id=" in printed
+    assert "capture_hidden_marker_rule_id=" in printed
+    assert 'stop_capture="marker"' in printed
+
+    serialized = grammar.serialize_json()
+    rules = json.loads(serialized)["rules"]
+    rule = next(item for item in rules if item[0] == "r")
+    assert rule[8] >= 0 and rule[9] >= 0
+    assert rule[10] == "marker"
+
+    for candidate in (
+        grammar,
+        xgr.Grammar.from_ebnf(printed),
+        xgr.Grammar.deserialize_json(serialized),
+    ):
+        assert _captures_for_string(candidate, "xy!!z", cache_enabled=True) == [
+            ("marker", b"!!"),
+            ("inner", b"xy"),
+            ("outer", expected_outer),
+        ]
+
+
+STOP_SUFFIX_COMBINED_TOKENIZER = xgr.TokenizerInfo(["x", "<", ">", "a!", "b!", "a", "b", "!"])
+
+
+@pytest.mark.parametrize(
+    "attribute, expected_all",
+    [pytest.param("suffix", b"xx<a!>", id="suffix"), pytest.param("stop", b"xx<a>", id="stop")],
+)
+def test_lark_suffix_stop_with_max_tokens_capture_and_lazy(
+    attribute: str, expected_all: bytes
+) -> None:
+    # The features also compose independently on separate rules. Explicit lazy is accepted
+    # because suffix/stop already has lazy semantics.
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="all"]: reasoning "<" value ">"
+        reasoning[max_tokens=2, capture]: TEXT
+        value[lazy, capture, {attribute}="!"]: /[ab]*/
+        TEXT: /(\\n|.)*/
+        """,
+        tokenizer_info=STOP_SUFFIX_COMBINED_TOKENIZER,
+    )
+    compiled = xgr.GrammarCompiler(
+        STOP_SUFFIX_COMBINED_TOKENIZER, cache_enabled=False
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    for token_id in [0, 0]:
+        assert token_id in _allowed_token_ids(matcher, STOP_SUFFIX_COMBINED_TOKENIZER)
+        assert matcher.accept_token(token_id)
+    assert _allowed_token_ids(matcher, STOP_SUFFIX_COMBINED_TOKENIZER) == [1]
+    assert matcher.accept_token(1)
+    assert 3 in _allowed_token_ids(matcher, STOP_SUFFIX_COMBINED_TOKENIZER)
+    assert matcher.accept_token(3)
+    assert _allowed_token_ids(matcher, STOP_SUFFIX_COMBINED_TOKENIZER) == [2]
+    assert matcher.accept_token(2) and matcher.is_terminated()
+    assert matcher.get_captures() == [("reasoning", b"xx"), ("value", b"a"), ("all", expected_all)]
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_same_rule_max_tokens_without_capture(attribute: str) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start: value ">"
+        value[max_tokens=2, {attribute}="!"]: TEXT
+        TEXT: /(\\n|.)*/
+        """,
+        tokenizer_info=STOP_SUFFIX_COMBINED_TOKENIZER,
+    )
+    compiled = xgr.GrammarCompiler(
+        STOP_SUFFIX_COMBINED_TOKENIZER, cache_enabled=False
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(0) and matcher.accept_token(0)
+    assert _allowed_token_ids(matcher, STOP_SUFFIX_COMBINED_TOKENIZER) == [2]
+    assert matcher.accept_token(2) and matcher.is_terminated()
+
+
+@pytest.mark.parametrize(
+    "attribute, expected_marker_outer",
+    [pytest.param("suffix", b"ab!>", id="suffix"), pytest.param("stop", b"ab>", id="stop")],
+)
+def test_lark_suffix_stop_same_rule_max_tokens(
+    attribute: str, expected_marker_outer: bytes
+) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="all"]: value ">"
+        value[max_tokens=2, capture="body", {attribute}="!", stop_capture="marker"]: /[ab]*/
+        """,
+        tokenizer_info=STOP_SUFFIX_COMBINED_TOKENIZER,
+    )
+    printed = str(grammar)
+    assert "max_tokens=2" in printed
+    assert "capture_hidden_body_rule_id=" in printed
+    grammar = xgr.Grammar.deserialize_json(grammar.serialize_json())
+    compiled = xgr.GrammarCompiler(
+        STOP_SUFFIX_COMBINED_TOKENIZER, cache_enabled=False
+    ).compile_grammar(grammar)
+
+    # Marker first: retain the existing committed-shortest marker and capture behavior.
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(3)  # "a!"
+    assert _allowed_token_ids(matcher, STOP_SUFFIX_COMBINED_TOKENIZER) == [2]
+    assert matcher.accept_token(2) and matcher.is_terminated()
+    assert matcher.get_captures() == [
+        ("marker", b"!"),
+        ("body", b"a"),
+        ("all", b"a!>" if attribute == "suffix" else b"a>"),
+    ]
+
+    # Budget first: close through the body without fabricating a marker capture.
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(5) and matcher.accept_token(6)  # "a", "b"
+    assert _allowed_token_ids(matcher, STOP_SUFFIX_COMBINED_TOKENIZER) == [2]
+    assert not matcher.accept_token(0)  # A rejection must not commit the forced close.
+    assert _allowed_token_ids(matcher, STOP_SUFFIX_COMBINED_TOKENIZER) == [2]
+    forked = matcher.fork()
+    for candidate in [matcher, forked]:
+        assert candidate.accept_token(2) and candidate.is_terminated()
+        assert candidate.get_captures() == [("body", b"ab"), ("all", b"ab>")]
+
+    # Roll back across the forced close, then take the marker-first path instead.
+    matcher.rollback(2)
+    assert matcher.accept_token(4)  # "b!"
+    assert matcher.accept_token(2) and matcher.is_terminated()
+    assert matcher.get_captures() == [
+        ("marker", b"!"),
+        ("body", b"ab"),
+        ("all", expected_marker_outer),
+    ]
+
+
+@pytest.mark.parametrize(
+    "attribute, expected_outer",
+    [pytest.param("suffix", b"a!!>", id="suffix"), pytest.param("stop", b"a>", id="stop")],
+)
+def test_lark_suffix_stop_max_tokens_marker_crosses_token_boundary(
+    attribute: str, expected_outer: bytes
+) -> None:
+    grammar = xgr.Grammar.from_lark(
+        f"""
+        start[capture="all"]: value ">"
+        value[max_tokens=1, capture="body", {attribute}=END, stop_capture="marker"]: /[ab]*/
+        END: /!!+/
+        """,
+        tokenizer_info=STOP_SUFFIX_COMBINED_TOKENIZER,
+    )
+    compiled = xgr.GrammarCompiler(
+        STOP_SUFFIX_COMBINED_TOKENIZER, cache_enabled=False
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(3)  # "a!": the marker is only partially matched at the budget.
+    assert _allowed_token_ids(matcher, STOP_SUFFIX_COMBINED_TOKENIZER) == [7]
+    assert matcher.accept_token(7)  # Complete "!!" across the token boundary.
+    assert _allowed_token_ids(matcher, STOP_SUFFIX_COMBINED_TOKENIZER) == [2]
+    assert matcher.accept_token(2) and matcher.is_terminated()
+    assert matcher.get_captures() == [("marker", b"!!"), ("body", b"a"), ("all", expected_outer)]
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_body_must_be_terminal_but_supports_bounded_regex(attribute: str) -> None:
+    _assert_lark_error(
+        f'start: r\nr[{attribute}="!"]: sub\nsub: /[a-z]*/', "terminal cannot reference rule"
+    )
+    _assert_language(
+        f'start: r\nr[{attribute}="!"]: /[a-z]{{2,5}}/',
+        ["ab!", "abcde!"],
+        ["a!", "abcdef!", "ab!!"],
+    )

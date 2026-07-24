@@ -251,6 +251,11 @@ struct CaptureEvent {
   /*! \brief The position where the rule started matching. kNoPrevInputPos means position 0 (the
    * rule acts as the root). */
   int32_t start_pos;
+  /*! \brief Number of trailing bytes hidden only from this rule's own capture for this
+   * completion. */
+  int32_t hidden_suffix_bytes = 0;
+  /*! \brief Number of trailing bytes hidden from every containing capture for this completion. */
+  int32_t hidden_stop_bytes = 0;
 };
 
 class EarleyParser {
@@ -332,8 +337,8 @@ class EarleyParser {
     return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
   }
 
-  /*! \brief Whether any rule of the grammar has a capture name. Fixed at construction. When
-   * false, the capture machinery is fully disabled and has no overhead. */
+  /*! \brief Whether any rule of the grammar has a capture or stop_capture name. Fixed at
+   * construction. When false, the capture machinery is fully disabled and has no overhead. */
   bool capture_tracking_ = false;
 
   /*!
@@ -356,10 +361,22 @@ class EarleyParser {
     return capture_tracking_ && rule_id >= 0 && !grammar_->GetRule(rule_id).capture_name.empty();
   }
 
-  /*! \brief Record a capture event for a completed captured rule in the current row. */
-  void RecordCaptureEvent(const ParserState& state) {
-    capture_event_history_.PushBackInLatestRow({state.rule_id, state.rule_start_pos});
+  /*! \brief Returns true if completing this rule can hide bytes from a capture. */
+  bool RuleHasHiddenBytes(int32_t rule_id) const {
+    if (!capture_tracking_ || rule_id < 0) {
+      return false;
+    }
+    const auto& rule = grammar_->GetRule(rule_id);
+    return rule.capture_hidden_suffix_bytes > 0 || rule.capture_hidden_stop_bytes > 0;
   }
+
+  /*! \brief Returns true if completing this rule must produce a capture-history event. */
+  bool RuleNeedsCaptureEvent(int32_t rule_id) const {
+    return RuleHasCapture(rule_id) || RuleHasHiddenBytes(rule_id);
+  }
+
+  /*! \brief Record a capture or hidden-span event for a completed rule in the current row. */
+  void RecordCaptureEvent(const ParserState& state, bool marker_present);
 
   /*!
    * \brief The lazy rule occurrences (rule_id, rule_start_pos) completed while building the
@@ -394,7 +411,7 @@ class EarleyParser {
    * of the grammar is used to check if the grammar is completed,
    * so it should be added into the next states.
    */
-  void Complete(const ParserState& state, bool debug_print = false);
+  void Complete(const ParserState& state, bool debug_print = false, bool marker_present = true);
 
   /*!
    * \brief The prediction operation of the Earley parser.

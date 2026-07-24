@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <variant>
 #include <vector>
@@ -145,10 +146,11 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
 
   // A rule definition may carry an attribute block before ::=, e.g.
   // name[max_tokens=10] ::= ..., name[capture] ::= ..., name[capture="x"] ::= ...,
-  // name[lazy] ::= ..., or a comma-separated combination:
-  // name[max_tokens=10, capture="x", lazy] ::= ... The bracket group is treated as an attribute
-  // block only when it is followed by "::="; otherwise it is left to be lexed as a character
-  // class.
+  // name[capture_hidden_suffix_bytes=3] ::= ..., name[capture_hidden_stop_bytes=3] ::= ...,
+  // name[capture_hidden_body_rule_id=1, capture_hidden_marker_rule_id=2] ::= ...,
+  // name[stop_capture="marker"] ::= ..., name[lazy] ::= ..., or a comma-separated combination.
+  // The bracket group is treated as an attribute block only when it is followed by "::=";
+  // otherwise it is left to be lexed as a character class.
   if (*cur_ == '[') {
     int delta = 1;
     auto skip_space = [&]() {
@@ -171,54 +173,84 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
     bool matched = true;
     bool has_max_tokens = false;
     bool has_capture = false;
+    bool has_capture_hidden_suffix_bytes = false;
+    bool has_capture_hidden_stop_bytes = false;
+    bool has_capture_hidden_body_rule_id = false;
+    bool has_capture_hidden_marker_rule_id = false;
+    bool has_stop_capture = false;
     bool has_lazy = false;
     int64_t max_tokens_value = -1;
+    int64_t capture_hidden_suffix_bytes_value = 0;
+    int64_t capture_hidden_stop_bytes_value = 0;
+    int64_t capture_hidden_body_rule_id_value = -1;
+    int64_t capture_hidden_marker_rule_id_value = -1;
     std::string capture_value;
+    std::string stop_capture_value;
+    auto parse_integer_value = [&](int64_t* value) {
+      skip_space();
+      if (Peek(delta) != '=') {
+        return false;
+      }
+      ++delta;
+      skip_space();
+      *value = 0;
+      int digits = 0;
+      while (Peek(delta) >= '0' && Peek(delta) <= '9' && digits < 10) {
+        *value = *value * 10 + (Peek(delta) - '0');
+        ++delta;
+        ++digits;
+      }
+      return digits > 0 && !(Peek(delta) >= '0' && Peek(delta) <= '9');
+    };
+    auto parse_string_value = [&](std::string* value) {
+      skip_space();
+      if (Peek(delta) != '=') {
+        return false;
+      }
+      ++delta;
+      skip_space();
+      if (Peek(delta) != '"') {
+        return false;
+      }
+      ++delta;
+      while (Peek(delta) != '"') {
+        char c = Peek(delta);
+        if (c == '\0' || c == '\n' || c == '\r' || c == '\\') {
+          return false;
+        }
+        value->push_back(c);
+        ++delta;
+      }
+      ++delta;
+      return true;
+    };
     // Parse a comma-separated attribute list. Each attribute may appear at most once.
     while (matched) {
       skip_space();
       if (!has_max_tokens && match_keyword("max_tokens")) {
         has_max_tokens = true;
-        skip_space();
-        if (Peek(delta) == '=') {
-          ++delta;
-          skip_space();
-          max_tokens_value = 0;
-          int digits = 0;
-          while (Peek(delta) >= '0' && Peek(delta) <= '9' && digits < 10) {
-            max_tokens_value = max_tokens_value * 10 + (Peek(delta) - '0');
-            ++delta;
-            ++digits;
-          }
-          if (digits == 0 || (Peek(delta) >= '0' && Peek(delta) <= '9')) {
-            matched = false;
-          }
-        } else {
-          matched = false;
-        }
+        matched = parse_integer_value(&max_tokens_value);
+      } else if (!has_capture_hidden_suffix_bytes && match_keyword("capture_hidden_suffix_bytes")) {
+        has_capture_hidden_suffix_bytes = true;
+        matched = parse_integer_value(&capture_hidden_suffix_bytes_value);
+      } else if (!has_capture_hidden_stop_bytes && match_keyword("capture_hidden_stop_bytes")) {
+        has_capture_hidden_stop_bytes = true;
+        matched = parse_integer_value(&capture_hidden_stop_bytes_value);
+      } else if (!has_capture_hidden_body_rule_id && match_keyword("capture_hidden_body_rule_id")) {
+        has_capture_hidden_body_rule_id = true;
+        matched = parse_integer_value(&capture_hidden_body_rule_id_value);
+      } else if (!has_capture_hidden_marker_rule_id &&
+                 match_keyword("capture_hidden_marker_rule_id")) {
+        has_capture_hidden_marker_rule_id = true;
+        matched = parse_integer_value(&capture_hidden_marker_rule_id_value);
+      } else if (!has_stop_capture && match_keyword("stop_capture")) {
+        has_stop_capture = true;
+        matched = parse_string_value(&stop_capture_value);
       } else if (!has_capture && match_keyword("capture")) {
         has_capture = true;
         skip_space();
         if (Peek(delta) == '=') {
-          ++delta;
-          skip_space();
-          if (Peek(delta) != '"') {
-            matched = false;
-          } else {
-            ++delta;
-            while (matched && Peek(delta) != '"') {
-              char c = Peek(delta);
-              if (c == '\0' || c == '\n' || c == '\r' || c == '\\') {
-                matched = false;
-                break;
-              }
-              capture_value.push_back(c);
-              ++delta;
-            }
-            if (matched) {
-              ++delta;
-            }
-          }
+          matched = parse_string_value(&capture_value);
         } else {
           capture_value = identifier;
         }
@@ -259,10 +291,40 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
       if (has_capture && capture_value.empty()) {
         ReportLexerError("The capture name must not be empty", start_line, start_column);
       }
+      if (has_stop_capture && stop_capture_value.empty()) {
+        ReportLexerError("The stop capture name must not be empty", start_line, start_column);
+      }
+      if (has_capture_hidden_body_rule_id != has_capture_hidden_marker_rule_id) {
+        ReportLexerError(
+            "The capture-hidden body and marker rule ids must be specified together",
+            start_line,
+            start_column
+        );
+      }
+      if ((has_capture_hidden_suffix_bytes && capture_hidden_suffix_bytes_value <= 0) ||
+          (has_capture_hidden_stop_bytes && capture_hidden_stop_bytes_value <= 0)) {
+        ReportLexerError(
+            "The number of capture-hidden bytes must be positive", start_line, start_column
+        );
+      }
+      constexpr int64_t kMaxInt32 = std::numeric_limits<int32_t>::max();
+      if ((has_max_tokens && max_tokens_value > kMaxInt32) ||
+          (has_capture_hidden_suffix_bytes && capture_hidden_suffix_bytes_value > kMaxInt32) ||
+          (has_capture_hidden_stop_bytes && capture_hidden_stop_bytes_value > kMaxInt32) ||
+          (has_capture_hidden_body_rule_id && capture_hidden_body_rule_id_value > kMaxInt32) ||
+          (has_capture_hidden_marker_rule_id && capture_hidden_marker_rule_id_value > kMaxInt32)) {
+        ReportLexerError("The rule attribute value is too large", start_line, start_column);
+      }
       Consume(delta);
       Token token{TokenType::Identifier, identifier, identifier, start_line, start_column};
       token.max_tokens = static_cast<int32_t>(max_tokens_value);
       token.capture_name = capture_value;
+      token.capture_hidden_suffix_bytes = static_cast<int32_t>(capture_hidden_suffix_bytes_value);
+      token.capture_hidden_stop_bytes = static_cast<int32_t>(capture_hidden_stop_bytes_value);
+      token.capture_hidden_body_rule_id = static_cast<int32_t>(capture_hidden_body_rule_id_value);
+      token.capture_hidden_marker_rule_id =
+          static_cast<int32_t>(capture_hidden_marker_rule_id_value);
+      token.stop_capture_name = stop_capture_value;
       token.is_lazy = has_lazy;
       return token;
     }
@@ -1315,6 +1377,11 @@ EBNFParser::Rule EBNFParser::ParseRule() {
   cur_rule_name_ = std::any_cast<std::string>(Peek().value);
   int32_t max_tokens = Peek().max_tokens;
   std::string capture_name = Peek().capture_name;
+  int32_t capture_hidden_suffix_bytes = Peek().capture_hidden_suffix_bytes;
+  int32_t capture_hidden_stop_bytes = Peek().capture_hidden_stop_bytes;
+  int32_t capture_hidden_body_rule_id = Peek().capture_hidden_body_rule_id;
+  int32_t capture_hidden_marker_rule_id = Peek().capture_hidden_marker_rule_id;
+  std::string stop_capture_name = Peek().stop_capture_name;
   bool is_lazy = Peek().is_lazy;
   Consume();
 
@@ -1330,6 +1397,11 @@ EBNFParser::Rule EBNFParser::ParseRule() {
   Rule rule{cur_rule_name_, body_id, lookahead_id};
   rule.max_tokens = max_tokens;
   rule.capture_name = capture_name;
+  rule.capture_hidden_suffix_bytes = capture_hidden_suffix_bytes;
+  rule.capture_hidden_stop_bytes = capture_hidden_stop_bytes;
+  rule.capture_hidden_body_rule_id = capture_hidden_body_rule_id;
+  rule.capture_hidden_marker_rule_id = capture_hidden_marker_rule_id;
+  rule.stop_capture_name = stop_capture_name;
   rule.is_lazy = is_lazy;
   return rule;
 }
@@ -1372,6 +1444,12 @@ Grammar EBNFParser::Parse(
     builder_.UpdateLookaheadAssertion(new_rule.name, new_rule.lookahead_assertion_id);
     builder_.UpdateMaxTokens(new_rule.name, new_rule.max_tokens);
     builder_.UpdateCaptureName(new_rule.name, new_rule.capture_name);
+    builder_.UpdateCaptureHiddenSuffixBytes(new_rule.name, new_rule.capture_hidden_suffix_bytes);
+    builder_.UpdateCaptureHiddenStopBytes(new_rule.name, new_rule.capture_hidden_stop_bytes);
+    builder_.UpdateCaptureHiddenRuleIds(
+        new_rule.name, new_rule.capture_hidden_body_rule_id, new_rule.capture_hidden_marker_rule_id
+    );
+    builder_.UpdateStopCaptureName(new_rule.name, new_rule.stop_capture_name);
     builder_.UpdateLazy(new_rule.name, new_rule.is_lazy);
   }
 

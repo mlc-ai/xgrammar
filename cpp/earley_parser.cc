@@ -25,6 +25,36 @@ using GrammarExpr = Grammar::Impl::GrammarExpr;
 
 bool EarleyParser::IsCompleted() const { return is_completed_.back(); }
 
+void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_present) {
+  const auto& rule = grammar_->GetRule(state.rule_id);
+  int32_t hidden_suffix_bytes = rule.capture_hidden_suffix_bytes;
+  int32_t hidden_stop_bytes = rule.capture_hidden_stop_bytes;
+
+  if (!marker_present) {
+    hidden_suffix_bytes = 0;
+    hidden_stop_bytes = 0;
+  }
+
+  // A non-looping TagDispatch can also complete before its trigger is encountered, which is what
+  // lets a free-text tail end normally. Only the terminal post-dispatch state has no outgoing
+  // edges; completions in the trigger-scanning states did not consume a suffix/stop marker.
+  if (hidden_suffix_bytes > 0 || hidden_stop_bytes > 0) {
+    const auto& body = grammar_->GetGrammarExpr(rule.body_expr_id);
+    if (body.type == GrammarExprType::kTagDispatch) {
+      XGRAMMAR_DCHECK(grammar_->per_rule_fsms[state.rule_id].has_value());
+      const auto& fsm = grammar_->per_rule_fsms[state.rule_id]->GetFsm().GetFsm();
+      if (fsm.GetEdges(state.element_id).size() != 0) {
+        hidden_suffix_bytes = 0;
+        hidden_stop_bytes = 0;
+      }
+    }
+  }
+
+  capture_event_history_.PushBackInLatestRow(
+      {state.rule_id, state.rule_start_pos, hidden_suffix_bytes, hidden_stop_bytes}
+  );
+}
+
 void EarleyParser::PopLastStates(int32_t cnt) {
   stop_token_is_accepted_ = false;
   if (cnt >= static_cast<int32_t>(rule_id_to_completable_states_.size())) {
@@ -38,11 +68,11 @@ void EarleyParser::PopLastStates(int32_t cnt) {
   }
 }
 
-void EarleyParser::Complete(const ParserState& state, bool debug_print) {
-  // Record the capture event for captured rules. This is only enabled during definitive
-  // advances; speculative completions (mask computation, lookahead) never record events.
-  if (capture_recording_ && RuleHasCapture(state.rule_id)) {
-    RecordCaptureEvent(state);
+void EarleyParser::Complete(const ParserState& state, bool debug_print, bool marker_present) {
+  // Record capture and hidden-span events. This is only enabled during definitive advances;
+  // speculative completions (mask computation, lookahead) never record events.
+  if (capture_recording_ && RuleNeedsCaptureEvent(state.rule_id)) {
+    RecordCaptureEvent(state, marker_present);
   }
   if (state.rule_id != -1 && grammar_->GetRule(state.rule_id).is_lazy) {
     tmp_completed_lazy_occurrences_.emplace_back(state.rule_id, state.rule_start_pos);
@@ -345,7 +375,8 @@ EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> in
     }
   }
   for (int32_t i = 0; i < grammar_->NumRules(); ++i) {
-    if (!grammar_->GetRule(i).capture_name.empty()) {
+    const auto& rule = grammar_->GetRule(i);
+    if (!rule.capture_name.empty() || !rule.stop_capture_name.empty()) {
       capture_tracking_ = true;
       break;
     }
@@ -430,11 +461,11 @@ void EarleyParser::ExpandNextRuleRefElement(
   bool right_recursion_to_root = false;
   // The right-recursion optimization elides the completion of the parent rule (and, in the
   // to-root case, corrupts the start position of the child rule), so it must be disabled when
-  // either rule is captured; otherwise their capture events would be lost.
+  // either rule produces capture-history events.
   if (state.element_id != grammar_expr.size() - 1 ||
       sub_grammar_expr->type == GrammarExprType::kRepeat ||
       (state.rule_start_pos == rule_id_to_completable_states_.size() - 1) ||
-      RuleHasCapture(state.rule_id) || RuleHasCapture(ref_rule_id)) {
+      RuleNeedsCaptureEvent(state.rule_id) || RuleNeedsCaptureEvent(ref_rule_id)) {
     // It's not the right recursion, or it's the root rule.
     rule_id_to_completable_states_.PushBackInLatestRow(std::make_pair(ref_rule_id, state));
   } else {
@@ -542,9 +573,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
     if (!is_repeat && (fsm.GetFsm().GetFsm().GetEdges(target).size() == 0) &&
         fsm.GetFsm().IsEndState(target) &&
         state.rule_start_pos != static_cast<int32_t>(rule_id_to_completable_states_.size() - 1) &&
-        !RuleHasCapture(state.rule_id) && !RuleHasCapture(ref_rule_id)) {
+        !RuleNeedsCaptureEvent(state.rule_id) && !RuleNeedsCaptureEvent(ref_rule_id)) {
       // It's a right recursion. We can optimize it. The optimization elides the completion of
-      // the parent rule, so it is disabled when either rule is captured.
+      // the parent rule, so it is disabled when either rule produces capture-history events.
       // If it's the right recursion, we need to add the ancestors of the parent state.
       if (state.rule_start_pos == ParserState::kNoPrevInputPos) {
         // In this case, we can mark the new state as the root state to speed up.

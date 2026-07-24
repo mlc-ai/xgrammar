@@ -14,22 +14,45 @@ namespace xgrammar {
 std::string GrammarPrinter::PrintRule(const Rule& rule) {
   std::string res = rule.name;
   // Print the attributes as one comma-separated bracket group, re-parseable by the EBNF lexer.
-  if (rule.max_tokens >= 0 || !rule.capture_name.empty() || rule.is_lazy) {
+  if (rule.max_tokens >= 0 || !rule.capture_name.empty() || rule.capture_hidden_suffix_bytes > 0 ||
+      rule.capture_hidden_stop_bytes > 0 || rule.capture_hidden_body_rule_id >= 0 ||
+      !rule.stop_capture_name.empty() || rule.is_lazy) {
     std::string attributes;
+    auto append_attribute = [&](const std::string& attribute) {
+      if (!attributes.empty()) {
+        attributes += ", ";
+      }
+      attributes += attribute;
+    };
     if (rule.max_tokens >= 0) {
-      attributes += "max_tokens=" + std::to_string(rule.max_tokens);
+      append_attribute("max_tokens=" + std::to_string(rule.max_tokens));
     }
     if (!rule.capture_name.empty()) {
-      if (!attributes.empty()) {
-        attributes += ", ";
-      }
-      attributes += "capture=\"" + rule.capture_name + "\"";
+      append_attribute("capture=\"" + rule.capture_name + "\"");
+    }
+    if (rule.capture_hidden_suffix_bytes > 0) {
+      append_attribute(
+          "capture_hidden_suffix_bytes=" + std::to_string(rule.capture_hidden_suffix_bytes)
+      );
+    }
+    if (rule.capture_hidden_stop_bytes > 0) {
+      append_attribute(
+          "capture_hidden_stop_bytes=" + std::to_string(rule.capture_hidden_stop_bytes)
+      );
+    }
+    if (rule.capture_hidden_body_rule_id >= 0) {
+      append_attribute(
+          "capture_hidden_body_rule_id=" + std::to_string(rule.capture_hidden_body_rule_id)
+      );
+      append_attribute(
+          "capture_hidden_marker_rule_id=" + std::to_string(rule.capture_hidden_marker_rule_id)
+      );
+    }
+    if (!rule.stop_capture_name.empty()) {
+      append_attribute("stop_capture=\"" + rule.stop_capture_name + "\"");
     }
     if (rule.is_lazy) {
-      if (!attributes.empty()) {
-        attributes += ", ";
-      }
-      attributes += "lazy";
+      append_attribute("lazy");
     }
     res += "[" + attributes + "]";
   }

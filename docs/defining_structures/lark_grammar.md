@@ -399,6 +399,7 @@ head[lazy]: TEXT "<tool>"          // any text, then a fixed trigger string
 head[lazy]: TEXT <|tool_token|>    // any text, then a special token (requires tokenizer_info)
 head[lazy]: /(\n|.)*<tool>/        // the same trigger written as a regex suffix
 head[suffix="<tool>"]: TEXT        // the same trigger written as a suffix attribute
+head[stop="<tool>"]: TEXT          // mask-equivalent; differs only for captures
 tool: TEXT <|tool_token|> ...      // token trigger written inline, without a head rule
 ```
 
@@ -444,8 +445,9 @@ TEXT: /(\n|.)*/
 ```
 
 This matches arbitrary text and completes as soon as the trigger appears; nothing may follow the
-trigger. Text that never produces the trigger is also accepted. The regex-suffix and
-`suffix="..."` head forms are only accepted inside the full dispatch pattern.
+trigger. Text that never produces the trigger is also accepted. The `suffix="..."` and
+`stop="..."` forms can also be used this way and retain this efficient TagDispatch lowering.
+The regex-suffix form is only accepted inside the full dispatch pattern.
 
 ### General Lazy Rules (Committed-Shortest Matching)
 
@@ -477,6 +479,65 @@ Notes:
 - The same attribute is available in the EBNF frontend: `name[lazy] ::= ...`, and it round-trips
   through `Grammar.__str__()` / `Grammar.from_ebnf()`.
 
+### The `suffix` and `stop` Attributes
+
+`suffix` and `stop` both match the rule body lazily through the first occurrence of a marker. Like
+llguidance, the marker may be a string literal, a regular expression, or an uppercase terminal
+name:
+
+```text
+field[suffix="<end>"]: /[a-z]*/
+field[suffix=/</?end>/]: /[a-z]*/
+field[suffix=END]: /[a-z]*/
+END: "</end>" | "<end>"
+```
+
+At the mask and validation levels, these forms are equivalent to appending the marker to a lazy
+rule. A general body must itself be a terminal expression; strings, regexes (including bounded
+repetition), and uppercase terminal composition are compiled together into one automaton. The
+marker is required during ordinary validation, and committed-shortest matching prevents the body
+from continuing through an earlier match. `%ignore` remains lexeme-scoped. For an any-text body
+with a fixed, case-sensitive string marker, XGrammar retains the TagDispatch fast path: the rule
+completes at the marker when one appears, while text that ends without a marker is also accepted.
+
+The distinction between the two attributes is capture scope:
+
+```text
+start[capture="outer"]: field "z"
+field[capture="inner", suffix="!"]: /[a-z]*/
+# "xy!z" -> inner=b"xy", outer=b"xy!z"
+
+start[capture="outer"]: field "z"
+field[capture="inner", stop="!"]: /[a-z]*/
+# "xy!z" -> inner=b"xy", outer=b"xyz"
+
+start[capture="outer"]: field "z"
+field[capture="inner", suffix=/!!+/, stop_capture="marker"]: /[a-z]*/
+# "xy!!z" -> marker=b"!!", inner=b"xy", outer=b"xy!!z"
+```
+
+- `suffix` excludes the marker from the annotated rule's own capture, but enclosing captures
+  retain it.
+- `stop` excludes the marker from the annotated rule and every enclosing capture. This only
+  changes capture materialization: the accepted marker bytes are not removed from the model
+  context and the matcher performs no token rollback.
+- A `stop` rule does not need its own `capture` attribute for the marker to be hidden from an
+  enclosing capture. Multiple markers inside one enclosing capture are all removed.
+- `stop_capture="name"` captures exactly the bytes matched by either `stop` or `suffix`, before
+  the marker is hidden from other captures. It works even when the annotated rule has no
+  `capture` attribute.
+- String flags and regex flags follow the same support as ordinary Lark terminals. In particular,
+  ASCII case-insensitive string markers such as `suffix="END"i` and dot-all regex markers such as
+  `stop=/BEGIN.*END/s` are supported.
+- An empty string literal marker is not accepted; in particular, the llguidance EOS shorthand
+  `stop=""` is not supported. A regex or named terminal marker may still be nullable.
+- Adding an explicit `lazy` attribute is allowed but redundant.
+- `max_tokens` may annotate the same rule as `lazy`, `suffix`, or `stop`. The first boundary wins:
+  a marker that completes first keeps the normal committed-shortest and capture behavior; if the
+  token budget expires first and the body can end there, the rule completes without a marker (and
+  therefore produces no `stop_capture`). If the body cannot end, for example in the middle of a
+  multi-token marker, the budget is relaxed until a valid boundary is reached.
+
 ## Token Budgets
 
 A rule can be given a token budget with the `max_tokens` attribute:
@@ -501,6 +562,11 @@ always stays grammar-valid. Bodies that can end at any position — such as the 
 form above — therefore never exceed their budget. For other bodies (e.g. `/(\S*\s)+/`) the
 budget is best-effort and a compile-time warning marks the rule.
 
+`max_tokens` composes with committed-shortest matching. With `lazy`, whichever of the lazy
+completion and the token deadline is reached first closes the occurrence. With `suffix` or
+`stop`, a deadline may close through the already matched body without fabricating marker bytes;
+normal suffix/stop capture scope applies only when the marker was actually consumed.
+
 The budget applies **per occurrence**: in `(r ",")* r` every element gets its own budget, and
 to bound a whole loop the budget goes on a wrapper rule (`list[max_tokens=N]: item+`). Nested
 budgets combine by taking the minimum. Rules inside a budgeted rule may also be used outside of
@@ -512,8 +578,8 @@ warning is logged, once per matcher. The budget state lives in the parser state,
 advances without token boundaries and is not counted (budgets constrain mask-driven
 generation, not validation/prefill).
 
-`max_tokens` must be positive and cannot be combined with `lazy` or `suffix`, used on
-terminals, or on rules consumed by the dynamic dispatch pattern.
+`max_tokens` must be positive. It can be combined with `lazy`, `suffix`, and `stop`, but cannot be
+used on terminals or on rules consumed by the dynamic dispatch pattern.
 
 ## Capture Groups
 
@@ -556,4 +622,5 @@ rule body itself, the reported span may extend past the span of the finally acce
 
 Captures are supported on rules only (not terminals), and not on rules consumed by the dynamic
 dispatch pattern (the head, tool and tail rules themselves); rules referenced from a tool's
-body, like `arg` above, work as expected.
+body, like `arg` above, work as expected. See the `suffix` and `stop` section for their marker
+exclusion rules.

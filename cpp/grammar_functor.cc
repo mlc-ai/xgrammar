@@ -71,6 +71,22 @@ class SubGrammarAdderImpl : public GrammarMutator {
       builder_->UpdateLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
       builder_->UpdateMaxTokens(new_rule_ids_names[i].first, rule.max_tokens);
       builder_->UpdateCaptureName(new_rule_ids_names[i].first, rule.capture_name);
+      builder_->UpdateCaptureHiddenSuffixBytes(
+          new_rule_ids_names[i].first, rule.capture_hidden_suffix_bytes
+      );
+      builder_->UpdateCaptureHiddenStopBytes(
+          new_rule_ids_names[i].first, rule.capture_hidden_stop_bytes
+      );
+      builder_->UpdateCaptureHiddenRuleIds(
+          new_rule_ids_names[i].first,
+          rule.capture_hidden_body_rule_id == -1
+              ? -1
+              : new_rule_ids_names[rule.capture_hidden_body_rule_id].first,
+          rule.capture_hidden_marker_rule_id == -1
+              ? -1
+              : new_rule_ids_names[rule.capture_hidden_marker_rule_id].first
+      );
+      builder_->UpdateStopCaptureName(new_rule_ids_names[i].first, rule.stop_capture_name);
       builder_->UpdateLazy(new_rule_ids_names[i].first, rule.is_lazy);
     }
     return new_rule_ids_names[base_grammar_->GetRootRuleId()].first;
@@ -278,6 +294,12 @@ class StructureNormalizerImpl : public GrammarMutator {
       builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       builder_->UpdateMaxTokens(i, rule.max_tokens);
       builder_->UpdateCaptureName(i, rule.capture_name);
+      builder_->UpdateCaptureHiddenSuffixBytes(i, rule.capture_hidden_suffix_bytes);
+      builder_->UpdateCaptureHiddenStopBytes(i, rule.capture_hidden_stop_bytes);
+      builder_->UpdateCaptureHiddenRuleIds(
+          i, rule.capture_hidden_body_rule_id, rule.capture_hidden_marker_rule_id
+      );
+      builder_->UpdateStopCaptureName(i, rule.stop_capture_name);
       builder_->UpdateLazy(i, rule.is_lazy);
     }
     return builder_->Get(base_grammar_->GetRootRule().name);
@@ -624,9 +646,11 @@ class RuleInlinerImpl : public GrammarMutator {
   bool CheckIfRuleCanBeInlined(int32_t rule_id) {
     auto rule = base_grammar_->GetRule(rule_id);
     // Inlining a budgeted rule would erase the rule its token budget applies to. Inlining a
-    // captured rule would eliminate its completion events, so its capture would never be
-    // recorded. Inlining a lazy rule would erase its committed-shortest semantics.
-    if (rule.max_tokens >= 0 || !rule.capture_name.empty() || rule.is_lazy) {
+    // capture-relevant rule would eliminate its completion events, so its capture or hidden span
+    // would never be recorded. Inlining a lazy rule would erase its committed-shortest semantics.
+    if (rule.max_tokens >= 0 || !rule.capture_name.empty() ||
+        rule.capture_hidden_suffix_bytes > 0 || rule.capture_hidden_stop_bytes > 0 ||
+        rule.is_lazy) {
       return false;
     }
     auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
@@ -683,6 +707,10 @@ class UsedRulesAnalyzer : public GrammarVisitor<std::vector<int32_t>> {
       if (rule.lookahead_assertion_id != -1) {
         VisitExpr(rule.lookahead_assertion_id);
       }
+      if (rule.capture_hidden_body_rule_id != -1) {
+        visit_queue_.push(rule.capture_hidden_body_rule_id);
+        visit_queue_.push(rule.capture_hidden_marker_rule_id);
+      }
     }
 
     return std::vector<int32_t>(visited.begin(), visited.end());
@@ -732,6 +760,20 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
       );
       builder_->UpdateMaxTokens(rule_id_map_[rule_id], rule.max_tokens);
       builder_->UpdateCaptureName(rule_id_map_[rule_id], rule.capture_name);
+      builder_->UpdateCaptureHiddenSuffixBytes(
+          rule_id_map_[rule_id], rule.capture_hidden_suffix_bytes
+      );
+      builder_->UpdateCaptureHiddenStopBytes(rule_id_map_[rule_id], rule.capture_hidden_stop_bytes);
+      builder_->UpdateCaptureHiddenRuleIds(
+          rule_id_map_[rule_id],
+          rule.capture_hidden_body_rule_id == -1
+              ? -1
+              : rule_id_map_.at(rule.capture_hidden_body_rule_id),
+          rule.capture_hidden_marker_rule_id == -1
+              ? -1
+              : rule_id_map_.at(rule.capture_hidden_marker_rule_id)
+      );
+      builder_->UpdateStopCaptureName(rule_id_map_[rule_id], rule.stop_capture_name);
       builder_->UpdateLazy(rule_id_map_[rule_id], rule.is_lazy);
     }
     XGRAMMAR_CHECK(rule_id_map_.count(grammar->GetRootRuleId()) > 0);
@@ -1880,10 +1922,11 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   int32_t grammar_expr_id = builder_->AddRuleRef(rule_id);
   const auto& ref_rule = base_grammar_->GetRule(rule_id);
   const auto& ref_rule_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
-  // Keep the reference to budgeted and lazy rules: replacing it with the rule's content would
-  // erase the rule the token budget or lazy semantics applies to.
-  if (ref_rule.max_tokens < 0 && !ref_rule.is_lazy &&
-      ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
+  // Keep the reference to rules carrying runtime or capture metadata: replacing it with the
+  // rule's content would erase the rule that metadata applies to.
+  if (ref_rule.max_tokens < 0 && ref_rule.capture_name.empty() &&
+      ref_rule.capture_hidden_suffix_bytes == 0 && ref_rule.capture_hidden_stop_bytes == 0 &&
+      !ref_rule.is_lazy && ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
       ref_rule_body.size() == 1) {
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
     if (ref_choice.size() == 1) {
@@ -2052,6 +2095,12 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
       builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       builder_->UpdateMaxTokens(i, rule.max_tokens);
       builder_->UpdateCaptureName(i, rule.capture_name);
+      builder_->UpdateCaptureHiddenSuffixBytes(i, rule.capture_hidden_suffix_bytes);
+      builder_->UpdateCaptureHiddenStopBytes(i, rule.capture_hidden_stop_bytes);
+      builder_->UpdateCaptureHiddenRuleIds(
+          i, rule.capture_hidden_body_rule_id, rule.capture_hidden_marker_rule_id
+      );
+      builder_->UpdateStopCaptureName(i, rule.stop_capture_name);
       builder_->UpdateLazy(i, rule.is_lazy);
     }
     return builder_->Get(base_grammar_->GetRootRule().name);
@@ -2059,6 +2108,9 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
 
  private:
   int32_t BuildFlattenedLazyBody(int32_t body_expr_id) {
+    if (base_grammar_->GetGrammarExpr(body_expr_id).type == GrammarExprType::kRegex) {
+      return VisitExpr(body_expr_id);
+    }
     // Unwrap chains of single rule references (r ::= (x), x ::= (y), ...) produced by regex
     // conversion, and detect the plus-desugar pattern at the top level.
     int32_t cur_body_id = body_expr_id;
@@ -2576,6 +2628,16 @@ class GrammarOptimizerImpl {
         continue;
       }
       const auto& body = grammar->GetGrammarExpr(rule.body_expr_id);
+      if (std::binary_search(
+              grammar->allow_empty_rule_ids.begin(), grammar->allow_empty_rule_ids.end(), i
+          )) {
+        XGRAMMAR_LOG(WARNING) << "The lazy rule '" << rule.name
+                              << "' can match the empty string, so it always matches the empty "
+                                 "string (committed-shortest matching).";
+      }
+      if (body.type == Grammar::Impl::GrammarExprType::kRegex) {
+        continue;
+      }
       XGRAMMAR_CHECK(body.type == Grammar::Impl::GrammarExprType::kChoices)
           << "lazy rule '" << rule.name << "' must have a terminal-like body";
       for (auto choice_id : body) {
@@ -2594,13 +2656,6 @@ class GrammarOptimizerImpl {
             << "' must have a terminal-like body (strings, character classes, and regexes that "
                "compile to a single FSM); rule references and repetition ranges are not supported";
         }
-      }
-      if (std::binary_search(
-              grammar->allow_empty_rule_ids.begin(), grammar->allow_empty_rule_ids.end(), i
-          )) {
-        XGRAMMAR_LOG(WARNING) << "The lazy rule '" << rule.name
-                              << "' can match the empty string, so it always matches the empty "
-                                 "string (committed-shortest matching).";
       }
     }
   }

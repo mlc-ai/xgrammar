@@ -220,6 +220,37 @@ class GrammarBuilder {
    */
   void UpdateCaptureName(std::string rule_name, const std::string& capture_name);
 
+  /*! \brief Set the number of trailing bytes hidden from this rule's own capture. */
+  void UpdateCaptureHiddenSuffixBytes(int32_t rule_id, int32_t hidden_bytes);
+
+  /*! \brief Set the number of trailing bytes hidden from this rule's own capture. */
+  void UpdateCaptureHiddenSuffixBytes(std::string rule_name, int32_t hidden_bytes);
+
+  /*! \brief Set the number of trailing bytes hidden from this and all enclosing captures. */
+  void UpdateCaptureHiddenStopBytes(int32_t rule_id, int32_t hidden_bytes);
+
+  /*! \brief Set the number of trailing bytes hidden from this and all enclosing captures. */
+  void UpdateCaptureHiddenStopBytes(std::string rule_name, int32_t hidden_bytes);
+
+  /*!
+   * \brief Set helper rule ids used to locate a variable-length suffix/stop marker. Both ids must
+   * be -1 (disabled) or valid rule ids.
+   */
+  void UpdateCaptureHiddenRuleIds(int32_t rule_id, int32_t body_rule_id, int32_t marker_rule_id);
+
+  /*!
+   * \brief Set helper rule ids used to locate a variable-length suffix/stop marker by rule name.
+   */
+  void UpdateCaptureHiddenRuleIds(
+      std::string rule_name, int32_t body_rule_id, int32_t marker_rule_id
+  );
+
+  /*! \brief Set the capture name for bytes matched by a suffix/stop marker. */
+  void UpdateStopCaptureName(int32_t rule_id, const std::string& capture_name);
+
+  /*! \brief Set the suffix/stop marker capture name on the rule referred by name. */
+  void UpdateStopCaptureName(std::string rule_name, const std::string& capture_name);
+
   /*! \brief Set whether the rule referred by the given rule_id is lazy (committed-shortest). */
   void UpdateLazy(int32_t rule_id, bool is_lazy);
 
