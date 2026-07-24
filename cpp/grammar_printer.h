@@ -21,6 +21,7 @@ namespace xgrammar {
 class GrammarPrinter {
  private:
   using Rule = Grammar::Impl::Rule;
+  using SuffixStopInfo = Grammar::Impl::SuffixStopInfo;
   using GrammarExprType = Grammar::Impl::GrammarExprType;
   using GrammarExpr = Grammar::Impl::GrammarExpr;
 
@@ -35,7 +36,7 @@ class GrammarPrinter {
   std::string ToString();
 
   /*! \brief Print a rule. */
-  std::string PrintRule(const Rule& rule);
+  std::string PrintRule(const Rule& rule, const SuffixStopInfo* suffix_stop_info);
   /*! \brief Print a rule corresponding to the given id. */
   std::string PrintRule(int32_t rule_id);
   /*! \brief Print a GrammarExpr. */

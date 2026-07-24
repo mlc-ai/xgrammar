@@ -13,7 +13,10 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -461,6 +464,19 @@ class GrammarMatcher::Impl : public EarleyParser {
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
+    if (has_budget_rules_) {
+      for (int32_t rule_id = 0; rule_id < grammar_->NumRules(); ++rule_id) {
+        const auto& rule = grammar_->GetRule(rule_id);
+        if (rule.max_tokens < 0) {
+          continue;
+        }
+        const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
+        if (suffix_stop_info != nullptr && suffix_stop_info->body_rule_id >= 0) {
+          has_budget_marker_rules_ = true;
+          break;
+        }
+      }
+    }
   }
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
@@ -479,7 +495,9 @@ class GrammarMatcher::Impl : public EarleyParser {
     token_length_history.clear();
     current_token_index_ = -1;
     budget_enforce_pending_ = false;
+    budget_force_close_pending_ = false;
     budget_exceeded_warned_ = false;
+    budget_body_match_cache_.clear();
     accepted_bytes_.clear();
     row_byte_end_.assign(1, 0);
     EarleyParser::Reset();
@@ -572,10 +590,24 @@ class GrammarMatcher::Impl : public EarleyParser {
       int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
   );
 
+  /*! \brief Whether byte offsets are needed for captures or budgeted suffix/stop rules. */
+  bool ShouldTrackAcceptedBytes() const {
+    return IsCaptureTrackingEnabled() || has_budget_marker_rules_;
+  }
+
+  /*! \brief Whether the bytes consumed by this expired suffix/stop occurrence form a complete
+   * match of its body, so max_tokens may end it without consuming the marker. */
+  bool CanForceCompleteWithoutMarker(const ParserState& state);
+
+  /*! \brief Commit the current budget boundary: discard expired states and complete eligible
+   * suffix/stop occurrences without their marker. Returns whether a derivation remains viable. */
+  bool ApplyBudgetEnforcement(bool debug_print = false);
+
   /*! \brief Consume the pending budget decision and warn once when a token budget was
    * exceeded. */
   bool FinishAccept(bool consumed_past_deadline) {
     budget_enforce_pending_ = false;
+    budget_force_close_pending_ = false;
     if (consumed_past_deadline && !budget_exceeded_warned_) {
       budget_exceeded_warned_ = true;
       XGRAMMAR_LOG(WARNING
@@ -616,15 +648,27 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::deque<int> token_length_history;
 
   /*! \brief Set by the last mask computation when an exhausted budget could be enforced: the
-   * next accept skips the expired states, committing the forced close. */
+   * next accept commits the same state transition used to compute that mask. */
   bool budget_enforce_pending_ = false;
+  /*! \brief Whether the pending decision includes a suffix/stop completion without its marker. */
+  bool budget_force_close_pending_ = false;
   /*! \brief Whether the one-time budget-exceeded warning has been reported. */
   bool budget_exceeded_warned_ = false;
+  /*! \brief Whether byte history is needed to recognize a budgeted suffix/stop body boundary. */
+  bool has_budget_marker_rules_ = false;
 
-  /*! \brief The bytes accepted so far. Only maintained when the grammar has captured rules. */
+  struct BudgetBodyMatchProgress {
+    int64_t begin_byte;
+    int64_t end_byte;
+    std::unordered_set<int> states;
+  };
+  /*! \brief Incremental body-FSM progress keyed by (rule id, occurrence start row). */
+  std::unordered_map<int64_t, BudgetBodyMatchProgress> budget_body_match_cache_;
+
+  /*! \brief The bytes accepted so far. Maintained for captures and budgeted marker rules. */
   std::vector<uint8_t> accepted_bytes_;
   /*! \brief row_byte_end_[i] is the number of accepted bytes after input position i. Aligned
-   * with the parser's state history. Only maintained when the grammar has captured rules. */
+   * with the parser's state history whenever accepted_bytes_ is maintained. */
   std::vector<int64_t> row_byte_end_{0};
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
@@ -705,6 +749,136 @@ bool GrammarMatcher::Impl::IsTerminated() const {
 
 bool GrammarMatcher::Impl::IsStopTokenAccepted() const { return stop_token_is_accepted_; }
 
+bool GrammarMatcher::Impl::CanForceCompleteWithoutMarker(const ParserState& state) {
+  if (!IsExpiredState(state) || state.rule_id < 0) {
+    return false;
+  }
+  const auto& rule = grammar_->GetRule(state.rule_id);
+  if (rule.max_tokens < 0) {
+    return false;
+  }
+  const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(state.rule_id);
+  if (suffix_stop_info == nullptr || suffix_stop_info->body_rule_id < 0) {
+    return false;
+  }
+  XGRAMMAR_DCHECK(ShouldTrackAcceptedBytes());
+  XGRAMMAR_DCHECK(row_byte_end_.size() == static_cast<size_t>(scanable_state_history_.size()));
+  int32_t start_row =
+      state.rule_start_pos == ParserState::kNoPrevInputPos ? 0 : state.rule_start_pos;
+  XGRAMMAR_DCHECK(start_row >= 0 && start_row < static_cast<int32_t>(row_byte_end_.size()));
+  int64_t begin = row_byte_end_[start_row];
+  int64_t end = row_byte_end_.back();
+
+  XGRAMMAR_DCHECK(grammar_->per_rule_fsms[suffix_stop_info->body_rule_id].has_value());
+  const auto& body_fsm = grammar_->per_rule_fsms[suffix_stop_info->body_rule_id]->GetFsm();
+  XGRAMMAR_DCHECK(body_fsm.IsLeaf()) << "A suffix/stop body helper must compile to a leaf FSM";
+
+  int64_t occurrence =
+      (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
+  auto [it, inserted] = budget_body_match_cache_.try_emplace(
+      occurrence, BudgetBodyMatchProgress{begin, begin, {body_fsm.GetStart()}}
+  );
+  auto& progress = it->second;
+  if (inserted) {
+    body_fsm.GetFsm().GetEpsilonClosure(&progress.states);
+  } else if (progress.begin_byte != begin || progress.end_byte > end) {
+    // This is only expected after restoring external matcher state. Rollback and reset clear the
+    // cache eagerly, but reinitialize defensively if a caller supplies an equivalent history.
+    progress = BudgetBodyMatchProgress{begin, begin, {body_fsm.GetStart()}};
+    body_fsm.GetFsm().GetEpsilonClosure(&progress.states);
+  }
+
+  std::unordered_set<int> next_states;
+  for (int64_t offset = progress.end_byte; offset < end && !progress.states.empty(); ++offset) {
+    body_fsm.GetFsm().Advance(
+        progress.states, accepted_bytes_[offset], &next_states, FSMEdge::EdgeType::kCharRange, true
+    );
+    progress.states = next_states;
+  }
+  progress.end_byte = end;
+  return std::any_of(progress.states.begin(), progress.states.end(), [&](int state_id) {
+    return body_fsm.IsEndState(state_id);
+  });
+}
+
+bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
+  XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
+  const auto latest_row = scanable_state_history_[scanable_state_history_.size() - 1];
+  std::vector<ParserState> latest_states(latest_row.begin(), latest_row.end());
+  std::vector<ParserState> force_completed_states;
+  std::unordered_set<int64_t> force_completed_occurrences;
+
+  tmp_states_visited_in_queue_.Clear();
+  tmp_states_to_be_added_.clear();
+  tmp_completed_lazy_occurrences_.clear();
+  tmp_accept_stop_token_ = IsCompleted();
+
+  for (const auto& state : latest_states) {
+    if (!IsExpiredState(state)) {
+      EnqueueWithoutProcessing(state);
+      continue;
+    }
+    if (!CanForceCompleteWithoutMarker(state)) {
+      continue;
+    }
+    int64_t occurrence =
+        (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
+    if (force_completed_occurrences.insert(occurrence).second) {
+      force_completed_states.push_back(state);
+    }
+  }
+
+  for (const auto& state : force_completed_states) {
+    Complete(state, debug_print, /*marker_present=*/false);
+  }
+  while (!tmp_process_state_queue_.empty()) {
+    const auto state = std::move(tmp_process_state_queue_.front());
+    tmp_process_state_queue_.pop();
+    auto [scanable, completable] = Predict(state, debug_print);
+    if (completable) {
+      Complete(state, debug_print);
+    }
+    if (scanable) {
+      tmp_states_to_be_added_.push_back(state);
+    }
+  }
+  if (!tmp_completed_lazy_occurrences_.empty()) {
+    RemoveCommittedLazyStates();
+  }
+
+  bool any_expired = false;
+  bool any_alive = false;
+  for (const auto& state : tmp_states_to_be_added_) {
+    if (IsExpiredState(state)) {
+      any_expired = true;
+    } else {
+      any_alive = true;
+    }
+  }
+  if (any_expired && (any_alive || tmp_accept_stop_token_)) {
+    // Completing a budgeted suffix/stop rule can expose an already-expired parent alternative.
+    // Apply the same preference as the ordinary max_tokens path: once another derivation can
+    // continue or finish at this boundary, expired derivations may not consume another token.
+    tmp_states_to_be_added_.erase(
+        std::remove_if(
+            tmp_states_to_be_added_.begin(),
+            tmp_states_to_be_added_.end(),
+            [&](const ParserState& state) { return IsExpiredState(state); }
+        ),
+        tmp_states_to_be_added_.end()
+    );
+  }
+
+  bool viable = tmp_accept_stop_token_ || !tmp_states_to_be_added_.empty();
+  if (!viable) {
+    return false;
+  }
+  scanable_state_history_.PopBack(1);
+  scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  is_completed_.back() = tmp_accept_stop_token_;
+  return true;
+}
+
 // TODO(yixin): Polish verbose logging
 bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   if (IsStopTokenAccepted()) {
@@ -719,11 +893,53 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     return false;
   }
 
+  bool is_stop_token =
+      std::find(stop_token_ids_.begin(), stop_token_ids_.end(), token_id) != stop_token_ids_.end();
+  const auto& special_token_ids = tokenizer_info_.GetSpecialTokenIds();
+  if (!is_stop_token && std::find(special_token_ids.begin(), special_token_ids.end(), token_id) !=
+                            special_token_ids.end()) {
+    XGRAMMAR_LOG(WARNING) << "GrammarMatcher cannot accept special token id " << token_id << ": "
+                          << tokenizer_info_.GetDecodedVocab()[token_id]
+                          << ". Rejecting the token.";
+    return false;
+  }
+
   current_token_index_ = static_cast<int32_t>(token_length_history.size());
+  bool enforce_budget = budget_enforce_pending_;
+  bool force_budget_close = budget_force_close_pending_;
+  if (force_budget_close) {
+    // Validate on a copy first: a rejected token must not commit the budget-close transition.
+    Impl trial(*this);
+    trial.capture_recording_ = false;
+    bool applied = trial.ApplyBudgetEnforcement();
+    XGRAMMAR_DCHECK(applied);
+    if (!applied) {
+      return false;
+    }
+    trial.budget_enforce_pending_ = false;
+    trial.budget_force_close_pending_ = false;
+    if (!trial.AcceptToken(token_id, false)) {
+      return false;
+    }
+  }
+
+  // Capture events are only recorded on the definitive accept path.
+  CaptureRecordingGuard capture_guard(this);
+  if (force_budget_close) {
+    bool applied = ApplyBudgetEnforcement(debug_print);
+    XGRAMMAR_DCHECK(applied);
+    if (!applied) {
+      return false;
+    }
+    budget_enforce_pending_ = false;
+    budget_force_close_pending_ = false;
+  }
+  SkipExpiredGuard skip_expired_guard(this, enforce_budget && !force_budget_close);
+
   // The token extends a derivation past its budget iff expired states are allowed to scan
   // (no enforcement) while some exist.
   bool consumed_past_deadline = false;
-  if (has_budget_rules_ && !budget_enforce_pending_) {
+  if (has_budget_rules_ && !enforce_budget) {
     const auto& row = scanable_state_history_[scanable_state_history_.size() - 1];
     for (const auto& state : row) {
       if (IsExpiredState(state)) {
@@ -732,7 +948,6 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       }
     }
   }
-  SkipExpiredGuard skip_expired_guard(this, budget_enforce_pending_);
 
   if (debug_print) {
     std::string states_str;
@@ -745,8 +960,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
                        << states_str;
   }
   // Handle the stop token
-  if (std::find(stop_token_ids_.begin(), stop_token_ids_.end(), token_id) !=
-      stop_token_ids_.end()) {
+  if (is_stop_token) {
     bool accepted = AcceptStopToken();
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: " << accepted;
@@ -754,19 +968,8 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     return accepted ? FinishAccept(consumed_past_deadline) : false;
   }
 
-  const auto& special_token_ids = tokenizer_info_.GetSpecialTokenIds();
-  if (std::find(special_token_ids.begin(), special_token_ids.end(), token_id) !=
-      special_token_ids.end()) {
-    XGRAMMAR_LOG(WARNING) << "GrammarMatcher cannot accept special token id " << token_id << ": "
-                          << tokenizer_info_.GetDecodedVocab()[token_id]
-                          << ". Rejecting the token.";
-    return false;
-  }
-
   const auto& token = tokenizer_info_.GetDecodedVocab()[token_id];
 
-  // Capture events are only recorded on the definitive accept path.
-  CaptureRecordingGuard capture_guard(this);
   const int32_t size_before_token = rule_id_to_completable_states_.size();
 
   // Phase 1: Try atomic token path (from current state, before byte path)
@@ -809,12 +1012,12 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     PopLastStates(pos);
     AdvanceAtomicToken(token_id, debug_print);
     token_length_history.push_back(1);
-    if (IsCaptureTrackingEnabled()) {
+    if (ShouldTrackAcceptedBytes()) {
       AppendAtomicRow(token);
     }
   } else if (byte_path_success && !atomic_success) {
     token_length_history.push_back(token.size());
-    if (IsCaptureTrackingEnabled()) {
+    if (ShouldTrackAcceptedBytes()) {
       AppendPerByteRows(token);
     }
   } else {
@@ -826,7 +1029,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       is_completed_.push_back(atomic_completed);
       PushCaptureRow(atomic_capture_row);
       token_length_history.push_back(1);
-      if (IsCaptureTrackingEnabled()) {
+      if (ShouldTrackAcceptedBytes()) {
         AppendAtomicRow(token);
       }
     } else {
@@ -864,14 +1067,38 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
         if (event.start_pos == size_before_token) {
           event.start_pos = rule_id_to_completable_states_.size();
         }
-        if (std::find_if(
-                merged_capture_row.begin(),
-                merged_capture_row.end(),
-                [&](const CaptureEvent& e) {
-                  return e.rule_id == event.rule_id && e.start_pos == event.start_pos;
-                }
-            ) == merged_capture_row.end()) {
+        if (event.occurrence_start_pos == size_before_token) {
+          event.occurrence_start_pos = rule_id_to_completable_states_.size();
+        }
+        for (auto& target : event.stop_capture_targets) {
+          if (target.start_pos == size_before_token) {
+            target.start_pos = rule_id_to_completable_states_.size();
+          }
+        }
+        auto existing = std::find_if(
+            merged_capture_row.begin(),
+            merged_capture_row.end(),
+            [&](const CaptureEvent& e) {
+              return e.rule_id == event.rule_id && e.start_pos == event.start_pos &&
+                     e.occurrence_start_pos == event.occurrence_start_pos;
+            }
+        );
+        if (existing == merged_capture_row.end()) {
           merged_capture_row.push_back(event);
+        } else {
+          existing->hidden_suffix_bytes =
+              std::max(existing->hidden_suffix_bytes, event.hidden_suffix_bytes);
+          existing->hidden_stop_bytes =
+              std::max(existing->hidden_stop_bytes, event.hidden_stop_bytes);
+          for (const auto& target : event.stop_capture_targets) {
+            if (std::find(
+                    existing->stop_capture_targets.begin(),
+                    existing->stop_capture_targets.end(),
+                    target
+                ) == existing->stop_capture_targets.end()) {
+              existing->stop_capture_targets.push_back(target);
+            }
+          }
         }
       }
 
@@ -880,7 +1107,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       is_completed_.push_back(byte_completed || atomic_completed);
       PushCaptureRow(merged_capture_row);
       token_length_history.push_back(token.size());
-      if (IsCaptureTrackingEnabled()) {
+      if (ShouldTrackAcceptedBytes()) {
         AppendPerByteRows(token);
       }
     }
@@ -927,7 +1154,7 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
     ++accepted_cnt;
   }
   token_length_history.push_back(input_str.size());
-  if (IsCaptureTrackingEnabled()) {
+  if (ShouldTrackAcceptedBytes()) {
     AppendPerByteRows(input_str);
   }
 
@@ -980,21 +1207,39 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
     const auto& row = scanable_state_history_[scanable_state_history_.size() - 1];
     bool any_expired = false;
     bool any_alive = false;
+    bool can_force_close_without_marker = false;
     for (const auto& state : row) {
       if (IsExpiredState(state)) {
         any_expired = true;
+        can_force_close_without_marker =
+            can_force_close_without_marker ||
+            (has_budget_marker_rules_ && CanForceCompleteWithoutMarker(state));
       } else {
         any_alive = true;
       }
     }
+    if (can_force_close_without_marker) {
+      // Compute the enforcing state on a copy. In addition to dropping expired derivations,
+      // this lets a budgeted suffix/stop rule end through its body when the marker has not
+      // appeared yet. The real state is committed only after an allowed token is accepted.
+      Impl trial(*this);
+      trial.capture_recording_ = false;
+      bool applied = trial.ApplyBudgetEnforcement(debug_print);
+      if (applied) {
+        trial.FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/false, debug_print);
+      }
+      if (applied && (trial.IsCompleted() || trial.BitmaskHasAnyToken(bitmask_data_ptr))) {
+        budget_enforce_pending_ = true;
+        budget_force_close_pending_ = true;
+        return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
+      }
+    }
     if (any_expired && (any_alive || IsCompleted())) {
-      // The expired derivations can be forced to end here: some other derivation can make
-      // progress (or the grammar can terminate), so mask from the non-expired states only.
-      // Only when the vocabulary cannot encode any of the live states' next bytes does the
-      // mask come out empty; fall through to relaxing then.
+      // No marker-less completion is needed: retain the original max_tokens fast path.
       FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/true, debug_print);
       if (BitmaskHasAnyToken(bitmask_data_ptr) || IsCompleted()) {
         budget_enforce_pending_ = true;
+        budget_force_close_pending_ = false;
         return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
       }
     }
@@ -1002,6 +1247,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
     // derivations cannot end here — relax the budget for one step and report it on the next
     // accept.
     budget_enforce_pending_ = false;
+    budget_force_close_pending_ = false;
   }
   FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/false, debug_print);
   return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
@@ -1168,6 +1414,15 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
          "get the jump forward string";
 
   current_token_index_ = static_cast<int32_t>(token_length_history.size());
+  if (budget_force_close_pending_) {
+    Impl trial(*this);
+    trial.capture_recording_ = false;
+    if (trial.ApplyBudgetEnforcement()) {
+      trial.budget_enforce_pending_ = false;
+      trial.budget_force_close_pending_ = false;
+      return trial.FindJumpForwardString();
+    }
+  }
 
   std::string result;
   int num_accepted_chars = 0;
@@ -1234,13 +1489,15 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
     int steps = token_length_history.back();
     PopLastStates(steps);
     token_length_history.pop_back();
-    if (IsCaptureTrackingEnabled() && steps > 0) {
+    if (ShouldTrackAcceptedBytes() && steps > 0) {
       row_byte_end_.resize(row_byte_end_.size() - steps);
       accepted_bytes_.resize(row_byte_end_.back());
     }
     --num_tokens;
   }
   budget_enforce_pending_ = false;
+  budget_force_close_pending_ = false;
+  budget_body_match_cache_.clear();
 }
 
 std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptures(bool deduplicate
@@ -1258,14 +1515,30 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
   struct FlatEvent {
     int32_t rule_id;
     int32_t start_row;
+    int32_t occurrence_start_pos;
     int32_t end_row;
+    int32_t hidden_suffix_bytes;
+    int32_t hidden_stop_bytes;
+    std::vector<CaptureOccurrence> stop_capture_targets;
+    bool marker_present = false;
+    int64_t marker_start_byte = -1;
   };
   std::vector<FlatEvent> events;
   for (int32_t row = 0; row < capture_event_history_.size(); ++row) {
     for (const auto& event : capture_event_history_[row]) {
       int32_t start_row = event.start_pos == ParserState::kNoPrevInputPos ? 0 : event.start_pos;
       XGRAMMAR_DCHECK(start_row <= row);
-      events.push_back({event.rule_id, start_row, row});
+      events.push_back(
+          {event.rule_id,
+           start_row,
+           event.occurrence_start_pos,
+           row,
+           event.hidden_suffix_bytes,
+           event.hidden_stop_bytes,
+           event.stop_capture_targets,
+           false,
+           -1}
+      );
     }
   }
 
@@ -1289,18 +1562,219 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
     }
   }
 
+  auto contains_end_state = [](const CompactFSMWithStartEnd& fsm,
+                               const std::unordered_set<int>& states) {
+    return std::any_of(states.begin(), states.end(), [&](int state) {
+      return fsm.IsEndState(state);
+    });
+  };
+
+  auto accepted_prefixes = [&](const CompactFSMWithStartEnd& fsm, int64_t begin, int64_t end) {
+    XGRAMMAR_DCHECK(fsm.IsLeaf()) << "A suffix/stop capture helper must compile to a leaf FSM";
+    std::vector<bool> result(static_cast<size_t>(end - begin + 1), false);
+    std::unordered_set<int> states{fsm.GetStart()};
+    fsm.GetFsm().GetEpsilonClosure(&states);
+    result[0] = contains_end_state(fsm, states);
+    std::unordered_set<int> next_states;
+    for (int64_t offset = 0; offset < end - begin; ++offset) {
+      fsm.GetFsm().Advance(
+          states, accepted_bytes_[begin + offset], &next_states, FSMEdge::EdgeType::kCharRange, true
+      );
+      states = next_states;
+      result[static_cast<size_t>(offset + 1)] = contains_end_state(fsm, states);
+    }
+    return result;
+  };
+
+  // Compute which suffixes of [begin, end) are accepted by marker_fsm. This is a reverse NFA
+  // traversal, so locating a delimiter remains linear in the captured byte length even when the
+  // body (for example /.*/) can end at every byte.
+  auto accepted_suffixes = [&](const CompactFSMWithStartEnd& marker_fsm, int64_t begin, int64_t end
+                           ) {
+    XGRAMMAR_DCHECK(marker_fsm.IsLeaf())
+        << "A suffix/stop marker helper must compile to a leaf FSM";
+    const auto& fsm = marker_fsm.GetFsm();
+    std::unordered_set<int> reachable;
+    marker_fsm.GetReachableStates(&reachable);
+    struct ReverseCharEdge {
+      int32_t source;
+      int32_t min;
+      int32_t max;
+    };
+    std::vector<std::vector<int32_t>> reverse_epsilon(fsm.NumStates());
+    std::vector<std::vector<ReverseCharEdge>> reverse_char(fsm.NumStates());
+    for (int32_t source : reachable) {
+      for (const auto& edge : fsm.GetEdges(source)) {
+        if (!reachable.count(edge.target)) {
+          continue;
+        }
+        if (edge.IsEpsilon()) {
+          reverse_epsilon[edge.target].push_back(source);
+        } else if (edge.IsCharRange()) {
+          reverse_char[edge.target].push_back({source, edge.min, edge.max});
+        }
+      }
+    }
+    auto add_reverse_epsilon_closure = [&](std::unordered_set<int>* states) {
+      std::vector<int32_t> queue(states->begin(), states->end());
+      for (size_t i = 0; i < queue.size(); ++i) {
+        for (int32_t predecessor : reverse_epsilon[queue[i]]) {
+          if (states->insert(predecessor).second) {
+            queue.push_back(predecessor);
+          }
+        }
+      }
+    };
+
+    std::vector<bool> result(static_cast<size_t>(end - begin + 1), false);
+    std::unordered_set<int> states(marker_fsm.GetEnds().begin(), marker_fsm.GetEnds().end());
+    add_reverse_epsilon_closure(&states);
+    result[static_cast<size_t>(end - begin)] = states.count(marker_fsm.GetStart()) != 0;
+    std::unordered_set<int> previous_states;
+    for (int64_t offset = end - begin; offset > 0; --offset) {
+      previous_states.clear();
+      int32_t byte = accepted_bytes_[begin + offset - 1];
+      for (int32_t target : states) {
+        for (const auto& edge : reverse_char[target]) {
+          if (edge.min <= byte && byte <= edge.max) {
+            previous_states.insert(edge.source);
+          }
+        }
+      }
+      add_reverse_epsilon_closure(&previous_states);
+      states = previous_states;
+      result[static_cast<size_t>(offset - 1)] = states.count(marker_fsm.GetStart()) != 0;
+    }
+    return result;
+  };
+
+  // Resolve every marker to a concrete byte span once. Fixed strings use their recorded length;
+  // regexes and named terminals use helper FSMs for both sides of the original body/marker split.
+  for (size_t i = 0; i < events.size(); ++i) {
+    if (!keep[i]) {
+      continue;
+    }
+    auto& event = events[i];
+    int32_t hidden_bytes = std::max(event.hidden_suffix_bytes, event.hidden_stop_bytes);
+    if (hidden_bytes <= 0) {
+      continue;
+    }
+    const auto& rule = grammar_->GetRule(event.rule_id);
+    const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(event.rule_id);
+    XGRAMMAR_DCHECK(suffix_stop_info != nullptr);
+    int64_t event_start = row_byte_end_[event.start_row];
+    int64_t event_end = row_byte_end_[event.end_row];
+    event.marker_present = true;
+    if (suffix_stop_info->body_rule_id == -1) {
+      event.marker_start_byte =
+          std::max(event_start, event_end - static_cast<int64_t>(hidden_bytes));
+      continue;
+    }
+
+    XGRAMMAR_DCHECK(suffix_stop_info->body_rule_id >= 0 && suffix_stop_info->marker_rule_id >= 0);
+    XGRAMMAR_DCHECK(
+        grammar_->per_rule_fsms[suffix_stop_info->body_rule_id].has_value() &&
+        grammar_->per_rule_fsms[suffix_stop_info->marker_rule_id].has_value()
+    );
+    const auto& body_fsm = grammar_->per_rule_fsms[suffix_stop_info->body_rule_id]->GetFsm();
+    const auto& marker_fsm = grammar_->per_rule_fsms[suffix_stop_info->marker_rule_id]->GetFsm();
+    std::vector<bool> body_ends = accepted_prefixes(body_fsm, event_start, event_end);
+    std::vector<bool> marker_starts = accepted_suffixes(marker_fsm, event_start, event_end);
+    bool found = false;
+    for (size_t offset = 0; offset < body_ends.size(); ++offset) {
+      if (body_ends[offset] && marker_starts[offset]) {
+        event.marker_start_byte = event_start + static_cast<int64_t>(offset);
+        found = true;
+        break;
+      }
+    }
+    XGRAMMAR_DCHECK(found) << "Could not recover the suffix/stop marker boundary for rule "
+                           << rule.name;
+    if (!found) {
+      event.marker_present = false;
+      event.marker_start_byte = -1;
+    }
+  }
+
+  // Associate each stop marker only with captured occurrences reached through its concrete
+  // Earley parent chain. Failed or unrelated branches may cover identical byte ranges, so byte
+  // overlap alone is not a valid indication that a marker belongs to a capture.
+  std::unordered_map<int64_t, std::vector<std::pair<int64_t, int64_t>>>
+      hidden_stop_spans_by_capture;
+  for (size_t i = 0; i < events.size(); ++i) {
+    if (!keep[i] || events[i].hidden_stop_bytes <= 0 || !events[i].marker_present) {
+      continue;
+    }
+    int64_t event_end = row_byte_end_[events[i].end_row];
+    int64_t hidden_start = events[i].marker_start_byte;
+    if (hidden_start < event_end) {
+      for (const auto& target : events[i].stop_capture_targets) {
+        int64_t target_key =
+            (static_cast<int64_t>(target.rule_id) << 32) | static_cast<uint32_t>(target.start_pos);
+        hidden_stop_spans_by_capture[target_key].emplace_back(hidden_start, event_end);
+      }
+    }
+  }
+  for (auto& [_, spans] : hidden_stop_spans_by_capture) {
+    std::sort(spans.begin(), spans.end());
+  }
+
   for (size_t i = 0; i < events.size(); ++i) {
     if (!keep[i]) {
       continue;
     }
     const auto& event = events[i];
-    result.emplace_back(
-        grammar_->GetRule(event.rule_id).capture_name,
-        std::string(
-            accepted_bytes_.begin() + row_byte_end_[event.start_row],
-            accepted_bytes_.begin() + row_byte_end_[event.end_row]
-        )
-    );
+    const auto& rule = grammar_->GetRule(event.rule_id);
+    const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(event.rule_id);
+    int64_t capture_start = row_byte_end_[event.start_row];
+    int64_t capture_end = row_byte_end_[event.end_row];
+    if (event.marker_present && suffix_stop_info != nullptr &&
+        !suffix_stop_info->stop_capture_name.empty()) {
+      std::string marker_capture;
+      if (event.marker_start_byte < capture_end) {
+        marker_capture.assign(
+            reinterpret_cast<const char*>(accepted_bytes_.data() + event.marker_start_byte),
+            static_cast<size_t>(capture_end - event.marker_start_byte)
+        );
+      }
+      result.emplace_back(suffix_stop_info->stop_capture_name, std::move(marker_capture));
+    }
+    if (rule.capture_name.empty()) {
+      continue;
+    }
+    if (event.hidden_suffix_bytes > 0 && event.marker_present) {
+      capture_end = event.marker_start_byte;
+    }
+
+    std::string capture;
+    int64_t cursor = capture_start;
+    auto append_bytes = [&](int64_t begin, int64_t end) {
+      if (begin < end) {
+        capture.append(
+            reinterpret_cast<const char*>(accepted_bytes_.data() + begin),
+            static_cast<size_t>(end - begin)
+        );
+      }
+    };
+    int64_t capture_key = (static_cast<int64_t>(event.rule_id) << 32) |
+                          static_cast<uint32_t>(event.occurrence_start_pos);
+    auto hidden_spans_it = hidden_stop_spans_by_capture.find(capture_key);
+    if (hidden_spans_it != hidden_stop_spans_by_capture.end()) {
+      for (const auto& hidden : hidden_spans_it->second) {
+        if (hidden.second <= capture_start) {
+          continue;
+        }
+        if (hidden.first >= capture_end) {
+          break;
+        }
+        int64_t hidden_begin = std::max(hidden.first, capture_start);
+        int64_t hidden_end = std::min(hidden.second, capture_end);
+        append_bytes(cursor, hidden_begin);
+        cursor = std::max(cursor, hidden_end);
+      }
+    }
+    append_bytes(cursor, capture_end);
+    result.emplace_back(rule.capture_name, std::move(capture));
   }
   return result;
 }
