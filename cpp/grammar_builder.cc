@@ -335,7 +335,7 @@ void GrammarBuilder::UpdateSuffixStopInfo(std::string rule_name, const SuffixSto
 }
 
 void GrammarBuilder::UpdateLazy(int32_t rule_id, bool is_lazy) {
-  XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+  XGRAMMAR_CHECK(rule_id < static_cast<int32_t>(grammar_->rules_.size()))
       << "Rule id " << rule_id << " is out of range.";
   grammar_->rules_[rule_id].is_lazy = is_lazy;
 }

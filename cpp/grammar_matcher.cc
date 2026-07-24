@@ -464,13 +464,17 @@ class GrammarMatcher::Impl : public EarleyParser {
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
-    for (int32_t rule_id = 0; rule_id < grammar_->NumRules(); ++rule_id) {
-      const auto& rule = grammar_->GetRule(rule_id);
-      const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
-      if (rule.max_tokens >= 0 && suffix_stop_info != nullptr &&
-          suffix_stop_info->body_rule_id >= 0) {
-        has_budget_marker_rules_ = true;
-        break;
+    if (has_budget_rules_) {
+      for (int32_t rule_id = 0; rule_id < grammar_->NumRules(); ++rule_id) {
+        const auto& rule = grammar_->GetRule(rule_id);
+        if (rule.max_tokens < 0) {
+          continue;
+        }
+        const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
+        if (suffix_stop_info != nullptr && suffix_stop_info->body_rule_id >= 0) {
+          has_budget_marker_rules_ = true;
+          break;
+        }
       }
     }
   }
@@ -741,9 +745,11 @@ bool GrammarMatcher::Impl::CanForceCompleteWithoutMarker(const ParserState& stat
     return false;
   }
   const auto& rule = grammar_->GetRule(state.rule_id);
+  if (rule.max_tokens < 0) {
+    return false;
+  }
   const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(state.rule_id);
-  if (rule.max_tokens < 0 || suffix_stop_info == nullptr ||
-      suffix_stop_info->body_rule_id < 0) {
+  if (suffix_stop_info == nullptr || suffix_stop_info->body_rule_id < 0) {
     return false;
   }
   XGRAMMAR_DCHECK(ShouldTrackAcceptedBytes());
@@ -1164,7 +1170,8 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       if (IsExpiredState(state)) {
         any_expired = true;
         can_force_close_without_marker =
-            can_force_close_without_marker || CanForceCompleteWithoutMarker(state);
+            can_force_close_without_marker ||
+            (has_budget_marker_rules_ && CanForceCompleteWithoutMarker(state));
       } else {
         any_alive = true;
       }

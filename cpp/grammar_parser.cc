@@ -308,8 +308,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
         );
       }
       constexpr int64_t kMaxInt32 = std::numeric_limits<int32_t>::max();
-      if ((has_max_tokens && max_tokens_value > kMaxInt32) ||
-          (has_capture_hidden_suffix_bytes && capture_hidden_suffix_bytes_value > kMaxInt32) ||
+      if ((has_capture_hidden_suffix_bytes && capture_hidden_suffix_bytes_value > kMaxInt32) ||
           (has_capture_hidden_stop_bytes && capture_hidden_stop_bytes_value > kMaxInt32) ||
           (has_capture_hidden_body_rule_id && capture_hidden_body_rule_id_value > kMaxInt32) ||
           (has_capture_hidden_marker_rule_id && capture_hidden_marker_rule_id_value > kMaxInt32)) {

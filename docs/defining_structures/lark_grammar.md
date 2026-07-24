@@ -487,7 +487,7 @@ name:
 
 ```text
 field[suffix="<end>"]: /[a-z]*/
-field[suffix=/</?end>/]: /[a-z]*/
+field[suffix=/<\/?end>/]: /[a-z]*/
 field[suffix=END]: /[a-z]*/
 END: "</end>" | "<end>"
 ```

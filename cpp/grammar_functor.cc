@@ -1905,10 +1905,10 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   int32_t grammar_expr_id = builder_->AddRuleRef(rule_id);
   const auto& ref_rule = base_grammar_->GetRule(rule_id);
   const auto& ref_rule_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
-  // Keep the reference to rules carrying runtime or capture metadata: replacing it with the
-  // rule's content would erase the rule that metadata applies to.
-  if (ref_rule.max_tokens < 0 && ref_rule.capture_name.empty() &&
-      base_grammar_->GetSuffixStopInfo(rule_id) == nullptr && !ref_rule.is_lazy &&
+  // Keep the reference to budgeted, suffix/stop, and lazy rules: replacing it with the rule's
+  // content would erase the rule that the runtime semantics apply to.
+  if (ref_rule.max_tokens < 0 && base_grammar_->GetSuffixStopInfo(rule_id) == nullptr &&
+      !ref_rule.is_lazy &&
       ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
       ref_rule_body.size() == 1) {
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
