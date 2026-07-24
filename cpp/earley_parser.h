@@ -240,6 +240,18 @@ class RepeatDetector {
   void Clear();
 };
 
+/*! \brief A concrete occurrence of a captured rule in an Earley parent chain. */
+struct CaptureOccurrence {
+  /*! \brief The id of the captured rule. */
+  int32_t rule_id;
+  /*! \brief The position where the rule occurrence started. */
+  int32_t start_pos;
+
+  bool operator==(const CaptureOccurrence& other) const {
+    return rule_id == other.rule_id && start_pos == other.start_pos;
+  }
+};
+
 /*!
  * \brief A completion event of a captured rule, recorded when the rule is completed during
  * parsing. The matched span is [start_pos, r) in input positions, where r is the position (i.e.
@@ -251,11 +263,17 @@ struct CaptureEvent {
   /*! \brief The position where the rule started matching. kNoPrevInputPos means position 0 (the
    * rule acts as the root). */
   int32_t start_pos;
+  /*! \brief The unadjusted start position of this rule occurrence. This differs from start_pos
+   * for the zero-width event inserted after a dynamic-dispatch marker. */
+  int32_t occurrence_start_pos;
   /*! \brief Number of trailing bytes hidden only from this rule's own capture for this
    * completion. */
   int32_t hidden_suffix_bytes = 0;
   /*! \brief Number of trailing bytes hidden from every containing capture for this completion. */
   int32_t hidden_stop_bytes = 0;
+  /*! \brief The captured rule occurrences whose concrete Earley parent chains contain this stop
+   * completion. Includes this rule's occurrence when the rule itself is captured. */
+  std::vector<CaptureOccurrence> stop_capture_targets;
 };
 
 class EarleyParser {

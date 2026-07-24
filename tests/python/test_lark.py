@@ -2289,6 +2289,27 @@ def test_lark_suffix_stop_capture_scope(attribute: str, expected_outer: bytes) -
     assert _captures_for_string(grammar, "xy!z") == [("inner", b"xy"), ("outer", expected_outer)]
 
 
+@pytest.mark.parametrize("deduplicate", [True, False], ids=["deduplicated", "raw-events"])
+def test_lark_stop_capture_scope_ignores_unrelated_earley_branch(deduplicate: bool) -> None:
+    grammar = xgr.Grammar.from_lark(
+        """
+        start: a | c
+        a[capture="a"]: b "q"
+        b[stop="!"]: "x"
+        c[capture="c"]: "x!"
+        """
+    )
+    compiled = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=False).compile_grammar(
+        grammar
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string("x!") and matcher.is_terminated()
+
+    # b has no capture of its own. Its stop marker belongs only to the enclosing a occurrence,
+    # which ultimately fails on the missing "q"; the overlapping successful c branch must keep it.
+    assert matcher.get_captures(deduplicate=deduplicate) == [("c", b"x!")]
+
+
 @pytest.mark.parametrize(
     "attribute, expected_outer",
     [

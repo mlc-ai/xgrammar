@@ -61,8 +61,51 @@ void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_pres
     XGRAMMAR_DCHECK(event_start_pos >= 0);
   }
 
+  std::vector<CaptureOccurrence> stop_capture_targets;
+  if (hidden_stop_bytes > 0) {
+    auto add_target = [&](CaptureOccurrence occurrence) {
+      if (std::find(stop_capture_targets.begin(), stop_capture_targets.end(), occurrence) ==
+          stop_capture_targets.end()) {
+        stop_capture_targets.push_back(occurrence);
+      }
+    };
+
+    // Follow only the parent links of this concrete rule occurrence. A byte-overlap test at
+    // materialization time cannot distinguish an actual captured ancestor from an unrelated
+    // Earley branch that happens to cover the same input.
+    std::vector<CaptureOccurrence> pending{{state.rule_id, state.rule_start_pos}};
+    std::unordered_set<int64_t> visited;
+    while (!pending.empty()) {
+      CaptureOccurrence occurrence = pending.back();
+      pending.pop_back();
+      int64_t occurrence_key = (static_cast<int64_t>(occurrence.rule_id) << 32) |
+                               static_cast<uint32_t>(occurrence.start_pos);
+      if (!visited.insert(occurrence_key).second) {
+        continue;
+      }
+      if (RuleHasCapture(occurrence.rule_id)) {
+        add_target(occurrence);
+      }
+      if (occurrence.start_pos == ParserState::kNoPrevInputPos) {
+        continue;
+      }
+      const auto& parent_states = rule_id_to_completable_states_[occurrence.start_pos];
+      for (const auto& [ref_rule_id, parent_state] : parent_states) {
+        if (ref_rule_id != occurrence.rule_id || parent_state.rule_id < 0) {
+          continue;
+        }
+        pending.push_back({parent_state.rule_id, parent_state.rule_start_pos});
+      }
+    }
+  }
+
   capture_event_history_.PushBackInLatestRow(
-      {state.rule_id, event_start_pos, hidden_suffix_bytes, hidden_stop_bytes}
+      {state.rule_id,
+       event_start_pos,
+       state.rule_start_pos,
+       hidden_suffix_bytes,
+       hidden_stop_bytes,
+       std::move(stop_capture_targets)}
   );
 }
 

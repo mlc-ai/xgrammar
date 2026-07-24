@@ -1067,11 +1067,20 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
         if (event.start_pos == size_before_token) {
           event.start_pos = rule_id_to_completable_states_.size();
         }
+        if (event.occurrence_start_pos == size_before_token) {
+          event.occurrence_start_pos = rule_id_to_completable_states_.size();
+        }
+        for (auto& target : event.stop_capture_targets) {
+          if (target.start_pos == size_before_token) {
+            target.start_pos = rule_id_to_completable_states_.size();
+          }
+        }
         auto existing = std::find_if(
             merged_capture_row.begin(),
             merged_capture_row.end(),
             [&](const CaptureEvent& e) {
-              return e.rule_id == event.rule_id && e.start_pos == event.start_pos;
+              return e.rule_id == event.rule_id && e.start_pos == event.start_pos &&
+                     e.occurrence_start_pos == event.occurrence_start_pos;
             }
         );
         if (existing == merged_capture_row.end()) {
@@ -1081,6 +1090,15 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
               std::max(existing->hidden_suffix_bytes, event.hidden_suffix_bytes);
           existing->hidden_stop_bytes =
               std::max(existing->hidden_stop_bytes, event.hidden_stop_bytes);
+          for (const auto& target : event.stop_capture_targets) {
+            if (std::find(
+                    existing->stop_capture_targets.begin(),
+                    existing->stop_capture_targets.end(),
+                    target
+                ) == existing->stop_capture_targets.end()) {
+              existing->stop_capture_targets.push_back(target);
+            }
+          }
         }
       }
 
@@ -1497,9 +1515,11 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
   struct FlatEvent {
     int32_t rule_id;
     int32_t start_row;
+    int32_t occurrence_start_pos;
     int32_t end_row;
     int32_t hidden_suffix_bytes;
     int32_t hidden_stop_bytes;
+    std::vector<CaptureOccurrence> stop_capture_targets;
     bool marker_present = false;
     int64_t marker_start_byte = -1;
   };
@@ -1511,9 +1531,11 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
       events.push_back(
           {event.rule_id,
            start_row,
+           event.occurrence_start_pos,
            row,
            event.hidden_suffix_bytes,
            event.hidden_stop_bytes,
+           event.stop_capture_targets,
            false,
            -1}
       );
@@ -1674,10 +1696,11 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
     }
   }
 
-  // A stop marker is excluded from every capture containing it. Build the concrete byte spans
-  // once, then splice them out while materializing each capture. Duplicate/overlapping spans can
-  // arise from equivalent Earley hypotheses, so merge them defensively.
-  std::vector<std::pair<int64_t, int64_t>> hidden_stop_spans;
+  // Associate each stop marker only with captured occurrences reached through its concrete
+  // Earley parent chain. Failed or unrelated branches may cover identical byte ranges, so byte
+  // overlap alone is not a valid indication that a marker belongs to a capture.
+  std::unordered_map<int64_t, std::vector<std::pair<int64_t, int64_t>>>
+      hidden_stop_spans_by_capture;
   for (size_t i = 0; i < events.size(); ++i) {
     if (!keep[i] || events[i].hidden_stop_bytes <= 0 || !events[i].marker_present) {
       continue;
@@ -1685,18 +1708,15 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
     int64_t event_end = row_byte_end_[events[i].end_row];
     int64_t hidden_start = events[i].marker_start_byte;
     if (hidden_start < event_end) {
-      hidden_stop_spans.emplace_back(hidden_start, event_end);
+      for (const auto& target : events[i].stop_capture_targets) {
+        int64_t target_key =
+            (static_cast<int64_t>(target.rule_id) << 32) | static_cast<uint32_t>(target.start_pos);
+        hidden_stop_spans_by_capture[target_key].emplace_back(hidden_start, event_end);
+      }
     }
   }
-  std::sort(hidden_stop_spans.begin(), hidden_stop_spans.end());
-  std::vector<std::pair<int64_t, int64_t>> merged_hidden_stop_spans;
-  for (const auto& span : hidden_stop_spans) {
-    if (!merged_hidden_stop_spans.empty() && span.first <= merged_hidden_stop_spans.back().second) {
-      merged_hidden_stop_spans.back().second =
-          std::max(merged_hidden_stop_spans.back().second, span.second);
-    } else {
-      merged_hidden_stop_spans.push_back(span);
-    }
+  for (auto& [_, spans] : hidden_stop_spans_by_capture) {
+    std::sort(spans.begin(), spans.end());
   }
 
   for (size_t i = 0; i < events.size(); ++i) {
@@ -1736,17 +1756,22 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
         );
       }
     };
-    for (const auto& hidden : merged_hidden_stop_spans) {
-      if (hidden.second <= capture_start) {
-        continue;
+    int64_t capture_key = (static_cast<int64_t>(event.rule_id) << 32) |
+                          static_cast<uint32_t>(event.occurrence_start_pos);
+    auto hidden_spans_it = hidden_stop_spans_by_capture.find(capture_key);
+    if (hidden_spans_it != hidden_stop_spans_by_capture.end()) {
+      for (const auto& hidden : hidden_spans_it->second) {
+        if (hidden.second <= capture_start) {
+          continue;
+        }
+        if (hidden.first >= capture_end) {
+          break;
+        }
+        int64_t hidden_begin = std::max(hidden.first, capture_start);
+        int64_t hidden_end = std::min(hidden.second, capture_end);
+        append_bytes(cursor, hidden_begin);
+        cursor = std::max(cursor, hidden_end);
       }
-      if (hidden.first >= capture_end) {
-        break;
-      }
-      int64_t hidden_begin = std::max(hidden.first, capture_start);
-      int64_t hidden_end = std::min(hidden.second, capture_end);
-      append_bytes(cursor, hidden_begin);
-      cursor = std::max(cursor, hidden_end);
     }
     append_bytes(cursor, capture_end);
     result.emplace_back(rule.capture_name, std::move(capture));
