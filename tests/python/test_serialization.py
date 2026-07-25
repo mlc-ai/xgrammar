@@ -53,6 +53,7 @@ def test_serialize_grammar():
     serialized = grammar.serialize_json()
     expected_json = {
         "rules": [["rule1", 4, -1, False, -1, "", False], ["root", 8, -1, False, -1, "", False]],
+        "suffix_stop_infos": [],
         "grammar_expr_data": [0, 5, 8, 12, 14, 18, 21, 24, 28],
         "grammar_expr_indptr": [
             # fmt: off
@@ -74,6 +75,7 @@ def test_serialize_grammar_exception():
     """Test Grammar serialization produces expected JSON string."""
     expected_json = {
         "rules": [["rule1", 4, 9, True, -1, "", False], ["root", 8, -1, False, -1, "", False]],
+        "suffix_stop_infos": [],
         "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28, 31],
         "grammar_expr_indptr": [
             # fmt: off
@@ -198,6 +200,7 @@ def test_serialize_compiled_grammar():
     expected_json = {
         "grammar": {
             "rules": [["rule1", 4, 9, True, -1, "", False], ["root", 8, -1, False, -1, "", False]],
+            "suffix_stop_infos": [],
             "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28, 31],
             "grammar_expr_indptr": [
                 # fmt: off
