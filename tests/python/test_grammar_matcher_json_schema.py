@@ -545,6 +545,10 @@ def test_regression_accept_invalid_token():
 
 
 @pytest.mark.hf_token_required
+@pytest.mark.skipif(
+    sys.version_info < (3, 9),
+    reason="Kimi-K2's huggingface remote tokenizer code requires Python >= 3.9",
+)
 def test_regression_accept_kimi_tokenizer_token():
     config = AutoConfig.from_pretrained("moonshotai/Kimi-K2-Thinking", trust_remote_code=True)
     tokenizer = AutoTokenizer.from_pretrained("moonshotai/Kimi-K2-Thinking", trust_remote_code=True)

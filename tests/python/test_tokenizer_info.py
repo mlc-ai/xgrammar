@@ -50,6 +50,15 @@ tokenizer_path__vocab_type__prepend_space = [
     ("moonshotai/Kimi-K2-Instruct", xgr.VocabType.BYTE_LEVEL, False),
 ]
 
+if sys.version_info < (3, 9):
+    # Kimi-K2's huggingface remote tokenizer code uses PEP 585 builtin generics (list[dict]),
+    # which cannot be evaluated on Python 3.8.
+    tokenizer_path__vocab_type__prepend_space = [
+        entry
+        for entry in tokenizer_path__vocab_type__prepend_space
+        if not entry[0].startswith("moonshotai/Kimi-K2")
+    ]
+
 tokenizer_paths = [path for path, *_ in tokenizer_path__vocab_type__prepend_space]
 
 
