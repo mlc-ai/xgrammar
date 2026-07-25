@@ -401,6 +401,18 @@ class EarleyParser {
   void RecordCaptureEvent(const ParserState& state, bool marker_present);
 
   /*!
+   * \brief Whether this completion of a suffix/stop rule actually consumed the trailing marker.
+   * A non-looping TagDispatch can also complete before its trigger is encountered, which is what
+   * lets a free-text tail end normally. Only the terminal post-dispatch state has no outgoing
+   * edges; completions in the trigger-scanning states did not consume a suffix/stop marker.
+   */
+  bool CompletionConsumedMarker(const ParserState& state) const;
+
+  /*! \brief Collect the captured rule occurrences whose concrete Earley parent chains contain
+   * the given stop completion. Includes the completed rule's own occurrence when captured. */
+  std::vector<CaptureOccurrence> CollectStopCaptureTargets(const ParserState& state) const;
+
+  /*!
    * \brief The lazy rule occurrences (rule_id, rule_start_pos) completed while building the
    * current row. Committed-shortest matching: their remaining states are removed when the row is
    * finalized, so the occurrence cannot be extended further.

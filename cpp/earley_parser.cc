@@ -25,35 +25,60 @@ using GrammarExpr = Grammar::Impl::GrammarExpr;
 
 bool EarleyParser::IsCompleted() const { return is_completed_.back(); }
 
-void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_present) {
-  const auto& rule = grammar_->GetRule(state.rule_id);
-  const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(state.rule_id);
-  int32_t hidden_suffix_bytes =
-      suffix_stop_info == nullptr ? 0 : suffix_stop_info->hidden_suffix_bytes;
-  int32_t hidden_stop_bytes = suffix_stop_info == nullptr ? 0 : suffix_stop_info->hidden_stop_bytes;
-  int32_t event_start_pos = state.rule_start_pos;
-
-  if (!marker_present) {
-    hidden_suffix_bytes = 0;
-    hidden_stop_bytes = 0;
+bool EarleyParser::CompletionConsumedMarker(const ParserState& state) const {
+  const auto& body = grammar_->GetGrammarExpr(grammar_->GetRule(state.rule_id).body_expr_id);
+  if (body.type != GrammarExprType::kTagDispatch) {
+    return true;
   }
+  XGRAMMAR_DCHECK(grammar_->per_rule_fsms[state.rule_id].has_value());
+  const auto& fsm = grammar_->per_rule_fsms[state.rule_id]->GetFsm().GetFsm();
+  return fsm.GetEdges(state.element_id).size() == 0;
+}
 
-  // A non-looping TagDispatch can also complete before its trigger is encountered, which is what
-  // lets a free-text tail end normally. Only the terminal post-dispatch state has no outgoing
-  // edges; completions in the trigger-scanning states did not consume a suffix/stop marker.
-  if (hidden_suffix_bytes > 0 || hidden_stop_bytes > 0) {
-    const auto& body = grammar_->GetGrammarExpr(rule.body_expr_id);
-    if (body.type == GrammarExprType::kTagDispatch) {
-      XGRAMMAR_DCHECK(grammar_->per_rule_fsms[state.rule_id].has_value());
-      const auto& fsm = grammar_->per_rule_fsms[state.rule_id]->GetFsm().GetFsm();
-      if (fsm.GetEdges(state.element_id).size() != 0) {
-        hidden_suffix_bytes = 0;
-        hidden_stop_bytes = 0;
+std::vector<CaptureOccurrence> EarleyParser::CollectStopCaptureTargets(const ParserState& state
+) const {
+  // Follow only the parent links of this concrete rule occurrence. A byte-overlap test at
+  // materialization time cannot distinguish an actual captured ancestor from an unrelated
+  // Earley branch that happens to cover the same input.
+  std::vector<CaptureOccurrence> targets;
+  std::vector<CaptureOccurrence> pending{{state.rule_id, state.rule_start_pos}};
+  std::unordered_set<int64_t> visited;
+  while (!pending.empty()) {
+    CaptureOccurrence occurrence = pending.back();
+    pending.pop_back();
+    int64_t occurrence_key = (static_cast<int64_t>(occurrence.rule_id) << 32) |
+                             static_cast<uint32_t>(occurrence.start_pos);
+    if (!visited.insert(occurrence_key).second) {
+      continue;
+    }
+    if (RuleHasCapture(occurrence.rule_id)) {
+      targets.push_back(occurrence);
+    }
+    if (occurrence.start_pos == ParserState::kNoPrevInputPos) {
+      continue;
+    }
+    const auto& parent_states = rule_id_to_completable_states_[occurrence.start_pos];
+    for (const auto& [ref_rule_id, parent_state] : parent_states) {
+      if (ref_rule_id != occurrence.rule_id || parent_state.rule_id < 0) {
+        continue;
       }
+      pending.push_back({parent_state.rule_id, parent_state.rule_start_pos});
     }
   }
+  return targets;
+}
 
-  if (suffix_stop_info != nullptr && suffix_stop_info->body_rule_id == state.rule_id) {
+void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_present) {
+  const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(state.rule_id);
+  bool marker_consumed =
+      marker_present && suffix_stop_info != nullptr &&
+      (suffix_stop_info->hidden_suffix_bytes > 0 || suffix_stop_info->hidden_stop_bytes > 0) &&
+      CompletionConsumedMarker(state);
+  const int32_t hidden_suffix_bytes = marker_consumed ? suffix_stop_info->hidden_suffix_bytes : 0;
+  const int32_t hidden_stop_bytes = marker_consumed ? suffix_stop_info->hidden_stop_bytes : 0;
+
+  int32_t event_start_pos = state.rule_start_pos;
+  if (marker_consumed && suffix_stop_info->body_rule_id == state.rule_id) {
     // A self-referencing body helper marks the zero-width event inserted immediately after a
     // dynamic string trigger. Its capture span is the fixed-length marker that precedes it.
     XGRAMMAR_DCHECK(event_start_pos != ParserState::kNoPrevInputPos);
@@ -61,43 +86,8 @@ void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_pres
     XGRAMMAR_DCHECK(event_start_pos >= 0);
   }
 
-  std::vector<CaptureOccurrence> stop_capture_targets;
-  if (hidden_stop_bytes > 0) {
-    auto add_target = [&](CaptureOccurrence occurrence) {
-      if (std::find(stop_capture_targets.begin(), stop_capture_targets.end(), occurrence) ==
-          stop_capture_targets.end()) {
-        stop_capture_targets.push_back(occurrence);
-      }
-    };
-
-    // Follow only the parent links of this concrete rule occurrence. A byte-overlap test at
-    // materialization time cannot distinguish an actual captured ancestor from an unrelated
-    // Earley branch that happens to cover the same input.
-    std::vector<CaptureOccurrence> pending{{state.rule_id, state.rule_start_pos}};
-    std::unordered_set<int64_t> visited;
-    while (!pending.empty()) {
-      CaptureOccurrence occurrence = pending.back();
-      pending.pop_back();
-      int64_t occurrence_key = (static_cast<int64_t>(occurrence.rule_id) << 32) |
-                               static_cast<uint32_t>(occurrence.start_pos);
-      if (!visited.insert(occurrence_key).second) {
-        continue;
-      }
-      if (RuleHasCapture(occurrence.rule_id)) {
-        add_target(occurrence);
-      }
-      if (occurrence.start_pos == ParserState::kNoPrevInputPos) {
-        continue;
-      }
-      const auto& parent_states = rule_id_to_completable_states_[occurrence.start_pos];
-      for (const auto& [ref_rule_id, parent_state] : parent_states) {
-        if (ref_rule_id != occurrence.rule_id || parent_state.rule_id < 0) {
-          continue;
-        }
-        pending.push_back({parent_state.rule_id, parent_state.rule_start_pos});
-      }
-    }
-  }
+  std::vector<CaptureOccurrence> stop_capture_targets =
+      hidden_stop_bytes > 0 ? CollectStopCaptureTargets(state) : std::vector<CaptureOccurrence>{};
 
   capture_event_history_.PushBackInLatestRow(
       {state.rule_id,
