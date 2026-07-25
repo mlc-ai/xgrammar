@@ -263,12 +263,6 @@ void GrammarBuilder::UpdateLookaheadExact(int32_t rule_id, bool is_exact) {
   grammar_->rules_[rule_id].is_exact_lookahead = is_exact;
 }
 
-void GrammarBuilder::UpdateLookaheadReachesRoot(int32_t rule_id, bool reaches_root) {
-  XGRAMMAR_CHECK(rule_id < static_cast<int32_t>(grammar_->rules_.size()))
-      << "Rule id " << rule_id << " is out of range.";
-  grammar_->rules_[rule_id].lookahead_reaches_root = reaches_root;
-}
-
 void GrammarBuilder::UpdateLookaheadAssertion(
     std::string rule_name, int32_t lookahead_assertion_id
 ) {

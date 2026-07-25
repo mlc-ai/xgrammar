@@ -84,7 +84,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
 
  private:
   /*! \brief Check if a token can pass the lookahead assertion. */
-  std::pair</*acceptable*/ bool, /*lookahead completed*/ bool> IsTokenPassLookaheadAssertion(
+  std::pair</*acceptable*/ bool, /*can reach end*/ bool> IsTokenPassLookaheadAssertion(
       const std::string& token, const std::vector<bool>& can_reach_end_stack
   );
 
@@ -152,7 +152,6 @@ void GrammarMatcherForTokenMaskCache::AdaptCacheWithLookahead(
   const auto& subtree_nodes_range = tokenizer_info_.GetTrieSubtreeNodesRange();
   const std::string* prev_token = nullptr;
   bool is_exact_lookahead = grammar_->GetRule(init_rule_id_).is_exact_lookahead;
-  bool lookahead_reaches_root = grammar_->GetRule(init_rule_id_).lookahead_reaches_root;
   int prev_matched_size = 0;
   int last_rejected_range = 0;
   int last_uncertain_range = 0;
@@ -226,9 +225,7 @@ void GrammarMatcherForTokenMaskCache::AdaptCacheWithLookahead(
         auto [lookahead_accepted, lookahead_completed] =
             IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_);
         if ((!is_root_rule) && lookahead_accepted) {
-          if (lookahead_reaches_root) {
-            tmp_accepted_indices_.push_back(uncertain_index);
-          } else if (lookahead_completed || !is_exact_lookahead) {
+          if (lookahead_completed || !is_exact_lookahead) {
             tmp_uncertain_indices_.push_back(uncertain_index);
           } else {
             tmp_accepted_indices_.push_back(uncertain_index);
@@ -314,57 +311,56 @@ void GrammarMatcherForTokenMaskCache::AdaptCacheWithLookahead(
 std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAssertion(
     const std::string& token, const std::vector<bool>& can_reach_end_stack
 ) {
+  bool accepted = true;
+  bool can_reach_end = true;
   auto lookahead_assertion_id = grammar_->GetRule(init_rule_id_).lookahead_assertion_id;
   if (lookahead_assertion_id == -1) {
-    return {/*accepted=*/true, /*completed=*/true};
+    return {accepted, can_reach_end};
   }
-  const bool reaches_root = grammar_->GetRule(init_rule_id_).lookahead_reaches_root;
   auto lookahead_state =
       ParserState(/*rule_id*/ -1, lookahead_assertion_id, 0, ParserState::kNoPrevInputPos, 0);
   PushStateAndExpand(lookahead_state);
-  const int token_len = token.size();
+  int token_len = token.size();
+  if (IsCompleted()) {
+    // If the lookahead assertion is already completed, we can accept the token.
+    PopLastStates(1);
+    return {accepted, can_reach_end};
+  }
 
-  // Find all positions that can come to an end. Then check if the suffix from that position
+  // Find all positions that can come to and end. Then check if the suffix from that position
   // can be accepted by the lookahead assertion.
   for (int i = static_cast<int>(can_reach_end_stack.size()) - 1; i >= 0; --i) {
     if (!can_reach_end_stack[i]) {
       continue;
     }
-
-    // A root-reaching lookahead is also an end-of-input assertion. Completion before the token
-    // ends is not sufficient, but nullable alternatives may still consume the remaining bytes.
-    if (IsCompleted() && (!reaches_root || i == token_len)) {
-      PopLastStates(1);
-      return {/*accepted=*/true, /*completed=*/true};
-    }
-
-    int accepted_chars = 0;
-    bool failed = false;
+    int last_accept_pos = i - 1;
     for (int pos = i; pos < token_len; ++pos) {
       if (!Advance(token[pos])) {
-        failed = true;
         break;
       }
-      ++accepted_chars;
-      if (IsCompleted() && (!reaches_root || pos == token_len - 1)) {
-        // Roll back the accepted characters and the pushed initial lookahead state.
-        PopLastStates(accepted_chars + 1);
-        return {/*accepted=*/true, /*completed=*/true};
+      last_accept_pos = pos;
+      // Case 1. The whole rule is finished.
+      if (IsCompleted()) {
+        // accepted chars: pos - i + 1
+        // we need to rollback the pushed initial state as well
+        PopLastStates(pos - i + 2);
+        return {accepted, can_reach_end};
       }
     }
-
-    if (!failed && i + accepted_chars == token_len) {
-      // The token is a proper prefix of the exact continuation.
-      PopLastStates(accepted_chars + 1);
-      return {/*accepted=*/true, /*completed=*/false};
+    // Case 2. The whole token is accepted
+    if (last_accept_pos == token_len - 1) {
+      PopLastStates(last_accept_pos - i + 2);
+      can_reach_end = false;
+      return {accepted, can_reach_end};
     }
-
-    // This split is not accepted. Restore the initial lookahead state and try the next one.
-    PopLastStates(accepted_chars);
+    // Case 3. The token is not accepted. Check the next position.
+    PopLastStates(last_accept_pos - i + 1);
   }
 
   PopLastStates(1);
-  return {/*accepted=*/false, /*completed=*/false};
+  can_reach_end = false;
+  accepted = false;
+  return {accepted, can_reach_end};
 }
 
 // Comparator for std::pair<int32_t, std::string> based on the string value.
@@ -530,7 +526,6 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
   int prev_matched_size = 0;
   int last_rejected_range = 0;
   const bool& is_exact_lookahead = grammar_->GetRule(init_rule_id_).is_exact_lookahead;
-  const bool& lookahead_reaches_root = grammar_->GetRule(init_rule_id_).lookahead_reaches_root;
   std::optional<const DynamicBitset*> definite_accepted_bitset = std::nullopt;
   const bool is_tag_dispatch_rule =
       grammar_->GetGrammarExpr(grammar_->GetRule(init_rule_id_).body_expr_id).type ==
@@ -651,10 +646,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
         auto [lookahead_accepted, lookahead_completed] =
             IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_);
         if ((!is_root_rule) && lookahead_accepted) {
-          if (lookahead_reaches_root) {
-            tmp_accepted_indices_.push_back(i);
-            tmp_accepted_by_lookahead_indices_.push_back(i);
-          } else if (lookahead_completed || !is_exact_lookahead) {
+          if (lookahead_completed || !is_exact_lookahead) {
             tmp_uncertain_indices_.push_back(i);
           } else {
             tmp_accepted_indices_.push_back(i);
@@ -810,7 +802,6 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   std::optional<AdaptiveTokenMask> crossing_cache = std::nullopt;
   int lookahead_id = grammar_->GetRule(initial_state_.rule_id).lookahead_assertion_id;
   bool is_exact_lookahead = grammar_->GetRule(initial_state_.rule_id).is_exact_lookahead;
-  bool lookahead_reaches_root = grammar_->GetRule(initial_state_.rule_id).lookahead_reaches_root;
   std::optional<uint64_t> lookahead_hash = std::nullopt;
   if (rule_level_cache_is_available) {
     lookahead_hash = GrammarFSMHasher::HashSequence(grammar_, lookahead_id);
@@ -826,9 +817,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
     const auto& fsm = grammar_->per_rule_fsms[init_rule_id_].value();
     if (lookahead_hash.has_value()) {
       crossing_cache = rule_level_cache_->GetCache(
-          HashCombine(
-              fsm_hash.value(), lookahead_hash.value(), is_exact_lookahead, lookahead_reaches_root
-          ),
+          HashCombine(fsm_hash.value(), lookahead_hash.value(), is_exact_lookahead),
           new_state_id,
           fsm.GetNodeNum(),
           fsm.GetEdgeNum()
@@ -934,9 +923,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
       if (lookahead_hash.has_value()) {
         auto& fsm = grammar_->per_rule_fsms[init_rule_id_].value();
         rule_level_cache_->AddCache(
-            HashCombine(
-                fsm_hash.value(), lookahead_hash.value(), is_exact_lookahead, lookahead_reaches_root
-            ),
+            HashCombine(fsm_hash.value(), lookahead_hash.value(), is_exact_lookahead),
             new_state_id,
             fsm.GetNodeNum(),
             fsm.GetEdgeNum(),
@@ -993,9 +980,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
 
       if (lookahead_hash.has_value()) {
         rule_level_cache_->AddCache(
-            HashCombine(
-                fsm_hash.value(), lookahead_hash.value(), is_exact_lookahead, lookahead_reaches_root
-            ),
+            HashCombine(fsm_hash.value(), lookahead_hash.value(), is_exact_lookahead),
             new_state_id,
             fsm.GetNodeNum(),
             fsm.GetEdgeNum(),

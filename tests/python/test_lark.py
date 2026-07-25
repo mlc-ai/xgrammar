@@ -706,67 +706,6 @@ def test_lark_standalone_lazy_rule() -> None:
     _assert_language(grammar, ["", "plain", "<end>", "plain<end>"], ["<end>x", "a<end>b"])
 
 
-@pytest.mark.parametrize("marker_style", ["lazy", "suffix", "stop"])
-def test_lark_flat_marker_crossing_tokens_are_preclassified(marker_style: str) -> None:
-    if marker_style == "lazy":
-        value_0 = 'value_0[lazy]: TEXT ";"'
-        value_1 = 'value_1[lazy]: TEXT "!"'
-    else:
-        value_0 = f'value_0[{marker_style}=";"]: TEXT'
-        value_1 = f'value_1[{marker_style}="!"]: TEXT'
-
-    grammar = f"""
-        start: pair_0 pair_1
-        pair_0: "k000=" value_0
-        {value_0}
-        pair_1: "k001=" value_1
-        {value_1}
-        TEXT: /(\\n|.)*/
-    """
-    tokenizer_info = xgr.TokenizerInfo(["k000=", "ab;k001=x!", "ab;k001=x!tail", "ab;k001=x"])
-    compiled = _compile_lark(grammar, tokenizer_info)
-
-    # The complete continuation of each value is known at compile time, including root EOI.
-    # Therefore marker-crossing tokens do not require the runtime uncertain-token loop.
-    serialized = json.loads(compiled.serialize_json())
-    assert all(not mask["uncertain_indices"] for _, mask in serialized["adaptive_token_mask_cache"])
-
-    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
-    assert matcher.accept_token(0)
-    allowed = _allowed_token_ids(matcher, tokenizer_info)
-    assert 1 in allowed  # Crosses both markers and ends exactly at root.
-    assert 2 not in allowed  # Completes root before the token's trailing bytes.
-    assert 3 in allowed  # Crosses the first marker and continues inside the final value.
-    assert matcher.accept_token(1)
-    assert matcher.is_terminated()
-
-
-def test_lark_ambiguous_marker_follow_uses_runtime_fallback() -> None:
-    tokenizer_info = xgr.TokenizerInfo(["a", "b", "q!x", "q!y", "q!z", "q"])
-    compiled = _compile_lark(
-        """
-        start: ("a" value "x") | ("b" value "y")
-        value[lazy]: TEXT "!"
-        TEXT: /(\\n|.)*/
-        """,
-        tokenizer_info,
-    )
-
-    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
-    assert matcher.accept_token(0)
-    allowed = _allowed_token_ids(matcher, tokenizer_info)
-    assert 2 in allowed
-    assert 3 not in allowed
-    assert 4 not in allowed
-
-    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
-    assert matcher.accept_token(1)
-    allowed = _allowed_token_ids(matcher, tokenizer_info)
-    assert 2 not in allowed
-    assert 3 in allowed
-    assert 4 not in allowed
-
-
 def test_lark_lazy_rule_starred_terminal() -> None:
     grammar = r"""
         start: head "!"

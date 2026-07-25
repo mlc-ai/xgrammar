@@ -81,12 +81,6 @@ class Grammar::Impl {
     int32_t lookahead_assertion_id = -1;
     /*! \brief Whether the lookahead assertion is exact. */
     bool is_exact_lookahead = false;
-    /*! \brief Whether the exact lookahead contains the complete continuation to the root rule.
-     *
-     * When true, completing the lookahead before the end of a token is a definite rejection:
-     * there is no enclosing rule left that could consume the remaining bytes.
-     */
-    bool lookahead_reaches_root = false;
     /*! \brief The token budget of the rule. When non-negative, the matcher bounds each
      * occurrence of this rule to at most max_tokens LLM tokens, forcing it to end at the
      * earliest possible position once the budget is exhausted. -1 means no budget. */
@@ -406,7 +400,6 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::Rule::body_expr_id,
     &Grammar::Impl::Rule::lookahead_assertion_id,
     &Grammar::Impl::Rule::is_exact_lookahead,
-    &Grammar::Impl::Rule::lookahead_reaches_root,
     &Grammar::Impl::Rule::max_tokens,
     &Grammar::Impl::Rule::capture_name,
     &Grammar::Impl::Rule::is_lazy

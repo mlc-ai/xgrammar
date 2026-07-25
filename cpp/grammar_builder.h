@@ -197,9 +197,6 @@ class GrammarBuilder {
 
   void UpdateLookaheadExact(int32_t rule_id, bool is_exact = true);
 
-  /*! \brief Mark whether a rule's exact lookahead reaches the root rule. */
-  void UpdateLookaheadReachesRoot(int32_t rule_id, bool reaches_root = true);
-
   /*!
    * \brief Add a lookahead assertion to a rule referred by the given name. The lookahead
    * assertion should be a sequence GrammarExpr id. An id of -1 means no lookahead assertion.

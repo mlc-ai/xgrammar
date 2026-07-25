@@ -56,13 +56,7 @@ std::string GrammarPrinter::PrintRule(const Rule& rule, const SuffixStopInfo* su
     res += "[" + attributes + "]";
   }
   res += " ::= " + PrintGrammarExpr(rule.body_expr_id);
-  bool is_internal_root_eoi = false;
-  if (rule.lookahead_assertion_id != -1 && rule.lookahead_reaches_root) {
-    auto lookahead_expr = grammar_->GetGrammarExpr(rule.lookahead_assertion_id);
-    is_internal_root_eoi = lookahead_expr.type == Grammar::Impl::GrammarExprType::kSequence &&
-                           lookahead_expr.size() == 0;
-  }
-  if (rule.lookahead_assertion_id != -1 && !is_internal_root_eoi) {
+  if (rule.lookahead_assertion_id != -1) {
     res += " (=" + PrintGrammarExpr(rule.lookahead_assertion_id) + ")";
   }
   return res;
