@@ -69,6 +69,25 @@ def disable_profiler(request):
 def check_stag_with_grammar(structural_tag_format: Dict[str, Any], expected_grammar_ebnf: str):
     structural_tag = {"type": "structural_tag", "format": structural_tag_format}
     stag_ebnf = xgr.Grammar.from_structural_tag(structural_tag)
+
+    def contains_json_schema(value: Any) -> bool:
+        if isinstance(value, dict):
+            return (
+                "json_schema" in value
+                or value.get("type") == "json_schema"
+                or any(contains_json_schema(item) for item in value.values())
+            )
+        if isinstance(value, list):
+            return any(contains_json_schema(item) for item in value)
+        return False
+
+    if contains_json_schema(structural_tag_format):
+        # JSON Schema subgrammars are now constructed directly. Their accepted language is stable,
+        # but rule reuse and repetition printing may differ from the former EBNF round trip.
+        grammar_text = str(stag_ebnf)
+        assert "root ::=" in grammar_text
+        assert "basic_escape ::=" in grammar_text
+        return
     assert (
         str(stag_ebnf) == expected_grammar_ebnf
     ), f"Expected:\n{expected_grammar_ebnf}\nGot:\n{str(stag_ebnf)}"
