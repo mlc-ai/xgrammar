@@ -94,8 +94,9 @@ also accepts an `indices` parameter to fill only a subset of the bitmask rows, m
 [`batch_accept_string`](xgrammar.BatchGrammarMatcher.batch_accept_string) and
 [`batch_rollback`](xgrammar.BatchGrammarMatcher.batch_rollback) are the batch versions of the
 corresponding [`xgr.GrammarMatcher`](xgrammar.GrammarMatcher) methods.
-[`batch_get_temperature`](xgrammar.BatchGrammarMatcher.batch_get_temperature) collects the
-effective sampling temperature of each matcher in one pass, for grammars that use the
+[`batch_fill_temperature`](xgrammar.BatchGrammarMatcher.batch_fill_temperature) fills a
+`float32` CPU tensor with the effective sampling temperature of each matcher in one pass
+(`-1` for matchers without a configured temperature), for grammars that use the
 `temperature` rule attribute.
 
 ## Speculative Decoding

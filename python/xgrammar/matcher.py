@@ -390,8 +390,8 @@ class GrammarMatcher(XGRObject):
             (default: -1.0).
         temperatures : Optional[torch.Tensor], default: None
             Optional 1D float32 CPU tensor with one element per node. It is filled with the
-            effective temperature for each visited node. ``NaN`` means that no temperature
-            is configured.
+            effective temperature for each visited node. ``-1`` means that no effective
+            temperature is configured, or that the node was not visited or was rejected.
 
         Returns
         -------
@@ -593,22 +593,34 @@ class BatchGrammarMatcher(XGRObject):
         self._handle.batch_fill_next_token_bitmask(matcher_handles, bitmask, indices, debug_print)
 
     @staticmethod
-    def batch_get_temperature(matchers: List["GrammarMatcher"]) -> List[Optional[float]]:
-        """Get the effective sampling temperature for multiple matchers.
+    def batch_fill_temperature(
+        matchers: List["GrammarMatcher"],
+        temperatures: torch.Tensor,
+        indices: Optional[List[int]] = None,
+    ) -> None:
+        """Fill the effective sampling temperature of multiple matchers into a tensor.
 
         Parameters
         ----------
         matchers : List[GrammarMatcher]
             The list of matchers to query.
 
-        Returns
-        -------
-        temperatures : List[Optional[float]]
-            The effective sampling temperature for each matcher.
+        temperatures : torch.Tensor
+            A pre-allocated 1D float32 CPU tensor. The entry of a matcher without an
+            effective temperature is set to ``-1``.
+
+        indices : Optional[List[int]], default: None
+            A list of indices to specify which element each matcher writes to. If None,
+            matchers[i] writes to temperatures[i].
+
+        Raises
+        ------
+        RuntimeError
+            If the temperatures tensor is invalid (not on CPU, not float32, not 1D, or too
+            small), or if the sizes of matchers and indices do not match.
         """
         matcher_handles = [matcher._handle for matcher in matchers]
-        result = _core.BatchGrammarMatcher.batch_get_temperature(matcher_handles)
-        return [None if value is None else float(value) for value in result]
+        _core.BatchGrammarMatcher.batch_fill_temperature(matcher_handles, temperatures, indices)
 
     @staticmethod
     def batch_accept_token(

@@ -131,7 +131,8 @@ class GrammarMatcher {
    *        If the traversal exceeds this threshold, it returns false.
    *        A value <= 0 disables the timeout (default: -1.0).
    * \param temperatures Optional DLTensor to store the effective temperature for each node
-   *        (1D float32 with num_nodes elements). NaN represents no effective temperature.
+   *        (1D float32 with num_nodes elements). -1 represents no effective temperature; it is
+   *        also written for nodes that were not visited or were rejected.
    * \return true if the traversal completed successfully, false if it timed out.
    */
   bool TraverseDraftTree(
@@ -243,12 +244,17 @@ class BatchGrammarMatcher {
   );
 
   /*!
-   * \brief Get the effective sampling temperature for each matcher.
+   * \brief Fill the effective sampling temperature of each matcher into a tensor.
    * \param matchers The array of GrammarMatcher objects.
-   * \return The effective sampling temperature for each matcher.
+   * \param temperatures The pre-allocated 1D float32 CPU tensor to store the result. The entry of
+   * a matcher without an effective temperature is set to -1.
+   * \param indices The optional array of indices to specify which element each matcher writes to.
+   * If not provided, matchers[i] writes to temperatures[i].
    */
-  static std::vector<std::optional<float>> BatchGetTemperature(
-      const std::vector<GrammarMatcher>& matchers
+  static void BatchFillTemperature(
+      const std::vector<GrammarMatcher>& matchers,
+      DLTensor* temperatures,
+      const std::optional<std::vector<int32_t>>& indices = std::nullopt
   );
 
   /*!

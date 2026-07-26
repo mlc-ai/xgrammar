@@ -599,14 +599,17 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           }
       )
       .def_static(
-          "batch_get_temperature",
-          [](ffi::Array<O> matchers_ref) {
+          "batch_fill_temperature",
+          [](ffi::Array<O> matchers_ref, ffi::AnyView temperatures, ffi::AnyView indices) {
             std::vector<GrammarMatcher> matchers;
             matchers.reserve(matchers_ref.size());
             for (int64_t i = 0; i < static_cast<int64_t>(matchers_ref.size()); ++i) {
               matchers.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
             }
-            return BatchGrammarMatcher::BatchGetTemperature(matchers);
+            DLTensor* temperatures_ptr = temperatures.cast<DLTensor*>();
+            BatchGrammarMatcher::BatchFillTemperature(
+                matchers, temperatures_ptr, OptionalInt32VectorFromView(indices)
+            );
           }
       )
       .def_static(

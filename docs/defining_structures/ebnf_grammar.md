@@ -195,9 +195,10 @@ warning once and `matcher.temperature` returns the maximum. If no active rule sp
 temperature, it returns the matcher's `default_temperature`; if neither is configured, it returns
 `None`.
 
-Use `BatchGrammarMatcher.batch_get_temperature` to query multiple matchers. During speculative
-decoding, the optional `temperatures` tensor passed to `GrammarMatcher.traverse_draft_tree`
-receives the effective temperature for each tree node.
+Use `BatchGrammarMatcher.batch_fill_temperature` to fill the temperatures of multiple matchers
+into a pre-allocated tensor. During speculative decoding, the optional `temperatures` tensor
+passed to `GrammarMatcher.traverse_draft_tree` receives the effective temperature for each tree
+node. In both tensors, `-1` means there is no effective temperature.
 
 ## Macros
 

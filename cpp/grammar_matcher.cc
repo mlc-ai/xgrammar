@@ -102,8 +102,7 @@ bool TraverseDraftTreeRecursive(
       if (!matcher.IsTerminated()) {
         matcher.FillNextTokenBitmask(token_bitmask, current_position);
         if (temperatures != nullptr) {
-          temperatures[current_position] =
-              matcher.GetTemperature().value_or(std::numeric_limits<float>::quiet_NaN());
+          temperatures[current_position] = matcher.GetTemperature().value_or(-1.0f);
         }
 
         if (retrieve_next_token[current_position] != -1) {
@@ -2070,11 +2069,7 @@ bool GrammarMatcher::TraverseDraftTree(
   if (temperatures != nullptr) {
     XGRAMMAR_CHECK(retrieve_next_token->shape[0] == temperatures->shape[0])
         << "The temperatures size must match the number of nodes in the tree";
-    std::fill_n(
-        reinterpret_cast<float*>(temperatures->data),
-        temperatures->shape[0],
-        std::numeric_limits<float>::quiet_NaN()
-    );
+    std::fill_n(reinterpret_cast<float*>(temperatures->data), temperatures->shape[0], -1.0f);
   }
   XGRAMMAR_CHECK(retrieve_next_sibling->shape[0] > 0 && retrieve_next_sibling->data != nullptr)
       << "The draft tree must not be empty";
@@ -2135,15 +2130,31 @@ void BatchGrammarMatcher::BatchFillNextTokenBitmask(
   pimpl_->BatchFillNextTokenBitmask(matchers, next_token_bitmask, indices, debug_print);
 }
 
-std::vector<std::optional<float>> BatchGrammarMatcher::BatchGetTemperature(
-    const std::vector<GrammarMatcher>& matchers
+void BatchGrammarMatcher::BatchFillTemperature(
+    const std::vector<GrammarMatcher>& matchers,
+    DLTensor* temperatures,
+    const std::optional<std::vector<int32_t>>& indices
 ) {
-  std::vector<std::optional<float>> temperatures;
-  temperatures.reserve(matchers.size());
-  for (const auto& matcher : matchers) {
-    temperatures.push_back(matcher.GetTemperature());
+  XGRAMMAR_CHECK(
+      temperatures->ndim == 1 && temperatures->dtype.code == kDLFloat &&
+      temperatures->dtype.bits == 32
+  ) << "The temperatures tensor must be a 1D float32 tensor";
+  XGRAMMAR_CHECK(
+      temperatures->device.device_type == kDLCPU ||
+      temperatures->device.device_type == kDLCUDAHost ||
+      temperatures->device.device_type == kDLROCMHost
+  ) << "The temperatures tensor must be on CPU";
+  if (indices.has_value()) {
+    XGRAMMAR_CHECK(indices->size() == matchers.size())
+        << "The indices size must match the number of matchers";
   }
-  return temperatures;
+  auto* temperatures_data = reinterpret_cast<float*>(temperatures->data);
+  for (int64_t i = 0; i < static_cast<int64_t>(matchers.size()); ++i) {
+    int64_t position = indices.has_value() ? (*indices)[i] : i;
+    XGRAMMAR_CHECK(position >= 0 && position < temperatures->shape[0])
+        << "The index " << position << " is out of bounds for the temperatures tensor";
+    temperatures_data[position] = matchers[i].GetTemperature().value_or(-1.0f);
+  }
 }
 
 std::vector<uint8_t> BatchGrammarMatcher::BatchAcceptString(
