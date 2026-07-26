@@ -63,7 +63,10 @@ build.verbose = true
 # CMake configuration
 cmake.version = "CMakeLists.txt"
 cmake.args = []
-cmake.build-type = "RelWithDebInfo"
+# Use Release for wheels: debug info would multiply the binary size by >10x, and no error
+# reporting path needs it. Error messages carry file:line via __FILE__/__LINE__ macros,
+# which are preserved in any build type.
+cmake.build-type = "Release"
 
 # Logging
 logging.level = "INFO"
