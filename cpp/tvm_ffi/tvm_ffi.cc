@@ -912,7 +912,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           [](O grammar_ref) {
             // The pass rewrites in place, so copy first to leave the input grammar unaffected.
             const Grammar& input = grammar_ref.as<GrammarObj>()->value;
-            Grammar grammar = GrammarBuilder(input).Get(input->GetRootRuleId());
+            Grammar grammar(std::make_shared<Grammar::Impl>(*input.operator->()));
             ByteStringFuser::Apply(&grammar);
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(grammar));
           }
@@ -922,7 +922,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           [](O grammar_ref) {
             // The pass rewrites in place, so copy first to leave the input grammar unaffected.
             const Grammar& input = grammar_ref.as<GrammarObj>()->value;
-            Grammar grammar = GrammarBuilder(input).Get(input->GetRootRuleId());
+            Grammar grammar(std::make_shared<Grammar::Impl>(*input.operator->()));
             RuleInliner::Apply(&grammar);
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(grammar));
           }

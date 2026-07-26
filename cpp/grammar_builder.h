@@ -47,7 +47,9 @@ class GrammarBuilder {
   /*!
    * \brief Create a builder bound to an existing grammar without copying it. Unlike the copy
    * constructor above, appended exprs and rule updates are written directly into *grammar. The
-   * grammar must outlive the builder.
+   * grammar must outlive the builder. The rule name to id map is not built, so name-based
+   * operations (GetRuleId, AddRule, UpdateRuleBody by name, ...) are not supported on such a
+   * builder.
    */
   static GrammarBuilder FromMutableGrammar(Grammar* grammar);
 

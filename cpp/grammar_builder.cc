@@ -28,11 +28,10 @@ GrammarBuilder::GrammarBuilder(const Grammar& grammar)
 }
 
 GrammarBuilder GrammarBuilder::FromMutableGrammar(Grammar* grammar) {
+  // The rule name to id map is not built: it is only needed by name-based operations, and
+  // building it costs O(num_rules) string hashing, which in-place rewriters do not need.
   GrammarBuilder builder;
   builder.grammar_ = grammar->pimpl_;
-  for (int i = 0; i < static_cast<int>(builder.grammar_->NumRules()); ++i) {
-    builder.rule_name_to_id_[builder.grammar_->GetRule(i).name] = i;
-  }
   return builder;
 }
 

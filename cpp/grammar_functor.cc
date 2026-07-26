@@ -590,6 +590,9 @@ class InPlaceGrammarRewriter {
   void Apply(Grammar* grammar) {
     grammar_ = grammar;
     builder_ = GrammarBuilder::FromMutableGrammar(grammar);
+    // Expr ids are dense, so the memo is a plain array over the original exprs. Appended exprs
+    // are never visited again, so they need no memo slots.
+    memo_.assign(builder_.NumGrammarExprs(), -1);
     Prepare();
     int32_t num_rules = builder_.NumRules();
     for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
@@ -616,8 +619,9 @@ class InPlaceGrammarRewriter {
 
   /*! \brief Visit an expr; return its rewritten id, or the original id when nothing changed. */
   int32_t VisitExpr(int32_t expr_id) {
-    if (auto it = memo_.find(expr_id); it != memo_.end()) {
-      return it->second;
+    XGRAMMAR_DCHECK(expr_id < static_cast<int32_t>(memo_.size()));
+    if (memo_[expr_id] != -1) {
+      return memo_[expr_id];
     }
     int32_t result;
     switch (builder_.GetGrammarExpr(expr_id).type) {
@@ -640,17 +644,24 @@ class InPlaceGrammarRewriter {
   /*! \brief Rebuild a choices, recursing into each choice. Overridden to add rewriting. */
   virtual int32_t VisitChoices(int32_t expr_id) { return RebuildContainer(expr_id, true); }
 
-  /*! \brief Recurse into a sequence or choices; append a rebuilt expr only if a child changed. */
+  /*! \brief Recurse into a sequence or choices; append a rebuilt expr only if a child changed.
+   * No memory is allocated when no child changes. */
   int32_t RebuildContainer(int32_t expr_id, bool is_choices) {
-    auto expr = builder_.GetGrammarExpr(expr_id);
-    std::vector<int32_t> child_ids(expr.begin(), expr.end());
+    int32_t size = builder_.GetGrammarExpr(expr_id).size();
     std::vector<int32_t> new_child_ids;
-    new_child_ids.reserve(child_ids.size());
     bool changed = false;
-    for (int32_t child_id : child_ids) {
+    for (int32_t i = 0; i < size; ++i) {
+      // Re-fetch the expr each iteration: visiting a child may append to the arena and
+      // invalidate previously fetched views.
+      int32_t child_id = builder_.GetGrammarExpr(expr_id)[i];
       int32_t new_child_id = VisitExpr(child_id);
-      changed |= new_child_id != child_id;
-      new_child_ids.push_back(new_child_id);
+      if (!changed && new_child_id != child_id) {
+        changed = true;
+        CopyChildrenPrefix(expr_id, i, &new_child_ids);
+      }
+      if (changed) {
+        new_child_ids.push_back(new_child_id);
+      }
     }
     if (!changed) {
       return expr_id;
@@ -658,10 +669,18 @@ class InPlaceGrammarRewriter {
     return is_choices ? builder_.AddChoices(new_child_ids) : builder_.AddSequence(new_child_ids);
   }
 
+  /*! \brief Copy the first count children of expr into *out. Used to materialize the already
+   * scanned, unchanged prefix once the first change is discovered. */
+  void CopyChildrenPrefix(int32_t expr_id, int32_t count, std::vector<int32_t>* out) {
+    auto expr = builder_.GetGrammarExpr(expr_id);
+    out->reserve(expr.size());
+    out->insert(out->end(), expr.begin(), expr.begin() + count);
+  }
+
   GrammarBuilder builder_;
   Grammar* grammar_;
-  // Maps an original expr id to its rewritten id (or itself when unchanged).
-  std::unordered_map<int32_t, int32_t> memo_;
+  // Maps an original expr id to its rewritten id (or itself when unchanged); -1 means unvisited.
+  std::vector<int32_t> memo_;
 };
 
 /*!
@@ -684,14 +703,17 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
     for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
       original_body_expr_ids_.push_back(builder_.GetRule(rule_id).body_expr_id);
     }
+    can_rule_be_inlined_.assign(num_rules, -1);
   }
 
   int32_t VisitChoices(int32_t expr_id) override {
-    auto expr = builder_.GetGrammarExpr(expr_id);
-    std::vector<int32_t> choice_ids(expr.begin(), expr.end());
+    int32_t size = builder_.GetGrammarExpr(expr_id).size();
     std::vector<int32_t> new_choice_ids;
     bool changed = false;
-    for (int32_t choice_id : choice_ids) {
+    for (int32_t i = 0; i < size; ++i) {
+      // Re-fetch views each iteration: rewriting may append to the arena and invalidate
+      // previously fetched views.
+      int32_t choice_id = builder_.GetGrammarExpr(expr_id)[i];
       auto choice_expr = builder_.GetGrammarExpr(choice_id);
       int32_t inline_rule_id = -1;
       if (choice_expr.type == GrammarExprType::kSequence && choice_expr.size() > 0) {
@@ -702,11 +724,21 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
       }
       if (inline_rule_id == -1) {
         int32_t new_choice_id = VisitExpr(choice_id);
-        changed |= new_choice_id != choice_id;
-        new_choice_ids.push_back(new_choice_id);
+        if (!changed && new_choice_id != choice_id) {
+          changed = true;
+          CopyChildrenPrefix(expr_id, i, &new_choice_ids);
+        }
+        if (changed) {
+          new_choice_ids.push_back(new_choice_id);
+        }
         continue;
       }
+      if (!changed) {
+        changed = true;
+        CopyChildrenPrefix(expr_id, i, &new_choice_ids);
+      }
       // Do inlining: prepend each choice of the referenced rule to the rest of this sequence.
+      // Copy the needed element ids before appending anything.
       std::vector<int32_t> rest_element_ids(choice_expr.begin() + 1, choice_expr.end());
       auto ref_body = builder_.GetGrammarExpr(original_body_expr_ids_[inline_rule_id]);
       std::vector<int32_t> ref_choice_ids(ref_body.begin(), ref_body.end());
@@ -717,7 +749,6 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
         new_sequence.insert(new_sequence.end(), rest_element_ids.begin(), rest_element_ids.end());
         new_choice_ids.push_back(builder_.AddSequence(new_sequence));
       }
-      changed = true;
     }
     if (!changed) {
       return expr_id;
@@ -729,8 +760,8 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
   /*! \brief A rule can be inlined iff its body is a non-empty choices of sequences that contain no
    * rule references. Judged on the original grammar via original_body_expr_ids_. */
   bool CanRuleBeInlined(int32_t rule_id) {
-    if (auto it = can_rule_be_inlined_.find(rule_id); it != can_rule_be_inlined_.end()) {
-      return it->second;
+    if (can_rule_be_inlined_[rule_id] != -1) {
+      return can_rule_be_inlined_[rule_id] != 0;
     }
     const auto& rule = (*grammar_)->GetRule(rule_id);
     // Inlining a budgeted rule would erase the rule its length budget applies to. Inlining a
@@ -768,13 +799,14 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
         }
       }
     }
-    can_rule_be_inlined_[rule_id] = result;
+    can_rule_be_inlined_[rule_id] = result ? 1 : 0;
     return result;
   }
 
   // Rule body expr ids captured before any rewriting, for order-independent inlinability checks.
   std::vector<int32_t> original_body_expr_ids_;
-  std::unordered_map<int32_t, bool> can_rule_be_inlined_;
+  // Per-rule cache of CanRuleBeInlined: -1 unknown, 0 false, 1 true.
+  std::vector<int8_t> can_rule_be_inlined_;
 };
 
 /*!
@@ -2696,8 +2728,10 @@ class GrammarOptimizerImpl {
  public:
   static Grammar Apply(const Grammar& grammar) {
     // ByteStringFuser and RuleInliner rewrite the grammar in place, so work on a private copy: the
-    // input grammar may be shared (e.g. a cached grammar) and must not be mutated.
-    Grammar result = GrammarBuilder(grammar).Get(grammar->GetRootRuleId());
+    // input grammar may be shared (e.g. a cached grammar) and must not be mutated. Copy the impl
+    // directly (contiguous vector copies) instead of going through GrammarBuilder, which would
+    // also build the unneeded rule name map.
+    Grammar result(std::make_shared<Grammar::Impl>(*grammar.operator->()));
     ByteStringFuser::Apply(&result);
     RuleInliner::Apply(&result);
     result = RepetitionRangeExpander::Apply(result);
@@ -2760,10 +2794,29 @@ class GrammarOptimizerImpl {
 class ByteStringFuserImpl : public InPlaceGrammarRewriter {
  protected:
   int32_t VisitSequence(int32_t expr_id) override {
+    // Read-only probe: rewrite only if the sequence contains two adjacent byte strings. The
+    // probe appends nothing, so no memory is allocated for the common unchanged case.
+    bool previous_is_byte_string = false;
+    bool has_adjacent_byte_strings = false;
+    {
+      auto expr = builder_.GetGrammarExpr(expr_id);
+      for (int32_t element_id : expr) {
+        bool is_byte_string =
+            builder_.GetGrammarExpr(element_id).type == GrammarExprType::kByteString;
+        if (is_byte_string && previous_is_byte_string) {
+          has_adjacent_byte_strings = true;
+          break;
+        }
+        previous_is_byte_string = is_byte_string;
+      }
+    }
+    if (!has_adjacent_byte_strings) {
+      return expr_id;
+    }
+    // Copy the element ids first: fusing appends to the arena and invalidates expr views.
     auto expr = builder_.GetGrammarExpr(expr_id);
     std::vector<int32_t> element_ids(expr.begin(), expr.end());
     std::vector<int32_t> new_element_ids;
-    bool changed = false;
     for (size_t i = 0; i < element_ids.size();) {
       if (builder_.GetGrammarExpr(element_ids[i]).type != GrammarExprType::kByteString) {
         new_element_ids.push_back(element_ids[i]);
@@ -2785,12 +2838,8 @@ class ByteStringFuserImpl : public InPlaceGrammarRewriter {
         new_element_ids.push_back(element_ids[i]);
       } else {
         new_element_ids.push_back(builder_.AddByteString(fused_bytes));
-        changed = true;
       }
       i = run_end;
-    }
-    if (!changed) {
-      return expr_id;
     }
     return builder_.AddSequence(new_element_ids);
   }
