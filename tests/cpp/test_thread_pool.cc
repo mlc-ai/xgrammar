@@ -55,9 +55,32 @@ TEST(XGramamrThreadPoolTest, WaitKeepsPoolReusable) {
   EXPECT_THROW(failure.get(), std::runtime_error);
   pool.Wait();
 
+  pool.Execute([]() { throw std::runtime_error("expected execute failure"); });
+  EXPECT_THROW(pool.Wait(), std::runtime_error);
+
   auto success = pool.Submit([]() { return 42; });
   EXPECT_EQ(success.get(), 42);
   pool.Wait();
+
+  pool.Execute([&completed]() { ++completed; });
+  EXPECT_NO_THROW(pool.Wait());
+  EXPECT_EQ(completed.load(), 49);
+}
+
+TEST(XGramamrThreadPoolTest, ParallelForPropagatesWorkerExceptions) {
+  EXPECT_THROW(
+      ParallelFor(
+          0,
+          8,
+          4,
+          [](int index) {
+            if (index == 3) {
+              throw std::runtime_error("expected parallel-for failure");
+            }
+          }
+      ),
+      std::runtime_error
+  );
 }
 
 // TEST(XGramamrThreadPoolTest, PressureTest) {

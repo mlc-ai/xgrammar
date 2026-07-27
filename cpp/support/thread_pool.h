@@ -7,6 +7,7 @@
 #define XGRAMMAR_SUPPORT_THREAD_POOL_H_
 
 #include <condition_variable>
+#include <exception>
 #include <functional>
 #include <future>
 #include <mutex>
@@ -51,7 +52,11 @@ class ThreadPool {
             task = std::move(task_queue_.front());
             task_queue_.pop();
           }
-          task();
+          try {
+            task();
+          } catch (...) {
+            RecordTaskException(std::current_exception());
+          }
           TaskComplete();
         }
       });
@@ -111,9 +116,23 @@ class ThreadPool {
     queue_condition_.notify_one();
   }
 
+  /*!
+   * \brief Wait for all queued tasks and rethrow the first exception from an Execute task.
+   *
+   * The recorded exception is cleared before it is rethrown, so the pool remains reusable.
+   * Submit task exceptions are still propagated through their returned futures.
+   */
   void Wait() {
-    std::unique_lock<std::mutex> lock(queue_mutex_);
-    tasks_done_condition_.wait(lock, [this] { return unfinished_task_count_ == 0; });
+    std::exception_ptr task_exception;
+    {
+      std::unique_lock<std::mutex> lock(queue_mutex_);
+      tasks_done_condition_.wait(lock, [this] { return unfinished_task_count_ == 0; });
+      task_exception = task_exception_;
+      task_exception_ = nullptr;
+    }
+    if (task_exception != nullptr) {
+      std::rethrow_exception(task_exception);
+    }
   }
 
   /*!
@@ -148,6 +167,13 @@ class ThreadPool {
   ThreadPool& operator=(ThreadPool&&) = delete;
 
  private:
+  void RecordTaskException(std::exception_ptr task_exception) {
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    if (task_exception_ == nullptr) {
+      task_exception_ = std::move(task_exception);
+    }
+  }
+
   void TaskComplete() {
     std::unique_lock<std::mutex> lock(queue_mutex_);
     --unfinished_task_count_;
@@ -170,6 +196,8 @@ class ThreadPool {
   bool shutdown_ = false;
   /*! \brief Number of unfinished tasks */
   int unfinished_task_count_ = 0;
+  /*! \brief First exception thrown by an Execute task since the previous Wait. */
+  std::exception_ptr task_exception_;
 };
 
 inline void ParallelFor(int low, int high, int num_threads, std::function<void(int)> f) {
@@ -195,6 +223,7 @@ inline void ParallelFor(int low, int high, int num_threads, std::function<void(i
       }
     });
   }
+  pool.Wait();
   pool.Join();
 }
 
