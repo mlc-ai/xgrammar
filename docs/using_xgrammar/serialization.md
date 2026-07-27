@@ -73,6 +73,13 @@ require a `TokenizerInfo` object and check if it matches the metadata in the ser
 If so, the deserialization will use the provided `TokenizerInfo` object in the result. If not, the
 deserialization will raise a [`xgr.exception.DeserializeFormatError`](xgrammar.exception.DeserializeFormatError).
 
+An optimized grammar contains one complete finite-state machine (FSM) and a view of it for each
+grammar rule. The serialized representation stores the complete FSM once. Each per-rule entry is a
+compact view containing only its start state, end states, DFA flag, edge count, and node count.
+Deserialization validates the view count, state bounds, sorted unique end states, and size metadata
+before rebuilding the shared views. This avoids duplicating the complete FSM for every rule while
+preserving exact round trips.
+
 ```python
 # Construct CompiledGrammar
 compiler: xgr.GrammarCompiler = xgr.GrammarCompiler(tokenizer_info_deserialized)

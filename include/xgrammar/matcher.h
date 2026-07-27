@@ -125,6 +125,7 @@ class GrammarMatcher {
    * \param time_threshold Maximum allowed time in seconds for the DFS traversal.
    *        If the traversal exceeds this threshold, it returns false.
    *        A value <= 0 disables the timeout (default: -1.0).
+   * \param root_position Node to treat as the root. Its draft token is ignored.
    * \return true if the traversal completed successfully, false if it timed out.
    */
   bool TraverseDraftTree(
@@ -132,7 +133,8 @@ class GrammarMatcher {
       const DLTensor* retrieve_next_sibling,
       const DLTensor* draft_tokens,
       DLTensor* token_bitmask,
-      double time_threshold = -1.0
+      double time_threshold = -1.0,
+      int32_t root_position = 0
   );
 
   /*!
@@ -229,6 +231,29 @@ class BatchGrammarMatcher {
       DLTensor* next_token_bitmask,
       const std::optional<std::vector<int32_t>>& indices = std::nullopt,
       bool debug_print = false
+  );
+
+  /*!
+   * \brief Traverse one draft tree per matcher and fill their token bitmask rows in parallel.
+   * \param matchers The array of GrammarMatcher objects.
+   * \param retrieve_next_token A shared 1D tree or a 2D batch of trees.
+   * \param retrieve_next_sibling A shared 1D sibling tree or a 2D batch of trees.
+   * \param draft_tokens A 2D tensor of token ids with one row per request.
+   * \param token_bitmask A 2D tensor laid out as batch_size * num_nodes rows.
+   * \param indices Optional request-row index for each matcher. Indices must be unique.
+   * \param root_positions Optional root node for each matcher.
+   * \param time_threshold Maximum traversal time per matcher in seconds; <= 0 disables it.
+   * \return A byte per matcher indicating whether traversal completed before the timeout.
+   */
+  std::vector<uint8_t> BatchTraverseDraftTree(
+      std::vector<GrammarMatcher>* matchers,
+      const DLTensor* retrieve_next_token,
+      const DLTensor* retrieve_next_sibling,
+      const DLTensor* draft_tokens,
+      DLTensor* token_bitmask,
+      const std::optional<std::vector<int32_t>>& indices = std::nullopt,
+      const std::optional<std::vector<int32_t>>& root_positions = std::nullopt,
+      double time_threshold = -1.0
   );
 
   /*!

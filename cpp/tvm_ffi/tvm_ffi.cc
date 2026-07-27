@@ -595,6 +595,40 @@ TVM_FFI_STATIC_INIT_BLOCK() {
             );
           }
       )
+      .def(
+          "batch_traverse_draft_tree",
+          [](BatchGrammarMatcherObj* o,
+             ffi::Array<O> matchers_ref,
+             ffi::AnyView retrieve_next_token,
+             ffi::AnyView retrieve_next_sibling,
+             ffi::AnyView draft_tokens,
+             ffi::AnyView token_bitmask,
+             ffi::AnyView indices,
+             ffi::AnyView root_positions,
+             double time_threshold) {
+            std::vector<GrammarMatcher> matchers;
+            matchers.reserve(matchers_ref.size());
+            for (int64_t i = 0; i < static_cast<int64_t>(matchers_ref.size()); ++i) {
+              matchers.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
+            }
+            std::vector<uint8_t> completed = o->value.BatchTraverseDraftTree(
+                &matchers,
+                retrieve_next_token.cast<DLTensor*>(),
+                retrieve_next_sibling.cast<DLTensor*>(),
+                draft_tokens.cast<DLTensor*>(),
+                token_bitmask.cast<DLTensor*>(),
+                OptionalInt32VectorFromView(indices),
+                OptionalInt32VectorFromView(root_positions),
+                time_threshold
+            );
+            ffi::Array<int64_t> result;
+            result.reserve(completed.size());
+            for (uint8_t value : completed) {
+              result.push_back(static_cast<int64_t>(value));
+            }
+            return result;
+          }
+      )
       .def_static(
           "batch_accept_string",
           [](ffi::Array<O> matchers_ref, ffi::Array<ffi::Any> input_str_byte_union, bool debug_print
@@ -686,7 +720,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              ffi::AnyView retrieve_next_sibling,
              ffi::AnyView draft_tokens,
              ffi::AnyView token_bitmask,
-             double time_threshold) {
+             double time_threshold,
+             int64_t root_position) {
             DLTensor* retrieve_next_token_ptr = retrieve_next_token.cast<DLTensor*>();
             DLTensor* retrieve_next_sibling_ptr = retrieve_next_sibling.cast<DLTensor*>();
             DLTensor* draft_tokens_ptr = draft_tokens.cast<DLTensor*>();
@@ -696,7 +731,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 retrieve_next_sibling_ptr,
                 draft_tokens_ptr,
                 token_bitmask_ptr,
-                time_threshold
+                time_threshold,
+                static_cast<int32_t>(root_position)
             );
           }
       )

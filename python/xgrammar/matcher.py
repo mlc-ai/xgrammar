@@ -363,6 +363,7 @@ class GrammarMatcher(XGRObject):
         draft_tokens: torch.Tensor,
         token_bitmask: torch.Tensor,
         time_threshold: float = -1.0,
+        root_position: int = 0,
     ) -> bool:
         """Traverse a draft token tree and fill the token bitmask for each node.
 
@@ -382,6 +383,8 @@ class GrammarMatcher(XGRObject):
             Maximum allowed time in seconds for the traversal. If the traversal
             exceeds this threshold, it returns False. A value <= 0 disables the timeout
             (default: -1.0).
+        root_position : int
+            Node to treat as the root. The draft token at this position is ignored.
 
         Returns
         -------
@@ -389,7 +392,12 @@ class GrammarMatcher(XGRObject):
             True if the traversal completed successfully, False if it timed out.
         """
         return self._handle.traverse_draft_tree(
-            retrieve_next_token, retrieve_next_sibling, draft_tokens, token_bitmask, time_threshold
+            retrieve_next_token,
+            retrieve_next_sibling,
+            draft_tokens,
+            token_bitmask,
+            time_threshold,
+            root_position,
         )
 
     def find_jump_forward_string(self) -> str:
@@ -531,7 +539,8 @@ class BatchGrammarMatcher(XGRObject):
         ----------
         max_threads : Union[int, Literal["auto"]], default: "auto"
             The maximum number of threads to use for parallel processing. If set to "auto", the
-            max_threads will be set to std::thread::hardware_concurrency() / 2.
+            max_threads will be set to at least one and otherwise half of
+            std::thread::hardware_concurrency(). Worker threads are reused across calls.
         """
 
         self._init_handle(_core.BatchGrammarMatcher(max_threads))
@@ -571,6 +580,59 @@ class BatchGrammarMatcher(XGRObject):
         matcher_handles = [matcher._handle for matcher in matchers]
 
         self._handle.batch_fill_next_token_bitmask(matcher_handles, bitmask, indices, debug_print)
+
+    def batch_traverse_draft_tree(
+        self,
+        matchers: List["GrammarMatcher"],
+        retrieve_next_token: torch.Tensor,
+        retrieve_next_sibling: torch.Tensor,
+        draft_tokens: torch.Tensor,
+        token_bitmask: torch.Tensor,
+        indices: Optional[List[int]] = None,
+        root_positions: Optional[List[int]] = None,
+        time_threshold: float = -1.0,
+    ) -> List[bool]:
+        """Traverse one draft tree per matcher and fill all mask rows in one native call.
+
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            Independent matcher instances to traverse.
+        retrieve_next_token : torch.Tensor
+            A shared 1D int64 child-index tree or a contiguous 2D tensor with one tree per
+            request row.
+        retrieve_next_sibling : torch.Tensor
+            A shared 1D int64 sibling-index tree or a contiguous 2D tensor with one tree per
+            request row.
+        draft_tokens : torch.Tensor
+            A contiguous 2D int64 tensor with shape ``(batch_size, num_nodes)``.
+        token_bitmask : torch.Tensor
+            A contiguous 2D int32 tensor with ``batch_size * num_nodes`` rows. The call resets
+            every row to all-true before traversing the selected request rows.
+        indices : Optional[List[int]], default: None
+            Unique request-row index for each matcher. If omitted, matcher ``i`` uses row ``i``.
+        root_positions : Optional[List[int]], default: None
+            Root node for each matcher. If omitted, every root is node zero.
+        time_threshold : float, default: -1.0
+            Maximum traversal time per matcher in seconds. A value <= 0 disables the timeout.
+
+        Returns
+        -------
+        completed : List[bool]
+            Whether each matcher completed traversal before its timeout.
+        """
+        matcher_handles = [matcher._handle for matcher in matchers]
+        result = self._handle.batch_traverse_draft_tree(
+            matcher_handles,
+            retrieve_next_token,
+            retrieve_next_sibling,
+            draft_tokens,
+            token_bitmask,
+            indices,
+            root_positions,
+            time_threshold,
+        )
+        return [bool(value) for value in result]
 
     @staticmethod
     def batch_accept_token(

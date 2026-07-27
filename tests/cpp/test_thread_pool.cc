@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
+#include <stdexcept>
 
 #include "support/thread_pool.h"
 using namespace xgrammar;
@@ -35,6 +37,27 @@ TEST(XGramamrThreadPoolTest, FunctionalTest) {
 
   // Wait for task to complete
   pool.Join();
+}
+
+TEST(XGramamrThreadPoolTest, WaitKeepsPoolReusable) {
+  ThreadPool pool(4);
+  std::atomic<int> completed{0};
+
+  for (int round = 0; round < 3; ++round) {
+    for (int task = 0; task < 16; ++task) {
+      pool.Execute([&completed]() { ++completed; });
+    }
+    pool.Wait();
+    EXPECT_EQ(completed.load(), (round + 1) * 16);
+  }
+
+  auto failure = pool.Submit([]() -> int { throw std::runtime_error("expected failure"); });
+  EXPECT_THROW(failure.get(), std::runtime_error);
+  pool.Wait();
+
+  auto success = pool.Submit([]() { return 42; });
+  EXPECT_EQ(success.get(), 42);
+  pool.Wait();
 }
 
 // TEST(XGramamrThreadPoolTest, PressureTest) {

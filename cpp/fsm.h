@@ -618,6 +618,9 @@ class FSMWithStartEndBase {
    */
   const std::vector<int32_t>& GetEnds() const { return ends_; }
 
+  /*! \brief Returns whether this FSM view is deterministic. */
+  bool GetIsDFA() const { return is_dfa_; }
+
   /*!
    * \brief Checks if a given state is an end/accepting state.
    * \param state The state to check.
