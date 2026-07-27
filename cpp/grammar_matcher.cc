@@ -185,7 +185,9 @@ int32_t* CheckAndGetBitmaskPtr(const DLTensor& token_bitmask, int vocab_size, in
       token_bitmask.device.device_type == kDLROCMHost
   ) << "The provided bitmask's device is not valid: should be CPU";
 
-  return reinterpret_cast<int32_t*>(token_bitmask.data) + index * buffer_size;
+  auto* data =
+      static_cast<char*>(token_bitmask.data) + static_cast<std::size_t>(token_bitmask.byte_offset);
+  return reinterpret_cast<int32_t*>(data) + index * buffer_size;
 }
 
 void _DebugGetMaskedTokensFromBitmask(
