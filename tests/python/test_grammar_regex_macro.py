@@ -61,6 +61,21 @@ ebnf_str__input_str__accepted__test_regex_macro_accept_string = [
     ('root ::= Regex("[0-9]{2,}")', "1", False),
     ('root ::= Regex("[^a-z]")', "A", True),
     ('root ::= Regex("[^a-z]")', "a", False),
+    # Unicode literals, character classes and escapes
+    ('root ::= Regex("你+")', "你你", True),
+    ('root ::= Regex("你+")', "你你😁", False),
+    ('root ::= Regex("你+?")', "你你", True),
+    ('root ::= Regex("你+?")', "", False),
+    ('root ::= Regex("^你好$")', "你好", True),
+    ('root ::= Regex("[一-龥]+")', "你好", True),
+    ('root ::= Regex("[一-龥]+")', "镘", True),
+    ('root ::= Regex("[一-龥]+")', "hello", False),
+    ('root ::= Regex("[^一-龥]+")', "A😁", True),
+    ('root ::= Regex("[^一-龥]+")', "A你", False),
+    ('root ::= Regex("[^]")', "你", True),
+    ('root ::= Regex("[^]")', "", False),
+    (r'root ::= Regex("\\u4F60\\u{1F601}")', "你😁", True),
+    (r'root ::= Regex("\\D+\\W+\\S+")', "你😁界", True),
     # Anchors are allowed and ignored
     ('root ::= Regex("^[0-9]+$")', "123", True),
     ('root ::= Regex("^[0-9]+$")', "a", False),
@@ -90,9 +105,11 @@ ebnf_str__input_str__accepted__test_regex_macro_accept_string = [
     ('root ::= Regex("\\\\d+\\\\.\\\\d+")', "3.", False),
     ('root ::= Regex("\\\\w+")', "a_1", True),
     ('root ::= Regex("\\\\w+")', "a b", False),
-    # . matches any byte, including multi-byte UTF-8 characters
+    # . matches one Unicode codepoint.
     ('root ::= Regex("a.c")', "abc", True),
     ('root ::= Regex("a.c")', "a?c", True),
+    ('root ::= Regex(".")', "你", True),
+    ('root ::= Regex(".")', "你好", False),
     ('root ::= Regex(".+")', "你好", True),
     # Regex used in a sequence and in choices
     ('root ::= "x" Regex("[0-9]+") "y"', "x123y", True),
@@ -219,10 +236,12 @@ def test_json_schema_pattern_fallback_to_cfg():
     grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
     assert "Regex(" not in str(grammar)
 
-    # A pattern with non-printable-ASCII characters also falls back to the CFG expansion.
+
+def test_json_schema_unicode_pattern_uses_regex_macro():
     schema = json.dumps({"type": "string", "pattern": "^[一-龥]+$"})
     grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
-    assert "Regex(" not in str(grammar)
+    assert "Regex(" in str(grammar)
+    assert "json_string=true" in str(grammar)
     assert _is_grammar_accept_string(grammar, '"你好"')
     assert not _is_grammar_accept_string(grammar, '"ab"')
 

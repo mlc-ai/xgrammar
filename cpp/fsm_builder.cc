@@ -6,23 +6,159 @@
 
 #include <sys/types.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
+#include <initializer_list>
+#include <limits>
 #include <optional>
 #include <set>
 #include <stack>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
 
 #include "fsm.h"
+#include "support/encoding.h"
 #include "support/logging.h"
 #include "support/utils.h"
 
 namespace xgrammar {
+
+namespace {
+
+constexpr TCodepoint kMaxUnicodeCodepoint = 0x10FFFF;
+constexpr TCodepoint kHighSurrogateStart = 0xD800;
+constexpr TCodepoint kLowSurrogateEnd = 0xDFFF;
+constexpr uint8_t kContinuationByteMin = 0x80;
+constexpr uint8_t kContinuationByteMax = 0xBF;
+
+using UTF8Bytes = std::array<uint8_t, 4>;
+
+struct EncodedCodepoint {
+  UTF8Bytes bytes{};
+  int length = 0;
+};
+
+EncodedCodepoint EncodeCodepoint(TCodepoint codepoint) {
+  std::string utf8 = CharToUTF8(codepoint);
+  EncodedCodepoint result;
+  result.length = static_cast<int>(utf8.size());
+  for (int index = 0; index < result.length; ++index) {
+    result.bytes[index] = static_cast<uint8_t>(utf8[index]);
+  }
+  return result;
+}
+
+void AddAnyContinuationBytes(FSMWithStartEnd* fsm, int from, int to, int remaining_byte_count) {
+  int current_state = from;
+  for (int index = 0; index < remaining_byte_count; ++index) {
+    int next_state = index + 1 == remaining_byte_count ? to : fsm->AddState();
+    fsm->GetFsm().AddEdge(current_state, next_state, kContinuationByteMin, kContinuationByteMax);
+    current_state = next_state;
+  }
+}
+
+void AddUTF8SequenceRange(
+    FSMWithStartEnd* fsm,
+    int from,
+    int to,
+    const UTF8Bytes& minimum,
+    const UTF8Bytes& maximum,
+    int byte_count,
+    int byte_index = 0
+) {
+  if (byte_index + 1 == byte_count) {
+    fsm->GetFsm().AddEdge(from, to, minimum[byte_index], maximum[byte_index]);
+    return;
+  }
+
+  if (minimum[byte_index] == maximum[byte_index]) {
+    int next_state = fsm->AddState();
+    fsm->GetFsm().AddEdge(from, next_state, minimum[byte_index], maximum[byte_index]);
+    AddUTF8SequenceRange(fsm, next_state, to, minimum, maximum, byte_count, byte_index + 1);
+    return;
+  }
+
+  UTF8Bytes lower_maximum = minimum;
+  std::fill(
+      lower_maximum.begin() + byte_index + 1,
+      lower_maximum.begin() + byte_count,
+      kContinuationByteMax
+  );
+  int lower_state = fsm->AddState();
+  fsm->GetFsm().AddEdge(from, lower_state, minimum[byte_index], minimum[byte_index]);
+  AddUTF8SequenceRange(fsm, lower_state, to, minimum, lower_maximum, byte_count, byte_index + 1);
+
+  if (minimum[byte_index] + 1 < maximum[byte_index]) {
+    int middle_state = fsm->AddState();
+    fsm->GetFsm().AddEdge(from, middle_state, minimum[byte_index] + 1, maximum[byte_index] - 1);
+    AddAnyContinuationBytes(fsm, middle_state, to, byte_count - byte_index - 1);
+  }
+
+  UTF8Bytes upper_minimum = maximum;
+  std::fill(
+      upper_minimum.begin() + byte_index + 1,
+      upper_minimum.begin() + byte_count,
+      kContinuationByteMin
+  );
+  int upper_state = fsm->AddState();
+  fsm->GetFsm().AddEdge(from, upper_state, maximum[byte_index], maximum[byte_index]);
+  AddUTF8SequenceRange(fsm, upper_state, to, upper_minimum, maximum, byte_count, byte_index + 1);
+}
+
+void AddCodepointRange(
+    FSMWithStartEnd* fsm, int from, int to, TCodepoint minimum, TCodepoint maximum
+) {
+  static constexpr std::array<std::pair<TCodepoint, TCodepoint>, 5> kValidCodepointIntervals = {
+      std::pair<TCodepoint, TCodepoint>{0x000000, 0x00007F},
+      {0x000080, 0x0007FF},
+      {0x000800, 0x00D7FF},
+      {0x00E000, 0x00FFFF},
+      {0x010000, kMaxUnicodeCodepoint}
+  };
+
+  for (const auto& [interval_minimum, interval_maximum] : kValidCodepointIntervals) {
+    TCodepoint range_minimum = std::max(minimum, interval_minimum);
+    TCodepoint range_maximum = std::min(maximum, interval_maximum);
+    if (range_minimum > range_maximum) {
+      continue;
+    }
+    EncodedCodepoint encoded_minimum = EncodeCodepoint(range_minimum);
+    EncodedCodepoint encoded_maximum = EncodeCodepoint(range_maximum);
+    XGRAMMAR_DCHECK(encoded_minimum.length == encoded_maximum.length);
+    AddUTF8SequenceRange(
+        fsm, from, to, encoded_minimum.bytes, encoded_maximum.bytes, encoded_minimum.length
+    );
+  }
+}
+
+Result<std::vector<TCodepoint>> ParseRegexCodepoints(const std::string& regex) {
+  std::vector<TCodepoint> result;
+  for (size_t offset = 0; offset < regex.size();) {
+    auto [codepoint, byte_count] = ParseNextUTF8(regex.c_str() + offset);
+    if (codepoint == CharHandlingError::kInvalidUTF8 || byte_count <= 0 ||
+        offset + byte_count > regex.size()) {
+      return ResultErr("The regex is not a valid UTF-8 string.");
+    }
+    int canonical_byte_count = codepoint <= 0x7F     ? 1
+                               : codepoint <= 0x7FF  ? 2
+                               : codepoint <= 0xFFFF ? 3
+                                                     : 4;
+    if (byte_count != canonical_byte_count || codepoint > kMaxUnicodeCodepoint ||
+        (codepoint >= kHighSurrogateStart && codepoint <= kLowSurrogateEnd)) {
+      return ResultErr("The regex contains an invalid Unicode codepoint.");
+    }
+    result.push_back(codepoint);
+    offset += byte_count;
+  }
+  return ResultOk(std::move(result));
+}
+
+}  // namespace
 
 class RegexIR {
  public:
@@ -40,10 +176,14 @@ class RegexIR {
 
   using State = std::variant<Leaf, Symbol, Union, Bracket, Repeat>;
 
-  // This struct is used to store the string in regex, or
-  // the character class in regex.
+  struct CodepointRange {
+    TCodepoint minimum;
+    TCodepoint maximum;
+  };
+
+  // An atomic regex element matching exactly one Unicode codepoint.
   struct Leaf {
-    std::string regex;
+    std::vector<CodepointRange> ranges;
   };
 
   // This struct is used to store the symbol in regex, i.e.
@@ -104,20 +244,27 @@ class RegexIR {
 
  private:
   /*!
-   * \brief Construct a FSM from a regex string.
-   * \details The regex string should only be the format like "abx" or [a-c0-9].
-   * \details Any symbols like "a|b" or "a*b" are not supported.
-   * \param regex The regex string.
+   * \brief Construct an FSM from a regex leaf.
+   * \param leaf The Unicode codepoint ranges accepted by the leaf.
    * \return The FSM with start and end states.
    */
-  static FSMWithStartEnd BuildLeafFSMFromRegex(const std::string& regex);
+  static FSMWithStartEnd BuildLeafFSM(const Leaf& leaf);
 
   /*!
-   * \brief Handle escape characters.
-   * \param regex the corresponding string.
-   * \param start the pos escape characters start.
+   * \brief Parse an escape sequence into a regex leaf.
    */
-  static std::vector<std::pair<int, int>> HandleEscapes(const std::string& regex, int start);
+  static Result<Leaf> ParseEscape(
+      const std::vector<TCodepoint>& regex, int* index, bool in_character_class
+  );
+
+  /*!
+   * \brief Parse a character class into a regex leaf.
+   */
+  static Result<Leaf> ParseCharacterClass(const std::vector<TCodepoint>& regex, int* index);
+
+  static std::vector<CodepointRange> NormalizeRanges(std::vector<CodepointRange> ranges);
+
+  static std::vector<CodepointRange> NegateRanges(std::vector<CodepointRange> ranges);
 
   /*!
    * \brief Check repeat in regex. i.e {...} and {...,...}
@@ -126,33 +273,39 @@ class RegexIR {
    * After the function, start will be the position of '}'.
    * \return The repeat range.
    */
-  static Result<std::pair<int, int>> CheckRepeat(const std::string& regex, int& start);
+  static Result<std::pair<int, int>> CheckRepeat(const std::vector<TCodepoint>& regex, int& start);
 
   friend class RegexFSMBuilder;
 };
 
-Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& start) {
+Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::vector<TCodepoint>& regex, int& start) {
   if (regex[start] != '{') {
     return ResultErr("Invalid repeat format1");
   }
   int lower_bound = 0;
   int upper_bound = RegexIR::kRepeatNoUpperBound;
-  std::string num_str;
   XGRAMMAR_DCHECK(regex[start] == '{');
   start++;
-  while (static_cast<size_t>(start) < regex.size() && regex[start] == ' ') {
+  while (start < static_cast<int>(regex.size()) && regex[start] == ' ') {
     start++;
   }
-  while (static_cast<size_t>(start) < regex.size() && std::isdigit(regex[start])) {
-    num_str += regex[start];
+  bool has_lower_bound = false;
+  while (start < static_cast<int>(regex.size()) && regex[start] >= '0' && regex[start] <= '9') {
+    has_lower_bound = true;
+    if (lower_bound > (std::numeric_limits<int>::max() - (regex[start] - '0')) / 10) {
+      return ResultErr("Repeat lower bound is too large");
+    }
+    lower_bound = lower_bound * 10 + regex[start] - '0';
     start++;
   }
-  if (num_str.empty()) {
+  if (!has_lower_bound) {
     return ResultErr("Invalid repeat format2");
   }
-  lower_bound = std::stoi(num_str);
-  while (static_cast<size_t>(start) < regex.size() && regex[start] == ' ') {
+  while (start < static_cast<int>(regex.size()) && regex[start] == ' ') {
     start++;
+  }
+  if (start >= static_cast<int>(regex.size())) {
+    return ResultErr("Invalid repeat format");
   }
   // The format is {n}
   if (regex[start] == '}') {
@@ -164,29 +317,36 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
   }
   XGRAMMAR_DCHECK(regex[start] == ',');
   start++;
-  while (static_cast<size_t>(start) < regex.size() && regex[start] == ' ') {
+  while (start < static_cast<int>(regex.size()) && regex[start] == ' ') {
     start++;
+  }
+  if (start >= static_cast<int>(regex.size())) {
+    return ResultErr("Invalid repeat format");
   }
   // The format is {n,}
   if (regex[start] == '}') {
     return ResultOk(std::make_pair(lower_bound, upper_bound));
   }
-  num_str.clear();
-  while (static_cast<size_t>(start) < regex.size() && std::isdigit(regex[start])) {
-    num_str += regex[start];
+  bool has_upper_bound = false;
+  upper_bound = 0;
+  while (start < static_cast<int>(regex.size()) && regex[start] >= '0' && regex[start] <= '9') {
+    has_upper_bound = true;
+    if (upper_bound > (std::numeric_limits<int>::max() - (regex[start] - '0')) / 10) {
+      return ResultErr("Repeat upper bound is too large");
+    }
+    upper_bound = upper_bound * 10 + regex[start] - '0';
     start++;
   }
-  if (num_str.empty()) {
+  if (!has_upper_bound) {
     return ResultErr("Invalid repeat format4");
   }
-  upper_bound = std::stoi(num_str);
   if (upper_bound < lower_bound) {
     return ResultErr("Invalid repeat: the lower bound is larger than the upper bound");
   }
-  while (static_cast<size_t>(start) < regex.size() && regex[start] == ' ') {
+  while (start < static_cast<int>(regex.size()) && regex[start] == ' ') {
     start++;
   }
-  if (regex[start] != '}') {
+  if (start >= static_cast<int>(regex.size()) || regex[start] != '}') {
     return ResultErr("Invalid repeat format5");
   }
   XGRAMMAR_DCHECK(regex[start] == '}');
@@ -216,7 +376,7 @@ Result<FSMWithStartEnd> RegexIR::Build() const {
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Leaf& state) const {
-  FSMWithStartEnd result = BuildLeafFSMFromRegex(state.regex);
+  FSMWithStartEnd result = BuildLeafFSM(state);
   return ResultOk(std::move(result));
 }
 
@@ -365,269 +525,314 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   return ResultOk(std::move(result));
 }
 
-FSMWithStartEnd RegexIR::BuildLeafFSMFromRegex(const std::string& regex) {
-  FSM empty_fsm(0);
-  FSMWithStartEnd result(empty_fsm, 0, {}, true);
-  // Handle the regex string.
-  if (!(regex[0] == '[' && regex[regex.size() - 1] == ']')) {
-    result.AddState();
-    for (size_t i = 0; i < regex.size(); i++) {
-      if (regex[i] != '\\') {
-        if (regex[i] == '.') {
-          result.GetFsm().AddEdge(result.NumStates() - 1, result.NumStates(), 0, 0xFF);
-        } else {
-          result.GetFsm().AddEdge(
-              result.NumStates() - 1,
-              result.NumStates(),
-              static_cast<uint8_t>(regex[i]),
-              static_cast<uint8_t>(regex[i])
-          );
-        }
-        result.AddState();
-        continue;
-      }
-      std::vector<std::pair<int, int>> escape_vector = HandleEscapes(regex, i);
-      for (const auto& escape : escape_vector) {
-        result.GetFsm().AddEdge(
-            result.NumStates() - 1,
-            result.NumStates(),
-            static_cast<uint8_t>(escape.first),
-            static_cast<uint8_t>(escape.second)
-        );
-      }
-      result.AddState();
-      i++;
-    }
-    result.AddEndState(result.NumStates() - 1);
-  } else if (regex[0] == '[' && regex[regex.size() - 1] == ']') {
-    // Handle the character class.
-    result.AddState();
-    result.AddState();
-    result.AddEndState(1);
-    bool reverse = regex[1] == '^';
-    for (size_t i = reverse ? 2 : 1; i < regex.size() - 1; i++) {
-      if (regex[i] != '\\') {
-        if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
-          // A single char.
-          result.GetFsm().AddEdge(
-              0, 1, static_cast<uint8_t>(regex[i]), static_cast<uint8_t>(regex[i])
-          );
-          continue;
-        }
-        // Handle the char range.
-        if (regex[i + 2] != '\\') {
-          result.GetFsm().AddEdge(
-              0, 1, static_cast<uint8_t>(regex[i]), static_cast<uint8_t>(regex[i + 2])
-          );
-          i = i + 2;
-          continue;
-        }
-        auto escaped_edges = HandleEscapes(regex, i + 2);
-        // Means it's not a range.
-        if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
-          result.GetFsm().AddEdge(
-              0, 1, static_cast<uint8_t>(regex[i]), static_cast<uint8_t>(regex[i])
-          );
-          continue;
-        }
-        result.GetFsm().AddEdge(
-            0, 1, static_cast<uint8_t>(regex[0]), static_cast<uint8_t>(escaped_edges[0].first)
-        );
-        i = i + 3;
-        continue;
-      }
-      auto escaped_edges = HandleEscapes(regex, i);
-      i = i + 1;
-      if (escaped_edges.size() != 1 || escaped_edges[0].first != escaped_edges[0].second) {
-        // It's a multi-match escape char.
-        for (const auto& edge : escaped_edges) {
-          result.GetFsm().AddEdge(
-              0, 1, static_cast<uint8_t>(edge.first), static_cast<uint8_t>(edge.second)
-          );
-        }
-        continue;
-      }
-      if (!(((i + 2) < regex.size() - 1) && regex[i + 1] == '-')) {
-        result.GetFsm().AddEdge(
-            0,
-            1,
-            static_cast<uint8_t>(escaped_edges[0].first),
-            static_cast<uint8_t>(escaped_edges[0].second)
-        );
-        continue;
-      }
-      if (regex[i + 2] != '\\') {
-        result.GetFsm().AddEdge(
-            0, 1, static_cast<uint8_t>(escaped_edges[0].first), static_cast<uint8_t>(regex[i + 2])
-        );
-        i = i + 2;
-        continue;
-      }
-      auto rhs_escaped_edges = HandleEscapes(regex, i + 2);
-      if (rhs_escaped_edges.size() != 1 ||
-          rhs_escaped_edges[0].first != rhs_escaped_edges[0].second) {
-        result.GetFsm().AddEdge(
-            0,
-            1,
-            static_cast<uint8_t>(escaped_edges[0].first),
-            static_cast<uint8_t>(escaped_edges[0].second)
-        );
-        continue;
-      }
-      result.GetFsm().AddEdge(
-          0,
-          1,
-          static_cast<uint8_t>(escaped_edges[0].first),
-          static_cast<uint8_t>(rhs_escaped_edges[0].first)
-      );
-      i = i + 3;
-      continue;
-    }
-    bool has_edge[0x100];
-    memset(has_edge, 0, sizeof(has_edge));
-    FSM new_fsm(2);
-    for (const auto& edge : result.GetFsm().GetEdges(0)) {
-      for (int i = edge.min; i <= edge.max; i++) {
-        has_edge[i] = true;
-      }
-    }
-    // Simplify the edges. e.g [abc] -> [a-c]
-    int last = -1;
-    if (reverse) {
-      for (int i = 0; i < 0x100; i++) {
-        if (!has_edge[i]) {
-          if (last == -1) {
-            last = i;
-          }
-          continue;
-        }
-        if (last != -1) {
-          new_fsm.AddEdge(0, 1, last, i - 1);
-          last = -1;
-        }
-      }
-      if (last != -1) {
-        new_fsm.AddEdge(0, 1, last, 0xFF);
-      }
-    } else {
-      for (int i = 0; i < 0x100; i++) {
-        if (has_edge[i]) {
-          if (last == -1) {
-            last = i;
-          }
-          continue;
-        }
-        if (last != -1) {
-          new_fsm.AddEdge(0, 1, last, i - 1);
-          last = -1;
-        }
-      }
-      if (last != -1) {
-        new_fsm.AddEdge(0, 1, last, 0xFF);
-      }
-    }
-    result = FSMWithStartEnd(new_fsm, 0, {1}, false);
-  } else {
-    // TODO: The support for rules.
-    XGRAMMAR_LOG(WARNING) << "rule is not supported yet.";
+FSMWithStartEnd RegexIR::BuildLeafFSM(const Leaf& leaf) {
+  FSMWithStartEnd result(FSM(2), 0, {1});
+  for (const auto& range : leaf.ranges) {
+    AddCodepointRange(&result, 0, 1, range.minimum, range.maximum);
   }
   return result;
 }
 
-std::vector<std::pair<int, int>> RegexIR::HandleEscapes(const std::string& regex, int start) {
-  std::vector<std::pair<int, int>> result;
-  switch (regex[start + 1]) {
-    case 'n': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\n', '\n'));
-    }
-    case 't': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\t', '\t'));
-    }
-    case 'r': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\r', '\r'));
-    }
-
-    case '0': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('\0', '\0'));
-    }
-    case 's': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair(0, ' '));
-    }
-    case 'S': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair(' ' + 1, 0x00FF));
-    }
-    case 'd': {
-      return std::vector<std::pair<int, int>>(1, std::make_pair('0', '9'));
-    }
-    case 'D': {
-      std::vector<std::pair<int, int>> result;
-      result.emplace_back(0, '0' - 1);
-      result.emplace_back('9' + 1, 0x00FF);
-      return result;
-    }
-    case 'w': {
-      std::vector<std::pair<int, int>> result;
-      result.emplace_back('0', '9');
-      result.emplace_back('a', 'z');
-      result.emplace_back('A', 'Z');
-      result.emplace_back('_', '_');
-      return result;
-    }
-    case 'W': {
-      std::vector<std::pair<int, int>> result;
-      result.emplace_back(0, '0' - 1);
-      result.emplace_back('9' + 1, 'A' - 1);
-      result.emplace_back('Z' + 1, '_' - 1);
-      result.emplace_back('_' + 1, 'a' - 1);
-      result.emplace_back('z' + 1, 0x00FF);
-      return result;
-    }
-    default: {
-      return std::vector<std::pair<int, int>>(
-          1, std::make_pair(regex[start + 1], regex[start + 1])
-      );
+std::vector<RegexIR::CodepointRange> RegexIR::NormalizeRanges(std::vector<CodepointRange> ranges) {
+  std::sort(ranges.begin(), ranges.end(), [](const auto& lhs, const auto& rhs) {
+    return std::make_pair(lhs.minimum, lhs.maximum) < std::make_pair(rhs.minimum, rhs.maximum);
+  });
+  std::vector<CodepointRange> result;
+  for (const auto& range : ranges) {
+    if (result.empty() || range.minimum > result.back().maximum + 1) {
+      result.push_back(range);
+    } else {
+      result.back().maximum = std::max(result.back().maximum, range.maximum);
     }
   }
+  return result;
+}
+
+std::vector<RegexIR::CodepointRange> RegexIR::NegateRanges(std::vector<CodepointRange> ranges) {
+  ranges = NormalizeRanges(std::move(ranges));
+  std::vector<CodepointRange> result;
+  TCodepoint next_minimum = 0;
+  for (const auto& range : ranges) {
+    if (next_minimum < range.minimum) {
+      result.push_back({next_minimum, range.minimum - 1});
+    }
+    if (range.maximum == kMaxUnicodeCodepoint) {
+      return result;
+    }
+    next_minimum = range.maximum + 1;
+  }
+  if (next_minimum <= kMaxUnicodeCodepoint) {
+    result.push_back({next_minimum, kMaxUnicodeCodepoint});
+  }
+  return result;
+}
+
+Result<RegexIR::Leaf> RegexIR::ParseEscape(
+    const std::vector<TCodepoint>& regex, int* index, bool in_character_class
+) {
+  int start = *index;
+  if (start + 1 >= static_cast<int>(regex.size())) {
+    return ResultErr("Escape sequence is not finished.");
+  }
+  TCodepoint escaped = regex[start + 1];
+
+  auto make_leaf = [](TCodepoint codepoint) {
+    return Leaf{{CodepointRange{codepoint, codepoint}}};
+  };
+  auto make_ranges = [](std::initializer_list<CodepointRange> ranges) {
+    return Leaf{std::vector<CodepointRange>(ranges)};
+  };
+
+  if (escaped == 'd') {
+    *index = start + 1;
+    return ResultOk(make_ranges({{'0', '9'}}));
+  }
+  if (escaped == 'D') {
+    *index = start + 1;
+    return ResultOk(Leaf{NegateRanges({{'0', '9'}})});
+  }
+  if (escaped == 'w') {
+    *index = start + 1;
+    return ResultOk(make_ranges({{'0', '9'}, {'A', 'Z'}, {'_', '_'}, {'a', 'z'}}));
+  }
+  if (escaped == 'W') {
+    *index = start + 1;
+    return ResultOk(Leaf{NegateRanges({{'0', '9'}, {'A', 'Z'}, {'_', '_'}, {'a', 'z'}})});
+  }
+  if (escaped == 's') {
+    *index = start + 1;
+    return ResultOk(make_ranges(
+        {{'\t', '\t'},
+         {'\n', '\n'},
+         {'\v', '\v'},
+         {'\f', '\f'},
+         {'\r', '\r'},
+         {' ', ' '},
+         {0xA0, 0xA0}}
+    ));
+  }
+  if (escaped == 'S') {
+    *index = start + 1;
+    return ResultOk(Leaf{NegateRanges(
+        {{'\t', '\t'},
+         {'\n', '\n'},
+         {'\v', '\v'},
+         {'\f', '\f'},
+         {'\r', '\r'},
+         {' ', ' '},
+         {0xA0, 0xA0}}
+    )});
+  }
+  if (!in_character_class && ((escaped >= '1' && escaped <= '9') || escaped == 'k')) {
+    return ResultErr("Backreference is not supported yet.");
+  }
+  if (!in_character_class && (escaped == 'p' || escaped == 'P')) {
+    return ResultErr("Unicode character class escape sequence is not supported yet.");
+  }
+  if (!in_character_class && (escaped == 'b' || escaped == 'B')) {
+    return ResultErr("Word boundary is not supported yet.");
+  }
+
+  static const std::unordered_map<TCodepoint, TCodepoint> kSimpleEscapes = {
+      {'\'', '\''},
+      {'"', '"'},
+      {'?', '?'},
+      {'\\', '\\'},
+      {'/', '/'},
+      {'a', '\a'},
+      {'b', '\b'},
+      {'f', '\f'},
+      {'n', '\n'},
+      {'r', '\r'},
+      {'t', '\t'},
+      {'v', '\v'},
+      {'0', '\0'},
+      {'e', '\x1B'}
+  };
+  if (auto iterator = kSimpleEscapes.find(escaped); iterator != kSimpleEscapes.end()) {
+    *index = start + 1;
+    return ResultOk(make_leaf(iterator->second));
+  }
+
+  uint64_t parsed_codepoint = 0;
+  if (escaped == 'u' && start + 2 < static_cast<int>(regex.size()) && regex[start + 2] == '{') {
+    int current = start + 3;
+    int digit_count = 0;
+    while (current < static_cast<int>(regex.size()) && regex[current] <= 0x7F &&
+           HexCharToInt(static_cast<char>(regex[current])) != -1) {
+      if (++digit_count > 6) {
+        return ResultErr("Invalid Unicode escape sequence.");
+      }
+      parsed_codepoint = parsed_codepoint * 16 + HexCharToInt(static_cast<char>(regex[current]));
+      current++;
+    }
+    if (digit_count == 0 || current >= static_cast<int>(regex.size()) || regex[current] != '}') {
+      return ResultErr("Invalid Unicode escape sequence.");
+    }
+    *index = current;
+  } else if (escaped == 'u' || escaped == 'U') {
+    int digit_count = escaped == 'u' ? 4 : 8;
+    if (start + digit_count + 1 >= static_cast<int>(regex.size())) {
+      return ResultErr("Escape sequence is not finished.");
+    }
+    for (int offset = 0; offset < digit_count; ++offset) {
+      TCodepoint digit_codepoint = regex[start + 2 + offset];
+      int digit = digit_codepoint <= 0x7F ? HexCharToInt(static_cast<char>(digit_codepoint)) : -1;
+      if (digit == -1) {
+        return ResultErr("Invalid Unicode escape sequence.");
+      }
+      parsed_codepoint = parsed_codepoint * 16 + digit;
+    }
+    *index = start + digit_count + 1;
+  } else if (escaped == 'x') {
+    int current = start + 2;
+    int digit_count = 0;
+    while (current < static_cast<int>(regex.size()) && regex[current] <= 0x7F &&
+           HexCharToInt(static_cast<char>(regex[current])) != -1) {
+      int digit = HexCharToInt(static_cast<char>(regex[current]));
+      if (parsed_codepoint > (static_cast<uint64_t>(kMaxUnicodeCodepoint) - digit) / 16) {
+        return ResultErr("Invalid Unicode codepoint in escape sequence.");
+      }
+      parsed_codepoint = parsed_codepoint * 16 + digit;
+      digit_count++;
+      current++;
+    }
+    if (digit_count == 0) {
+      return ResultErr("Invalid hexadecimal escape sequence.");
+    }
+    *index = current - 1;
+  } else if (escaped == 'c') {
+    if (start + 2 >= static_cast<int>(regex.size()) ||
+        !((regex[start + 2] >= 'A' && regex[start + 2] <= 'Z') ||
+          (regex[start + 2] >= 'a' && regex[start + 2] <= 'z'))) {
+      return ResultErr("Invalid control character escape sequence.");
+    }
+    parsed_codepoint = regex[start + 2] % 32;
+    *index = start + 2;
+  } else {
+    *index = start + 1;
+    return ResultOk(make_leaf(escaped));
+  }
+
+  if (parsed_codepoint > static_cast<uint64_t>(kMaxUnicodeCodepoint) ||
+      (parsed_codepoint >= static_cast<uint64_t>(kHighSurrogateStart) &&
+       parsed_codepoint <= static_cast<uint64_t>(kLowSurrogateEnd))) {
+    return ResultErr("Invalid Unicode codepoint in escape sequence.");
+  }
+  return ResultOk(make_leaf(static_cast<TCodepoint>(parsed_codepoint)));
+}
+
+Result<RegexIR::Leaf> RegexIR::ParseCharacterClass(
+    const std::vector<TCodepoint>& regex, int* index
+) {
+  XGRAMMAR_DCHECK(regex[*index] == '[');
+  int current = *index + 1;
+  bool is_negative = current < static_cast<int>(regex.size()) && regex[current] == '^';
+  if (is_negative) {
+    current++;
+  }
+  if (current >= static_cast<int>(regex.size())) {
+    return ResultErr("Empty character class is not allowed in regex.");
+  }
+  if (regex[current] == ']') {
+    if (!is_negative) {
+      return ResultErr("Empty character class is not allowed in regex.");
+    }
+    *index = current;
+    return ResultOk(Leaf{{CodepointRange{0, kMaxUnicodeCodepoint}}});
+  }
+
+  auto parse_atom = [&](int* position) -> Result<Leaf> {
+    if (*position >= static_cast<int>(regex.size()) || regex[*position] == ']') {
+      return ResultErr("Character class range is not finished.");
+    }
+    if (regex[*position] == '\n' || regex[*position] == '\r') {
+      return ResultErr("Character class should not contain newline.");
+    }
+    if (regex[*position] == '\\') {
+      int escape_index = *position;
+      auto escape_result = ParseEscape(regex, &escape_index, true);
+      if (escape_result.IsErr()) {
+        return escape_result;
+      }
+      *position = escape_index + 1;
+      return escape_result;
+    }
+    TCodepoint codepoint = regex[*position];
+    (*position)++;
+    return ResultOk(Leaf{{CodepointRange{codepoint, codepoint}}});
+  };
+
+  std::vector<CodepointRange> ranges;
+  while (current < static_cast<int>(regex.size()) && regex[current] != ']') {
+    auto left_result = parse_atom(&current);
+    if (left_result.IsErr()) {
+      return left_result;
+    }
+    Leaf left = std::move(left_result).Unwrap();
+    bool has_range_separator = current + 1 < static_cast<int>(regex.size()) &&
+                               regex[current] == '-' && regex[current + 1] != ']';
+    if (has_range_separator && left.ranges.size() == 1 &&
+        left.ranges[0].minimum == left.ranges[0].maximum) {
+      int right_position = current + 1;
+      auto right_result = parse_atom(&right_position);
+      if (right_result.IsErr()) {
+        return right_result;
+      }
+      Leaf right = std::move(right_result).Unwrap();
+      if (right.ranges.size() == 1 && right.ranges[0].minimum == right.ranges[0].maximum) {
+        if (left.ranges[0].minimum > right.ranges[0].minimum) {
+          return ResultErr("Character class range has a larger start than end.");
+        }
+        ranges.push_back({left.ranges[0].minimum, right.ranges[0].minimum});
+        current = right_position;
+        continue;
+      }
+    }
+    ranges.insert(ranges.end(), left.ranges.begin(), left.ranges.end());
+  }
+
+  if (current >= static_cast<int>(regex.size()) || regex[current] != ']') {
+    return ResultErr("Unclosed character class.");
+  }
+  *index = current;
+  ranges = NormalizeRanges(std::move(ranges));
+  if (is_negative) {
+    ranges = NegateRanges(std::move(ranges));
+  }
+  return ResultOk(Leaf{std::move(ranges)});
 }
 
 Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
+  auto codepoint_result = ParseRegexCodepoints(regex);
+  if (codepoint_result.IsErr()) {
+    return ResultErr(std::move(codepoint_result).UnwrapErr());
+  }
+  std::vector<TCodepoint> regex_codepoints = std::move(codepoint_result).Unwrap();
   RegexIR ir;
   using IRState = std::variant<RegexIR::State, char>;
   // We use a stack to store the states.
   std::stack<IRState> stack;
-  int left_middle_bracket = -1;
-  for (int i = 0; i < static_cast<int>(regex.size()); i++) {
-    if (i == 0 && regex[i] == '^') {
+  for (int i = 0; i < static_cast<int>(regex_codepoints.size()); i++) {
+    TCodepoint current_codepoint = regex_codepoints[i];
+    if (i == 0 && current_codepoint == '^') {
       continue;
     }
-    if (i == static_cast<int>(regex.size()) - 1 && regex[i] == '$') {
+    if (i == static_cast<int>(regex_codepoints.size()) - 1 && current_codepoint == '$') {
       continue;
     }
-    // Handle The class.
-    if (regex[i] == '[') {
-      if (left_middle_bracket != -1) {
-        return ResultErr("Nested middle bracket!");
+    if (current_codepoint == '[') {
+      auto leaf_result = RegexIR::ParseCharacterClass(regex_codepoints, &i);
+      if (leaf_result.IsErr()) {
+        return ResultErr(std::move(leaf_result).UnwrapErr());
       }
-      left_middle_bracket = i;
+      stack.push(std::move(leaf_result).Unwrap());
       continue;
     }
-    if (regex[i] == ']') {
-      if (left_middle_bracket == -1) {
-        return ResultErr("Invalid middle bracket!");
-      }
-      RegexIR::Leaf leaf;
-      leaf.regex = regex.substr(left_middle_bracket, i - left_middle_bracket + 1);
-      stack.push(leaf);
-      left_middle_bracket = -1;
-      continue;
+    if (current_codepoint == ']') {
+      return ResultErr("Invalid middle bracket!");
     }
-    if (left_middle_bracket != -1) {
-      if (regex[i] == '\\') {
-        i++;
-      }
-      continue;
-    }
-    if (regex[i] == '+' || regex[i] == '*' || regex[i] == '?') {
+    if (current_codepoint == '+' || current_codepoint == '*' || current_codepoint == '?') {
       if (stack.empty()) {
         return ResultErr("Invalid regex: no state before operator!");
       }
@@ -639,7 +844,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
       auto child = std::get<RegexIR::State>(state);
       RegexIR::Symbol symbol;
       symbol.state.push_back(child);
-      switch (regex[i]) {
+      switch (current_codepoint) {
         case '+': {
           symbol.symbol = RegexIR::RegexSymbol::plus;
           break;
@@ -654,24 +859,31 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
         }
       }
       stack.push(symbol);
-      continue;
-    }
-    if (regex[i] == '(' || regex[i] == '|') {
-      stack.push(regex[i]);
-      if (i < static_cast<int>(regex.size()) - 2 && regex[i] == '(' && regex[i + 1] == '?' &&
-          regex[i + 2] == ':') {
-        i += 2;
-        continue;
+      if (i + 1 < static_cast<int>(regex_codepoints.size()) && regex_codepoints[i + 1] == '?') {
+        i++;
       }
-      if (i < static_cast<int>(regex.size()) - 2 && regex[i] == '(' && regex[i + 1] == '?' &&
-          (regex[i + 2] == '!' || regex[i + 2] == '=')) {
-        i += 2;
-        // TODO(Linzhang Li): Handling the lookahead.
-        continue;
+      if (i + 1 < static_cast<int>(regex_codepoints.size()) &&
+          (regex_codepoints[i + 1] == '{' || regex_codepoints[i + 1] == '*' ||
+           regex_codepoints[i + 1] == '+' || regex_codepoints[i + 1] == '?')) {
+        return ResultErr("Two consecutive repetition modifiers are not allowed.");
       }
       continue;
     }
-    if (regex[i] == ')') {
+    if (current_codepoint == '(' || current_codepoint == '|') {
+      stack.push(static_cast<char>(current_codepoint));
+      if (i < static_cast<int>(regex_codepoints.size()) - 2 && current_codepoint == '(' &&
+          regex_codepoints[i + 1] == '?' && regex_codepoints[i + 2] == ':') {
+        i += 2;
+        continue;
+      }
+      if (i < static_cast<int>(regex_codepoints.size()) - 2 && current_codepoint == '(' &&
+          regex_codepoints[i + 1] == '?' &&
+          (regex_codepoints[i + 2] == '!' || regex_codepoints[i + 2] == '=')) {
+        return ResultErr("Lookahead is not supported yet.");
+      }
+      continue;
+    }
+    if (current_codepoint == ')') {
       std::stack<IRState> states;
       bool paired = false;
       bool unioned = false;
@@ -734,7 +946,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
       }
       continue;
     }
-    if (regex[i] == '{') {
+    if (current_codepoint == '{') {
       if (stack.empty()) {
         return ResultErr("Invalid regex: no state before repeat!");
       }
@@ -743,7 +955,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
         return ResultErr("Invalid regex: no state before repeat!");
       }
       stack.pop();
-      auto bounds_result = RegexIR::CheckRepeat(regex, i);
+      auto bounds_result = RegexIR::CheckRepeat(regex_codepoints, i);
       if (bounds_result.IsErr()) {
         return ResultErr(std::move(bounds_result).UnwrapErr());
       }
@@ -754,16 +966,29 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(const std::string& regex) {
       repeat.upper_bound = bounds.second;
       repeat.states.push_back(child);
       stack.push(repeat);
+      if (i + 1 < static_cast<int>(regex_codepoints.size()) && regex_codepoints[i + 1] == '?') {
+        i++;
+      }
+      if (i + 1 < static_cast<int>(regex_codepoints.size()) &&
+          (regex_codepoints[i + 1] == '{' || regex_codepoints[i + 1] == '*' ||
+           regex_codepoints[i + 1] == '+' || regex_codepoints[i + 1] == '?')) {
+        return ResultErr("Two consecutive repetition modifiers are not allowed.");
+      }
       continue;
     }
     RegexIR::Leaf leaf;
-    if (regex[i] != '\\') {
-      leaf.regex = regex[i];
+    if (current_codepoint == '\\') {
+      auto leaf_result = RegexIR::ParseEscape(regex_codepoints, &i, false);
+      if (leaf_result.IsErr()) {
+        return ResultErr(std::move(leaf_result).UnwrapErr());
+      }
+      leaf = std::move(leaf_result).Unwrap();
+    } else if (current_codepoint == '.') {
+      leaf.ranges = {{0, kMaxUnicodeCodepoint}};
     } else {
-      leaf.regex = regex.substr(i, 2);
-      i++;
+      leaf.ranges = {{current_codepoint, current_codepoint}};
     }
-    stack.push(leaf);
+    stack.push(std::move(leaf));
     continue;
   }
   std::vector<RegexIR::State> res_states;

@@ -371,7 +371,7 @@ TEST(XGrammarFSMBuilderTest, TestChoicesFSMBuilder) {
 }
 
 TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenChars) {
-  // \S matches any non-whitespace byte. With the JSON forbidden characters removed, the
+  // \S matches any non-whitespace codepoint. With the JSON forbidden characters removed, the
   // quote and the backslash must be rejected while other printable characters stay.
   const auto& forbidden = GrammarFSMBuilder::JSONStringForbiddenChars();
   auto fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars("\\S+", forbidden).Unwrap();
@@ -387,9 +387,11 @@ TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenChars) {
   EXPECT_FALSE(fsm_wse.AcceptString("\""));
   EXPECT_FALSE(fsm_wse.AcceptString("\\"));
 
-  // . matches any byte; the control characters must be rejected as well.
+  // . matches any Unicode codepoint; the control characters must be rejected as well.
   fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars(".", forbidden).Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("你"));
+  EXPECT_FALSE(fsm_wse.AcceptString("你好"));
   EXPECT_FALSE(fsm_wse.AcceptString("\t"));
   EXPECT_FALSE(fsm_wse.AcceptString("\n"));
   EXPECT_FALSE(fsm_wse.AcceptString("\""));
@@ -409,6 +411,115 @@ TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenChars) {
   // Multi-byte UTF-8 characters (bytes >= 0x80) are not affected by the JSON exclusion.
   fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars(".+", forbidden).Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("你好"));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexUnicodeLiteralAndQuantifier) {
+  auto fsm_wse = RegexFSMBuilder::Build("你+😁?").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("你"));
+  EXPECT_TRUE(fsm_wse.AcceptString("你你"));
+  EXPECT_TRUE(fsm_wse.AcceptString("你😁"));
+  EXPECT_TRUE(fsm_wse.AcceptString("你你😁"));
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("😁"));
+  EXPECT_FALSE(fsm_wse.AcceptString("你😁😁"));
+
+  // A quantifier applies to the complete codepoint, not its final UTF-8 byte.
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string("\xE4\xBD\xA0\xA0", 4)));
+
+  // Lazy modifiers change matching preference, not the accepted language.
+  fsm_wse = RegexFSMBuilder::Build("你+?").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("你"));
+  EXPECT_TRUE(fsm_wse.AcceptString("你你"));
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+
+  // Boundary anchors are redundant because the automaton performs full-string matching.
+  fsm_wse = RegexFSMBuilder::Build("^你好$").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("你好"));
+
+  EXPECT_TRUE(RegexFSMBuilder::Build("你++").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("(?=你)").IsErr());
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexUnicodeCharacterClass) {
+  auto fsm_wse = RegexFSMBuilder::Build("[一-龥]+").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("一"));
+  EXPECT_TRUE(fsm_wse.AcceptString("龥"));
+  EXPECT_TRUE(fsm_wse.AcceptString("你好"));
+  EXPECT_TRUE(fsm_wse.AcceptString("镘"));
+  EXPECT_FALSE(fsm_wse.AcceptString("〇"));
+  EXPECT_FALSE(fsm_wse.AcceptString("A"));
+
+  fsm_wse = RegexFSMBuilder::Build("[^一-龥]+").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_TRUE(fsm_wse.AcceptString("😁"));
+  EXPECT_FALSE(fsm_wse.AcceptString("你"));
+  EXPECT_FALSE(fsm_wse.AcceptString("A你"));
+
+  fsm_wse = RegexFSMBuilder::Build("[A-Zα-ω一-龥😀-🙏]+").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("Aω你😁"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+
+  fsm_wse = RegexFSMBuilder::Build("[^]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("你"));
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("你好"));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexUnicodeEscapes) {
+  auto fsm_wse = RegexFSMBuilder::Build(R"(\u4F60\u{1F601}\U00000041\x42\cJ)").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("你😁AB\n"));
+  EXPECT_FALSE(fsm_wse.AcceptString("你😁AB"));
+
+  fsm_wse = RegexFSMBuilder::Build(R"([\u4E00-\u9FA5]+)").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("你好"));
+  EXPECT_FALSE(fsm_wse.AcceptString("hello"));
+
+  EXPECT_TRUE(RegexFSMBuilder::Build(R"(\uD800)").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build(R"(\u{110000})").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build(R"(\xFFFFFFFFFFFFFFFF)").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build(R"(\u12)").IsErr());
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexDotMatchesOneUnicodeCodepoint) {
+  auto fsm_wse = RegexFSMBuilder::Build(".").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_TRUE(fsm_wse.AcceptString("你"));
+  EXPECT_TRUE(fsm_wse.AcceptString("😁"));
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("你好"));
+
+  // Reject isolated continuation bytes, overlong encodings, surrogates and values above U+10FFFF.
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string("\x80", 1)));
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string("\xC0\x80", 2)));
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string("\xED\xA0\x80", 3)));
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string("\xF4\x90\x80\x80", 4)));
+
+  fsm_wse = RegexFSMBuilder::Build(".{2}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("你好"));
+  EXPECT_TRUE(fsm_wse.AcceptString("A😁"));
+  EXPECT_FALSE(fsm_wse.AcceptString("你"));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexUnicodeRangeBoundaries) {
+  auto fsm_wse = RegexFSMBuilder::Build(R"([\u007F-\u0080])").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\x7F"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\xC2\x80"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\xC2\x81"));
+
+  fsm_wse = RegexFSMBuilder::Build(R"([\u07FF-\u0800])").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\xDF\xBF"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\xE0\xA0\x80"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\xE0\xA0\x81"));
+
+  fsm_wse = RegexFSMBuilder::Build(R"([\uD7FF-\uE000])").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\xED\x9F\xBF"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\xEE\x80\x80"));
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string("\xED\xA0\x80", 3)));
+
+  fsm_wse = RegexFSMBuilder::Build(R"([\uFFFF-\u{10000}])").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\xEF\xBF\xBF"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\xF0\x90\x80\x80"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\xF0\x90\x80\x81"));
 }
 
 TEST(XGrammarFSMBuilderTest, TestGrammarFSMBuilderRegex) {
