@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -118,6 +119,13 @@ class CompiledGrammar::Impl {
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>
       adaptive_token_mask_cache;
+
+  /*! \brief Lazily built Unicode codepoint counts for the sorted decoded vocabulary. */
+  std::once_flag token_char_data_once;
+  int32_t max_token_chars = -1;
+  std::vector<int32_t> token_char_counts;
+  std::vector<int32_t> sorted_indices_by_char_count;
+  std::vector<int32_t> char_count_offsets;
 
   Grammar GetGrammar() const { return grammar; }
 

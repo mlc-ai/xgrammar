@@ -70,6 +70,7 @@ class GrammarFunctor {
         // Handle lookahead assertion
         builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
         builder_->UpdateMaxTokens(i, rule.max_tokens);
+        builder_->UpdateMaxChars(i, rule.max_chars);
         builder_->UpdateCaptureName(i, rule.capture_name);
         if (const auto* suffix_stop_info = base_grammar_->GetSuffixStopInfo(i)) {
           builder_->UpdateSuffixStopInfo(i, *suffix_stop_info);

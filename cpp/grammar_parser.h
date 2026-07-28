@@ -61,6 +61,8 @@ class EBNFLexer {
     int column;
     // The token budget attached to a rule-definition identifier via name[max_tokens=N], or -1.
     int32_t max_tokens = -1;
+    // The character budget attached to a rule-definition identifier via name[max_chars=N], or -1.
+    int32_t max_chars = -1;
     // The capture name attached to a rule-definition identifier via name[capture="x"], or empty.
     std::string capture_name = {};
     // Trailing bytes hidden only from the rule's own capture.
