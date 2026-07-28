@@ -266,6 +266,9 @@ class IndentManager {
 
 /*!
  * \brief Convert SchemaSpec directly to a grammar AST.
+ *
+ * This is the base class for grammar generation. It generates JSON-format grammar by default.
+ * Subclasses can override virtual methods to generate different formats (e.g., XML).
  */
 class JSONSchemaConverter {
  public:
@@ -282,10 +285,6 @@ class JSONSchemaConverter {
   );
 
   virtual ~JSONSchemaConverter() = default;
-  JSONSchemaConverter(const JSONSchemaConverter&) = delete;
-  JSONSchemaConverter& operator=(const JSONSchemaConverter&) = delete;
-  JSONSchemaConverter(JSONSchemaConverter&&) = default;
-  JSONSchemaConverter& operator=(JSONSchemaConverter&&) = default;
 
   /*!
    * \brief Convert SchemaSpec directly to a grammar AST.
@@ -298,7 +297,7 @@ class JSONSchemaConverter {
   using CharacterClassElement = GrammarBuilder::CharacterClassElement;
 
   // ==================== Virtual methods for generation ====================
-  // Subclasses can override these to customize grammar AST generation.
+  // Subclasses can override these to customize output format
 
   virtual int32_t GenerateInteger(const IntegerSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateNumber(const NumberSpec& spec, const std::string& rule_name);
@@ -307,7 +306,7 @@ class JSONSchemaConverter {
   virtual int32_t GenerateNull(const NullSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name);
   virtual int32_t GenerateObject(
-      const ObjectSpec& spec, const std::string& rule_name, bool need_braces = true
+      const ObjectSpec& spec, const std::string& rule_name, bool need_brace = true
   );
   virtual int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name);
   virtual int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name);
@@ -323,12 +322,12 @@ class JSONSchemaConverter {
   /*! \brief Format a property key. Override for different formats. */
   virtual int32_t FormatPropertyKey(const std::string& key);
 
-  /*! \brief Format a property key and value. Override for different formats. */
+  /*! \brief Format a property (key + value). Override for different formats. */
   virtual int32_t FormatProperty(
       const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
   );
 
-  /*! \brief Format an additional or unevaluated property. */
+  /*! \brief Format an "other" property (additional/unevaluated). Override for different formats. */
   virtual int32_t FormatOtherProperty(
       int32_t key_pattern_expr,
       int32_t value_rule_id,
@@ -336,39 +335,39 @@ class JSONSchemaConverter {
       const std::string& rule_name_suffix
   );
 
-  /*! \brief Get the basic key-pattern rule name. */
+  /*! \brief Get the basic string rule name. Override for different formats. */
   virtual std::string GetKeyPattern() const;
 
-  /*! \brief Get a key-pattern expression that excludes specific property names. */
+  /*! \brief Get a key pattern that excludes specific property names. */
   virtual int32_t GetKeyPatternExcluding(
       const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
   );
 
-  /*! \brief Get the basic any rule name. */
+  /*! \brief Get the basic any rule name. Override for different formats. */
   virtual std::string GetBasicAnyRuleName() const;
 
-  /*! \brief Add basic rules for the format. */
+  /*! \brief Add basic rules for the format. Override for different formats. */
   virtual void AddBasicRules();
   void AddBasicRules(const std::vector<std::string>& additional_rule_names);
 
-  /*! \brief Add a key-value pair to the generation cache. */
+  /*! \brief Add a key-value pair to the generation cache. Override for custom cache behavior. */
   virtual void AddCache(const std::string& key, int32_t rule_id);
 
-  /*! \brief Get a cached rule id. */
+  /*! \brief Get cached value by key. Returns std::nullopt if not found. */
   virtual std::optional<int32_t> GetCache(const std::string& key) const;
 
-  // ==================== Helper methods for subclasses ====================
+  // ==================== Helper methods (for subclasses to use) ====================
 
-  /*! \brief Dispatch to the appropriate Generate method based on the spec type. */
+  /*! \brief Dispatch to the appropriate Generate method based on spec type. */
   int32_t GenerateFromSpec(const SchemaSpecPtr& spec, const std::string& rule_name_hint);
 
-  /*! \brief Create a rule and return its id, handling caching. */
+  /*! \brief Create a rule and return the rule id (handles caching). */
   int32_t CreateRule(const SchemaSpecPtr& spec, const std::string& rule_name_hint);
 
-  /*! \brief Get the next separator string from the indent manager. */
+  /*! \brief Get next separator from indent manager. */
   virtual std::string NextSeparator(bool is_end = false);
 
-  /*! \brief Get the whitespace pattern. */
+  /*! \brief Get whitespace pattern. */
   std::string GetWhitespacePattern() const;
 
   int32_t Empty();
@@ -392,7 +391,7 @@ class JSONSchemaConverter {
       const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
   );
 
-  /*! \brief Create an expression with property-count constraints. */
+  /*! \brief Helper to create rule with repetition constraints. */
   int32_t GetPropertyWithNumberConstraints(
       int32_t pattern,
       int min_properties,
@@ -401,19 +400,11 @@ class JSONSchemaConverter {
       const std::string& rule_name
   );
 
-  /*! \brief Generate object properties in any-order mode. */
-  int32_t GetAnyOrderRuleForProperties(
-      const std::vector<ObjectSpec::Property>& properties,
-      const std::unordered_set<std::string>& required,
-      const SchemaSpecPtr& additional,
-      const std::string& rule_name,
-      const std::string& additional_suffix,
-      int min_properties,
-      int max_properties,
-      const std::optional<int32_t>& additional_property_override
-  );
-
-  /*! \brief Generate an expression for object properties. */
+  /*! \brief Generate partial rule for object properties.
+   *  \param additional_property_override When set, used as the additional property
+   *         pattern instead of the default GetKeyPattern() : value. This supports patternProperties
+   *         and propertyNames constraints on additional keys.
+   */
   int32_t GetPartialRuleForProperties(
       const std::vector<ObjectSpec::Property>& properties,
       const std::unordered_set<std::string>& required,
@@ -425,16 +416,35 @@ class JSONSchemaConverter {
       const std::optional<int32_t>& additional_property_override = std::nullopt
   );
 
-  /*! \brief Return the built-in regular expression for a JSON Schema string format. */
-  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
+  /*! \brief Generate the object rule in "any order" mode: an "item" alternation over all property
+   *  keys, repeated between max(min_properties, required.size()) and max_properties times. Only the
+   *  entry count is bounded, not which keys appear.
+   */
+  int32_t GetAnyOrderRuleForProperties(
+      const std::vector<ObjectSpec::Property>& properties,
+      const std::unordered_set<std::string>& required,
+      const SchemaSpecPtr& additional,
+      const std::string& rule_name,
+      const std::string& additional_suffix,
+      int min_properties,
+      int max_properties,
+      const std::optional<int32_t>& additional_property_override = std::nullopt
+  );
 
   // ==================== Protected members ====================
 
   GrammarBuilder builder_;
-  GenerateCacheManager rule_cache_manager_;
+  IndentManager indent_manager_;
+  int32_t colon_expr_id_;
+  bool any_whitespace_;
+  std::optional<int> max_whitespace_cnt_;
+  // When true, object properties may appear in any order (see GetAnyOrderRuleForProperties).
+  // Applies to all objects (including nested ones). Default false preserves the fixed-order
+  // behavior.
+  bool any_order_ = false;
 
  public:
-  // Basic rule names.
+  // Basic rule names
   static const std::string kBasicAny;
   static const std::string kBasicInteger;
   static const std::string kBasicNumber;
@@ -446,17 +456,31 @@ class JSONSchemaConverter {
   static const std::string kBasicEscape;
   static const std::string kBasicStringSub;
 
+ protected:
+  GenerateCacheManager rule_cache_manager_;
+
  private:
-  struct DirectTrieNode {
-    bool is_terminal = false;
-    std::map<uint8_t, DirectTrieNode> children;
-  };
-
   void AddHelperRules();
-  int32_t GenerateIntegerMultipleOfDFA(int64_t multiple_of, const std::string& rule_name);
-  int32_t BuildTrieBody(const DirectTrieNode& node, const std::string& rule_name);
 
+  std::unordered_map<std::string, int32_t> uri_to_rule_id_;  // For circular reference handling
+  RefResolver ref_resolver_;  // Resolves $ref URI to SchemaSpecPtr at generate time
+
+  // Trie over property names, for key patterns that exclude specific properties
+  struct TrieNode {
+    bool is_terminal = false;
+    std::map<uint8_t, TrieNode> children;
+  };
+  int32_t BuildTrieBody(const TrieNode& node, const std::string& rule_name);
+
+  // Reused grammar expression ids
+  std::optional<int32_t> empty_expr_id_;
+  std::unordered_map<std::string, int32_t> byte_string_expr_ids_;
+  std::unordered_map<int32_t, int32_t> rule_ref_expr_ids_;
+  std::optional<int32_t> whitespace_expr_id_;
+
+  // Helper for integer/number range regex generation
   static std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
+  int32_t GenerateIntegerMultipleOfDFA(int64_t multiple_of, const std::string& rule_name);
   static std::string GenerateFloatRangeRegex(
       std::optional<double> start,
       std::optional<double> end,
@@ -465,18 +489,10 @@ class JSONSchemaConverter {
       bool exclusive_end = false
   );
 
-  std::optional<int32_t> empty_expr_id_;
-  std::unordered_map<std::string, int32_t> byte_string_expr_ids_;
-  std::unordered_map<int32_t, int32_t> rule_ref_expr_ids_;
-  IndentManager indent_manager_;
-  int32_t colon_expr_id_;
-  bool any_whitespace_;
-  std::optional<int> max_whitespace_cnt_;
-  std::optional<int32_t> whitespace_expr_id_;
-  bool any_order_;
-  RefResolver ref_resolver_;
-  std::unordered_map<std::string, int32_t> uri_to_rule_id_;
+ protected:
+  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
 
+  // Expose for testing
   friend std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
   friend std::string GenerateFloatRangeRegex(
       std::optional<double> start,
@@ -524,9 +540,10 @@ Grammar JSONSchemaToGrammar(
  * \param max_whitespace_cnt The maximum number of whitespace characters for the whitespace
  * which is used for indentation or JSON elements separation when any_whitespace is True. If
  * std::nullopt, it means unlimited. Default: std::nullopt.
- * \param json_format Define the root format of the object. JSONFormat::kJSON generates a fully
- * JSON-style grammar. The Qwen, MiniMax, DeepSeek, and GLM variants generate an XML-style root
- * whose inner values use JSON syntax. Default: JSONFormat::kJSON.
+ * \param json_format Define the root
+ * format of the object. If it's JSONFormat::kJSON, then it will generate a fully JSON-style
+ * grammar. If it's JSONFormat::kXML, then it will generate a grammar with the root format is
+ * XML-style, while the inner format is JSON-style. Default: JSONFormat::kJSON.
  * \returns The EBNF grammar string.
  */
 
@@ -560,9 +577,10 @@ std::string JSONSchemaToEBNF(
  * \param max_whitespace_cnt The maximum number of whitespace characters for the whitespace
  * which is used for indentation or JSON elements separation when any_whitespace is True. If
  * std::nullopt, it means unlimited. Default: std::nullopt.
- * \param json_format Define the root format of the object. JSONFormat::kJSON generates a fully
- * JSON-style grammar. The Qwen, MiniMax, DeepSeek, and GLM variants generate an XML-style root
- * whose inner values use JSON syntax. Default: JSONFormat::kJSON.
+ * \param json_format Define the root format of the object. If it's JSONFormat::kJSON,
+ * then it will generate a fully JSON-style grammar. If it's JSONFormat::kXML, then it will
+ * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
+ * Default: JSONFormat::kJSON.
  * \returns The EBNF grammar string.
  */
 std::string JSONSchemaToEBNF(
