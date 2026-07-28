@@ -201,8 +201,11 @@ answer ::= [0-9]+
 
 Once the budget is exhausted, the token mask forces the occurrence to end if its body can end at
 the current position. If it cannot end there, the budget is relaxed until the earliest valid
-boundary, so the output remains grammar-valid. The bound is therefore exact for bodies such as
-`[^]*` that can end at any position and best-effort for other bodies.
+boundary, so the output remains grammar-valid. If this relaxation causes a derivation to consume a
+token past its budget, the matcher logs a warning the first time, at most once per matcher. When
+authoring a budgeted rule, prefer a body that can end at every possible budget boundary. For
+example, `[^]*` can end at any position, so its budget is exact; bodies that cannot end where the
+budget runs out remain best-effort.
 
 The budget applies independently to every occurrence. To bound a whole repeated region, put the
 option on a wrapper rule. Nested budgets use the smallest active budget. Use a positive decimal
