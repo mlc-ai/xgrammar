@@ -100,6 +100,12 @@ basic_number_digits ::= (([0-9]))
 basic_array_items ::= (([ \n\t]* "," [ \n\t]* basic_any))
 basic_object_properties ::= (([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any))
 root_0 ::= (("{" [ \n\t]* "\"arg\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
 triggered_tags_group ::= (("" root_0 "end"))
 triggered_tags ::= TagDispatch(
   ("start", triggered_tags_group),
@@ -107,12 +113,6 @@ triggered_tags ::= TagDispatch(
   excludes=()
 )
 root_1 ::= ((triggered_tags))
-basic_integer_1 ::= ("" | ("-"))
-basic_number_1 ::= ("" | ("-"))
-basic_number_2 ::= (("0") | ([1-9] [0-9]*))
-basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
-basic_number_4 ::= ("" | ([+\-]))
-basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
 root_2 ::= (([a-z] root_2) | ([a-z]))
 """
 
@@ -131,6 +131,12 @@ basic_number_digits ::= (([0-9]))
 basic_array_items ::= (([ \n\t]* "," [ \n\t]* basic_any))
 basic_object_properties ::= (([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any))
 root_0 ::= (("{" [ \n\t]* "\"arg\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
 triggered_tags_group ::= (("" root_0 "end"))
 triggered_tags ::= TagDispatch(
   ("start", triggered_tags_group),
@@ -138,12 +144,6 @@ triggered_tags ::= TagDispatch(
   excludes=()
 )
 root_1 ::= ((triggered_tags))
-basic_integer_1 ::= ("" | ("-"))
-basic_number_1 ::= ("" | ("-"))
-basic_number_2 ::= (("0") | ([1-9] [0-9]*))
-basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
-basic_number_4 ::= ("" | ([+\-]))
-basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
 root_2 ::= (([a-z] root_2) | ([a-z]))
 """
     start = "start"

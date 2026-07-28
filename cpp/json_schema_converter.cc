@@ -1716,1216 +1716,971 @@ const std::string JSONSchemaConverter::kBasicObject = "basic_object";
 const std::string JSONSchemaConverter::kBasicEscape = "basic_escape";
 const std::string JSONSchemaConverter::kBasicStringSub = "basic_string_sub";
 
-namespace {
-
-using CharacterClassElement = GrammarBuilder::CharacterClassElement;
-
-struct DirectTrieNode {
-  bool is_terminal = false;
-  std::map<uint8_t, DirectTrieNode> children;
-};
-
-struct XMLWrapper {
-  std::string key_wrapper_prefix;
-  std::string key_wrapper_suffix;
-  std::string value_wrapper_prefix;
-  std::string parameter_suffix;
-};
-
-const XMLWrapper& GetXMLWrapper(JSONFormat format) {
-  static const std::unordered_map<JSONFormat, XMLWrapper> kWrappers = {
-      {JSONFormat::kQwenXML, {"<parameter=", ">", "", "</parameter>"}},
-      {JSONFormat::kMiniMaxXML, {"<parameter name=\"", "\">", "", "</parameter>"}},
-      {JSONFormat::kDeepSeekXML,
-       {"<｜DSML｜parameter name=\"",
-        "",
-        "",
-        // TODO(Linzhang): We do not validate the string's value, and we accept both.
-        "</｜DSML｜parameter>"}},
-      {JSONFormat::kGlmXML, {"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"}},
-  };
-  auto it = kWrappers.find(format);
-  XGRAMMAR_CHECK(it != kWrappers.end()) << "JSON format is not an XML tool-calling format";
-  return it->second;
+JSONSchemaConverter::JSONSchemaConverter(
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool any_whitespace,
+    std::optional<int> max_whitespace_cnt,
+    RefResolver ref_resolver,
+    bool any_order
+)
+    : indent_manager_(
+          indent,
+          separators.has_value() ? separators->first
+                                 : (any_whitespace ? "," : (indent.has_value() ? "," : ", ")),
+          any_whitespace,
+          max_whitespace_cnt
+      ),
+      any_whitespace_(any_whitespace),
+      max_whitespace_cnt_(max_whitespace_cnt),
+      any_order_(any_order),
+      ref_resolver_(std::move(ref_resolver)) {
+  std::string colon_separator =
+      separators.has_value() ? separators->second : (any_whitespace ? ":" : ": ");
+  std::string whitespace = GetWhitespacePattern();
+  colon_expr_id_ = FormattingExpression(
+      any_whitespace ? whitespace + " \"" + colon_separator + "\" " + whitespace
+                     : "\"" + colon_separator + "\""
+  );
 }
 
-class ScopedNesting {
- public:
-  ScopedNesting(int* level, bool enabled) : level_(enabled ? level : nullptr) {
-    if (level_ != nullptr) {
-      ++*level_;
+Grammar JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
+  AddBasicRules();
+
+  std::string root_rule_name = AllocateRuleName("root");
+  uri_to_rule_name_["#"] = root_rule_name;
+
+  auto cached_rule = GetCache(spec->cache_key);
+  if (cached_rule.has_value()) {
+    AddRuleWithAllocatedName(root_rule_name, RuleRef(*cached_rule));
+  } else {
+    if (!spec->cache_key.empty()) {
+      AddCache(spec->cache_key, root_rule_name);
     }
+    AddRuleWithAllocatedName(root_rule_name, GenerateFromSpec(spec, root_rule_name));
   }
+  return Get(root_rule_name);
+}
 
-  ~ScopedNesting() {
-    if (level_ != nullptr) {
-      --*level_;
-    }
+// Keep converter-specific naming and node reuse local; GrammarBuilder creates all AST nodes.
+std::string JSONSchemaConverter::AllocateRuleName(const std::string& name_hint) {
+  std::string name = builder_.GetNewRuleName(name_hint);
+  builder_.AddEmptyRule(name);
+  return name;
+}
+
+void JSONSchemaConverter::ReserveRule(const std::string& name) {
+  XGRAMMAR_CHECK(builder_.GetRuleId(name) == -1) << "Rule " << name << " already exists";
+  builder_.AddEmptyRule(name);
+}
+
+std::string JSONSchemaConverter::AddRule(const std::string& name_hint, int32_t body_expr_id) {
+  std::string name = AllocateRuleName(name_hint);
+  AddRuleWithAllocatedName(name, body_expr_id);
+  return name;
+}
+
+void JSONSchemaConverter::AddRuleWithAllocatedName(const std::string& name, int32_t body_expr_id) {
+  int32_t rule_id = builder_.GetRuleId(name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << name << " is not allocated";
+  builder_.UpdateRuleBody(rule_id, body_expr_id);
+}
+
+int32_t JSONSchemaConverter::Empty() {
+  if (!empty_expr_id_.has_value()) {
+    empty_expr_id_ = builder_.AddEmptyStr();
   }
+  return *empty_expr_id_;
+}
 
- private:
-  int* level_;
-};
-
-}  // namespace
-
-class JSONSchemaConverter::Impl {
- public:
-  Impl(
-      std::optional<int> indent,
-      std::optional<std::pair<std::string, std::string>> separators,
-      bool any_whitespace,
-      std::optional<int> max_whitespace_cnt,
-      RefResolver ref_resolver,
-      bool any_order,
-      JSONFormat json_format
-  )
-      : indent_manager_(
-            indent,
-            separators.has_value() ? separators->first
-                                   : (any_whitespace ? "," : (indent.has_value() ? "," : ", ")),
-            any_whitespace,
-            max_whitespace_cnt
-        ),
-        any_whitespace_(any_whitespace),
-        max_whitespace_cnt_(max_whitespace_cnt),
-        any_order_(any_order),
-        ref_resolver_(std::move(ref_resolver)),
-        json_format_(json_format),
-        xml_wrapper_(json_format == JSONFormat::kJSON ? XMLWrapper{} : GetXMLWrapper(json_format)) {
-    std::string colon_separator =
-        separators.has_value() ? separators->second : (any_whitespace ? ":" : ": ");
-    std::string whitespace = WhitespacePattern();
-    colon_expr_id_ = FormattingExpression(
-        any_whitespace ? whitespace + " \"" + colon_separator + "\" " + whitespace
-                       : "\"" + colon_separator + "\""
-    );
+int32_t JSONSchemaConverter::ByteString(const std::string& value) {
+  auto it = byte_string_expr_ids_.find(value);
+  if (it != byte_string_expr_ids_.end()) {
+    return it->second;
   }
+  int32_t expr_id = value.empty() ? Empty() : builder_.AddByteString(value);
+  byte_string_expr_ids_[value] = expr_id;
+  return expr_id;
+}
 
-  Grammar Convert(const SchemaSpecPtr& spec) {
-    nested_object_level_ = 0;
-    AddBasicRules();
+int32_t JSONSchemaConverter::CharacterClass(
+    const std::vector<CharacterClassElement>& elements, bool is_negative
+) {
+  return builder_.AddCharacterClass(elements, is_negative);
+}
 
-    std::string root_rule_name = AllocateRuleName("root");
-    uri_to_rule_name_["#"] = root_rule_name;
+int32_t JSONSchemaConverter::CharacterClassStar(
+    const std::vector<CharacterClassElement>& elements, bool is_negative
+) {
+  return builder_.AddCharacterClassStar(elements, is_negative);
+}
 
-    auto cached_rule = GetCache(spec->cache_key);
-    if (cached_rule.has_value()) {
-      AddRuleWithAllocatedName(root_rule_name, RuleRef(*cached_rule));
-    } else {
-      if (!spec->cache_key.empty()) {
-        AddCache(spec->cache_key, root_rule_name);
-      }
-      AddRuleWithAllocatedName(root_rule_name, GenerateFromSpec(spec, root_rule_name));
-    }
-    return Get(root_rule_name);
+int32_t JSONSchemaConverter::Regex(const std::string& regex, bool json_string) {
+  return builder_.AddRegex(regex, json_string);
+}
+
+int32_t JSONSchemaConverter::TagDispatch(
+    bool loop_after_dispatch, std::vector<std::string> excludes
+) {
+  return builder_.AddTagDispatch(
+      Grammar::Impl::TagDispatch{{}, loop_after_dispatch, std::move(excludes)}
+  );
+}
+
+int32_t JSONSchemaConverter::RuleRef(int32_t rule_id) {
+  auto it = rule_ref_expr_ids_.find(rule_id);
+  if (it != rule_ref_expr_ids_.end()) {
+    return it->second;
   }
+  int32_t expr_id = builder_.AddRuleRef(rule_id);
+  rule_ref_expr_ids_[rule_id] = expr_id;
+  return expr_id;
+}
 
- private:
-  // Keep converter-specific naming and node reuse local; GrammarBuilder creates all AST nodes.
-  std::string AllocateRuleName(const std::string& name_hint) {
-    std::string name = builder_.GetNewRuleName(name_hint);
-    builder_.AddEmptyRule(name);
-    return name;
+int32_t JSONSchemaConverter::RuleRef(const std::string& rule_name) {
+  int32_t rule_id = builder_.GetRuleId(rule_name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not allocated";
+  return RuleRef(rule_id);
+}
+
+int32_t JSONSchemaConverter::Sequence(const std::vector<int32_t>& elements) {
+  if (elements.empty()) {
+    return Empty();
   }
-
-  void ReserveRule(const std::string& name) {
-    XGRAMMAR_CHECK(builder_.GetRuleId(name) == -1) << "Rule " << name << " already exists";
-    builder_.AddEmptyRule(name);
+  if (elements.size() == 1) {
+    return elements[0];
   }
+  return builder_.AddSequence(elements);
+}
 
-  std::string AddRule(const std::string& name_hint, int32_t body_expr_id) {
-    std::string name = AllocateRuleName(name_hint);
-    AddRuleWithAllocatedName(name, body_expr_id);
-    return name;
+int32_t JSONSchemaConverter::Choice(const std::vector<int32_t>& choices) {
+  if (choices.empty()) {
+    return Empty();
   }
-
-  void AddRuleWithAllocatedName(const std::string& name, int32_t body_expr_id) {
-    int32_t rule_id = builder_.GetRuleId(name);
-    XGRAMMAR_CHECK(rule_id != -1) << "Rule " << name << " is not allocated";
-    builder_.UpdateRuleBody(rule_id, body_expr_id);
+  if (choices.size() == 1) {
+    return choices[0];
   }
+  return builder_.AddChoices(choices);
+}
 
-  int32_t Empty() {
-    if (!empty_expr_id_.has_value()) {
-      empty_expr_id_ = builder_.AddEmptyStr();
-    }
-    return *empty_expr_id_;
+int32_t JSONSchemaConverter::Repeat(
+    const std::string& rule_name_hint, int32_t expr_id, int32_t min_count, int32_t max_count
+) {
+  if (min_count == 0 && max_count == 0) {
+    return Empty();
   }
-
-  int32_t ByteString(const std::string& value) {
-    auto it = byte_string_expr_ids_.find(value);
-    if (it != byte_string_expr_ids_.end()) {
-      return it->second;
-    }
-    int32_t expr_id = value.empty() ? Empty() : builder_.AddByteString(value);
-    byte_string_expr_ids_[value] = expr_id;
+  if (min_count == 1 && max_count == 1) {
     return expr_id;
   }
-
-  int32_t CharacterClass(
-      const std::vector<CharacterClassElement>& elements, bool is_negative = false
-  ) {
-    return builder_.AddCharacterClass(elements, is_negative);
+  if (min_count == 0 && max_count == 1) {
+    return Choice({Empty(), expr_id});
   }
-
-  int32_t CharacterClassStar(
-      const std::vector<CharacterClassElement>& elements, bool is_negative = false
-  ) {
-    return builder_.AddCharacterClassStar(elements, is_negative);
-  }
-
-  int32_t Regex(const std::string& regex, bool json_string = false) {
-    return builder_.AddRegex(regex, json_string);
-  }
-
-  int32_t TagDispatch(bool loop_after_dispatch, std::vector<std::string> excludes) {
-    return builder_.AddTagDispatch(
-        Grammar::Impl::TagDispatch{{}, loop_after_dispatch, std::move(excludes)}
-    );
-  }
-
-  int32_t RuleRef(int32_t rule_id) {
-    auto it = rule_ref_expr_ids_.find(rule_id);
-    if (it != rule_ref_expr_ids_.end()) {
-      return it->second;
-    }
-    int32_t expr_id = builder_.AddRuleRef(rule_id);
-    rule_ref_expr_ids_[rule_id] = expr_id;
-    return expr_id;
-  }
-
-  int32_t RuleRef(const std::string& rule_name) {
-    int32_t rule_id = builder_.GetRuleId(rule_name);
-    XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not allocated";
-    return RuleRef(rule_id);
-  }
-
-  int32_t Sequence(const std::vector<int32_t>& elements) {
-    if (elements.empty()) {
-      return Empty();
-    }
-    if (elements.size() == 1) {
-      return elements[0];
-    }
-    return builder_.AddSequence(elements);
-  }
-
-  int32_t Choice(const std::vector<int32_t>& choices) {
-    if (choices.empty()) {
-      return Empty();
-    }
-    if (choices.size() == 1) {
-      return choices[0];
-    }
-    return builder_.AddChoices(choices);
-  }
-
-  int32_t Repeat(
-      const std::string& rule_name_hint, int32_t expr_id, int32_t min_count, int32_t max_count
-  ) {
-    if (min_count == 0 && max_count == 0) {
-      return Empty();
-    }
-    if (min_count == 1 && max_count == 1) {
-      return expr_id;
-    }
-    if (min_count == 0 && max_count == 1) {
-      return Choice({Empty(), expr_id});
-    }
-    if (min_count == 0 && max_count == -1) {
-      auto expr = builder_.GetGrammarExpr(expr_id);
-      if (expr.type == GrammarBuilder::GrammarExprType::kCharacterClass) {
-        std::vector<int32_t> data(expr.begin(), expr.end());
-        return builder_.AddGrammarExpr(
-            {GrammarBuilder::GrammarExprType::kCharacterClassStar,
-             data.data(),
-             static_cast<int32_t>(data.size())}
-        );
-      }
-    }
-    return builder_.AddRepeatFromExpr(rule_name_hint, expr_id, min_count, max_count);
-  }
-
-  void SetLookahead(const std::string& rule_name, int32_t lookahead_expr_id) {
-    builder_.UpdateLookaheadAssertion(rule_name, lookahead_expr_id);
-  }
-
-  int32_t AddSubGrammar(const Grammar& grammar) {
-    int32_t rule_id = SubGrammarAdder::Apply(&builder_, grammar);
-    return RuleRef(rule_id);
-  }
-
-  Grammar Get(const std::string& root_rule_name) { return builder_.Get(root_rule_name); }
-
-  static constexpr const char* kXMLString = "xml_string";
-  static constexpr const char* kXMLAny = "xml_any";
-  static constexpr const char* kXMLObject = "xml_object";
-  static constexpr const char* kXMLVariableName = "xml_variable_name";
-
-  bool IsXML() const { return json_format_ != JSONFormat::kJSON; }
-
-  bool IsOuterXML() const { return IsXML() && nested_object_level_ <= 1; }
-
-  std::string WhitespacePattern() const {
-    if (!max_whitespace_cnt_.has_value()) {
-      return "[ \\n\\t]*";
-    }
-    return "[ \\n\\t]{0," + std::to_string(*max_whitespace_cnt_) + "}";
-  }
-
-  int32_t WhitespaceExpression() {
-    std::vector<CharacterClassElement> elements = {{' ', ' '}, {'\n', '\n'}, {'\t', '\t'}};
-    if (!max_whitespace_cnt_.has_value()) {
-      if (!whitespace_expr_id_.has_value()) {
-        whitespace_expr_id_ = CharacterClassStar(elements);
-      }
-      return *whitespace_expr_id_;
-    }
-    // Bounded whitespace occurrences intentionally remain distinct, matching the historical
-    // parser-produced rule shape after normalization.
-    return Repeat(
-        "whitespace", CharacterClass(elements), 0, static_cast<int32_t>(*max_whitespace_cnt_)
-    );
-  }
-
-  int32_t FormattingExpression(const std::string& expression) {
-    const std::string whitespace = WhitespacePattern();
-    if (expression == whitespace) {
-      return WhitespaceExpression();
-    }
-
-    const std::string prefix = whitespace + " ";
-    const std::string suffix = " " + whitespace;
-    if (expression.size() >= prefix.size() + suffix.size() &&
-        expression.compare(0, prefix.size(), prefix) == 0 &&
-        expression.compare(expression.size() - suffix.size(), suffix.size(), suffix) == 0) {
-      return Sequence(
-          {WhitespaceExpression(),
-           FormattingExpression(
-               expression.substr(prefix.size(), expression.size() - prefix.size() - suffix.size())
-           ),
-           WhitespaceExpression()}
+  if (min_count == 0 && max_count == -1) {
+    auto expr = builder_.GetGrammarExpr(expr_id);
+    if (expr.type == GrammarBuilder::GrammarExprType::kCharacterClass) {
+      std::vector<int32_t> data(expr.begin(), expr.end());
+      return builder_.AddGrammarExpr(
+          {GrammarBuilder::GrammarExprType::kCharacterClassStar,
+           data.data(),
+           static_cast<int32_t>(data.size())}
       );
     }
+  }
+  return builder_.AddRepeatFromExpr(rule_name_hint, expr_id, min_count, max_count);
+}
 
-    picojson::value value;
-    std::string error = picojson::parse(value, expression);
-    XGRAMMAR_CHECK(error.empty() && value.is<std::string>())
-        << "Unsupported indentation expression: " << expression;
-    return ByteString(value.get<std::string>());
+void JSONSchemaConverter::SetLookahead(const std::string& rule_name, int32_t lookahead_expr_id) {
+  builder_.UpdateLookaheadAssertion(rule_name, lookahead_expr_id);
+}
+
+int32_t JSONSchemaConverter::AddSubGrammar(const Grammar& grammar) {
+  int32_t rule_id = SubGrammarAdder::Apply(&builder_, grammar);
+  return RuleRef(rule_id);
+}
+
+Grammar JSONSchemaConverter::Get(const std::string& root_rule_name) {
+  return builder_.Get(root_rule_name);
+}
+
+std::string JSONSchemaConverter::GetWhitespacePattern() const {
+  if (!max_whitespace_cnt_.has_value()) {
+    return "[ \\n\\t]*";
+  }
+  return "[ \\n\\t]{0," + std::to_string(*max_whitespace_cnt_) + "}";
+}
+
+int32_t JSONSchemaConverter::WhitespaceExpression() {
+  std::vector<CharacterClassElement> elements = {{' ', ' '}, {'\n', '\n'}, {'\t', '\t'}};
+  if (!max_whitespace_cnt_.has_value()) {
+    if (!whitespace_expr_id_.has_value()) {
+      whitespace_expr_id_ = CharacterClassStar(elements);
+    }
+    return *whitespace_expr_id_;
+  }
+  // Bounded whitespace occurrences intentionally remain distinct, matching the historical
+  // parser-produced rule shape after normalization.
+  return Repeat(
+      "whitespace", CharacterClass(elements), 0, static_cast<int32_t>(*max_whitespace_cnt_)
+  );
+}
+
+int32_t JSONSchemaConverter::FormattingExpression(const std::string& expression) {
+  const std::string whitespace = GetWhitespacePattern();
+  if (expression == whitespace) {
+    return WhitespaceExpression();
   }
 
-  int32_t NextSeparatorExpression(bool is_end = false) {
-    if (IsOuterXML()) {
-      return WhitespaceExpression();
-    }
-    return FormattingExpression(indent_manager_.NextSeparator(is_end));
-  }
-
-  int32_t KeyPatternExpression() {
-    return RuleRef(IsOuterXML() ? kXMLVariableName : JSONSchemaConverter::kBasicString);
-  }
-
-  std::string XMLValue(const std::string& json_value) const {
-    picojson::value value;
-    std::string error = picojson::parse(value, json_value);
-    if (error.empty() && value.is<std::string>()) {
-      return value.get<std::string>();
-    }
-    return json_value;
-  }
-
-  int32_t GenerateFromSpec(const SchemaSpecPtr& spec, const std::string& rule_name_hint) {
-    return std::visit(
-        [this, &rule_name_hint](const auto& value) -> int32_t {
-          using T = std::decay_t<decltype(value)>;
-          if constexpr (std::is_same_v<T, IntegerSpec>) {
-            return GenerateInteger(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, NumberSpec>) {
-            return GenerateNumber(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, StringSpec>) {
-            return GenerateString(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, BooleanSpec>) {
-            return GenerateBoolean(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, NullSpec>) {
-            return GenerateNull(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, ArraySpec>) {
-            return GenerateArray(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, ObjectSpec>) {
-            return GenerateObject(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, AnySpec>) {
-            return GenerateAny(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, ConstSpec>) {
-            return GenerateConst(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, EnumSpec>) {
-            return GenerateEnum(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, RefSpec>) {
-            return GenerateRef(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, AnyOfSpec>) {
-            return GenerateAnyOf(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, OneOfSpec>) {
-            return GenerateOneOf(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, AllOfSpec>) {
-            return GenerateAllOf(value, rule_name_hint);
-          } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
-            return GenerateTypeArray(value, rule_name_hint);
-          } else {
-            XGRAMMAR_LOG(FATAL) << "Unknown JSON schema specification type";
-          }
-        },
-        spec->spec
-    );
-  }
-
-  std::string CreateRule(const SchemaSpecPtr& spec, const std::string& rule_name_hint) {
-    auto cached = GetCache(spec->cache_key);
-    if (cached.has_value()) {
-      return *cached;
-    }
-    std::string rule_name = AllocateRuleName(rule_name_hint);
-    AddRuleWithAllocatedName(rule_name, GenerateFromSpec(spec, rule_name));
-    return rule_name;
-  }
-
-  void AddCache(const std::string& key, const std::string& rule_name) {
-    if (!key.empty()) {
-      rule_cache_manager_.AddCache(key, !IsXML() || nested_object_level_ > 1, rule_name);
-    }
-  }
-
-  std::optional<std::string> GetCache(const std::string& key) const {
-    if (key.empty()) {
-      return std::nullopt;
-    }
-    return rule_cache_manager_.GetCache(key, !IsXML() || nested_object_level_ > 1);
-  }
-
-  int32_t RegexExpression(
-      const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
-  ) {
-    bool can_use_fsm = !force_cfg_expansion;
-    if (json_string) {
-      can_use_fsm =
-          can_use_fsm && std::all_of(regex.begin(), regex.end(), [](unsigned char character) {
-            return character >= 0x20 && character <= 0x7e;
-          });
-    }
-    if (can_use_fsm) {
-      auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
-      if (fsm_result.IsOk()) {
-        auto fsm = std::move(fsm_result).Unwrap();
-        std::unordered_set<int> reachable_states;
-        fsm.GetReachableStates(&reachable_states);
-        bool language_is_empty =
-            std::none_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
-              return fsm.IsEndState(state);
-            });
-        if (!language_is_empty) {
-          return Regex(regex, json_string);
-        }
-      }
-    }
-
-    // Keep regex conversion independent. Only the uncommon fallback path converts its existing
-    // EBNF result to a subgrammar; the JSON Schema rule graph itself is still built directly.
-    return AddSubGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
-  }
-
-  void AddBasicRules() {
-    std::vector<std::string> basic_rule_names = {
-        JSONSchemaConverter::kBasicEscape,
-        JSONSchemaConverter::kBasicStringSub,
-        JSONSchemaConverter::kBasicAny,
-        JSONSchemaConverter::kBasicInteger,
-        JSONSchemaConverter::kBasicNumber,
-        JSONSchemaConverter::kBasicString,
-        JSONSchemaConverter::kBasicBoolean,
-        JSONSchemaConverter::kBasicNull,
-        JSONSchemaConverter::kBasicArray,
-        JSONSchemaConverter::kBasicObject,
-    };
-    if (IsXML()) {
-      basic_rule_names.insert(
-          basic_rule_names.end(), {kXMLString, kXMLAny, kXMLObject, kXMLVariableName}
-      );
-      nested_object_level_ = 2;
-    }
-    for (const auto& name : basic_rule_names) {
-      ReserveRule(name);
-    }
-    AddHelperRules();
-
-    auto saved_indent_manager = indent_manager_;
-    indent_manager_ = IndentManager(
-        std::nullopt,
-        any_whitespace_ ? "," : ", ",
-        any_whitespace_,
-        any_whitespace_ ? max_whitespace_cnt_ : std::nullopt
-    );
-
-    auto any_spec = SchemaSpec::Make(AnySpec{}, "{}", JSONSchemaConverter::kBasicAny);
-    AddRuleWithAllocatedName(
-        JSONSchemaConverter::kBasicAny,
-        GenerateAny(std::get<AnySpec>(any_spec->spec), JSONSchemaConverter::kBasicAny)
-    );
-    AddCache("{}", JSONSchemaConverter::kBasicAny);
-
-    constexpr const char* kIntegerCacheKey = "{\"type\":\"integer\"}";
-    AddRuleWithAllocatedName(
-        JSONSchemaConverter::kBasicInteger,
-        GenerateInteger(IntegerSpec{}, JSONSchemaConverter::kBasicInteger)
-    );
-    AddCache(kIntegerCacheKey, JSONSchemaConverter::kBasicInteger);
-
-    constexpr const char* kNumberCacheKey = "{\"type\":\"number\"}";
-    AddRuleWithAllocatedName(
-        JSONSchemaConverter::kBasicNumber,
-        GenerateNumber(NumberSpec{}, JSONSchemaConverter::kBasicNumber)
-    );
-    AddCache(kNumberCacheKey, JSONSchemaConverter::kBasicNumber);
-
-    constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
-    AddRuleWithAllocatedName(
-        JSONSchemaConverter::kBasicString,
-        Sequence({ByteString("\""), RuleRef(JSONSchemaConverter::kBasicStringSub)})
-    );
-    AddCache(kStringCacheKey, JSONSchemaConverter::kBasicString);
-
-    constexpr const char* kBooleanCacheKey = "{\"type\":\"boolean\"}";
-    AddRuleWithAllocatedName(
-        JSONSchemaConverter::kBasicBoolean,
-        GenerateBoolean(BooleanSpec{}, JSONSchemaConverter::kBasicBoolean)
-    );
-    AddCache(kBooleanCacheKey, JSONSchemaConverter::kBasicBoolean);
-
-    constexpr const char* kNullCacheKey = "{\"type\":\"null\"}";
-    AddRuleWithAllocatedName(
-        JSONSchemaConverter::kBasicNull, GenerateNull(NullSpec{}, JSONSchemaConverter::kBasicNull)
-    );
-    AddCache(kNullCacheKey, JSONSchemaConverter::kBasicNull);
-
-    constexpr const char* kArrayCacheKey = "{\"type\":\"array\"}";
-    ArraySpec array_spec;
-    array_spec.allow_additional_items = true;
-    array_spec.additional_items = any_spec;
-    AddRuleWithAllocatedName(
-        JSONSchemaConverter::kBasicArray,
-        GenerateArray(array_spec, JSONSchemaConverter::kBasicArray)
-    );
-    AddCache(kArrayCacheKey, JSONSchemaConverter::kBasicArray);
-
-    constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
-    ObjectSpec object_spec;
-    object_spec.allow_additional_properties = true;
-    object_spec.additional_properties_schema = any_spec;
-    AddRuleWithAllocatedName(
-        JSONSchemaConverter::kBasicObject,
-        GenerateObject(object_spec, JSONSchemaConverter::kBasicObject)
-    );
-    AddCache(kObjectCacheKey, JSONSchemaConverter::kBasicObject);
-
-    indent_manager_ = saved_indent_manager;
-    if (!IsXML()) {
-      return;
-    }
-
-    nested_object_level_ = 1;
-    AddRuleWithAllocatedName(kXMLString, TagDispatch(false, {xml_wrapper_.parameter_suffix}));
-    AddCache(kStringCacheKey, kXMLString);
-
-    AddRuleWithAllocatedName(kXMLAny, GenerateAny(AnySpec{}, kXMLAny));
-    AddCache("{}", kXMLAny);
-
-    nested_object_level_ = 0;
-    ObjectSpec xml_object_spec;
-    xml_object_spec.allow_additional_properties = true;
-    xml_object_spec.additional_properties_schema = any_spec;
-    AddRuleWithAllocatedName(kXMLObject, GenerateObject(xml_object_spec, kXMLObject));
-    AddCache(kObjectCacheKey, kXMLObject);
-
-    AddRuleWithAllocatedName(
-        kXMLVariableName,
-        Sequence(
-            {CharacterClass({{'a', 'z'}, {'A', 'Z'}, {'_', '_'}}),
-             CharacterClassStar({{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}})}
-        )
-    );
-  }
-
-  void AddHelperRules() {
-    if (max_whitespace_cnt_.has_value()) {
-      // Preserve historical helper-rule numbering after grammar optimization. The text parser
-      // allocated one initial bounded-repetition helper that dead-code elimination later removed.
-      AddRule(JSONSchemaConverter::kBasicStringSub, Empty());
-    }
-    int32_t escaped_character = CharacterClass(
-        {{'"', '"'},
-         {'\\', '\\'},
-         {'/', '/'},
-         {'b', 'b'},
-         {'f', 'f'},
-         {'n', 'n'},
-         {'r', 'r'},
-         {'t', 't'}}
-    );
-    int32_t hexadecimal_character = CharacterClass({{'A', 'F'}, {'a', 'f'}, {'0', '9'}});
-    int32_t unicode_escape = Sequence(
-        {ByteString("u"),
-         hexadecimal_character,
-         hexadecimal_character,
-         hexadecimal_character,
-         hexadecimal_character}
-    );
-    AddRuleWithAllocatedName(
-        JSONSchemaConverter::kBasicEscape, Choice({escaped_character, unicode_escape})
-    );
-
-    int32_t normal_character =
-        CharacterClass({{0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
-    int32_t string_sub_ref = RuleRef(JSONSchemaConverter::kBasicStringSub);
-    int32_t string_sub_body = Choice(
-        {ByteString("\""),
-         Sequence({normal_character, string_sub_ref}),
-         Sequence({ByteString("\\"), RuleRef(JSONSchemaConverter::kBasicEscape), string_sub_ref})}
-    );
-    AddRuleWithAllocatedName(JSONSchemaConverter::kBasicStringSub, string_sub_body);
-    int32_t closing_context = CharacterClass({{',', ','}, {'}', '}'}, {']', ']'}, {':', ':'}});
-    SetLookahead(
-        JSONSchemaConverter::kBasicStringSub, Sequence({WhitespaceExpression(), closing_context})
-    );
-  }
-
-  int32_t GenerateInteger(const IntegerSpec& spec, const std::string& rule_name) {
-    std::optional<int64_t> start = spec.minimum;
-    std::optional<int64_t> end = spec.maximum;
-    if (spec.exclusive_minimum.has_value() &&
-        (!start.has_value() || *spec.exclusive_minimum >= *start)) {
-      XGRAMMAR_CHECK(*spec.exclusive_minimum != std::numeric_limits<int64_t>::max());
-      start = *spec.exclusive_minimum + 1;
-    }
-    if (spec.exclusive_maximum.has_value() &&
-        (!end.has_value() || *spec.exclusive_maximum <= *end)) {
-      XGRAMMAR_CHECK(*spec.exclusive_maximum != std::numeric_limits<int64_t>::min());
-      end = *spec.exclusive_maximum - 1;
-    }
-
-    if (spec.multiple_of.has_value()) {
-      if (start.has_value() && end.has_value()) {
-        std::vector<int32_t> multiples;
-        for (int64_t value = *start; value <= *end; ++value) {
-          if (IsMultipleOf(value, *spec.multiple_of)) {
-            multiples.push_back(ByteString(std::to_string(value)));
-          }
-          if (value == std::numeric_limits<int64_t>::max()) {
-            break;
-          }
-        }
-        return Choice(multiples);
-      }
-      return GenerateIntegerMultipleOfDFA(*spec.multiple_of, rule_name);
-    }
-    if (start.has_value() || end.has_value()) {
-      return RegexExpression(
-          JSONSchemaConverter::GenerateRangeRegex(start, end),
-          false,
-          /*force_cfg_expansion=*/true
-      );
-    }
-    int32_t optional_minus = Choice({Empty(), ByteString("-")});
-    return Choice(
-        {ByteString("0"),
-         Sequence({optional_minus, CharacterClass({{'1', '9'}}), CharacterClassStar({{'0', '9'}})})}
-    );
-  }
-
-  int32_t GenerateIntegerMultipleOfDFA(int64_t multiple_of, const std::string& rule_name) {
-    std::vector<std::string> states(multiple_of);
-    for (int64_t state = 0; state < multiple_of; ++state) {
-      states[state] = AllocateRuleName(
-          rule_name + "_multiple_of_" + std::to_string(multiple_of) + "_mod_" +
-          std::to_string(state)
-      );
-    }
-    for (int64_t state = 0; state < multiple_of; ++state) {
-      std::vector<int32_t> transitions;
-      if (state == 0) {
-        transitions.push_back(Empty());
-      }
-      for (int64_t digit = 0; digit <= 9; ++digit) {
-        int64_t next_state = (state * 10 + digit) % multiple_of;
-        transitions.push_back(
-            Sequence({ByteString(std::to_string(digit)), RuleRef(states[next_state])})
-        );
-      }
-      AddRuleWithAllocatedName(states[state], Choice(transitions));
-    }
-
-    std::vector<int32_t> non_zero_starts;
-    for (int64_t digit = 1; digit <= 9; ++digit) {
-      non_zero_starts.push_back(
-          Sequence({ByteString(std::to_string(digit)), RuleRef(states[digit % multiple_of])})
-      );
-    }
-    return Choice(
-        {ByteString("0"), Sequence({Choice({Empty(), ByteString("-")}), Choice(non_zero_starts)})}
-    );
-  }
-
-  int32_t GenerateNumber(const NumberSpec& spec, const std::string& rule_name) {
-    std::optional<double> start = spec.minimum;
-    std::optional<double> end = spec.maximum;
-    bool exclusive_start = false;
-    bool exclusive_end = false;
-    if (spec.exclusive_minimum.has_value() &&
-        (!start.has_value() || *spec.exclusive_minimum >= *start)) {
-      start = spec.exclusive_minimum;
-      exclusive_start = true;
-    }
-    if (spec.exclusive_maximum.has_value() &&
-        (!end.has_value() || *spec.exclusive_maximum <= *end)) {
-      end = spec.exclusive_maximum;
-      exclusive_end = true;
-    }
-    if (start.has_value() || end.has_value()) {
-      return RegexExpression(
-          JSONSchemaConverter::GenerateFloatRangeRegex(
-              start, end, /*precision=*/6, exclusive_start, exclusive_end
-          ),
-          false,
-          /*force_cfg_expansion=*/true
-      );
-    }
-
-    int32_t optional_minus = Choice({Empty(), ByteString("-")});
-    int32_t integer_part = Choice(
-        {ByteString("0"), Sequence({CharacterClass({{'1', '9'}}), CharacterClassStar({{'0', '9'}})})
-        }
-    );
-    int32_t one_or_more_digits = Repeat(rule_name + "_digits", CharacterClass({{'0', '9'}}), 1, -1);
-    int32_t fraction = Choice({Empty(), Sequence({ByteString("."), one_or_more_digits})});
-    int32_t exponent = Choice(
-        {Empty(),
-         Sequence(
-             {CharacterClass({{'e', 'e'}, {'E', 'E'}}),
-              Choice({Empty(), CharacterClass({{'+', '+'}, {'-', '-'}})}),
-              one_or_more_digits}
-         )}
-    );
-    return Sequence({optional_minus, integer_part, fraction, exponent});
-  }
-
-  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) {
-    if (IsOuterXML()) {
-      if (!spec.pattern.has_value() && !spec.format.has_value() && spec.min_length == 0 &&
-          spec.max_length == -1) {
-        return RuleRef(kXMLString);
-      }
-      if (spec.format.has_value()) {
-        auto regex = JSONSchemaConverter::JSONFormatToRegexPattern(*spec.format);
-        if (regex.has_value()) {
-          return RegexExpression(*regex, false, true);
-        }
-      }
-      if (spec.pattern.has_value()) {
-        return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
-      }
-      return Repeat(
-          rule_name + "_characters",
-          CharacterClass({{0, 0x10ffff}}),
-          spec.min_length,
-          spec.max_length
-      );
-    }
-
-    if (spec.format.has_value()) {
-      auto regex = JSONSchemaConverter::JSONFormatToRegexPattern(*spec.format);
-      if (regex.has_value()) {
-        return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
-      }
-    }
-    if (spec.pattern.has_value()) {
-      return Sequence(
-          {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
-      );
-    }
-    if (spec.min_length != 0 || spec.max_length != -1) {
-      int32_t character =
-          CharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
-      int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
-      return Sequence({ByteString("\""), body, ByteString("\"")});
-    }
-    return Sequence({ByteString("\""), RuleRef(JSONSchemaConverter::kBasicStringSub)});
-  }
-
-  int32_t GenerateBoolean(const BooleanSpec&, const std::string&) {
-    return Choice({ByteString("true"), ByteString("false")});
-  }
-
-  int32_t GenerateNull(const NullSpec&, const std::string&) { return ByteString("null"); }
-
-  int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) {
-    ScopedNesting nesting(&nested_object_level_, IsXML());
-    indent_manager_.StartIndent();
-    int32_t start_separator = FormattingExpression(indent_manager_.StartSeparator());
-    int32_t middle_separator = FormattingExpression(indent_manager_.MiddleSeparator());
-    int32_t end_separator = FormattingExpression(indent_manager_.EndSeparator());
-    int32_t empty_separator = FormattingExpression(indent_manager_.EmptySeparator());
-
-    std::vector<std::string> item_rules;
-    for (size_t index = 0; index < spec.prefix_items.size(); ++index) {
-      item_rules.push_back(
-          CreateRule(spec.prefix_items[index], rule_name + "_item_" + std::to_string(index))
-      );
-    }
-    std::string additional_rule;
-    if (spec.allow_additional_items && spec.additional_items) {
-      additional_rule = CreateRule(spec.additional_items, rule_name + "_additional");
-    }
-    indent_manager_.EndIndent();
-
-    int32_t left_bracket = ByteString("[");
-    int32_t right_bracket = ByteString("]");
-    int32_t empty_array = Sequence({left_bracket, empty_separator, right_bracket});
-
-    if (item_rules.empty()) {
-      if (!spec.allow_additional_items || spec.max_items == 0) {
-        return empty_array;
-      }
-      int32_t additional = RuleRef(additional_rule);
-      int32_t tail = Repeat(
-          rule_name + "_items",
-          Sequence({middle_separator, additional}),
-          spec.min_items == 0 ? 0 : static_cast<int32_t>(spec.min_items - 1),
-          spec.max_items == -1 ? -1 : static_cast<int32_t>(spec.max_items - 1)
-      );
-      int32_t nonempty =
-          Sequence({left_bracket, start_separator, additional, tail, end_separator, right_bracket});
-      return spec.min_items == 0 ? Choice({nonempty, empty_array}) : nonempty;
-    }
-
-    std::vector<int32_t> prefix_elements;
-    for (size_t index = 0; index < item_rules.size(); ++index) {
-      if (index != 0) {
-        prefix_elements.push_back(middle_separator);
-      }
-      prefix_elements.push_back(RuleRef(item_rules[index]));
-    }
-    int32_t prefix = Sequence(prefix_elements);
-    if (!spec.allow_additional_items) {
-      return Sequence({left_bracket, start_separator, prefix, end_separator, right_bracket});
-    }
-
-    int64_t minimum_additional =
-        std::max(int64_t{0}, spec.min_items - static_cast<int64_t>(item_rules.size()));
-    int32_t additional_tail = Repeat(
-        rule_name + "_additional_items",
-        Sequence({middle_separator, RuleRef(additional_rule)}),
-        static_cast<int32_t>(minimum_additional),
-        spec.max_items == -1
-            ? -1
-            : static_cast<int32_t>(spec.max_items - static_cast<int64_t>(item_rules.size()))
-    );
+  const std::string prefix = whitespace + " ";
+  const std::string suffix = " " + whitespace;
+  if (expression.size() >= prefix.size() + suffix.size() &&
+      expression.compare(0, prefix.size(), prefix) == 0 &&
+      expression.compare(expression.size() - suffix.size(), suffix.size(), suffix) == 0) {
     return Sequence(
-        {left_bracket, start_separator, prefix, additional_tail, end_separator, right_bracket}
+        {WhitespaceExpression(),
+         FormattingExpression(
+             expression.substr(prefix.size(), expression.size() - prefix.size() - suffix.size())
+         ),
+         WhitespaceExpression()}
     );
   }
 
-  int32_t XMLKeySuffix() {
-    if (json_format_ == JSONFormat::kDeepSeekXML) {
-      return Sequence(
-          {ByteString("\" string=\""),
-           Choice({ByteString("true"), ByteString("false")}),
-           ByteString("\">")}
-      );
-    }
-    return ByteString(xml_wrapper_.key_wrapper_suffix);
-  }
+  picojson::value value;
+  std::string error = picojson::parse(value, expression);
+  XGRAMMAR_CHECK(error.empty() && value.is<std::string>())
+      << "Unsupported indentation expression: " << expression;
+  return ByteString(value.get<std::string>());
+}
 
-  int32_t FormatPropertyKey(const std::string& key) {
-    if (IsOuterXML()) {
-      return Sequence({ByteString(xml_wrapper_.key_wrapper_prefix + key), XMLKeySuffix()});
-    }
-    return ByteString(picojson::value(key).serialize());
-  }
+std::string JSONSchemaConverter::NextSeparator(bool is_end) {
+  return indent_manager_.NextSeparator(is_end);
+}
 
-  int32_t FormatProperty(const std::string& key, const std::string& value_rule) {
-    if (IsOuterXML()) {
-      std::vector<int32_t> elements = {FormatPropertyKey(key)};
-      if (!xml_wrapper_.value_wrapper_prefix.empty()) {
-        elements.push_back(WhitespaceExpression());
-        elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
-      }
-      if (value_rule == kXMLString) {
-        elements.push_back(RuleRef(value_rule));
-      } else {
-        elements.push_back(WhitespaceExpression());
-        elements.push_back(RuleRef(value_rule));
-        elements.push_back(WhitespaceExpression());
-      }
-      elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
-      return Sequence(elements);
-    }
-    return Sequence({FormatPropertyKey(key), colon_expr_id_, RuleRef(value_rule)});
-  }
+int32_t JSONSchemaConverter::NextSeparatorExpression(bool is_end) {
+  return FormattingExpression(NextSeparator(is_end));
+}
 
-  int32_t FormatOtherProperty(int32_t key_pattern, const std::string& value_rule) {
-    if (IsOuterXML()) {
-      std::vector<int32_t> elements = {
-          ByteString(xml_wrapper_.key_wrapper_prefix), key_pattern, XMLKeySuffix()
-      };
-      if (!xml_wrapper_.value_wrapper_prefix.empty()) {
-        elements.push_back(WhitespaceExpression());
-        elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
-      }
-      if (value_rule == kXMLString) {
-        elements.push_back(RuleRef(value_rule));
-      } else {
-        elements.push_back(WhitespaceExpression());
-        elements.push_back(RuleRef(value_rule));
-        elements.push_back(WhitespaceExpression());
-      }
-      elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
-      return Sequence(elements);
-    }
-    return Sequence({key_pattern, colon_expr_id_, RuleRef(value_rule)});
-  }
+std::string JSONSchemaConverter::GetKeyPattern() const { return JSONSchemaConverter::kBasicString; }
 
-  int32_t BuildTrieBody(const DirectTrieNode& node, const std::string& rule_name) {
-    std::vector<int32_t> choices;
-    if (!node.is_terminal) {
-      choices.push_back(ByteString("\""));
-    }
+int32_t JSONSchemaConverter::KeyPatternExpression() { return RuleRef(GetKeyPattern()); }
 
-    std::vector<CharacterClassElement> excluded = {
-        {0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}
-    };
-    for (const auto& [character, child] : node.children) {
-      static_cast<void>(child);
-      excluded.push_back({character, character});
-    }
-    choices.push_back(
-        Sequence({CharacterClass(excluded, true), RuleRef(JSONSchemaConverter::kBasicStringSub)})
-    );
-    choices.push_back(Sequence(
-        {ByteString("\\"),
-         RuleRef(JSONSchemaConverter::kBasicEscape),
-         RuleRef(JSONSchemaConverter::kBasicStringSub)}
-    ));
-    for (const auto& [character, child] : node.children) {
-      choices.push_back(Sequence(
-          {ByteString(std::string(1, static_cast<char>(character))), BuildTrieBody(child, rule_name)
-          }
-      ));
-    }
-    return Choice(choices);
-  }
+std::string JSONSchemaConverter::GetBasicAnyRuleName() const {
+  return JSONSchemaConverter::kBasicAny;
+}
 
-  int32_t GetKeyPatternExcluding(
-      const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
-  ) {
-    if (IsOuterXML()) {
-      return RuleRef(kXMLVariableName);
-    }
-    if (properties.empty()) {
-      return RuleRef(JSONSchemaConverter::kBasicString);
-    }
-
-    DirectTrieNode root;
-    for (const auto& property : properties) {
-      DirectTrieNode* current = &root;
-      for (unsigned char character : property.name) {
-        current = &current->children[character];
-      }
-      current->is_terminal = true;
-    }
-
-    std::string key_rule_name = AllocateRuleName(rule_name + "_addl_key");
-    AddRuleWithAllocatedName(
-        key_rule_name, Sequence({ByteString("\""), BuildTrieBody(root, key_rule_name)})
-    );
-    SetLookahead(
-        key_rule_name,
-        Sequence(
-            {WhitespaceExpression(),
-             CharacterClass({{',', ','}, {'}', '}'}, {']', ']'}, {':', ':'}})}
-        )
-    );
-    return RuleRef(key_rule_name);
-  }
-
-  int32_t GetPropertyWithNumberConstraints(
-      int32_t pattern,
-      int min_properties,
-      int max_properties,
-      int already_repeated_times,
-      const std::string& rule_name
-  ) {
-    if (max_properties != -1 && max_properties == already_repeated_times) {
-      return Empty();
-    }
-    int lower = std::max(0, min_properties - already_repeated_times);
-    int upper = max_properties == -1 ? -1 : std::max(-1, max_properties - already_repeated_times);
-    return Repeat(rule_name + "_properties", pattern, lower, upper);
-  }
-
-  int32_t GetAnyOrderRuleForProperties(
-      const std::vector<ObjectSpec::Property>& properties,
-      const std::unordered_set<std::string>& required,
-      const SchemaSpecPtr& additional,
-      const std::string& rule_name,
-      const std::string& additional_suffix,
-      int min_properties,
-      int max_properties,
-      const std::optional<int32_t>& additional_property_override
-  ) {
-    int32_t first_separator = NextSeparatorExpression();
-    int32_t middle_separator = NextSeparatorExpression();
-    int32_t last_separator = NextSeparatorExpression(true);
-
-    std::vector<int32_t> items;
-    for (size_t index = 0; index < properties.size(); ++index) {
-      const auto& property = properties[index];
-      std::string value_rule =
-          CreateRule(property.schema, rule_name + "_prop_" + std::to_string(index));
-      items.push_back(FormatProperty(property.name, value_rule));
-    }
-    if (additional != nullptr) {
-      if (additional_property_override.has_value()) {
-        items.push_back(*additional_property_override);
-      } else {
-        std::string value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-        items.push_back(
-            FormatOtherProperty(GetKeyPatternExcluding(properties, rule_name), value_rule)
-        );
-      }
-    }
-
-    std::string item_rule = AddRule(rule_name + "_item", Choice(items));
-    int minimum_count = std::max(min_properties, static_cast<int>(required.size()));
-    int32_t repeated_items = GetPropertyWithNumberConstraints(
-        Sequence({middle_separator, RuleRef(item_rule)}),
-        minimum_count,
-        max_properties,
-        1,
-        rule_name
-    );
-    return Sequence({first_separator, RuleRef(item_rule), repeated_items, last_separator});
-  }
-
-  int32_t GetPartialRuleForProperties(
-      const std::vector<ObjectSpec::Property>& properties,
-      const std::unordered_set<std::string>& required,
-      const SchemaSpecPtr& additional,
-      const std::string& rule_name,
-      const std::string& additional_suffix,
-      int min_properties,
-      int max_properties,
-      const std::optional<int32_t>& additional_property_override = std::nullopt
-  ) {
-    if (max_properties == 0) {
-      return Empty();
-    }
-    if (any_order_) {
-      return GetAnyOrderRuleForProperties(
-          properties,
-          required,
-          additional,
-          rule_name,
-          additional_suffix,
-          min_properties,
-          max_properties,
-          additional_property_override
-      );
-    }
-
-    int32_t first_separator = NextSeparatorExpression();
-    int32_t middle_separator = NextSeparatorExpression();
-    int32_t last_separator = NextSeparatorExpression(true);
-
-    std::vector<int32_t> property_patterns;
-    for (size_t index = 0; index < properties.size(); ++index) {
-      std::string value_rule =
-          CreateRule(properties[index].schema, rule_name + "_prop_" + std::to_string(index));
-      property_patterns.push_back(FormatProperty(properties[index].name, value_rule));
-    }
-
-    bool allow_additional = additional != nullptr;
-    std::optional<int32_t> additional_pattern;
-    auto get_additional_pattern = [&]() -> int32_t {
-      if (!additional_pattern.has_value()) {
-        if (additional_property_override.has_value()) {
-          additional_pattern = *additional_property_override;
+int32_t JSONSchemaConverter::GenerateFromSpec(
+    const SchemaSpecPtr& spec, const std::string& rule_name_hint
+) {
+  return std::visit(
+      [this, &rule_name_hint](const auto& value) -> int32_t {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<T, IntegerSpec>) {
+          return GenerateInteger(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, NumberSpec>) {
+          return GenerateNumber(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, StringSpec>) {
+          return GenerateString(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, BooleanSpec>) {
+          return GenerateBoolean(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, NullSpec>) {
+          return GenerateNull(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, ArraySpec>) {
+          return GenerateArray(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, ObjectSpec>) {
+          return GenerateObject(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, AnySpec>) {
+          return GenerateAny(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, ConstSpec>) {
+          return GenerateConst(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, EnumSpec>) {
+          return GenerateEnum(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, RefSpec>) {
+          return GenerateRef(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, AnyOfSpec>) {
+          return GenerateAnyOf(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, OneOfSpec>) {
+          return GenerateOneOf(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, AllOfSpec>) {
+          return GenerateAllOf(value, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
+          return GenerateTypeArray(value, rule_name_hint);
         } else {
-          std::string value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-          additional_pattern =
-              FormatOtherProperty(GetKeyPatternExcluding(properties, rule_name), value_rule);
+          XGRAMMAR_LOG(FATAL) << "Unknown JSON schema specification type";
         }
+      },
+      spec->spec
+  );
+}
+
+std::string JSONSchemaConverter::CreateRule(
+    const SchemaSpecPtr& spec, const std::string& rule_name_hint
+) {
+  auto cached = GetCache(spec->cache_key);
+  if (cached.has_value()) {
+    return *cached;
+  }
+  std::string rule_name = AllocateRuleName(rule_name_hint);
+  AddRuleWithAllocatedName(rule_name, GenerateFromSpec(spec, rule_name));
+  return rule_name;
+}
+
+void JSONSchemaConverter::AddCache(const std::string& key, const std::string& rule_name) {
+  if (!key.empty()) {
+    rule_cache_manager_.AddCache(key, true, rule_name);
+  }
+}
+
+std::optional<std::string> JSONSchemaConverter::GetCache(const std::string& key) const {
+  if (key.empty()) {
+    return std::nullopt;
+  }
+  return rule_cache_manager_.GetCache(key, true);
+}
+
+int32_t JSONSchemaConverter::RegexExpression(
+    const std::string& regex, bool json_string, bool force_cfg_expansion
+) {
+  bool can_use_fsm = !force_cfg_expansion;
+  if (json_string) {
+    can_use_fsm =
+        can_use_fsm && std::all_of(regex.begin(), regex.end(), [](unsigned char character) {
+          return character >= 0x20 && character <= 0x7e;
+        });
+  }
+  if (can_use_fsm) {
+    auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
+    if (fsm_result.IsOk()) {
+      auto fsm = std::move(fsm_result).Unwrap();
+      std::unordered_set<int> reachable_states;
+      fsm.GetReachableStates(&reachable_states);
+      bool language_is_empty =
+          std::none_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
+            return fsm.IsEndState(state);
+          });
+      if (!language_is_empty) {
+        return Regex(regex, json_string);
       }
-      return *additional_pattern;
-    };
+    }
+  }
 
-    if (min_properties == 0 && max_properties == -1) {
-      std::vector<int32_t> tails(properties.size(), Empty());
-      std::vector<uint8_t> is_required(properties.size(), false);
+  // Keep regex conversion independent. Only the uncommon fallback path converts its existing
+  // EBNF result to a subgrammar; the JSON Schema rule graph itself is still built directly.
+  return AddSubGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
+}
 
-      if (allow_additional) {
-        int32_t repeated_additional = Repeat(
-            rule_name + "_additional_properties",
-            Sequence({middle_separator, get_additional_pattern()}),
-            0,
-            -1
-        );
-        std::string tail_rule = AddRule(
-            rule_name + "_part_" + std::to_string(static_cast<int>(properties.size()) - 1),
-            repeated_additional
-        );
-        tails.back() = RuleRef(tail_rule);
-      }
+void JSONSchemaConverter::AddBasicRules() { AddBasicRules({}); }
 
-      for (int index = static_cast<int>(properties.size()) - 2; index >= 0; --index) {
-        int32_t with_property =
-            Sequence({middle_separator, property_patterns[index + 1], tails[index + 1]});
-        int32_t body = with_property;
-        if (!required.count(properties[index + 1].name)) {
-          body = Choice({tails[index + 1], with_property});
-        } else {
-          is_required[index + 1] = true;
+void JSONSchemaConverter::AddBasicRules(const std::vector<std::string>& additional_rule_names) {
+  std::vector<std::string> basic_rule_names = {
+      JSONSchemaConverter::kBasicEscape,
+      JSONSchemaConverter::kBasicStringSub,
+      JSONSchemaConverter::kBasicAny,
+      JSONSchemaConverter::kBasicInteger,
+      JSONSchemaConverter::kBasicNumber,
+      JSONSchemaConverter::kBasicString,
+      JSONSchemaConverter::kBasicBoolean,
+      JSONSchemaConverter::kBasicNull,
+      JSONSchemaConverter::kBasicArray,
+      JSONSchemaConverter::kBasicObject,
+  };
+  basic_rule_names.insert(
+      basic_rule_names.end(), additional_rule_names.begin(), additional_rule_names.end()
+  );
+  for (const auto& name : basic_rule_names) {
+    ReserveRule(name);
+  }
+  AddHelperRules();
+
+  auto saved_indent_manager = indent_manager_;
+  indent_manager_ = IndentManager(
+      std::nullopt,
+      any_whitespace_ ? "," : ", ",
+      any_whitespace_,
+      any_whitespace_ ? max_whitespace_cnt_ : std::nullopt
+  );
+
+  auto any_spec = SchemaSpec::Make(AnySpec{}, "{}", JSONSchemaConverter::kBasicAny);
+  AddRuleWithAllocatedName(
+      JSONSchemaConverter::kBasicAny,
+      GenerateAny(std::get<AnySpec>(any_spec->spec), JSONSchemaConverter::kBasicAny)
+  );
+  AddCache("{}", JSONSchemaConverter::kBasicAny);
+
+  constexpr const char* kIntegerCacheKey = "{\"type\":\"integer\"}";
+  AddRuleWithAllocatedName(
+      JSONSchemaConverter::kBasicInteger,
+      GenerateInteger(IntegerSpec{}, JSONSchemaConverter::kBasicInteger)
+  );
+  AddCache(kIntegerCacheKey, JSONSchemaConverter::kBasicInteger);
+
+  constexpr const char* kNumberCacheKey = "{\"type\":\"number\"}";
+  AddRuleWithAllocatedName(
+      JSONSchemaConverter::kBasicNumber,
+      GenerateNumber(NumberSpec{}, JSONSchemaConverter::kBasicNumber)
+  );
+  AddCache(kNumberCacheKey, JSONSchemaConverter::kBasicNumber);
+
+  constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
+  AddRuleWithAllocatedName(
+      JSONSchemaConverter::kBasicString,
+      Sequence({ByteString("\""), RuleRef(JSONSchemaConverter::kBasicStringSub)})
+  );
+  AddCache(kStringCacheKey, JSONSchemaConverter::kBasicString);
+
+  constexpr const char* kBooleanCacheKey = "{\"type\":\"boolean\"}";
+  AddRuleWithAllocatedName(
+      JSONSchemaConverter::kBasicBoolean,
+      GenerateBoolean(BooleanSpec{}, JSONSchemaConverter::kBasicBoolean)
+  );
+  AddCache(kBooleanCacheKey, JSONSchemaConverter::kBasicBoolean);
+
+  constexpr const char* kNullCacheKey = "{\"type\":\"null\"}";
+  AddRuleWithAllocatedName(
+      JSONSchemaConverter::kBasicNull, GenerateNull(NullSpec{}, JSONSchemaConverter::kBasicNull)
+  );
+  AddCache(kNullCacheKey, JSONSchemaConverter::kBasicNull);
+
+  constexpr const char* kArrayCacheKey = "{\"type\":\"array\"}";
+  ArraySpec array_spec;
+  array_spec.allow_additional_items = true;
+  array_spec.additional_items = any_spec;
+  AddRuleWithAllocatedName(
+      JSONSchemaConverter::kBasicArray, GenerateArray(array_spec, JSONSchemaConverter::kBasicArray)
+  );
+  AddCache(kArrayCacheKey, JSONSchemaConverter::kBasicArray);
+
+  constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
+  ObjectSpec object_spec;
+  object_spec.allow_additional_properties = true;
+  object_spec.additional_properties_schema = any_spec;
+  AddRuleWithAllocatedName(
+      JSONSchemaConverter::kBasicObject,
+      GenerateObject(object_spec, JSONSchemaConverter::kBasicObject)
+  );
+  AddCache(kObjectCacheKey, JSONSchemaConverter::kBasicObject);
+
+  indent_manager_ = saved_indent_manager;
+}
+
+void JSONSchemaConverter::AddHelperRules() {
+  if (max_whitespace_cnt_.has_value()) {
+    // Preserve historical helper-rule numbering after grammar optimization. The text parser
+    // allocated one initial bounded-repetition helper that dead-code elimination later removed.
+    AddRule(JSONSchemaConverter::kBasicStringSub, Empty());
+  }
+  int32_t escaped_character = CharacterClass(
+      {{'"', '"'},
+       {'\\', '\\'},
+       {'/', '/'},
+       {'b', 'b'},
+       {'f', 'f'},
+       {'n', 'n'},
+       {'r', 'r'},
+       {'t', 't'}}
+  );
+  int32_t hexadecimal_character = CharacterClass({{'A', 'F'}, {'a', 'f'}, {'0', '9'}});
+  int32_t unicode_escape = Sequence(
+      {ByteString("u"),
+       hexadecimal_character,
+       hexadecimal_character,
+       hexadecimal_character,
+       hexadecimal_character}
+  );
+  AddRuleWithAllocatedName(
+      JSONSchemaConverter::kBasicEscape, Choice({escaped_character, unicode_escape})
+  );
+
+  int32_t normal_character =
+      CharacterClass({{0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
+  int32_t string_sub_ref = RuleRef(JSONSchemaConverter::kBasicStringSub);
+  int32_t string_sub_body = Choice(
+      {ByteString("\""),
+       Sequence({normal_character, string_sub_ref}),
+       Sequence({ByteString("\\"), RuleRef(JSONSchemaConverter::kBasicEscape), string_sub_ref})}
+  );
+  AddRuleWithAllocatedName(JSONSchemaConverter::kBasicStringSub, string_sub_body);
+  int32_t closing_context = CharacterClass({{',', ','}, {'}', '}'}, {']', ']'}, {':', ':'}});
+  SetLookahead(
+      JSONSchemaConverter::kBasicStringSub, Sequence({WhitespaceExpression(), closing_context})
+  );
+}
+
+int32_t JSONSchemaConverter::GenerateInteger(
+    const IntegerSpec& spec, const std::string& rule_name
+) {
+  std::optional<int64_t> start = spec.minimum;
+  std::optional<int64_t> end = spec.maximum;
+  if (spec.exclusive_minimum.has_value() &&
+      (!start.has_value() || *spec.exclusive_minimum >= *start)) {
+    XGRAMMAR_CHECK(*spec.exclusive_minimum != std::numeric_limits<int64_t>::max());
+    start = *spec.exclusive_minimum + 1;
+  }
+  if (spec.exclusive_maximum.has_value() && (!end.has_value() || *spec.exclusive_maximum <= *end)) {
+    XGRAMMAR_CHECK(*spec.exclusive_maximum != std::numeric_limits<int64_t>::min());
+    end = *spec.exclusive_maximum - 1;
+  }
+
+  if (spec.multiple_of.has_value()) {
+    if (start.has_value() && end.has_value()) {
+      std::vector<int32_t> multiples;
+      for (int64_t value = *start; value <= *end; ++value) {
+        if (IsMultipleOf(value, *spec.multiple_of)) {
+          multiples.push_back(ByteString(std::to_string(value)));
         }
-        std::string tail_rule = AddRule(rule_name + "_part_" + std::to_string(index), body);
-        tails[index] = RuleRef(tail_rule);
-      }
-      if (required.count(properties[0].name)) {
-        is_required[0] = true;
-      }
-
-      std::vector<int32_t> choices;
-      for (size_t index = 0; index < properties.size(); ++index) {
-        choices.push_back(Sequence({property_patterns[index], tails[index]}));
-        if (is_required[index]) {
+        if (value == std::numeric_limits<int64_t>::max()) {
           break;
         }
       }
-      if (allow_additional && required.empty()) {
-        choices.push_back(Sequence({get_additional_pattern(), tails.back()}));
+      return Choice(multiples);
+    }
+    return GenerateIntegerMultipleOfDFA(*spec.multiple_of, rule_name);
+  }
+  if (start.has_value() || end.has_value()) {
+    return RegexExpression(
+        JSONSchemaConverter::GenerateRangeRegex(start, end),
+        false,
+        /*force_cfg_expansion=*/true
+    );
+  }
+  int32_t optional_minus = Choice({Empty(), ByteString("-")});
+  return Choice(
+      {ByteString("0"),
+       Sequence({optional_minus, CharacterClass({{'1', '9'}}), CharacterClassStar({{'0', '9'}})})}
+  );
+}
+
+int32_t JSONSchemaConverter::GenerateIntegerMultipleOfDFA(
+    int64_t multiple_of, const std::string& rule_name
+) {
+  std::vector<std::string> states(multiple_of);
+  for (int64_t state = 0; state < multiple_of; ++state) {
+    states[state] = AllocateRuleName(
+        rule_name + "_multiple_of_" + std::to_string(multiple_of) + "_mod_" + std::to_string(state)
+    );
+  }
+  for (int64_t state = 0; state < multiple_of; ++state) {
+    std::vector<int32_t> transitions;
+    if (state == 0) {
+      transitions.push_back(Empty());
+    }
+    for (int64_t digit = 0; digit <= 9; ++digit) {
+      int64_t next_state = (state * 10 + digit) % multiple_of;
+      transitions.push_back(
+          Sequence({ByteString(std::to_string(digit)), RuleRef(states[next_state])})
+      );
+    }
+    AddRuleWithAllocatedName(states[state], Choice(transitions));
+  }
+
+  std::vector<int32_t> non_zero_starts;
+  for (int64_t digit = 1; digit <= 9; ++digit) {
+    non_zero_starts.push_back(
+        Sequence({ByteString(std::to_string(digit)), RuleRef(states[digit % multiple_of])})
+    );
+  }
+  return Choice(
+      {ByteString("0"), Sequence({Choice({Empty(), ByteString("-")}), Choice(non_zero_starts)})}
+  );
+}
+
+int32_t JSONSchemaConverter::GenerateNumber(const NumberSpec& spec, const std::string& rule_name) {
+  std::optional<double> start = spec.minimum;
+  std::optional<double> end = spec.maximum;
+  bool exclusive_start = false;
+  bool exclusive_end = false;
+  if (spec.exclusive_minimum.has_value() &&
+      (!start.has_value() || *spec.exclusive_minimum >= *start)) {
+    start = spec.exclusive_minimum;
+    exclusive_start = true;
+  }
+  if (spec.exclusive_maximum.has_value() && (!end.has_value() || *spec.exclusive_maximum <= *end)) {
+    end = spec.exclusive_maximum;
+    exclusive_end = true;
+  }
+  if (start.has_value() || end.has_value()) {
+    return RegexExpression(
+        JSONSchemaConverter::GenerateFloatRangeRegex(
+            start, end, /*precision=*/6, exclusive_start, exclusive_end
+        ),
+        false,
+        /*force_cfg_expansion=*/true
+    );
+  }
+
+  int32_t optional_minus = Choice({Empty(), ByteString("-")});
+  int32_t integer_part = Choice(
+      {ByteString("0"), Sequence({CharacterClass({{'1', '9'}}), CharacterClassStar({{'0', '9'}})})}
+  );
+  int32_t one_or_more_digits = Repeat(rule_name + "_digits", CharacterClass({{'0', '9'}}), 1, -1);
+  int32_t fraction = Choice({Empty(), Sequence({ByteString("."), one_or_more_digits})});
+  int32_t exponent = Choice(
+      {Empty(),
+       Sequence(
+           {CharacterClass({{'e', 'e'}, {'E', 'E'}}),
+            Choice({Empty(), CharacterClass({{'+', '+'}, {'-', '-'}})}),
+            one_or_more_digits}
+       )}
+  );
+  return Sequence({optional_minus, integer_part, fraction, exponent});
+}
+
+int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::string& rule_name) {
+  if (spec.format.has_value()) {
+    auto regex = JSONSchemaConverter::JSONFormatToRegexPattern(*spec.format);
+    if (regex.has_value()) {
+      return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
+    }
+  }
+  if (spec.pattern.has_value()) {
+    return Sequence(
+        {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
+    );
+  }
+  if (spec.min_length != 0 || spec.max_length != -1) {
+    int32_t character =
+        CharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
+    int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
+    return Sequence({ByteString("\""), body, ByteString("\"")});
+  }
+  return Sequence({ByteString("\""), RuleRef(JSONSchemaConverter::kBasicStringSub)});
+}
+
+int32_t JSONSchemaConverter::GenerateBoolean(const BooleanSpec&, const std::string&) {
+  return Choice({ByteString("true"), ByteString("false")});
+}
+
+int32_t JSONSchemaConverter::GenerateNull(const NullSpec&, const std::string&) {
+  return ByteString("null");
+}
+
+int32_t JSONSchemaConverter::GenerateArray(const ArraySpec& spec, const std::string& rule_name) {
+  indent_manager_.StartIndent();
+  int32_t start_separator = FormattingExpression(indent_manager_.StartSeparator());
+  int32_t middle_separator = FormattingExpression(indent_manager_.MiddleSeparator());
+  int32_t end_separator = FormattingExpression(indent_manager_.EndSeparator());
+  int32_t empty_separator = FormattingExpression(indent_manager_.EmptySeparator());
+
+  std::vector<std::string> item_rules;
+  for (size_t index = 0; index < spec.prefix_items.size(); ++index) {
+    item_rules.push_back(
+        CreateRule(spec.prefix_items[index], rule_name + "_item_" + std::to_string(index))
+    );
+  }
+  std::string additional_rule;
+  if (spec.allow_additional_items && spec.additional_items) {
+    additional_rule = CreateRule(spec.additional_items, rule_name + "_additional");
+  }
+  indent_manager_.EndIndent();
+
+  int32_t left_bracket = ByteString("[");
+  int32_t right_bracket = ByteString("]");
+  int32_t empty_array = Sequence({left_bracket, empty_separator, right_bracket});
+
+  if (item_rules.empty()) {
+    if (!spec.allow_additional_items || spec.max_items == 0) {
+      return empty_array;
+    }
+    int32_t additional = RuleRef(additional_rule);
+    int32_t tail = Repeat(
+        rule_name + "_items",
+        Sequence({middle_separator, additional}),
+        spec.min_items == 0 ? 0 : static_cast<int32_t>(spec.min_items - 1),
+        spec.max_items == -1 ? -1 : static_cast<int32_t>(spec.max_items - 1)
+    );
+    int32_t nonempty =
+        Sequence({left_bracket, start_separator, additional, tail, end_separator, right_bracket});
+    return spec.min_items == 0 ? Choice({nonempty, empty_array}) : nonempty;
+  }
+
+  std::vector<int32_t> prefix_elements;
+  for (size_t index = 0; index < item_rules.size(); ++index) {
+    if (index != 0) {
+      prefix_elements.push_back(middle_separator);
+    }
+    prefix_elements.push_back(RuleRef(item_rules[index]));
+  }
+  int32_t prefix = Sequence(prefix_elements);
+  if (!spec.allow_additional_items) {
+    return Sequence({left_bracket, start_separator, prefix, end_separator, right_bracket});
+  }
+
+  int64_t minimum_additional =
+      std::max(int64_t{0}, spec.min_items - static_cast<int64_t>(item_rules.size()));
+  int32_t additional_tail = Repeat(
+      rule_name + "_additional_items",
+      Sequence({middle_separator, RuleRef(additional_rule)}),
+      static_cast<int32_t>(minimum_additional),
+      spec.max_items == -1
+          ? -1
+          : static_cast<int32_t>(spec.max_items - static_cast<int64_t>(item_rules.size()))
+  );
+  return Sequence(
+      {left_bracket, start_separator, prefix, additional_tail, end_separator, right_bracket}
+  );
+}
+
+int32_t JSONSchemaConverter::FormatPropertyKey(const std::string& key) {
+  return ByteString(picojson::value(key).serialize());
+}
+
+int32_t JSONSchemaConverter::FormatProperty(
+    const std::string& key, const std::string& value_rule, const std::string&, int64_t
+) {
+  return Sequence({FormatPropertyKey(key), colon_expr_id_, RuleRef(value_rule)});
+}
+
+int32_t JSONSchemaConverter::
+    FormatOtherProperty(int32_t key_pattern_expr, const std::string& value_rule, const std::string&, const std::string&) {
+  return Sequence({key_pattern_expr, colon_expr_id_, RuleRef(value_rule)});
+}
+
+int32_t JSONSchemaConverter::BuildTrieBody(
+    const DirectTrieNode& node, const std::string& rule_name
+) {
+  std::vector<int32_t> choices;
+  if (!node.is_terminal) {
+    choices.push_back(ByteString("\""));
+  }
+
+  std::vector<CharacterClassElement> excluded = {
+      {0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}
+  };
+  for (const auto& [character, child] : node.children) {
+    static_cast<void>(child);
+    excluded.push_back({character, character});
+  }
+  choices.push_back(
+      Sequence({CharacterClass(excluded, true), RuleRef(JSONSchemaConverter::kBasicStringSub)})
+  );
+  choices.push_back(Sequence(
+      {ByteString("\\"),
+       RuleRef(JSONSchemaConverter::kBasicEscape),
+       RuleRef(JSONSchemaConverter::kBasicStringSub)}
+  ));
+  for (const auto& [character, child] : node.children) {
+    choices.push_back(Sequence(
+        {ByteString(std::string(1, static_cast<char>(character))), BuildTrieBody(child, rule_name)}
+    ));
+  }
+  return Choice(choices);
+}
+
+int32_t JSONSchemaConverter::GetKeyPatternExcluding(
+    const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+) {
+  if (properties.empty()) {
+    return RuleRef(JSONSchemaConverter::kBasicString);
+  }
+
+  DirectTrieNode root;
+  for (const auto& property : properties) {
+    DirectTrieNode* current = &root;
+    for (unsigned char character : property.name) {
+      current = &current->children[character];
+    }
+    current->is_terminal = true;
+  }
+
+  std::string key_rule_name = AllocateRuleName(rule_name + "_addl_key");
+  AddRuleWithAllocatedName(
+      key_rule_name, Sequence({ByteString("\""), BuildTrieBody(root, key_rule_name)})
+  );
+  SetLookahead(
+      key_rule_name,
+      Sequence(
+          {WhitespaceExpression(), CharacterClass({{',', ','}, {'}', '}'}, {']', ']'}, {':', ':'}})}
+      )
+  );
+  return RuleRef(key_rule_name);
+}
+
+int32_t JSONSchemaConverter::GetPropertyWithNumberConstraints(
+    int32_t pattern,
+    int min_properties,
+    int max_properties,
+    int already_repeated_times,
+    const std::string& rule_name
+) {
+  if (max_properties != -1 && max_properties == already_repeated_times) {
+    return Empty();
+  }
+  int lower = std::max(0, min_properties - already_repeated_times);
+  int upper = max_properties == -1 ? -1 : std::max(-1, max_properties - already_repeated_times);
+  return Repeat(rule_name + "_properties", pattern, lower, upper);
+}
+
+int32_t JSONSchemaConverter::GetAnyOrderRuleForProperties(
+    const std::vector<ObjectSpec::Property>& properties,
+    const std::unordered_set<std::string>& required,
+    const SchemaSpecPtr& additional,
+    const std::string& rule_name,
+    const std::string& additional_suffix,
+    int min_properties,
+    int max_properties,
+    const std::optional<int32_t>& additional_property_override
+) {
+  int32_t first_separator = NextSeparatorExpression();
+  int32_t middle_separator = NextSeparatorExpression();
+  int32_t last_separator = NextSeparatorExpression(true);
+
+  std::vector<int32_t> items;
+  for (size_t index = 0; index < properties.size(); ++index) {
+    const auto& property = properties[index];
+    std::string value_rule =
+        CreateRule(property.schema, rule_name + "_prop_" + std::to_string(index));
+    items.push_back(FormatProperty(property.name, value_rule, rule_name, index));
+  }
+  if (additional != nullptr) {
+    if (additional_property_override.has_value()) {
+      items.push_back(*additional_property_override);
+    } else {
+      std::string value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
+      items.push_back(FormatOtherProperty(
+          GetKeyPatternExcluding(properties, rule_name), value_rule, rule_name, additional_suffix
+      ));
+    }
+  }
+
+  std::string item_rule = AddRule(rule_name + "_item", Choice(items));
+  int minimum_count = std::max(min_properties, static_cast<int>(required.size()));
+  int32_t repeated_items = GetPropertyWithNumberConstraints(
+      Sequence({middle_separator, RuleRef(item_rule)}), minimum_count, max_properties, 1, rule_name
+  );
+  return Sequence({first_separator, RuleRef(item_rule), repeated_items, last_separator});
+}
+
+int32_t JSONSchemaConverter::GetPartialRuleForProperties(
+    const std::vector<ObjectSpec::Property>& properties,
+    const std::unordered_set<std::string>& required,
+    const SchemaSpecPtr& additional,
+    const std::string& rule_name,
+    const std::string& additional_suffix,
+    int min_properties,
+    int max_properties,
+    const std::optional<int32_t>& additional_property_override
+) {
+  if (max_properties == 0) {
+    return Empty();
+  }
+  if (any_order_) {
+    return GetAnyOrderRuleForProperties(
+        properties,
+        required,
+        additional,
+        rule_name,
+        additional_suffix,
+        min_properties,
+        max_properties,
+        additional_property_override
+    );
+  }
+
+  int32_t first_separator = NextSeparatorExpression();
+  int32_t middle_separator = NextSeparatorExpression();
+  int32_t last_separator = NextSeparatorExpression(true);
+
+  std::vector<int32_t> property_patterns;
+  for (size_t index = 0; index < properties.size(); ++index) {
+    std::string value_rule =
+        CreateRule(properties[index].schema, rule_name + "_prop_" + std::to_string(index));
+    property_patterns.push_back(FormatProperty(properties[index].name, value_rule, rule_name, index)
+    );
+  }
+
+  bool allow_additional = additional != nullptr;
+  std::optional<int32_t> additional_pattern;
+  auto get_additional_pattern = [&]() -> int32_t {
+    if (!additional_pattern.has_value()) {
+      if (additional_property_override.has_value()) {
+        additional_pattern = *additional_property_override;
+      } else {
+        std::string value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
+        additional_pattern = FormatOtherProperty(
+            GetKeyPatternExcluding(properties, rule_name), value_rule, rule_name, additional_suffix
+        );
       }
-      return Sequence({first_separator, Choice(choices), last_separator});
+    }
+    return *additional_pattern;
+  };
+
+  if (min_properties == 0 && max_properties == -1) {
+    std::vector<int32_t> tails(properties.size(), Empty());
+    std::vector<uint8_t> is_required(properties.size(), false);
+
+    if (allow_additional) {
+      int32_t repeated_additional = Repeat(
+          rule_name + "_additional_properties",
+          Sequence({middle_separator, get_additional_pattern()}),
+          0,
+          -1
+      );
+      std::string tail_rule = AddRule(
+          rule_name + "_part_" + std::to_string(static_cast<int>(properties.size()) - 1),
+          repeated_additional
+      );
+      tails.back() = RuleRef(tail_rule);
     }
 
-    const int property_count = static_cast<int>(properties.size());
-    std::vector<uint8_t> is_required(property_count, false);
-    std::vector<int> matched_min(property_count, 0);
-    bool found_required = required.count(properties[0].name);
-    matched_min[0] = 1;
-    for (int index = 1; index < property_count; ++index) {
-      if (required.count(properties[index].name)) {
-        is_required[index] = true;
-        matched_min[index] = matched_min[index - 1] + 1;
+    for (int index = static_cast<int>(properties.size()) - 2; index >= 0; --index) {
+      int32_t with_property =
+          Sequence({middle_separator, property_patterns[index + 1], tails[index + 1]});
+      int32_t body = with_property;
+      if (!required.count(properties[index + 1].name)) {
+        body = Choice({tails[index + 1], with_property});
       } else {
-        matched_min[index] = matched_min[index - 1];
+        is_required[index + 1] = true;
       }
-      if (!found_required) {
-        matched_min[index] = 1;
-      }
-      if (is_required[index]) {
-        found_required = true;
-      }
+      std::string tail_rule = AddRule(rule_name + "_part_" + std::to_string(index), body);
+      tails[index] = RuleRef(tail_rule);
     }
     if (required.count(properties[0].name)) {
       is_required[0] = true;
     }
 
-    if (max_properties == -1) {
-      std::vector<std::vector<int32_t>> tails(property_count);
-      matched_min.back() = allow_additional ? std::max(1, matched_min.back())
-                                            : std::max(min_properties, matched_min.back());
-      for (int index = property_count - 2; index >= 0; --index) {
-        matched_min[index] = std::max(matched_min[index], matched_min[index + 1] - 1);
+    std::vector<int32_t> choices;
+    for (size_t index = 0; index < properties.size(); ++index) {
+      choices.push_back(Sequence({property_patterns[index], tails[index]}));
+      if (is_required[index]) {
+        break;
       }
-
-      for (int matched = matched_min.back(); matched <= property_count; ++matched) {
-        int32_t body = allow_additional
-                           ? GetPropertyWithNumberConstraints(
-                                 Sequence({middle_separator, get_additional_pattern()}),
-                                 min_properties,
-                                 max_properties,
-                                 matched,
-                                 rule_name
-                             )
-                           : Empty();
-        if (allow_additional) {
-          std::string tail_rule = AddRule(
-              rule_name + "_part_" + std::to_string(property_count - 1) + "_" +
-                  std::to_string(matched),
-              body
-          );
-          tails.back().push_back(RuleRef(tail_rule));
-        } else {
-          tails.back().push_back(body);
-        }
-      }
-
-      for (int index = property_count - 2; index >= 0; --index) {
-        for (int matched = matched_min[index]; matched <= index + 1; ++matched) {
-          int32_t with_property = Sequence(
-              {middle_separator,
-               property_patterns[index + 1],
-               tails[index + 1][matched + 1 - matched_min[index + 1]]}
-          );
-          int32_t body =
-              (is_required[index + 1] || matched == matched_min[index + 1] - 1)
-                  ? with_property
-                  : Choice({tails[index + 1][matched - matched_min[index + 1]], with_property});
-          std::string tail_rule = AddRule(
-              rule_name + "_part_" + std::to_string(index) + "_" + std::to_string(matched), body
-          );
-          tails[index].push_back(RuleRef(tail_rule));
-        }
-      }
-
-      std::vector<int32_t> choices;
-      for (int index = 0; index < property_count; ++index) {
-        if (matched_min[index] > 1) {
-          break;
-        }
-        choices.push_back(Sequence({property_patterns[index], tails[index][1 - matched_min[index]]})
-        );
-        if (is_required[index]) {
-          break;
-        }
-      }
-      if (allow_additional && required.empty()) {
-        choices.push_back(Sequence(
-            {get_additional_pattern(),
-             GetPropertyWithNumberConstraints(
-                 Sequence({middle_separator, get_additional_pattern()}),
-                 min_properties,
-                 max_properties,
-                 1,
-                 rule_name
-             )}
-        ));
-      }
-      return Sequence({first_separator, Choice(choices), last_separator});
     }
+    if (allow_additional && required.empty()) {
+      choices.push_back(Sequence({get_additional_pattern(), tails.back()}));
+    }
+    return Sequence({first_separator, Choice(choices), last_separator});
+  }
 
+  const int property_count = static_cast<int>(properties.size());
+  std::vector<uint8_t> is_required(property_count, false);
+  std::vector<int> matched_min(property_count, 0);
+  bool found_required = required.count(properties[0].name);
+  matched_min[0] = 1;
+  for (int index = 1; index < property_count; ++index) {
+    if (required.count(properties[index].name)) {
+      is_required[index] = true;
+      matched_min[index] = matched_min[index - 1] + 1;
+    } else {
+      matched_min[index] = matched_min[index - 1];
+    }
+    if (!found_required) {
+      matched_min[index] = 1;
+    }
+    if (is_required[index]) {
+      found_required = true;
+    }
+  }
+  if (required.count(properties[0].name)) {
+    is_required[0] = true;
+  }
+
+  if (max_properties == -1) {
     std::vector<std::vector<int32_t>> tails(property_count);
-    std::vector<int> matched_max(property_count, property_count);
-    matched_max[0] = 1;
-    for (int index = 1; index < property_count; ++index) {
-      matched_max[index] = matched_max[index - 1] + 1;
-    }
     matched_min.back() = allow_additional ? std::max(1, matched_min.back())
                                           : std::max(min_properties, matched_min.back());
-    matched_max.back() = std::min(max_properties, matched_max.back());
     for (int index = property_count - 2; index >= 0; --index) {
       matched_min[index] = std::max(matched_min[index], matched_min[index + 1] - 1);
-      matched_max[index] = is_required[index + 1]
-                               ? std::min(matched_max[index], matched_max[index + 1] - 1)
-                               : std::min(matched_max[index], matched_max[index + 1]);
     }
 
-    for (int matched = matched_min.back(); matched <= matched_max.back(); ++matched) {
+    for (int matched = matched_min.back(); matched <= property_count; ++matched) {
       int32_t body = allow_additional ? GetPropertyWithNumberConstraints(
                                             Sequence({middle_separator, get_additional_pattern()}),
                                             min_properties,
@@ -2947,20 +2702,16 @@ class JSONSchemaConverter::Impl {
     }
 
     for (int index = property_count - 2; index >= 0; --index) {
-      for (int matched = matched_min[index]; matched <= matched_max[index]; ++matched) {
-        int32_t body;
-        if (matched == matched_max[index + 1]) {
-          body = tails[index + 1][matched - matched_min[index + 1]];
-        } else {
-          int32_t with_property = Sequence(
-              {middle_separator,
-               property_patterns[index + 1],
-               tails[index + 1][matched + 1 - matched_min[index + 1]]}
-          );
-          body = (is_required[index + 1] || matched == matched_min[index + 1] - 1)
-                     ? with_property
-                     : Choice({tails[index + 1][matched - matched_min[index + 1]], with_property});
-        }
+      for (int matched = matched_min[index]; matched <= index + 1; ++matched) {
+        int32_t with_property = Sequence(
+            {middle_separator,
+             property_patterns[index + 1],
+             tails[index + 1][matched + 1 - matched_min[index + 1]]}
+        );
+        int32_t body =
+            (is_required[index + 1] || matched == matched_min[index + 1] - 1)
+                ? with_property
+                : Choice({tails[index + 1][matched - matched_min[index + 1]], with_property});
         std::string tail_rule = AddRule(
             rule_name + "_part_" + std::to_string(index) + "_" + std::to_string(matched), body
         );
@@ -2970,9 +2721,6 @@ class JSONSchemaConverter::Impl {
 
     std::vector<int32_t> choices;
     for (int index = 0; index < property_count; ++index) {
-      if (matched_max[index] < matched_min[index]) {
-        continue;
-      }
       if (matched_min[index] > 1) {
         break;
       }
@@ -2996,326 +2744,356 @@ class JSONSchemaConverter::Impl {
     return Sequence({first_separator, Choice(choices), last_separator});
   }
 
-  int32_t GenerateObject(
-      const ObjectSpec& spec, const std::string& rule_name, bool need_braces = true
-  ) {
-    ScopedNesting nesting(&nested_object_level_, IsXML());
-    if (IsXML()) {
-      need_braces = nested_object_level_ > 1;
+  std::vector<std::vector<int32_t>> tails(property_count);
+  std::vector<int> matched_max(property_count, property_count);
+  matched_max[0] = 1;
+  for (int index = 1; index < property_count; ++index) {
+    matched_max[index] = matched_max[index - 1] + 1;
+  }
+  matched_min.back() = allow_additional ? std::max(1, matched_min.back())
+                                        : std::max(min_properties, matched_min.back());
+  matched_max.back() = std::min(max_properties, matched_max.back());
+  for (int index = property_count - 2; index >= 0; --index) {
+    matched_min[index] = std::max(matched_min[index], matched_min[index + 1] - 1);
+    matched_max[index] = is_required[index + 1]
+                             ? std::min(matched_max[index], matched_max[index + 1] - 1)
+                             : std::min(matched_max[index], matched_max[index + 1]);
+  }
+
+  for (int matched = matched_min.back(); matched <= matched_max.back(); ++matched) {
+    int32_t body = allow_additional ? GetPropertyWithNumberConstraints(
+                                          Sequence({middle_separator, get_additional_pattern()}),
+                                          min_properties,
+                                          max_properties,
+                                          matched,
+                                          rule_name
+                                      )
+                                    : Empty();
+    if (allow_additional) {
+      std::string tail_rule = AddRule(
+          rule_name + "_part_" + std::to_string(property_count - 1) + "_" + std::to_string(matched),
+          body
+      );
+      tails.back().push_back(RuleRef(tail_rule));
+    } else {
+      tails.back().push_back(body);
+    }
+  }
+
+  for (int index = property_count - 2; index >= 0; --index) {
+    for (int matched = matched_min[index]; matched <= matched_max[index]; ++matched) {
+      int32_t body;
+      if (matched == matched_max[index + 1]) {
+        body = tails[index + 1][matched - matched_min[index + 1]];
+      } else {
+        int32_t with_property = Sequence(
+            {middle_separator,
+             property_patterns[index + 1],
+             tails[index + 1][matched + 1 - matched_min[index + 1]]}
+        );
+        body = (is_required[index + 1] || matched == matched_min[index + 1] - 1)
+                   ? with_property
+                   : Choice({tails[index + 1][matched - matched_min[index + 1]], with_property});
+      }
+      std::string tail_rule = AddRule(
+          rule_name + "_part_" + std::to_string(index) + "_" + std::to_string(matched), body
+      );
+      tails[index].push_back(RuleRef(tail_rule));
+    }
+  }
+
+  std::vector<int32_t> choices;
+  for (int index = 0; index < property_count; ++index) {
+    if (matched_max[index] < matched_min[index]) {
+      continue;
+    }
+    if (matched_min[index] > 1) {
+      break;
+    }
+    choices.push_back(Sequence({property_patterns[index], tails[index][1 - matched_min[index]]}));
+    if (is_required[index]) {
+      break;
+    }
+  }
+  if (allow_additional && required.empty()) {
+    choices.push_back(Sequence(
+        {get_additional_pattern(),
+         GetPropertyWithNumberConstraints(
+             Sequence({middle_separator, get_additional_pattern()}),
+             min_properties,
+             max_properties,
+             1,
+             rule_name
+         )}
+    ));
+  }
+  return Sequence({first_separator, Choice(choices), last_separator});
+}
+
+int32_t JSONSchemaConverter::GenerateObject(
+    const ObjectSpec& spec, const std::string& rule_name, bool need_braces
+) {
+  std::string additional_suffix;
+  SchemaSpecPtr additional_property;
+  if (spec.allow_additional_properties && spec.additional_properties_schema) {
+    additional_suffix = "addl";
+    additional_property = spec.additional_properties_schema;
+  } else if (spec.allow_unevaluated_properties && spec.unevaluated_properties_schema) {
+    additional_suffix = "uneval";
+    additional_property = spec.unevaluated_properties_schema;
+  } else if (spec.allow_additional_properties || spec.allow_unevaluated_properties) {
+    additional_suffix = "addl";
+    additional_property = SchemaSpec::Make(AnySpec{}, "", "any");
+  }
+
+  indent_manager_.StartIndent();
+  bool has_content = false;
+  bool could_be_empty = false;
+  int32_t content = Empty();
+
+  if (!spec.properties.empty() && (!spec.pattern_properties.empty() || spec.property_names)) {
+    SchemaSpecPtr effective_additional = additional_property;
+    std::string effective_suffix = additional_suffix;
+    std::optional<int32_t> additional_override;
+
+    if (!spec.pattern_properties.empty()) {
+      std::vector<int32_t> patterns;
+      for (size_t index = 0; index < spec.pattern_properties.size(); ++index) {
+        const auto& pattern_property = spec.pattern_properties[index];
+        std::string value_rule =
+            CreateRule(pattern_property.schema, rule_name + "_pp_" + std::to_string(index));
+        patterns.push_back(Sequence(
+            {ByteString("\""),
+             RegexExpression(pattern_property.pattern, /*json_string=*/true),
+             ByteString("\""),
+             colon_expr_id_,
+             RuleRef(value_rule)}
+        ));
+      }
+      if (effective_additional) {
+        std::string value_rule =
+            CreateRule(effective_additional, rule_name + "_" + effective_suffix);
+        patterns.push_back(
+            FormatOtherProperty(KeyPatternExpression(), value_rule, rule_name, effective_suffix)
+        );
+      }
+      additional_override = Choice(patterns);
+      if (!effective_additional) {
+        effective_additional = SchemaSpec::Make(AnySpec{}, "", "any");
+      }
+      effective_suffix = "pp";
+    } else if (spec.property_names && effective_additional) {
+      std::string key_rule = CreateRule(spec.property_names, rule_name + "_name");
+      std::string value_rule = CreateRule(effective_additional, rule_name + "_" + effective_suffix);
+      additional_override = Sequence({RuleRef(key_rule), colon_expr_id_, RuleRef(value_rule)});
+      effective_suffix = "pn";
     }
 
-    std::string additional_suffix;
-    SchemaSpecPtr additional_property;
-    if (spec.allow_additional_properties && spec.additional_properties_schema) {
-      additional_suffix = "addl";
-      additional_property = spec.additional_properties_schema;
-    } else if (spec.allow_unevaluated_properties && spec.unevaluated_properties_schema) {
-      additional_suffix = "uneval";
-      additional_property = spec.unevaluated_properties_schema;
-    } else if (spec.allow_additional_properties || spec.allow_unevaluated_properties) {
-      additional_suffix = "addl";
-      additional_property = SchemaSpec::Make(AnySpec{}, "", "any");
-    }
-
-    indent_manager_.StartIndent();
-    bool has_content = false;
-    bool could_be_empty = false;
-    int32_t content = Empty();
-
-    if (!spec.properties.empty() && (!spec.pattern_properties.empty() || spec.property_names)) {
-      SchemaSpecPtr effective_additional = additional_property;
-      std::string effective_suffix = additional_suffix;
-      std::optional<int32_t> additional_override;
-
+    content = GetPartialRuleForProperties(
+        spec.properties,
+        spec.required,
+        effective_additional,
+        rule_name,
+        effective_suffix,
+        spec.min_properties,
+        spec.max_properties,
+        additional_override
+    );
+    has_content = spec.max_properties != 0;
+    could_be_empty = spec.required.empty() && spec.min_properties == 0;
+  } else if (!spec.pattern_properties.empty() || spec.property_names) {
+    if (spec.max_properties != 0) {
+      int32_t beginning_separator = NextSeparatorExpression();
+      std::vector<int32_t> property_choices;
       if (!spec.pattern_properties.empty()) {
-        std::vector<int32_t> patterns;
         for (size_t index = 0; index < spec.pattern_properties.size(); ++index) {
           const auto& pattern_property = spec.pattern_properties[index];
           std::string value_rule =
-              CreateRule(pattern_property.schema, rule_name + "_pp_" + std::to_string(index));
-          patterns.push_back(Sequence(
-              {ByteString("\""),
+              CreateRule(pattern_property.schema, rule_name + "_prop_" + std::to_string(index));
+          property_choices.push_back(Sequence(
+              {beginning_separator,
+               ByteString("\""),
                RegexExpression(pattern_property.pattern, /*json_string=*/true),
                ByteString("\""),
                colon_expr_id_,
                RuleRef(value_rule)}
           ));
         }
-        if (effective_additional) {
-          std::string value_rule =
-              CreateRule(effective_additional, rule_name + "_" + effective_suffix);
-          patterns.push_back(FormatOtherProperty(KeyPatternExpression(), value_rule));
-        }
-        additional_override = Choice(patterns);
-        if (!effective_additional) {
-          effective_additional = SchemaSpec::Make(AnySpec{}, "", "any");
-        }
-        effective_suffix = "pp";
-      } else if (spec.property_names && effective_additional) {
-        std::string key_rule = CreateRule(spec.property_names, rule_name + "_name");
-        std::string value_rule =
-            CreateRule(effective_additional, rule_name + "_" + effective_suffix);
-        additional_override = Sequence({RuleRef(key_rule), colon_expr_id_, RuleRef(value_rule)});
-        effective_suffix = "pn";
-      }
-
-      content = GetPartialRuleForProperties(
-          spec.properties,
-          spec.required,
-          effective_additional,
-          rule_name,
-          effective_suffix,
-          spec.min_properties,
-          spec.max_properties,
-          additional_override
-      );
-      has_content = spec.max_properties != 0;
-      could_be_empty = spec.required.empty() && spec.min_properties == 0;
-    } else if (!spec.pattern_properties.empty() || spec.property_names) {
-      if (spec.max_properties != 0) {
-        int32_t beginning_separator = NextSeparatorExpression();
-        std::vector<int32_t> property_choices;
-        if (!spec.pattern_properties.empty()) {
-          for (size_t index = 0; index < spec.pattern_properties.size(); ++index) {
-            const auto& pattern_property = spec.pattern_properties[index];
-            std::string value_rule =
-                CreateRule(pattern_property.schema, rule_name + "_prop_" + std::to_string(index));
-            property_choices.push_back(Sequence(
-                {beginning_separator,
-                 ByteString("\""),
-                 RegexExpression(pattern_property.pattern, /*json_string=*/true),
-                 ByteString("\""),
-                 colon_expr_id_,
-                 RuleRef(value_rule)}
-            ));
-          }
-        } else {
-          std::string key_rule = CreateRule(spec.property_names, rule_name + "_name");
-          property_choices.push_back(Sequence(
-              {beginning_separator,
-               RuleRef(key_rule),
-               colon_expr_id_,
-               RuleRef(JSONSchemaConverter::kBasicAny)}
-          ));
-        }
-
-        std::string property_rule = AddRule(rule_name + "_prop", Choice(property_choices));
-        int32_t subsequent_property = Sequence({NextSeparatorExpression(), RuleRef(property_rule)});
-        content = Sequence(
-            {RuleRef(property_rule),
-             GetPropertyWithNumberConstraints(
-                 subsequent_property, spec.min_properties, spec.max_properties, 1, rule_name
-             ),
-             NextSeparatorExpression(true)}
-        );
-        has_content = true;
-        could_be_empty = spec.min_properties == 0;
       } else {
-        could_be_empty = true;
+        std::string key_rule = CreateRule(spec.property_names, rule_name + "_name");
+        property_choices.push_back(Sequence(
+            {beginning_separator, RuleRef(key_rule), colon_expr_id_, RuleRef(GetBasicAnyRuleName())}
+        ));
       }
-    } else if (!spec.properties.empty()) {
-      content = GetPartialRuleForProperties(
-          spec.properties,
-          spec.required,
-          additional_property,
-          rule_name,
-          additional_suffix,
-          spec.min_properties,
-          spec.max_properties
+
+      std::string property_rule = AddRule(rule_name + "_prop", Choice(property_choices));
+      int32_t subsequent_property = Sequence({NextSeparatorExpression(), RuleRef(property_rule)});
+      content = Sequence(
+          {RuleRef(property_rule),
+           GetPropertyWithNumberConstraints(
+               subsequent_property, spec.min_properties, spec.max_properties, 1, rule_name
+           ),
+           NextSeparatorExpression(true)}
       );
-      has_content = spec.max_properties != 0;
-      could_be_empty = spec.required.empty() && spec.min_properties == 0;
-    } else if (additional_property) {
-      if (spec.max_properties != 0) {
-        std::string value_rule =
-            CreateRule(additional_property, rule_name + "_" + additional_suffix);
-        int32_t property = FormatOtherProperty(KeyPatternExpression(), value_rule);
-        content = Sequence(
-            {NextSeparatorExpression(),
-             property,
-             GetPropertyWithNumberConstraints(
-                 Sequence({NextSeparatorExpression(), property}),
-                 spec.min_properties,
-                 spec.max_properties,
-                 1,
-                 rule_name
-             ),
-             NextSeparatorExpression(true)}
-        );
-        has_content = true;
-      }
+      has_content = true;
       could_be_empty = spec.min_properties == 0;
     } else {
       could_be_empty = true;
     }
-
-    indent_manager_.EndIndent();
-
-    int32_t result = need_braces ? Sequence({ByteString("{"), content, ByteString("}")}) : content;
-    if (could_be_empty) {
-      int32_t empty_content = any_whitespace_ ? WhitespaceExpression() : Empty();
-      int32_t empty_result =
-          need_braces ? Sequence({ByteString("{"), empty_content, ByteString("}")}) : empty_content;
-      return has_content ? Choice({result, empty_result}) : empty_result;
-    }
-    return result;
-  }
-
-  int32_t GenerateAny(const AnySpec&, const std::string&) {
-    if (IsXML()) {
-      if (nested_object_level_ == 0) {
-        return RuleRef(kXMLObject);
-      }
-      if (nested_object_level_ == 1) {
-        return Choice(
-            {RuleRef(kXMLString),
-             RuleRef(JSONSchemaConverter::kBasicArray),
-             RuleRef(JSONSchemaConverter::kBasicObject)}
-        );
-      }
-    }
-    return Choice(
-        {RuleRef(JSONSchemaConverter::kBasicNumber),
-         RuleRef(JSONSchemaConverter::kBasicString),
-         RuleRef(JSONSchemaConverter::kBasicBoolean),
-         RuleRef(JSONSchemaConverter::kBasicNull),
-         RuleRef(JSONSchemaConverter::kBasicArray),
-         RuleRef(JSONSchemaConverter::kBasicObject)}
+  } else if (!spec.properties.empty()) {
+    content = GetPartialRuleForProperties(
+        spec.properties,
+        spec.required,
+        additional_property,
+        rule_name,
+        additional_suffix,
+        spec.min_properties,
+        spec.max_properties
     );
-  }
-
-  int32_t GenerateConst(const ConstSpec& spec, const std::string&) {
-    return ByteString(IsOuterXML() ? XMLValue(spec.json_value) : spec.json_value);
-  }
-
-  int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) {
-    XGRAMMAR_DCHECK(!spec.json_values.empty())
-        << "GenerateEnum called with empty enum spec for rule: " << rule_name;
-    std::vector<int32_t> values;
-    values.reserve(spec.json_values.size());
-    for (const auto& value : spec.json_values) {
-      values.push_back(ByteString(IsOuterXML() ? XMLValue(value) : value));
+    has_content = spec.max_properties != 0;
+    could_be_empty = spec.required.empty() && spec.min_properties == 0;
+  } else if (additional_property) {
+    if (spec.max_properties != 0) {
+      std::string value_rule = CreateRule(additional_property, rule_name + "_" + additional_suffix);
+      int32_t property =
+          FormatOtherProperty(KeyPatternExpression(), value_rule, rule_name, additional_suffix);
+      content = Sequence(
+          {NextSeparatorExpression(),
+           property,
+           GetPropertyWithNumberConstraints(
+               Sequence({NextSeparatorExpression(), property}),
+               spec.min_properties,
+               spec.max_properties,
+               1,
+               rule_name
+           ),
+           NextSeparatorExpression(true)}
+      );
+      has_content = true;
     }
-    return Choice(values);
+    could_be_empty = spec.min_properties == 0;
+  } else {
+    could_be_empty = true;
   }
 
-  int32_t GenerateRef(const RefSpec& spec, const std::string&) {
-    auto mapped = uri_to_rule_name_.find(spec.uri);
-    if (mapped != uri_to_rule_name_.end()) {
-      return RuleRef(mapped->second);
-    }
-    XGRAMMAR_CHECK(ref_resolver_) << "Ref resolver not set; cannot resolve $ref: " << spec.uri;
+  indent_manager_.EndIndent();
 
-    std::string rule_name_hint = "ref";
-    if (spec.uri.size() >= 2 && spec.uri[0] == '#' && spec.uri[1] == '/') {
-      std::string prefix;
-      std::stringstream stream(spec.uri.substr(2));
-      std::string part;
-      while (std::getline(stream, part, '/')) {
-        if (part.empty()) {
-          continue;
-        }
-        if (!prefix.empty()) {
-          prefix += '_';
-        }
-        for (char character : part) {
-          if (std::isalpha(static_cast<unsigned char>(character)) || character == '_' ||
-              character == '-' || character == '.') {
-            prefix += character;
-          }
-        }
+  int32_t result = need_braces ? Sequence({ByteString("{"), content, ByteString("}")}) : content;
+  if (could_be_empty) {
+    int32_t empty_content = any_whitespace_ ? WhitespaceExpression() : Empty();
+    int32_t empty_result =
+        need_braces ? Sequence({ByteString("{"), empty_content, ByteString("}")}) : empty_content;
+    return has_content ? Choice({result, empty_result}) : empty_result;
+  }
+  return result;
+}
+
+int32_t JSONSchemaConverter::GenerateAny(const AnySpec&, const std::string&) {
+  return Choice(
+      {RuleRef(JSONSchemaConverter::kBasicNumber),
+       RuleRef(JSONSchemaConverter::kBasicString),
+       RuleRef(JSONSchemaConverter::kBasicBoolean),
+       RuleRef(JSONSchemaConverter::kBasicNull),
+       RuleRef(JSONSchemaConverter::kBasicArray),
+       RuleRef(JSONSchemaConverter::kBasicObject)}
+  );
+}
+
+int32_t JSONSchemaConverter::GenerateConst(const ConstSpec& spec, const std::string&) {
+  return ByteString(spec.json_value);
+}
+
+int32_t JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::string& rule_name) {
+  XGRAMMAR_DCHECK(!spec.json_values.empty())
+      << "GenerateEnum called with empty enum spec for rule: " << rule_name;
+  std::vector<int32_t> values;
+  values.reserve(spec.json_values.size());
+  for (const auto& value : spec.json_values) {
+    values.push_back(ByteString(value));
+  }
+  return Choice(values);
+}
+
+int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string&) {
+  auto mapped = uri_to_rule_name_.find(spec.uri);
+  if (mapped != uri_to_rule_name_.end()) {
+    return RuleRef(mapped->second);
+  }
+  XGRAMMAR_CHECK(ref_resolver_) << "Ref resolver not set; cannot resolve $ref: " << spec.uri;
+
+  std::string rule_name_hint = "ref";
+  if (spec.uri.size() >= 2 && spec.uri[0] == '#' && spec.uri[1] == '/') {
+    std::string prefix;
+    std::stringstream stream(spec.uri.substr(2));
+    std::string part;
+    while (std::getline(stream, part, '/')) {
+      if (part.empty()) {
+        continue;
       }
       if (!prefix.empty()) {
-        rule_name_hint = std::move(prefix);
+        prefix += '_';
+      }
+      for (char character : part) {
+        if (std::isalpha(static_cast<unsigned char>(character)) || character == '_' ||
+            character == '-' || character == '.') {
+          prefix += character;
+        }
       }
     }
-
-    std::string allocated_rule = AllocateRuleName(rule_name_hint);
-    uri_to_rule_name_[spec.uri] = allocated_rule;
-    SchemaSpecPtr resolved = ref_resolver_(spec.uri, allocated_rule);
-    AddRuleWithAllocatedName(allocated_rule, GenerateFromSpec(resolved, allocated_rule));
-    if (!resolved->cache_key.empty()) {
-      AddCache(resolved->cache_key, allocated_rule);
+    if (!prefix.empty()) {
+      rule_name_hint = std::move(prefix);
     }
-    return RuleRef(allocated_rule);
   }
 
-  int32_t GenerateAnyOf(const AnyOfSpec& spec, const std::string& rule_name) {
-    std::vector<int32_t> choices;
-    for (size_t index = 0; index < spec.options.size(); ++index) {
-      choices.push_back(
-          RuleRef(CreateRule(spec.options[index], rule_name + "_case_" + std::to_string(index)))
-      );
-    }
-    return Choice(choices);
+  std::string allocated_rule = AllocateRuleName(rule_name_hint);
+  uri_to_rule_name_[spec.uri] = allocated_rule;
+  SchemaSpecPtr resolved = ref_resolver_(spec.uri, allocated_rule);
+  AddRuleWithAllocatedName(allocated_rule, GenerateFromSpec(resolved, allocated_rule));
+  if (!resolved->cache_key.empty()) {
+    AddCache(resolved->cache_key, allocated_rule);
   }
+  return RuleRef(allocated_rule);
+}
 
-  int32_t GenerateOneOf(const OneOfSpec& spec, const std::string& rule_name) {
-    std::vector<int32_t> choices;
-    for (size_t index = 0; index < spec.options.size(); ++index) {
-      choices.push_back(
-          RuleRef(CreateRule(spec.options[index], rule_name + "_case_" + std::to_string(index)))
-      );
-    }
-    return Choice(choices);
+int32_t JSONSchemaConverter::GenerateAnyOf(const AnyOfSpec& spec, const std::string& rule_name) {
+  std::vector<int32_t> choices;
+  for (size_t index = 0; index < spec.options.size(); ++index) {
+    choices.push_back(
+        RuleRef(CreateRule(spec.options[index], rule_name + "_case_" + std::to_string(index)))
+    );
   }
+  return Choice(choices);
+}
 
-  int32_t GenerateAllOf(const AllOfSpec& spec, const std::string& rule_name) {
-    if (spec.schemas.size() == 1) {
-      return GenerateFromSpec(spec.schemas[0], rule_name + "_case_0");
-    }
-    XGRAMMAR_LOG(WARNING) << "Support for allOf with multiple options is still ongoing";
-    return GenerateAny(AnySpec{}, rule_name);
+int32_t JSONSchemaConverter::GenerateOneOf(const OneOfSpec& spec, const std::string& rule_name) {
+  std::vector<int32_t> choices;
+  for (size_t index = 0; index < spec.options.size(); ++index) {
+    choices.push_back(
+        RuleRef(CreateRule(spec.options[index], rule_name + "_case_" + std::to_string(index)))
+    );
   }
+  return Choice(choices);
+}
 
-  int32_t GenerateTypeArray(const TypeArraySpec& spec, const std::string& rule_name) {
-    std::vector<int32_t> choices;
-    for (size_t index = 0; index < spec.type_schemas.size(); ++index) {
-      choices.push_back(RuleRef(
-          CreateRule(spec.type_schemas[index], rule_name + "_type_" + std::to_string(index))
-      ));
-    }
-    return Choice(choices);
+int32_t JSONSchemaConverter::GenerateAllOf(const AllOfSpec& spec, const std::string& rule_name) {
+  if (spec.schemas.size() == 1) {
+    return GenerateFromSpec(spec.schemas[0], rule_name + "_case_0");
   }
+  XGRAMMAR_LOG(WARNING) << "Support for allOf with multiple options is still ongoing";
+  return GenerateAny(AnySpec{}, rule_name);
+}
 
-  GrammarBuilder builder_;
-  std::optional<int32_t> empty_expr_id_;
-  std::unordered_map<std::string, int32_t> byte_string_expr_ids_;
-  std::unordered_map<int32_t, int32_t> rule_ref_expr_ids_;
-  IndentManager indent_manager_;
-  int32_t colon_expr_id_;
-  bool any_whitespace_;
-  std::optional<int> max_whitespace_cnt_;
-  std::optional<int32_t> whitespace_expr_id_;
-  bool any_order_;
-  RefResolver ref_resolver_;
-  JSONFormat json_format_;
-  int nested_object_level_ = 0;
-  XMLWrapper xml_wrapper_;
-  GenerateCacheManager rule_cache_manager_;
-  std::unordered_map<std::string, std::string> uri_to_rule_name_;
-};
-
-JSONSchemaConverter::JSONSchemaConverter(
-    std::optional<int> indent,
-    std::optional<std::pair<std::string, std::string>> separators,
-    bool any_whitespace,
-    std::optional<int> max_whitespace_cnt,
-    RefResolver ref_resolver,
-    bool any_order,
-    JSONFormat json_format
-)
-    : impl_(std::make_shared<Impl>(
-          indent,
-          std::move(separators),
-          any_whitespace,
-          max_whitespace_cnt,
-          std::move(ref_resolver),
-          any_order,
-          json_format
-      )) {}
-
-Grammar JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) { return impl_->Convert(spec); }
+int32_t JSONSchemaConverter::GenerateTypeArray(
+    const TypeArraySpec& spec, const std::string& rule_name
+) {
+  std::vector<int32_t> choices;
+  for (size_t index = 0; index < spec.type_schemas.size(); ++index) {
+    choices.push_back(
+        RuleRef(CreateRule(spec.type_schemas[index], rule_name + "_type_" + std::to_string(index)))
+    );
+  }
+  return Choice(choices);
+}
 
 // ==================== Static Helper Methods ====================
 
@@ -4275,16 +4053,37 @@ Grammar JSONSchemaToGrammar(
     return std::move(result).Unwrap();
   };
 
-  JSONSchemaConverter converter(
-      indent,
-      std::move(separators),
-      any_whitespace,
-      max_whitespace_cnt,
-      std::move(ref_resolver),
-      any_order,
-      json_format
-  );
-  return converter.Convert(spec);
+  switch (json_format) {
+    case JSONFormat::kJSON: {
+      JSONSchemaConverter converter(
+          indent,
+          std::move(separators),
+          any_whitespace,
+          max_whitespace_cnt,
+          std::move(ref_resolver),
+          any_order
+      );
+      return converter.Convert(spec);
+    }
+    case JSONFormat::kQwenXML:
+    case JSONFormat::kMiniMaxXML:
+    case JSONFormat::kDeepSeekXML:
+    case JSONFormat::kGlmXML: {
+      XMLToolCallingConverter converter(
+          indent,
+          std::move(separators),
+          any_whitespace,
+          max_whitespace_cnt,
+          std::move(ref_resolver),
+          json_format,
+          any_order
+      );
+      return converter.Convert(spec);
+    }
+    default:
+      XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);
+  }
+  XGRAMMAR_UNREACHABLE();
 }
 
 std::string JSONSchemaToEBNF(
@@ -4345,7 +4144,7 @@ std::string JSONSchemaToEBNF(
       JSONSchemaConverter converter(
           indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
-      return converter.Convert(spec).ToString();
+      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
     }
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
@@ -4360,7 +4159,7 @@ std::string JSONSchemaToEBNF(
           json_format,
           any_order
       );
-      return converter.Convert(spec).ToString();
+      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
     }
     default:
       XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);

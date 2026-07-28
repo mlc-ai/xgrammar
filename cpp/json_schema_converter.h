@@ -11,6 +11,7 @@
 #include <xgrammar/grammar.h>
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -20,6 +21,7 @@
 #include <variant>
 #include <vector>
 
+#include "grammar_builder.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -275,11 +277,14 @@ class JSONSchemaConverter {
       bool any_whitespace,
       std::optional<int> max_whitespace_cnt,
       RefResolver ref_resolver = nullptr,
-      bool any_order = false,
-      JSONFormat json_format = JSONFormat::kJSON
+      bool any_order = false
   );
 
   virtual ~JSONSchemaConverter() = default;
+  JSONSchemaConverter(const JSONSchemaConverter&) = delete;
+  JSONSchemaConverter& operator=(const JSONSchemaConverter&) = delete;
+  JSONSchemaConverter(JSONSchemaConverter&&) = default;
+  JSONSchemaConverter& operator=(JSONSchemaConverter&&) = default;
 
   /*!
    * \brief Convert SchemaSpec directly to a grammar AST.
@@ -288,6 +293,162 @@ class JSONSchemaConverter {
    */
   Grammar Convert(const SchemaSpecPtr& spec);
 
+ protected:
+  using CharacterClassElement = GrammarBuilder::CharacterClassElement;
+
+  // ==================== Virtual methods for generation ====================
+  // Subclasses can override these to customize grammar AST generation.
+
+  virtual int32_t GenerateInteger(const IntegerSpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateNumber(const NumberSpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateString(const StringSpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateBoolean(const BooleanSpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateNull(const NullSpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateObject(
+      const ObjectSpec& spec, const std::string& rule_name, bool need_braces = true
+  );
+  virtual int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateRef(const RefSpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateAnyOf(const AnyOfSpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateOneOf(const OneOfSpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateAllOf(const AllOfSpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateTypeArray(const TypeArraySpec& spec, const std::string& rule_name);
+
+  // ==================== Hooks for customization ====================
+
+  /*! \brief Format a property key. Override for different formats. */
+  virtual int32_t FormatPropertyKey(const std::string& key);
+
+  /*! \brief Format a property key and value. Override for different formats. */
+  virtual int32_t FormatProperty(
+      const std::string& key,
+      const std::string& value_rule,
+      const std::string& rule_name,
+      int64_t idx
+  );
+
+  /*! \brief Format an additional or unevaluated property. */
+  virtual int32_t FormatOtherProperty(
+      int32_t key_pattern_expr,
+      const std::string& value_rule,
+      const std::string& rule_name,
+      const std::string& rule_name_suffix
+  );
+
+  /*! \brief Get the basic key-pattern rule name. */
+  virtual std::string GetKeyPattern() const;
+
+  /*! \brief Get a key-pattern expression that excludes specific property names. */
+  virtual int32_t GetKeyPatternExcluding(
+      const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+  );
+
+  /*! \brief Get the basic any rule name. */
+  virtual std::string GetBasicAnyRuleName() const;
+
+  /*! \brief Add basic rules for the format. */
+  virtual void AddBasicRules();
+  void AddBasicRules(const std::vector<std::string>& additional_rule_names);
+
+  /*! \brief Add a key-value pair to the generation cache. */
+  virtual void AddCache(const std::string& key, const std::string& rule_name);
+
+  /*! \brief Get a cached rule name. */
+  virtual std::optional<std::string> GetCache(const std::string& key) const;
+
+  // ==================== Helper methods for subclasses ====================
+
+  /*! \brief Dispatch to the appropriate Generate method based on the spec type. */
+  int32_t GenerateFromSpec(const SchemaSpecPtr& spec, const std::string& rule_name_hint);
+
+  /*! \brief Create a rule and return its name, handling caching. */
+  std::string CreateRule(const SchemaSpecPtr& spec, const std::string& rule_name_hint);
+
+  /*! \brief Get the next separator string from the indent manager. */
+  virtual std::string NextSeparator(bool is_end = false);
+
+  /*! \brief Get the whitespace pattern. */
+  std::string GetWhitespacePattern() const;
+
+  std::string AllocateRuleName(const std::string& name_hint);
+  void ReserveRule(const std::string& name);
+  std::string AddRule(const std::string& name_hint, int32_t body_expr_id);
+  void AddRuleWithAllocatedName(const std::string& name, int32_t body_expr_id);
+
+  int32_t Empty();
+  int32_t ByteString(const std::string& value);
+  int32_t CharacterClass(
+      const std::vector<CharacterClassElement>& elements, bool is_negative = false
+  );
+  int32_t CharacterClassStar(
+      const std::vector<CharacterClassElement>& elements, bool is_negative = false
+  );
+  int32_t Regex(const std::string& regex, bool json_string = false);
+  int32_t TagDispatch(bool loop_after_dispatch, std::vector<std::string> excludes);
+  int32_t RuleRef(int32_t rule_id);
+  int32_t RuleRef(const std::string& rule_name);
+  int32_t Sequence(const std::vector<int32_t>& elements);
+  int32_t Choice(const std::vector<int32_t>& choices);
+  int32_t Repeat(
+      const std::string& rule_name_hint, int32_t expr_id, int32_t min_count, int32_t max_count
+  );
+  void SetLookahead(const std::string& rule_name, int32_t lookahead_expr_id);
+  int32_t AddSubGrammar(const Grammar& grammar);
+  Grammar Get(const std::string& root_rule_name);
+
+  int32_t WhitespaceExpression();
+  int32_t FormattingExpression(const std::string& expression);
+  int32_t NextSeparatorExpression(bool is_end = false);
+  int32_t KeyPatternExpression();
+
+  int32_t RegexExpression(
+      const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
+  );
+
+  /*! \brief Create an expression with property-count constraints. */
+  int32_t GetPropertyWithNumberConstraints(
+      int32_t pattern,
+      int min_properties,
+      int max_properties,
+      int already_repeated_times,
+      const std::string& rule_name
+  );
+
+  /*! \brief Generate object properties in any-order mode. */
+  int32_t GetAnyOrderRuleForProperties(
+      const std::vector<ObjectSpec::Property>& properties,
+      const std::unordered_set<std::string>& required,
+      const SchemaSpecPtr& additional,
+      const std::string& rule_name,
+      const std::string& additional_suffix,
+      int min_properties,
+      int max_properties,
+      const std::optional<int32_t>& additional_property_override
+  );
+
+  /*! \brief Generate an expression for object properties. */
+  int32_t GetPartialRuleForProperties(
+      const std::vector<ObjectSpec::Property>& properties,
+      const std::unordered_set<std::string>& required,
+      const SchemaSpecPtr& additional,
+      const std::string& rule_name,
+      const std::string& additional_suffix,
+      int min_properties,
+      int max_properties,
+      const std::optional<int32_t>& additional_property_override = std::nullopt
+  );
+
+  /*! \brief Return the built-in regular expression for a JSON Schema string format. */
+  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
+
+  // ==================== Protected members ====================
+
+  GenerateCacheManager rule_cache_manager_;
+
+ public:
   // Basic rule names.
   static const std::string kBasicAny;
   static const std::string kBasicInteger;
@@ -300,13 +461,15 @@ class JSONSchemaConverter {
   static const std::string kBasicEscape;
   static const std::string kBasicStringSub;
 
- protected:
-  /*! \brief Return the built-in regular expression for a JSON Schema string format. */
-  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
-
  private:
-  class Impl;
-  std::shared_ptr<Impl> impl_;
+  struct DirectTrieNode {
+    bool is_terminal = false;
+    std::map<uint8_t, DirectTrieNode> children;
+  };
+
+  void AddHelperRules();
+  int32_t GenerateIntegerMultipleOfDFA(int64_t multiple_of, const std::string& rule_name);
+  int32_t BuildTrieBody(const DirectTrieNode& node, const std::string& rule_name);
 
   static std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
   static std::string GenerateFloatRangeRegex(
@@ -316,6 +479,19 @@ class JSONSchemaConverter {
       bool exclusive_start = false,
       bool exclusive_end = false
   );
+
+  GrammarBuilder builder_;
+  std::optional<int32_t> empty_expr_id_;
+  std::unordered_map<std::string, int32_t> byte_string_expr_ids_;
+  std::unordered_map<int32_t, int32_t> rule_ref_expr_ids_;
+  IndentManager indent_manager_;
+  int32_t colon_expr_id_;
+  bool any_whitespace_;
+  std::optional<int> max_whitespace_cnt_;
+  std::optional<int32_t> whitespace_expr_id_;
+  bool any_order_;
+  RefResolver ref_resolver_;
+  std::unordered_map<std::string, std::string> uri_to_rule_name_;
 
   friend std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
   friend std::string GenerateFloatRangeRegex(
