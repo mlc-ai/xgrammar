@@ -8,26 +8,28 @@
 #include <picojson.h>
 
 #include <algorithm>
+#include <cctype>
 #include <climits>
 #include <cmath>
 #include <cstdint>
 #include <iomanip>
 #include <limits>
 #include <map>
+#include <memory>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
 #include "regex_converter.h"
-#include "support/encoding.h"
 #include "support/logging.h"
-#include "support/utils.h"
 
 namespace xgrammar {
 
@@ -383,19 +385,6 @@ EffectiveIntegerRange ComputeEffectiveIntegerRange(const IntegerSpec& spec) {
     range.end = range.end.has_value() ? std::min(*range.end, excl_end) : excl_end;
   }
   return range;
-}
-
-std::string DigitLiteral(int64_t digit) {
-  return EBNFScriptCreator::Str(std::string(1, static_cast<char>('0' + digit)));
-}
-
-std::string JoinRegexAlternatives(const std::vector<std::string>& alternatives) {
-  std::string result;
-  for (size_t i = 0; i < alternatives.size(); ++i) {
-    if (i != 0) result += "|";
-    result += alternatives[i];
-  }
-  return result;
 }
 
 bool TypeSetsOverlap(
@@ -1750,205 +1739,345 @@ JSONSchemaConverter::JSONSchemaConverter(
       ref_resolver_(std::move(ref_resolver)) {
   std::string colon_sep =
       separators.has_value() ? separators->second : (any_whitespace ? ":" : ": ");
-  if (any_whitespace) {
-    std::string whitespace_part;
-    if (!max_whitespace_cnt_.has_value()) {
-      whitespace_part = "[ \\n\\t]*";
-    } else {
-      whitespace_part = "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
-    }
-    colon_pattern_ = whitespace_part + " \"" + colon_sep + "\" " + whitespace_part;
-  } else {
-    colon_pattern_ = "\"" + colon_sep + "\"";
-  }
+  std::string whitespace = GetWhitespacePattern();
+  colon_expr_id_ = FormattingExpression(
+      any_whitespace ? whitespace + " \"" + colon_sep + "\" " + whitespace : "\"" + colon_sep + "\""
+  );
 }
 
-std::string JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
+Grammar JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
   AddBasicRules();
 
   // Register the root rule for circular reference handling
   // This allows $ref: "#" to resolve to "root"
-  std::string root_rule_name = ebnf_script_creator_.AllocateRuleName("root");
-  uri_to_rule_name_["#"] = root_rule_name;
+  int32_t root_rule_id = builder_.AddEmptyRuleWithHint("root");
+  std::string root_rule_name = builder_.GetRule(root_rule_id).name;
+  uri_to_rule_id_["#"] = root_rule_id;
 
   // Check if the spec can be directly mapped to an existing rule
   auto cached_rule = GetCache(spec->cache_key);
   if (cached_rule.has_value()) {
     // Root schema matches a basic type, just reference it
-    ebnf_script_creator_.AddRuleWithAllocatedName(root_rule_name, cached_rule.value());
+    builder_.UpdateRuleBody(root_rule_id, RuleRef(*cached_rule));
   } else {
     // Generate the rule body
     if (!spec->cache_key.empty()) {
-      AddCache(spec->cache_key, root_rule_name);
+      AddCache(spec->cache_key, root_rule_id);
     }
-    std::string root_body = GenerateFromSpec(spec, root_rule_name);
-    ebnf_script_creator_.AddRuleWithAllocatedName(root_rule_name, root_body);
+    builder_.UpdateRuleBody(root_rule_id, GenerateFromSpec(spec, root_rule_name));
   }
-
-  return ebnf_script_creator_.GetScript();
+  return builder_.Get(root_rule_id);
 }
 
-void JSONSchemaConverter::AddBasicRules() {
+void JSONSchemaConverter::AddBasicRules() { AddBasicRules({}); }
+
+void JSONSchemaConverter::AddBasicRules(const std::vector<std::string>& additional_rule_names) {
+  std::vector<std::string> basic_rule_names = {
+      kBasicEscape,
+      kBasicStringSub,
+      kBasicAny,
+      kBasicInteger,
+      kBasicNumber,
+      kBasicString,
+      kBasicBoolean,
+      kBasicNull,
+      kBasicArray,
+      kBasicObject,
+  };
+  basic_rule_names.insert(
+      basic_rule_names.end(), additional_rule_names.begin(), additional_rule_names.end()
+  );
+  for (const auto& name : basic_rule_names) {
+    builder_.AddEmptyRule(name);
+  }
   AddHelperRules();
 
   // Create basic rules with a temporary indent manager for compact format
   auto saved_indent_manager = indent_manager_;
-  if (any_whitespace_) {
-    indent_manager_ = IndentManager(std::nullopt, ",", true, max_whitespace_cnt_);
-  } else {
-    indent_manager_ = IndentManager(std::nullopt, ", ", false, std::nullopt);
-  }
+  indent_manager_ = IndentManager(
+      std::nullopt,
+      any_whitespace_ ? "," : ", ",
+      any_whitespace_,
+      any_whitespace_ ? max_whitespace_cnt_ : std::nullopt
+  );
 
   // basic_any - use "{}" as the cache key for empty schema
   auto any_spec = SchemaSpec::Make(AnySpec{}, "{}", kBasicAny);
-  std::string any_body = GenerateAny(std::get<AnySpec>(any_spec->spec), kBasicAny);
-  ebnf_script_creator_.AddRule(kBasicAny, any_body);
-  AddCache("{}", kBasicAny);
+  builder_.UpdateRuleBody(kBasicAny, GenerateAny(std::get<AnySpec>(any_spec->spec), kBasicAny));
+  AddCache("{}", builder_.GetRuleId(kBasicAny));
 
   // basic_integer - cache_key matches SchemaParser::ComputeCacheKey for {"type": "integer"}
   constexpr const char* kIntegerCacheKey = "{\"type\":\"integer\"}";
-  auto int_spec = SchemaSpec::Make(IntegerSpec{}, kIntegerCacheKey, kBasicInteger);
-  std::string int_body = GenerateInteger(std::get<IntegerSpec>(int_spec->spec), kBasicInteger);
-  ebnf_script_creator_.AddRule(kBasicInteger, int_body);
-  AddCache(kIntegerCacheKey, kBasicInteger);
+  builder_.UpdateRuleBody(kBasicInteger, GenerateInteger(IntegerSpec{}, kBasicInteger));
+  AddCache(kIntegerCacheKey, builder_.GetRuleId(kBasicInteger));
 
   // basic_number - cache_key matches SchemaParser::ComputeCacheKey for {"type": "number"}
   constexpr const char* kNumberCacheKey = "{\"type\":\"number\"}";
-  auto num_spec = SchemaSpec::Make(NumberSpec{}, kNumberCacheKey, kBasicNumber);
-  std::string num_body = GenerateNumber(std::get<NumberSpec>(num_spec->spec), kBasicNumber);
-  ebnf_script_creator_.AddRule(kBasicNumber, num_body);
-  AddCache(kNumberCacheKey, kBasicNumber);
+  builder_.UpdateRuleBody(kBasicNumber, GenerateNumber(NumberSpec{}, kBasicNumber));
+  AddCache(kNumberCacheKey, builder_.GetRuleId(kBasicNumber));
 
-  // basic_string - cache_key matches SchemaParser::ComputeCacheKey for {"type": "string"}
   constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
-  auto str_spec = SchemaSpec::Make(StringSpec{}, kStringCacheKey, kBasicString);
-  std::string str_body = "[\"] " + kBasicStringSub;
-  ebnf_script_creator_.AddRule(kBasicString, str_body);
-  AddCache(kStringCacheKey, kBasicString);
+  builder_.UpdateRuleBody(kBasicString, Sequence({ByteString("\""), RuleRef(kBasicStringSub)}));
+  AddCache(kStringCacheKey, builder_.GetRuleId(kBasicString));
 
   // basic_boolean - cache_key matches SchemaParser::ComputeCacheKey for {"type": "boolean"}
   constexpr const char* kBooleanCacheKey = "{\"type\":\"boolean\"}";
-  auto bool_spec = SchemaSpec::Make(BooleanSpec{}, kBooleanCacheKey, kBasicBoolean);
-  std::string bool_body = GenerateBoolean(std::get<BooleanSpec>(bool_spec->spec), kBasicBoolean);
-  ebnf_script_creator_.AddRule(kBasicBoolean, bool_body);
-  AddCache(kBooleanCacheKey, kBasicBoolean);
+  builder_.UpdateRuleBody(kBasicBoolean, GenerateBoolean(BooleanSpec{}, kBasicBoolean));
+  AddCache(kBooleanCacheKey, builder_.GetRuleId(kBasicBoolean));
 
   // basic_null - cache_key matches SchemaParser::ComputeCacheKey for {"type": "null"}
   constexpr const char* kNullCacheKey = "{\"type\":\"null\"}";
-  auto null_spec = SchemaSpec::Make(NullSpec{}, kNullCacheKey, kBasicNull);
-  std::string null_body = GenerateNull(std::get<NullSpec>(null_spec->spec), kBasicNull);
-  ebnf_script_creator_.AddRule(kBasicNull, null_body);
-  AddCache(kNullCacheKey, kBasicNull);
+  builder_.UpdateRuleBody(kBasicNull, GenerateNull(NullSpec{}, kBasicNull));
+  AddCache(kNullCacheKey, builder_.GetRuleId(kBasicNull));
 
   // basic_array - cache_key matches SchemaParser::ComputeCacheKey for {"type": "array"}
   constexpr const char* kArrayCacheKey = "{\"type\":\"array\"}";
   ArraySpec array_spec_val;
   array_spec_val.allow_additional_items = true;
   array_spec_val.additional_items = any_spec;
-  auto array_spec = SchemaSpec::Make(std::move(array_spec_val), kArrayCacheKey, kBasicArray);
-  std::string array_body = GenerateArray(std::get<ArraySpec>(array_spec->spec), kBasicArray);
-  ebnf_script_creator_.AddRule(kBasicArray, array_body);
-  AddCache(kArrayCacheKey, kBasicArray);
+  builder_.UpdateRuleBody(kBasicArray, GenerateArray(array_spec_val, kBasicArray));
+  AddCache(kArrayCacheKey, builder_.GetRuleId(kBasicArray));
 
   // basic_object - cache_key matches SchemaParser::ComputeCacheKey for {"type": "object"}
   constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
   ObjectSpec obj_spec_val;
   obj_spec_val.allow_additional_properties = true;
   obj_spec_val.additional_properties_schema = any_spec;
-  auto obj_spec = SchemaSpec::Make(std::move(obj_spec_val), kObjectCacheKey, kBasicObject);
-  std::string obj_body = GenerateObject(std::get<ObjectSpec>(obj_spec->spec), kBasicObject);
-  ebnf_script_creator_.AddRule(kBasicObject, obj_body);
-  AddCache(kObjectCacheKey, kBasicObject);
+  builder_.UpdateRuleBody(kBasicObject, GenerateObject(obj_spec_val, kBasicObject));
+  AddCache(kObjectCacheKey, builder_.GetRuleId(kBasicObject));
 
   indent_manager_ = saved_indent_manager;
 }
 
 void JSONSchemaConverter::AddHelperRules() {
-  ebnf_script_creator_.AddRule(
-      kBasicEscape, "[\"\\\\/bfnrt] | \"u\" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]"
+  if (max_whitespace_cnt_.has_value()) {
+    // Preserve historical helper-rule numbering after grammar optimization. The text parser
+    // allocated one initial bounded-repetition helper that dead-code elimination later removed.
+    builder_.AddRuleWithHint(kBasicStringSub, Empty());
+  }
+  int32_t escaped_character = builder_.AddCharacterClass(
+      {{'"', '"'},
+       {'\\', '\\'},
+       {'/', '/'},
+       {'b', 'b'},
+       {'f', 'f'},
+       {'n', 'n'},
+       {'r', 'r'},
+       {'t', 't'}}
   );
-  std::string whitespace_part = GetWhitespacePattern();
-  ebnf_script_creator_.AddRule(
-      kBasicStringSub,
-      "(\"\\\"\" | [^\\0-\\x1f\\\"\\\\\\r\\n] " + kBasicStringSub + " | \"\\\\\" " + kBasicEscape +
-          " " + kBasicStringSub + ") (= " + whitespace_part + " [,}\\]:])"
+  int32_t hexadecimal_character = builder_.AddCharacterClass({{'A', 'F'}, {'a', 'f'}, {'0', '9'}});
+  int32_t unicode_escape = Sequence(
+      {ByteString("u"),
+       hexadecimal_character,
+       hexadecimal_character,
+       hexadecimal_character,
+       hexadecimal_character}
   );
+  builder_.UpdateRuleBody(kBasicEscape, Choice({escaped_character, unicode_escape}));
+
+  int32_t normal_character = builder_.AddCharacterClass(
+      {{0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true
+  );
+  int32_t string_sub_ref = RuleRef(kBasicStringSub);
+  int32_t string_sub_body = Choice(
+      {ByteString("\""),
+       Sequence({normal_character, string_sub_ref}),
+       Sequence({ByteString("\\"), RuleRef(kBasicEscape), string_sub_ref})}
+  );
+  builder_.UpdateRuleBody(kBasicStringSub, string_sub_body);
+  int32_t closing_context =
+      builder_.AddCharacterClass({{',', ','}, {'}', '}'}, {']', ']'}, {':', ':'}});
+  builder_.UpdateLookaheadAssertion(
+      kBasicStringSub, Sequence({WhitespaceExpression(), closing_context})
+  );
+}
+
+// Keep converter-specific node reuse local; GrammarBuilder creates all AST nodes.
+int32_t JSONSchemaConverter::Empty() {
+  if (!empty_expr_id_.has_value()) {
+    empty_expr_id_ = builder_.AddEmptyStr();
+  }
+  return *empty_expr_id_;
+}
+
+int32_t JSONSchemaConverter::ByteString(const std::string& value) {
+  auto it = byte_string_expr_ids_.find(value);
+  if (it != byte_string_expr_ids_.end()) {
+    return it->second;
+  }
+  int32_t expr_id = value.empty() ? Empty() : builder_.AddByteString(value);
+  byte_string_expr_ids_[value] = expr_id;
+  return expr_id;
+}
+
+int32_t JSONSchemaConverter::TagDispatch(
+    bool loop_after_dispatch, std::vector<std::string> excludes
+) {
+  return builder_.AddTagDispatch(
+      Grammar::Impl::TagDispatch{{}, loop_after_dispatch, std::move(excludes)}
+  );
+}
+
+int32_t JSONSchemaConverter::RuleRef(int32_t rule_id) {
+  auto it = rule_ref_expr_ids_.find(rule_id);
+  if (it != rule_ref_expr_ids_.end()) {
+    return it->second;
+  }
+  int32_t expr_id = builder_.AddRuleRef(rule_id);
+  rule_ref_expr_ids_[rule_id] = expr_id;
+  return expr_id;
+}
+
+int32_t JSONSchemaConverter::RuleRef(const std::string& rule_name) {
+  int32_t rule_id = builder_.GetRuleId(rule_name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not allocated";
+  return RuleRef(rule_id);
+}
+
+int32_t JSONSchemaConverter::Sequence(const std::vector<int32_t>& elements) {
+  if (elements.empty()) {
+    return Empty();
+  }
+  if (elements.size() == 1) {
+    return elements[0];
+  }
+  return builder_.AddSequence(elements);
+}
+
+int32_t JSONSchemaConverter::Choice(const std::vector<int32_t>& choices) {
+  if (choices.empty()) {
+    return Empty();
+  }
+  if (choices.size() == 1) {
+    return choices[0];
+  }
+  return builder_.AddChoices(choices);
+}
+
+int32_t JSONSchemaConverter::Repeat(
+    const std::string& rule_name_hint, int32_t expr_id, int32_t min_count, int32_t max_count
+) {
+  if (min_count == 0 && max_count == 0) {
+    return Empty();
+  }
+  if (min_count == 1 && max_count == 1) {
+    return expr_id;
+  }
+  if (min_count == 0 && max_count == 1) {
+    return Choice({Empty(), expr_id});
+  }
+  if (min_count == 0 && max_count == -1) {
+    auto expr = builder_.GetGrammarExpr(expr_id);
+    if (expr.type == GrammarBuilder::GrammarExprType::kCharacterClass) {
+      std::vector<int32_t> data(expr.begin(), expr.end());
+      return builder_.AddGrammarExpr(
+          {GrammarBuilder::GrammarExprType::kCharacterClassStar,
+           data.data(),
+           static_cast<int32_t>(data.size())}
+      );
+    }
+  }
+  return builder_.AddRepeatFromExpr(rule_name_hint, expr_id, min_count, max_count);
+}
+
+int32_t JSONSchemaConverter::AddSubGrammar(const Grammar& grammar) {
+  int32_t rule_id = SubGrammarAdder::Apply(&builder_, grammar);
+  return RuleRef(rule_id);
 }
 
 std::string JSONSchemaConverter::GetWhitespacePattern() const {
   if (!max_whitespace_cnt_.has_value()) {
     return "[ \\n\\t]*";
-  } else {
-    return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
   }
+  return "[ \\n\\t]{0," + std::to_string(*max_whitespace_cnt_) + "}";
+}
+
+int32_t JSONSchemaConverter::WhitespaceExpression() {
+  std::vector<CharacterClassElement> elements = {{' ', ' '}, {'\n', '\n'}, {'\t', '\t'}};
+  if (!max_whitespace_cnt_.has_value()) {
+    if (!whitespace_expr_id_.has_value()) {
+      whitespace_expr_id_ = builder_.AddCharacterClassStar(elements);
+    }
+    return *whitespace_expr_id_;
+  }
+  // Bounded whitespace occurrences intentionally remain distinct, matching the historical
+  // parser-produced rule shape after normalization.
+  return Repeat(
+      "whitespace",
+      builder_.AddCharacterClass(elements),
+      0,
+      static_cast<int32_t>(*max_whitespace_cnt_)
+  );
+}
+
+int32_t JSONSchemaConverter::FormattingExpression(const std::string& expression) {
+  const std::string whitespace = GetWhitespacePattern();
+  if (expression == whitespace) {
+    return WhitespaceExpression();
+  }
+
+  const std::string prefix = whitespace + " ";
+  const std::string suffix = " " + whitespace;
+  if (expression.size() >= prefix.size() + suffix.size() &&
+      expression.compare(0, prefix.size(), prefix) == 0 &&
+      expression.compare(expression.size() - suffix.size(), suffix.size(), suffix) == 0) {
+    return Sequence(
+        {WhitespaceExpression(),
+         FormattingExpression(
+             expression.substr(prefix.size(), expression.size() - prefix.size() - suffix.size())
+         ),
+         WhitespaceExpression()}
+    );
+  }
+
+  picojson::value value;
+  std::string error = picojson::parse(value, expression);
+  XGRAMMAR_CHECK(error.empty() && value.is<std::string>())
+      << "Unsupported indentation expression: " << expression;
+  return ByteString(value.get<std::string>());
 }
 
 std::string JSONSchemaConverter::NextSeparator(bool is_end) {
   return indent_manager_.NextSeparator(is_end);
 }
 
-std::string JSONSchemaConverter::GetKeyPattern() const { return kBasicString; }
-
-namespace {
-
-struct TrieNode {
-  bool is_terminal = false;
-  std::map<char, TrieNode> children;
-};
-
-std::string BuildTrieBody(const TrieNode& node) {
-  std::string result;
-  bool first = true;
-  auto add = [&](const std::string& s) {
-    if (!first) result += " | ";
-    first = false;
-    result += s;
-  };
-
-  // 1. Close quote - only if no excluded key ends here
-  if (!node.is_terminal) {
-    add("\"\\\"\"");
-  }
-
-  // 2. Negated char class - excludes edge chars + JSON specials
-  std::string neg = "[^";
-  for (const auto& [c, _] : node.children) {
-    if (c == ']' || c == '\\' || c == '^' || c == '-') {
-      neg += "\\";
-    }
-    neg += c;
-  }
-  neg += "\\0-\\x1f\\\"\\\\\\r\\n]";
-  add(neg + " " + JSONSchemaConverter::kBasicStringSub);
-
-  // 3. Escape sequence
-  add("\"\\\\\" " + JSONSchemaConverter::kBasicEscape + " " + JSONSchemaConverter::kBasicStringSub);
-
-  // 4. Trie edges - recurse
-  for (const auto& [c, child] : node.children) {
-    std::string child_body = BuildTrieBody(child);
-    std::string char_lit = "\"";
-    if (c == '"') {
-      char_lit += "\\\"";
-    } else if (c == '\\') {
-      char_lit += "\\\\";
-    } else {
-      char_lit += c;
-    }
-    char_lit += "\"";
-    add(char_lit + " " + child_body);
-  }
-
-  return "(" + result + ")";
+int32_t JSONSchemaConverter::NextSeparatorExpression(bool is_end) {
+  return FormattingExpression(NextSeparator(is_end));
 }
 
-}  // namespace
+std::string JSONSchemaConverter::GetKeyPattern() const { return kBasicString; }
 
-std::string JSONSchemaConverter::GetKeyPatternExcluding(
+int32_t JSONSchemaConverter::KeyPatternExpression() { return RuleRef(GetKeyPattern()); }
+
+int32_t JSONSchemaConverter::BuildTrieBody(const TrieNode& node, const std::string& rule_name) {
+  std::vector<int32_t> choices;
+  if (!node.is_terminal) {
+    choices.push_back(ByteString("\""));
+  }
+
+  std::vector<CharacterClassElement> excluded = {
+      {0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}
+  };
+  for (const auto& [character, child] : node.children) {
+    static_cast<void>(child);
+    excluded.push_back({character, character});
+  }
+  choices.push_back(Sequence({builder_.AddCharacterClass(excluded, true), RuleRef(kBasicStringSub)})
+  );
+  choices.push_back(Sequence({ByteString("\\"), RuleRef(kBasicEscape), RuleRef(kBasicStringSub)}));
+  for (const auto& [character, child] : node.children) {
+    choices.push_back(Sequence(
+        {ByteString(std::string(1, static_cast<char>(character))), BuildTrieBody(child, rule_name)}
+    ));
+  }
+  return Choice(choices);
+}
+
+int32_t JSONSchemaConverter::GetKeyPatternExcluding(
     const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
 ) {
   if (properties.empty()) {
-    return GetKeyPattern();
+    return KeyPatternExpression();
   }
 
   // Build trie from property names
@@ -1956,37 +2085,43 @@ std::string JSONSchemaConverter::GetKeyPatternExcluding(
   TrieNode root;
   for (const auto& prop : properties) {
     TrieNode* cur = &root;
-    for (char c : prop.name) {
+    for (unsigned char c : prop.name) {
       cur = &cur->children[c];
     }
     cur->is_terminal = true;
   }
 
-  // Generate EBNF body
-  std::string inner = BuildTrieBody(root);
-  std::string ws = GetWhitespacePattern();
-  std::string body = "[\"] (" + inner + ") (= " + ws + " [,}\\]:])";
-
-  return ebnf_script_creator_.AddRule(rule_name + "_addl_key", body);
+  int32_t key_rule_id = builder_.AddEmptyRuleWithHint(rule_name + "_addl_key");
+  std::string key_rule_name = builder_.GetRule(key_rule_id).name;
+  builder_.UpdateRuleBody(
+      key_rule_id, Sequence({ByteString("\""), BuildTrieBody(root, key_rule_name)})
+  );
+  builder_.UpdateLookaheadAssertion(
+      key_rule_id,
+      Sequence(
+          {WhitespaceExpression(),
+           builder_.AddCharacterClass({{',', ','}, {'}', '}'}, {']', ']'}, {':', ':'}})}
+      )
+  );
+  return RuleRef(key_rule_id);
 }
 
 std::string JSONSchemaConverter::GetBasicAnyRuleName() const { return kBasicAny; }
 
-void JSONSchemaConverter::AddCache(const std::string& key, const std::string& value) {
-  if (key.empty()) {
-    return;
+void JSONSchemaConverter::AddCache(const std::string& key, int32_t rule_id) {
+  if (!key.empty()) {
+    rule_cache_manager_.AddCache(key, true, rule_id);
   }
-  rule_cache_manager_.AddCache(key, true, value);
 }
 
-std::optional<std::string> JSONSchemaConverter::GetCache(const std::string& key) const {
+std::optional<int32_t> JSONSchemaConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
   }
   return rule_cache_manager_.GetCache(key, true);
 }
 
-std::string JSONSchemaConverter::CreateRule(
+int32_t JSONSchemaConverter::CreateRule(
     const SchemaSpecPtr& spec, const std::string& rule_name_hint
 ) {
   // Only check cache for basic rules (pre-populated in AddBasicRules)
@@ -1995,19 +2130,19 @@ std::string JSONSchemaConverter::CreateRule(
   if (cached.has_value()) {
     return cached.value();
   }
-
-  std::string rule_name = ebnf_script_creator_.AllocateRuleName(rule_name_hint);
-  std::string rule_body = GenerateFromSpec(spec, rule_name);
-  ebnf_script_creator_.AddRuleWithAllocatedName(rule_name, rule_body);
-
-  return rule_name;
+  int32_t rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
+  // Copy the name before generating: GenerateFromSpec may add rules and reallocate the
+  // builder's rule storage, invalidating references into it.
+  std::string rule_name = builder_.GetRule(rule_id).name;
+  builder_.UpdateRuleBody(rule_id, GenerateFromSpec(spec, rule_name));
+  return rule_id;
 }
 
-std::string JSONSchemaConverter::GenerateFromSpec(
+int32_t JSONSchemaConverter::GenerateFromSpec(
     const SchemaSpecPtr& spec, const std::string& rule_name_hint
 ) {
   return std::visit(
-      [this, &rule_name_hint](const auto& s) -> std::string {
+      [this, &rule_name_hint](const auto& s) -> int32_t {
         using T = std::decay_t<decltype(s)>;
         if constexpr (std::is_same_v<T, IntegerSpec>) {
           return GenerateInteger(s, rule_name_hint);
@@ -2041,16 +2176,55 @@ std::string JSONSchemaConverter::GenerateFromSpec(
           return GenerateTypeArray(s, rule_name_hint);
         } else {
           XGRAMMAR_LOG(FATAL) << "Unknown spec type";
-          return "";
         }
       },
       spec->spec
   );
 }
 
+/*!
+ * \brief Emit the grammar expression matching a regex. Prefer the Regex node with
+ * json_string=true so the pattern is compiled into a single automaton by GrammarFSMBuilder;
+ * json_string=true excludes the characters that must be escaped in a JSON string ('"', '\\'
+ * and the control characters) from every character match, so classes like \S cannot emit an
+ * unescaped quote. Fall back to the CFG expansion when the FSM regex engine does not support
+ * the pattern, or when the exclusion makes the pattern unmatchable (e.g. a pattern requiring
+ * a literal '"').
+ */
+int32_t JSONSchemaConverter::RegexExpression(
+    const std::string& regex, bool json_string, bool force_cfg_expansion
+) {
+  bool can_use_fsm = !force_cfg_expansion;
+  if (json_string) {
+    can_use_fsm =
+        can_use_fsm && std::all_of(regex.begin(), regex.end(), [](unsigned char character) {
+          return character >= 0x20 && character <= 0x7e;
+        });
+  }
+  if (can_use_fsm) {
+    auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
+    if (fsm_result.IsOk()) {
+      auto fsm = std::move(fsm_result).Unwrap();
+      std::unordered_set<int> reachable_states;
+      fsm.GetReachableStates(&reachable_states);
+      bool language_is_empty =
+          std::none_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
+            return fsm.IsEndState(state);
+          });
+      if (!language_is_empty) {
+        return builder_.AddRegex(regex, json_string);
+      }
+    }
+  }
+
+  // Keep regex conversion independent. Only the uncommon fallback path converts its existing
+  // EBNF result to a subgrammar; the JSON Schema rule graph itself is still built directly.
+  return AddSubGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
+}
+
 // ==================== Generate Methods ====================
 
-std::string JSONSchemaConverter::GenerateInteger(
+int32_t JSONSchemaConverter::GenerateInteger(
     const IntegerSpec& spec, const std::string& rule_name
 ) {
   // Shared with ParseInteger's range validation so emission and validation agree on the effective
@@ -2063,70 +2237,76 @@ std::string JSONSchemaConverter::GenerateInteger(
     // ParseInteger keeps multiple_of only when the range is fully bounded (enumerate the
     // multiples) or fully unbounded (emit a modulo DFA); the half-bounded case is dropped there.
     if (start.has_value() && end.has_value()) {
-      std::vector<std::string> multiples;
+      std::vector<int32_t> multiples;
       for (int64_t value = *start; value <= *end; ++value) {
-        if (IsMultipleOf(value, *spec.multiple_of)) multiples.push_back(std::to_string(value));
-        if (value == std::numeric_limits<int64_t>::max()) break;
+        if (IsMultipleOf(value, *spec.multiple_of)) {
+          multiples.push_back(ByteString(std::to_string(value)));
+        }
+        if (value == std::numeric_limits<int64_t>::max()) {
+          break;
+        }
       }
-      return RegexToEBNF("^(" + JoinRegexAlternatives(multiples) + ")$", false);
+      return Choice(multiples);
     }
     return GenerateIntegerMultipleOfDFA(*spec.multiple_of, rule_name);
   }
-
   if (start.has_value() || end.has_value()) {
-    std::string range_regex = GenerateRangeRegex(start, end);
-    return RegexToEBNF(range_regex, false);
-  }
-  return "(\"0\" | \"-\"? [1-9] [0-9]*)";
-}
-
-std::string JSONSchemaConverter::GenerateIntegerMultipleOfDFA(
-    int64_t multiple_of, const std::string& rule_name
-) {
-  std::vector<std::string> state_rule_names(multiple_of);
-  for (int64_t state = 0; state < multiple_of; ++state) {
-    state_rule_names[state] = ebnf_script_creator_.AllocateRuleName(
-        rule_name + "_multiple_of_" + std::to_string(multiple_of) + "_mod_" + std::to_string(state)
+    return RegexExpression(
+        GenerateRangeRegex(start, end),
+        false,
+        /*force_cfg_expansion=*/true
     );
   }
-
-  for (int64_t state = 0; state < multiple_of; ++state) {
-    std::vector<std::string> transitions;
-    if (state == 0) transitions.push_back("\"\"");
-    for (int64_t digit = 0; digit <= 9; ++digit) {
-      int64_t next_state = (state * 10 + digit) % multiple_of;
-      transitions.push_back(
-          EBNFScriptCreator::Concat({DigitLiteral(digit), state_rule_names[next_state]})
-      );
-    }
-    ebnf_script_creator_.AddRuleWithAllocatedName(
-        state_rule_names[state], EBNFScriptCreator::Or(transitions)
-    );
-  }
-
-  std::vector<std::string> non_zero_start_transitions;
-  for (int64_t digit = 1; digit <= 9; ++digit) {
-    non_zero_start_transitions.push_back(
-        EBNFScriptCreator::Concat({DigitLiteral(digit), state_rule_names[digit % multiple_of]})
-    );
-  }
-  return EBNFScriptCreator::Or(
-      {EBNFScriptCreator::Str("0"),
-       EBNFScriptCreator::Concat(
-           {EBNFScriptCreator::Str("-") + "?", EBNFScriptCreator::Or(non_zero_start_transitions)}
+  int32_t optional_minus = Choice({Empty(), ByteString("-")});
+  return Choice(
+      {ByteString("0"),
+       Sequence(
+           {optional_minus,
+            builder_.AddCharacterClass({{'1', '9'}}),
+            builder_.AddCharacterClassStar({{'0', '9'}})}
        )}
   );
 }
 
-std::string JSONSchemaConverter::GenerateNumber(
-    const NumberSpec& spec, const std::string& rule_name
+int32_t JSONSchemaConverter::GenerateIntegerMultipleOfDFA(
+    int64_t multiple_of, const std::string& rule_name
 ) {
-  std::optional<double> start, end;
+  std::vector<int32_t> states(multiple_of);
+  for (int64_t state = 0; state < multiple_of; ++state) {
+    states[state] = builder_.AddEmptyRuleWithHint(
+        rule_name + "_multiple_of_" + std::to_string(multiple_of) + "_mod_" + std::to_string(state)
+    );
+  }
+  for (int64_t state = 0; state < multiple_of; ++state) {
+    std::vector<int32_t> transitions;
+    if (state == 0) {
+      transitions.push_back(Empty());
+    }
+    for (int64_t digit = 0; digit <= 9; ++digit) {
+      int64_t next_state = (state * 10 + digit) % multiple_of;
+      transitions.push_back(
+          Sequence({ByteString(std::to_string(digit)), RuleRef(states[next_state])})
+      );
+    }
+    builder_.UpdateRuleBody(states[state], Choice(transitions));
+  }
+
+  std::vector<int32_t> non_zero_starts;
+  for (int64_t digit = 1; digit <= 9; ++digit) {
+    non_zero_starts.push_back(
+        Sequence({ByteString(std::to_string(digit)), RuleRef(states[digit % multiple_of])})
+    );
+  }
+  return Choice(
+      {ByteString("0"), Sequence({Choice({Empty(), ByteString("-")}), Choice(non_zero_starts)})}
+  );
+}
+
+int32_t JSONSchemaConverter::GenerateNumber(const NumberSpec& spec, const std::string& rule_name) {
+  std::optional<double> start = spec.minimum;
+  std::optional<double> end = spec.maximum;
   bool exclusive_start = false;
   bool exclusive_end = false;
-  if (spec.minimum.has_value()) {
-    start = spec.minimum;
-  }
   // When both bounds are present the larger lower bound wins; on a tie the
   // exclusive one is stricter.
   if (spec.exclusive_minimum.has_value() &&
@@ -2134,247 +2314,180 @@ std::string JSONSchemaConverter::GenerateNumber(
     start = spec.exclusive_minimum;
     exclusive_start = true;
   }
-  if (spec.maximum.has_value()) {
-    end = spec.maximum;
-  }
   if (spec.exclusive_maximum.has_value() && (!end.has_value() || *spec.exclusive_maximum <= *end)) {
     end = spec.exclusive_maximum;
     exclusive_end = true;
   }
-
   if (start.has_value() || end.has_value()) {
-    std::string range_regex =
-        GenerateFloatRangeRegex(start, end, 6, exclusive_start, exclusive_end);
-    return RegexToEBNF(range_regex, false);
-  }
-  // Note: The format must be "-"? ("0" | ...) not ("0" | "-"? ...)
-  // The first allows -0, -123, 0, 123
-  // The second allows 0, -123, 123 but not -0
-  return "\"-\"? (\"0\" | [1-9] [0-9]*) (\".\" [0-9]+)? ([eE] [+-]? [0-9]+)?";
-}
-
-/*!
- * \brief Emit the EBNF fragment matching a regex that forms the body of a JSON string
- * literal. Prefer the Regex(..., json_string=true) macro so the pattern is compiled into a
- * single automaton by GrammarFSMBuilder; json_string=true excludes the characters that must
- * be escaped in a JSON string ('"', '\\' and the control characters) from every character
- * match, so classes like \S cannot emit an unescaped quote. Fall back to the CFG expansion
- * when the FSM regex engine does not support the pattern, or when the exclusion makes the
- * pattern unmatchable (e.g. a pattern requiring a literal '"').
- */
-static std::string RegexToEBNFElement(const std::string& regex) {
-  bool is_printable_ascii = std::all_of(regex.begin(), regex.end(), [](unsigned char c) {
-    return c >= 0x20 && c <= 0x7E;
-  });
-  if (is_printable_ascii) {
-    auto fsm_result = GrammarFSMBuilder::Regex(regex, /*json_string=*/true);
-    if (fsm_result.IsOk()) {
-      auto fsm = std::move(fsm_result).Unwrap();
-      std::unordered_set<int> reachable_states;
-      fsm.GetReachableStates(&reachable_states);
-      bool language_is_empty =
-          std::none_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
-            return fsm.IsEndState(state);
-          });
-      if (!language_is_empty) {
-        return "Regex(\"" + EscapeString(regex) + "\", json_string=true)";
-      }
-    }
-  }
-  return RegexToEBNF(regex, false);
-}
-
-std::string JSONSchemaConverter::GenerateString(
-    const StringSpec& spec, const std::string& rule_name
-) {
-  // Check for format
-  if (spec.format.has_value()) {
-    const std::string& format = *spec.format;
-    auto regex_pattern = JSONFormatToRegexPattern(format);
-
-    if (regex_pattern.has_value()) {
-      // The built-in format regexes use constructs that the FSM regex engine does not fully
-      // support yet (e.g. quoted email local parts), so they keep the CFG expansion.
-      std::string converted_regex = RegexToEBNF(regex_pattern.value(), false);
-      return "\"\\\"\" " + converted_regex + " \"\\\"\"";
-    }
-  }
-
-  // Check for pattern
-  if (spec.pattern.has_value()) {
-    std::string converted_regex = RegexToEBNFElement(*spec.pattern);
-    return "\"\\\"\" " + converted_regex + " \"\\\"\"";
-  }
-
-  // Check for length constraints
-  if (spec.min_length != 0 || spec.max_length != -1) {
-    std::string char_pattern = "[^\"\\\\\\r\\n]";
-    std::string repetition;
-    if (spec.max_length == -1) {
-      repetition = "{" + std::to_string(spec.min_length) + ",}";
-    } else {
-      repetition =
-          "{" + std::to_string(spec.min_length) + "," + std::to_string(spec.max_length) + "}";
-    }
-    return "\"\\\"\" " + char_pattern + repetition + " \"\\\"\"";
-  }
-
-  // Default string
-  return "[\"] " + kBasicStringSub;
-}
-
-std::string JSONSchemaConverter::GenerateBoolean(
-    const BooleanSpec& spec, const std::string& rule_name
-) {
-  return "\"true\" | \"false\"";
-}
-
-std::string JSONSchemaConverter::GenerateNull(const NullSpec& spec, const std::string& rule_name) {
-  return "\"null\"";
-}
-
-std::string JSONSchemaConverter::GenerateArray(
-    const ArraySpec& spec, const std::string& rule_name
-) {
-  indent_manager_.StartIndent();
-
-  auto start_separator = indent_manager_.StartSeparator();
-  auto mid_separator = indent_manager_.MiddleSeparator();
-  auto end_separator = indent_manager_.EndSeparator();
-  auto empty_separator = indent_manager_.EmptySeparator();
-
-  std::vector<std::string> item_rule_names;
-  std::string additional_rule_name;
-
-  // Handle prefix items
-  for (size_t i = 0; i < spec.prefix_items.size(); ++i) {
-    item_rule_names.push_back(
-        CreateRule(spec.prefix_items[i], rule_name + "_item_" + std::to_string(i))
+    return RegexExpression(
+        GenerateFloatRangeRegex(start, end, /*precision=*/6, exclusive_start, exclusive_end),
+        false,
+        /*force_cfg_expansion=*/true
     );
   }
 
-  // Handle additional items
-  if (spec.allow_additional_items && spec.additional_items) {
-    additional_rule_name = CreateRule(spec.additional_items, rule_name + "_additional");
-  }
+  int32_t optional_minus = Choice({Empty(), ByteString("-")});
+  int32_t integer_part = Choice(
+      {ByteString("0"),
+       Sequence(
+           {builder_.AddCharacterClass({{'1', '9'}}), builder_.AddCharacterClassStar({{'0', '9'}})}
+       )}
+  );
+  int32_t one_or_more_digits =
+      Repeat(rule_name + "_digits", builder_.AddCharacterClass({{'0', '9'}}), 1, -1);
+  int32_t fraction = Choice({Empty(), Sequence({ByteString("."), one_or_more_digits})});
+  int32_t exponent = Choice(
+      {Empty(),
+       Sequence(
+           {builder_.AddCharacterClass({{'e', 'e'}, {'E', 'E'}}),
+            Choice({Empty(), builder_.AddCharacterClass({{'+', '+'}, {'-', '-'}})}),
+            one_or_more_digits}
+       )}
+  );
+  // Note: The format must be "-"? ("0" | ...) not ("0" | "-"? ...)
+  // The first allows -0, -123, 0, 123
+  // The second allows 0, -123, 123 but not -0
+  return Sequence({optional_minus, integer_part, fraction, exponent});
+}
 
+int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::string& rule_name) {
+  // Check for format
+  if (spec.format.has_value()) {
+    auto regex = JSONFormatToRegexPattern(*spec.format);
+    if (regex.has_value()) {
+      // The built-in format regexes use constructs that the FSM regex engine does not fully
+      // support yet (e.g. quoted email local parts), so they keep the CFG expansion.
+      return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
+    }
+  }
+  // Check for pattern
+  if (spec.pattern.has_value()) {
+    return Sequence(
+        {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
+    );
+  }
+  // Check for length constraints
+  if (spec.min_length != 0 || spec.max_length != -1) {
+    int32_t character =
+        builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
+    int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
+    return Sequence({ByteString("\""), body, ByteString("\"")});
+  }
+  // Default string
+  return Sequence({ByteString("\""), RuleRef(kBasicStringSub)});
+}
+
+int32_t JSONSchemaConverter::GenerateBoolean(
+    const BooleanSpec& spec, const std::string& rule_name
+) {
+  return Choice({ByteString("true"), ByteString("false")});
+}
+
+int32_t JSONSchemaConverter::GenerateNull(const NullSpec& spec, const std::string& rule_name) {
+  return ByteString("null");
+}
+
+int32_t JSONSchemaConverter::GenerateArray(const ArraySpec& spec, const std::string& rule_name) {
+  indent_manager_.StartIndent();
+  int32_t start_separator = FormattingExpression(indent_manager_.StartSeparator());
+  int32_t middle_separator = FormattingExpression(indent_manager_.MiddleSeparator());
+  int32_t end_separator = FormattingExpression(indent_manager_.EndSeparator());
+  int32_t empty_separator = FormattingExpression(indent_manager_.EmptySeparator());
+
+  std::vector<int32_t> item_rule_ids;
+  for (size_t index = 0; index < spec.prefix_items.size(); ++index) {
+    item_rule_ids.push_back(
+        CreateRule(spec.prefix_items[index], rule_name + "_item_" + std::to_string(index))
+    );
+  }
+  int32_t additional_rule_id = -1;
+  if (spec.allow_additional_items && spec.additional_items) {
+    additional_rule_id = CreateRule(spec.additional_items, rule_name + "_additional");
+  }
   indent_manager_.EndIndent();
 
-  // Construct the result
-  const std::string& left_bracket = EBNFScriptCreator::Str("[");
-  const std::string& right_bracket = EBNFScriptCreator::Str("]");
+  int32_t left_bracket = ByteString("[");
+  int32_t right_bracket = ByteString("]");
+  int32_t empty_array = Sequence({left_bracket, empty_separator, right_bracket});
 
-  if (spec.prefix_items.empty()) {
-    auto empty_part = EBNFScriptCreator::Concat({left_bracket, empty_separator, right_bracket});
-    if (!spec.allow_additional_items) {
-      return empty_part;
-    } else if (spec.min_items == 0 && spec.max_items == 0) {
-      return empty_part;
-    } else if (spec.min_items == 0 && spec.max_items != 0) {
-      return EBNFScriptCreator::Or(
-          {EBNFScriptCreator::Concat(
-               {left_bracket,
-                start_separator,
-                additional_rule_name,
-                EBNFScriptCreator::Repeat(
-                    EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
-                    0,
-                    spec.max_items == -1 ? -1 : static_cast<int>(spec.max_items - 1)
-                ),
-                end_separator,
-                right_bracket}
-           ),
-           empty_part}
-      );
-    } else {
-      return EBNFScriptCreator::Concat(
-          {left_bracket,
-           start_separator,
-           additional_rule_name,
-           EBNFScriptCreator::Repeat(
-               EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
-               static_cast<int>(spec.min_items - 1),
-               spec.max_items == -1 ? -1 : static_cast<int>(spec.max_items - 1)
-           ),
-           end_separator,
-           right_bracket}
-      );
+  if (item_rule_ids.empty()) {
+    if (!spec.allow_additional_items || spec.max_items == 0) {
+      return empty_array;
     }
-  } else {
-    std::vector<std::string> prefix_part;
-    for (size_t i = 0; i < item_rule_names.size(); ++i) {
-      if (i > 0) {
-        prefix_part.push_back(mid_separator);
-      }
-      prefix_part.push_back(item_rule_names[i]);
-    }
-    auto prefix_part_str = EBNFScriptCreator::Concat(prefix_part);
-    if (!spec.allow_additional_items) {
-      return EBNFScriptCreator::Concat(
-          {left_bracket, start_separator, prefix_part_str, end_separator, right_bracket}
-      );
-    } else {
-      int64_t min_items = std::max(
-          static_cast<int64_t>(0), spec.min_items - static_cast<int64_t>(item_rule_names.size())
-      );
-      return EBNFScriptCreator::Concat(
-          {left_bracket,
-           start_separator,
-           prefix_part_str,
-           EBNFScriptCreator::Repeat(
-               EBNFScriptCreator::Concat({mid_separator, additional_rule_name}),
-               static_cast<int>(min_items),
-               spec.max_items == -1
-                   ? -1
-                   : static_cast<int>(spec.max_items - static_cast<int64_t>(item_rule_names.size()))
-           ),
-           end_separator,
-           right_bracket}
-      );
-    }
+    int32_t additional = RuleRef(additional_rule_id);
+    int32_t tail = Repeat(
+        rule_name + "_items",
+        Sequence({middle_separator, additional}),
+        spec.min_items == 0 ? 0 : static_cast<int32_t>(spec.min_items - 1),
+        spec.max_items == -1 ? -1 : static_cast<int32_t>(spec.max_items - 1)
+    );
+    int32_t nonempty =
+        Sequence({left_bracket, start_separator, additional, tail, end_separator, right_bracket});
+    return spec.min_items == 0 ? Choice({nonempty, empty_array}) : nonempty;
   }
+
+  std::vector<int32_t> prefix_elements;
+  for (size_t index = 0; index < item_rule_ids.size(); ++index) {
+    if (index != 0) {
+      prefix_elements.push_back(middle_separator);
+    }
+    prefix_elements.push_back(RuleRef(item_rule_ids[index]));
+  }
+  int32_t prefix = Sequence(prefix_elements);
+  if (!spec.allow_additional_items) {
+    return Sequence({left_bracket, start_separator, prefix, end_separator, right_bracket});
+  }
+
+  int64_t minimum_additional =
+      std::max(int64_t{0}, spec.min_items - static_cast<int64_t>(item_rule_ids.size()));
+  int32_t additional_tail = Repeat(
+      rule_name + "_additional_items",
+      Sequence({middle_separator, RuleRef(additional_rule_id)}),
+      static_cast<int32_t>(minimum_additional),
+      spec.max_items == -1
+          ? -1
+          : static_cast<int32_t>(spec.max_items - static_cast<int64_t>(item_rule_ids.size()))
+  );
+  return Sequence(
+      {left_bracket, start_separator, prefix, additional_tail, end_separator, right_bracket}
+  );
 }
 
-std::string JSONSchemaConverter::FormatPropertyKey(const std::string& key) {
-  return "\"" + JSONStrToPrintableStr(picojson::value(key).serialize()) + "\"";
+int32_t JSONSchemaConverter::FormatPropertyKey(const std::string& key) {
+  return ByteString(picojson::value(key).serialize());
 }
 
-std::string JSONSchemaConverter::FormatProperty(
-    const std::string& key, const std::string& value_rule, const std::string& rule_name, int64_t idx
+int32_t JSONSchemaConverter::FormatProperty(
+    const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
 ) {
-  return FormatPropertyKey(key) + " " + colon_pattern_ + " " + value_rule;
+  return Sequence({FormatPropertyKey(key), colon_expr_id_, RuleRef(value_rule_id)});
 }
 
-std::string JSONSchemaConverter::FormatOtherProperty(
-    const std::string& key_pattern,
-    const std::string& value_rule,
+int32_t JSONSchemaConverter::FormatOtherProperty(
+    int32_t key_pattern_expr,
+    int32_t value_rule_id,
     const std::string& rule_name,
     const std::string& rule_name_suffix
 ) {
-  return key_pattern + " " + colon_pattern_ + " " + value_rule;
+  return Sequence({key_pattern_expr, colon_expr_id_, RuleRef(value_rule_id)});
 }
 
-std::string JSONSchemaConverter::GetPropertyWithNumberConstraints(
-    const std::string& pattern, int min_properties, int max_properties, int already_repeated_times
+int32_t JSONSchemaConverter::GetPropertyWithNumberConstraints(
+    int32_t pattern,
+    int min_properties,
+    int max_properties,
+    int already_repeated_times,
+    const std::string& rule_name
 ) {
   if (max_properties != -1 && max_properties == already_repeated_times) {
-    return "\"\"";
+    return Empty();
   }
   int lower = std::max(0, min_properties - already_repeated_times);
   int upper = max_properties == -1 ? -1 : std::max(-1, max_properties - already_repeated_times);
-  if (lower == 0 && upper == -1) {
-    return "(" + pattern + ")*";
-  } else if (lower == 0 && upper == 1) {
-    return "(" + pattern + ")?";
-  } else if (lower == 1 && upper == 1) {
-    return pattern;
-  } else {
-    return "(" + pattern + "){" + std::to_string(lower) + "," +
-           (upper == -1 ? "" : std::to_string(upper)) + "} ";
-  }
+  return Repeat(rule_name + "_properties", pattern, lower, upper);
 }
 
-std::string JSONSchemaConverter::GetAnyOrderRuleForProperties(
+int32_t JSONSchemaConverter::GetAnyOrderRuleForProperties(
     const std::vector<ObjectSpec::Property>& properties,
     const std::unordered_set<std::string>& required,
     const SchemaSpecPtr& additional,
@@ -2382,54 +2495,48 @@ std::string JSONSchemaConverter::GetAnyOrderRuleForProperties(
     const std::string& additional_suffix,
     int min_properties,
     int max_properties,
-    const std::string& additional_prop_pattern_override
+    const std::optional<int32_t>& additional_property_override
 ) {
-  std::string first_sep = NextSeparator();
-  std::string mid_sep = NextSeparator();
-  std::string last_sep = NextSeparator(true);
+  int32_t first_separator = NextSeparatorExpression();
+  int32_t middle_separator = NextSeparatorExpression();
+  int32_t last_separator = NextSeparatorExpression(true);
 
   // Build one "item" alternation over every property (any required/optional key) plus any
   // additional/pattern key; any_order does not care which key goes where.
-  std::vector<std::string> item_patterns;
-  for (size_t idx = 0; idx < properties.size(); ++idx) {
-    const auto& prop = properties[idx];
-    std::string value_rule = CreateRule(prop.schema, rule_name + "_prop_" + std::to_string(idx));
-    item_patterns.push_back(FormatProperty(prop.name, value_rule, rule_name, idx));
+  std::vector<int32_t> items;
+  for (size_t index = 0; index < properties.size(); ++index) {
+    const auto& property = properties[index];
+    int32_t value_rule_id =
+        CreateRule(property.schema, rule_name + "_prop_" + std::to_string(index));
+    items.push_back(FormatProperty(property.name, value_rule_id, rule_name, index));
   }
   if (additional != nullptr) {
-    if (!additional_prop_pattern_override.empty()) {
-      item_patterns.push_back(additional_prop_pattern_override);
+    if (additional_property_override.has_value()) {
+      items.push_back(*additional_property_override);
     } else {
-      std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-      item_patterns.push_back(FormatOtherProperty(
-          GetKeyPatternExcluding(properties, rule_name),
-          add_value_rule,
-          rule_name,
-          additional_suffix
+      int32_t value_rule_id = CreateRule(additional, rule_name + "_" + additional_suffix);
+      items.push_back(FormatOtherProperty(
+          GetKeyPatternExcluding(properties, rule_name), value_rule_id, rule_name, additional_suffix
       ));
     }
   }
 
-  std::string item_body;
-  for (size_t i = 0; i < item_patterns.size(); ++i) {
-    if (i != 0) {
-      item_body += " | ";
-    }
-    item_body += item_patterns[i];
-  }
-  std::string item_rule = ebnf_script_creator_.AddRule(rule_name + "_item", item_body);
+  int32_t item_rule_id = builder_.AddRuleWithHint(rule_name + "_item", Choice(items));
 
   // Repeat `item` between n = max(minProperties, #required) and m = maxProperties times; only the
   // count is constrained, not which keys appear.
-  int min_count = std::max(min_properties, static_cast<int>(required.size()));
-  std::string content =
-      item_rule + " " +
-      GetPropertyWithNumberConstraints(mid_sep + " " + item_rule, min_count, max_properties, 1);
-
-  return first_sep + " (" + content + ") " + last_sep;
+  int minimum_count = std::max(min_properties, static_cast<int>(required.size()));
+  int32_t repeated_items = GetPropertyWithNumberConstraints(
+      Sequence({middle_separator, RuleRef(item_rule_id)}),
+      minimum_count,
+      max_properties,
+      1,
+      rule_name
+  );
+  return Sequence({first_separator, RuleRef(item_rule_id), repeated_items, last_separator});
 }
 
-std::string JSONSchemaConverter::GetPartialRuleForProperties(
+int32_t JSONSchemaConverter::GetPartialRuleForProperties(
     const std::vector<ObjectSpec::Property>& properties,
     const std::unordered_set<std::string>& required,
     const SchemaSpecPtr& additional,
@@ -2437,12 +2544,11 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
     const std::string& additional_suffix,
     int min_properties,
     int max_properties,
-    const std::string& additional_prop_pattern_override
+    const std::optional<int32_t>& additional_property_override
 ) {
   if (max_properties == 0) {
-    return "";
+    return Empty();
   }
-
   if (any_order_) {
     return GetAnyOrderRuleForProperties(
         properties,
@@ -2452,354 +2558,279 @@ std::string JSONSchemaConverter::GetPartialRuleForProperties(
         additional_suffix,
         min_properties,
         max_properties,
-        additional_prop_pattern_override
+        additional_property_override
     );
   }
 
-  std::string first_sep = NextSeparator();
-  std::string mid_sep = NextSeparator();
-  std::string last_sep = NextSeparator(true);
+  int32_t first_separator = NextSeparatorExpression();
+  int32_t middle_separator = NextSeparatorExpression();
+  int32_t last_separator = NextSeparatorExpression(true);
 
-  std::string res = "";
-
-  std::vector<std::string> prop_patterns;
-  for (size_t idx = 0; idx < properties.size(); ++idx) {
-    const auto& prop = properties[idx];
-    std::string value_rule = CreateRule(prop.schema, rule_name + "_prop_" + std::to_string(idx));
-    prop_patterns.push_back(FormatProperty(prop.name, value_rule, rule_name, idx));
+  std::vector<int32_t> property_patterns;
+  for (size_t index = 0; index < properties.size(); ++index) {
+    int32_t value_rule_id =
+        CreateRule(properties[index].schema, rule_name + "_prop_" + std::to_string(index));
+    property_patterns.push_back(
+        FormatProperty(properties[index].name, value_rule_id, rule_name, index)
+    );
   }
+
+  bool allow_additional = additional != nullptr;
+  std::optional<int32_t> additional_pattern;
+  auto get_additional_pattern = [&]() -> int32_t {
+    if (!additional_pattern.has_value()) {
+      if (additional_property_override.has_value()) {
+        additional_pattern = *additional_property_override;
+      } else {
+        int32_t value_rule_id = CreateRule(additional, rule_name + "_" + additional_suffix);
+        additional_pattern = FormatOtherProperty(
+            GetKeyPatternExcluding(properties, rule_name),
+            value_rule_id,
+            rule_name,
+            additional_suffix
+        );
+      }
+    }
+    return *additional_pattern;
+  };
 
   if (min_properties == 0 && max_properties == -1) {
     // Case 1: No property number constraints
-    std::vector<std::string> rule_names(properties.size(), "");
+    std::vector<int32_t> tails(properties.size(), Empty());
     std::vector<uint8_t> is_required(properties.size(), false);
-    bool allow_additional = additional != nullptr;
 
-    // Construct the last rule
-    std::string additional_prop_pattern;
     if (allow_additional) {
-      if (!additional_prop_pattern_override.empty()) {
-        additional_prop_pattern = additional_prop_pattern_override;
-      } else {
-        std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-        additional_prop_pattern = FormatOtherProperty(
-            GetKeyPatternExcluding(properties, rule_name),
-            add_value_rule,
-            rule_name,
-            additional_suffix
-        );
-      }
-      std::string last_rule_body = "(" + mid_sep + " " + additional_prop_pattern + ")*";
-      std::string last_rule_name =
-          rule_name + "_part_" + std::to_string(static_cast<int>(properties.size()) - 1);
-      last_rule_name = ebnf_script_creator_.AddRule(last_rule_name, last_rule_body);
-      rule_names.back() = last_rule_name;
-    } else {
-      rule_names.back() = "\"\"";
+      int32_t repeated_additional = Repeat(
+          rule_name + "_additional_properties",
+          Sequence({middle_separator, get_additional_pattern()}),
+          0,
+          -1
+      );
+      int32_t tail_rule_id = builder_.AddRuleWithHint(
+          rule_name + "_part_" + std::to_string(static_cast<int>(properties.size()) - 1),
+          repeated_additional
+      );
+      tails.back() = RuleRef(tail_rule_id);
     }
 
-    // Construct 0~(len(properties) - 2) rules
-    for (int i = static_cast<int>(properties.size()) - 2; i >= 0; --i) {
-      const std::string& prop_pattern = prop_patterns[i + 1];
-      const std::string& last_rule_name = rule_names[i + 1];
-      std::string cur_rule_body = mid_sep + " " + prop_pattern + " " + last_rule_name;
-      if (!required.count(properties[i + 1].name)) {
-        cur_rule_body = last_rule_name + " | " + cur_rule_body;
+    for (int index = static_cast<int>(properties.size()) - 2; index >= 0; --index) {
+      int32_t with_property =
+          Sequence({middle_separator, property_patterns[index + 1], tails[index + 1]});
+      int32_t body = with_property;
+      if (!required.count(properties[index + 1].name)) {
+        body = Choice({tails[index + 1], with_property});
       } else {
-        is_required[i + 1] = true;
+        is_required[index + 1] = true;
       }
-      std::string cur_rule_name = rule_name + "_part_" + std::to_string(i);
-      cur_rule_name = ebnf_script_creator_.AddRule(cur_rule_name, cur_rule_body);
-      rule_names[i] = cur_rule_name;
+      int32_t tail_rule_id =
+          builder_.AddRuleWithHint(rule_name + "_part_" + std::to_string(index), body);
+      tails[index] = RuleRef(tail_rule_id);
     }
     if (required.count(properties[0].name)) {
       is_required[0] = true;
     }
 
-    // Construct the root rule
-    for (size_t i = 0; i < properties.size(); ++i) {
-      if (i != 0) {
-        res += " | ";
-      }
-      res += "(" + prop_patterns[i] + " " + rule_names[i] + ")";
-      if (is_required[i]) {
+    std::vector<int32_t> choices;
+    for (size_t index = 0; index < properties.size(); ++index) {
+      choices.push_back(Sequence({property_patterns[index], tails[index]}));
+      if (is_required[index]) {
         break;
       }
     }
-
     if (allow_additional && required.empty()) {
-      res += " | " + additional_prop_pattern + " " + rule_names.back();
+      choices.push_back(Sequence({get_additional_pattern(), tails.back()}));
     }
-
-    res = first_sep + " (" + res + ") " + last_sep;
-  } else if (max_properties == -1) {
-    // Case 2: With constraint on the lower bound of the properties number
-    const int properties_size = static_cast<int>(properties.size());
-    std::vector<std::vector<std::string>> rule_names(properties_size, std::vector<std::string>());
-    std::vector<int> key_matched_min(properties_size, 0);
-    std::vector<uint8_t> is_required(properties_size, false);
-    bool allow_additional = additional != nullptr;
-
-    std::string additional_prop_pattern;
-    if (allow_additional) {
-      if (!additional_prop_pattern_override.empty()) {
-        additional_prop_pattern = additional_prop_pattern_override;
-      } else {
-        std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-        additional_prop_pattern = FormatOtherProperty(
-            GetKeyPatternExcluding(properties, rule_name),
-            add_value_rule,
-            rule_name,
-            additional_suffix
-        );
-      }
-    }
-
-    // Get the range of matched properties for each rule
-    bool get_first_required = required.count(properties[0].name);
-    key_matched_min[0] = 1;
-    for (int i = 1; i < properties_size; ++i) {
-      if (required.count(properties[i].name)) {
-        is_required[i] = true;
-        key_matched_min[i] = key_matched_min[i - 1] + 1;
-      } else {
-        key_matched_min[i] = key_matched_min[i - 1];
-      }
-      if (!get_first_required) {
-        key_matched_min[i] = 1;
-      }
-      if (is_required[i]) {
-        get_first_required = true;
-      }
-    }
-    if (required.count(properties[0].name)) {
-      is_required[0] = true;
-    }
-    if (allow_additional) {
-      key_matched_min.back() = std::max(1, key_matched_min.back());
-    } else {
-      key_matched_min.back() = std::max(min_properties, key_matched_min.back());
-    }
-    for (int i = properties_size - 2; i >= 0; --i) {
-      key_matched_min[i] = std::max(key_matched_min[i], key_matched_min[i + 1] - 1);
-    }
-
-    // Construct the last rule
-    if (allow_additional) {
-      for (int matched = key_matched_min.back(); matched <= properties_size; ++matched) {
-        std::string last_rule_body = GetPropertyWithNumberConstraints(
-            mid_sep + " " + additional_prop_pattern, min_properties, max_properties, matched
-        );
-        std::string last_rule_name = rule_name + "_part_" + std::to_string(properties_size - 1) +
-                                     "_" + std::to_string(matched);
-        last_rule_name = ebnf_script_creator_.AddRule(last_rule_name, last_rule_body);
-        rule_names.back().push_back(last_rule_name);
-      }
-    } else {
-      for (int matched = key_matched_min.back(); matched <= properties_size; ++matched) {
-        rule_names.back().push_back("\"\"");
-      }
-    }
-
-    // Construct 0~(len(properties) - 2) rules
-    for (int i = properties_size - 2; i >= 0; --i) {
-      const std::string& prop_pattern = prop_patterns[i + 1];
-      for (int matched = key_matched_min[i]; matched <= i + 1; ++matched) {
-        std::string cur_rule_body;
-        if (is_required[i + 1] || matched == key_matched_min[i + 1] - 1) {
-          cur_rule_body = mid_sep + " " + prop_pattern + " " +
-                          rule_names[i + 1][matched + 1 - key_matched_min[i + 1]];
-        } else {
-          cur_rule_body = rule_names[i + 1][matched - key_matched_min[i + 1]] + " | " + mid_sep +
-                          " " + prop_pattern + " " +
-                          rule_names[i + 1][matched - key_matched_min[i + 1] + 1];
-        }
-        std::string cur_rule_name =
-            rule_name + "_part_" + std::to_string(i) + "_" + std::to_string(matched);
-        cur_rule_name = ebnf_script_creator_.AddRule(cur_rule_name, cur_rule_body);
-        rule_names[i].push_back(cur_rule_name);
-      }
-    }
-
-    // Construct root rule
-    bool is_first = true;
-    for (int i = 0; i < properties_size; ++i) {
-      if (key_matched_min[i] > 1) {
-        break;
-      }
-      if (!is_first) {
-        res += " | ";
-      } else {
-        is_first = false;
-      }
-      res += "(" + prop_patterns[i] + " " + rule_names[i][1 - key_matched_min[i]] + ")";
-      if (is_required[i]) {
-        break;
-      }
-    }
-
-    if (allow_additional && required.empty()) {
-      if (!is_first) {
-        res += " | ";
-      }
-      res += "(" + additional_prop_pattern + " " +
-             GetPropertyWithNumberConstraints(
-                 mid_sep + " " + additional_prop_pattern, min_properties, max_properties, 1
-             ) +
-             ")";
-    }
-
-    res = first_sep + " (" + res + ") " + last_sep;
-  } else {
-    // Case 3: With constraints on both lower & upper bound of the properties number
-    const int properties_size = static_cast<int>(properties.size());
-    std::vector<std::vector<std::string>> rule_names(properties_size, std::vector<std::string>());
-    std::vector<int> key_matched_min(properties_size, 0);
-    std::vector<int> key_matched_max(properties_size, properties_size);
-    std::vector<uint8_t> is_required(properties_size, false);
-    bool allow_additional = additional != nullptr;
-
-    std::string additional_prop_pattern;
-    if (allow_additional) {
-      if (!additional_prop_pattern_override.empty()) {
-        additional_prop_pattern = additional_prop_pattern_override;
-      } else {
-        std::string add_value_rule = CreateRule(additional, rule_name + "_" + additional_suffix);
-        additional_prop_pattern = FormatOtherProperty(
-            GetKeyPatternExcluding(properties, rule_name),
-            add_value_rule,
-            rule_name,
-            additional_suffix
-        );
-      }
-    }
-
-    // Get the range of matched properties for each rule
-    bool get_first_required = required.count(properties[0].name);
-    key_matched_min[0] = 1;
-    key_matched_max[0] = 1;
-    for (int i = 1; i < properties_size; ++i) {
-      if (required.count(properties[i].name)) {
-        is_required[i] = true;
-        key_matched_min[i] = key_matched_min[i - 1] + 1;
-      } else {
-        key_matched_min[i] = key_matched_min[i - 1];
-      }
-      if (!get_first_required) {
-        key_matched_min[i] = 1;
-      }
-      key_matched_max[i] = key_matched_max[i - 1] + 1;
-      if (is_required[i]) {
-        get_first_required = true;
-      }
-    }
-    if (required.count(properties[0].name)) {
-      is_required[0] = true;
-    }
-    if (allow_additional) {
-      key_matched_min.back() = std::max(1, key_matched_min.back());
-      key_matched_max.back() = std::min(max_properties, key_matched_max.back());
-    } else {
-      key_matched_min.back() = std::max(min_properties, key_matched_min.back());
-      key_matched_max.back() = std::min(max_properties, key_matched_max.back());
-    }
-    for (int i = properties_size - 2; i >= 0; --i) {
-      key_matched_min[i] = std::max(key_matched_min[i], key_matched_min[i + 1] - 1);
-      if (is_required[i + 1]) {
-        key_matched_max[i] = std::min(key_matched_max[i], key_matched_max[i + 1] - 1);
-      } else {
-        key_matched_max[i] = std::min(key_matched_max[i], key_matched_max[i + 1]);
-      }
-    }
-
-    // Construct the last rule
-    if (allow_additional) {
-      for (int matched = key_matched_min.back(); matched <= key_matched_max.back(); ++matched) {
-        std::string last_rule_body = GetPropertyWithNumberConstraints(
-            mid_sep + " " + additional_prop_pattern, min_properties, max_properties, matched
-        );
-        std::string last_rule_name = rule_name + "_part_" + std::to_string(properties_size - 1) +
-                                     "_" + std::to_string(matched);
-        last_rule_name = ebnf_script_creator_.AddRule(last_rule_name, last_rule_body);
-        rule_names.back().push_back(last_rule_name);
-      }
-    } else {
-      for (int matched = key_matched_min.back(); matched <= key_matched_max.back(); ++matched) {
-        rule_names.back().push_back("\"\"");
-      }
-    }
-
-    // Construct 0~(len(properties) - 2) rules
-    for (int i = properties_size - 2; i >= 0; --i) {
-      const std::string& prop_pattern = prop_patterns[i + 1];
-      for (int matched = key_matched_min[i]; matched <= key_matched_max[i]; ++matched) {
-        std::string cur_rule_body;
-        if (matched == key_matched_max[i + 1]) {
-          cur_rule_body = rule_names[i + 1][matched - key_matched_min[i + 1]];
-        } else if (is_required[i + 1] || matched == key_matched_min[i + 1] - 1) {
-          cur_rule_body = mid_sep + " " + prop_pattern + " " +
-                          rule_names[i + 1][matched + 1 - key_matched_min[i + 1]];
-        } else {
-          cur_rule_body = rule_names[i + 1][matched - key_matched_min[i + 1]] + " | " + mid_sep +
-                          " " + prop_pattern + " " +
-                          rule_names[i + 1][matched - key_matched_min[i + 1] + 1];
-        }
-        std::string cur_rule_name =
-            rule_name + "_part_" + std::to_string(i) + "_" + std::to_string(matched);
-        cur_rule_name = ebnf_script_creator_.AddRule(cur_rule_name, cur_rule_body);
-        rule_names[i].push_back(cur_rule_name);
-      }
-    }
-
-    // Construct root rule
-    bool is_first = true;
-    for (int i = 0; i < properties_size; ++i) {
-      if (key_matched_max[i] < key_matched_min[i]) {
-        continue;
-      }
-      if (key_matched_min[i] > 1) {
-        break;
-      }
-      if (!is_first) {
-        res += " | ";
-      } else {
-        is_first = false;
-      }
-      res += "(" + prop_patterns[i] + " " + rule_names[i][1 - key_matched_min[i]] + ")";
-      if (is_required[i]) {
-        break;
-      }
-    }
-
-    if (allow_additional && required.empty()) {
-      if (!is_first) {
-        res += " | ";
-      }
-      res += "(" + additional_prop_pattern + " " +
-             GetPropertyWithNumberConstraints(
-                 mid_sep + " " + additional_prop_pattern, min_properties, max_properties, 1
-             ) +
-             ")";
-    }
-
-    res = first_sep + " (" + res + ") " + last_sep;
+    return Sequence({first_separator, Choice(choices), last_separator});
   }
 
-  return res;
+  const int property_count = static_cast<int>(properties.size());
+  std::vector<uint8_t> is_required(property_count, false);
+  std::vector<int> matched_min(property_count, 0);
+  bool found_required = required.count(properties[0].name);
+  matched_min[0] = 1;
+  for (int index = 1; index < property_count; ++index) {
+    if (required.count(properties[index].name)) {
+      is_required[index] = true;
+      matched_min[index] = matched_min[index - 1] + 1;
+    } else {
+      matched_min[index] = matched_min[index - 1];
+    }
+    if (!found_required) {
+      matched_min[index] = 1;
+    }
+    if (is_required[index]) {
+      found_required = true;
+    }
+  }
+  if (required.count(properties[0].name)) {
+    is_required[0] = true;
+  }
+
+  if (max_properties == -1) {
+    // Case 2: With constraint on the lower bound of the properties number
+    std::vector<std::vector<int32_t>> tails(property_count);
+    matched_min.back() = allow_additional ? std::max(1, matched_min.back())
+                                          : std::max(min_properties, matched_min.back());
+    for (int index = property_count - 2; index >= 0; --index) {
+      matched_min[index] = std::max(matched_min[index], matched_min[index + 1] - 1);
+    }
+
+    for (int matched = matched_min.back(); matched <= property_count; ++matched) {
+      int32_t body = allow_additional ? GetPropertyWithNumberConstraints(
+                                            Sequence({middle_separator, get_additional_pattern()}),
+                                            min_properties,
+                                            max_properties,
+                                            matched,
+                                            rule_name
+                                        )
+                                      : Empty();
+      if (allow_additional) {
+        int32_t tail_rule_id = builder_.AddRuleWithHint(
+            rule_name + "_part_" + std::to_string(property_count - 1) + "_" +
+                std::to_string(matched),
+            body
+        );
+        tails.back().push_back(RuleRef(tail_rule_id));
+      } else {
+        tails.back().push_back(body);
+      }
+    }
+
+    for (int index = property_count - 2; index >= 0; --index) {
+      for (int matched = matched_min[index]; matched <= index + 1; ++matched) {
+        int32_t with_property = Sequence(
+            {middle_separator,
+             property_patterns[index + 1],
+             tails[index + 1][matched + 1 - matched_min[index + 1]]}
+        );
+        int32_t body =
+            (is_required[index + 1] || matched == matched_min[index + 1] - 1)
+                ? with_property
+                : Choice({tails[index + 1][matched - matched_min[index + 1]], with_property});
+        int32_t tail_rule_id = builder_.AddRuleWithHint(
+            rule_name + "_part_" + std::to_string(index) + "_" + std::to_string(matched), body
+        );
+        tails[index].push_back(RuleRef(tail_rule_id));
+      }
+    }
+
+    std::vector<int32_t> choices;
+    for (int index = 0; index < property_count; ++index) {
+      if (matched_min[index] > 1) {
+        break;
+      }
+      choices.push_back(Sequence({property_patterns[index], tails[index][1 - matched_min[index]]}));
+      if (is_required[index]) {
+        break;
+      }
+    }
+    if (allow_additional && required.empty()) {
+      choices.push_back(Sequence(
+          {get_additional_pattern(),
+           GetPropertyWithNumberConstraints(
+               Sequence({middle_separator, get_additional_pattern()}),
+               min_properties,
+               max_properties,
+               1,
+               rule_name
+           )}
+      ));
+    }
+    return Sequence({first_separator, Choice(choices), last_separator});
+  }
+
+  // Case 3: With constraints on both lower & upper bound of the properties number
+  std::vector<std::vector<int32_t>> tails(property_count);
+  std::vector<int> matched_max(property_count, property_count);
+  matched_max[0] = 1;
+  for (int index = 1; index < property_count; ++index) {
+    matched_max[index] = matched_max[index - 1] + 1;
+  }
+  matched_min.back() = allow_additional ? std::max(1, matched_min.back())
+                                        : std::max(min_properties, matched_min.back());
+  matched_max.back() = std::min(max_properties, matched_max.back());
+  for (int index = property_count - 2; index >= 0; --index) {
+    matched_min[index] = std::max(matched_min[index], matched_min[index + 1] - 1);
+    matched_max[index] = is_required[index + 1]
+                             ? std::min(matched_max[index], matched_max[index + 1] - 1)
+                             : std::min(matched_max[index], matched_max[index + 1]);
+  }
+
+  for (int matched = matched_min.back(); matched <= matched_max.back(); ++matched) {
+    int32_t body = allow_additional ? GetPropertyWithNumberConstraints(
+                                          Sequence({middle_separator, get_additional_pattern()}),
+                                          min_properties,
+                                          max_properties,
+                                          matched,
+                                          rule_name
+                                      )
+                                    : Empty();
+    if (allow_additional) {
+      int32_t tail_rule_id = builder_.AddRuleWithHint(
+          rule_name + "_part_" + std::to_string(property_count - 1) + "_" + std::to_string(matched),
+          body
+      );
+      tails.back().push_back(RuleRef(tail_rule_id));
+    } else {
+      tails.back().push_back(body);
+    }
+  }
+
+  for (int index = property_count - 2; index >= 0; --index) {
+    for (int matched = matched_min[index]; matched <= matched_max[index]; ++matched) {
+      int32_t body;
+      if (matched == matched_max[index + 1]) {
+        body = tails[index + 1][matched - matched_min[index + 1]];
+      } else {
+        int32_t with_property = Sequence(
+            {middle_separator,
+             property_patterns[index + 1],
+             tails[index + 1][matched + 1 - matched_min[index + 1]]}
+        );
+        body = (is_required[index + 1] || matched == matched_min[index + 1] - 1)
+                   ? with_property
+                   : Choice({tails[index + 1][matched - matched_min[index + 1]], with_property});
+      }
+      int32_t tail_rule_id = builder_.AddRuleWithHint(
+          rule_name + "_part_" + std::to_string(index) + "_" + std::to_string(matched), body
+      );
+      tails[index].push_back(RuleRef(tail_rule_id));
+    }
+  }
+
+  std::vector<int32_t> choices;
+  for (int index = 0; index < property_count; ++index) {
+    if (matched_max[index] < matched_min[index]) {
+      continue;
+    }
+    if (matched_min[index] > 1) {
+      break;
+    }
+    choices.push_back(Sequence({property_patterns[index], tails[index][1 - matched_min[index]]}));
+    if (is_required[index]) {
+      break;
+    }
+  }
+  if (allow_additional && required.empty()) {
+    choices.push_back(Sequence(
+        {get_additional_pattern(),
+         GetPropertyWithNumberConstraints(
+             Sequence({middle_separator, get_additional_pattern()}),
+             min_properties,
+             max_properties,
+             1,
+             rule_name
+         )}
+    ));
+  }
+  return Sequence({first_separator, Choice(choices), last_separator});
 }
 
-std::string JSONSchemaConverter::GenerateObject(
+int32_t JSONSchemaConverter::GenerateObject(
     const ObjectSpec& spec, const std::string& rule_name, bool need_braces
 ) {
-  std::string result = "";
-  if (need_braces) {
-    result += "\"{\"";
-  }
-
-  bool could_be_empty = false;
-
   // Determine additional property handling
-  std::string additional_suffix = "";
+  std::string additional_suffix;
   SchemaSpecPtr additional_property;
   if (spec.allow_additional_properties && spec.additional_properties_schema) {
     additional_suffix = "addl";
@@ -2813,6 +2844,9 @@ std::string JSONSchemaConverter::GenerateObject(
   }
 
   indent_manager_.StartIndent();
+  bool has_content = false;
+  bool could_be_empty = false;
+  int32_t content = Empty();
 
   if (!spec.properties.empty() && (!spec.pattern_properties.empty() || spec.property_names)) {
     // Case 1a: properties coexist with patternProperties and/or propertyNames.
@@ -2820,116 +2854,136 @@ std::string JSONSchemaConverter::GenerateObject(
     // patternProperties/propertyNames as the additional property pattern override.
     SchemaSpecPtr effective_additional = additional_property;
     std::string effective_suffix = additional_suffix;
-    std::string pp_override = "";
+    std::optional<int32_t> additional_override;
 
     if (!spec.pattern_properties.empty()) {
       // Build patternProperties as additional property alternatives
-      std::string pp_body = "";
-      for (size_t i = 0; i < spec.pattern_properties.size(); ++i) {
-        const auto& pp = spec.pattern_properties[i];
-        std::string value = CreateRule(pp.schema, rule_name + "_pp_" + std::to_string(i));
-        std::string pp_single = "\"\\\"\" " + RegexToEBNFElement(pp.pattern) + " \"\\\"\" " +
-                                colon_pattern_ + " " + value;
-        if (i != 0) pp_body += " | ";
-        pp_body += pp_single;
+      std::vector<int32_t> patterns;
+      for (size_t index = 0; index < spec.pattern_properties.size(); ++index) {
+        const auto& pattern_property = spec.pattern_properties[index];
+        int32_t value_rule_id =
+            CreateRule(pattern_property.schema, rule_name + "_pp_" + std::to_string(index));
+        patterns.push_back(Sequence(
+            {ByteString("\""),
+             RegexExpression(pattern_property.pattern, /*json_string=*/true),
+             ByteString("\""),
+             colon_expr_id_,
+             RuleRef(value_rule_id)}
+        ));
       }
       // Merge with existing additionalProperties if present
       if (effective_additional) {
-        std::string add_value_rule =
+        int32_t value_rule_id =
             CreateRule(effective_additional, rule_name + "_" + effective_suffix);
-        std::string add_prop =
-            FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, effective_suffix);
-        pp_body += " | " + add_prop;
+        patterns.push_back(
+            FormatOtherProperty(KeyPatternExpression(), value_rule_id, rule_name, effective_suffix)
+        );
       }
-      // Wrap in parentheses to ensure correct EBNF precedence when | is present
-      pp_override = "(" + pp_body + ")";
+      additional_override = Choice(patterns);
       if (!effective_additional) {
         effective_additional = SchemaSpec::Make(AnySpec{}, "", "any");
       }
       effective_suffix = "pp";
     } else if (spec.property_names && effective_additional) {
       // propertyNames constrains keys of additional properties.
-      // Only apply when additional properties are allowed — when additionalProperties
+      // Only apply when additional properties are allowed - when additionalProperties
       // is false, no extra keys beyond named properties should be permitted.
-      auto key_pattern = CreateRule(spec.property_names, rule_name + "_name");
-      std::string val_rule = CreateRule(effective_additional, rule_name + "_" + effective_suffix);
-      pp_override = key_pattern + " " + colon_pattern_ + " " + val_rule;
+      int32_t key_rule_id = CreateRule(spec.property_names, rule_name + "_name");
+      int32_t value_rule_id = CreateRule(effective_additional, rule_name + "_" + effective_suffix);
+      additional_override =
+          Sequence({RuleRef(key_rule_id), colon_expr_id_, RuleRef(value_rule_id)});
       effective_suffix = "pn";
     }
 
-    result += " " + GetPartialRuleForProperties(
-                        spec.properties,
-                        spec.required,
-                        effective_additional,
-                        rule_name,
-                        effective_suffix,
-                        spec.min_properties,
-                        spec.max_properties,
-                        pp_override
-                    );
+    content = GetPartialRuleForProperties(
+        spec.properties,
+        spec.required,
+        effective_additional,
+        rule_name,
+        effective_suffix,
+        spec.min_properties,
+        spec.max_properties,
+        additional_override
+    );
+    has_content = spec.max_properties != 0;
     could_be_empty = spec.required.empty() && spec.min_properties == 0;
   } else if (!spec.pattern_properties.empty() || spec.property_names) {
-    // Case 1b: patternProperties or propertyNames without named properties (original logic)
-    std::string beg_seq = NextSeparator();
-
-    std::string property_rule_body = "(";
+    // Case 1b: patternProperties or propertyNames without named properties
     if (spec.max_properties != 0) {
+      int32_t beginning_separator = NextSeparatorExpression();
+      std::vector<int32_t> property_choices;
       if (!spec.pattern_properties.empty()) {
-        for (size_t i = 0; i < spec.pattern_properties.size(); ++i) {
-          const auto& pp = spec.pattern_properties[i];
-          std::string value = CreateRule(pp.schema, rule_name + "_prop_" + std::to_string(i));
-          std::string property_pattern = "\"\\\"\" " + RegexToEBNFElement(pp.pattern) +
-                                         " \"\\\"\" " + colon_pattern_ + " " + value;
-          if (i != 0) {
-            property_rule_body += " | ";
-          }
-          property_rule_body += "(" + beg_seq + " " + property_pattern + ")";
+        for (size_t index = 0; index < spec.pattern_properties.size(); ++index) {
+          const auto& pattern_property = spec.pattern_properties[index];
+          int32_t value_rule_id =
+              CreateRule(pattern_property.schema, rule_name + "_prop_" + std::to_string(index));
+          property_choices.push_back(Sequence(
+              {beginning_separator,
+               ByteString("\""),
+               RegexExpression(pattern_property.pattern, /*json_string=*/true),
+               ByteString("\""),
+               colon_expr_id_,
+               RuleRef(value_rule_id)}
+          ));
         }
-        property_rule_body += ")";
       } else {
-        auto key_pattern = CreateRule(spec.property_names, rule_name + "_name");
-        property_rule_body +=
-            beg_seq + " " + key_pattern + " " + colon_pattern_ + " " + GetBasicAnyRuleName() + ")";
+        int32_t key_rule_id = CreateRule(spec.property_names, rule_name + "_name");
+        property_choices.push_back(Sequence(
+            {beginning_separator,
+             RuleRef(key_rule_id),
+             colon_expr_id_,
+             RuleRef(GetBasicAnyRuleName())}
+        ));
       }
 
-      auto prop_rule_name = ebnf_script_creator_.AllocateRuleName(rule_name + "_prop");
-      ebnf_script_creator_.AddRuleWithAllocatedName(prop_rule_name, property_rule_body);
-
-      result +=
-          " " + prop_rule_name + " " +
-          GetPropertyWithNumberConstraints(
-              NextSeparator() + " " + prop_rule_name, spec.min_properties, spec.max_properties, 1
-          ) +
-          NextSeparator(true);
+      int32_t property_rule_id =
+          builder_.AddRuleWithHint(rule_name + "_prop", Choice(property_choices));
+      int32_t subsequent_property =
+          Sequence({NextSeparatorExpression(), RuleRef(property_rule_id)});
+      content = Sequence(
+          {RuleRef(property_rule_id),
+           GetPropertyWithNumberConstraints(
+               subsequent_property, spec.min_properties, spec.max_properties, 1, rule_name
+           ),
+           NextSeparatorExpression(true)}
+      );
+      has_content = true;
       could_be_empty = spec.min_properties == 0;
+    } else {
+      could_be_empty = true;
     }
   } else if (!spec.properties.empty()) {
     // Case 2: properties defined (no patternProperties/propertyNames)
-    result += " " + GetPartialRuleForProperties(
-                        spec.properties,
-                        spec.required,
-                        additional_property,
-                        rule_name,
-                        additional_suffix,
-                        spec.min_properties,
-                        spec.max_properties
-                    );
+    content = GetPartialRuleForProperties(
+        spec.properties,
+        spec.required,
+        additional_property,
+        rule_name,
+        additional_suffix,
+        spec.min_properties,
+        spec.max_properties
+    );
+    has_content = spec.max_properties != 0;
     could_be_empty = spec.required.empty() && spec.min_properties == 0;
   } else if (additional_property) {
     // Case 3: no properties defined, additional properties allowed
     if (spec.max_properties != 0) {
-      std::string add_value_rule =
-          CreateRule(additional_property, rule_name + "_" + additional_suffix);
-      std::string other_property_pattern =
-          FormatOtherProperty(GetKeyPattern(), add_value_rule, rule_name, additional_suffix);
-      result += " " + NextSeparator() + " " + other_property_pattern + " ";
-      result += GetPropertyWithNumberConstraints(
-                    NextSeparator() + " " + other_property_pattern,
-                    spec.min_properties,
-                    spec.max_properties,
-                    1
-                ) +
-                " " + NextSeparator(true);
+      int32_t value_rule_id = CreateRule(additional_property, rule_name + "_" + additional_suffix);
+      int32_t property =
+          FormatOtherProperty(KeyPatternExpression(), value_rule_id, rule_name, additional_suffix);
+      content = Sequence(
+          {NextSeparatorExpression(),
+           property,
+           GetPropertyWithNumberConstraints(
+               Sequence({NextSeparatorExpression(), property}),
+               spec.min_properties,
+               spec.max_properties,
+               1,
+               rule_name
+           ),
+           NextSeparatorExpression(true)}
+      );
+      has_content = true;
     }
     could_be_empty = spec.min_properties == 0;
   } else {
@@ -2940,55 +2994,46 @@ std::string JSONSchemaConverter::GenerateObject(
 
   indent_manager_.EndIndent();
 
-  if (need_braces) {
-    result += " \"}\"";
-  }
+  int32_t result = need_braces ? Sequence({ByteString("{"), content, ByteString("}")}) : content;
   if (could_be_empty) {
-    std::string whitespace_part = GetWhitespacePattern();
-    auto rest = need_braces
-                    ? "\"{\" " + std::string(any_whitespace_ ? whitespace_part + " " : "") + "\"}\""
-                    : std::string(any_whitespace_ ? whitespace_part : "");
-    if (result == "\"{\"  \"}\"" || result == "") {
-      result = rest;
-    } else {
-      result = "(" + result + ") | " + rest;
-    }
-  }
-
-  if (result.empty()) {
-    return "\"\"";
+    int32_t empty_content = any_whitespace_ ? WhitespaceExpression() : Empty();
+    int32_t empty_result =
+        need_braces ? Sequence({ByteString("{"), empty_content, ByteString("}")}) : empty_content;
+    return has_content ? Choice({result, empty_result}) : empty_result;
   }
   return result;
 }
 
-std::string JSONSchemaConverter::GenerateAny(const AnySpec& spec, const std::string& rule_name) {
-  return kBasicNumber + " | " + kBasicString + " | " + kBasicBoolean + " | " + kBasicNull + " | " +
-         kBasicArray + " | " + kBasicObject;
+int32_t JSONSchemaConverter::GenerateAny(const AnySpec& spec, const std::string& rule_name) {
+  return Choice(
+      {RuleRef(kBasicNumber),
+       RuleRef(kBasicString),
+       RuleRef(kBasicBoolean),
+       RuleRef(kBasicNull),
+       RuleRef(kBasicArray),
+       RuleRef(kBasicObject)}
+  );
 }
 
-std::string JSONSchemaConverter::GenerateConst(
-    const ConstSpec& spec, const std::string& rule_name
-) {
-  return "\"" + JSONStrToPrintableStr(spec.json_value) + "\"";
+int32_t JSONSchemaConverter::GenerateConst(const ConstSpec& spec, const std::string& rule_name) {
+  return ByteString(spec.json_value);
 }
 
-std::string JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::string& rule_name) {
+int32_t JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::string& rule_name) {
   XGRAMMAR_DCHECK(!spec.json_values.empty())
       << "GenerateEnum called with empty enum spec for rule: " << rule_name;
-  std::string result = "";
-  for (size_t i = 0; i < spec.json_values.size(); ++i) {
-    if (i != 0) {
-      result += " | ";
-    }
-    result += "(\"" + JSONStrToPrintableStr(spec.json_values[i]) + "\")";
+  std::vector<int32_t> values;
+  values.reserve(spec.json_values.size());
+  for (const auto& value : spec.json_values) {
+    values.push_back(ByteString(value));
   }
-  return result;
+  return Choice(values);
 }
 
-std::string JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string& rule_name) {
+int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string& rule_name) {
   // First check if we have a direct URI mapping (for circular references)
-  if (uri_to_rule_name_.count(spec.uri)) {
-    return uri_to_rule_name_[spec.uri];
+  if (uri_to_rule_id_.count(spec.uri)) {
+    return RuleRef(uri_to_rule_id_[spec.uri]);
   }
 
   if (!ref_resolver_) {
@@ -3020,49 +3065,38 @@ std::string JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::str
     }
   }
 
-  std::string allocated_rule_name = ebnf_script_creator_.AllocateRuleName(rule_name_hint);
-  uri_to_rule_name_[spec.uri] = allocated_rule_name;
-
+  int32_t allocated_rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
+  std::string allocated_rule_name = builder_.GetRule(allocated_rule_id).name;
+  uri_to_rule_id_[spec.uri] = allocated_rule_id;
   SchemaSpecPtr resolved = ref_resolver_(spec.uri, allocated_rule_name);
-  std::string rule_body = GenerateFromSpec(resolved, allocated_rule_name);
-  ebnf_script_creator_.AddRuleWithAllocatedName(allocated_rule_name, rule_body);
-
+  builder_.UpdateRuleBody(allocated_rule_id, GenerateFromSpec(resolved, allocated_rule_name));
   if (!resolved->cache_key.empty()) {
-    AddCache(resolved->cache_key, allocated_rule_name);
+    AddCache(resolved->cache_key, allocated_rule_id);
   }
-
-  return allocated_rule_name;
+  return RuleRef(allocated_rule_id);
 }
 
-std::string JSONSchemaConverter::GenerateAnyOf(
-    const AnyOfSpec& spec, const std::string& rule_name
-) {
-  std::string result = "";
-  for (size_t i = 0; i < spec.options.size(); ++i) {
-    if (i != 0) {
-      result += " | ";
-    }
-    result += CreateRule(spec.options[i], rule_name + "_case_" + std::to_string(i));
+int32_t JSONSchemaConverter::GenerateAnyOf(const AnyOfSpec& spec, const std::string& rule_name) {
+  std::vector<int32_t> choices;
+  for (size_t index = 0; index < spec.options.size(); ++index) {
+    choices.push_back(
+        RuleRef(CreateRule(spec.options[index], rule_name + "_case_" + std::to_string(index)))
+    );
   }
-  return result;
+  return Choice(choices);
 }
 
-std::string JSONSchemaConverter::GenerateOneOf(
-    const OneOfSpec& spec, const std::string& rule_name
-) {
-  std::string result = "";
-  for (size_t i = 0; i < spec.options.size(); ++i) {
-    if (i != 0) {
-      result += " | ";
-    }
-    result += CreateRule(spec.options[i], rule_name + "_case_" + std::to_string(i));
+int32_t JSONSchemaConverter::GenerateOneOf(const OneOfSpec& spec, const std::string& rule_name) {
+  std::vector<int32_t> choices;
+  for (size_t index = 0; index < spec.options.size(); ++index) {
+    choices.push_back(
+        RuleRef(CreateRule(spec.options[index], rule_name + "_case_" + std::to_string(index)))
+    );
   }
-  return result;
+  return Choice(choices);
 }
 
-std::string JSONSchemaConverter::GenerateAllOf(
-    const AllOfSpec& spec, const std::string& rule_name
-) {
+int32_t JSONSchemaConverter::GenerateAllOf(const AllOfSpec& spec, const std::string& rule_name) {
   if (spec.schemas.size() == 1) {
     return GenerateFromSpec(spec.schemas[0], rule_name + "_case_0");
   }
@@ -3070,17 +3104,16 @@ std::string JSONSchemaConverter::GenerateAllOf(
   return GenerateFromSpec(SchemaSpec::Make(AnySpec{}, "", "any"), rule_name);
 }
 
-std::string JSONSchemaConverter::GenerateTypeArray(
+int32_t JSONSchemaConverter::GenerateTypeArray(
     const TypeArraySpec& spec, const std::string& rule_name
 ) {
-  std::string result = "";
-  for (size_t i = 0; i < spec.type_schemas.size(); ++i) {
-    if (i != 0) {
-      result += " | ";
-    }
-    result += CreateRule(spec.type_schemas[i], rule_name + "_type_" + std::to_string(i));
+  std::vector<int32_t> choices;
+  for (size_t index = 0; index < spec.type_schemas.size(); ++index) {
+    choices.push_back(
+        RuleRef(CreateRule(spec.type_schemas[index], rule_name + "_type_" + std::to_string(index)))
+    );
   }
-  return result;
+  return Choice(choices);
 }
 
 // ==================== Static Helper Methods ====================
@@ -3187,36 +3220,6 @@ std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(const s
     return std::nullopt;
   }
   return it->second;
-}
-
-std::string JSONSchemaConverter::JSONStrToPrintableStr(const std::string& json_str) {
-  static const std::vector<std::pair<std::string, std::string>> kReplaceMapping = {
-      {"\\", "\\\\"}, {"\"", "\\\""}
-  };
-  std::string result = json_str;
-  for (const auto& [k, v] : kReplaceMapping) {
-    size_t pos = 0;
-    while ((pos = result.find(k, pos)) != std::string::npos) {
-      result.replace(pos, k.length(), v);
-      pos += v.length();
-    }
-  }
-  return result;
-}
-
-bool JSONSchemaConverter::StringSpecKey::operator==(const StringSpecKey& other) const {
-  return pattern == other.pattern && min_length == other.min_length &&
-         max_length == other.max_length && wrapper == other.wrapper;
-}
-
-size_t JSONSchemaConverter::StringSpecKeyHash::operator()(const StringSpecKey& key) const {
-  return HashCombine(
-      std::hash<std::string>()(key.pattern),
-      key.min_length,
-      key.max_length,
-      std::hash<std::string>()(key.wrapper.first),
-      std::hash<std::string>()(key.wrapper.second)
-  );
 }
 
 // ==================== Range Regex Generation ====================
@@ -4043,6 +4046,67 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
   return it->second;
 }
 
+Grammar JSONSchemaToGrammar(
+    const std::string& schema,
+    bool any_whitespace,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
+    bool any_order,
+    JSONFormat json_format
+) {
+  picojson::value schema_value;
+  std::string error = picojson::parse(schema_value, schema);
+  XGRAMMAR_CHECK(error.empty()) << "Failed to parse JSON: " << error
+                                << ". The JSON string is:" << schema;
+  SchemaParser parser(schema_value, {strict_mode, json_format});
+  auto spec_result = parser.Parse(schema_value, "root");
+  if (spec_result.IsErr()) {
+    XGRAMMAR_LOG(FATAL) << std::move(spec_result).UnwrapErr().what();
+  }
+  auto spec = std::move(spec_result).Unwrap();
+  auto ref_resolver = [&parser](const std::string& uri, const std::string& rule_name_hint) {
+    auto result = parser.ResolveRef(uri, rule_name_hint);
+    if (result.IsErr()) {
+      XGRAMMAR_LOG(FATAL) << std::move(result).UnwrapErr().what();
+    }
+    return std::move(result).Unwrap();
+  };
+
+  switch (json_format) {
+    case JSONFormat::kJSON: {
+      JSONSchemaConverter converter(
+          indent,
+          std::move(separators),
+          any_whitespace,
+          max_whitespace_cnt,
+          std::move(ref_resolver),
+          any_order
+      );
+      return converter.Convert(spec);
+    }
+    case JSONFormat::kQwenXML:
+    case JSONFormat::kMiniMaxXML:
+    case JSONFormat::kDeepSeekXML:
+    case JSONFormat::kGlmXML: {
+      XMLToolCallingConverter converter(
+          indent,
+          std::move(separators),
+          any_whitespace,
+          max_whitespace_cnt,
+          std::move(ref_resolver),
+          json_format,
+          any_order
+      );
+      return converter.Convert(spec);
+    }
+    default:
+      XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);
+  }
+  XGRAMMAR_UNREACHABLE();
+}
+
 std::string JSONSchemaToEBNF(
     const std::string& schema,
     bool any_whitespace,
@@ -4101,7 +4165,7 @@ std::string JSONSchemaToEBNF(
       JSONSchemaConverter converter(
           indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
-      return converter.Convert(spec);
+      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
     }
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
@@ -4116,7 +4180,7 @@ std::string JSONSchemaToEBNF(
           json_format,
           any_order
       );
-      return converter.Convert(spec);
+      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
     }
     default:
       XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);

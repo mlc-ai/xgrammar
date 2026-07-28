@@ -5,10 +5,13 @@
  */
 #include "json_schema_converter_ext.h"
 
-#include <unordered_map>
+#include <picojson.h>
 
-#include "json_schema_converter.h"
-#include "regex_converter.h"
+#include <unordered_map>
+#include <utility>
+#include <vector>
+
+#include "support/logging.h"
 
 namespace xgrammar {
 
@@ -20,12 +23,12 @@ const std::string XMLToolCallingConverter::kXMLVariableName = "xml_variable_name
 const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
     XMLToolCallingConverter::kKeyWrapperMap = {
         {JSONFormat::kQwenXML, {"<parameter=", ">", "", "</parameter>"}},
-        {JSONFormat::kMiniMaxXML, {"<parameter name=\\\"", "\\\">", "", "</parameter>"}},
+        {JSONFormat::kMiniMaxXML, {"<parameter name=\"", "\">", "", "</parameter>"}},
         {JSONFormat::kDeepSeekXML,
-         {"<｜DSML｜parameter name=\\\"",
-          "\\\" string=\\\"\" (\"true\" | \"false\") \"\\\">",
+         {"<｜DSML｜parameter name=\"",
           "",
-          // TODO(Linzhang): we do not validate the string's value, and we accept both.
+          "",
+          // TODO(Linzhang): We do not validate the string's value, and we accept both.
           "</｜DSML｜parameter>"}},
         {JSONFormat::kGlmXML, {"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"}},
 };
@@ -42,17 +45,33 @@ XMLToolCallingConverter::XMLToolCallingConverter(
     : JSONSchemaConverter(
           indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       ),
+      json_format_(json_format),
       nested_object_level_(0),
       xml_wrapper_(kKeyWrapperMap.at(json_format)) {}
 
-std::string XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
+Grammar XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
   nested_object_level_ = 0;
-  AddBasicRules();
-  std::string root_rule_name = ebnf_script_creator_.AllocateRuleName("root");
-  std::string root_body = GenerateFromSpec(spec, root_rule_name);
-  ebnf_script_creator_.AddRuleWithAllocatedName(root_rule_name, root_body);
+  return JSONSchemaConverter::Convert(spec);
+}
 
-  return ebnf_script_creator_.GetScript();
+std::string XMLToolCallingConverter::XMLValue(const std::string& json_value) const {
+  picojson::value value;
+  std::string error = picojson::parse(value, json_value);
+  if (error.empty() && value.is<std::string>()) {
+    return value.get<std::string>();
+  }
+  return json_value;
+}
+
+int32_t XMLToolCallingConverter::XMLKeySuffix() {
+  if (json_format_ == JSONFormat::kDeepSeekXML) {
+    return Sequence(
+        {ByteString("\" string=\""),
+         Choice({ByteString("true"), ByteString("false")}),
+         ByteString("\">")}
+    );
+  }
+  return ByteString(xml_wrapper_.key_wrapper_suffix);
 }
 
 void XMLToolCallingConverter::AddBasicRules() {
@@ -60,44 +79,40 @@ void XMLToolCallingConverter::AddBasicRules() {
   XGRAMMAR_DCHECK(nested_object_level_ == 0);
   // The nested part, true json format, is at level 2.
   nested_object_level_ = 2;
-  JSONSchemaConverter::AddBasicRules();
-  nested_object_level_ = 1;
-  // The outer part, xml format, is at level 1.
-  // Add XML string rule
-  ebnf_script_creator_.AddRule(
-      kXMLString,
-      "TagDispatch("
-      "loop_after_dispatch=false,"
-      "excludes=(\"" +
-          xml_wrapper_.parameter_suffix +
-          "\")"
-          ")"
-  );
+  JSONSchemaConverter::AddBasicRules({kXMLString, kXMLAny, kXMLObject, kXMLVariableName});
+
+  auto any_spec = SchemaSpec::Make(AnySpec{}, "{}", kBasicAny);
   constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
-  AddCache(kStringCacheKey, kXMLString);
+  constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
+
+  // The outer part, xml format, is at level 1.
+  nested_object_level_ = 1;
+  // Add XML string rule
+  builder_.UpdateRuleBody(kXMLString, TagDispatch(false, {xml_wrapper_.parameter_suffix}));
+  AddCache(kStringCacheKey, builder_.GetRuleId(kXMLString));
 
   // Add XML any rule
-  auto any_spec = SchemaSpec::Make(AnySpec{}, "{}", kXMLAny);
-  std::string any_body = GenerateAny(std::get<AnySpec>(any_spec->spec), kXMLAny);
-  ebnf_script_creator_.AddRule(kXMLAny, any_body);
-  AddCache("{}", kXMLAny);
+  builder_.UpdateRuleBody(kXMLAny, GenerateAny(AnySpec{}, kXMLAny));
+  AddCache("{}", builder_.GetRuleId(kXMLAny));
 
   // Reset the nested object level to 0, which is the root level.
   nested_object_level_ = 0;
 
   // Add XML object rule
-  constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
-  ObjectSpec obj_spec_val;
-  obj_spec_val.allow_additional_properties = true;
-  obj_spec_val.additional_properties_schema = any_spec;
-  auto obj_spec = SchemaSpec::Make(std::move(obj_spec_val), kObjectCacheKey, kXMLObject);
-  std::string obj_body = GenerateObject(std::get<ObjectSpec>(obj_spec->spec), kXMLObject);
-  ebnf_script_creator_.AddRule(kXMLObject, obj_body);
-  AddCache(kObjectCacheKey, kXMLObject);
+  ObjectSpec xml_object_spec;
+  xml_object_spec.allow_additional_properties = true;
+  xml_object_spec.additional_properties_schema = any_spec;
+  builder_.UpdateRuleBody(kXMLObject, GenerateObject(xml_object_spec, kXMLObject));
+  AddCache(kObjectCacheKey, builder_.GetRuleId(kXMLObject));
 
   // Add XML variable name rule
-  std::string var_body = "[a-zA-Z_][a-zA-Z0-9_]*";
-  ebnf_script_creator_.AddRule(kXMLVariableName, var_body);
+  builder_.UpdateRuleBody(
+      kXMLVariableName,
+      Sequence(
+          {builder_.AddCharacterClass({{'a', 'z'}, {'A', 'Z'}, {'_', '_'}}),
+           builder_.AddCharacterClassStar({{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}})}
+      )
+  );
 }
 
 std::string XMLToolCallingConverter::GetKeyPattern() const {
@@ -114,11 +129,11 @@ std::string XMLToolCallingConverter::GetBasicAnyRuleName() const {
   return kBasicAny;
 }
 
-std::string XMLToolCallingConverter::GetKeyPatternExcluding(
+int32_t XMLToolCallingConverter::GetKeyPatternExcluding(
     const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
 ) {
   if (nested_object_level_ <= 1) {
-    return GetKeyPattern();
+    return RuleRef(GetKeyPattern());
   }
   return JSONSchemaConverter::GetKeyPatternExcluding(properties, rule_name);
 }
@@ -130,60 +145,44 @@ std::string XMLToolCallingConverter::NextSeparator(bool is_end) {
   return JSONSchemaConverter::NextSeparator(is_end);
 }
 
-std::string XMLToolCallingConverter::GenerateString(
+int32_t XMLToolCallingConverter::GenerateString(
     const StringSpec& spec, const std::string& rule_name
 ) {
   if (nested_object_level_ <= 1) {
-    // For XML format, use TagDispatch for strings
     if (!spec.pattern.has_value() && !spec.format.has_value() && spec.min_length == 0 &&
         spec.max_length == -1) {
-      return kXMLString;
+      return RuleRef(kXMLString);
     }
     if (spec.format.has_value()) {
-      const std::string& format = *spec.format;
-      auto regex_pattern = JSONFormatToRegexPattern(format);
-
-      if (regex_pattern.has_value()) {
-        std::string converted_regex = RegexToEBNF(regex_pattern.value(), false);
-        return converted_regex;
+      auto regex = JSONFormatToRegexPattern(*spec.format);
+      if (regex.has_value()) {
+        return RegexExpression(*regex, false, true);
       }
     }
-
-    // Check for pattern
     if (spec.pattern.has_value()) {
-      std::string converted_regex = RegexToEBNF(*spec.pattern, false);
-      return converted_regex;
+      return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
     }
-
-    // Check for length constraints
-    if (spec.min_length != 0 || spec.max_length != -1) {
-      std::string char_pattern = "[^]";
-      std::string repetition;
-      if (spec.max_length == -1) {
-        repetition = "{" + std::to_string(spec.min_length) + ",}";
-      } else {
-        repetition =
-            "{" + std::to_string(spec.min_length) + "," + std::to_string(spec.max_length) + "}";
-      }
-      return char_pattern + repetition;
-    }
+    return Repeat(
+        rule_name + "_characters",
+        builder_.AddCharacterClass({{0, 0x10ffff}}),
+        spec.min_length,
+        spec.max_length
+    );
   }
   return JSONSchemaConverter::GenerateString(spec, rule_name);
 }
 
-std::string XMLToolCallingConverter::GenerateAny(
-    const AnySpec& spec, const std::string& rule_name
-) {
+int32_t XMLToolCallingConverter::GenerateAny(const AnySpec& spec, const std::string& rule_name) {
   if (nested_object_level_ == 0) {
-    return kXMLObject;
+    return RuleRef(kXMLObject);
   }
   if (nested_object_level_ == 1) {
-    return kXMLString + " | " + kBasicArray + " | " + kBasicObject;
+    return Choice({RuleRef(kXMLString), RuleRef(kBasicArray), RuleRef(kBasicObject)});
   }
   return JSONSchemaConverter::GenerateAny(spec, rule_name);
 }
 
-std::string XMLToolCallingConverter::GenerateArray(
+int32_t XMLToolCallingConverter::GenerateArray(
     const ArraySpec& spec, const std::string& rule_name
 ) {
   nested_object_level_++;
@@ -192,95 +191,90 @@ std::string XMLToolCallingConverter::GenerateArray(
   return result;
 }
 
-std::string XMLToolCallingConverter::GenerateConst(
+int32_t XMLToolCallingConverter::GenerateConst(
     const ConstSpec& spec, const std::string& rule_name
 ) {
   if (nested_object_level_ <= 1) {
-    const std::string& val = spec.json_value;
-    if (val.size() >= 2 && val.front() == '"' && val.back() == '"') {
-      return "\"" + val.substr(1, val.size() - 2) + "\"";
-    }
-    return "\"" + val + "\"";
+    return ByteString(XMLValue(spec.json_value));
   }
   return JSONSchemaConverter::GenerateConst(spec, rule_name);
 }
 
-std::string XMLToolCallingConverter::GenerateEnum(
-    const EnumSpec& spec, const std::string& rule_name
-) {
+int32_t XMLToolCallingConverter::GenerateEnum(const EnumSpec& spec, const std::string& rule_name) {
   XGRAMMAR_DCHECK(!spec.json_values.empty())
       << "GenerateEnum called with empty enum spec for rule: " << rule_name;
   if (nested_object_level_ <= 1) {
-    std::string result;
-    for (size_t i = 0; i < spec.json_values.size(); ++i) {
-      if (i != 0) {
-        result += " | ";
-      }
-      const std::string& val = spec.json_values[i];
-      if (val.size() >= 2 && val.front() == '"' && val.back() == '"') {
-        result += "(\"" + val.substr(1, val.size() - 2) + "\")";
-      } else {
-        result += "(\"" + val + "\")";
-      }
+    std::vector<int32_t> values;
+    values.reserve(spec.json_values.size());
+    for (const auto& value : spec.json_values) {
+      values.push_back(ByteString(XMLValue(value)));
     }
-    return result;
+    return Choice(values);
   }
   return JSONSchemaConverter::GenerateEnum(spec, rule_name);
 }
 
-std::string XMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
+int32_t XMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
   if (nested_object_level_ <= 1) {
-    return "\"" + xml_wrapper_.key_wrapper_prefix + key + xml_wrapper_.key_wrapper_suffix + "\"";
+    return Sequence({ByteString(xml_wrapper_.key_wrapper_prefix + key), XMLKeySuffix()});
   }
   return JSONSchemaConverter::FormatPropertyKey(key);
 }
 
-std::string XMLToolCallingConverter::FormatProperty(
-    const std::string& key, const std::string& value_rule, const std::string& rule_name, int64_t idx
+int32_t XMLToolCallingConverter::FormatProperty(
+    const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
 ) {
   if (nested_object_level_ <= 1) {
-    std::string whitespace = GetWhitespacePattern();
+    std::vector<int32_t> elements = {FormatPropertyKey(key)};
+    if (!xml_wrapper_.value_wrapper_prefix.empty()) {
+      elements.push_back(WhitespaceExpression());
+      elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
+    }
     // xml_string already accepts whitespace. Adding whitespace repetitions around it preserves the
     // language but creates one Earley state for every possible split with the string body.
-    std::string formatted_value =
-        value_rule == kXMLString ? value_rule : whitespace + " " + value_rule + " " + whitespace;
-    if (!xml_wrapper_.value_wrapper_prefix.empty()) {
-      return "\"" + xml_wrapper_.key_wrapper_prefix + key + xml_wrapper_.key_wrapper_suffix +
-             "\" " + whitespace + " \"" + xml_wrapper_.value_wrapper_prefix + "\" " +
-             formatted_value + " \"" + xml_wrapper_.parameter_suffix + "\"";
+    if (value_rule_id == builder_.GetRuleId(kXMLString)) {
+      elements.push_back(RuleRef(value_rule_id));
+    } else {
+      elements.push_back(WhitespaceExpression());
+      elements.push_back(RuleRef(value_rule_id));
+      elements.push_back(WhitespaceExpression());
     }
-    return "\"" + xml_wrapper_.key_wrapper_prefix + key + xml_wrapper_.key_wrapper_suffix + "\" " +
-           formatted_value + " \"" + xml_wrapper_.parameter_suffix + "\"";
+    elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
+    return Sequence(elements);
   }
-  return JSONSchemaConverter::FormatProperty(key, value_rule, rule_name, idx);
+  return JSONSchemaConverter::FormatProperty(key, value_rule_id, rule_name, idx);
 }
 
-std::string XMLToolCallingConverter::FormatOtherProperty(
-    const std::string& key_pattern,
-    const std::string& value_rule,
+int32_t XMLToolCallingConverter::FormatOtherProperty(
+    int32_t key_pattern_expr,
+    int32_t value_rule_id,
     const std::string& rule_name,
     const std::string& rule_name_suffix
 ) {
   if (nested_object_level_ <= 1) {
-    std::string whitespace = GetWhitespacePattern();
-    std::string formatted_value =
-        value_rule == kXMLString ? value_rule : whitespace + " " + value_rule + " " + whitespace;
+    std::vector<int32_t> elements = {
+        ByteString(xml_wrapper_.key_wrapper_prefix), key_pattern_expr, XMLKeySuffix()
+    };
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
-      return "\"" + xml_wrapper_.key_wrapper_prefix + "\" " + key_pattern + " \"" +
-             xml_wrapper_.key_wrapper_suffix + "\" " + whitespace + " \"" +
-             xml_wrapper_.value_wrapper_prefix + "\" " + formatted_value + " \"" +
-             xml_wrapper_.parameter_suffix + "\"";
+      elements.push_back(WhitespaceExpression());
+      elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
     }
-    return "\"" + xml_wrapper_.key_wrapper_prefix + "\" " + key_pattern + " \"" +
-           xml_wrapper_.key_wrapper_suffix + "\" " + formatted_value + " \"" +
-           xml_wrapper_.parameter_suffix + "\"";
+    if (value_rule_id == builder_.GetRuleId(kXMLString)) {
+      elements.push_back(RuleRef(value_rule_id));
+    } else {
+      elements.push_back(WhitespaceExpression());
+      elements.push_back(RuleRef(value_rule_id));
+      elements.push_back(WhitespaceExpression());
+    }
+    elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
+    return Sequence(elements);
   }
   return JSONSchemaConverter::FormatOtherProperty(
-      key_pattern, value_rule, rule_name, rule_name_suffix
+      key_pattern_expr, value_rule_id, rule_name, rule_name_suffix
   );
 }
 
-std::string XMLToolCallingConverter::GenerateObject(
+int32_t XMLToolCallingConverter::GenerateObject(
     const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces
 ) {
   nested_object_level_++;
@@ -290,14 +284,14 @@ std::string XMLToolCallingConverter::GenerateObject(
   return result;
 }
 
-void XMLToolCallingConverter::AddCache(const std::string& key, const std::string& value) {
+void XMLToolCallingConverter::AddCache(const std::string& key, int32_t rule_id) {
   if (key.empty()) {
     return;
   }
-  rule_cache_manager_.AddCache(key, nested_object_level_ > 1, value);
+  rule_cache_manager_.AddCache(key, nested_object_level_ > 1, rule_id);
 }
 
-std::optional<std::string> XMLToolCallingConverter::GetCache(const std::string& key) const {
+std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
   }
