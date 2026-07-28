@@ -7,7 +7,10 @@
 
 #include <chrono>
 #include <iostream>
+#include <random>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "fsm.h"
 #include "fsm_builder.h"
@@ -521,6 +524,225 @@ TEST(XGrammarFSMTest, MergeEquivalentStatesNoCrossRuleChaining) {
   EXPECT_TRUE(merged.AcceptString("yam"));
   // Should not over-merge and introduce this path.
   EXPECT_FALSE(merged.AcceptString("ybn"));
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesMergesLeafStatesByEndStatus) {
+  FSMWithStartEnd fsm;
+  int start_state = fsm.AddState();
+  fsm.SetStartState(start_state);
+  for (int state = 0; state < 4; ++state) {
+    fsm.AddState();
+  }
+  fsm.AddEndState(1);
+  fsm.AddEndState(2);
+  fsm.GetFsm().AddEdge(start_state, 1, 'a', 'a');
+  fsm.GetFsm().AddEdge(start_state, 2, 'a', 'a');
+  fsm.GetFsm().AddEdge(start_state, 3, 'b', 'b');
+  fsm.GetFsm().AddEdge(start_state, 4, 'c', 'c');
+
+  auto merged = fsm.MergeEquivalentStates();
+  EXPECT_EQ(merged.GetFsm().NumStates(), 3);
+  EXPECT_TRUE(merged.AcceptString("a"));
+  EXPECT_FALSE(merged.AcceptString("b"));
+  EXPECT_FALSE(merged.AcceptString("c"));
+  EXPECT_EQ(merged.MergeEquivalentStates().ToString(), merged.ToString());
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesDeepCommonPrefix) {
+  constexpr int kNumberOfCopies = 64;
+  const std::string accepted_string = "abcdefghijklmnopqrstuvwx";
+
+  FSMWithStartEnd fsm;
+  int start_state = fsm.AddState();
+  fsm.SetStartState(start_state);
+  for (int copy = 0; copy < kNumberOfCopies; ++copy) {
+    int current_state = start_state;
+    for (char character : accepted_string) {
+      int next_state = fsm.AddState();
+      fsm.GetFsm().AddEdge(current_state, next_state, character, character);
+      current_state = next_state;
+    }
+    fsm.AddEndState(current_state);
+  }
+
+  auto merged = fsm.MergeEquivalentStates();
+  EXPECT_EQ(merged.GetFsm().NumStates(), accepted_string.size() + 1);
+  EXPECT_TRUE(merged.AcceptString(accepted_string));
+  EXPECT_FALSE(merged.AcceptString(accepted_string.substr(0, accepted_string.size() - 1)));
+  EXPECT_EQ(merged.MergeEquivalentStates().ToString(), merged.ToString());
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesDeepCommonSuffix) {
+  constexpr int kNumberOfBranches = 64;
+  const std::string common_suffix = "shared_suffix";
+
+  FSMWithStartEnd fsm;
+  int start_state = fsm.AddState();
+  fsm.SetStartState(start_state);
+  for (int branch = 0; branch < kNumberOfBranches; ++branch) {
+    int current_state = start_state;
+    int first_character = '!' + branch;
+    int next_state = fsm.AddState();
+    fsm.GetFsm().AddEdge(current_state, next_state, first_character, first_character);
+    current_state = next_state;
+    for (char character : common_suffix) {
+      next_state = fsm.AddState();
+      fsm.GetFsm().AddEdge(current_state, next_state, character, character);
+      current_state = next_state;
+    }
+    fsm.AddEndState(current_state);
+  }
+
+  auto merged = fsm.MergeEquivalentStates();
+  EXPECT_EQ(merged.GetFsm().NumStates(), common_suffix.size() + 2);
+  for (int branch = 0; branch < kNumberOfBranches; ++branch) {
+    EXPECT_TRUE(merged.AcceptString(std::string(1, static_cast<char>('!' + branch)) + common_suffix)
+    );
+  }
+  EXPECT_FALSE(merged.AcceptString(std::string(1, 'a') + common_suffix.substr(1)));
+  EXPECT_EQ(merged.MergeEquivalentStates().ToString(), merged.ToString());
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesHandlesCyclesAndDifferentEndStatus) {
+  FSMWithStartEnd cyclic_fsm;
+  for (int state = 0; state < 5; ++state) {
+    cyclic_fsm.AddState();
+  }
+  cyclic_fsm.SetStartState(0);
+  cyclic_fsm.AddEndState(3);
+  cyclic_fsm.AddEndState(4);
+  cyclic_fsm.GetFsm().AddEdge(0, 1, 'a', 'a');
+  cyclic_fsm.GetFsm().AddEdge(0, 2, 'a', 'a');
+  cyclic_fsm.GetFsm().AddEdge(1, 1, 'b', 'b');
+  cyclic_fsm.GetFsm().AddEdge(2, 2, 'b', 'b');
+  cyclic_fsm.GetFsm().AddEdge(1, 3, 'c', 'c');
+  cyclic_fsm.GetFsm().AddEdge(2, 4, 'd', 'd');
+
+  auto merged_cycle = cyclic_fsm.MergeEquivalentStates();
+  EXPECT_EQ(merged_cycle.GetFsm().NumStates(), 4);
+  EXPECT_TRUE(merged_cycle.AcceptString("ac"));
+  EXPECT_TRUE(merged_cycle.AcceptString("abbbc"));
+  EXPECT_TRUE(merged_cycle.AcceptString("ad"));
+  EXPECT_TRUE(merged_cycle.AcceptString("abbbd"));
+  EXPECT_FALSE(merged_cycle.AcceptString("ab"));
+
+  FSMWithStartEnd different_end_status_fsm;
+  for (int state = 0; state < 4; ++state) {
+    different_end_status_fsm.AddState();
+  }
+  different_end_status_fsm.SetStartState(0);
+  different_end_status_fsm.AddEndState(1);
+  different_end_status_fsm.AddEndState(3);
+  different_end_status_fsm.GetFsm().AddEdge(0, 1, 'a', 'a');
+  different_end_status_fsm.GetFsm().AddEdge(0, 2, 'a', 'a');
+  different_end_status_fsm.GetFsm().AddEdge(2, 3, 'b', 'b');
+
+  auto merged_end_status = different_end_status_fsm.MergeEquivalentStates();
+  EXPECT_EQ(merged_end_status.GetFsm().NumStates(), 3);
+  EXPECT_TRUE(merged_end_status.AcceptString("a"));
+  EXPECT_TRUE(merged_end_status.AcceptString("ab"));
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesHandlesMultipleAndSpecialEdges) {
+  FSMWithStartEnd multiple_edges_fsm;
+  for (int state = 0; state < 4; ++state) {
+    multiple_edges_fsm.AddState();
+  }
+  multiple_edges_fsm.SetStartState(0);
+  multiple_edges_fsm.AddEndState(1);
+  multiple_edges_fsm.AddEndState(2);
+  multiple_edges_fsm.GetFsm().AddEdge(0, 1, 'a', 'c');
+  multiple_edges_fsm.GetFsm().AddEdge(0, 1, 'x', 'z');
+  multiple_edges_fsm.GetFsm().AddEdge(0, 2, 'a', 'c');
+  multiple_edges_fsm.GetFsm().AddEdge(0, 2, 'x', 'z');
+  multiple_edges_fsm.GetFsm().AddEdge(3, 3, 'q', 'q');
+
+  auto merged_ranges = multiple_edges_fsm.MergeEquivalentStates();
+  EXPECT_EQ(merged_ranges.GetFsm().NumStates(), 3);
+  EXPECT_TRUE(merged_ranges.AcceptString("b"));
+  EXPECT_TRUE(merged_ranges.AcceptString("y"));
+  EXPECT_FALSE(merged_ranges.AcceptString("q"));
+
+  FSMWithStartEnd special_edges_fsm;
+  for (int state = 0; state < 5; ++state) {
+    special_edges_fsm.AddState();
+  }
+  special_edges_fsm.SetStartState(0);
+  special_edges_fsm.AddEndState(3);
+  special_edges_fsm.AddEndState(4);
+  special_edges_fsm.GetFsm().AddRuleEdge(0, 1, 7);
+  special_edges_fsm.GetFsm().AddRuleEdge(0, 2, 7);
+  special_edges_fsm.GetFsm().AddEOSEdge(1, 3);
+  special_edges_fsm.GetFsm().AddEOSEdge(2, 4);
+
+  auto merged_special_edges = special_edges_fsm.MergeEquivalentStates();
+  EXPECT_EQ(merged_special_edges.GetFsm().NumStates(), 3);
+  EXPECT_EQ(
+      merged_special_edges.MergeEquivalentStates().ToString(), merged_special_edges.ToString()
+  );
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesRandomizedPreservesLanguage) {
+  std::vector<std::string> test_strings = {""};
+  std::vector<std::string> strings_at_current_length = {""};
+  for (int length = 1; length <= 4; ++length) {
+    std::vector<std::string> strings_at_next_length;
+    for (const auto& prefix : strings_at_current_length) {
+      for (char character : std::string("abc")) {
+        strings_at_next_length.push_back(prefix + character);
+      }
+    }
+    test_strings.insert(
+        test_strings.end(), strings_at_next_length.begin(), strings_at_next_length.end()
+    );
+    strings_at_current_length = std::move(strings_at_next_length);
+  }
+
+  std::mt19937 random_generator(20260728);
+  for (int test_case = 0; test_case < 300; ++test_case) {
+    SCOPED_TRACE(test_case);
+    int number_of_states = 4 + random_generator() % 9;
+    FSMWithStartEnd fsm;
+    for (int state = 0; state < number_of_states; ++state) {
+      fsm.AddState();
+    }
+    fsm.SetStartState(random_generator() % number_of_states);
+    for (int state = 0; state < number_of_states; ++state) {
+      if (random_generator() % 4 == 0) {
+        fsm.AddEndState(state);
+      }
+    }
+    for (int source = 0; source < number_of_states; ++source) {
+      int number_of_edges = random_generator() % 5;
+      for (int edge_index = 0; edge_index < number_of_edges; ++edge_index) {
+        int target = random_generator() % number_of_states;
+        if (random_generator() % 8 == 0) {
+          fsm.GetFsm().AddEpsilonEdge(source, target);
+        } else {
+          int character = 'a' + random_generator() % 3;
+          fsm.GetFsm().AddEdge(source, target, character, character);
+        }
+      }
+      if (random_generator() % 10 == 0 && !fsm.GetFsm().GetEdges(source).empty()) {
+        const auto duplicate_edge = fsm.GetFsm().GetEdges(source).front();
+        fsm.GetFsm().AddEdge(source, duplicate_edge.target, duplicate_edge.min, duplicate_edge.max);
+      }
+    }
+
+    std::vector<bool> accepted_before;
+    accepted_before.reserve(test_strings.size());
+    for (const auto& test_string : test_strings) {
+      accepted_before.push_back(fsm.AcceptString(test_string));
+    }
+
+    auto merged = fsm.MergeEquivalentStates();
+    EXPECT_LE(merged.GetFsm().NumStates(), fsm.GetFsm().NumStates());
+    for (size_t index = 0; index < test_strings.size(); ++index) {
+      EXPECT_EQ(merged.AcceptString(test_strings[index]), accepted_before[index])
+          << "String: " << test_strings[index];
+    }
+    EXPECT_EQ(merged.MergeEquivalentStates().ToString(), merged.ToString());
+  }
 }
 
 TEST(XGrammarFSMTest, SimplifyEpsilonPreservesAcceptance) {
