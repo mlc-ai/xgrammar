@@ -383,6 +383,7 @@ class GrammarFSMBuilder {
 
  public:
   static void Apply(Grammar* grammar);
+  static void Apply(Grammar* grammar, int max_threads);
   static FSMWithStartEnd RuleRef(const GrammarExpr& expr);
   static FSMWithStartEnd CharacterClass(const GrammarExpr& expr);
   static FSMWithStartEnd ByteString(const GrammarExpr& expr);
@@ -440,6 +441,7 @@ class RepetitionRangeExpander {
 class GrammarOptimizer {
  public:
   static Grammar Apply(const Grammar& grammar);
+  static Grammar Apply(const Grammar& grammar, int max_threads);
 };
 
 /*!
