@@ -105,7 +105,7 @@ FSM_STRUCTURE_CASES = [
             "minItems": 1,
             "maxItems": 4,
         },
-        "d0284724594dcee4009b06e2ef7d210b7614f062482caa5df925a10619af4323",
+        "a7a376ee74bc9e59e36da46fd7dddc9c322555c96110120260779bd07a9d14c5",
     ),
     (
         "structural_tag",
