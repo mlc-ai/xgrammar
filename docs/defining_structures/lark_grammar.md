@@ -669,8 +669,10 @@ with `max_tokens`, `lazy`, `suffix`, and `stop`; the first applicable length or 
 wins. It applies to `accept_string`, unlike `max_tokens`. Rollback, reset, forking, and speculative
 decoding restore the character count exactly.
 
-`max_chars` must be between 1 and 1,000,000, inclusive. It cannot be used on terminals or on rules
-consumed by the dynamic dispatch pattern.
+`max_chars` must be between 0 and 2,147,483,647, inclusive. A zero budget closes the rule
+immediately when its body can end at the entry position. It cannot be used on terminals. On a
+dynamic dispatch start rule or a rule consumed by dynamic dispatch, it is ignored and a warning
+is logged.
 
 ## Capture Groups
 

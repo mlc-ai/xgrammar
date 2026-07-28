@@ -769,14 +769,7 @@ class LarkParser {
         definition->max_tokens_location = key.location;
       } else if (key.text == "max_chars") {
         Consume(TokenType::kEquals, "expected '=' after max_chars attribute");
-        Location value_location = Peek().location;
         int32_t value = ParseInteger();
-        if (value <= 0) {
-          RaiseLarkError(source_, value_location, "max_chars must be positive");
-        }
-        if (value > 1'000'000) {
-          RaiseLarkError(source_, value_location, "max_chars is too large");
-        }
         if (definition->max_chars.has_value()) {
           RaiseLarkError(source_, key.location, "max_chars attribute is specified more than once");
         }
@@ -1384,11 +1377,8 @@ class LarkCompiler {
           );
         }
         if (definition.max_chars.has_value()) {
-          RaiseLarkError(
-              source_,
-              definition.max_chars_location,
-              "max_chars is not supported on rules consumed by dynamic dispatch"
-          );
+          XGRAMMAR_LOG(WARNING) << "Ignoring max_chars on rule '" << definition.name
+                                << "' because it is consumed by dynamic dispatch.";
         }
         if (definition.capture_name.has_value()) {
           RaiseLarkError(
@@ -1416,11 +1406,8 @@ class LarkCompiler {
             );
           }
           if (definition.max_chars.has_value()) {
-            RaiseLarkError(
-                source_,
-                definition.max_chars_location,
-                "max_chars is not supported on a dynamic dispatch start rule"
-            );
+            XGRAMMAR_LOG(WARNING) << "Ignoring max_chars on dynamic dispatch start rule '"
+                                  << definition.name << "'.";
           }
           body_expr_id = dynamic_start_body.value();
         } else if (definition.max_tokens.has_value() || definition.max_chars.has_value()) {

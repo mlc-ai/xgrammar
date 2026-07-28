@@ -8,6 +8,7 @@
 #define XGRAMMAR_EARLEY_PARSER_H_
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <ostream>
 #include <queue>
@@ -406,7 +407,9 @@ class EarleyParser {
     if (own < 0) {
       return parent_deadline;
     }
-    int32_t deadline = current_char_index_ + own;
+    int32_t deadline = own > std::numeric_limits<int32_t>::max() - current_char_index_
+                           ? std::numeric_limits<int32_t>::max()
+                           : current_char_index_ + own;
     return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
   }
 

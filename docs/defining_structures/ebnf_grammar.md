@@ -242,8 +242,9 @@ cannot end where the budget runs out remain best-effort.
 The budget applies per occurrence, nested character budgets use the smallest active budget, and
 `max_chars` may be combined with `max_tokens`; whichever boundary is reached first takes effect.
 Unlike `max_tokens`, character budgets also apply to `accept_string`. Token acceptance, rollback,
-reset, forking, and speculative decoding preserve the character count. Use an integer from 1 to
-1,000,000.
+reset, forking, and speculative decoding preserve the character count. Use an integer from 0 to
+2,147,483,647. A zero budget closes the rule immediately when its body can end at the entry
+position.
 
 ### Capture Groups
 

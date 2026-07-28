@@ -350,12 +350,13 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
         );
       }
       constexpr int64_t kMaxInt32 = std::numeric_limits<int32_t>::max();
-      if (has_max_chars && (max_chars_value <= 0 || max_chars_value > 1'000'000)) {
+      if (has_max_chars && max_chars_value < 0) {
         ReportLexerError(
-            "The max_chars rule attribute must be between 1 and 1000000", start_line, start_column
+            "The max_chars rule attribute must be non-negative", start_line, start_column
         );
       }
-      if ((has_capture_hidden_suffix_bytes && capture_hidden_suffix_bytes_value > kMaxInt32) ||
+      if ((has_max_chars && max_chars_value > kMaxInt32) ||
+          (has_capture_hidden_suffix_bytes && capture_hidden_suffix_bytes_value > kMaxInt32) ||
           (has_capture_hidden_stop_bytes && capture_hidden_stop_bytes_value > kMaxInt32) ||
           (has_capture_hidden_body_rule_id && capture_hidden_body_rule_id_value > kMaxInt32) ||
           (has_capture_hidden_marker_rule_id && capture_hidden_marker_rule_id_value > kMaxInt32)) {

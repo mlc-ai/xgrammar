@@ -72,6 +72,19 @@ def test_max_chars_accept_string_is_transactional() -> None:
     assert matcher.is_terminated()
 
 
+def test_max_chars_zero_closes_at_rule_entry() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["a", ">"])
+    compiled = _compile(
+        'start: value ">"\nvalue[max_chars=0]: TEXT\nTEXT: /(\\n|.)*/', tokenizer_info
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert _allowed_token_ids(matcher, tokenizer_info) == [1]
+    assert not matcher.accept_token(0)
+    assert matcher.accept_token(1)
+    assert matcher.is_terminated()
+
+
 def test_max_chars_codepoint_split_across_tokens() -> None:
     tokenizer_info = xgr.TokenizerInfo([b"\xe4", b"\xb8", b"\xad", b">"])
     compiled = _compile(
@@ -261,11 +274,31 @@ def test_max_chars_round_trip_and_validation() -> None:
     assert str(xgr.Grammar.from_ebnf(printed)) == printed
     assert str(xgr.Grammar.deserialize_json(grammar.serialize_json())) == printed
 
-    for value in (0, 1_000_001):
-        with pytest.raises(RuntimeError, match="max_chars"):
-            xgr.Grammar.from_lark(f"start[max_chars={value}]: /a*/")
-        with pytest.raises(RuntimeError, match="max_chars"):
+    for value in (0, 1_000_001, 2_147_483_647):
+        assert f"max_chars={value}" in str(xgr.Grammar.from_lark(f"start[max_chars={value}]: /a*/"))
+        assert f"max_chars={value}" in str(
             xgr.Grammar.from_ebnf(f"root[max_chars={value}] ::= [a]*")
+        )
+
+
+def test_max_chars_is_ignored_on_dynamic_dispatch_rules(capfd: pytest.CaptureFixture[str]) -> None:
+    grammar = xgr.Grammar.from_lark(
+        r"""
+        start[max_chars=5]: tool* tail
+        tail: TEXT
+        tool_head[lazy]: TEXT "<tool>"
+        tool[max_chars=3]: tool_head /[0-9]+/ "</tool>"
+        TEXT: /(\n|.)*/
+        """
+    )
+    captured = capfd.readouterr()
+    warnings = captured.out + captured.err
+
+    assert "Ignoring max_chars on dynamic dispatch start rule 'start'." in warnings
+    assert (
+        "Ignoring max_chars on rule 'tool' because it is consumed by dynamic dispatch." in warnings
+    )
+    assert "max_chars=" not in str(grammar)
 
 
 def test_max_chars_compiler_cache_and_serialization() -> None:
