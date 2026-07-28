@@ -524,7 +524,7 @@ Notes:
   middle of a sequence, quantifiers over multi-character strings, and repetition ranges like
   `{2,5}`) are rejected at compile time.
 - A lazy rule that can match the empty string always matches the empty string (for example
-  `foo[lazy]: /.*/`); the compiler emits a warning for this.
+  `foo[lazy]: /.*/`).
 - Lazy rules are compiled as lexemes: `%ignore` is not woven inside their bodies, and like
   terminals they take the ignored-token skip after them.
 - Each occurrence of the rule commits independently, and the commit is exact for validation
@@ -616,8 +616,7 @@ is possible at the current position; otherwise the budget is relaxed for one ste
 enforcement is retried, so the rule ends at the earliest possible position and the output
 always stays grammar-valid. When authoring a budgeted rule, prefer a body that can end at every
 possible budget boundary. The arbitrary-text form above can end at any position and therefore
-never exceeds its budget. For other bodies (e.g. `/(\S*\s)+/`) the budget is best-effort and a
-compile-time warning marks the rule.
+never exceeds its budget. For other bodies (e.g. `/(\S*\s)+/`) the budget is best-effort.
 
 `max_tokens` composes with committed-shortest matching. With `lazy`, whichever of the lazy
 completion and the token deadline is reached first closes the occurrence. With `suffix` or

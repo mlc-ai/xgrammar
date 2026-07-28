@@ -2603,8 +2603,7 @@ class GrammarOptimizerImpl {
   /*!
    * \brief Committed-shortest (lazy) matching requires the whole rule body to compile into a
    * single per-rule FSM without rule references, so that the states of one occurrence are exactly
-   * the states with the rule's id. Also warn on lazy rules that can match empty: they commit at
-   * entry and always match the empty string.
+   * the states with the rule's id.
    */
   static void ValidateLazyRules(const Grammar& grammar) {
     for (int32_t i = 0; i < grammar->NumRules(); ++i) {
@@ -2613,13 +2612,6 @@ class GrammarOptimizerImpl {
         continue;
       }
       const auto& body = grammar->GetGrammarExpr(rule.body_expr_id);
-      if (std::binary_search(
-              grammar->allow_empty_rule_ids.begin(), grammar->allow_empty_rule_ids.end(), i
-          )) {
-        XGRAMMAR_LOG(WARNING) << "The lazy rule '" << rule.name
-                              << "' can match the empty string, so it always matches the empty "
-                                 "string (committed-shortest matching).";
-      }
       if (body.type == Grammar::Impl::GrammarExprType::kRegex) {
         continue;
       }

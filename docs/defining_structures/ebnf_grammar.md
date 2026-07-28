@@ -267,9 +267,8 @@ character classes, `Regex` expressions, and supported repetitions or alternative
 elements. Bodies that still require rule references, recursion, or repetition ranges after
 normalization are rejected during compilation.
 
-A lazy rule that can match the empty string always commits to the empty match and produces a
-warning. Each occurrence commits independently, and `rollback`, `reset`, and `fork` restore the
-commit state.
+A lazy rule that can match the empty string always commits to the empty match. Each occurrence
+commits independently, and `rollback`, `reset`, and `fork` restore the commit state.
 
 ### Sampling Temperature
 
