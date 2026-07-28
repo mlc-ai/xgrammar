@@ -85,67 +85,6 @@ r3 ::= ("" | ("abc"))
 
 
 def test_grammar_union_with_stag():
-    expected_grammar_union = r"""root ::= ((root_1) | (root_2))
-basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
-basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
-basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
-basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
-basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
-basic_string ::= (("\"" basic_string_sub))
-basic_boolean ::= (("true") | ("false"))
-basic_null ::= (("null"))
-basic_array ::= (("[" [ \n\t]* basic_any basic_array_items{0, -1} [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_properties{0, -1} [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-basic_number_digits ::= (([0-9]))
-basic_array_items ::= (([ \n\t]* "," [ \n\t]* basic_any))
-basic_object_properties ::= (([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any))
-root_0 ::= (("{" [ \n\t]* "\"arg\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-basic_integer_1 ::= ("" | ("-"))
-basic_number_1 ::= ("" | ("-"))
-basic_number_2 ::= (("0") | ([1-9] [0-9]*))
-basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
-basic_number_4 ::= ("" | ([+\-]))
-basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
-triggered_tags_group ::= (("" root_0 "end"))
-triggered_tags ::= TagDispatch(
-  ("start", triggered_tags_group),
-  loop_after_dispatch=true,
-  excludes=()
-)
-root_1 ::= ((triggered_tags))
-root_2 ::= (([a-z] root_2) | ([a-z]))
-"""
-
-    expected_grammar_concat = r"""root ::= ((root_1 root_2))
-basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
-basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
-basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
-basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
-basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
-basic_string ::= (("\"" basic_string_sub))
-basic_boolean ::= (("true") | ("false"))
-basic_null ::= (("null"))
-basic_array ::= (("[" [ \n\t]* basic_any basic_array_items{0, -1} [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_properties{0, -1} [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-basic_number_digits ::= (([0-9]))
-basic_array_items ::= (([ \n\t]* "," [ \n\t]* basic_any))
-basic_object_properties ::= (([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any))
-root_0 ::= (("{" [ \n\t]* "\"arg\"" [ \n\t]* ":" [ \n\t]* basic_string [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-basic_integer_1 ::= ("" | ("-"))
-basic_number_1 ::= ("" | ("-"))
-basic_number_2 ::= (("0") | ([1-9] [0-9]*))
-basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
-basic_number_4 ::= ("" | ([+\-]))
-basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
-triggered_tags_group ::= (("" root_0 "end"))
-triggered_tags ::= TagDispatch(
-  ("start", triggered_tags_group),
-  loop_after_dispatch=true,
-  excludes=()
-)
-root_1 ::= ((triggered_tags))
-root_2 ::= (([a-z] root_2) | ([a-z]))
-"""
     start = "start"
     schema = {"type": "object", "properties": {"arg": {"type": "string"}}}
     end = "end"
@@ -153,10 +92,16 @@ root_2 ::= (([a-z] root_2) | ([a-z]))
     triggers = [start]
     stag_grammar = xgr.Grammar.from_structural_tag([tag], triggers)
     start_grammar = xgr.Grammar.from_ebnf("root ::= [a-z] root | [a-z]")
+
     grammar_union = xgr.Grammar.union(stag_grammar, start_grammar)
-    assert str(grammar_union) == expected_grammar_union
+    assert _is_grammar_accept_string(grammar_union, 'start{"arg": "x"}end')
+    assert _is_grammar_accept_string(grammar_union, "abc")
+    assert not _is_grammar_accept_string(grammar_union, 'start{"arg": "x"}endabc')
+
     grammar_concat = xgr.Grammar.concat(stag_grammar, start_grammar)
-    assert str(grammar_concat) == expected_grammar_concat
+    assert _is_grammar_accept_string(grammar_concat, 'start{"arg": "x"}endabc')
+    assert not _is_grammar_accept_string(grammar_concat, 'start{"arg": "x"}end')
+    assert not _is_grammar_accept_string(grammar_concat, "abc")
 
 
 def test_grammar_union_concat_compiled_semantics():

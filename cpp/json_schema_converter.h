@@ -326,7 +326,12 @@ class JSONSchemaConverter {
   );
 };
 
-/*! \brief Convert a JSON Schema string directly to a grammar AST. */
+/*!
+ * \brief Convert a JSON Schema string directly to an unnormalized grammar AST.
+ *
+ * Callers that need normalized grammar should apply GrammarNormalizer after composing any
+ * subgrammars.
+ */
 Grammar JSONSchemaToGrammar(
     const std::string& schema,
     bool any_whitespace = true,

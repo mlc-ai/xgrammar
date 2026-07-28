@@ -4284,7 +4284,7 @@ Grammar JSONSchemaToGrammar(
       any_order,
       json_format
   );
-  return GrammarNormalizer::Apply(converter.Convert(spec));
+  return converter.Convert(spec);
 }
 
 std::string JSONSchemaToEBNF(
@@ -4345,7 +4345,7 @@ std::string JSONSchemaToEBNF(
       JSONSchemaConverter converter(
           indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
-      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
+      return converter.Convert(spec).ToString();
     }
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
@@ -4360,7 +4360,7 @@ std::string JSONSchemaToEBNF(
           json_format,
           any_order
       );
-      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
+      return converter.Convert(spec).ToString();
     }
     default:
       XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);
