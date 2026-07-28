@@ -7,6 +7,7 @@
 #include <dlpack/dlpack.h>
 #include <tvm/ffi/any.h>
 #include <tvm/ffi/error.h>
+#include <tvm/ffi/extra/stl.h>
 #include <tvm/ffi/string.h>
 #include <tvm/ffi/tvm_ffi.h>
 #include <xgrammar/xgrammar.h>
@@ -220,13 +221,15 @@ class GrammarMatcherObj : public ffi::Object {
       ffi::ObjectRef compiled_grammar_ref,
       ffi::AnyView override_stop_tokens_opt,
       bool terminate_without_stop_token,
-      int64_t max_rollback_tokens
+      int64_t max_rollback_tokens,
+      std::optional<float> default_temperature
   )
       : value(
             compiled_grammar_ref.as<CompiledGrammarObj>()->value,
             OptionalIntVectorFromView(override_stop_tokens_opt),
             terminate_without_stop_token,
-            static_cast<int>(max_rollback_tokens)
+            static_cast<int>(max_rollback_tokens),
+            default_temperature
         ) {}
 
   static constexpr bool _type_mutable = true;
@@ -596,6 +599,20 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           }
       )
       .def_static(
+          "batch_fill_temperature",
+          [](ffi::Array<O> matchers_ref, ffi::AnyView temperatures, ffi::AnyView indices) {
+            std::vector<GrammarMatcher> matchers;
+            matchers.reserve(matchers_ref.size());
+            for (int64_t i = 0; i < static_cast<int64_t>(matchers_ref.size()); ++i) {
+              matchers.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
+            }
+            DLTensor* temperatures_ptr = temperatures.cast<DLTensor*>();
+            BatchGrammarMatcher::BatchFillTemperature(
+                matchers, temperatures_ptr, OptionalInt32VectorFromView(indices)
+            );
+          }
+      )
+      .def_static(
           "batch_accept_string",
           [](ffi::Array<O> matchers_ref, ffi::Array<ffi::Any> input_str_byte_union, bool debug_print
           ) {
@@ -649,9 +666,9 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       });
 
   // GrammarMatcher: init(compiled_grammar, override_stop_tokens_opt, terminate_without_stop,
-  // max_rollback_tokens)
+  // max_rollback_tokens, default_temperature)
   refl::ObjectDef<GrammarMatcherObj>()
-      .def(refl::init<O, ffi::AnyView, bool, int64_t>())
+      .def(refl::init<O, ffi::AnyView, bool, int64_t, std::optional<float>>())
       .def(
           "accept_token",
           [](GrammarMatcherObj* o, int64_t token_id, bool debug_print) {
@@ -686,17 +703,21 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              ffi::AnyView retrieve_next_sibling,
              ffi::AnyView draft_tokens,
              ffi::AnyView token_bitmask,
-             double time_threshold) {
+             double time_threshold,
+             ffi::AnyView temperatures) {
             DLTensor* retrieve_next_token_ptr = retrieve_next_token.cast<DLTensor*>();
             DLTensor* retrieve_next_sibling_ptr = retrieve_next_sibling.cast<DLTensor*>();
             DLTensor* draft_tokens_ptr = draft_tokens.cast<DLTensor*>();
             DLTensor* token_bitmask_ptr = token_bitmask.cast<DLTensor*>();
+            DLTensor* temperatures_ptr =
+                temperatures == nullptr ? nullptr : temperatures.cast<DLTensor*>();
             return o->value.TraverseDraftTree(
                 retrieve_next_token_ptr,
                 retrieve_next_sibling_ptr,
                 draft_tokens_ptr,
                 token_bitmask_ptr,
-                time_threshold
+                time_threshold,
+                temperatures_ptr
             );
           }
       )
@@ -739,6 +760,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
             return static_cast<int64_t>(o->value.GetMaxRollbackTokens());
           }
       )
+      .def("temperature", [](const GrammarMatcherObj* o) { return o->value.GetTemperature(); })
       .def(
           "stop_token_ids",
           [](const GrammarMatcherObj* o) {

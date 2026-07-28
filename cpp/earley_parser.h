@@ -51,7 +51,8 @@ struct ParserState {
       const int32_t& budget_deadline = -1,
       const int32_t& sub_element_id = 0,
       const int32_t& repeat_count = 0,
-      const int32_t& partial_codepoint = 0
+      const int32_t& partial_codepoint = 0,
+      const int32_t& active_temperature_rule_id = -1
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
@@ -60,7 +61,8 @@ struct ParserState {
         budget_deadline(budget_deadline),
         sub_element_id(sub_element_id),
         repeat_count(repeat_count),
-        partial_codepoint(partial_codepoint) {}
+        partial_codepoint(partial_codepoint),
+        active_temperature_rule_id(active_temperature_rule_id) {}
 
   /*!
    * \brief A rule_start_pos value of kNoPrevInputPos means this ParserState is the root of the
@@ -97,6 +99,9 @@ struct ParserState {
   /*! \brief Partial codepoint accumulated during UTF-8 decoding for positive character classes. */
   int32_t partial_codepoint = 0;
 
+  /*! \brief The innermost active rule that specifies a sampling temperature. */
+  int32_t active_temperature_rule_id = -1;
+
   /*!
    * \brief Lexicographic order over all fields. It is only used to sort the states for
    * deterministic serialization, and is not needed during parsing.
@@ -108,7 +113,10 @@ struct ParserState {
     if (rule_start_pos != other.rule_start_pos) return rule_start_pos < other.rule_start_pos;
     if (sub_element_id != other.sub_element_id) return sub_element_id < other.sub_element_id;
     if (repeat_count != other.repeat_count) return repeat_count < other.repeat_count;
-    return partial_codepoint < other.partial_codepoint;
+    if (partial_codepoint != other.partial_codepoint) {
+      return partial_codepoint < other.partial_codepoint;
+    }
+    return active_temperature_rule_id < other.active_temperature_rule_id;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
@@ -131,6 +139,9 @@ struct ParserState {
     if (budget_deadline != -1) {
       result += ", budget_deadline=" + std::to_string(budget_deadline);
     }
+    if (active_temperature_rule_id != -1) {
+      result += ", active_temperature_rule_id=" + std::to_string(active_temperature_rule_id);
+    }
     result += ")";
     return result;
   }
@@ -145,7 +156,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &ParserState::budget_deadline,
     &ParserState::sub_element_id,
     &ParserState::repeat_count,
-    &ParserState::partial_codepoint
+    &ParserState::partial_codepoint,
+    &ParserState::active_temperature_rule_id
 );
 
 /*!
@@ -183,7 +195,8 @@ class StateEqualForParsing {
            lhs.element_id == rhs.element_id && lhs.rule_start_pos == rhs.rule_start_pos &&
            lhs.sub_element_id == rhs.sub_element_id && lhs.repeat_count == rhs.repeat_count &&
            lhs.partial_codepoint == rhs.partial_codepoint &&
-           lhs.budget_deadline == rhs.budget_deadline;
+           lhs.budget_deadline == rhs.budget_deadline &&
+           lhs.active_temperature_rule_id == rhs.active_temperature_rule_id;
   }
 };
 
@@ -202,7 +215,8 @@ class StateHashForParsing {
         state.sub_element_id,
         state.repeat_count,
         state.partial_codepoint,
-        state.budget_deadline
+        state.budget_deadline,
+        state.active_temperature_rule_id
     );
   }
 };
@@ -459,6 +473,9 @@ class EarleyParser {
 
   /*! \brief The initial state expanded from the root rule of the grammar. */
   ParserState RootInitialState() const;
+
+  /*! \brief Resolve the active temperature rule when entering a rule. */
+  int32_t ResolveActiveTemperatureRule(int32_t rule_id, int32_t inherited_rule_id) const;
 
   /*!
    * \brief Expand the rule, used for RuleRef and kTagDispatch.
