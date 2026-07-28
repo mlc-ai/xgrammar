@@ -120,7 +120,6 @@ void EarleyParser::PopLastStates(int32_t cnt) {
     char_budget_entry_history_.erase(
         char_budget_entry_history_.end() - cnt, char_budget_entry_history_.end()
     );
-    current_char_index_ = char_count_history_.back();
   }
 }
 
@@ -393,10 +392,7 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   tmp_completed_lazy_occurrences_.clear();
   if (has_char_budget_rules_) {
     tmp_char_budget_entered_ = char_budget_entry_history_.back();
-  }
-  int32_t previous_char_index = current_char_index_;
-  if (has_char_budget_rules_) {
-    current_char_index_ += StartsUTF8Codepoint(ch);
+    char_count_history_.push_back(GetCurrentCharIndex() + StartsUTF8Codepoint(ch));
   }
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   // Scan all the scanable states.
@@ -410,7 +406,7 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   // Check if the character is accepted.
   if (tmp_process_state_queue_.empty() && tmp_states_to_be_added_.empty()) {
     if (has_char_budget_rules_) {
-      current_char_index_ = previous_char_index;
+      char_count_history_.pop_back();
     }
     return false;
   }
@@ -439,7 +435,6 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
   if (has_char_budget_rules_) {
-    char_count_history_.push_back(current_char_index_);
     char_budget_entry_history_.push_back(tmp_char_budget_entered_);
   }
   return true;
@@ -534,7 +529,7 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
   if (has_char_budget_rules_) {
-    char_count_history_.push_back(current_char_index_);
+    char_count_history_.push_back(GetCurrentCharIndex());
     char_budget_entry_history_.push_back(tmp_char_budget_entered_);
   }
 }
@@ -549,7 +544,6 @@ void EarleyParser::Reset() {
   }
   char_count_history_.clear();
   char_budget_entry_history_.clear();
-  current_char_index_ = 0;
   tmp_char_budget_entered_ = false;
   capture_recording_ = false;
   XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
@@ -1174,10 +1168,7 @@ bool EarleyParser::AdvanceAtomicToken(
   tmp_completed_lazy_occurrences_.clear();
   if (has_char_budget_rules_) {
     tmp_char_budget_entered_ = char_budget_entry_history_.back();
-  }
-  int32_t previous_char_index = current_char_index_;
-  if (has_char_budget_rules_) {
-    current_char_index_ += token_char_count;
+    char_count_history_.push_back(GetCurrentCharIndex() + token_char_count);
   }
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   for (const auto& state : latest_states) {
@@ -1188,7 +1179,7 @@ bool EarleyParser::AdvanceAtomicToken(
   }
   if (tmp_process_state_queue_.empty() && tmp_states_to_be_added_.empty()) {
     if (has_char_budget_rules_) {
-      current_char_index_ = previous_char_index;
+      char_count_history_.pop_back();
     }
     return false;
   }
@@ -1213,7 +1204,6 @@ bool EarleyParser::AdvanceAtomicToken(
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
   if (has_char_budget_rules_) {
-    char_count_history_.push_back(current_char_index_);
     char_budget_entry_history_.push_back(tmp_char_budget_entered_);
   }
   return true;

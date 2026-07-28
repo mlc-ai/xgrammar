@@ -373,9 +373,6 @@ class EarleyParser {
   /*! \brief The number of Unicode codepoints accepted at every parser history row. */
   std::vector<int32_t> char_count_history_;
 
-  /*! \brief The current accepted Unicode codepoint count. */
-  int32_t current_char_index_ = 0;
-
   /*! \brief Whether any rule of the grammar has a character budget. */
   bool has_char_budget_rules_ = false;
 
@@ -407,15 +404,16 @@ class EarleyParser {
     if (own < 0) {
       return parent_deadline;
     }
-    int32_t deadline = own > std::numeric_limits<int32_t>::max() - current_char_index_
+    int32_t current_char_index = GetCurrentCharIndex();
+    int32_t deadline = own > std::numeric_limits<int32_t>::max() - current_char_index
                            ? std::numeric_limits<int32_t>::max()
-                           : current_char_index_ + own;
+                           : current_char_index + own;
     return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
   }
 
   /*! \brief Whether the state's derivation may not consume another Unicode codepoint. */
   bool IsCharExpiredState(const ParserState& state) const {
-    return state.char_budget_deadline >= 0 && current_char_index_ >= state.char_budget_deadline;
+    return state.char_budget_deadline >= 0 && GetCurrentCharIndex() >= state.char_budget_deadline;
   }
 
   static bool StartsUTF8Codepoint(uint8_t byte) { return (byte & 0xC0) != 0x80; }
@@ -707,7 +705,7 @@ class EarleyParser {
       capture_event_history_.PushBack(std::vector<CaptureEvent>());
     }
     if (has_char_budget_rules_) {
-      char_count_history_.push_back(current_char_index_);
+      char_count_history_.push_back(GetCurrentCharIndex());
       char_budget_entry_history_.push_back(char_budget_entry_history_.back());
     }
   }
@@ -719,10 +717,11 @@ class EarleyParser {
     }
     char_count_history_.push_back(char_count);
     char_budget_entry_history_.push_back(char_budget_entered);
-    current_char_index_ = char_count;
   }
 
-  int32_t GetCurrentCharIndex() const { return current_char_index_; }
+  int32_t GetCurrentCharIndex() const {
+    return char_count_history_.empty() ? 0 : char_count_history_.back();
+  }
 
   bool HasEnteredCharBudget() const {
     return has_char_budget_rules_ && char_budget_entry_history_.back();
