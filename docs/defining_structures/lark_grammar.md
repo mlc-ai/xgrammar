@@ -615,8 +615,8 @@ derivation may consume. Once the deadline passes, each mask forces the rule to e
 is possible at the current position; otherwise the budget is relaxed for one step and
 enforcement is retried, so the rule ends at the earliest possible position and the output
 always stays grammar-valid. When authoring a budgeted rule, prefer a body that can end at every
-possible budget boundary. The arbitrary-text form above can end at any position and therefore
-never exceeds its budget. For other bodies (e.g. `/(\S*\s)+/`) the budget is best-effort.
+possible budget boundary. For example, the arbitrary-text form above can end at any position, so
+its budget is exact; bodies that cannot end where the budget runs out remain best-effort.
 
 `max_tokens` composes with committed-shortest matching. With `lazy`, whichever of the lazy
 completion and the token deadline is reached first closes the occurrence. With `suffix` or
