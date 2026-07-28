@@ -342,6 +342,34 @@ grammar = xgr.Grammar.from_lark(
 
 ## Rule Options
 
+Rule options are written as a comma-separated list between a rule name and its colon:
+
+```text
+reasoning[max_tokens=512, capture="reasoning"]: TEXT
+name[lazy]: /[a-z]+/
+field[suffix="!", stop_capture="marker"]: /[a-z]*/
+value[temperature=0.7]: /[a-z]+/
+```
+
+They are supported on lowercase rules only; uppercase terminals cannot carry options. The
+available options are:
+
+- `lazy`: commit the rule to its
+  [earliest possible completion](#general-lazy-rules-committed-shortest-matching).
+- `suffix=marker`: end lazily at a marker and exclude the marker from this rule's own capture.
+- `stop=marker`: end lazily at a marker and exclude the marker from this rule and all enclosing
+  captures.
+- `stop_capture="name"`: capture a `suffix` or `stop` marker separately. See
+  [The `suffix` and `stop` Attributes](#the-suffix-and-stop-attributes).
+- `max_tokens=N`: give every occurrence a [token budget](#token-budgets).
+- `capture` or `capture="name"`: record the rule's matched span as a
+  [capture group](#capture-groups).
+- `temperature=N`: select the [sampling temperature](#sampling-temperature) while the rule is
+  active.
+
+`suffix` and `stop` cannot be used together, and `stop_capture` requires one of them. Other
+supported combinations and their boundary behavior are described below.
+
 ### Sampling Temperature
 
 The `temperature` rule attribute selects the sampling temperature while a terminal-like rule or
@@ -364,6 +392,9 @@ explicit temperature overrides an inherited outer temperature. When ambiguous pa
 different active temperatures, `matcher.temperature` emits a warning once and returns the maximum.
 If no active rule has a temperature, it returns `default_temperature`; if neither is configured,
 it returns `None`.
+
+`temperature` can be combined with `capture`. Combining it with `max_tokens`, `lazy`, `suffix`, or
+`stop` is not supported.
 
 `BatchGrammarMatcher.batch_fill_temperature` fills a pre-allocated one-dimensional CPU `float32`
 tensor with one temperature per matcher; the entry of a matcher without an effective temperature
@@ -548,7 +579,9 @@ field[capture="inner", suffix=/!!+/, stop_capture="marker"]: /[a-z]*/
   enclosing capture. Multiple markers inside one enclosing capture are all removed.
 - `stop_capture="name"` captures exactly the bytes matched by either `stop` or `suffix`, before
   the marker is hidden from other captures. It works even when the annotated rule has no
-  `capture` attribute.
+  `capture` attribute. Its name follows the same restrictions as `capture`.
+- `suffix` and `stop` cannot be specified on the same rule, and `stop_capture` requires one of
+  them.
 - String flags and regex flags follow the same support as ordinary Lark terminals. In particular,
   ASCII case-insensitive string markers such as `suffix="END"i` and dot-all regex markers such as
   `stop=/BEGIN.*END/s` are supported.
@@ -601,8 +634,8 @@ warning is logged, once per matcher. The budget state lives in the parser state,
 advances without token boundaries and is not counted (budgets constrain mask-driven
 generation, not validation/prefill).
 
-`max_tokens` must be positive. It can be combined with `lazy`, `suffix`, and `stop`, but cannot be
-used on terminals or on rules consumed by the dynamic dispatch pattern.
+`max_tokens` must be between 1 and 1,000,000, inclusive. It can be combined with `lazy`, `suffix`,
+and `stop`, but cannot be used on terminals or on rules consumed by the dynamic dispatch pattern.
 
 ## Capture Groups
 

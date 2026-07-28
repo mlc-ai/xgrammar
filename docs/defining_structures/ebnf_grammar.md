@@ -180,6 +180,94 @@ identifier ::= [a-zA-Z_] [a-zA-Z0-9_]*
 
 ## Rule Options
 
+A rule may carry a comma-separated option list between its name and `::=`:
+
+```text
+value[max_tokens=32, capture="answer", lazy, temperature=0.7] ::= [a-z]+
+```
+
+Each option may appear at most once. Options without a value, such as `capture` and `lazy`, are
+written as bare names; the other options use `name=value`.
+
+### Token Budgets
+
+The `max_tokens` option gives each occurrence of a rule a token budget:
+
+```text
+root ::= "<think>" reasoning "</think>" answer
+reasoning[max_tokens=512] ::= [^]*
+answer ::= [0-9]+
+```
+
+Once the budget is exhausted, the token mask forces the occurrence to end if its body can end at
+the current position. If it cannot end there, the budget is relaxed until the earliest valid
+boundary, so the output remains grammar-valid. The bound is therefore exact for bodies such as
+`[^]*` that can end at any position and best-effort for other bodies.
+
+The budget applies independently to every occurrence. To bound a whole repeated region, put the
+option on a wrapper rule. Nested budgets use the smallest active budget. Use a positive decimal
+integer for `N`.
+
+`max_tokens` is enforced during token-mask-driven generation. `accept_string` has no token
+boundaries and does not consume the budget. Rollback, reset, forking, and speculative decoding
+preserve the budget state.
+
+### Capture Groups
+
+The `capture` option records the input span matched by a rule:
+
+```text
+root ::= item ("," item)*
+item[capture] ::= [0-9]+
+```
+
+`capture` uses the rule name as the capture name. Use `capture="name"` to choose a different,
+non-empty name:
+
+```text
+item[capture="number"] ::= [0-9]+
+```
+
+Retrieve completed captures from the matcher:
+
+```python
+matcher.accept_string("1,22,333")
+matcher.get_captures()
+# [("number", b"1"), ("number", b"22"), ("number", b"333")]
+```
+
+Captures are recorded when tokens or strings are accepted. Filling a token mask does not record
+captures, and `rollback` also rolls them back. A repeated rule produces one capture for every
+occurrence, in completion order.
+
+The parser may keep several possible parses alive at once, so one occurrence can complete at
+several candidate positions. By default, `get_captures(deduplicate=True)` keeps the longest
+completion for each occurrence. This is exact when a following delimiter cannot also be matched
+by the captured body. Use `get_captures(deduplicate=False)` to retrieve every raw completion
+event.
+
+### Committed-Shortest Matching
+
+The `lazy` option makes a rule commit to its earliest possible completion:
+
+```text
+root ::= "<" name ">" rest
+name[lazy] ::= [a-z]+
+rest ::= [a-z]+
+```
+
+Here `name` consumes exactly one letter: as soon as `[a-z]+` can end, all alternatives in which
+the same occurrence continues are discarded.
+
+The body of a lazy rule must compile to a single terminal-like form made from string literals,
+character classes, `Regex` expressions, and supported repetitions or alternatives of those
+elements. Bodies that still require rule references, recursion, or repetition ranges after
+normalization are rejected during compilation.
+
+A lazy rule that can match the empty string always commits to the empty match and produces a
+warning. Each occurrence commits independently, and `rollback`, `reset`, and `fork` restore the
+commit state.
+
 ### Sampling Temperature
 
 The `temperature` rule option selects the sampling temperature while a rule is active:
@@ -199,6 +287,31 @@ Use `BatchGrammarMatcher.batch_fill_temperature` to fill the temperatures of mul
 into a pre-allocated tensor. During speculative decoding, the optional `temperatures` tensor
 passed to `GrammarMatcher.traverse_draft_tree` receives the effective temperature for each tree
 node. In both tensors, `-1` means there is no effective temperature.
+
+### Generated Suffix and Stop Metadata
+
+The Lark frontend provides high-level `suffix`, `stop`, and `stop_capture` options for terminating
+a lazy rule at a marker and controlling whether that marker appears in captures. EBNF does not
+accept `suffix=...` or `stop=...` directly. Instead, `str(grammar)` lowers them to the following
+EBNF rule options so that the printed grammar can be parsed again without losing capture
+behavior:
+
+- `capture_hidden_suffix_bytes=N` marks a trailing suffix marker as hidden from the annotated
+  rule's own capture while retaining it in enclosing captures. For a fixed marker, `N` is its byte
+  length.
+- `capture_hidden_stop_bytes=N` marks a trailing stop marker as hidden from the annotated rule and
+  every enclosing capture. For a fixed marker, `N` is its byte length.
+- `capture_hidden_body_rule_id=N` and `capture_hidden_marker_rule_id=N` identify helper rules used
+  to recover the boundary of a variable-length marker. They must be specified together.
+- `stop_capture="name"` records the marker bytes under `name` before they are hidden from other
+  captures.
+
+These options affect only capture materialization. The marker bytes remain in the accepted model
+output. The numeric values are internal rule IDs and marker metadata generated by XGrammar;
+changing rule order or editing the values can invalidate their meaning. They are intended for
+`str(grammar)` / `Grammar.from_ebnf()` round trips rather than hand-authored grammars. Author
+suffix and stop behavior through the
+[Lark frontend](lark_grammar.md#the-suffix-and-stop-attributes).
 
 ## Macros
 
