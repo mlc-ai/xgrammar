@@ -1089,7 +1089,8 @@ class GrammarFSMBuilderImpl {
   const static uint32_t kMin4BytesUnicode = 0xF0808080;
   const static uint32_t kMax4BytesUnicode = 0xF7BFBFBF;
 
-  explicit GrammarFSMBuilderImpl(FSM& target_fsm) : target_fsm_(target_fsm) {}
+  explicit GrammarFSMBuilderImpl(FSM& target_fsm, const std::string* rule_name = nullptr)
+      : target_fsm_(target_fsm), rule_name_(rule_name) {}
 
   static void Apply(Grammar* grammar) {
     FSM complete_fsm;
@@ -1142,37 +1143,69 @@ class GrammarFSMBuilderImpl {
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
   static Result<FSMWithStartEnd> Regex(const std::string& regex, bool json_string = false);
   /* Building tool functions.*/
-  static std::optional<FSMWithStartEnd> BuildTagDispatch(
+  static std::optional<FSMWithStartEnd> BuildTagDispatchFSM(
       const std::vector<std::pair<std::string, int>>& string_trigger_rules,
       bool loop_after_dispatch,
       const std::vector<std::string>& excluded_strings
   );
 
  private:
-  static FSMWithStartEnd BuildRuleFSM(Grammar& grammar, int rule_id);
-  static FSMWithStartEnd BuildSingleElement(const GrammarExpr& expr);
-  bool BuildElement(
-      const GrammarExpr& element_expr, int start_state, std::vector<int32_t>* end_states
+  static FSMWithStartEnd BuildRuleFSM(const Grammar& grammar, int rule_id);
+  static FSMWithStartEnd BuildExpressionFSM(
+      const GrammarExpr& expr, const Grammar& grammar, const std::string* rule_name = nullptr
   );
-  bool BuildSequence(
+  void BuildExpression(
       const GrammarExpr& expr,
       const Grammar& grammar,
       int start_state,
       std::vector<int32_t>* end_states
   );
-  bool BuildChoices(
-      const GrammarExpr& expr,
-      const Grammar& grammar,
-      int start_state,
-      std::vector<int32_t>* end_states
-  );
+  void BuildEmptyString(int start_state, std::vector<int32_t>* end_states);
+  void BuildByteString(const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states);
+  void BuildRuleRef(const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states);
   void BuildCharacterClass(
       const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
   );
+  void BuildCharacterClassStar(
+      const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+  );
+  void BuildRepeat(const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states);
+  void BuildToken(const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states);
+  void BuildExcludeToken(
+      const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+  );
+  void BuildRegex(
+      const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
+  );
+  void BuildTagDispatch(
+      const Grammar::Impl::TagDispatch& tag_dispatch,
+      int start_state,
+      std::vector<int32_t>* end_states
+  );
+  void BuildTokenTagDispatch(
+      const Grammar::Impl::TokenTagDispatch& token_tag_dispatch,
+      int start_state,
+      std::vector<int32_t>* end_states
+  );
+  void BuildSequence(
+      const GrammarExpr& expr,
+      const Grammar& grammar,
+      int start_state,
+      std::vector<int32_t>* end_states
+  );
+  void BuildChoices(
+      const GrammarExpr& expr,
+      const Grammar& grammar,
+      int start_state,
+      std::vector<int32_t>* end_states
+  );
+  void AddCharacterClassTransitions(const GrammarExpr& expr, int start_state, int end_state);
   void BuildNegativeCharacterClass(const GrammarExpr& expr, int start_state, int end_state);
+  void AppendFSM(FSMWithStartEnd fsm, int start_state, std::vector<int32_t>* end_states);
   void AddCharacterRange(int from, int to, uint32_t min, uint32_t max);
 
   FSM& target_fsm_;
+  const std::string* rule_name_;
 };
 
 // This function will add a range [min, max] of characters to the FSM, and the length
@@ -1425,11 +1458,12 @@ void GrammarFSMBuilderImpl::BuildNegativeCharacterClass(
   AddCharacterRange(start_state, end_state, kMin2BytesUnicode, kMax4BytesUnicode);
 }
 
-void GrammarFSMBuilderImpl::BuildCharacterClass(
-    const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+void GrammarFSMBuilderImpl::AddCharacterClassTransitions(
+    const GrammarExpr& expr, int start_state, int end_state
 ) {
-  end_states->clear();
-  int end_state = expr.type == ExprType::kCharacterClassStar ? start_state : target_fsm_.AddState();
+  XGRAMMAR_DCHECK(
+      expr.type == ExprType::kCharacterClass || expr.type == ExprType::kCharacterClassStar
+  );
   bool is_negative = expr[0];
   if (is_negative) {
     BuildNegativeCharacterClass(expr, start_state, end_state);
@@ -1443,172 +1477,215 @@ void GrammarFSMBuilderImpl::BuildCharacterClass(
       AddCharacterRange(start_state, end_state, packed_min, packed_max);
     }
   }
+}
+
+void GrammarFSMBuilderImpl::BuildCharacterClass(
+    const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+) {
+  XGRAMMAR_DCHECK(expr.type == ExprType::kCharacterClass);
+  end_states->clear();
+  int end_state = target_fsm_.AddState();
+  AddCharacterClassTransitions(expr, start_state, end_state);
   end_states->push_back(end_state);
 }
 
-FSMWithStartEnd GrammarFSMBuilderImpl::BuildRuleFSM(Grammar& grammar, int rule_id) {
-  auto rule = grammar->GetRule(rule_id);
-  auto grammar_expr = grammar->GetGrammarExpr(rule.body_expr_id);
-  switch (grammar_expr.type) {
-    case ExprType::kTagDispatch: {
-      auto rule_fsm = TagDispatch(grammar->GetTagDispatch(grammar_expr));
-      XGRAMMAR_CHECK(rule_fsm.has_value())
-          << "Failed to build tag dispatch fsm for rule " << rule_id;
-      return std::move(*rule_fsm);
-    }
-    case ExprType::kTokenTagDispatch: {
-      auto rule_fsm = TokenTagDispatch(grammar->GetTokenTagDispatch(grammar_expr));
-      XGRAMMAR_CHECK(rule_fsm.has_value())
-          << "Failed to build token tag dispatch fsm for rule " << rule_id;
-      return std::move(*rule_fsm);
-    }
-    case ExprType::kRegex: {
-      auto regex_string = grammar->GetRegexString(grammar_expr);
-      auto rule_fsm_result = Regex(regex_string, grammar->GetRegexIsJSONString(grammar_expr));
-      if (rule_fsm_result.IsErr()) {
-        XGRAMMAR_LOG(FATAL) << "Failed to build the automaton for rule " << rule.name
-                            << " with regex " << regex_string << ": "
-                            << std::move(rule_fsm_result).UnwrapErr().what();
-      }
-      return std::move(rule_fsm_result).Unwrap();
-    }
-    case ExprType::kChoices: {
-      auto rule_fsm = Choices(grammar_expr, grammar);
-      XGRAMMAR_CHECK(rule_fsm.has_value())
-          << "Failed to build choices fsm for rule " << rule_id << " (" << rule.name << ")";
-      return std::move(*rule_fsm);
-    }
-    default:
-      XGRAMMAR_LOG(FATAL) << "Unsupported grammar expression type "
-                          << static_cast<int>(grammar_expr.type) << " for rule " << rule_id << " ("
-                          << rule.name << ")";
-  }
-  XGRAMMAR_UNREACHABLE();
+void GrammarFSMBuilderImpl::BuildCharacterClassStar(
+    const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+) {
+  XGRAMMAR_DCHECK(expr.type == ExprType::kCharacterClassStar);
+  end_states->clear();
+  AddCharacterClassTransitions(expr, start_state, start_state);
+  end_states->push_back(start_state);
 }
 
-FSMWithStartEnd GrammarFSMBuilderImpl::BuildSingleElement(const GrammarExpr& expr) {
+FSMWithStartEnd GrammarFSMBuilderImpl::BuildRuleFSM(const Grammar& grammar, int rule_id) {
+  const auto& rule = grammar->GetRule(rule_id);
+  return BuildExpressionFSM(grammar->GetGrammarExpr(rule.body_expr_id), grammar, &rule.name);
+}
+
+FSMWithStartEnd GrammarFSMBuilderImpl::BuildExpressionFSM(
+    const GrammarExpr& expr, const Grammar& grammar, const std::string* rule_name
+) {
+  FSM result_fsm;
+  int start_state = result_fsm.AddState();
+  std::vector<int32_t> end_states;
+  GrammarFSMBuilderImpl builder(result_fsm, rule_name);
+  builder.BuildExpression(expr, grammar, start_state, &end_states);
+  FSMWithStartEnd result(result_fsm, start_state, std::move(end_states));
+  if (expr.type != ExprType::kTagDispatch && expr.type != ExprType::kTokenTagDispatch) {
+    result = result.SimplifyEpsilon();
+    result = result.MergeEquivalentStates();
+  }
+  return result;
+}
+
+FSMWithStartEnd GrammarFSMBuilderImpl::RuleRef(const GrammarExpr& expr) {
   FSM result_fsm;
   int start_state = result_fsm.AddState();
   std::vector<int32_t> end_states;
   GrammarFSMBuilderImpl builder(result_fsm);
-  XGRAMMAR_CHECK(builder.BuildElement(expr, start_state, &end_states))
-      << "Unsupported grammar expression type: " << static_cast<int>(expr.type);
+  builder.BuildRuleRef(expr, start_state, &end_states);
   return FSMWithStartEnd(result_fsm, start_state, std::move(end_states));
 }
 
-FSMWithStartEnd GrammarFSMBuilderImpl::RuleRef(const GrammarExpr& expr) {
-  return BuildSingleElement(expr);
-}
-
 FSMWithStartEnd GrammarFSMBuilderImpl::CharacterClass(const GrammarExpr& expr) {
-  return BuildSingleElement(expr);
+  FSM result_fsm;
+  int start_state = result_fsm.AddState();
+  std::vector<int32_t> end_states;
+  GrammarFSMBuilderImpl builder(result_fsm);
+  if (expr.type == ExprType::kCharacterClassStar) {
+    builder.BuildCharacterClassStar(expr, start_state, &end_states);
+  } else {
+    builder.BuildCharacterClass(expr, start_state, &end_states);
+  }
+  return FSMWithStartEnd(result_fsm, start_state, std::move(end_states));
 }
 
 FSMWithStartEnd GrammarFSMBuilderImpl::ByteString(const GrammarExpr& expr) {
-  return BuildSingleElement(expr);
+  FSM result_fsm;
+  int start_state = result_fsm.AddState();
+  std::vector<int32_t> end_states;
+  GrammarFSMBuilderImpl builder(result_fsm);
+  builder.BuildByteString(expr, start_state, &end_states);
+  return FSMWithStartEnd(result_fsm, start_state, std::move(end_states));
 }
 
 FSMWithStartEnd GrammarFSMBuilderImpl::Token(const GrammarExpr& expr) {
-  return BuildSingleElement(expr);
+  FSM result_fsm;
+  int start_state = result_fsm.AddState();
+  std::vector<int32_t> end_states;
+  GrammarFSMBuilderImpl builder(result_fsm);
+  builder.BuildToken(expr, start_state, &end_states);
+  return FSMWithStartEnd(result_fsm, start_state, std::move(end_states));
 }
 
 FSMWithStartEnd GrammarFSMBuilderImpl::ExcludeToken(const GrammarExpr& expr) {
-  return BuildSingleElement(expr);
+  FSM result_fsm;
+  int start_state = result_fsm.AddState();
+  std::vector<int32_t> end_states;
+  GrammarFSMBuilderImpl builder(result_fsm);
+  builder.BuildExcludeToken(expr, start_state, &end_states);
+  return FSMWithStartEnd(result_fsm, start_state, std::move(end_states));
 }
 
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TokenTagDispatch(
-    const Grammar::Impl::TokenTagDispatch& ttd
+    const Grammar::Impl::TokenTagDispatch& token_tag_dispatch
 ) {
-  int num_triggers = static_cast<int>(ttd.trigger_rule_pairs.size());
-  bool loop = ttd.loop_after_dispatch;
-  int num_states = 1 + num_triggers + (loop ? 0 : 1);
-  FSM fsm(num_states);
-  std::vector<int32_t> ends;
-  int start = 0;
-  ends.push_back(start);
-  int end_state = -1;
-  if (!loop) {
-    end_state = num_states - 1;
-    ends.push_back(end_state);
-  }
-  std::vector<int32_t> self_loop_exclude;
-  for (const auto& [token_id, rule_id] : ttd.trigger_rule_pairs) {
-    self_loop_exclude.push_back(token_id);
-  }
-  for (auto excl_id : ttd.excludes) {
-    self_loop_exclude.push_back(excl_id);
-  }
-  std::sort(self_loop_exclude.begin(), self_loop_exclude.end());
-  self_loop_exclude.erase(
-      std::unique(self_loop_exclude.begin(), self_loop_exclude.end()), self_loop_exclude.end()
-  );
-  for (int i = 0; i < num_triggers; ++i) {
-    int dispatch_state = 1 + i;
-    auto [token_id, rule_id] = ttd.trigger_rule_pairs[i];
-    fsm.AddTokenEdge(start, dispatch_state, {token_id});
-    int target = loop ? start : end_state;
-    fsm.AddRuleEdge(dispatch_state, target, static_cast<int32_t>(rule_id));
-  }
-  fsm.AddExcludeTokenEdge(start, start, self_loop_exclude);
-  return FSMWithStartEnd(fsm, start, ends);
+  FSM result_fsm;
+  int start_state = result_fsm.AddState();
+  std::vector<int32_t> end_states;
+  GrammarFSMBuilderImpl builder(result_fsm);
+  builder.BuildTokenTagDispatch(token_tag_dispatch, start_state, &end_states);
+  return FSMWithStartEnd(result_fsm, start_state, std::move(end_states));
 }
 
-bool GrammarFSMBuilderImpl::BuildElement(
-    const GrammarExpr& element_expr, int start_state, std::vector<int32_t>* end_states
+void GrammarFSMBuilderImpl::BuildExpression(
+    const GrammarExpr& expr,
+    const Grammar& grammar,
+    int start_state,
+    std::vector<int32_t>* end_states
 ) {
   XGRAMMAR_DCHECK(start_state >= 0 && start_state < target_fsm_.NumStates());
-  end_states->clear();
-  switch (element_expr.type) {
-    case (ExprType::kByteString): {
-      int current_state = start_state;
-      for (int32_t byte : element_expr) {
-        int next_state = target_fsm_.AddState();
-        target_fsm_.AddEdge(
-            current_state, next_state, static_cast<uint8_t>(byte), static_cast<uint8_t>(byte)
-        );
-        current_state = next_state;
-      }
-      end_states->push_back(current_state);
-      return true;
-    }
-    case (ExprType::kRuleRef): {
-      int end_state = target_fsm_.AddState();
-      target_fsm_.AddRuleEdge(start_state, end_state, element_expr[0]);
-      end_states->push_back(end_state);
-      return true;
-    }
-    case (ExprType::kCharacterClass):
-    case (ExprType::kCharacterClassStar): {
-      BuildCharacterClass(element_expr, start_state, end_states);
-      return true;
-    }
-    case (ExprType::kRepeat): {
-      int end_state = target_fsm_.AddState();
-      target_fsm_.AddRepeatEdge(
-          start_state, end_state, element_expr[0], element_expr[1], element_expr[2]
+  switch (expr.type) {
+    case ExprType::kEmptyStr:
+      return BuildEmptyString(start_state, end_states);
+    case ExprType::kByteString:
+      return BuildByteString(expr, start_state, end_states);
+    case ExprType::kCharacterClass:
+      return BuildCharacterClass(expr, start_state, end_states);
+    case ExprType::kCharacterClassStar:
+      return BuildCharacterClassStar(expr, start_state, end_states);
+    case ExprType::kRuleRef:
+      return BuildRuleRef(expr, start_state, end_states);
+    case ExprType::kRepeat:
+      return BuildRepeat(expr, start_state, end_states);
+    case ExprType::kToken:
+      return BuildToken(expr, start_state, end_states);
+    case ExprType::kExcludeToken:
+      return BuildExcludeToken(expr, start_state, end_states);
+    case ExprType::kSequence:
+      return BuildSequence(expr, grammar, start_state, end_states);
+    case ExprType::kChoices:
+      return BuildChoices(expr, grammar, start_state, end_states);
+    case ExprType::kRegex:
+      return BuildRegex(
+          grammar->GetRegexString(expr),
+          grammar->GetRegexIsJSONString(expr),
+          start_state,
+          end_states
       );
-      end_states->push_back(end_state);
-      return true;
-    }
-    case (ExprType::kToken):
-    case (ExprType::kExcludeToken): {
-      int end_state = target_fsm_.AddState();
-      std::vector<int32_t> token_ids(element_expr.begin(), element_expr.end());
-      if (element_expr.type == ExprType::kToken) {
-        target_fsm_.AddTokenEdge(start_state, end_state, token_ids);
-      } else {
-        target_fsm_.AddExcludeTokenEdge(start_state, end_state, token_ids);
-      }
-      end_states->push_back(end_state);
-      return true;
-    }
-    default: {
-      return false;
-    }
+    case ExprType::kTagDispatch:
+      return BuildTagDispatch(grammar->GetTagDispatch(expr), start_state, end_states);
+    case ExprType::kTokenTagDispatch:
+      return BuildTokenTagDispatch(grammar->GetTokenTagDispatch(expr), start_state, end_states);
   }
+  XGRAMMAR_UNREACHABLE();
 }
 
-bool GrammarFSMBuilderImpl::BuildSequence(
+void GrammarFSMBuilderImpl::BuildEmptyString(int start_state, std::vector<int32_t>* end_states) {
+  end_states->clear();
+  end_states->push_back(start_state);
+}
+
+void GrammarFSMBuilderImpl::BuildByteString(
+    const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+) {
+  XGRAMMAR_DCHECK(expr.type == ExprType::kByteString);
+  end_states->clear();
+  int current_state = start_state;
+  for (int32_t byte : expr) {
+    int next_state = target_fsm_.AddState();
+    target_fsm_.AddEdge(
+        current_state, next_state, static_cast<uint8_t>(byte), static_cast<uint8_t>(byte)
+    );
+    current_state = next_state;
+  }
+  end_states->push_back(current_state);
+}
+
+void GrammarFSMBuilderImpl::BuildRuleRef(
+    const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+) {
+  XGRAMMAR_DCHECK(expr.type == ExprType::kRuleRef);
+  end_states->clear();
+  int end_state = target_fsm_.AddState();
+  target_fsm_.AddRuleEdge(start_state, end_state, expr[0]);
+  end_states->push_back(end_state);
+}
+
+void GrammarFSMBuilderImpl::BuildRepeat(
+    const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+) {
+  XGRAMMAR_DCHECK(expr.type == ExprType::kRepeat);
+  end_states->clear();
+  int end_state = target_fsm_.AddState();
+  target_fsm_.AddRepeatEdge(start_state, end_state, expr[0], expr[1], expr[2]);
+  end_states->push_back(end_state);
+}
+
+void GrammarFSMBuilderImpl::BuildToken(
+    const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+) {
+  XGRAMMAR_DCHECK(expr.type == ExprType::kToken);
+  end_states->clear();
+  int end_state = target_fsm_.AddState();
+  target_fsm_.AddTokenEdge(start_state, end_state, std::vector<int32_t>(expr.begin(), expr.end()));
+  end_states->push_back(end_state);
+}
+
+void GrammarFSMBuilderImpl::BuildExcludeToken(
+    const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+) {
+  XGRAMMAR_DCHECK(expr.type == ExprType::kExcludeToken);
+  end_states->clear();
+  int end_state = target_fsm_.AddState();
+  target_fsm_.AddExcludeTokenEdge(
+      start_state, end_state, std::vector<int32_t>(expr.begin(), expr.end())
+  );
+  end_states->push_back(end_state);
+}
+
+void GrammarFSMBuilderImpl::BuildSequence(
     const GrammarExpr& expr,
     const Grammar& grammar,
     int start_state,
@@ -1618,26 +1695,20 @@ bool GrammarFSMBuilderImpl::BuildSequence(
   end_states->clear();
   if (expr.size() == 0) {
     end_states->push_back(start_state);
-    return true;
+    return;
   }
 
-  if (!BuildElement(grammar->GetGrammarExpr(expr[0]), start_state, end_states)) {
-    return false;
-  }
+  BuildExpression(grammar->GetGrammarExpr(expr[0]), grammar, start_state, end_states);
 
   std::vector<int32_t> next_end_states;
   for (int index = 1; index < static_cast<int>(expr.size()); ++index) {
     int element_start = target_fsm_.AddState();
-    if (!BuildElement(grammar->GetGrammarExpr(expr[index]), element_start, &next_end_states)) {
-      return false;
-    }
+    BuildExpression(grammar->GetGrammarExpr(expr[index]), grammar, element_start, &next_end_states);
     for (int32_t previous_end_state : *end_states) {
       target_fsm_.AddEpsilonEdge(previous_end_state, element_start);
     }
     end_states->swap(next_end_states);
   }
-
-  return true;
 }
 
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
@@ -1647,13 +1718,11 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
   int start_state = result_fsm.AddState();
   std::vector<int32_t> end_states;
   GrammarFSMBuilderImpl builder(result_fsm);
-  if (!builder.BuildSequence(expr, grammar, start_state, &end_states)) {
-    return std::nullopt;
-  }
+  builder.BuildSequence(expr, grammar, start_state, &end_states);
   return FSMWithStartEnd(result_fsm, start_state, std::move(end_states));
 }
 
-bool GrammarFSMBuilderImpl::BuildChoices(
+void GrammarFSMBuilderImpl::BuildChoices(
     const GrammarExpr& expr,
     const Grammar& grammar,
     int start_state,
@@ -1663,28 +1732,28 @@ bool GrammarFSMBuilderImpl::BuildChoices(
   XGRAMMAR_DCHECK(start_state >= 0 && start_state < target_fsm_.NumStates());
   end_states->clear();
 
-  int sequence_count = 0;
+  int non_empty_choice_count = 0;
   bool nullable = false;
   for (int32_t choice_id : expr) {
     const auto& choice_expr = grammar->GetGrammarExpr(choice_id);
     if (choice_expr.type == ExprType::kEmptyStr) {
       nullable = true;
     } else {
-      XGRAMMAR_DCHECK(choice_expr.type == ExprType::kSequence);
-      ++sequence_count;
+      ++non_empty_choice_count;
     }
   }
 
-  if (sequence_count == 0) {
+  if (non_empty_choice_count == 0) {
     end_states->push_back(start_state);
-    return true;
+    return;
   }
 
-  if (sequence_count == 1 && !nullable) {
+  if (non_empty_choice_count == 1 && !nullable) {
     for (int32_t choice_id : expr) {
       const auto& choice_expr = grammar->GetGrammarExpr(choice_id);
       if (choice_expr.type != ExprType::kEmptyStr) {
-        return BuildSequence(choice_expr, grammar, start_state, end_states);
+        BuildExpression(choice_expr, grammar, start_state, end_states);
+        return;
       }
     }
     XGRAMMAR_UNREACHABLE();
@@ -1697,9 +1766,7 @@ bool GrammarFSMBuilderImpl::BuildChoices(
       continue;
     }
     int branch_start_state = target_fsm_.AddState();
-    if (!BuildSequence(choice_expr, grammar, branch_start_state, &branch_end_states)) {
-      return false;
-    }
+    BuildExpression(choice_expr, grammar, branch_start_state, &branch_end_states);
     target_fsm_.AddEpsilonEdge(start_state, branch_start_state);
     end_states->insert(end_states->end(), branch_end_states.begin(), branch_end_states.end());
   }
@@ -1709,26 +1776,112 @@ bool GrammarFSMBuilderImpl::BuildChoices(
     target_fsm_.AddEpsilonEdge(start_state, nullable_branch_state);
     end_states->push_back(nullable_branch_state);
   }
-  return true;
 }
 
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Choices(
     const GrammarExpr& expr, const Grammar& grammar
 ) {
-  FSM result_fsm;
-  int start_state = result_fsm.AddState();
-  std::vector<int32_t> end_states;
-  GrammarFSMBuilderImpl builder(result_fsm);
-  if (!builder.BuildChoices(expr, grammar, start_state, &end_states)) {
-    return std::nullopt;
-  }
-  FSMWithStartEnd result(result_fsm, start_state, std::move(end_states));
-  result = result.SimplifyEpsilon();
-  result = result.MergeEquivalentStates();
-  return result;
+  return BuildExpressionFSM(expr, grammar);
 }
 
-std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatch(
+void GrammarFSMBuilderImpl::AppendFSM(
+    FSMWithStartEnd fsm, int start_state, std::vector<int32_t>* end_states
+) {
+  const bool target_is_empty = target_fsm_.NumStates() == 1 && start_state == 0 &&
+                               target_fsm_.GetEdges(0).empty() &&
+                               target_fsm_.GetEdgeAuxData().empty() && fsm.GetStart() == 0;
+  if (target_is_empty) {
+    *end_states = fsm.GetEnds();
+    target_fsm_ = std::move(fsm.GetFsm());
+    return;
+  }
+
+  std::vector<int> state_mapping;
+  target_fsm_.AddFSM(fsm.GetFsm(), &state_mapping);
+  target_fsm_.AddEpsilonEdge(start_state, state_mapping[fsm.GetStart()]);
+  end_states->clear();
+  end_states->reserve(fsm.GetEnds().size());
+  for (int end_state : fsm.GetEnds()) {
+    end_states->push_back(state_mapping[end_state]);
+  }
+}
+
+void GrammarFSMBuilderImpl::BuildRegex(
+    const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
+) {
+  auto build_result = json_string ? RegexFSMBuilder::BuildWithForbiddenChars(
+                                        regex, GrammarFSMBuilder::JSONStringForbiddenChars()
+                                    )
+                                  : RegexFSMBuilder::Build(regex);
+  if (build_result.IsErr()) {
+    auto error = std::move(build_result).UnwrapErr();
+    if (rule_name_ != nullptr) {
+      XGRAMMAR_LOG(FATAL) << "Failed to build the automaton for rule " << *rule_name_
+                          << " with regex " << regex << ": " << error.what();
+    }
+    XGRAMMAR_LOG(FATAL) << "Failed to build the automaton for regex " << regex << ": "
+                        << error.what();
+  }
+  AppendFSM(std::move(build_result).Unwrap(), start_state, end_states);
+}
+
+void GrammarFSMBuilderImpl::BuildTagDispatch(
+    const Grammar::Impl::TagDispatch& tag_dispatch,
+    int start_state,
+    std::vector<int32_t>* end_states
+) {
+  auto build_result = TagDispatch(tag_dispatch);
+  XGRAMMAR_CHECK(build_result.has_value()) << "Failed to build tag dispatch FSM";
+  AppendFSM(std::move(*build_result), start_state, end_states);
+}
+
+void GrammarFSMBuilderImpl::BuildTokenTagDispatch(
+    const Grammar::Impl::TokenTagDispatch& token_tag_dispatch,
+    int start_state,
+    std::vector<int32_t>* end_states
+) {
+  int trigger_count = static_cast<int>(token_tag_dispatch.trigger_rule_pairs.size());
+  std::vector<int32_t> dispatch_states;
+  dispatch_states.reserve(trigger_count);
+  for (int index = 0; index < trigger_count; ++index) {
+    dispatch_states.push_back(target_fsm_.AddState());
+  }
+
+  int end_state = -1;
+  end_states->clear();
+  end_states->push_back(start_state);
+  if (!token_tag_dispatch.loop_after_dispatch) {
+    end_state = target_fsm_.AddState();
+    end_states->push_back(end_state);
+  }
+
+  std::vector<int32_t> excluded_token_ids;
+  excluded_token_ids.reserve(
+      token_tag_dispatch.trigger_rule_pairs.size() + token_tag_dispatch.excludes.size()
+  );
+  for (const auto& trigger_rule_pair : token_tag_dispatch.trigger_rule_pairs) {
+    excluded_token_ids.push_back(trigger_rule_pair.first);
+  }
+  excluded_token_ids.insert(
+      excluded_token_ids.end(),
+      token_tag_dispatch.excludes.begin(),
+      token_tag_dispatch.excludes.end()
+  );
+  std::sort(excluded_token_ids.begin(), excluded_token_ids.end());
+  excluded_token_ids.erase(
+      std::unique(excluded_token_ids.begin(), excluded_token_ids.end()), excluded_token_ids.end()
+  );
+
+  for (int index = 0; index < trigger_count; ++index) {
+    auto [token_id, rule_id] = token_tag_dispatch.trigger_rule_pairs[index];
+    int dispatch_target = token_tag_dispatch.loop_after_dispatch ? start_state : end_state;
+    target_fsm_.AddTokenEdge(start_state, dispatch_states[index], {token_id});
+    target_fsm_.AddRuleEdge(dispatch_states[index], dispatch_target, rule_id);
+  }
+  target_fsm_.AddExcludeTokenEdge(start_state, start_state, excluded_token_ids);
+}
+
+std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchFSM(
     const std::vector<std::pair<std::string, int>>& string_trigger_rules,
     bool loop_after_dispatch,
     const std::vector<std::string>& excluded_strings
@@ -1776,7 +1929,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TagDispatch(
       tag_dispatch.tag_rule_pairs.begin(), tag_dispatch.tag_rule_pairs.end()
   );
 
-  return BuildTagDispatch(
+  return BuildTagDispatchFSM(
       string_trigger_rules, tag_dispatch.loop_after_dispatch, tag_dispatch.excludes
   );
 }

@@ -864,6 +864,18 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           }
       )
       .def(
+          "xgrammar.tvm_ffi_binding.testing._is_rule_fsm_accept_string",
+          [](O grammar_ref, int64_t rule_id, ffi::String input) {
+            const auto& grammar = grammar_ref.as<GrammarObj>()->value;
+            XGRAMMAR_CHECK(rule_id >= 0 && rule_id < grammar->NumRules())
+                << "Rule id is out of range: " << rule_id;
+            const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
+            XGRAMMAR_CHECK(rule_fsm.has_value())
+                << "Rule " << rule_id << " does not have a finite-state machine";
+            return rule_fsm->GetFsm().AcceptString(input);
+          }
+      )
+      .def(
           "xgrammar.tvm_ffi_binding.testing.grammar_functor.structure_normalizer",
           [](O grammar_ref) {
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(
@@ -909,6 +921,14 @@ TVM_FFI_STATIC_INIT_BLOCK() {
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(
                 GrammarOptimizer::Apply(grammar_ref.as<GrammarObj>()->value)
             ));
+          }
+      )
+      .def(
+          "xgrammar.tvm_ffi_binding.testing.grammar_functor.fsm_builder",
+          [](O grammar_ref) {
+            Grammar grammar = grammar_ref.as<GrammarObj>()->value;
+            GrammarFSMBuilder::Apply(&grammar);
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(grammar)));
           }
       )
       .def(

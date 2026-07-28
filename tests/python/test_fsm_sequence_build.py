@@ -15,8 +15,12 @@ import pytest
 
 import xgrammar as xgr
 from xgrammar.testing import (
+    GrammarFunctor,
+    _ebnf_to_grammar_no_normalization,
     _get_masked_tokens_from_bitmask,
     _get_matcher_from_grammar_and_tokenizer_info,
+    _is_rule_fsm_accept_string,
+    _print_grammar_fsms,
 )
 
 
@@ -76,6 +80,42 @@ def test_sequence_matches_reference_regex(
             )
             checked += 1
     assert checked > 1
+
+
+# --- Unnormalized nested expressions ---
+
+
+def test_build_arbitrarily_nested_expressions_without_normalization():
+    grammar = _ebnf_to_grammar_no_normalization(
+        """
+root ::= (("a" | "bb") ("c" | ("d" ("e" | "f")))) | (Regex("[0-9]+") "z")
+"""
+    )
+    grammar = GrammarFunctor.fsm_builder(grammar)
+
+    for accepted in ("ac", "bbc", "ade", "adf", "bbde", "bbdf", "0z", "123z"):
+        assert _is_rule_fsm_accept_string(grammar, 0, accepted)
+    for rejected in ("", "a", "bc", "ad", "z", "12", "1zz", "ace"):
+        assert not _is_rule_fsm_accept_string(grammar, 0, rejected)
+
+
+@pytest.mark.parametrize(
+    "grammar_str",
+    [
+        """
+root ::= "a" TagDispatch(("tag", body), loop_after_dispatch=false) "z"
+body ::= "b"
+""",
+        """
+root ::= Token(2) TokenTagDispatch((3, body), excludes=(5,)) Token(6)
+body ::= Token(4)
+""",
+    ],
+)
+def test_build_nested_dispatch_without_normalization(grammar_str: str):
+    grammar = _ebnf_to_grammar_no_normalization(grammar_str)
+    grammar = GrammarFunctor.fsm_builder(grammar)
+    assert "None" not in _print_grammar_fsms(grammar)
 
 
 # --- UTF-8 multi-byte content in sequences ---
