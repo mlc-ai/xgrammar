@@ -1163,6 +1163,9 @@ class GrammarFSMBuilderImpl {
   static FSMWithStartEnd ExcludeToken(const GrammarExpr& expr);
   static std::optional<FSMWithStartEnd> TokenTagDispatch(const Grammar::Impl::TokenTagDispatch& ttd
   );
+  /*! \brief Build the FSM of a single sequence element. Returns std::nullopt for unsupported
+   * element types. */
+  static std::optional<FSMWithStartEnd> BuildElement(const GrammarExpr& element_expr);
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
@@ -1536,36 +1539,37 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TokenTagDispatch(
   return FSMWithStartEnd(fsm, start, ends);
 }
 
+std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildElement(const GrammarExpr& element_expr
+) {
+  switch (element_expr.type) {
+    case (ExprType::kByteString): {
+      return ByteString(element_expr);
+    }
+    case (ExprType::kRuleRef): {
+      return RuleRef(element_expr);
+    }
+    case (ExprType::kCharacterClass):
+    case (ExprType::kCharacterClassStar): {
+      return CharacterClass(element_expr);
+    }
+    case (ExprType::kRepeat): {
+      return Repeat(element_expr);
+    }
+    case (ExprType::kToken): {
+      return Token(element_expr);
+    }
+    case (ExprType::kExcludeToken): {
+      return ExcludeToken(element_expr);
+    }
+    default: {
+      return std::nullopt;
+    }
+  }
+}
+
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
     const GrammarExpr& expr, const Grammar& grammar
 ) {
-  auto build_element = [](const GrammarExpr& element_expr) -> std::optional<FSMWithStartEnd> {
-    switch (element_expr.type) {
-      case (ExprType::kByteString): {
-        return ByteString(element_expr);
-      }
-      case (ExprType::kRuleRef): {
-        return RuleRef(element_expr);
-      }
-      case (ExprType::kCharacterClass):
-      case (ExprType::kCharacterClassStar): {
-        return CharacterClass(element_expr);
-      }
-      case (ExprType::kRepeat): {
-        return Repeat(element_expr);
-      }
-      case (ExprType::kToken): {
-        return Token(element_expr);
-      }
-      case (ExprType::kExcludeToken): {
-        return ExcludeToken(element_expr);
-      }
-      default: {
-        return std::nullopt;
-      }
-    }
-  };
-
   if (expr.size() == 0) {
     FSMWithStartEnd empty_fsm;
     empty_fsm.AddState();
@@ -1575,7 +1579,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
   }
 
   if (expr.size() == 1) {
-    return build_element(grammar->GetGrammarExpr(expr[0]));
+    return BuildElement(grammar->GetGrammarExpr(expr[0]));
   }
 
   // Concatenate the element FSMs as they are built so temporary FSMs can be released
