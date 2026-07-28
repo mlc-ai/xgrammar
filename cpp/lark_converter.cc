@@ -2035,11 +2035,6 @@ class LarkCompiler {
    * at any position (such as arbitrary text) therefore never exceed the budget.
    */
   int32_t CompileMaxTokensRule(const Definition& definition) {
-    if (!IsAnyText(definition.body) && !ExtractLazyTrigger(definition).has_value()) {
-      XGRAMMAR_LOG(WARNING) << "max_tokens on rule '" << definition.name
-                            << "' is best-effort: the budget may be exceeded when the rule "
-                               "cannot end at the position where it runs out.";
-    }
     builder_.UpdateMaxTokens(rule_ids_.at(definition.name), definition.max_tokens.value());
     if (HasLazySemantics(definition)) {
       return CompileLazyRule(definition);
