@@ -3,13 +3,15 @@
 The FSM builder constructs sequence FSMs by streaming each element (byte string, rule
 reference, character class, repetition, token edge) directly into one target FSM. These
 tests verify the resulting matcher behavior on real grammars covering every element type,
-including exhaustive comparisons against reference regexes.
+including exhaustive comparisons against reference regexes. A targeted EBNF corpus also
+guards the exact FSM layout produced by these construction paths.
 """
 
+import hashlib
 import itertools
 import re
 import sys
-from typing import List
+from typing import List, Tuple
 
 import pytest
 
@@ -135,7 +137,7 @@ def test_sequence_with_utf8_byte_strings():
 # --- Long mixed sequences stress the streaming concatenation loop ---
 
 
-def _build_long_sequence_grammar(num_segments: int) -> (str, str):
+def _build_long_sequence_grammar(num_segments: int) -> Tuple[str, str]:
     """A single rule whose body alternates byte strings and character classes."""
     elements: List[str] = []
     valid_parts: List[str] = []
@@ -278,6 +280,71 @@ def test_bitmask_matches_string_acceptance(grammar_str: str):
         assert matcher.accept_string(remaining[0])
         remaining = remaining[1:]
     assert matcher.is_terminated()
+
+
+# --- Exact EBNF FSM layout stability ---
+
+fsm_structure_cases = [
+    ('root ::= "a" [0-9] "b"', "55b4f598dd003190ab972e2c89246b46b7ad102506fdfa785003c270866e8572"),
+    (
+        'root ::= "hello" [a-zA-Z_] [0-9]* "world"',
+        "bf85be1292ab8bfcbdb08c09e4508ffe855d110cc19b36fd849c6724897c6a50",
+    ),
+    ('root ::= "<" [a-c]* ">"', "19cef267fb8eddbc9c5ac8fba92c135600fc720258abf0bd58cb6c346fe75c5a"),
+    (
+        'root ::= "x" [^0-9] "y" [^a-z]* "z"',
+        "fd5ab210c129fe4da573c175bfd0e97440d30a88d038a160e5bcbeb2f9fc00d0",
+    ),
+    (
+        'root ::= "(" inner ")" inner\ninner ::= [0-9] [0-9]',
+        "4de2c028805f73a42e2eb3766defb94a7b6a9cfb735fd9d9a7bf8c610e4b4012",
+    ),
+    (
+        'root ::= "a" item{2,5} "b"\nitem ::= [0-9]',
+        "eddead662499416bbd37a4b70d70912ace125deaeaa8fc1f48fbe61dde26b8c7",
+    ),
+    (
+        'root ::= item{3,}\nitem ::= "ab" [xy]',
+        "e80cfab029429aa5111b5b1b95c002f7fa4bc7b0a4e88ecae2d507067dba7b6d",
+    ),
+    (
+        'root ::= "ab" [0-9] | "cd" sub | sub sub\nsub ::= [a-f] "q"',
+        "29090db9590a3b07af82126f08ec25663f657fde2b659c7d172bf6da227861ba",
+    ),
+    (
+        'root ::= "abcdefghijklmnopqrstuvwxyz" [0-9] "ABCDEFGHIJKLMNOPQRSTUVWXYZ"',
+        "58b89fec9137ba57ef63aba58efa201d7a64b9c949b80d0e4376467613779aab",
+    ),
+    (
+        'root ::= "中文" [\\u4e00-\\u9fff] "端"',
+        "a2d7f36e1d3a0453d4267fb3937ed07a4abaac7361e051d3aaaaf7a6a58de462",
+    ),
+    ('root ::= "only"', "7880ea9fd56d9cca1976659fa1ccd4b7b347ab2688800e96bdafcfaa591019e5"),
+    ("root ::= [0-9]", "e210303c507b9b23c732079d40b3f0b01af0de6deb86c8974148dbb92b92896c"),
+    ('root ::= "" "a" ""', "8698019eb93735ab521cfd930bf7688a276b4ebfb33ccd7cea20f8139f99fbeb"),
+    (
+        'root ::= a b c\na ::= "x" [0-9]*\nb ::= a "y" | [^xyz]\nc ::= b{1,3} "end"',
+        "692de2ea3a886cc7aca953da58fe7dc66c26bc39a71b01fdeee53cfb58e89561",
+    ),
+]
+
+
+@pytest.fixture(scope="module")
+def structure_compiler():
+    vocabulary = [chr(character) for character in range(33, 127)] + ["中", "文", "端"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary)
+    return xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=False)
+
+
+@pytest.mark.parametrize("grammar_str, expected_digest", fsm_structure_cases)
+def test_compiled_ebnf_fsm_structure_stable(
+    structure_compiler, grammar_str: str, expected_digest: str
+):
+    """Detect changes to state numbers, edge order, endpoints, or complete-FSM layout."""
+    compiled = structure_compiler.compile_grammar(grammar_str)
+    printed_fsm = _print_grammar_fsms(compiled.grammar)
+    actual_digest = hashlib.sha256(printed_fsm.encode()).hexdigest()
+    assert actual_digest == expected_digest
 
 
 if __name__ == "__main__":
