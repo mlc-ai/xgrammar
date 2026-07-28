@@ -3,7 +3,6 @@
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
 
 from pydantic import BaseModel
-from typing_extensions import deprecated
 
 from .base import XGRObject, _core
 from .grammar import (
@@ -244,10 +243,6 @@ class GrammarCompiler(XGRObject):
     ) -> CompiledGrammar: ...
 
     @overload
-    @deprecated(
-        "compile_structural_tag(tags, triggers) is deprecated. Compile structural tag with the "
-        "StructuralTag class instead."
-    )
     def compile_structural_tag(
         self, tags: List[StructuralTagItem], triggers: List[str]
     ) -> CompiledGrammar: ...
