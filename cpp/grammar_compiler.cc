@@ -22,6 +22,7 @@
 #include "fsm.h"
 #include "grammar_functor.h"
 #include "grammar_impl.h"
+#include "structural_tag.h"
 #include "support/dynamic_bitset.h"
 #include "support/int_set.h"
 #include "support/logging.h"
@@ -1172,7 +1173,8 @@ CompiledGrammar GrammarCompilerSub::CompileJSONSchema(
 }
 
 CompiledGrammar GrammarCompilerSub::CompileStructuralTag(const std::string& structural_tag_json) {
-  auto result = Grammar::FromStructuralTag(structural_tag_json, tokenizer_info_);
+  auto result =
+      StructuralTagToGrammar(structural_tag_json, tokenizer_info_, max_threads_).ToVariant();
   XGRAMMAR_CHECK(std::holds_alternative<Grammar>(result))
       << GetMessageFromVariantError(std::get<1>(result));
   return MultiThreadCompileGrammar(std::get<0>(result));
