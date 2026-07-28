@@ -124,8 +124,6 @@ class CompiledGrammar::Impl {
   std::once_flag token_char_data_once;
   int32_t max_token_chars = -1;
   std::vector<int32_t> token_char_counts;
-  std::vector<int32_t> sorted_indices_by_char_count;
-  std::vector<int32_t> char_count_offsets;
 
   Grammar GetGrammar() const { return grammar; }
 

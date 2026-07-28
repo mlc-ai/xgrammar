@@ -61,6 +61,20 @@ def test_max_chars_counts_codepoints_across_token_boundaries() -> None:
     assert matcher.is_terminated()
 
 
+def test_max_chars_boundary_with_accepted_bitset() -> None:
+    accepted_tokens = [chr(0x1000 + index) for index in range(1024)]
+    rejected_tokens = [chr(0x2000 + index) for index in range(1024)]
+    vocab = [token for pair in zip(accepted_tokens, rejected_tokens) for token in pair] + [">"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    compiled = _compile(
+        f'start: value ">"\nvalue[max_chars=1]: /[{accepted_tokens[0]}-{accepted_tokens[-1]}]*/',
+        tokenizer_info,
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert _allowed_token_ids(matcher, tokenizer_info) == list(range(0, 2048, 2)) + [2048]
+
+
 def test_max_chars_accept_string_is_transactional() -> None:
     tokenizer_info = xgr.TokenizerInfo([])
     compiled = _compile(

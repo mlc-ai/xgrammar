@@ -14,7 +14,6 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <numeric>
 #include <optional>
 #include <string>
 #include <thread>
@@ -1709,12 +1708,6 @@ void GrammarMatcher::Impl::EnsureTokenCharCounts() {
   std::call_once(compiled_grammar_->token_char_data_once, [&]() {
     const auto& vocab = tokenizer_info_.GetSortedDecodedVocab();
     compiled_grammar_->token_char_counts.assign(vocab.size(), 0);
-    compiled_grammar_->sorted_indices_by_char_count.resize(vocab.size());
-    std::iota(
-        compiled_grammar_->sorted_indices_by_char_count.begin(),
-        compiled_grammar_->sorted_indices_by_char_count.end(),
-        0
-    );
 
     int32_t max_chars = 0;
     for (int32_t index = 0; index < static_cast<int32_t>(vocab.size()); ++index) {
@@ -1726,29 +1719,6 @@ void GrammarMatcher::Impl::EnsureTokenCharCounts() {
       max_chars = std::max(max_chars, count);
     }
     compiled_grammar_->max_token_chars = max_chars;
-
-    std::stable_sort(
-        compiled_grammar_->sorted_indices_by_char_count.begin(),
-        compiled_grammar_->sorted_indices_by_char_count.end(),
-        [&](int32_t left, int32_t right) {
-          return compiled_grammar_->token_char_counts[left] <
-                 compiled_grammar_->token_char_counts[right];
-        }
-    );
-
-    compiled_grammar_->char_count_offsets.assign(max_chars + 2, vocab.size());
-    size_t position = 0;
-    for (int32_t count = 0; count <= max_chars + 1; ++count) {
-      while (
-          position < vocab.size() &&
-          compiled_grammar_
-                  ->token_char_counts[compiled_grammar_->sorted_indices_by_char_count[position]] <
-              count
-      ) {
-        ++position;
-      }
-      compiled_grammar_->char_count_offsets[count] = position;
-    }
   });
 }
 
@@ -1762,11 +1732,7 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
 ) {
   EnsureTokenCharCounts();
   const auto& token_char_counts = compiled_grammar_->token_char_counts;
-  const auto& sorted_indices_by_char_count = compiled_grammar_->sorted_indices_by_char_count;
-  const auto& char_count_offsets = compiled_grammar_->char_count_offsets;
   const auto& vocab = tokenizer_info_.GetSortedDecodedVocab();
-  size_t first_over_budget =
-      char_count_offsets[std::min(remaining_chars + 1, GetMaxTokenChars() + 1)];
 
   std::vector<int32_t> tokens_to_check = adaptive_token_mask.uncertain_indices;
   switch (adaptive_token_mask.store_type) {
@@ -1780,15 +1746,14 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
       }
       break;
     case StoreType::kAcceptedBitset:
-      for (size_t position = 0; position < first_over_budget; ++position) {
-        int32_t index = sorted_indices_by_char_count[position];
-        if (adaptive_token_mask.accepted_bitset[index]) {
-          tmp_accepted_bitset_.Set(vocab[index].first, true);
+      for (int32_t index = 0; index < static_cast<int32_t>(vocab.size()); ++index) {
+        int32_t token_id = vocab[index].first;
+        if (!adaptive_token_mask.accepted_bitset[token_id]) {
+          continue;
         }
-      }
-      for (size_t position = first_over_budget; position < vocab.size(); ++position) {
-        int32_t index = sorted_indices_by_char_count[position];
-        if (adaptive_token_mask.accepted_bitset[index]) {
+        if (token_char_counts[index] <= remaining_chars) {
+          tmp_accepted_bitset_.Set(token_id, true);
+        } else {
           tokens_to_check.push_back(index);
         }
       }
@@ -1801,19 +1766,16 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
           adaptive_token_mask.uncertain_indices.end()
       );
       std::sort(blocked.begin(), blocked.end());
-      for (size_t position = 0; position < first_over_budget; ++position) {
-        int32_t index = sorted_indices_by_char_count[position];
-        if (!std::binary_search(blocked.begin(), blocked.end(), index)) {
-          tmp_accepted_bitset_.Set(vocab[index].first, true);
-        }
-      }
-      for (size_t position = first_over_budget; position < vocab.size(); ++position) {
-        int32_t index = sorted_indices_by_char_count[position];
-        if (!std::binary_search(
-                adaptive_token_mask.rejected_indices.begin(),
-                adaptive_token_mask.rejected_indices.end(),
-                index
-            )) {
+      for (int32_t index = 0; index < static_cast<int32_t>(vocab.size()); ++index) {
+        if (token_char_counts[index] <= remaining_chars) {
+          if (!std::binary_search(blocked.begin(), blocked.end(), index)) {
+            tmp_accepted_bitset_.Set(vocab[index].first, true);
+          }
+        } else if (!std::binary_search(
+                       adaptive_token_mask.rejected_indices.begin(),
+                       adaptive_token_mask.rejected_indices.end(),
+                       index
+                   )) {
           tokens_to_check.push_back(index);
         }
       }

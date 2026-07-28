@@ -207,8 +207,7 @@ std::optional<SerializationError> DeserializeJSONValue(
 
 std::size_t MemorySize(const CompiledGrammar::Impl& impl) {
   return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache) +
-         MemorySize(impl.token_char_counts) + MemorySize(impl.sorted_indices_by_char_count) +
-         MemorySize(impl.char_count_offsets);
+         MemorySize(impl.token_char_counts);
 }
 
 std::size_t CompiledGrammar::MemorySizeBytes() const { return MemorySize(*pimpl_); }
