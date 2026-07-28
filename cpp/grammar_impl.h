@@ -283,7 +283,7 @@ class Grammar::Impl {
   };
 
   /*! \brief Get the tag dispatch from the grammar expr. */
-  TagDispatch GetTagDispatch(const GrammarExpr& grammar_expr) {
+  TagDispatch GetTagDispatch(const GrammarExpr& grammar_expr) const {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kTagDispatch)
         << "GrammarExpr is not a tag dispatch";
 
@@ -315,7 +315,7 @@ class Grammar::Impl {
   }
 
   /*! \brief Get the tag dispatch from the grammar expr with the given id. */
-  TagDispatch GetTagDispatch(int32_t grammar_expr_id) {
+  TagDispatch GetTagDispatch(int32_t grammar_expr_id) const {
     return GetTagDispatch(GetGrammarExpr(grammar_expr_id));
   }
 
@@ -327,7 +327,7 @@ class Grammar::Impl {
   };
 
   /*! \brief Decode a kTokenTagDispatch expr into the TokenTagDispatch struct. */
-  TokenTagDispatch GetTokenTagDispatch(const GrammarExpr& grammar_expr) {
+  TokenTagDispatch GetTokenTagDispatch(const GrammarExpr& grammar_expr) const {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kTokenTagDispatch);
     TokenTagDispatch result;
     int pos = 0;
@@ -347,7 +347,7 @@ class Grammar::Impl {
   }
 
   /*! \brief Get the token tag dispatch from the grammar expr with the given id. */
-  TokenTagDispatch GetTokenTagDispatch(int32_t grammar_expr_id) {
+  TokenTagDispatch GetTokenTagDispatch(int32_t grammar_expr_id) const {
     return GetTokenTagDispatch(GetGrammarExpr(grammar_expr_id));
   }
 
