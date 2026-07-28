@@ -89,24 +89,24 @@ void XMLToolCallingConverter::AddBasicRules() {
   constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
 
   nested_object_level_ = 1;
-  AddRuleWithAllocatedName(kXMLString, TagDispatch(false, {xml_wrapper_.parameter_suffix}));
-  AddCache(kStringCacheKey, kXMLString);
+  builder_.UpdateRuleBody(kXMLString, TagDispatch(false, {xml_wrapper_.parameter_suffix}));
+  AddCache(kStringCacheKey, builder_.GetRuleId(kXMLString));
 
-  AddRuleWithAllocatedName(kXMLAny, GenerateAny(AnySpec{}, kXMLAny));
-  AddCache("{}", kXMLAny);
+  builder_.UpdateRuleBody(kXMLAny, GenerateAny(AnySpec{}, kXMLAny));
+  AddCache("{}", builder_.GetRuleId(kXMLAny));
 
   nested_object_level_ = 0;
   ObjectSpec xml_object_spec;
   xml_object_spec.allow_additional_properties = true;
   xml_object_spec.additional_properties_schema = any_spec;
-  AddRuleWithAllocatedName(kXMLObject, GenerateObject(xml_object_spec, kXMLObject));
-  AddCache(kObjectCacheKey, kXMLObject);
+  builder_.UpdateRuleBody(kXMLObject, GenerateObject(xml_object_spec, kXMLObject));
+  AddCache(kObjectCacheKey, builder_.GetRuleId(kXMLObject));
 
-  AddRuleWithAllocatedName(
+  builder_.UpdateRuleBody(
       kXMLVariableName,
       Sequence(
-          {CharacterClass({{'a', 'z'}, {'A', 'Z'}, {'_', '_'}}),
-           CharacterClassStar({{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}})}
+          {builder_.AddCharacterClass({{'a', 'z'}, {'A', 'Z'}, {'_', '_'}}),
+           builder_.AddCharacterClassStar({{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}})}
       )
   );
 }
@@ -129,7 +129,10 @@ int32_t XMLToolCallingConverter::GenerateString(
       return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
     }
     return Repeat(
-        rule_name + "_characters", CharacterClass({{0, 0x10ffff}}), spec.min_length, spec.max_length
+        rule_name + "_characters",
+        builder_.AddCharacterClass({{0, 0x10ffff}}),
+        spec.min_length,
+        spec.max_length
     );
   }
   return JSONSchemaConverter::GenerateString(spec, rule_name);
@@ -199,7 +202,7 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
 }
 
 int32_t XMLToolCallingConverter::FormatProperty(
-    const std::string& key, const std::string& value_rule, const std::string& rule_name, int64_t idx
+    const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
 ) {
   if (IsOuterXML()) {
     std::vector<int32_t> elements = {FormatPropertyKey(key)};
@@ -207,22 +210,22 @@ int32_t XMLToolCallingConverter::FormatProperty(
       elements.push_back(WhitespaceExpression());
       elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
     }
-    if (value_rule == kXMLString) {
-      elements.push_back(RuleRef(value_rule));
+    if (value_rule_id == builder_.GetRuleId(kXMLString)) {
+      elements.push_back(RuleRef(value_rule_id));
     } else {
       elements.push_back(WhitespaceExpression());
-      elements.push_back(RuleRef(value_rule));
+      elements.push_back(RuleRef(value_rule_id));
       elements.push_back(WhitespaceExpression());
     }
     elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
     return Sequence(elements);
   }
-  return JSONSchemaConverter::FormatProperty(key, value_rule, rule_name, idx);
+  return JSONSchemaConverter::FormatProperty(key, value_rule_id, rule_name, idx);
 }
 
 int32_t XMLToolCallingConverter::FormatOtherProperty(
     int32_t key_pattern_expr,
-    const std::string& value_rule,
+    int32_t value_rule_id,
     const std::string& rule_name,
     const std::string& rule_name_suffix
 ) {
@@ -234,18 +237,18 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
       elements.push_back(WhitespaceExpression());
       elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
     }
-    if (value_rule == kXMLString) {
-      elements.push_back(RuleRef(value_rule));
+    if (value_rule_id == builder_.GetRuleId(kXMLString)) {
+      elements.push_back(RuleRef(value_rule_id));
     } else {
       elements.push_back(WhitespaceExpression());
-      elements.push_back(RuleRef(value_rule));
+      elements.push_back(RuleRef(value_rule_id));
       elements.push_back(WhitespaceExpression());
     }
     elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
     return Sequence(elements);
   }
   return JSONSchemaConverter::FormatOtherProperty(
-      key_pattern_expr, value_rule, rule_name, rule_name_suffix
+      key_pattern_expr, value_rule_id, rule_name, rule_name_suffix
   );
 }
 
@@ -276,14 +279,14 @@ std::string XMLToolCallingConverter::GetBasicAnyRuleName() const {
   return JSONSchemaConverter::GetBasicAnyRuleName();
 }
 
-void XMLToolCallingConverter::AddCache(const std::string& key, const std::string& rule_name) {
+void XMLToolCallingConverter::AddCache(const std::string& key, int32_t rule_id) {
   if (key.empty()) {
     return;
   }
-  rule_cache_manager_.AddCache(key, nested_object_level_ > 1, rule_name);
+  rule_cache_manager_.AddCache(key, nested_object_level_ > 1, rule_id);
 }
 
-std::optional<std::string> XMLToolCallingConverter::GetCache(const std::string& key) const {
+std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
   }

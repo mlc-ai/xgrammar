@@ -210,16 +210,17 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format);
 
 /*!
  * \brief Manage the rule generation cache. Wraps key-value cache for schema deduplication.
+ * The cached value is the rule id in the grammar builder.
  */
 class GenerateCacheManager {
  public:
   /*! \brief Add a key-value pair to the cache. */
-  void AddCache(const std::string& key, bool is_inner_layer, const std::string& value) {
-    cache_[{key, is_inner_layer}] = value;
+  void AddCache(const std::string& key, bool is_inner_layer, int32_t rule_id) {
+    cache_[{key, is_inner_layer}] = rule_id;
   }
 
-  /*! \brief Get cached value by key. Returns std::nullopt if not found. */
-  std::optional<std::string> GetCache(const std::string& key, bool is_inner_layer) const {
+  /*! \brief Get cached rule id by key. Returns std::nullopt if not found. */
+  std::optional<int32_t> GetCache(const std::string& key, bool is_inner_layer) const {
     auto it = cache_.find({key, is_inner_layer});
     if (it != cache_.end()) {
       return it->second;
@@ -228,7 +229,7 @@ class GenerateCacheManager {
   }
 
  private:
-  std::unordered_map<std::pair<std::string, bool>, std::string> cache_;
+  std::unordered_map<std::pair<std::string, bool>, int32_t> cache_;
 };
 
 /*!
@@ -324,16 +325,13 @@ class JSONSchemaConverter {
 
   /*! \brief Format a property key and value. Override for different formats. */
   virtual int32_t FormatProperty(
-      const std::string& key,
-      const std::string& value_rule,
-      const std::string& rule_name,
-      int64_t idx
+      const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
   );
 
   /*! \brief Format an additional or unevaluated property. */
   virtual int32_t FormatOtherProperty(
       int32_t key_pattern_expr,
-      const std::string& value_rule,
+      int32_t value_rule_id,
       const std::string& rule_name,
       const std::string& rule_name_suffix
   );
@@ -354,18 +352,18 @@ class JSONSchemaConverter {
   void AddBasicRules(const std::vector<std::string>& additional_rule_names);
 
   /*! \brief Add a key-value pair to the generation cache. */
-  virtual void AddCache(const std::string& key, const std::string& rule_name);
+  virtual void AddCache(const std::string& key, int32_t rule_id);
 
-  /*! \brief Get a cached rule name. */
-  virtual std::optional<std::string> GetCache(const std::string& key) const;
+  /*! \brief Get a cached rule id. */
+  virtual std::optional<int32_t> GetCache(const std::string& key) const;
 
   // ==================== Helper methods for subclasses ====================
 
   /*! \brief Dispatch to the appropriate Generate method based on the spec type. */
   int32_t GenerateFromSpec(const SchemaSpecPtr& spec, const std::string& rule_name_hint);
 
-  /*! \brief Create a rule and return its name, handling caching. */
-  std::string CreateRule(const SchemaSpecPtr& spec, const std::string& rule_name_hint);
+  /*! \brief Create a rule and return its id, handling caching. */
+  int32_t CreateRule(const SchemaSpecPtr& spec, const std::string& rule_name_hint);
 
   /*! \brief Get the next separator string from the indent manager. */
   virtual std::string NextSeparator(bool is_end = false);
@@ -373,20 +371,8 @@ class JSONSchemaConverter {
   /*! \brief Get the whitespace pattern. */
   std::string GetWhitespacePattern() const;
 
-  std::string AllocateRuleName(const std::string& name_hint);
-  void ReserveRule(const std::string& name);
-  std::string AddRule(const std::string& name_hint, int32_t body_expr_id);
-  void AddRuleWithAllocatedName(const std::string& name, int32_t body_expr_id);
-
   int32_t Empty();
   int32_t ByteString(const std::string& value);
-  int32_t CharacterClass(
-      const std::vector<CharacterClassElement>& elements, bool is_negative = false
-  );
-  int32_t CharacterClassStar(
-      const std::vector<CharacterClassElement>& elements, bool is_negative = false
-  );
-  int32_t Regex(const std::string& regex, bool json_string = false);
   int32_t TagDispatch(bool loop_after_dispatch, std::vector<std::string> excludes);
   int32_t RuleRef(int32_t rule_id);
   int32_t RuleRef(const std::string& rule_name);
@@ -395,9 +381,7 @@ class JSONSchemaConverter {
   int32_t Repeat(
       const std::string& rule_name_hint, int32_t expr_id, int32_t min_count, int32_t max_count
   );
-  void SetLookahead(const std::string& rule_name, int32_t lookahead_expr_id);
   int32_t AddSubGrammar(const Grammar& grammar);
-  Grammar Get(const std::string& root_rule_name);
 
   int32_t WhitespaceExpression();
   int32_t FormattingExpression(const std::string& expression);
@@ -446,6 +430,7 @@ class JSONSchemaConverter {
 
   // ==================== Protected members ====================
 
+  GrammarBuilder builder_;
   GenerateCacheManager rule_cache_manager_;
 
  public:
@@ -480,7 +465,6 @@ class JSONSchemaConverter {
       bool exclusive_end = false
   );
 
-  GrammarBuilder builder_;
   std::optional<int32_t> empty_expr_id_;
   std::unordered_map<std::string, int32_t> byte_string_expr_ids_;
   std::unordered_map<int32_t, int32_t> rule_ref_expr_ids_;
@@ -491,7 +475,7 @@ class JSONSchemaConverter {
   std::optional<int32_t> whitespace_expr_id_;
   bool any_order_;
   RefResolver ref_resolver_;
-  std::unordered_map<std::string, std::string> uri_to_rule_name_;
+  std::unordered_map<std::string, int32_t> uri_to_rule_id_;
 
   friend std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
   friend std::string GenerateFloatRangeRegex(

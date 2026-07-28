@@ -45,14 +45,11 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   // Override format hooks.
   int32_t FormatPropertyKey(const std::string& key) override;
   int32_t FormatProperty(
-      const std::string& key,
-      const std::string& value_rule,
-      const std::string& rule_name,
-      int64_t idx
+      const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
   ) override;
   int32_t FormatOtherProperty(
       int32_t key_pattern_expr,
-      const std::string& value_rule,
+      int32_t value_rule_id,
       const std::string& rule_name,
       const std::string& rule_name_suffix
   ) override;
@@ -64,8 +61,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::string GetBasicAnyRuleName() const override;
 
   void AddBasicRules() override;
-  void AddCache(const std::string& key, const std::string& rule_name) override;
-  std::optional<std::string> GetCache(const std::string& key) const override;
+  void AddCache(const std::string& key, int32_t rule_id) override;
+  std::optional<int32_t> GetCache(const std::string& key) const override;
 
  private:
   // Wrapper strings for XML parameter tags.
