@@ -32,6 +32,7 @@
 #include "support/logging.h"
 #include "support/thread_pool.h"
 #include "testing.h"
+#include "tokenizer_info_impl.h"
 
 namespace xgrammar {
 
@@ -610,10 +611,6 @@ class GrammarMatcher::Impl : public EarleyParser {
   void FillBitmaskForStates(
       int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
   );
-
-  void EnsureTokenCharCounts();
-
-  int32_t GetMaxTokenChars();
 
   void FillBitmaskForCharBudgetBoundary(
       const AdaptiveTokenMask& adaptive_token_mask, int32_t remaining_chars
@@ -1704,34 +1701,10 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
 }
 
-void GrammarMatcher::Impl::EnsureTokenCharCounts() {
-  std::call_once(compiled_grammar_->token_char_data_once, [&]() {
-    const auto& vocab = tokenizer_info_.GetSortedDecodedVocab();
-    compiled_grammar_->token_char_counts.assign(vocab.size(), 0);
-
-    int32_t max_chars = 0;
-    for (int32_t index = 0; index < static_cast<int32_t>(vocab.size()); ++index) {
-      int32_t count = 0;
-      for (uint8_t byte : vocab[index].second) {
-        count += StartsUTF8Codepoint(byte);
-      }
-      compiled_grammar_->token_char_counts[index] = count;
-      max_chars = std::max(max_chars, count);
-    }
-    compiled_grammar_->max_token_chars = max_chars;
-  });
-}
-
-int32_t GrammarMatcher::Impl::GetMaxTokenChars() {
-  EnsureTokenCharCounts();
-  return compiled_grammar_->max_token_chars;
-}
-
 void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
     const AdaptiveTokenMask& adaptive_token_mask, int32_t remaining_chars
 ) {
-  EnsureTokenCharCounts();
-  const auto& token_char_counts = compiled_grammar_->token_char_counts;
+  const auto& token_char_counts = tokenizer_info_.ImplPtr()->GetTokenCharCounts();
   const auto& vocab = tokenizer_info_.GetSortedDecodedVocab();
 
   std::vector<int32_t> tokens_to_check = adaptive_token_mask.uncertain_indices;
@@ -1894,7 +1867,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
     if (state.char_budget_deadline >= 0) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
-      if (remaining_chars <= GetMaxTokenChars()) {
+      if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
         FillBitmaskForCharBudgetBoundary(adaptive_token_mask, std::max(remaining_chars, 0));
         continue;
       }

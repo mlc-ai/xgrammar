@@ -4,6 +4,7 @@
 #include <picojson.h>
 
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -39,6 +40,8 @@ class TokenizerInfo::Impl {
   const std::vector<int32_t>& GetTokenIdToSortedVocabIndex() const {
     return token_id_to_sorted_vocab_index_;
   }
+  const std::vector<int32_t>& GetTokenCharCounts() const;
+  int32_t GetMaxTokenChars() const;
 
   std::string DumpMetadata() const;
   picojson::value DumpMetadataValue() const;
@@ -55,6 +58,7 @@ class TokenizerInfo::Impl {
 
  private:
   static bool IsSpecialToken(const std::string& decoded_token);
+  void EnsureTokenCharCounts() const;
 
   /*! \brief The vocabulary type. */
   VocabType vocab_type_;
@@ -79,6 +83,10 @@ class TokenizerInfo::Impl {
   std::vector<int32_t> special_token_ids_;
   /*! \brief Reverse mapping: token_id -> index in sorted_decoded_vocab_. -1 if not present. */
   std::vector<int32_t> token_id_to_sorted_vocab_index_;
+  /*! \brief Lazily built Unicode codepoint counts for the sorted decoded vocabulary. */
+  mutable std::once_flag token_char_data_once_;
+  mutable int32_t max_token_chars_ = 0;
+  mutable std::vector<int32_t> token_char_counts_;
 
   /*!
    * \brief The tokens used to detect stop tokens from the vocabulary.
