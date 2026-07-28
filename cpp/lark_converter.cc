@@ -896,11 +896,6 @@ class LarkParser {
           source_, definition->stop_capture_location, "stop_capture requires stop or suffix"
       );
     }
-    if (definition->temperature.has_value() && definition->max_chars.has_value()) {
-      RaiseLarkError(
-          source_, definition->max_chars_location, "max_chars cannot be combined with temperature"
-      );
-    }
   }
 
   Node ParseChoice() {
@@ -1408,6 +1403,9 @@ class LarkCompiler {
       int32_t body_expr_id;
       if (definition.temperature.has_value()) {
         body_expr_id = CompileTemperatureRule(definition);
+        if (definition.max_chars.has_value()) {
+          builder_.UpdateMaxChars(rule_ids_.at(definition.name), definition.max_chars.value());
+        }
       } else if (definition.name == "start") {
         if (dynamic_start_body.has_value()) {
           if (definition.max_tokens.has_value()) {

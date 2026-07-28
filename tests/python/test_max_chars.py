@@ -134,6 +134,26 @@ def test_max_chars_combines_with_max_tokens() -> None:
     assert not _accepts_tokens_with_masks(compiled, tokenizer_info, [1, 1, 2])
 
 
+def test_max_chars_combines_with_temperature() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["a", "ab", "abc", ">"])
+    compiled = _compile(
+        """
+        start: value ">"
+        value[max_chars=2, temperature=0.7]: /[a-z]*/
+        """,
+        tokenizer_info,
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.temperature == pytest.approx(0.7)
+    assert _allowed_token_ids(matcher, tokenizer_info) == [0, 1, 3]
+    assert matcher.accept_token(1)
+    assert matcher.temperature is None
+    assert _allowed_token_ids(matcher, tokenizer_info) == [3]
+    assert matcher.accept_token(3)
+    assert matcher.is_terminated()
+
+
 def test_max_chars_suffix_can_close_inside_token() -> None:
     tokenizer_info = xgr.TokenizerInfo(["aa!", "a>!", "aa>!"])
     compiled = _compile(
@@ -246,9 +266,6 @@ def test_max_chars_round_trip_and_validation() -> None:
             xgr.Grammar.from_lark(f"start[max_chars={value}]: /a*/")
         with pytest.raises(RuntimeError, match="max_chars"):
             xgr.Grammar.from_ebnf(f"root[max_chars={value}] ::= [a]*")
-
-    with pytest.raises(RuntimeError, match="max_chars cannot be combined with temperature"):
-        xgr.Grammar.from_lark("start[max_chars=1, temperature=0.5]: /a*/")
 
 
 def test_max_chars_compiler_cache_and_serialization() -> None:
