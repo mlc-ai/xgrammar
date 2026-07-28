@@ -4,7 +4,11 @@ from typing import Optional
 import pytest
 
 import xgrammar as xgr
-from xgrammar.testing import GrammarFunctor, _ebnf_to_grammar_no_normalization
+from xgrammar.testing import (
+    GrammarFunctor,
+    _ebnf_to_grammar_no_normalization,
+    _get_allow_empty_rule_ids,
+)
 
 
 def test_basic_string_literal():
@@ -544,6 +548,16 @@ rule1 ::= (("a" [a-z]*) | ("b"))
 rule2 ::= (("b") | ("c" [b-c]))
 """,
     ),
+    (
+        r"""root ::= rule1 (rule2 "y")
+rule1 ::= "a" | "b"
+rule2 ::= "c" | "d"
+""",
+        r"""root ::= (("a" (("c" "y") | ("d" "y"))) | ("b" (("c" "y") | ("d" "y"))))
+rule1 ::= (("a") | ("b"))
+rule2 ::= (("c") | ("d"))
+""",
+    ),
 ]
 
 
@@ -659,6 +673,30 @@ rule1 ::= (("ab")) (=(("cd")))
     grammar = _ebnf_to_grammar_no_normalization(before)
     grammar = GrammarFunctor.byte_string_fuser(grammar)
     assert str(grammar) == expected
+
+
+def test_byte_string_fuser_removes_empty_byte_strings():
+    structural_tag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "triggered_tags",
+            "triggers": ["<t>"],
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": "<t>",
+                    "content": {"type": "const_string", "value": ""},
+                    "end": "",
+                }
+            ],
+        },
+    }
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    fused = GrammarFunctor.byte_string_fuser(grammar)
+    assert "triggered_tags_group ::= ((const_string))\n" in str(fused)
+
+    compiled = xgr.GrammarCompiler(xgr.TokenizerInfo([])).compile_grammar(grammar)
+    assert _get_allow_empty_rule_ids(compiled) == [0, 1, 2, 3]
 
 
 def test_optimizer_passes_do_not_mutate_input():

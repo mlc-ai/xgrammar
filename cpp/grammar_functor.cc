@@ -760,14 +760,20 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
         new_choice_ids.insert(new_choice_ids.end(), expr.begin(), expr.begin() + i);
       }
       // Do inlining: prepend each choice of the referenced rule to the rest of this sequence.
-      // Copy the needed element ids before appending anything.
+      // Copy and visit the needed element ids before appending anything.
       std::vector<int32_t> rest_element_ids(choice_expr.begin() + 1, choice_expr.end());
+      for (int32_t& element_id : rest_element_ids) {
+        element_id = VisitExpr(element_id);
+      }
       auto ref_body = builder_.GetGrammarExpr(original_body_expr_ids_[inline_rule_id]);
       std::vector<int32_t> ref_choice_ids(ref_body.begin(), ref_body.end());
       for (int32_t ref_choice_id : ref_choice_ids) {
         auto ref_choice_expr = builder_.GetGrammarExpr(ref_choice_id);
         XGRAMMAR_ICHECK(ref_choice_expr.type == GrammarExprType::kSequence);
         std::vector<int32_t> new_sequence(ref_choice_expr.begin(), ref_choice_expr.end());
+        for (int32_t& element_id : new_sequence) {
+          element_id = VisitExpr(element_id);
+        }
         new_sequence.insert(new_sequence.end(), rest_element_ids.begin(), rest_element_ids.end());
         new_choice_ids.push_back(builder_.AddSequence(new_sequence));
       }
@@ -2818,23 +2824,24 @@ class GrammarOptimizerImpl {
 class ByteStringFuserImpl : public InPlaceGrammarRewriter {
  protected:
   int32_t VisitSequence(int32_t expr_id) override {
-    // Read-only probe: rewrite only if the sequence contains two adjacent byte strings. The
-    // probe appends nothing, so no memory is allocated for the common unchanged case.
+    // Read-only probe: rewrite only if the sequence contains an empty byte string or two adjacent
+    // byte strings. The probe appends nothing, so no memory is allocated for the common unchanged
+    // case.
     bool previous_is_byte_string = false;
-    bool has_adjacent_byte_strings = false;
+    bool needs_rewrite = false;
     {
       auto expr = builder_.GetGrammarExpr(expr_id);
       for (int32_t element_id : expr) {
-        bool is_byte_string =
-            builder_.GetGrammarExpr(element_id).type == GrammarExprType::kByteString;
-        if (is_byte_string && previous_is_byte_string) {
-          has_adjacent_byte_strings = true;
+        auto element = builder_.GetGrammarExpr(element_id);
+        bool is_byte_string = element.type == GrammarExprType::kByteString;
+        if (is_byte_string && (previous_is_byte_string || element.size() == 0)) {
+          needs_rewrite = true;
           break;
         }
         previous_is_byte_string = is_byte_string;
       }
     }
-    if (!has_adjacent_byte_strings) {
+    if (!needs_rewrite) {
       return expr_id;
     }
     // Copy the element ids first: fusing appends to the arena and invalidates expr views.
@@ -2858,10 +2865,13 @@ class ByteStringFuserImpl : public InPlaceGrammarRewriter {
         fused_bytes.insert(fused_bytes.end(), element.begin(), element.end());
         ++run_end;
       }
-      if (run_end - i == 1) {
-        new_element_ids.push_back(element_ids[i]);
-      } else {
-        new_element_ids.push_back(builder_.AddByteString(fused_bytes));
+      // Empty byte strings are epsilon and can be omitted from a sequence.
+      if (!fused_bytes.empty()) {
+        if (run_end - i == 1) {
+          new_element_ids.push_back(element_ids[i]);
+        } else {
+          new_element_ids.push_back(builder_.AddByteString(fused_bytes));
+        }
       }
       i = run_end;
     }
