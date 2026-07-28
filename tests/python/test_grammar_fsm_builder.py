@@ -7,10 +7,10 @@ including exhaustive comparisons against reference regexes. A targeted EBNF corp
 guards the exact FSM layout produced by these construction paths.
 """
 
-import hashlib
 import itertools
 import re
 import sys
+from textwrap import dedent
 from typing import List, Tuple
 
 import pytest
@@ -284,47 +284,357 @@ def test_bitmask_matches_string_acceptance(grammar_str: str):
 
 # --- Exact EBNF FSM layout stability ---
 
+
+def _fsm_snapshot(snapshot: str) -> str:
+    return dedent(snapshot).lstrip("\n")
+
+
 fsm_structure_cases = [
-    ('root ::= "a" [0-9] "b"', "55b4f598dd003190ab972e2c89246b46b7ad102506fdfa785003c270866e8572"),
-    (
+    pytest.param(
+        'root ::= "a" [0-9] "b"',
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=4, start=2, end=[3], edges=[
+            0: [[0-9]->1]
+            1: ['b'->3]
+            2: ['a'->0]
+            3: []
+            ])
+            """
+        ),
+        id="literal-character-class-literal",
+    ),
+    pytest.param(
         'root ::= "hello" [a-zA-Z_] [0-9]* "world"',
-        "bf85be1292ab8bfcbdb08c09e4508ffe855d110cc19b36fd849c6724897c6a50",
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=12, start=2, end=[11], edges=[
+            0: [[A-Z]->1, '_'->1, [a-z]->1]
+            1: [[0-9]->1, 'w'->7]
+            2: ['h'->3]
+            3: ['e'->4]
+            4: ['l'->5]
+            5: ['l'->6]
+            6: ['o'->0]
+            7: ['o'->8]
+            8: ['r'->9]
+            9: ['l'->10]
+            10: ['d'->11]
+            11: []
+            ])
+            """
+        ),
+        id="mixed-character-classes",
     ),
-    ('root ::= "<" [a-c]* ">"', "19cef267fb8eddbc9c5ac8fba92c135600fc720258abf0bd58cb6c346fe75c5a"),
-    (
+    pytest.param(
+        'root ::= "<" [a-c]* ">"',
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=3, start=1, end=[2], edges=[
+            0: ['>'->2, [a-c]->0]
+            1: ['<'->0]
+            2: []
+            ])
+            """
+        ),
+        id="starred-character-class",
+    ),
+    pytest.param(
         'root ::= "x" [^0-9] "y" [^a-z]* "z"',
-        "fd5ab210c129fe4da573c175bfd0e97440d30a88d038a160e5bcbeb2f9fc00d0",
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=11, start=7, end=[10], edges=[
+            0: [[\x80-\xbf]->2]
+            1: [[\x80-\xbf]->3]
+            2: [[\x80-\xbf]->5]
+            3: [[\x80-\xbf]->6]
+            4: [[\0-/]->5, [:-\x7f]->5, [\xc0-\xdf]->2, [\xe0-\xef]->0, [\xf0-\xf7]->8]
+            5: ['y'->6]
+            6: [[\0-`]->6, 'z'->10, [{-\x7f]->6, [\xc0-\xdf]->3, [\xe0-\xef]->1, [\xf0-\xf7]->9]
+            7: ['x'->4]
+            8: [[\x80-\xbf]->0]
+            9: [[\x80-\xbf]->1]
+            10: []
+            ])
+            """
+        ),
+        id="negated-character-classes",
     ),
-    (
+    pytest.param(
         'root ::= "(" inner ")" inner\ninner ::= [0-9] [0-9]',
-        "4de2c028805f73a42e2eb3766defb94a7b6a9cfb735fd9d9a7bf8c610e4b4012",
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=8, start=3, end=[4], edges=[
+            0: [Rule(1)->1]
+            1: [')'->2]
+            2: [Rule(1)->4]
+            3: ['('->0]
+            4: []
+            ])
+            Rule 1: inner, FSM: CompactFSM(num_states=8, start=6, end=[7], edges=[
+            5: [[0-9]->7]
+            6: [[0-9]->5]
+            7: []
+            ])
+            """
+        ),
+        id="repeated-rule-reference",
     ),
-    (
+    pytest.param(
         'root ::= "a" item{2,5} "b"\nitem ::= [0-9]',
-        "eddead662499416bbd37a4b70d70912ace125deaeaa8fc1f48fbe61dde26b8c7",
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=16, start=2, end=[3], edges=[
+            0: [Rule(4)->1]
+            1: ['b'->3]
+            2: ['a'->0]
+            3: []
+            ])
+            Rule 1: root_1, FSM: CompactFSM(num_states=16, start=4, end=[4, 6], edges=[
+            4: [[0-9]->5]
+            5: [Rule(2)->6]
+            6: []
+            ])
+            Rule 2: root_2, FSM: CompactFSM(num_states=16, start=7, end=[7, 9], edges=[
+            7: [[0-9]->8]
+            8: [Rule(3)->9]
+            9: []
+            ])
+            Rule 3: root_3, FSM: CompactFSM(num_states=16, start=10, end=[10, 11], edges=[
+            10: [[0-9]->11]
+            11: []
+            ])
+            Rule 4: root_4, FSM: CompactFSM(num_states=16, start=14, end=[15], edges=[
+            12: [[0-9]->13]
+            13: [Rule(1)->15]
+            14: [[0-9]->12]
+            15: []
+            ])
+            """
+        ),
+        id="bounded-rule-repetition",
     ),
-    (
+    pytest.param(
         'root ::= item{3,}\nitem ::= "ab" [xy]',
-        "e80cfab029429aa5111b5b1b95c002f7fa4bc7b0a4e88ecae2d507067dba7b6d",
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=14, start=0, end=[1], edges=[
+            0: [Rule(3)->1]
+            1: []
+            ])
+            Rule 1: item, FSM: CompactFSM(num_states=14, start=3, end=[5], edges=[
+            2: ['x'->5, 'y'->5]
+            3: ['a'->4]
+            4: ['b'->2]
+            5: []
+            ])
+            Rule 2: root_1, FSM: CompactFSM(num_states=14, start=6, end=[6, 8], edges=[
+            6: [Rule(1)->7]
+            7: [Rule(2)->8]
+            8: []
+            ])
+            Rule 3: root_2, FSM: CompactFSM(num_states=14, start=12, end=[13], edges=[
+            9: [Rule(1)->10]
+            10: [Rule(1)->11]
+            11: [Rule(2)->13]
+            12: [Rule(1)->9]
+            13: []
+            ])
+            """
+        ),
+        id="unbounded-rule-repetition",
     ),
-    (
+    pytest.param(
         'root ::= "ab" [0-9] | "cd" sub | sub sub\nsub ::= [a-f] "q"',
-        "29090db9590a3b07af82126f08ec25663f657fde2b659c7d172bf6da227861ba",
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=10, start=2, end=[1], edges=[
+            0: [Rule(1)->1]
+            1: []
+            2: ['a'->5, [a-f]->4, 'c'->6]
+            3: [[0-9]->1]
+            4: ['q'->0]
+            5: ['b'->3]
+            6: ['d'->0]
+            ])
+            Rule 1: sub, FSM: CompactFSM(num_states=10, start=8, end=[9], edges=[
+            7: ['q'->9]
+            8: [[a-f]->7]
+            9: []
+            ])
+            """
+        ),
+        id="choices-with-rule-references",
     ),
-    (
+    pytest.param(
         'root ::= "abcdefghijklmnopqrstuvwxyz" [0-9] "ABCDEFGHIJKLMNOPQRSTUVWXYZ"',
-        "58b89fec9137ba57ef63aba58efa201d7a64b9c949b80d0e4376467613779aab",
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=54, start=2, end=[53], edges=[
+            0: [[0-9]->1]
+            1: ['A'->28]
+            2: ['a'->3]
+            3: ['b'->4]
+            4: ['c'->5]
+            5: ['d'->6]
+            6: ['e'->7]
+            7: ['f'->8]
+            8: ['g'->9]
+            9: ['h'->10]
+            10: ['i'->11]
+            11: ['j'->12]
+            12: ['k'->13]
+            13: ['l'->14]
+            14: ['m'->15]
+            15: ['n'->16]
+            16: ['o'->17]
+            17: ['p'->18]
+            18: ['q'->19]
+            19: ['r'->20]
+            20: ['s'->21]
+            21: ['t'->22]
+            22: ['u'->23]
+            23: ['v'->24]
+            24: ['w'->25]
+            25: ['x'->26]
+            26: ['y'->27]
+            27: ['z'->0]
+            28: ['B'->29]
+            29: ['C'->30]
+            30: ['D'->31]
+            31: ['E'->32]
+            32: ['F'->33]
+            33: ['G'->34]
+            34: ['H'->35]
+            35: ['I'->36]
+            36: ['J'->37]
+            37: ['K'->38]
+            38: ['L'->39]
+            39: ['M'->40]
+            40: ['N'->41]
+            41: ['O'->42]
+            42: ['P'->43]
+            43: ['Q'->44]
+            44: ['R'->45]
+            45: ['S'->46]
+            46: ['T'->47]
+            47: ['U'->48]
+            48: ['V'->49]
+            49: ['W'->50]
+            50: ['X'->51]
+            51: ['Y'->52]
+            52: ['Z'->53]
+            53: []
+            ])
+            """
+        ),
+        id="long-byte-strings",
     ),
-    (
+    pytest.param(
         'root ::= "中文" [\\u4e00-\\u9fff] "端"',
-        "a2d7f36e1d3a0453d4267fb3937ed07a4abaac7361e051d3aaaaf7a6a58de462",
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=14, start=3, end=[13], edges=[
+            0: [[\x80-\xbf]->2]
+            1: ['\xe4'->9, [\xe5-\xe9]->10]
+            2: ['\xe7'->11]
+            3: ['\xe4'->4]
+            4: ['\xb8'->5]
+            5: ['\xad'->6]
+            6: ['\xe6'->7]
+            7: ['\x96'->8]
+            8: ['\x87'->1]
+            9: [[\xb8-\xbf]->0]
+            10: [[\x80-\xbf]->0]
+            11: ['\xab'->12]
+            12: ['\xaf'->13]
+            13: []
+            ])
+            """
+        ),
+        id="utf8-byte-strings",
     ),
-    ('root ::= "only"', "7880ea9fd56d9cca1976659fa1ccd4b7b347ab2688800e96bdafcfaa591019e5"),
-    ("root ::= [0-9]", "e210303c507b9b23c732079d40b3f0b01af0de6deb86c8974148dbb92b92896c"),
-    ('root ::= "" "a" ""', "8698019eb93735ab521cfd930bf7688a276b4ebfb33ccd7cea20f8139f99fbeb"),
-    (
+    pytest.param(
+        'root ::= "only"',
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=5, start=0, end=[4], edges=[
+            0: ['o'->1]
+            1: ['n'->2]
+            2: ['l'->3]
+            3: ['y'->4]
+            4: []
+            ])
+            """
+        ),
+        id="single-literal",
+    ),
+    pytest.param(
+        "root ::= [0-9]",
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=2, start=0, end=[1], edges=[
+            0: [[0-9]->1]
+            1: []
+            ])
+            """
+        ),
+        id="single-character-class",
+    ),
+    pytest.param(
+        'root ::= "" "a" ""',
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=2, start=0, end=[1], edges=[
+            0: ['a'->1]
+            1: []
+            ])
+            """
+        ),
+        id="empty-elements",
+    ),
+    pytest.param(
         'root ::= a b c\na ::= "x" [0-9]*\nb ::= a "y" | [^xyz]\nc ::= b{1,3} "end"',
-        "692de2ea3a886cc7aca953da58fe7dc66c26bc39a71b01fdeee53cfb58e89561",
+        _fsm_snapshot(
+            r"""
+            Rule 0: root, FSM: CompactFSM(num_states=23, start=2, end=[3], edges=[
+            0: [Rule(1)->1, [0-9]->0]
+            1: [Rule(2)->3]
+            2: ['x'->0]
+            3: []
+            ])
+            Rule 1: b, FSM: CompactFSM(num_states=23, start=7, end=[5], edges=[
+            4: [[\x80-\xbf]->6]
+            5: []
+            6: [[\x80-\xbf]->5]
+            7: [[\0-w]->5, 'x'->8, [{-\x7f]->5, [\xc0-\xdf]->6, [\xe0-\xef]->4, [\xf0-\xf7]->9]
+            8: [[0-9]->8, 'y'->5]
+            9: [[\x80-\xbf]->4]
+            ])
+            Rule 2: c, FSM: CompactFSM(num_states=23, start=11, end=[14], edges=[
+            10: ['e'->12]
+            11: [Rule(5)->10]
+            12: ['n'->13]
+            13: ['d'->14]
+            14: []
+            ])
+            Rule 3: c_1, FSM: CompactFSM(num_states=23, start=15, end=[15, 17], edges=[
+            15: [Rule(1)->16]
+            16: [Rule(4)->17]
+            17: []
+            ])
+            Rule 4: c_2, FSM: CompactFSM(num_states=23, start=18, end=[18, 19], edges=[
+            18: [Rule(1)->19]
+            19: []
+            ])
+            Rule 5: c_3, FSM: CompactFSM(num_states=23, start=21, end=[22], edges=[
+            20: [Rule(3)->22]
+            21: [Rule(1)->20]
+            22: []
+            ])
+            """
+        ),
+        id="nested-rule-references",
     ),
 ]
 
@@ -336,15 +646,14 @@ def structure_compiler():
     return xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=False)
 
 
-@pytest.mark.parametrize("grammar_str, expected_digest", fsm_structure_cases)
+@pytest.mark.parametrize("grammar_str, expected_fsm", fsm_structure_cases)
 def test_compiled_ebnf_fsm_structure_stable(
-    structure_compiler, grammar_str: str, expected_digest: str
+    structure_compiler, grammar_str: str, expected_fsm: str
 ):
     """Detect changes to state numbers, edge order, endpoints, or complete-FSM layout."""
     compiled = structure_compiler.compile_grammar(grammar_str)
     printed_fsm = _print_grammar_fsms(compiled.grammar)
-    actual_digest = hashlib.sha256(printed_fsm.encode()).hexdigest()
-    assert actual_digest == expected_digest
+    assert printed_fsm == expected_fsm
 
 
 if __name__ == "__main__":
