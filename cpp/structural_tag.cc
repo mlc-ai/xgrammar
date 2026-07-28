@@ -953,7 +953,7 @@ Result<std::vector<std::variant<int32_t, std::string>>, ISTError> ParseIntOrStri
             field_name + " elements must be non-negative integers or strings"
         );
       }
-      result.push_back(id);
+      result.emplace_back(std::in_place_type<int32_t>, id);
     } else if (v.is<std::string>()) {
       auto s = v.get<std::string>();
       if (s.empty()) {
