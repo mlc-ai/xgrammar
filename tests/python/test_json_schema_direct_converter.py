@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -7,7 +7,7 @@ import xgrammar as xgr
 from xgrammar.testing import _is_grammar_accept_string
 
 
-def _accepts(schema: Dict[str, Any], text: str, **kwargs: Any) -> bool:
+def _accepts(schema: dict[str, Any], text: str, **kwargs: Any) -> bool:
     grammar = xgr.Grammar.from_json_schema(json.dumps(schema), **kwargs)
     return _is_grammar_accept_string(grammar, text)
 
@@ -121,7 +121,7 @@ def test_direct_converter_formatting_and_any_order():
     ],
 )
 def test_direct_converter_recursive_reference(text: str, expected: bool):
-    schema: Dict[str, Any] = {
+    schema: dict[str, Any] = {
         "type": "object",
         "properties": {
             "value": {"type": "integer"},
