@@ -115,6 +115,12 @@ void EarleyParser::PopLastStates(int32_t cnt) {
   if (capture_tracking_) {
     capture_event_history_.PopBack(cnt);
   }
+  if (has_char_budget_rules_) {
+    char_count_history_.erase(char_count_history_.end() - cnt, char_count_history_.end());
+    char_budget_entry_history_.erase(
+        char_budget_entry_history_.end() - cnt, char_budget_entry_history_.end()
+    );
+  }
 }
 
 void EarleyParser::Complete(const ParserState& state, bool debug_print, bool marker_present) {
@@ -168,7 +174,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             0,
-            parent_state.active_temperature_rule_id
+            parent_state.active_temperature_rule_id,
+            parent_state.char_budget_deadline
         });
         continue;
       }
@@ -190,7 +197,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             0,
-            parent_state.active_temperature_rule_id
+            parent_state.active_temperature_rule_id,
+            parent_state.char_budget_deadline
         });
       }
       // If the repeat count is less than the max repeat count, we can continue to
@@ -223,7 +231,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             0,
-            parent_state.active_temperature_rule_id
+            parent_state.active_temperature_rule_id,
+            parent_state.char_budget_deadline
         });
       }
       if (new_count < info.Upper()) {
@@ -236,7 +245,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             new_count,
             0,
-            parent_state.active_temperature_rule_id
+            parent_state.active_temperature_rule_id,
+            parent_state.char_budget_deadline
         });
       }
       break;
@@ -286,7 +296,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             0,
             0,
             0,
-            state.active_temperature_rule_id
+            state.active_temperature_rule_id,
+            state.char_budget_deadline
         });
       }
       return std::make_pair(true, false);
@@ -308,7 +319,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             0,
             0,
             0,
-            state.active_temperature_rule_id
+            state.active_temperature_rule_id,
+            state.char_budget_deadline
         });
       }
       return std::make_pair(false, false);
@@ -378,6 +390,10 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   tmp_states_to_be_added_.clear();
   tmp_accept_stop_token_ = false;
   tmp_completed_lazy_occurrences_.clear();
+  if (has_char_budget_rules_) {
+    tmp_char_budget_entered_ = char_budget_entry_history_.back();
+    char_count_history_.push_back(GetCurrentCharIndex() + StartsUTF8Codepoint(ch));
+  }
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   // Scan all the scanable states.
   for (const auto& state : latest_states) {
@@ -389,6 +405,9 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
 
   // Check if the character is accepted.
   if (tmp_process_state_queue_.empty() && tmp_states_to_be_added_.empty()) {
+    if (has_char_budget_rules_) {
+      char_count_history_.pop_back();
+    }
     return false;
   }
 
@@ -415,6 +434,9 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  if (has_char_budget_rules_) {
+    char_budget_entry_history_.push_back(tmp_char_budget_entered_);
+  }
   return true;
 }
 
@@ -440,8 +462,9 @@ EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> in
                            "the Earley parser.";
   }
   for (int32_t i = 0; i < grammar_->NumRules(); ++i) {
-    if (grammar_->GetRule(i).max_tokens >= 0) {
-      has_budget_rules_ = true;
+    has_budget_rules_ = has_budget_rules_ || grammar_->GetRule(i).max_tokens >= 0;
+    has_char_budget_rules_ = has_char_budget_rules_ || grammar_->GetRule(i).max_chars >= 0;
+    if (has_budget_rules_ && has_char_budget_rules_) {
       break;
     }
   }
@@ -474,7 +497,8 @@ ParserState EarleyParser::RootInitialState() const {
       0,
       0,
       0,
-      ResolveActiveTemperatureRule(root_rule_id, -1)
+      ResolveActiveTemperatureRule(root_rule_id, -1),
+      CharDeadlineForRule(root_rule_id, -1)
   );
 }
 
@@ -504,6 +528,10 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  if (has_char_budget_rules_) {
+    char_count_history_.push_back(GetCurrentCharIndex());
+    char_budget_entry_history_.push_back(tmp_char_budget_entered_);
+  }
 }
 
 void EarleyParser::Reset() {
@@ -514,6 +542,9 @@ void EarleyParser::Reset() {
   if (capture_tracking_) {
     capture_event_history_.PopBack(capture_event_history_.size());
   }
+  char_count_history_.clear();
+  char_budget_entry_history_.clear();
+  tmp_char_budget_entered_ = false;
   capture_recording_ = false;
   XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
   PushStateAndExpand(RootInitialState());
@@ -592,12 +623,16 @@ void EarleyParser::ExpandNextRuleRefElement(
         0,
         0,
         0,
-        state.active_temperature_rule_id
+        state.active_temperature_rule_id,
+        state.char_budget_deadline
     });
   }
 
   // If the reference rule is not visited, we need to add it to the queue.
   const auto& ref_rule = grammar_->GetRule(ref_rule_id);
+  if (ref_rule.max_chars >= 0) {
+    tmp_char_budget_entered_ = true;
+  }
   const auto& ref_grammar_expr_id = ref_rule.body_expr_id;
 
   XGRAMMAR_DCHECK(grammar_->per_rule_fsms[ref_rule_id].has_value());
@@ -612,7 +647,8 @@ void EarleyParser::ExpandNextRuleRefElement(
       0,
       0,
       0,
-      ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id)
+      ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id),
+      CharDeadlineForRule(ref_rule_id, state.char_budget_deadline)
   });
 }
 
@@ -632,7 +668,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           0,
           0,
           0,
-          state.active_temperature_rule_id
+          state.active_temperature_rule_id,
+          state.char_budget_deadline
       });
       continue;
     }
@@ -661,7 +698,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
             0,
             0,
             0,
-            state.active_temperature_rule_id
+            state.active_temperature_rule_id,
+            state.char_budget_deadline
         });
       }
       if (state.repeat_count >= repeat_info.Upper()) {
@@ -723,7 +761,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  0,
                  state.repeat_count,
                  0,
-                 state.active_temperature_rule_id
+                 state.active_temperature_rule_id,
+                 state.char_budget_deadline
              }}
         );
       } else {
@@ -739,7 +778,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  0,
                  0,
                  0,
-                 state.active_temperature_rule_id
+                 state.active_temperature_rule_id,
+                 state.char_budget_deadline
              }}
         );
       }
@@ -760,12 +800,16 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           0,
           0,
           0,
-          state.active_temperature_rule_id
+          state.active_temperature_rule_id,
+          state.char_budget_deadline
       });
     }
 
     // If the reference rule is not visited, we need to add it to the queue.
     const auto& ref_rule = grammar_->GetRule(ref_rule_id);
+    if (ref_rule.max_chars >= 0) {
+      tmp_char_budget_entered_ = true;
+    }
     const auto& ref_grammar_expr_id = ref_rule.body_expr_id;
 
     XGRAMMAR_DCHECK(grammar_->per_rule_fsms[ref_rule_id].has_value());
@@ -780,7 +824,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
         0,
         0,
         0,
-        ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id)
+        ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id),
+        CharDeadlineForRule(ref_rule_id, state.char_budget_deadline)
     });
   }
 }
@@ -1112,13 +1157,19 @@ void EarleyParser::ScanAtomicToken(const ParserState& state, int32_t token_id) {
   }
 }
 
-bool EarleyParser::AdvanceAtomicToken(int32_t token_id, bool debug_print) {
+bool EarleyParser::AdvanceAtomicToken(
+    int32_t token_id, bool debug_print, int32_t token_char_count
+) {
   XGRAMMAR_DCHECK(tmp_process_state_queue_.empty())
       << "The tmp_process_state_queue_ should be empty before AdvanceAtomicToken.";
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
   tmp_accept_stop_token_ = false;
   tmp_completed_lazy_occurrences_.clear();
+  if (has_char_budget_rules_) {
+    tmp_char_budget_entered_ = char_budget_entry_history_.back();
+    char_count_history_.push_back(GetCurrentCharIndex() + token_char_count);
+  }
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   for (const auto& state : latest_states) {
     if (skip_expired_states_ && IsExpiredState(state)) {
@@ -1127,6 +1178,9 @@ bool EarleyParser::AdvanceAtomicToken(int32_t token_id, bool debug_print) {
     ScanAtomicToken(state, token_id);
   }
   if (tmp_process_state_queue_.empty() && tmp_states_to_be_added_.empty()) {
+    if (has_char_budget_rules_) {
+      char_count_history_.pop_back();
+    }
     return false;
   }
   rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
@@ -1149,6 +1203,9 @@ bool EarleyParser::AdvanceAtomicToken(int32_t token_id, bool debug_print) {
   }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  if (has_char_budget_rules_) {
+    char_budget_entry_history_.push_back(tmp_char_budget_entered_);
+  }
   return true;
 }
 

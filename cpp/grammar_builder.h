@@ -213,6 +213,13 @@ class GrammarBuilder {
   /*! \brief Update the token budget of the rule referred by the given name. -1 means none. */
   void UpdateMaxTokens(std::string rule_name, int32_t max_tokens);
 
+  /*! \brief Update the character budget of the rule referred by the given rule_id. -1 means none.
+   */
+  void UpdateMaxChars(int32_t rule_id, int32_t max_chars);
+
+  /*! \brief Update the character budget of the rule referred by the given name. -1 means none. */
+  void UpdateMaxChars(std::string rule_name, int32_t max_chars);
+
   /*!
    * \brief Update the capture group name of the rule referred by the given rule_id. An empty
    * string means no capture.

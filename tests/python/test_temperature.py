@@ -77,6 +77,18 @@ def test_ebnf_temperature_enters_and_leaves_rule() -> None:
     assert matcher.temperature == pytest.approx(0.1)
 
 
+def test_ebnf_lazy_rule_preserves_temperature() -> None:
+    compiled_grammar = _compile_ebnf(
+        'root ::= "a" value "z"\nvalue[lazy, temperature=0.6] ::= "x"+'
+    )
+    matcher = xgr.GrammarMatcher(compiled_grammar, default_temperature=0.1)
+
+    assert matcher.accept_string("a")
+    assert matcher.temperature == pytest.approx(0.6)
+    assert matcher.accept_string("xz")
+    assert matcher.temperature == pytest.approx(0.1)
+
+
 @pytest.mark.parametrize(
     "grammar, message",
     [

@@ -70,6 +70,7 @@ class SubGrammarAdderImpl : public GrammarMutator {
       auto new_lookahead_assertion_id = VisitLookaheadAssertion(rule.lookahead_assertion_id);
       builder_->UpdateLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
       builder_->UpdateMaxTokens(new_rule_ids_names[i].first, rule.max_tokens);
+      builder_->UpdateMaxChars(new_rule_ids_names[i].first, rule.max_chars);
       builder_->UpdateCaptureName(new_rule_ids_names[i].first, rule.capture_name);
       if (const auto* suffix_stop_info = base_grammar_->GetSuffixStopInfo(i)) {
         auto remapped_info = *suffix_stop_info;
@@ -286,6 +287,7 @@ class StructureNormalizerImpl : public GrammarMutator {
       builder_->UpdateRuleBody(i, new_body_expr_id);
       builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       builder_->UpdateMaxTokens(i, rule.max_tokens);
+      builder_->UpdateMaxChars(i, rule.max_chars);
       builder_->UpdateCaptureName(i, rule.capture_name);
       if (const auto* suffix_stop_info = base_grammar_->GetSuffixStopInfo(i)) {
         builder_->UpdateSuffixStopInfo(i, *suffix_stop_info);
@@ -636,11 +638,11 @@ class RuleInlinerImpl : public GrammarMutator {
    */
   bool CheckIfRuleCanBeInlined(int32_t rule_id) {
     auto rule = base_grammar_->GetRule(rule_id);
-    // Inlining a budgeted rule would erase the rule its token budget applies to. Inlining a
+    // Inlining a budgeted rule would erase the rule its length budget applies to. Inlining a
     // capture-relevant rule would eliminate its completion events, so its capture or hidden span
     // would never be recorded. Inlining a lazy rule would erase its committed-shortest semantics.
     // Inlining a temperature rule would erase the rule its sampling temperature applies to.
-    if (rule.max_tokens >= 0 || !rule.capture_name.empty() ||
+    if (rule.max_tokens >= 0 || rule.max_chars >= 0 || !rule.capture_name.empty() ||
         base_grammar_->GetSuffixStopInfo(rule_id) != nullptr || rule.is_lazy ||
         rule.temperature.has_value()) {
       return false;
@@ -752,6 +754,7 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
           rule_id_map_[rule_id], VisitLookaheadAssertion(rule.lookahead_assertion_id)
       );
       builder_->UpdateMaxTokens(rule_id_map_[rule_id], rule.max_tokens);
+      builder_->UpdateMaxChars(rule_id_map_[rule_id], rule.max_chars);
       builder_->UpdateCaptureName(rule_id_map_[rule_id], rule.capture_name);
       if (const auto* suffix_stop_info = grammar->GetSuffixStopInfo(rule_id)) {
         auto remapped_info = *suffix_stop_info;
@@ -1912,8 +1915,9 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   const auto& ref_rule_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
   // Keep the reference to budgeted, suffix/stop, lazy, and temperature rules: replacing it with
   // the rule's content would erase the rule that the runtime semantics apply to.
-  if (ref_rule.max_tokens < 0 && base_grammar_->GetSuffixStopInfo(rule_id) == nullptr &&
-      !ref_rule.is_lazy && !ref_rule.temperature.has_value() &&
+  if (ref_rule.max_tokens < 0 && ref_rule.max_chars < 0 &&
+      base_grammar_->GetSuffixStopInfo(rule_id) == nullptr && !ref_rule.is_lazy &&
+      !ref_rule.temperature.has_value() &&
       ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
       ref_rule_body.size() == 1) {
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
@@ -2082,11 +2086,13 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
       builder_->UpdateRuleBody(i, new_body_expr_id);
       builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       builder_->UpdateMaxTokens(i, rule.max_tokens);
+      builder_->UpdateMaxChars(i, rule.max_chars);
       builder_->UpdateCaptureName(i, rule.capture_name);
       if (const auto* suffix_stop_info = base_grammar_->GetSuffixStopInfo(i)) {
         builder_->UpdateSuffixStopInfo(i, *suffix_stop_info);
       }
       builder_->UpdateLazy(i, rule.is_lazy);
+      builder_->UpdateRuleTemperature(i, rule.temperature);
     }
     return builder_->Get(base_grammar_->GetRootRule().name);
   }

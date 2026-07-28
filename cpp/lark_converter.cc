@@ -528,6 +528,8 @@ struct Definition {
   Location stop_capture_location;
   std::optional<int32_t> max_tokens;
   Location max_tokens_location;
+  std::optional<int32_t> max_chars;
+  Location max_chars_location;
   std::optional<std::string> capture_name;
   Location capture_location;
   Node body;
@@ -765,6 +767,14 @@ class LarkParser {
         }
         definition->max_tokens = value;
         definition->max_tokens_location = key.location;
+      } else if (key.text == "max_chars") {
+        Consume(TokenType::kEquals, "expected '=' after max_chars attribute");
+        int32_t value = ParseInteger();
+        if (definition->max_chars.has_value()) {
+          RaiseLarkError(source_, key.location, "max_chars attribute is specified more than once");
+        }
+        definition->max_chars = value;
+        definition->max_chars_location = key.location;
       } else if (key.text == "capture") {
         std::string capture_name;
         Location capture_location = key.location;
@@ -1366,6 +1376,10 @@ class LarkCompiler {
               "max_tokens is not supported on rules consumed by dynamic dispatch"
           );
         }
+        if (definition.max_chars.has_value()) {
+          XGRAMMAR_LOG(WARNING) << "Ignoring max_chars on rule '" << definition.name
+                                << "' because it is consumed by dynamic dispatch.";
+        }
         if (definition.capture_name.has_value()) {
           RaiseLarkError(
               source_,
@@ -1379,6 +1393,9 @@ class LarkCompiler {
       int32_t body_expr_id;
       if (definition.temperature.has_value()) {
         body_expr_id = CompileTemperatureRule(definition);
+        if (definition.max_chars.has_value()) {
+          builder_.UpdateMaxChars(rule_ids_.at(definition.name), definition.max_chars.value());
+        }
       } else if (definition.name == "start") {
         if (dynamic_start_body.has_value()) {
           if (definition.max_tokens.has_value()) {
@@ -1388,9 +1405,13 @@ class LarkCompiler {
                 "max_tokens is not supported on a dynamic dispatch start rule"
             );
           }
+          if (definition.max_chars.has_value()) {
+            XGRAMMAR_LOG(WARNING) << "Ignoring max_chars on dynamic dispatch start rule '"
+                                  << definition.name << "'.";
+          }
           body_expr_id = dynamic_start_body.value();
-        } else if (definition.max_tokens.has_value()) {
-          body_expr_id = CompileMaxTokensRule(definition);
+        } else if (definition.max_tokens.has_value() || definition.max_chars.has_value()) {
+          body_expr_id = CompileBudgetRule(definition);
         } else if (HasLazySemantics(definition)) {
           body_expr_id = CompileLazyRule(definition);
         } else {
@@ -1399,8 +1420,8 @@ class LarkCompiler {
         if (allow_initial_skip_ && skip_rule_id_ != -1) {
           body_expr_id = builder_.AddSequence({builder_.AddRuleRef(skip_rule_id_), body_expr_id});
         }
-      } else if (definition.max_tokens.has_value()) {
-        body_expr_id = CompileMaxTokensRule(definition);
+      } else if (definition.max_tokens.has_value() || definition.max_chars.has_value()) {
+        body_expr_id = CompileBudgetRule(definition);
       } else if (HasLazySemantics(definition)) {
         body_expr_id = CompileLazyRule(definition);
       } else {
@@ -2028,14 +2049,15 @@ class LarkCompiler {
     return builder_.AddSequence({expression, builder_.AddRuleRef(skip_rule_id_)});
   }
 
-  /*!
-   * \brief Compile a rule with the max_tokens attribute. The body compiles normally and the
-   * budget is recorded on the rule; the matcher then bounds each occurrence, forcing it to
-   * end at the earliest possible position once the budget is exhausted. Bodies that can end
-   * at any position (such as arbitrary text) therefore never exceed the budget.
-   */
-  int32_t CompileMaxTokensRule(const Definition& definition) {
-    builder_.UpdateMaxTokens(rule_ids_.at(definition.name), definition.max_tokens.value());
+  /*! \brief Compile a rule with a token or character budget. */
+  int32_t CompileBudgetRule(const Definition& definition) {
+    int32_t rule_id = rule_ids_.at(definition.name);
+    if (definition.max_tokens.has_value()) {
+      builder_.UpdateMaxTokens(rule_id, definition.max_tokens.value());
+    }
+    if (definition.max_chars.has_value()) {
+      builder_.UpdateMaxChars(rule_id, definition.max_chars.value());
+    }
     if (HasLazySemantics(definition)) {
       return CompileLazyRule(definition);
     }
@@ -2285,7 +2307,8 @@ class LarkCompiler {
     }
     std::optional<std::string> body_pattern;
     std::optional<std::string> marker_pattern;
-    if (marker != nullptr && (!marker_has_fixed_byte_length || definition.max_tokens.has_value())) {
+    if (marker != nullptr && (!marker_has_fixed_byte_length || definition.max_tokens.has_value() ||
+                              definition.max_chars.has_value())) {
       body_pattern = TerminalNodeToRegex(definition.body);
       marker_pattern = TerminalNodeToRegex(*marker);
       int32_t body_helper_expr = builder_.AddRegex(body_pattern.value());

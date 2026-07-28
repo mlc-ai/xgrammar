@@ -8,6 +8,7 @@
 #define XGRAMMAR_EARLEY_PARSER_H_
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <ostream>
 #include <queue>
@@ -52,7 +53,8 @@ struct ParserState {
       const int32_t& sub_element_id = 0,
       const int32_t& repeat_count = 0,
       const int32_t& partial_codepoint = 0,
-      const int32_t& active_temperature_rule_id = -1
+      const int32_t& active_temperature_rule_id = -1,
+      const int32_t& char_budget_deadline = -1
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
@@ -62,7 +64,8 @@ struct ParserState {
         sub_element_id(sub_element_id),
         repeat_count(repeat_count),
         partial_codepoint(partial_codepoint),
-        active_temperature_rule_id(active_temperature_rule_id) {}
+        active_temperature_rule_id(active_temperature_rule_id),
+        char_budget_deadline(char_budget_deadline) {}
 
   /*!
    * \brief A rule_start_pos value of kNoPrevInputPos means this ParserState is the root of the
@@ -102,6 +105,10 @@ struct ParserState {
   /*! \brief The innermost active rule that specifies a sampling temperature. */
   int32_t active_temperature_rule_id = -1;
 
+  /*! \brief The number of Unicode codepoints this derivation may consume before its active
+   * character budget expires; -1 means unlimited. Stored as an absolute input position. */
+  int32_t char_budget_deadline = -1;
+
   /*!
    * \brief Lexicographic order over all fields. It is only used to sort the states for
    * deterministic serialization, and is not needed during parsing.
@@ -111,12 +118,16 @@ struct ParserState {
     if (sequence_id != other.sequence_id) return sequence_id < other.sequence_id;
     if (element_id != other.element_id) return element_id < other.element_id;
     if (rule_start_pos != other.rule_start_pos) return rule_start_pos < other.rule_start_pos;
+    if (budget_deadline != other.budget_deadline) return budget_deadline < other.budget_deadline;
     if (sub_element_id != other.sub_element_id) return sub_element_id < other.sub_element_id;
     if (repeat_count != other.repeat_count) return repeat_count < other.repeat_count;
     if (partial_codepoint != other.partial_codepoint) {
       return partial_codepoint < other.partial_codepoint;
     }
-    return active_temperature_rule_id < other.active_temperature_rule_id;
+    if (active_temperature_rule_id != other.active_temperature_rule_id) {
+      return active_temperature_rule_id < other.active_temperature_rule_id;
+    }
+    return char_budget_deadline < other.char_budget_deadline;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
@@ -142,6 +153,9 @@ struct ParserState {
     if (active_temperature_rule_id != -1) {
       result += ", active_temperature_rule_id=" + std::to_string(active_temperature_rule_id);
     }
+    if (char_budget_deadline != -1) {
+      result += ", char_budget_deadline=" + std::to_string(char_budget_deadline);
+    }
     result += ")";
     return result;
   }
@@ -157,7 +171,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &ParserState::sub_element_id,
     &ParserState::repeat_count,
     &ParserState::partial_codepoint,
-    &ParserState::active_temperature_rule_id
+    &ParserState::active_temperature_rule_id,
+    &ParserState::char_budget_deadline
 );
 
 /*!
@@ -196,7 +211,8 @@ class StateEqualForParsing {
            lhs.sub_element_id == rhs.sub_element_id && lhs.repeat_count == rhs.repeat_count &&
            lhs.partial_codepoint == rhs.partial_codepoint &&
            lhs.budget_deadline == rhs.budget_deadline &&
-           lhs.active_temperature_rule_id == rhs.active_temperature_rule_id;
+           lhs.active_temperature_rule_id == rhs.active_temperature_rule_id &&
+           lhs.char_budget_deadline == rhs.char_budget_deadline;
   }
 };
 
@@ -216,7 +232,8 @@ class StateHashForParsing {
         state.repeat_count,
         state.partial_codepoint,
         state.budget_deadline,
-        state.active_temperature_rule_id
+        state.active_temperature_rule_id,
+        state.char_budget_deadline
     );
   }
 };
@@ -353,6 +370,18 @@ class EarleyParser {
   /*! \brief Whether any rule of the grammar has a token budget. */
   bool has_budget_rules_ = false;
 
+  /*! \brief The number of Unicode codepoints accepted at every parser history row. */
+  std::vector<int32_t> char_count_history_;
+
+  /*! \brief Whether any rule of the grammar has a character budget. */
+  bool has_char_budget_rules_ = false;
+
+  /*! \brief Whether a character-budgeted occurrence was entered since the initial parser row. */
+  std::vector<bool> char_budget_entry_history_;
+
+  /*! \brief Entry-history value for the row currently being expanded. */
+  bool tmp_char_budget_entered_ = false;
+
   /*! \brief Whether the state's derivation may not consume the next token. */
   bool IsExpiredState(const ParserState& state) const {
     return state.budget_deadline >= 0 && current_token_index_ > state.budget_deadline;
@@ -368,6 +397,26 @@ class EarleyParser {
     int32_t deadline = current_token_index_ + own;
     return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
   }
+
+  /*! \brief The character deadline for a newly predicted rule occurrence. */
+  int32_t CharDeadlineForRule(int32_t rule_id, int32_t parent_deadline) const {
+    int32_t own = grammar_->GetRule(rule_id).max_chars;
+    if (own < 0) {
+      return parent_deadline;
+    }
+    int32_t current_char_index = GetCurrentCharIndex();
+    int32_t deadline = own > std::numeric_limits<int32_t>::max() - current_char_index
+                           ? std::numeric_limits<int32_t>::max()
+                           : current_char_index + own;
+    return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
+  }
+
+  /*! \brief Whether the state's derivation may not consume another Unicode codepoint. */
+  bool IsCharExpiredState(const ParserState& state) const {
+    return state.char_budget_deadline >= 0 && GetCurrentCharIndex() >= state.char_budget_deadline;
+  }
+
+  static bool StartsUTF8Codepoint(uint8_t byte) { return (byte & 0xC0) != 0x80; }
 
   /*! \brief Whether any rule of the grammar has a capture or stop_capture name. Fixed at
    * construction. When false, the capture machinery is fully disabled and has no overhead. */
@@ -555,7 +604,7 @@ class EarleyParser {
    * \param debug_print Whether to print debug info.
    * \return True if any state advanced, false otherwise.
    */
-  bool AdvanceAtomicToken(int32_t token_id, bool debug_print = false);
+  bool AdvanceAtomicToken(int32_t token_id, bool debug_print = false, int32_t token_char_count = 0);
 
   /*!
    * \brief Enqueue the state into the queue.
@@ -644,13 +693,38 @@ class EarleyParser {
    * \param state The state to be pushed.
    */
   void PushOneStateToCheck(const ParserState& state) {
+    PushStatesToCheck(std::vector<ParserState>{state}, is_completed_.back());
+  }
+
+  /*! \brief Push a temporary parser row for token-mask checking. */
+  void PushStatesToCheck(const std::vector<ParserState>& states, bool completed) {
     rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
-    is_completed_.push_back(is_completed_.back());
-    scanable_state_history_.PushBack(&state, 1);
+    is_completed_.push_back(completed);
+    scanable_state_history_.PushBack(states);
     if (capture_tracking_) {
       capture_event_history_.PushBack(std::vector<CaptureEvent>());
     }
-    return;
+    if (has_char_budget_rules_) {
+      char_count_history_.push_back(GetCurrentCharIndex());
+      char_budget_entry_history_.push_back(char_budget_entry_history_.back());
+    }
+  }
+
+  /*! \brief Push a character-count row for a parser row created by the matcher. */
+  void PushCharCountRow(int32_t char_count, bool char_budget_entered) {
+    if (!has_char_budget_rules_) {
+      return;
+    }
+    char_count_history_.push_back(char_count);
+    char_budget_entry_history_.push_back(char_budget_entered);
+  }
+
+  int32_t GetCurrentCharIndex() const {
+    return char_count_history_.empty() ? 0 : char_count_history_.back();
+  }
+
+  bool HasEnteredCharBudget() const {
+    return has_char_budget_rules_ && char_budget_entry_history_.back();
   }
 
   /*! \brief Whether the grammar has any captured rule. */
