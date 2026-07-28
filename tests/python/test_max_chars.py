@@ -319,7 +319,10 @@ def test_max_chars_compiler_cache_and_serialization() -> None:
     tokenizer_info = xgr.TokenizerInfo(["ab>", "abc"])
     grammar = xgr.Grammar.from_ebnf('root ::= value ">"\nvalue[max_chars=2] ::= [^]*')
     compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=True).compile_grammar(grammar)
-    recovered = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), tokenizer_info)
+    recovered_tokenizer_info = xgr.TokenizerInfo.deserialize_json(tokenizer_info.serialize_json())
+    recovered = xgr.CompiledGrammar.deserialize_json(
+        compiled.serialize_json(), recovered_tokenizer_info
+    )
 
     for candidate in (compiled, recovered):
         matcher = xgr.GrammarMatcher(candidate, terminate_without_stop_token=True)
