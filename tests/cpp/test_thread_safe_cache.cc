@@ -250,4 +250,49 @@ namespace {
 //   }
 // }
 
+struct DoubleInteger {
+  int operator()(const int& key) const { return key * 2; }
+};
+
+struct IntegerSizeEstimator {
+  std::size_t operator()(const int&) const { return sizeof(int); }
+};
+
+TEST(ThreadSafeLRUCacheTest, ComputeOnMissOverride) {
+  using Cache = ThreadSafeLRUCache<int, int, DoubleInteger, IntegerSizeEstimator>;
+  auto check_cache = [](std::size_t max_size) {
+    Cache cache(max_size);
+    int custom_compute_count = 0;
+
+    EXPECT_EQ(
+        cache.Get(
+            3,
+            [&custom_compute_count](const int& key) {
+              ++custom_compute_count;
+              return key * 3;
+            }
+        ),
+        9
+    );
+    EXPECT_EQ(
+        cache.Get(
+            3,
+            [&custom_compute_count](const int&) {
+              ++custom_compute_count;
+              return -1;
+            }
+        ),
+        9
+    );
+    EXPECT_EQ(custom_compute_count, 1);
+    EXPECT_EQ(cache.Get(4), 8);
+
+    cache.Clear();
+    EXPECT_EQ(cache.Get(3), 6);
+  };
+
+  check_cache(Cache::kUnlimitedSize);
+  check_cache(1024);
+}
+
 }  // namespace

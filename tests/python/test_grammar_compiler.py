@@ -347,6 +347,24 @@ def test_grammar_compiler_crossing_cache_same_grammar():
     assert contexta.serialize_json() == contextb.serialize_json()
 
 
+def test_grammar_object_and_string_share_cache():
+    grammar = xgr.Grammar.from_ebnf('root ::= "a" | "b"')
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "ab"])
+    compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1)
+
+    compiled_from_object = compiler.compile_grammar(grammar)
+    cache_size_after_object = compiler.get_cache_size_bytes()
+    compiled_from_string = compiler.compile_grammar(str(grammar))
+
+    assert compiler.get_cache_size_bytes() == cache_size_after_object
+    assert compiled_from_object.serialize_json() == compiled_from_string.serialize_json()
+
+    compiled_without_cache = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False
+    ).compile_grammar(grammar)
+    assert compiled_from_object.serialize_json() == compiled_without_cache.serialize_json()
+
+
 @pytest.mark.hf_token_required
 def test_grammar_compiler_crossing_cache_different_grammar_with_same_fsm():
     grammar_a = """

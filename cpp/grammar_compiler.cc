@@ -1501,7 +1501,10 @@ CompiledGrammar GrammarCompiler::Impl::CompileGrammar(const Grammar& grammar) {
   if (!cache_enabled_) {
     return no_cache_compiler_.CompileGrammar(grammar);
   }
-  return grammar_level_cache_.Get(GrammarKey{grammar.ToString(), grammar->GetRootRule().name});
+  return grammar_level_cache_.Get(
+      GrammarKey{grammar.ToString(), grammar->GetRootRule().name},
+      [this, grammar](const UnionKey&) { return no_cache_compiler_.CompileGrammar(grammar); }
+  );
 }
 
 CompiledGrammar GrammarCompiler::Impl::CompileGrammar(

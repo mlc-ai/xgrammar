@@ -281,8 +281,17 @@ class ThreadSafeLRUCache {
   std::size_t MaxMemorySize() const { return max_size_; }
   std::size_t MemorySize() const { return current_size_; }
 
-  Value Get(const Key& key) {
-    auto future = GetFuture(key);
+  Value Get(const Key& key) { return Get(key, std::cref(computer_)); }
+
+  /*!
+   * \brief Gets or computes the value for a key with a per-call miss computer.
+   * \param key The key to lookup.
+   * \param compute_on_miss The function used to compute the value if this call inserts the key.
+   * \return The cached or newly computed value.
+   */
+  template <typename ComputeOnMiss>
+  Value Get(const Key& key, ComputeOnMiss&& compute_on_miss) {
+    auto future = GetFuture(key, std::forward<ComputeOnMiss>(compute_on_miss));
     return future.get().value;
   }
 
@@ -307,8 +316,11 @@ class ThreadSafeLRUCache {
   }
 
  private:
-  std::shared_future<SizedValue> GetFuture(const Key& key) {
-    if (this->max_size_ == kUnlimitedSize) return GetFutureUnlimited(key);
+  template <typename ComputeOnMiss>
+  std::shared_future<SizedValue> GetFuture(const Key& key, ComputeOnMiss&& compute_on_miss) {
+    if (this->max_size_ == kUnlimitedSize) {
+      return GetFutureUnlimited(key, std::forward<ComputeOnMiss>(compute_on_miss));
+    }
     auto& map = cache_.GetMap();
 
     {
@@ -323,12 +335,14 @@ class ThreadSafeLRUCache {
       }
     }
 
-    auto task = std::packaged_task<SizedValue()>{[this, &key] {
-      auto value = computer_(key);
-      auto result = SizedValue{value, size_estimator_(value)};
-      current_size_ += result.size;
-      return result;
-    }};
+    auto task = std::packaged_task<SizedValue()>{
+        [this, &key, compute_on_miss = std::forward<ComputeOnMiss>(compute_on_miss)]() mutable {
+          auto value = compute_on_miss(key);
+          auto result = SizedValue{value, size_estimator_(value)};
+          current_size_ += result.size;
+          return result;
+        }
+    };
 
     auto lock_map = std::unique_lock{map_mutex_};
     auto [it, success] = map.try_emplace(key);
@@ -360,7 +374,10 @@ class ThreadSafeLRUCache {
     return future;
   }
 
-  std::shared_future<SizedValue> GetFutureUnlimited(const Key& key) {
+  template <typename ComputeOnMiss>
+  std::shared_future<SizedValue> GetFutureUnlimited(
+      const Key& key, ComputeOnMiss&& compute_on_miss
+  ) {
     auto& map = cache_.GetMap();
 
     {
@@ -369,12 +386,14 @@ class ThreadSafeLRUCache {
       if (it != map.end()) return it->second.value;
     }
 
-    auto task = std::packaged_task<SizedValue()>{[this, &key] {
-      auto value = computer_(key);
-      auto result = SizedValue{value, size_estimator_(value)};
-      current_size_ += result.size;
-      return result;
-    }};
+    auto task = std::packaged_task<SizedValue()>{
+        [this, &key, compute_on_miss = std::forward<ComputeOnMiss>(compute_on_miss)]() mutable {
+          auto value = compute_on_miss(key);
+          auto result = SizedValue{value, size_estimator_(value)};
+          current_size_ += result.size;
+          return result;
+        }
+    };
 
     auto lock_map = std::unique_lock{map_mutex_};
     auto [it, success] = map.try_emplace(key);
