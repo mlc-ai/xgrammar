@@ -618,8 +618,7 @@ class InPlaceGrammarRewriter {
   virtual void Prepare() {}
 
   /*! \brief Visit an expr; return its rewritten id, or the original id when nothing changed.
-   * Contract: a visit appends to the arena only when it returns a new id, so a caller holding a
-   * GrammarExpr view may keep it as long as the returned id equals the input. */
+   * May append new exprs to the arena, invalidating outstanding GrammarExpr views. */
   int32_t VisitExpr(int32_t expr_id) {
     XGRAMMAR_DCHECK(expr_id < static_cast<int32_t>(memo_.size()));
     if (memo_[expr_id] != -1) {
@@ -650,15 +649,13 @@ class InPlaceGrammarRewriter {
     for (int32_t i = 0; i < size; ++i) {
       int32_t element_id = expr[i];
       int32_t new_element_id = VisitExpr(element_id);
-      if (new_element_id != element_id) {
-        // The rewrite appended to the arena and invalidated the view, so re-fetch it. On the
-        // first change, materialize the already scanned, unchanged prefix.
-        expr = builder_.GetGrammarExpr(expr_id);
-        if (!changed) {
-          changed = true;
-          new_element_ids.reserve(size);
-          new_element_ids.insert(new_element_ids.end(), expr.begin(), expr.begin() + i);
-        }
+      // The visit may have appended exprs to the arena and invalidated the view, so re-fetch.
+      expr = builder_.GetGrammarExpr(expr_id);
+      if (!changed && new_element_id != element_id) {
+        // Materialize the already scanned, unchanged prefix on the first change.
+        changed = true;
+        new_element_ids.reserve(size);
+        new_element_ids.insert(new_element_ids.end(), expr.begin(), expr.begin() + i);
       }
       if (changed) {
         new_element_ids.push_back(new_element_id);
@@ -680,15 +677,13 @@ class InPlaceGrammarRewriter {
     for (int32_t i = 0; i < size; ++i) {
       int32_t choice_id = expr[i];
       int32_t new_choice_id = VisitExpr(choice_id);
-      if (new_choice_id != choice_id) {
-        // The rewrite appended to the arena and invalidated the view, so re-fetch it. On the
-        // first change, materialize the already scanned, unchanged prefix.
-        expr = builder_.GetGrammarExpr(expr_id);
-        if (!changed) {
-          changed = true;
-          new_choice_ids.reserve(size);
-          new_choice_ids.insert(new_choice_ids.end(), expr.begin(), expr.begin() + i);
-        }
+      // The visit may have appended exprs to the arena and invalidated the view, so re-fetch.
+      expr = builder_.GetGrammarExpr(expr_id);
+      if (!changed && new_choice_id != choice_id) {
+        // Materialize the already scanned, unchanged prefix on the first change.
+        changed = true;
+        new_choice_ids.reserve(size);
+        new_choice_ids.insert(new_choice_ids.end(), expr.begin(), expr.begin() + i);
       }
       if (changed) {
         new_choice_ids.push_back(new_choice_id);
@@ -746,15 +741,13 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
       }
       if (inline_rule_id == -1) {
         int32_t new_choice_id = VisitExpr(choice_id);
-        if (new_choice_id != choice_id) {
-          // The rewrite appended to the arena and invalidated the view, so re-fetch it. On the
-          // first change, materialize the already scanned, unchanged prefix.
-          expr = builder_.GetGrammarExpr(expr_id);
-          if (!changed) {
-            changed = true;
-            new_choice_ids.reserve(size);
-            new_choice_ids.insert(new_choice_ids.end(), expr.begin(), expr.begin() + i);
-          }
+        // The visit may have appended exprs to the arena and invalidated the view, so re-fetch.
+        expr = builder_.GetGrammarExpr(expr_id);
+        if (!changed && new_choice_id != choice_id) {
+          // Materialize the already scanned, unchanged prefix on the first change.
+          changed = true;
+          new_choice_ids.reserve(size);
+          new_choice_ids.insert(new_choice_ids.end(), expr.begin(), expr.begin() + i);
         }
         if (changed) {
           new_choice_ids.push_back(new_choice_id);
