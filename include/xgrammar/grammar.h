@@ -199,6 +199,9 @@ class Grammar {
    */
   static std::variant<Grammar, SerializationError> DeserializeJSON(const std::string& json_string);
 
+  // Allow the builder to bind to this grammar's impl for in-place editing (FromMutableGrammar).
+  friend class GrammarBuilder;
+
   XGRAMMAR_DEFINE_PIMPL_METHODS(Grammar);
 };
 

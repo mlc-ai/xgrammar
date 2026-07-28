@@ -910,17 +910,21 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def(
           "xgrammar.tvm_ffi_binding.testing.grammar_functor.byte_string_fuser",
           [](O grammar_ref) {
-            return ffi::ObjectRef(ffi::make_object<GrammarObj>(
-                ByteStringFuser::Apply(grammar_ref.as<GrammarObj>()->value)
-            ));
+            // The pass rewrites in place, so copy first to leave the input grammar unaffected.
+            const Grammar& input = grammar_ref.as<GrammarObj>()->value;
+            Grammar grammar(std::make_shared<Grammar::Impl>(*input.operator->()));
+            ByteStringFuser::Apply(&grammar);
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(grammar));
           }
       )
       .def(
           "xgrammar.tvm_ffi_binding.testing.grammar_functor.rule_inliner",
           [](O grammar_ref) {
-            return ffi::ObjectRef(ffi::make_object<GrammarObj>(
-                RuleInliner::Apply(grammar_ref.as<GrammarObj>()->value)
-            ));
+            // The pass rewrites in place, so copy first to leave the input grammar unaffected.
+            const Grammar& input = grammar_ref.as<GrammarObj>()->value;
+            Grammar grammar(std::make_shared<Grammar::Impl>(*input.operator->()));
+            RuleInliner::Apply(&grammar);
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(grammar));
           }
       )
       .def(

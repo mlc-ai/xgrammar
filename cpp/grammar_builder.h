@@ -45,6 +45,13 @@ class GrammarBuilder {
   GrammarBuilder(const Grammar& grammar);
 
   /*!
+   * \brief Create a builder bound to an existing grammar without copying it. Unlike the copy
+   * constructor above, appended exprs and rule updates are written directly into *grammar. The
+   * grammar must outlive the builder.
+   */
+  static GrammarBuilder FromMutableGrammar(Grammar* grammar);
+
+  /*!
    * \brief Get the result grammar. This function will also set the root rule to the rule with the
    * specified name. The rule should be already added to the grammar.
    * \param root_rule_name The name of the root rule. Default is "root".
@@ -256,10 +263,18 @@ class GrammarBuilder {
   int32_t GetRuleId(const std::string& name) const;
 
  private:
+  /*!
+   * \brief Build rule_name_to_id_ from the existing rules if it has not been built yet.
+   * Builders bound to an existing grammar (copy constructor, FromMutableGrammar) defer building
+   * the map to the first name-based operation, so id-only rewriting pays no name hashing cost.
+   */
+  void EnsureRuleNameMap() const;
+
   // Mutable pointer to the grammar object.
   std::shared_ptr<Grammar::Impl> grammar_;
-  // Map from rule name to rule id.
-  std::unordered_map<std::string, int32_t> rule_name_to_id_;
+  // Map from rule name to rule id. Built lazily; see EnsureRuleNameMap.
+  mutable std::unordered_map<std::string, int32_t> rule_name_to_id_;
+  mutable bool rule_name_map_built_ = true;
   // Cache of next suffix index per name_hint for GetNewRuleName.
   std::unordered_map<std::string, int> next_cnt_per_hint_;
 };

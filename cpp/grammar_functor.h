@@ -330,11 +330,14 @@ class StructureNormalizer {
 /*************************** Grammar Optimizer ***************************/
 
 /*!
- * \brief Fuse the byte string elements in the grammar.
+ * \brief Fuse adjacent byte string elements in sequences.
+ * \details Rewrites *grammar in place. Only sequences that actually contain adjacent byte strings
+ * are rewritten; if nothing needs fusing, the grammar is left untouched. The caller must own the
+ * grammar, as the input is mutated directly.
  */
 class ByteStringFuser {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
@@ -347,10 +350,13 @@ class AllowEmptyRuleAnalyzer {
 
 /*!
  * \brief Inline the rule references in the grammar.
+ * \details Rewrites *grammar in place. Only choices with an inlinable leading rule reference are
+ * rewritten; if nothing can be inlined, the grammar is left untouched. The caller must own the
+ * grammar, as the input is mutated directly.
  */
 class RuleInliner {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
