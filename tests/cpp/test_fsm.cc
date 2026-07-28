@@ -526,6 +526,25 @@ TEST(XGrammarFSMTest, MergeEquivalentStatesNoCrossRuleChaining) {
   EXPECT_FALSE(merged.AcceptString("ybn"));
 }
 
+TEST(XGrammarFSMTest, MergeEquivalentStatesHandlesEmptySmallAndStateLimit) {
+  FSMWithStartEnd empty_fsm(FSM(0), 0, {});
+  auto merged_empty_fsm = empty_fsm.MergeEquivalentStates();
+  EXPECT_EQ(merged_empty_fsm.NumStates(), 0);
+  EXPECT_EQ(merged_empty_fsm.GetStart(), 0);
+  EXPECT_TRUE(merged_empty_fsm.GetEnds().empty());
+
+  FSMWithStartEnd small_fsm(FSM(3), 0, {2});
+  small_fsm.GetFsm().AddEdge(0, 1, 'a', 'a');
+  small_fsm.GetFsm().AddEdge(1, 2, 'b', 'b');
+  EXPECT_EQ(small_fsm.MergeEquivalentStates().ToString(), small_fsm.ToString());
+
+  FSMWithStartEnd limited_fsm(FSM(4), 0, {1, 2});
+  limited_fsm.GetFsm().AddEdge(0, 1, 'a', 'a');
+  limited_fsm.GetFsm().AddEdge(0, 2, 'a', 'a');
+  EXPECT_EQ(limited_fsm.MergeEquivalentStates(3).NumStates(), 4);
+  EXPECT_EQ(limited_fsm.MergeEquivalentStates().NumStates(), 3);
+}
+
 TEST(XGrammarFSMTest, MergeEquivalentStatesMergesLeafStatesByEndStatus) {
   FSMWithStartEnd fsm;
   int start_state = fsm.AddState();
@@ -678,8 +697,40 @@ TEST(XGrammarFSMTest, MergeEquivalentStatesHandlesMultipleAndSpecialEdges) {
   auto merged_special_edges = special_edges_fsm.MergeEquivalentStates();
   EXPECT_EQ(merged_special_edges.GetFsm().NumStates(), 3);
   EXPECT_EQ(
+      merged_special_edges.ToString(),
+      R"(FSM(num_states=3, start=2, end=[1], edges=[
+0: [EOS->1]
+1: []
+2: [Rule(7)->0]
+]))"
+  );
+  EXPECT_EQ(
       merged_special_edges.MergeEquivalentStates().ToString(), merged_special_edges.ToString()
   );
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesCanonicalizesDuplicateAndSelfEdges) {
+  FSMWithStartEnd fsm(FSM(5), 0, {3, 4});
+  fsm.GetFsm().AddEdge(0, 1, 'a', 'a');
+  fsm.GetFsm().AddEdge(0, 1, 'a', 'a');
+  fsm.GetFsm().AddEdge(0, 2, 'a', 'a');
+  fsm.GetFsm().AddEpsilonEdge(1, 1);
+  fsm.GetFsm().AddEpsilonEdge(2, 2);
+  fsm.GetFsm().AddEdge(1, 3, 'b', 'b');
+  fsm.GetFsm().AddEdge(2, 4, 'b', 'b');
+
+  auto merged = fsm.MergeEquivalentStates();
+  EXPECT_EQ(
+      merged.ToString(),
+      R"(FSM(num_states=3, start=2, end=[1], edges=[
+0: ['b'->1]
+1: []
+2: ['a'->0]
+]))"
+  );
+  EXPECT_TRUE(merged.AcceptString("ab"));
+  EXPECT_FALSE(merged.AcceptString("a"));
+  EXPECT_EQ(merged.MergeEquivalentStates().ToString(), merged.ToString());
 }
 
 TEST(XGrammarFSMTest, MergeEquivalentStatesRandomizedPreservesLanguage) {
