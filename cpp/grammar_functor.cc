@@ -1362,6 +1362,9 @@ class GrammarFSMBuilderImpl {
       bool loop_after_dispatch,
       const std::vector<std::string>& excluded_strings
   );
+  static std::optional<FSMWithStartEnd> BuildByteStringRuleRefByteStringChoices(
+      const GrammarExpr& expr, const Grammar& grammar
+  );
 
  private:
   static FSMWithStartEnd BuildRuleFSM(const Grammar& grammar, int rule_id);
@@ -1717,9 +1720,74 @@ FSMWithStartEnd GrammarFSMBuilderImpl::BuildRuleFSM(const Grammar& grammar, int 
   return BuildExpressionFSM(grammar->GetGrammarExpr(rule.body_expr_id), grammar, &rule.name);
 }
 
+std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildByteStringRuleRefByteStringChoices(
+    const GrammarExpr& expr, const Grammar& grammar
+) {
+  constexpr int kMinChoiceCount = 64;
+  if (expr.type != ExprType::kChoices || expr.size() < kMinChoiceCount) {
+    return std::nullopt;
+  }
+
+  std::vector<std::string> prefixes;
+  std::vector<int32_t> rule_ids;
+  std::vector<std::string> suffixes;
+  prefixes.reserve(expr.size());
+  rule_ids.reserve(expr.size());
+  suffixes.reserve(expr.size());
+  for (int32_t choice_id : expr) {
+    const auto& choice = grammar->GetGrammarExpr(choice_id);
+    if (choice.type != ExprType::kSequence || choice.size() != 3) {
+      return std::nullopt;
+    }
+    const auto& prefix = grammar->GetGrammarExpr(choice[0]);
+    const auto& rule_ref = grammar->GetGrammarExpr(choice[1]);
+    const auto& suffix = grammar->GetGrammarExpr(choice[2]);
+    if (prefix.type != ExprType::kByteString || rule_ref.type != ExprType::kRuleRef ||
+        rule_ref.size() != 1 || suffix.type != ExprType::kByteString) {
+      return std::nullopt;
+    }
+    prefixes.push_back(grammar->GetByteString(prefix));
+    rule_ids.push_back(rule_ref[0]);
+    suffixes.push_back(grammar->GetByteString(suffix));
+  }
+
+  std::vector<int32_t> prefix_end_states;
+  auto trie =
+      TrieFSMBuilder::Build(prefixes, std::vector<std::string>{}, &prefix_end_states, true, false);
+  XGRAMMAR_DCHECK(trie.has_value());
+  FSM fsm = std::move(trie->GetFsm());
+  const int start_state = trie->GetStart();
+  const int end_state = fsm.AddState();
+
+  std::map<std::string, int32_t> suffix_start_states;
+  std::set<std::tuple<int32_t, int32_t, int32_t>> added_rule_edges;
+  for (int i = 0; i < expr.size(); ++i) {
+    auto [it, inserted] = suffix_start_states.emplace(suffixes[i], end_state);
+    if (inserted) {
+      int32_t current_state = end_state;
+      for (auto byte = suffixes[i].rbegin(); byte != suffixes[i].rend(); ++byte) {
+        int32_t previous_state = fsm.AddState();
+        uint8_t value = static_cast<uint8_t>(*byte);
+        fsm.AddEdge(previous_state, current_state, value, value);
+        current_state = previous_state;
+      }
+      it->second = current_state;
+    }
+    auto edge = std::make_tuple(prefix_end_states[i], it->second, rule_ids[i]);
+    if (added_rule_edges.insert(edge).second) {
+      fsm.AddRuleEdge(prefix_end_states[i], it->second, rule_ids[i]);
+    }
+  }
+
+  return FSMWithStartEnd(fsm, start_state, {end_state});
+}
+
 FSMWithStartEnd GrammarFSMBuilderImpl::BuildExpressionFSM(
     const GrammarExpr& expr, const Grammar& grammar, const std::string* rule_name
 ) {
+  if (auto specialized = BuildByteStringRuleRefByteStringChoices(expr, grammar)) {
+    return std::move(*specialized);
+  }
   FSM result_fsm;
   int start_state = result_fsm.AddState();
   std::vector<int32_t> end_states;
