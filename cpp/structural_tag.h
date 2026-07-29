@@ -24,6 +24,8 @@
 
 namespace xgrammar {
 
+class ThreadPool;
+
 /******************** Structural Tag Definition ********************/
 
 // TODO(yixin): Consider moving the definition to Public API.
@@ -396,7 +398,8 @@ struct StructuralTag {
 Result<Grammar, StructuralTagError> StructuralTagToGrammar(
     const std::string& structural_tag_json,
     const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt,
-    int max_threads = 1
+    int max_threads = 1,
+    ThreadPool* thread_pool = nullptr
 );
 
 }  // namespace xgrammar
