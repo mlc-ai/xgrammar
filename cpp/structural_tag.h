@@ -389,11 +389,14 @@ struct StructuralTag {
 /*!
  * \brief Convert a structural tag JSON string to a grammar.
  * \param structural_tag_json The JSON string of the structural tag.
+ * \param tokenizer_info Optional tokenizer metadata for resolving named special tokens.
+ * \param normalize Whether to normalize the converted grammar before returning it.
  * \return A grammar if the JSON is valid, otherwise an error message in std::string.
  */
 Result<Grammar, StructuralTagError> StructuralTagToGrammar(
     const std::string& structural_tag_json,
-    const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt
+    const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt,
+    bool normalize = true
 );
 
 }  // namespace xgrammar
