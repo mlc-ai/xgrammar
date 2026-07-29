@@ -76,6 +76,130 @@ def _assert_lark_error(
     return error
 
 
+def test_lark_terminal_intersection() -> None:
+    _assert_language(
+        """
+        start: INTERSECTION
+        INTERSECTION: LOWER & ABC
+        LOWER: /[a-z]+/
+        ABC: /[abcABC]+/
+        """,
+        ["a", "abc", "bbb"],
+        ["", "A", "d", "1"],
+    )
+
+
+@pytest.mark.parametrize(
+    "terminal, accepted, rejected",
+    [
+        pytest.param(
+            "/[a-z]+/ & /[abcABC]+/", ["a", "abc", "bbb"], ["", "A", "d", "1"], id="direct-regexes"
+        ),
+        pytest.param(
+            "/[ab]+/ | /[cd]+/ & /[def]+/",
+            ["a", "ab", "d", "dd"],
+            ["", "c", "e", "f"],
+            id="intersection-binds-tighter-than-choice",
+        ),
+        pytest.param(
+            "(/[abf]+/ | /[cd]+/) & /[def]+/",
+            ["d", "f"],
+            ["", "a", "b", "c", "e"],
+            id="parenthesized-choice",
+        ),
+        pytest.param(
+            "/[abc]/ & /[bcd]/ & /[cde]/",
+            ["c"],
+            ["", "a", "b", "d", "e"],
+            id="chained-intersection",
+        ),
+        pytest.param("/a*/ & /a+/", ["a", "aa"], ["", "b"], id="empty-string-boundary"),
+        pytest.param("/a/? & /a{2}/", [], ["", "a", "aa"], id="empty-language"),
+        pytest.param(
+            "/a/ /b/ & /b/", [], ["", "a", "b", "ab", "abb"], id="sequence-is-one-operand"
+        ),
+        pytest.param("/.+/ & /你好/", ["你好"], ["", "你", "您好"], id="unicode"),
+        pytest.param(
+            "/./s & /./s",
+            [
+                "\x7f",
+                "\u0080",
+                "\u07ff",
+                "\u0800",
+                "\ud7ff",
+                "\ue000",
+                "\uffff",
+                "\U00010000",
+                "\U0010ffff",
+            ],
+            ["", "ab"],
+            id="utf8-boundaries",
+        ),
+        pytest.param(
+            "/(ab|cd)+/ & /.*d/", ["cd", "abcd", "cdcd"], ["", "ab", "abc"], id="repeated-group"
+        ),
+        pytest.param(
+            "/a{2,5}/ & /a{3,}/",
+            ["aaa", "aaaa", "aaaaa"],
+            ["", "a", "aa", "aaaaaa"],
+            id="bounded-repetition",
+        ),
+        pytest.param(
+            "/[α-ω]+/ & /[βγ]+/",
+            ["β", "γ", "βγ"],
+            ["", "α", "δ", "A"],
+            id="unicode-character-class",
+        ),
+    ],
+)
+def test_lark_terminal_intersection_semantics(
+    terminal: str, accepted: Sequence[str], rejected: Sequence[str]
+) -> None:
+    _assert_language(f"start: INTERSECTION\nINTERSECTION: {terminal}", accepted, rejected)
+
+
+def test_lark_intersection_is_rejected_in_rules() -> None:
+    _assert_lark_error(
+        """
+        start: lower & abc
+        lower: /[a-z]+/
+        abc: /[abcABC]+/
+        """,
+        "'&' is only supported in terminal definitions",
+    )
+
+
+def test_lark_terminal_intersection_nested_reference() -> None:
+    grammar = """
+        start: WRAPPED
+        WRAPPED: BASE "x" & /b+x/
+        BASE: /[ab]+/ & /[bc]+/
+    """
+    _assert_language(grammar, ["bx", "bbx"], ["", "ax", "bcx", "x"])
+
+
+def test_lark_terminal_intersection_does_not_insert_ignore() -> None:
+    grammar = """
+        %ignore / +/
+        start: PHRASE "!"
+        PHRASE: /a b/ & /a b/
+    """
+    _assert_language(grammar, ["a b!", "a b !"], ["ab!", "a  b!"])
+
+
+def test_lark_terminal_intersection_round_trip() -> None:
+    grammar = xgr.Grammar.from_lark(
+        """
+        start: VALUE
+        VALUE: /.+/ & /你好|您好/
+        """
+    )
+    recovered = xgr.Grammar.deserialize_json(grammar.serialize_json())
+    reparsed = xgr.Grammar.from_ebnf(str(grammar))
+    for candidate in [grammar, recovered, reparsed]:
+        _assert_grammar_language(candidate, ["你好", "您好"], ["", "你", "大家好"])
+
+
 @pytest.mark.parametrize(
     "grammar, accepted, rejected",
     [
@@ -933,9 +1057,6 @@ def test_lark_large_choice_grammar() -> None:
             'start: "a" %if enabled',
             "parametric %if conditions are not supported",
             id="parametric-if",
-        ),
-        pytest.param(
-            'start: A & B\nA: "a"\nB: "b"', "intersection '&' is not supported", id="intersection"
         ),
         pytest.param("start: ~/[a]/", "complement '~' is not supported", id="complement"),
         pytest.param(

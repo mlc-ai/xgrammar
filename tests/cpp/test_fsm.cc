@@ -282,6 +282,37 @@ TEST(XGrammarFSMTest, FunctionTest) {
   std::cout << "--------- Function Test Passed! -----------" << std::endl;
 }
 
+TEST(XGrammarFSMTest, IntersectionStateLimit) {
+  FSM lhs_fsm(2);
+  lhs_fsm.AddEdge(0, 1, 'a', 'a');
+  lhs_fsm.AddEdge(0, 0, 'b', 'b');
+  lhs_fsm.AddEdge(1, 0, 'a', 'a');
+  lhs_fsm.AddEdge(1, 1, 'b', 'b');
+  const FSMWithStartEnd lhs(lhs_fsm, 0, {0}, true);
+
+  FSM rhs_fsm(2);
+  rhs_fsm.AddEdge(0, 0, 'a', 'a');
+  rhs_fsm.AddEdge(0, 1, 'b', 'b');
+  rhs_fsm.AddEdge(1, 1, 'a', 'a');
+  rhs_fsm.AddEdge(1, 0, 'b', 'b');
+  const FSMWithStartEnd rhs(rhs_fsm, 0, {0}, true);
+
+  auto limited = FSMWithStartEnd::Intersect(lhs, rhs, 3);
+  ASSERT_TRUE(limited.IsErr());
+  EXPECT_EQ(
+      std::move(limited).UnwrapErr().what(),
+      std::string("The number of states in the intersection FSM exceeds the limit of 3")
+  );
+
+  auto sufficient = FSMWithStartEnd::Intersect(lhs, rhs, 4);
+  ASSERT_TRUE(sufficient.IsOk());
+  auto result = std::move(sufficient).Unwrap();
+  EXPECT_TRUE(result.AcceptString(""));
+  EXPECT_TRUE(result.AcceptString("aabb"));
+  EXPECT_FALSE(result.AcceptString("a"));
+  EXPECT_FALSE(result.AcceptString("b"));
+}
+
 TEST(XGrammarFSMTest, EfficiencyTest) {
   std::cout << "--------- Efficiency Test Starts! -----------" << std::endl;
   // i.e ([a-z]0123456789){10}. Use this way to test the performance.

@@ -156,7 +156,7 @@ TEST(LarkConverterTest, ErrorsContainSourceLocations) {
   XGRAMMAR_EXPECT_THROW(
       Grammar::FromLark("start: A & B\nA: \"a\"\nB: \"b\""),
       XGrammarError,
-      "intersection '&' is not supported"
+      "'&' is only supported in terminal definitions"
   );
   XGRAMMAR_EXPECT_THROW(
       Grammar::FromLark("start: /abc/i"),

@@ -146,6 +146,28 @@ start: /a.b/      // accepts "acb", "a😀b"; rejects "a\nb"
 line: /a.b/s      // also accepts "a\nb"
 ```
 
+### Terminal Intersections
+
+The `&` operator intersects two terminal expressions: the result accepts only strings accepted by
+both operands. It is available in uppercase terminal definitions, where every operand has a
+regular language that can be represented by a finite-state automaton. It is rejected in lowercase
+grammar rules.
+
+`&` binds more tightly than `|`, so `A & B | C` means `(A & B) | C`. Use parentheses when an
+alternative should be one operand of an intersection.
+
+```text
+start: IDENTIFIER
+
+IDENTIFIER: ASCII_NAME & NO_LEADING_DIGIT
+ASCII_NAME: /[A-Za-z0-9_]+/
+NO_LEADING_DIGIT: /[A-Za-z_][A-Za-z0-9_]*/
+```
+
+Intersection can be more expensive to compile than an equivalent plain regular expression because
+the compiler constructs the product of the operands' automata. Compilation fails instead of
+growing without bound if the built-in automaton state limit is exceeded.
+
 ### Sequences, Alternatives, and Groups
 
 | Form | Example | Meaning |
