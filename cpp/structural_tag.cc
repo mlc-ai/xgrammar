@@ -1758,7 +1758,7 @@ class StructuralTagGrammarConverter {
    * \return The rule id of the added rule. If the visit fails, the error is returned.
    * \note This method uses serialization to deduplicate identical formats.
    */
-  Result<int, ISTError> Visit(const Format& format);
+  Result<int, ISTError> Visit(const Format& format, bool deduplicate = true);
   Result<int, ISTError> VisitSub(const ConstStringFormat& format);
   Result<int, ISTError> VisitSub(const JSONSchemaFormat& format);
   Result<int, ISTError> VisitSub(const AnyTextFormat& format);
@@ -1804,7 +1804,7 @@ bool StructuralTagGrammarConverter::IsPrefix(
 Result<Grammar, ISTError> StructuralTagGrammarConverter::Convert(const StructuralTag& structural_tag
 ) {
   StructuralTagGrammarConverter converter;
-  auto result = converter.Visit(structural_tag.format);
+  auto result = converter.Visit(structural_tag.format, false);
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
   }
@@ -1821,19 +1821,34 @@ Grammar StructuralTagGrammarConverter::AddRootRuleAndGetGrammar(int ref_rule_id)
   return grammar_builder_.Get(root_rule_id);
 }
 
-Result<int, ISTError> StructuralTagGrammarConverter::Visit(const Format& format) {
-  std::string fingerprint = FormatToJSONValue(format).serialize();
+Result<int, ISTError> StructuralTagGrammarConverter::Visit(const Format& format, bool deduplicate) {
+  std::string fingerprint;
+  if (deduplicate) {
+    if (const auto* json_schema = std::get_if<JSONSchemaFormat>(&format)) {
+      fingerprint.reserve(
+          json_schema->json_schema.size() + json_schema->style.size() + sizeof(int) + 16
+      );
+      fingerprint.append(JSONSchemaFormat::type);
+      fingerprint.push_back('\0');
+      fingerprint.append(json_schema->json_schema);
+      fingerprint.push_back('\0');
+      fingerprint.append(json_schema->style);
+      fingerprint.push_back('\0');
+      fingerprint.push_back(json_schema->any_order ? '\1' : '\0');
+      fingerprint.append(std::to_string(json_schema->max_whitespace_cnt.value_or(-1)));
+    } else {
+      fingerprint = FormatToJSONValue(format).serialize();
+    }
 
-  // Check if we've already processed an identical format
-  auto it = serialization_to_rule_id_.find(fingerprint);
-  if (it != serialization_to_rule_id_.end()) {
-    return ResultOk(it->second);
+    auto it = serialization_to_rule_id_.find(fingerprint);
+    if (it != serialization_to_rule_id_.end()) {
+      return ResultOk(it->second);
+    }
   }
 
-  // Process the format and cache the result
   auto result =
       std::visit([&](auto&& arg) -> Result<int, ISTError> { return VisitSub(arg); }, format);
-  if (result.IsOk()) {
+  if (result.IsOk() && deduplicate) {
     int rule_id = std::move(result).Unwrap();
     serialization_to_rule_id_[fingerprint] = rule_id;
     return ResultOk(rule_id);
