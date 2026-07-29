@@ -24,6 +24,8 @@
 
 namespace xgrammar {
 
+class ThreadPool;
+
 /******************** Structural Tag Definition ********************/
 
 // TODO(yixin): Consider moving the definition to Public API.
@@ -389,11 +391,15 @@ struct StructuralTag {
 /*!
  * \brief Convert a structural tag JSON string to a grammar.
  * \param structural_tag_json The JSON string of the structural tag.
+ * \param tokenizer_info Optional tokenizer metadata for resolving named special tokens.
+ * \param max_threads Maximum number of threads used to convert independent JSON schemas.
  * \return A grammar if the JSON is valid, otherwise an error message in std::string.
  */
 Result<Grammar, StructuralTagError> StructuralTagToGrammar(
     const std::string& structural_tag_json,
-    const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt
+    const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt,
+    int max_threads = 1,
+    ThreadPool* thread_pool = nullptr
 );
 
 }  // namespace xgrammar
