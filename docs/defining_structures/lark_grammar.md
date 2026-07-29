@@ -146,6 +146,24 @@ start: /a.b/      // accepts "acb", "a😀b"; rejects "a\nb"
 line: /a.b/s      // also accepts "a\nb"
 ```
 
+### Regular-Expression Complements
+
+Prefix `~` complements one terminal expression: it accepts every valid Unicode string that the
+operand rejects. The operand can be a regex, string, group, optional expression, or uppercase
+terminal reference. Complements can be used directly in lowercase rules or inside uppercase
+terminal definitions.
+
+```text
+start: WITHOUT_CONTROL
+
+WITHOUT_CONTROL: ~/.*[\x00-\x1F].*/
+```
+
+Complement construction determinizes the operand's finite-state automaton. Compilation fails
+instead of growing without bound if the built-in 100,000-state limit is exceeded. Lowercase rule
+references, special tokens, and subgrammars cannot be complemented because they are not regular
+terminal expressions.
+
 ### Sequences, Alternatives, and Groups
 
 | Form | Example | Meaning |

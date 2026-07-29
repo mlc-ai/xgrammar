@@ -9,12 +9,15 @@
 #include <xgrammar/exception.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <queue>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -1850,6 +1853,412 @@ class LarkCompiler {
     RaiseLarkError(source_, node.location, "unsupported terminal node");
   }
 
+  struct RuleFSMConfiguration {
+    int32_t rule_id;
+    int32_t state;
+    std::vector<std::pair<int32_t, int32_t>> returns;
+
+    bool operator==(const RuleFSMConfiguration& other) const {
+      return rule_id == other.rule_id && state == other.state && returns == other.returns;
+    }
+  };
+
+  struct RuleFSMConfigurationHash {
+    size_t operator()(const RuleFSMConfiguration& configuration) const {
+      size_t result = std::hash<int32_t>{}(configuration.rule_id);
+      result ^=
+          std::hash<int32_t>{}(configuration.state) + 0x9e3779b9 + (result << 6) + (result >> 2);
+      for (const auto& [rule_id, state] : configuration.returns) {
+        result ^= std::hash<int32_t>{}(rule_id) + 0x9e3779b9 + (result << 6) + (result >> 2);
+        result ^= std::hash<int32_t>{}(state) + 0x9e3779b9 + (result << 6) + (result >> 2);
+      }
+      return result;
+    }
+  };
+
+  Result<FSMWithStartEnd> FlattenRuleFSMs(const Grammar& grammar, int32_t root_rule_id) {
+    static constexpr int32_t kMaxFlattenedStates = 100000;
+    FSM result_fsm;
+    std::vector<int32_t> end_states;
+    std::vector<RuleFSMConfiguration> configurations;
+    std::unordered_map<RuleFSMConfiguration, int32_t, RuleFSMConfigurationHash> state_by_config;
+    std::queue<int32_t> queue;
+
+    auto add_configuration = [&](RuleFSMConfiguration configuration) {
+      auto [it, inserted] = state_by_config.emplace(configuration, -1);
+      if (!inserted) {
+        return it->second;
+      }
+      if (static_cast<int32_t>(configurations.size()) >= kMaxFlattenedStates) {
+        state_by_config.erase(it);
+        return FSM::kNoNextState;
+      }
+      int32_t state = result_fsm.AddState();
+      it->second = state;
+      configurations.push_back(std::move(configuration));
+      queue.push(state);
+      return state;
+    };
+
+    const auto& root_fsm = grammar->per_rule_fsms.at(root_rule_id)->GetFsm();
+    int32_t start_state = add_configuration({root_rule_id, root_fsm.GetStart(), {}});
+    XGRAMMAR_DCHECK(start_state == 0);
+
+    while (!queue.empty()) {
+      int32_t result_state = queue.front();
+      queue.pop();
+      RuleFSMConfiguration configuration = configurations[result_state];
+      const auto& rule_fsm = grammar->per_rule_fsms.at(configuration.rule_id)->GetFsm();
+
+      if (rule_fsm.IsEndState(configuration.state)) {
+        if (configuration.returns.empty()) {
+          end_states.push_back(result_state);
+        } else {
+          auto return_configuration = configuration;
+          auto [return_rule_id, return_state] = return_configuration.returns.back();
+          return_configuration.returns.pop_back();
+          return_configuration.rule_id = return_rule_id;
+          return_configuration.state = return_state;
+          int32_t target = add_configuration(std::move(return_configuration));
+          if (target == FSM::kNoNextState) {
+            return ResultErr(
+                "The number of states needed to flatten a regular expression exceeds the limit "
+                "of " +
+                std::to_string(kMaxFlattenedStates)
+            );
+          }
+          result_fsm.AddEpsilonEdge(result_state, target);
+        }
+      }
+
+      for (const auto& edge : rule_fsm.GetFsm().GetEdges(configuration.state)) {
+        RuleFSMConfiguration next = configuration;
+        if (edge.IsRuleRef()) {
+          int32_t referenced_rule_id = edge.GetRefRuleId();
+          if (referenced_rule_id < 0 || referenced_rule_id >= grammar->NumRules() ||
+              !grammar->per_rule_fsms.at(referenced_rule_id).has_value()) {
+            return ResultErr("invalid rule reference while flattening a regular expression");
+          }
+          bool is_tail_call = rule_fsm.IsEndState(edge.target) &&
+                              rule_fsm.GetFsm().GetEdges(edge.target).size() == 0;
+          if (!is_tail_call) {
+            next.returns.push_back({configuration.rule_id, edge.target});
+          }
+          next.rule_id = referenced_rule_id;
+          next.state = grammar->per_rule_fsms.at(referenced_rule_id)->GetFsm().GetStart();
+        } else if (edge.IsEpsilon() || edge.IsCharRange()) {
+          next.state = edge.target;
+        } else {
+          return ResultErr("unsupported transition while flattening a regular expression");
+        }
+
+        int32_t target = add_configuration(std::move(next));
+        if (target == FSM::kNoNextState) {
+          return ResultErr(
+              "The number of states needed to flatten a regular expression exceeds the limit of " +
+              std::to_string(kMaxFlattenedStates)
+          );
+        }
+        if (edge.IsCharRange()) {
+          result_fsm.AddEdge(result_state, target, edge.min, edge.max);
+        } else {
+          result_fsm.AddEpsilonEdge(result_state, target);
+        }
+      }
+    }
+
+    FSMWithStartEnd result(result_fsm, start_state, std::move(end_states));
+    return ResultOk(result.SimplifyEpsilon().MergeEquivalentStates());
+  }
+
+  Result<FSMWithStartEnd> RegexPatternToFSM(const std::string& pattern) {
+    try {
+      Grammar grammar = Grammar::FromRegex(pattern);
+      grammar = RepetitionRangeExpander::Apply(grammar);
+      GrammarFSMBuilder::Apply(&grammar);
+      return FlattenRuleFSMs(grammar, grammar->GetRootRuleId());
+    } catch (const std::exception& error) {
+      return ResultErr(error.what());
+    }
+  }
+
+  Result<FSMWithStartEnd> TerminalNodeToFSM(
+      const Node& node, std::unordered_set<std::string>* visiting = nullptr
+  ) {
+    switch (node.kind) {
+      case Node::Kind::kSequence: {
+        if (node.children.empty()) {
+          return RegexPatternToFSM("");
+        }
+        std::vector<FSMWithStartEnd> elements;
+        elements.reserve(node.children.size());
+        for (const Node& child : node.children) {
+          auto child_fsm = TerminalNodeToFSM(child, visiting);
+          if (child_fsm.IsErr()) {
+            return child_fsm;
+          }
+          elements.push_back(std::move(child_fsm).Unwrap());
+        }
+        return ResultOk(FSMWithStartEnd::Concat(elements));
+      }
+      case Node::Kind::kChoice: {
+        std::vector<FSMWithStartEnd> alternatives;
+        alternatives.reserve(node.children.size());
+        for (const Node& child : node.children) {
+          auto child_fsm = TerminalNodeToFSM(child, visiting);
+          if (child_fsm.IsErr()) {
+            return child_fsm;
+          }
+          alternatives.push_back(std::move(child_fsm).Unwrap());
+        }
+        return ResultOk(FSMWithStartEnd::Union(alternatives));
+      }
+      case Node::Kind::kRepeat: {
+        auto child_result = TerminalNodeToFSM(node.children[0], visiting);
+        if (child_result.IsErr()) {
+          return child_result;
+        }
+        FSMWithStartEnd child = std::move(child_result).Unwrap();
+        std::vector<FSMWithStartEnd> elements;
+        elements.reserve(
+            node.max_repeat == -1 ? static_cast<size_t>(node.min_repeat) + 1
+                                  : static_cast<size_t>(node.max_repeat)
+        );
+        for (int32_t i = 0; i < node.min_repeat; ++i) {
+          elements.push_back(child.Copy());
+        }
+        if (node.max_repeat == -1) {
+          elements.push_back(child.Star());
+        } else {
+          for (int32_t i = node.min_repeat; i < node.max_repeat; ++i) {
+            elements.push_back(child.Optional());
+          }
+        }
+        if (elements.empty()) {
+          return RegexPatternToFSM("");
+        }
+        return ResultOk(FSMWithStartEnd::Concat(elements));
+      }
+      case Node::Kind::kName: {
+        auto definition_it = definition_by_name_.find(node.text);
+        if (definition_it == definition_by_name_.end()) {
+          RaiseLarkError(source_, node.location, "unknown name '" + node.text + "'");
+        }
+        if (!definition_it->second->is_terminal) {
+          RaiseLarkError(
+              source_, node.location, "terminal cannot reference rule '" + node.text + "'"
+          );
+        }
+        std::unordered_set<std::string> local_visiting;
+        if (visiting == nullptr) {
+          visiting = &local_visiting;
+        }
+        if (!visiting->insert(node.text).second) {
+          RaiseLarkError(
+              source_, node.location, "recursive terminal '" + node.text + "' is not supported"
+          );
+        }
+        auto result = TerminalNodeToFSM(definition_it->second->body, visiting);
+        visiting->erase(node.text);
+        return result;
+      }
+      case Node::Kind::kNot: {
+        auto child = TerminalNodeToFSM(node.children[0], visiting);
+        if (child.IsErr()) {
+          return child;
+        }
+        return std::move(child).Unwrap().Not(100000);
+      }
+      default:
+        return RegexPatternToFSM(TerminalNodeToRegex(node, visiting));
+    }
+  }
+
+  struct CodepointTransition {
+    int32_t min;
+    int32_t max;
+    int32_t target;
+  };
+
+  static int32_t DecodeUTF8(const std::array<int32_t, 4>& bytes, int32_t length) {
+    if (length == 1) {
+      return bytes[0];
+    }
+    static constexpr std::array<int32_t, 5> kFirstByteMasks = {0, 0x7F, 0x1F, 0x0F, 0x07};
+    int32_t codepoint = bytes[0] & kFirstByteMasks[length];
+    for (int32_t i = 1; i < length; ++i) {
+      codepoint = (codepoint << 6) | (bytes[i] & 0x3F);
+    }
+    return codepoint;
+  }
+
+  static int32_t UTF8LeadingByte(int32_t codepoint) {
+    if (codepoint <= 0x7F) {
+      return 0;
+    }
+    if (codepoint <= 0x7FF) {
+      return 0xC0 | (codepoint >> 6);
+    }
+    if (codepoint <= 0xFFFF) {
+      return 0xE0 | (codepoint >> 12);
+    }
+    return 0xF0 | (codepoint >> 18);
+  }
+
+  static void AppendFinalByteTransitions(
+      const FSM& fsm,
+      int32_t state,
+      int32_t min_byte,
+      int32_t max_byte,
+      std::array<int32_t, 4>* bytes,
+      int32_t byte_index,
+      std::vector<CodepointTransition>* result
+  ) {
+    for (const auto& edge : fsm.GetEdges(state)) {
+      XGRAMMAR_DCHECK(edge.IsCharRange());
+      int32_t lower = std::max(edge.min, min_byte);
+      int32_t upper = std::min(edge.max, max_byte);
+      if (lower > upper) {
+        continue;
+      }
+      (*bytes)[byte_index] = lower;
+      int32_t min_codepoint = DecodeUTF8(*bytes, byte_index + 1);
+      (*bytes)[byte_index] = upper;
+      int32_t max_codepoint = DecodeUTF8(*bytes, byte_index + 1);
+      result->push_back({min_codepoint, max_codepoint, edge.target});
+    }
+  }
+
+  static std::vector<CodepointTransition> CollectCodepointTransitions(
+      const FSMWithStartEnd& fsm, int32_t state
+  ) {
+    std::vector<CodepointTransition> result;
+    const FSM& raw_fsm = fsm.GetFsm();
+
+    for (const auto& edge : raw_fsm.GetEdges(state)) {
+      XGRAMMAR_DCHECK(edge.IsCharRange());
+      int32_t lower = std::max(edge.min, 0);
+      int32_t upper = std::min(edge.max, 0x7F);
+      if (lower <= upper) {
+        result.push_back({lower, upper, edge.target});
+      }
+    }
+
+    std::array<int32_t, 4> bytes{};
+    for (int32_t first = 0xC2; first <= 0xDF; ++first) {
+      int32_t state_1 = raw_fsm.GetNextState(state, first);
+      if (state_1 == FSM::kNoNextState) {
+        continue;
+      }
+      bytes[0] = first;
+      AppendFinalByteTransitions(raw_fsm, state_1, 0x80, 0xBF, &bytes, 1, &result);
+    }
+
+    for (int32_t first = 0xE0; first <= 0xEF; ++first) {
+      int32_t state_1 = raw_fsm.GetNextState(state, first);
+      if (state_1 == FSM::kNoNextState) {
+        continue;
+      }
+      bytes[0] = first;
+      int32_t second_min = first == 0xE0 ? 0xA0 : 0x80;
+      int32_t second_max = first == 0xED ? 0x9F : 0xBF;
+      for (int32_t second = second_min; second <= second_max; ++second) {
+        int32_t state_2 = raw_fsm.GetNextState(state_1, second);
+        if (state_2 == FSM::kNoNextState) {
+          continue;
+        }
+        bytes[1] = second;
+        AppendFinalByteTransitions(raw_fsm, state_2, 0x80, 0xBF, &bytes, 2, &result);
+      }
+    }
+
+    for (int32_t first = 0xF0; first <= 0xF4; ++first) {
+      int32_t state_1 = raw_fsm.GetNextState(state, first);
+      if (state_1 == FSM::kNoNextState) {
+        continue;
+      }
+      bytes[0] = first;
+      int32_t second_min = first == 0xF0 ? 0x90 : 0x80;
+      int32_t second_max = first == 0xF4 ? 0x8F : 0xBF;
+      for (int32_t second = second_min; second <= second_max; ++second) {
+        int32_t state_2 = raw_fsm.GetNextState(state_1, second);
+        if (state_2 == FSM::kNoNextState) {
+          continue;
+        }
+        bytes[1] = second;
+        for (int32_t third = 0x80; third <= 0xBF; ++third) {
+          int32_t state_3 = raw_fsm.GetNextState(state_2, third);
+          if (state_3 == FSM::kNoNextState) {
+            continue;
+          }
+          bytes[2] = third;
+          AppendFinalByteTransitions(raw_fsm, state_3, 0x80, 0xBF, &bytes, 3, &result);
+        }
+      }
+    }
+
+    std::sort(result.begin(), result.end(), [](const auto& lhs, const auto& rhs) {
+      if (lhs.min != rhs.min) {
+        return lhs.min < rhs.min;
+      }
+      if (lhs.max != rhs.max) {
+        return lhs.max < rhs.max;
+      }
+      return lhs.target < rhs.target;
+    });
+    std::vector<CodepointTransition> merged;
+    for (const auto& transition : result) {
+      if (!merged.empty() && merged.back().target == transition.target &&
+          UTF8LeadingByte(merged.back().min) == UTF8LeadingByte(transition.min) &&
+          transition.min <= merged.back().max + 1) {
+        merged.back().max = std::max(merged.back().max, transition.max);
+      } else {
+        merged.push_back(transition);
+      }
+    }
+    return merged;
+  }
+
+  int32_t AddComplementFSM(const FSMWithStartEnd& fsm, const std::string& rule_hint) {
+    std::vector<int32_t> states{fsm.GetStart()};
+    std::unordered_map<int32_t, int32_t> state_rules{
+        {fsm.GetStart(), builder_.AddEmptyRuleWithHint(rule_hint + "_complement_state")}
+    };
+
+    for (size_t state_index = 0; state_index < states.size(); ++state_index) {
+      int32_t state = states[state_index];
+      auto transitions = CollectCodepointTransitions(fsm, state);
+      for (const auto& transition : transitions) {
+        if (!state_rules.count(transition.target)) {
+          states.push_back(transition.target);
+          state_rules[transition.target] =
+              builder_.AddEmptyRuleWithHint(rule_hint + "_complement_state");
+        }
+      }
+
+      std::vector<int32_t> choices;
+      if (fsm.IsEndState(state)) {
+        choices.push_back(builder_.AddEmptyStr());
+      }
+      for (const auto& transition : transitions) {
+        int32_t character = builder_.AddCharacterClass({{transition.min, transition.max}});
+        choices.push_back(builder_.AddSequence(
+            {character, builder_.AddRuleRef(state_rules.at(transition.target))}
+        ));
+      }
+      int32_t body;
+      if (choices.empty()) {
+        body = builder_.AddCharacterClass({});
+      } else if (choices.size() == 1) {
+        body = choices[0];
+      } else {
+        body = builder_.AddChoices(choices);
+      }
+      builder_.UpdateRuleBody(state_rules.at(state), body);
+    }
+    return builder_.AddRuleRef(state_rules.at(fsm.GetStart()));
+  }
+
   const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {
     auto input_it = named_grammars_.inputs.find(name);
     if (input_it == named_grammars_.inputs.end()) {
@@ -2034,10 +2443,19 @@ class LarkCompiler {
         int32_t result = builder_.AddRuleRef(root_it->second);
         return append_skip ? AppendSkip(result) : result;
       }
-      case Node::Kind::kNot:
-        RaiseLarkError(
-            source_, node.location, "regular-expression complement '~' is not supported"
-        );
+      case Node::Kind::kNot: {
+        auto fsm = TerminalNodeToFSM(node);
+        if (fsm.IsErr()) {
+          auto error = std::move(fsm).UnwrapErr();
+          RaiseLarkError(
+              source_,
+              node.location,
+              "failed to compile regular-expression complement: " + std::string(error.what())
+          );
+        }
+        int32_t result = AddComplementFSM(std::move(fsm).Unwrap(), rule_hint);
+        return terminal_mode || !append_skip ? result : AppendSkip(result);
+      }
     }
     RaiseLarkError(source_, node.location, "unsupported grammar node");
   }

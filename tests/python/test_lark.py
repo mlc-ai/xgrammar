@@ -77,6 +77,49 @@ def _assert_lark_error(
 
 
 @pytest.mark.parametrize(
+    "expression, accepted, rejected",
+    [
+        pytest.param("~/[ab]+/", ["", "c", "ac", "你好"], ["a", "b", "aa", "abba"], id="regex"),
+        pytest.param("~(/a/ | /b/)", ["", "ab", "c", "你"], ["a", "b"], id="grouped-choice"),
+        pytest.param("~TOKEN", ["", "a", "abc", "🙂"], ["ab", "cd"], id="terminal-reference"),
+        pytest.param("~(/a/+)", ["", "b", "ab", "你好"], ["a", "aa", "aaa"], id="repeated-group"),
+        pytest.param("~/你好/", ["", "你", "您好", "x"], ["你好"], id="unicode-literal"),
+        pytest.param(
+            "~/./s", ["", "ab", "你好"], ["a", "\n", "你", "🙂"], id="dotall-single-codepoint"
+        ),
+        pytest.param("~/.*/s", [], ["", "a", "\n", "你", "🙂", "ab"], id="universal-language"),
+    ],
+)
+def test_lark_regex_complement(
+    expression: str, accepted: Sequence[str], rejected: Sequence[str]
+) -> None:
+    grammar = f"start: {expression}\nTOKEN: /ab|cd/"
+    _assert_language(grammar, accepted, rejected)
+
+
+def test_lark_regex_complement_in_terminal_and_with_ignore() -> None:
+    grammar = """
+        %ignore / +/
+        start: VALUE "!"
+        VALUE: ~FORBIDDEN
+        FORBIDDEN: /bad|worse/
+    """
+    _assert_language(
+        grammar, ["!", "ok!", "ok !", "badly!", "bad !", "worse !", "你好 !"], ["bad!", "worse!"]
+    )
+
+
+def test_lark_regex_complement_round_trip() -> None:
+    grammar = xgr.Grammar.from_lark("start: ~/你好|good/")
+    for candidate in (
+        grammar,
+        xgr.Grammar.from_ebnf(str(grammar)),
+        xgr.Grammar.deserialize_json(grammar.serialize_json()),
+    ):
+        _assert_grammar_language(candidate, ["", "你", "goodbye", "bad", "🙂"], ["你好", "good"])
+
+
+@pytest.mark.parametrize(
     "grammar, accepted, rejected",
     [
         pytest.param(
@@ -937,7 +980,11 @@ def test_lark_large_choice_grammar() -> None:
         pytest.param(
             'start: A & B\nA: "a"\nB: "b"', "intersection '&' is not supported", id="intersection"
         ),
-        pytest.param("start: ~/[a]/", "complement '~' is not supported", id="complement"),
+        pytest.param(
+            'start: ~item\nitem: "a"',
+            "terminal cannot reference rule 'item'",
+            id="complement-rule-reference",
+        ),
         pytest.param(
             'start: "\\u00c4"i',
             "case-insensitive string literals currently support ASCII characters only",
