@@ -9,15 +9,18 @@
 #include <xgrammar/exception.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <iomanip>
 #include <limits>
 #include <map>
 #include <memory>
 #include <optional>
+#include <queue>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -651,6 +654,7 @@ struct Node {
     kNestedLark,
     kSpecialToken,
     kGrammarRef,
+    kIntersection,
     kNot,
     kNever,
   };
@@ -1055,9 +1059,9 @@ class LarkParser {
   Node ParseChoice() {
     Location location = Peek().location;
     std::vector<Node> alternatives;
-    alternatives.push_back(ParseSequence());
+    alternatives.push_back(ParseIntersection());
     while (MatchAlternativeSeparator()) {
-      alternatives.push_back(ParseSequence());
+      alternatives.push_back(ParseIntersection());
     }
     if (alternatives.size() == 1) {
       return std::move(alternatives[0]);
@@ -1066,6 +1070,23 @@ class LarkParser {
     result.kind = Node::Kind::kChoice;
     result.location = location;
     result.children = std::move(alternatives);
+    return result;
+  }
+
+  Node ParseIntersection() {
+    Location location = Peek().location;
+    std::vector<Node> operands;
+    operands.push_back(ParseSequence());
+    while (Match(TokenType::kAnd)) {
+      operands.push_back(ParseSequence());
+    }
+    if (operands.size() == 1) {
+      return std::move(operands[0]);
+    }
+    Node result;
+    result.kind = Node::Kind::kIntersection;
+    result.location = location;
+    result.children = std::move(operands);
     return result;
   }
 
@@ -1095,8 +1116,8 @@ class LarkParser {
     if (Match(TokenType::kArrow)) {
       Consume(TokenType::kName, "expected alias name after '->'");
     }
-    if (Peek().type == TokenType::kAnd) {
-      RaiseLarkError(source_, Peek().location, "terminal intersection '&' is not supported");
+    if (Peek().type == TokenType::kIf) {
+      RaiseLarkError(source_, Peek().location, "parametric %if conditions are not supported");
     }
     Node result;
     result.kind = Node::Kind::kSequence;
@@ -2598,6 +2619,10 @@ class LarkCompiler {
         );
       case Node::Kind::kGrammarRef:
         RaiseLarkError(source_, node.location, "named grammars cannot be used in terminals");
+      case Node::Kind::kIntersection:
+        RaiseLarkError(
+            source_, node.location, "nested terminal intersection could not be compiled"
+        );
       case Node::Kind::kNot:
         RaiseLarkError(
             source_, node.location, "regular-expression complement '~' is not supported"
@@ -2724,815 +2749,1262 @@ class LarkCompiler {
     int32_t substring_expr_id = builder_.AddSubstring(chunks);
     int32_t rule_id = builder_.AddRuleWithHint(rule_hint + "_substring", substring_expr_id);
     return builder_.AddRuleRef(rule_id);
-  }
+    struct RuleFSMConfiguration {
+      int32_t rule_id;
+      int32_t state;
+      std::vector<std::pair<int32_t, int32_t>> returns;
 
-  const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {
-    auto input_it = named_grammars_.inputs.find(name);
-    if (input_it == named_grammars_.inputs.end()) {
-      RaiseLarkError(source_, location, "unknown named grammar '@" + name + "'");
-    }
-    if (std::holds_alternative<Grammar>(input_it->second)) {
-      return std::get<Grammar>(input_it->second);
-    }
-    auto compiled_it = named_grammars_.compiled.find(name);
-    if (compiled_it != named_grammars_.compiled.end()) {
-      return compiled_it->second;
-    }
+      bool operator==(const RuleFSMConfiguration& other) const {
+        return rule_id == other.rule_id && state == other.state && returns == other.returns;
+      }
+    };
 
-    auto active_it = std::find(named_grammars_.active.begin(), named_grammars_.active.end(), name);
-    if (active_it != named_grammars_.active.end()) {
-      std::ostringstream cycle;
-      for (auto it = active_it; it != named_grammars_.active.end(); ++it) {
-        if (it != active_it) {
-          cycle << " -> ";
-        }
-        cycle << "@" << *it;
-      }
-      cycle << " -> @" << name;
-      RaiseLarkError(source_, location, "circular named grammar reference: " + cycle.str());
-    }
-
-    named_grammars_.active.push_back(name);
-    try {
-      const std::string& named_source = std::get<std::string>(input_it->second);
-      auto tokens = LarkLexer(named_source).Tokenize();
-      auto document = LarkParser(named_source, std::move(tokens)).Parse();
-      Grammar compiled =
-          LarkCompiler(named_source, std::move(document), tokenizer_info_, named_grammars_)
-              .Compile();
-      auto compiled_it = named_grammars_.compiled.emplace(name, std::move(compiled)).first;
-      named_grammars_.active.pop_back();
-      return compiled_it->second;
-    } catch (const std::exception& error) {
-      named_grammars_.active.pop_back();
-      RaiseLarkError(
-          source_,
-          location,
-          "failed to compile named grammar '@" + name + "': " + std::string(error.what())
-      );
-    }
-  }
-
-  int32_t CompileNode(
-      const Node& node, const std::string& rule_hint, bool terminal_mode, bool append_skip = true
-  ) {
-    switch (node.kind) {
-      case Node::Kind::kSequence: {
-        if (node.children.empty()) {
-          return builder_.AddEmptyStr();
-        }
-        std::vector<int32_t> elements;
-        elements.reserve(node.children.size());
-        for (const Node& child : node.children) {
-          elements.push_back(CompileNode(child, rule_hint, terminal_mode, append_skip));
-        }
-        return elements.size() == 1 ? elements[0] : builder_.AddSequence(elements);
-      }
-      case Node::Kind::kChoice: {
-        std::vector<int32_t> choices;
-        choices.reserve(node.children.size());
-        for (const Node& child : node.children) {
-          choices.push_back(CompileNode(child, rule_hint, terminal_mode, append_skip));
-        }
-        return choices.size() == 1 ? choices[0] : builder_.AddChoices(choices);
-      }
-      case Node::Kind::kRepeat: {
-        int32_t child =
-            CompileNode(node.children[0], rule_hint + "_repeat", terminal_mode, append_skip);
-        return builder_.AddRepeatFromExpr(
-            rule_hint + "_repeat", child, node.min_repeat, node.max_repeat
-        );
-      }
-      case Node::Kind::kName: {
-        auto definition_it = definition_by_name_.find(node.text);
-        if (definition_it == definition_by_name_.end()) {
-          RaiseLarkError(source_, node.location, "unknown name '" + node.text + "'");
-        }
-        if (terminal_mode && !definition_it->second->is_terminal) {
-          RaiseLarkError(
-              source_, node.location, "terminal cannot reference rule '" + node.text + "'"
-          );
-        }
-        int32_t result = builder_.AddRuleRef(rule_ids_.at(node.text));
-        // Lazy rules are compiled like terminals (lexemes), so they also take a trailing skip.
-        // Temperature rules are also compiled like terminals.
-        bool is_lexeme = definition_it->second->is_terminal ||
-                         HasLazySemantics(*definition_it->second) ||
-                         definition_it->second->temperature.has_value();
-        return !terminal_mode && append_skip && is_lexeme ? AppendSkip(result) : result;
-      }
-      case Node::Kind::kString: {
-        int32_t result = CompileStringLiteral(node);
-        return !terminal_mode && append_skip && !node.text.empty() ? AppendSkip(result) : result;
-      }
-      case Node::Kind::kRange: {
-        auto begin = ParseUTF8(node.text.c_str());
-        auto end = ParseUTF8(node.text2.c_str());
-        if (begin.size() != 1 || end.size() != 1 || begin[0] == CharHandlingError::kInvalidUTF8 ||
-            end[0] == CharHandlingError::kInvalidUTF8) {
-          RaiseLarkError(source_, node.location, "character range endpoints must be one character");
-        }
-        if (begin[0] > end[0]) {
-          RaiseLarkError(source_, node.location, "character range start must not exceed end");
-        }
-        if (allow_invalid_utf8_ && (begin[0] > 0x7F || end[0] > 0x7F)) {
-          RaiseLarkError(
-              source_,
-              node.location,
-              "non-ASCII character ranges are not available when allow_invalid_utf8 is enabled"
-          );
-        }
-        int32_t result = builder_.AddCharacterClass({{begin[0], end[0]}});
-        return terminal_mode || !append_skip ? result : AppendSkip(result);
-      }
-      case Node::Kind::kRegex: {
-        RegexFlags flags = ParseRegexFlags(node);
-        std::string pattern = RewriteRegexDots(node.text, flags.dot_all);
-        if (allow_invalid_utf8_) {
-          if (flags.case_insensitive) {
-            pattern = "(?i)" + pattern;
-          }
-          int32_t regex_rule_id = builder_.AddRuleWithHint(
-              rule_hint + "_regex", CompileTerminalPattern(pattern, node.location)
-          );
-          int32_t result = builder_.AddRuleRef(regex_rule_id);
-          return terminal_mode || !append_skip ? result : AppendSkip(result);
-        }
-        if (flags.case_insensitive) {
-          // The FSM regex engine handles the (?i) prefix with ASCII case folding. Validate the
-          // pattern eagerly so that errors carry the source location.
-          std::string flagged_pattern = "(?i)" + pattern;
-          auto matches_empty = RegexFSMBuilder::MatchesEmpty(flagged_pattern);
-          if (matches_empty.IsErr()) {
-            RaiseLarkError(
-                source_,
-                node.location,
-                "failed to compile regular expression: " +
-                    std::string(std::move(matches_empty).UnwrapErr().what())
-            );
-          }
-          int32_t regex_rule_id =
-              builder_.AddRuleWithHint(rule_hint + "_regex", builder_.AddRegex(flagged_pattern));
-          int32_t result = builder_.AddRuleRef(regex_rule_id);
-          return terminal_mode || !append_skip ? result : AppendSkip(result);
-        }
-        try {
-          int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromRegex(pattern));
-          int32_t result = builder_.AddRuleRef(root);
-          return terminal_mode || !append_skip ? result : AppendSkip(result);
-        } catch (const std::exception& error) {
-          RaiseLarkError(
-              source_,
-              node.location,
-              "failed to compile regular expression: " + std::string(error.what())
-          );
-        }
-      }
-      case Node::Kind::kJson: {
-        if (terminal_mode) {
-          RaiseLarkError(source_, node.location, "%json cannot be used in terminals");
-        }
-        try {
-          int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromJSONSchema(node.text));
-          int32_t result = builder_.AddRuleRef(root);
-          return terminal_mode || !append_skip ? result : AppendSkip(result);
-        } catch (const std::exception& error) {
-          RaiseLarkError(
-              source_,
-              node.location,
-              "failed to compile inline JSON schema: " + std::string(error.what())
-          );
-        }
-      }
-      case Node::Kind::kStructuralTag: {
-        if (terminal_mode) {
-          RaiseLarkError(source_, node.location, "%structural_tag cannot be used in terminals");
-        }
-        auto root_it = structural_tag_roots_.find(node.text);
-        if (root_it == structural_tag_roots_.end()) {
-          std::optional<int32_t> root;
-          std::string error_message;
-          try {
-            auto converted = Grammar::FromStructuralTag(node.text, tokenizer_info_);
-            if (std::holds_alternative<StructuralTagError>(converted)) {
-              error_message = GetMessageFromVariantError(std::get<StructuralTagError>(converted));
-            } else {
-              root = SubGrammarAdder::Apply(&builder_, std::get<Grammar>(converted));
-            }
-          } catch (const std::exception& error) {
-            error_message = error.what();
-          }
-          if (!root.has_value()) {
-            RaiseLarkError(
-                source_, node.location, "failed to compile inline structural tag: " + error_message
-            );
-          }
-          root_it = structural_tag_roots_.emplace(node.text, root.value()).first;
-        }
-        int32_t result = builder_.AddRuleRef(root_it->second);
-        return append_skip ? AppendSkip(result) : result;
-      }
-      case Node::Kind::kNestedLark: {
-        if (terminal_mode) {
-          RaiseLarkError(source_, node.location, "nested %lark cannot be used in terminals");
-        }
-        try {
-          LarkCompiler compiler(source_, *node.nested, tokenizer_info_, named_grammars_);
-          int32_t root = SubGrammarAdder::Apply(&builder_, compiler.Compile());
-          int32_t result = builder_.AddRuleRef(root);
-          return terminal_mode || !append_skip ? result : AppendSkip(result);
-        } catch (const std::exception& error) {
-          RaiseLarkError(
-              source_,
-              node.location,
-              "failed to compile nested Lark grammar: " + std::string(error.what())
-          );
-        }
-      }
-      case Node::Kind::kSpecialToken: {
-        if (terminal_mode) {
-          RaiseLarkError(source_, node.location, "special tokens cannot be used in terminals");
-        }
-        SpecialTokenSet token_set = ResolveSpecialToken(node.text, node.location);
-        int32_t result = token_set.excluded ? builder_.AddExcludeTokenSet(token_set.token_ids)
-                                            : builder_.AddTokenSet(token_set.token_ids);
-        return append_skip ? AppendSkip(result) : result;
-      }
-      case Node::Kind::kRegexExt: {
-        int32_t result = CompileStructuredRegex(node, rule_hint);
-        return terminal_mode || !append_skip ? result : AppendSkip(result);
-      }
-      case Node::Kind::kGrammarRef: {
-        if (terminal_mode) {
-          RaiseLarkError(source_, node.location, "named grammars cannot be used in terminals");
-        }
-        std::string name = node.text.substr(1);
-        auto root_it = named_grammar_roots_.find(name);
-        if (root_it == named_grammar_roots_.end()) {
-          int32_t root =
-              SubGrammarAdder::Apply(&builder_, ResolveNamedGrammar(name, node.location));
-          root_it = named_grammar_roots_.emplace(name, root).first;
-        }
-        int32_t result = builder_.AddRuleRef(root_it->second);
-        return append_skip ? AppendSkip(result) : result;
-      }
-      case Node::Kind::kNot:
-        RaiseLarkError(
-            source_, node.location, "regular-expression complement '~' is not supported"
-        );
-      case Node::Kind::kNever: {
-        if (never_rule_id_ == -1) {
-          never_rule_id_ = builder_.AddEmptyRuleWithHint("lark_never");
-          builder_.UpdateRuleBody(never_rule_id_, builder_.AddRuleRef(never_rule_id_));
-        }
-        return builder_.AddRuleRef(never_rule_id_);
-      }
-    }
-    RaiseLarkError(source_, node.location, "unsupported grammar node");
-  }
-
-  int32_t AppendSkip(int32_t expression) {
-    if (skip_rule_id_ == -1) {
-      return expression;
-    }
-    return builder_.AddSequence({expression, builder_.AddRuleRef(skip_rule_id_)});
-  }
-
-  /*! \brief Compile a rule with a token or character budget. */
-  int32_t CompileBudgetRule(const Definition& definition) {
-    int32_t rule_id = rule_ids_.at(definition.name);
-    if (definition.max_tokens.has_value()) {
-      builder_.UpdateMaxTokens(rule_id, definition.max_tokens.value());
-    }
-    if (definition.max_chars.has_value()) {
-      builder_.UpdateMaxChars(rule_id, definition.max_chars.value());
-    }
-    if (HasLazySemantics(definition)) {
-      return CompileLazyRule(definition);
-    }
-    return CompileNode(definition.body, definition.name, false);
-  }
-
-  SpecialTokenSet ResolveSpecialToken(const std::string& token, const Location& location) const {
-    if (token.size() >= 4 && token.substr(0, 2) == "<[" && token.substr(token.size() - 2) == "]>") {
-      std::string contents = token.substr(2, token.size() - 4);
-      SpecialTokenSet result;
-      if (!contents.empty() && contents[0] == '^') {
-        result.excluded = true;
-        contents.erase(contents.begin());
-      }
-      if (contents == "*") {
-        if (result.excluded) {
-          RaiseLarkError(source_, location, "negated wildcard special token is not supported");
-        }
-        if (!tokenizer_info_.has_value()) {
-          RaiseLarkError(source_, location, "wildcard special token requires tokenizer_info");
-        }
-        result.token_ids.reserve(tokenizer_info_->GetVocabSize());
-        for (int32_t token_id = 0; token_id < tokenizer_info_->GetVocabSize(); ++token_id) {
-          result.token_ids.push_back(token_id);
+    struct RuleFSMConfigurationHash {
+      size_t operator()(const RuleFSMConfiguration& configuration) const {
+        size_t result = std::hash<int32_t>{}(configuration.rule_id);
+        result ^=
+            std::hash<int32_t>{}(configuration.state) + 0x9e3779b9 + (result << 6) + (result >> 2);
+        for (const auto& [rule_id, state] : configuration.returns) {
+          result ^= std::hash<int32_t>{}(rule_id) + 0x9e3779b9 + (result << 6) + (result >> 2);
+          result ^= std::hash<int32_t>{}(state) + 0x9e3779b9 + (result << 6) + (result >> 2);
         }
         return result;
       }
-      if (contents.find('*') != std::string::npos) {
-        RaiseLarkError(source_, location, "wildcard cannot be mixed with token ranges");
-      }
-      size_t offset = 0;
-      while (offset <= contents.size()) {
-        size_t comma = contents.find(',', offset);
-        std::string range = Trim(contents.substr(offset, comma - offset));
-        if (!range.empty()) {
-          size_t dash = range.find('-');
-          if (dash != std::string::npos && range.find('-', dash + 1) != std::string::npos) {
-            RaiseLarkError(
-                source_, location, "invalid numeric special-token range '" + range + "'"
+    };
+
+    Result<FSMWithStartEnd> FlattenRuleFSMs(const Grammar& grammar, int32_t root_rule_id) {
+      static constexpr int32_t kMaxFlattenedStates = 100000;
+      FSM result_fsm;
+      std::vector<int32_t> end_states;
+      std::vector<RuleFSMConfiguration> configurations;
+      std::unordered_map<RuleFSMConfiguration, int32_t, RuleFSMConfigurationHash> state_by_config;
+      std::queue<int32_t> queue;
+
+      auto add_configuration = [&](RuleFSMConfiguration configuration) {
+        auto [it, inserted] = state_by_config.emplace(configuration, -1);
+        if (!inserted) {
+          return it->second;
+        }
+        if (static_cast<int32_t>(configurations.size()) >= kMaxFlattenedStates) {
+          state_by_config.erase(it);
+          return FSM::kNoNextState;
+        }
+        int32_t state = result_fsm.AddState();
+        it->second = state;
+        configurations.push_back(std::move(configuration));
+        queue.push(state);
+        return state;
+      };
+
+      const auto& root_fsm = grammar->per_rule_fsms.at(root_rule_id)->GetFsm();
+      int32_t start_state = add_configuration({root_rule_id, root_fsm.GetStart(), {}});
+      XGRAMMAR_DCHECK(start_state == 0);
+
+      while (!queue.empty()) {
+        int32_t result_state = queue.front();
+        queue.pop();
+        RuleFSMConfiguration configuration = configurations[result_state];
+        const auto& rule_fsm = grammar->per_rule_fsms.at(configuration.rule_id)->GetFsm();
+
+        if (rule_fsm.IsEndState(configuration.state)) {
+          if (configuration.returns.empty()) {
+            end_states.push_back(result_state);
+          } else {
+            auto return_configuration = configuration;
+            auto [return_rule_id, return_state] = return_configuration.returns.back();
+            return_configuration.returns.pop_back();
+            return_configuration.rule_id = return_rule_id;
+            return_configuration.state = return_state;
+            int32_t target = add_configuration(std::move(return_configuration));
+            if (target == FSM::kNoNextState) {
+              return ResultErr(
+                  "The number of states needed to flatten a regular expression exceeds the limit "
+                  "of " +
+                  std::to_string(kMaxFlattenedStates)
+              );
+            }
+            result_fsm.AddEpsilonEdge(result_state, target);
+          }
+        }
+
+        for (const auto& edge : rule_fsm.GetFsm().GetEdges(configuration.state)) {
+          RuleFSMConfiguration next = configuration;
+          if (edge.IsRuleRef()) {
+            int32_t referenced_rule_id = edge.GetRefRuleId();
+            if (referenced_rule_id < 0 || referenced_rule_id >= grammar->NumRules() ||
+                !grammar->per_rule_fsms.at(referenced_rule_id).has_value()) {
+              return ResultErr("invalid rule reference while flattening a regular expression");
+            }
+            bool is_tail_call = rule_fsm.IsEndState(edge.target) &&
+                                rule_fsm.GetFsm().GetEdges(edge.target).size() == 0;
+            if (!is_tail_call) {
+              next.returns.push_back({configuration.rule_id, edge.target});
+            }
+            next.rule_id = referenced_rule_id;
+            next.state = grammar->per_rule_fsms.at(referenced_rule_id)->GetFsm().GetStart();
+          } else if (edge.IsEpsilon()) {
+            next.state = edge.target;
+          } else if (edge.IsCharRange()) {
+            next.state = edge.target;
+          } else {
+            return ResultErr("unsupported transition while flattening a regular expression");
+          }
+
+          int32_t target = add_configuration(std::move(next));
+          if (target == FSM::kNoNextState) {
+            return ResultErr(
+                "The number of states needed to flatten a regular expression exceeds the limit "
+                "of " +
+                std::to_string(kMaxFlattenedStates)
             );
           }
-          int64_t first;
-          int64_t last;
-          try {
-            auto parse_token_id = [](const std::string& value) {
-              std::string trimmed = Trim(value);
-              size_t parsed = 0;
-              int64_t result = std::stoll(trimmed, &parsed);
-              if (parsed != trimmed.size()) {
-                throw std::invalid_argument("trailing characters");
-              }
+          if (edge.IsCharRange()) {
+            result_fsm.AddEdge(result_state, target, edge.min, edge.max);
+          } else {
+            result_fsm.AddEpsilonEdge(result_state, target);
+          }
+        }
+      }
+
+      FSMWithStartEnd result(result_fsm, start_state, std::move(end_states));
+      return ResultOk(result.SimplifyEpsilon().MergeEquivalentStates());
+    }
+
+    Result<FSMWithStartEnd> RegexPatternToFSM(const std::string& pattern) {
+      try {
+        Grammar grammar = Grammar::FromRegex(pattern);
+        grammar = RepetitionRangeExpander::Apply(grammar);
+        GrammarFSMBuilder::Apply(&grammar);
+        return FlattenRuleFSMs(grammar, grammar->GetRootRuleId());
+      } catch (const std::exception& error) {
+        return ResultErr(error.what());
+      }
+    }
+
+    Result<FSMWithStartEnd> TerminalNodeToFSM(
+        const Node& node, std::unordered_set<std::string>* visiting = nullptr
+    ) {
+      switch (node.kind) {
+        case Node::Kind::kSequence: {
+          if (node.children.empty()) {
+            return RegexPatternToFSM("");
+          }
+          std::vector<FSMWithStartEnd> elements;
+          elements.reserve(node.children.size());
+          for (const Node& child : node.children) {
+            auto child_fsm = TerminalNodeToFSM(child, visiting);
+            if (child_fsm.IsErr()) {
+              return child_fsm;
+            }
+            elements.push_back(std::move(child_fsm).Unwrap());
+          }
+          return ResultOk(FSMWithStartEnd::Concat(elements));
+        }
+        case Node::Kind::kChoice: {
+          std::vector<FSMWithStartEnd> alternatives;
+          alternatives.reserve(node.children.size());
+          for (const Node& child : node.children) {
+            auto child_fsm = TerminalNodeToFSM(child, visiting);
+            if (child_fsm.IsErr()) {
+              return child_fsm;
+            }
+            alternatives.push_back(std::move(child_fsm).Unwrap());
+          }
+          return ResultOk(FSMWithStartEnd::Union(alternatives));
+        }
+        case Node::Kind::kRepeat: {
+          auto child_result = TerminalNodeToFSM(node.children[0], visiting);
+          if (child_result.IsErr()) {
+            return child_result;
+          }
+          FSMWithStartEnd child = std::move(child_result).Unwrap();
+          std::vector<FSMWithStartEnd> elements;
+          elements.reserve(
+              node.max_repeat == -1 ? static_cast<size_t>(node.min_repeat) + 1
+                                    : static_cast<size_t>(node.max_repeat)
+          );
+          for (int32_t i = 0; i < node.min_repeat; ++i) {
+            elements.push_back(child.Copy());
+          }
+          if (node.max_repeat == -1) {
+            elements.push_back(child.Star());
+          } else {
+            for (int32_t i = node.min_repeat; i < node.max_repeat; ++i) {
+              elements.push_back(child.Optional());
+            }
+          }
+          if (elements.empty()) {
+            return RegexPatternToFSM("");
+          }
+          return ResultOk(FSMWithStartEnd::Concat(elements));
+        }
+        case Node::Kind::kName: {
+          auto definition_it = definition_by_name_.find(node.text);
+          if (definition_it == definition_by_name_.end()) {
+            RaiseLarkError(source_, node.location, "unknown name '" + node.text + "'");
+          }
+          if (!definition_it->second->is_terminal) {
+            RaiseLarkError(
+                source_, node.location, "terminal cannot reference rule '" + node.text + "'"
+            );
+          }
+          std::unordered_set<std::string> local_visiting;
+          if (visiting == nullptr) {
+            visiting = &local_visiting;
+          }
+          if (!visiting->insert(node.text).second) {
+            RaiseLarkError(
+                source_, node.location, "recursive terminal '" + node.text + "' is not supported"
+            );
+          }
+          auto result = TerminalNodeToFSM(definition_it->second->body, visiting);
+          visiting->erase(node.text);
+          return result;
+        }
+        case Node::Kind::kIntersection: {
+          XGRAMMAR_DCHECK(node.children.size() >= 2);
+          auto result = TerminalNodeToFSM(node.children[0], visiting);
+          if (result.IsErr()) {
+            return result;
+          }
+          for (size_t i = 1; i < node.children.size(); ++i) {
+            auto rhs = TerminalNodeToFSM(node.children[i], visiting);
+            if (rhs.IsErr()) {
+              return rhs;
+            }
+            result =
+                FSMWithStartEnd::Intersect(std::move(result).Unwrap(), std::move(rhs).Unwrap());
+            if (result.IsErr()) {
               return result;
-            };
-            first = parse_token_id(range.substr(0, dash));
-            last = dash == std::string::npos ? first : parse_token_id(range.substr(dash + 1));
-          } catch (const std::exception&) {
-            RaiseLarkError(
-                source_, location, "invalid numeric special-token range '" + range + "'"
-            );
+            }
           }
-          if (first < 0 || last < first || last > std::numeric_limits<int32_t>::max()) {
-            RaiseLarkError(
-                source_, location, "invalid numeric special-token range '" + range + "'"
-            );
+          return result;
+        }
+        default:
+          return RegexPatternToFSM(TerminalNodeToRegex(node, visiting));
+      }
+    }
+
+    struct CodepointTransition {
+      int32_t min;
+      int32_t max;
+      int32_t target;
+    };
+
+    static int32_t DecodeUTF8(const std::array<int32_t, 4>& bytes, int32_t length) {
+      if (length == 1) {
+        return bytes[0];
+      }
+      static constexpr std::array<int32_t, 5> kFirstByteMasks = {0, 0x7F, 0x1F, 0x0F, 0x07};
+      int32_t codepoint = bytes[0] & kFirstByteMasks[length];
+      for (int32_t i = 1; i < length; ++i) {
+        codepoint = (codepoint << 6) | (bytes[i] & 0x3F);
+      }
+      return codepoint;
+    }
+
+    static int32_t UTF8LeadingByte(int32_t codepoint) {
+      if (codepoint <= 0x7F) {
+        return 0;
+      }
+      if (codepoint <= 0x7FF) {
+        return 0xC0 | (codepoint >> 6);
+      }
+      if (codepoint <= 0xFFFF) {
+        return 0xE0 | (codepoint >> 12);
+      }
+      return 0xF0 | (codepoint >> 18);
+    }
+
+    static void AppendFinalByteTransitions(
+        const FSM& fsm,
+        int32_t state,
+        int32_t min_byte,
+        int32_t max_byte,
+        std::array<int32_t, 4>* bytes,
+        int32_t byte_index,
+        std::vector<CodepointTransition>* result
+    ) {
+      for (const auto& edge : fsm.GetEdges(state)) {
+        XGRAMMAR_DCHECK(edge.IsCharRange());
+        int32_t lower = std::max(edge.min, min_byte);
+        int32_t upper = std::min(edge.max, max_byte);
+        if (lower > upper) {
+          continue;
+        }
+        (*bytes)[byte_index] = lower;
+        int32_t min_codepoint = DecodeUTF8(*bytes, byte_index + 1);
+        (*bytes)[byte_index] = upper;
+        int32_t max_codepoint = DecodeUTF8(*bytes, byte_index + 1);
+        result->push_back({min_codepoint, max_codepoint, edge.target});
+      }
+    }
+
+    static std::vector<CodepointTransition> CollectCodepointTransitions(
+        const FSMWithStartEnd& fsm, int32_t state
+    ) {
+      std::vector<CodepointTransition> result;
+      const FSM& raw_fsm = fsm.GetFsm();
+
+      for (const auto& edge : raw_fsm.GetEdges(state)) {
+        XGRAMMAR_DCHECK(edge.IsCharRange());
+        int32_t lower = std::max(edge.min, 0);
+        int32_t upper = std::min(edge.max, 0x7F);
+        if (lower <= upper) {
+          result.push_back({lower, upper, edge.target});
+        }
+      }
+
+      std::array<int32_t, 4> bytes{};
+      for (int32_t first = 0xC2; first <= 0xDF; ++first) {
+        int32_t state_1 = raw_fsm.GetNextState(state, first);
+        if (state_1 == FSM::kNoNextState) {
+          continue;
+        }
+        bytes[0] = first;
+        AppendFinalByteTransitions(raw_fsm, state_1, 0x80, 0xBF, &bytes, 1, &result);
+      }
+
+      for (int32_t first = 0xE0; first <= 0xEF; ++first) {
+        int32_t state_1 = raw_fsm.GetNextState(state, first);
+        if (state_1 == FSM::kNoNextState) {
+          continue;
+        }
+        bytes[0] = first;
+        int32_t second_min = first == 0xE0 ? 0xA0 : 0x80;
+        int32_t second_max = first == 0xED ? 0x9F : 0xBF;
+        for (int32_t second = second_min; second <= second_max; ++second) {
+          int32_t state_2 = raw_fsm.GetNextState(state_1, second);
+          if (state_2 == FSM::kNoNextState) {
+            continue;
           }
-          if (last - first > 1'000'000) {
-            RaiseLarkError(source_, location, "special-token range is too large");
+          bytes[1] = second;
+          AppendFinalByteTransitions(raw_fsm, state_2, 0x80, 0xBF, &bytes, 2, &result);
+        }
+      }
+
+      for (int32_t first = 0xF0; first <= 0xF4; ++first) {
+        int32_t state_1 = raw_fsm.GetNextState(state, first);
+        if (state_1 == FSM::kNoNextState) {
+          continue;
+        }
+        bytes[0] = first;
+        int32_t second_min = first == 0xF0 ? 0x90 : 0x80;
+        int32_t second_max = first == 0xF4 ? 0x8F : 0xBF;
+        for (int32_t second = second_min; second <= second_max; ++second) {
+          int32_t state_2 = raw_fsm.GetNextState(state_1, second);
+          if (state_2 == FSM::kNoNextState) {
+            continue;
           }
-          for (int64_t token_id = first; token_id <= last; ++token_id) {
-            result.token_ids.push_back(static_cast<int32_t>(token_id));
+          bytes[1] = second;
+          for (int32_t third = 0x80; third <= 0xBF; ++third) {
+            int32_t state_3 = raw_fsm.GetNextState(state_2, third);
+            if (state_3 == FSM::kNoNextState) {
+              continue;
+            }
+            bytes[2] = third;
+            AppendFinalByteTransitions(raw_fsm, state_3, 0x80, 0xBF, &bytes, 3, &result);
           }
         }
-        if (comma == std::string::npos) {
-          break;
+      }
+
+      std::sort(result.begin(), result.end(), [](const auto& lhs, const auto& rhs) {
+        if (lhs.min != rhs.min) {
+          return lhs.min < rhs.min;
         }
-        offset = comma + 1;
-      }
-      if (result.token_ids.empty()) {
-        RaiseLarkError(source_, location, "empty numeric special-token range");
-      }
-      std::sort(result.token_ids.begin(), result.token_ids.end());
-      result.token_ids.erase(
-          std::unique(result.token_ids.begin(), result.token_ids.end()), result.token_ids.end()
-      );
-      return result;
-    }
-
-    if (!tokenizer_info_.has_value()) {
-      RaiseLarkError(
-          source_, location, "named special token " + token + " requires tokenizer_info"
-      );
-    }
-    SpecialTokenSet result;
-    const auto& decoded_vocab = tokenizer_info_->GetDecodedVocab();
-    for (int32_t token_id = 0; token_id < static_cast<int32_t>(decoded_vocab.size()); ++token_id) {
-      if (decoded_vocab[token_id] == token) {
-        result.token_ids.push_back(token_id);
-      }
-    }
-    if (result.token_ids.empty()) {
-      RaiseLarkError(source_, location, "unknown special token " + token);
-    }
-    return result;
-  }
-
-  static const Node* UnwrapSingle(const Node* node) {
-    while (node->kind == Node::Kind::kSequence && node->children.size() == 1) {
-      node = &node->children[0];
-    }
-    return node;
-  }
-
-  bool IsAnyText(const Node& node, std::unordered_set<std::string>* visiting = nullptr) const {
-    if (node.kind == Node::Kind::kRegex) {
-      std::string pattern;
-      for (char c : node.text) {
-        if (c != ' ' && c != '\t' && c != '\r') {
-          pattern.push_back(c);
+        if (lhs.max != rhs.max) {
+          return lhs.max < rhs.max;
+        }
+        return lhs.target < rhs.target;
+      });
+      std::vector<CodepointTransition> merged;
+      for (const auto& transition : result) {
+        if (!merged.empty() && merged.back().target == transition.target &&
+            UTF8LeadingByte(merged.back().min) == UTF8LeadingByte(transition.min) &&
+            transition.min <= merged.back().max + 1) {
+          merged.back().max = std::max(merged.back().max, transition.max);
+        } else {
+          merged.push_back(transition);
         }
       }
-      if (node.flags.find_first_not_of("isu") != std::string::npos) {
-        return false;
-      }
-      if (node.flags.find('s') != std::string::npos) {
-        return pattern == ".*";
-      }
-      return pattern == "(.|\\n)*" || pattern == "(\\n|.)*" || pattern == "(?s:.*)" ||
-             pattern == "(?:.|\\n)*" || pattern == "(?:\\n|.)*" || pattern == "[\\s\\S]*";
+      return merged;
     }
-    if (node.kind == Node::Kind::kSequence && node.children.size() == 1) {
-      return IsAnyText(node.children[0], visiting);
-    }
-    if (node.kind == Node::Kind::kName) {
-      std::unordered_set<std::string> local_visiting;
-      if (visiting == nullptr) {
-        visiting = &local_visiting;
-      }
-      if (visiting->count(node.text)) {
-        return false;
-      }
-      auto it = definition_by_name_.find(node.text);
-      if (it == definition_by_name_.end()) {
-        return false;
-      }
-      visiting->insert(node.text);
-      bool result = IsAnyText(it->second->body, visiting);
-      visiting->erase(node.text);
-      return result;
-    }
-    return false;
-  }
 
-  std::optional<Trigger> ExtractLazyRegexTrigger(const Node& node) const {
-    if (node.kind != Node::Kind::kRegex) {
-      return std::nullopt;
-    }
-    if (node.flags.find('i') != std::string::npos ||
-        node.flags.find_first_not_of("su") != std::string::npos) {
-      return std::nullopt;
-    }
-    std::vector<std::string> prefixes;
-    if (node.flags.find('s') != std::string::npos) {
-      prefixes = {".*"};
-    } else {
-      prefixes = {"(.|\\n)*", "(\\n|.)*", "(?:.|\\n)*", "(?:\\n|.)*", "[\\s\\S]*", "(?s:.*)"};
-    }
-    for (const std::string& prefix : prefixes) {
-      if (node.text.size() <= prefix.size() || node.text.compare(0, prefix.size(), prefix) != 0) {
-        continue;
-      }
-      auto trigger = ParseFixedRegexLiteral(node.text.substr(prefix.size()));
-      if (trigger.has_value() && !trigger->empty()) {
-        return Trigger{Trigger::Level::kString, std::move(trigger.value()), {}, node.location};
-      }
-    }
-    return std::nullopt;
-  }
+    int32_t AddTerminalFSM(const FSMWithStartEnd& fsm, const std::string& rule_hint) {
+      std::vector<int32_t> states{fsm.GetStart()};
+      std::unordered_map<int32_t, int32_t> state_rules{
+          {fsm.GetStart(), builder_.AddEmptyRuleWithHint(rule_hint + "_intersection_state")}
+      };
 
-  std::optional<Trigger> ExtractLazyTrigger(const Definition& definition) const {
-    if (definition.stop.has_value()) {
-      const Node& marker = definition.stop.value();
-      if (!IsAnyText(definition.body) || marker.kind != Node::Kind::kString ||
-          !marker.flags.empty()) {
-        return std::nullopt;
-      }
-      return Trigger{Trigger::Level::kString, marker.text, {}, definition.stop_location};
-    }
-    if (definition.suffix.has_value()) {
-      const Node& marker = definition.suffix.value();
-      if (!IsAnyText(definition.body) || marker.kind != Node::Kind::kString ||
-          !marker.flags.empty()) {
-        return std::nullopt;
-      }
-      return Trigger{Trigger::Level::kString, marker.text, {}, definition.suffix_location};
-    }
-    if (!definition.lazy) {
-      return std::nullopt;
-    }
-    const Node* body = UnwrapSingle(&definition.body);
-    if (body->kind == Node::Kind::kRegex) {
-      auto regex_trigger = ExtractLazyRegexTrigger(*body);
-      if (regex_trigger.has_value()) {
-        return regex_trigger;
-      }
-    }
-    if (definition.body.kind != Node::Kind::kSequence || definition.body.children.size() != 2 ||
-        !IsAnyText(definition.body.children[0])) {
-      return std::nullopt;
-    }
-    const Node& trigger = definition.body.children[1];
-    if (trigger.kind == Node::Kind::kString && !trigger.text.empty() && trigger.flags.empty()) {
-      return Trigger{Trigger::Level::kString, trigger.text, {}, trigger.location};
-    }
-    if (trigger.kind == Node::Kind::kSpecialToken) {
-      SpecialTokenSet token_set = ResolveSpecialToken(trigger.text, trigger.location);
-      if (token_set.excluded) {
-        RaiseLarkError(source_, trigger.location, "lazy special-token trigger cannot be negated");
-      }
-      return Trigger{Trigger::Level::kToken, "", token_set.token_ids, trigger.location};
-    }
-    return std::nullopt;
-  }
-
-  int32_t CompileLazyRule(const Definition& definition) {
-    const Node* unwrapped_body = UnwrapSingle(&definition.body);
-    if (unwrapped_body->kind == Node::Kind::kStructuralTag) {
-      RaiseLarkError(
-          source_,
-          unwrapped_body->location,
-          "%structural_tag cannot be used with lazy, suffix, or stop"
-      );
-    }
-    int32_t rule_id = rule_ids_.at(definition.name);
-    const Node* marker = definition.suffix.has_value()
-                             ? &definition.suffix.value()
-                             : (definition.stop.has_value() ? &definition.stop.value() : nullptr);
-    bool marker_has_fixed_byte_length = marker != nullptr && marker->kind == Node::Kind::kString;
-    int32_t hidden_bytes =
-        marker_has_fixed_byte_length ? static_cast<int32_t>(marker->text.size()) : 1;
-    Grammar::Impl::SuffixStopInfo suffix_stop_info;
-    if (definition.suffix.has_value()) {
-      suffix_stop_info.hidden_suffix_bytes = hidden_bytes;
-    } else if (definition.stop.has_value()) {
-      suffix_stop_info.hidden_stop_bytes = hidden_bytes;
-    }
-    if (definition.stop_capture_name.has_value()) {
-      suffix_stop_info.stop_capture_name = definition.stop_capture_name.value();
-    }
-    const Node* body = UnwrapSingle(&definition.body);
-    if (!definition.suffix.has_value() && !definition.stop.has_value() &&
-        body->kind == Node::Kind::kRegex && ExtractLazyRegexTrigger(*body).has_value()) {
-      RaiseLarkError(
-          source_,
-          definition.location,
-          "lazy regex suffix is only supported on a head used by dynamic dispatch"
-      );
-    }
-    std::optional<std::string> body_pattern;
-    std::optional<std::string> marker_pattern;
-    if (marker != nullptr && (!marker_has_fixed_byte_length || definition.max_tokens.has_value() ||
-                              definition.max_chars.has_value())) {
-      body_pattern = TerminalNodeToRegex(definition.body);
-      marker_pattern = TerminalNodeToRegex(*marker);
-      int32_t body_helper_expr =
-          CompileTerminalPattern(body_pattern.value(), definition.body.location);
-      int32_t body_helper_rule =
-          builder_.AddRuleWithHint(definition.name + "_stop_body", body_helper_expr);
-      int32_t marker_helper_expr = CompileTerminalPattern(marker_pattern.value(), marker->location);
-      int32_t marker_helper_rule =
-          builder_.AddRuleWithHint(definition.name + "_stop_marker", marker_helper_expr);
-      suffix_stop_info.body_rule_id = body_helper_rule;
-      suffix_stop_info.marker_rule_id = marker_helper_rule;
-    }
-    builder_.UpdateSuffixStopInfo(rule_id, suffix_stop_info);
-    auto trigger = ExtractLazyTrigger(definition);
-    if (!trigger.has_value()) {
-      // General committed-shortest lazy rule: compiled like a terminal (no skip insertion);
-      // the terminal-like requirement is validated after grammar optimization. suffix="s" and
-      // stop="s" both desugar to the lazy rule over (body "s"); their only difference is capture
-      // scope, represented by the metadata set above.
-      builder_.UpdateLazy(rule_id, true);
-      if (marker != nullptr) {
-        if (!body_pattern.has_value()) {
-          body_pattern = TerminalNodeToRegex(definition.body);
-          marker_pattern = TerminalNodeToRegex(*marker);
+      for (size_t state_index = 0; state_index < states.size(); ++state_index) {
+        int32_t state = states[state_index];
+        auto transitions = CollectCodepointTransitions(fsm, state);
+        for (const auto& transition : transitions) {
+          if (!state_rules.count(transition.target)) {
+            states.push_back(transition.target);
+            state_rules[transition.target] =
+                builder_.AddEmptyRuleWithHint(rule_hint + "_intersection_state");
+          }
         }
-        return CompileTerminalPattern(
-            "(?:" + body_pattern.value() + ")(?:" + marker_pattern.value() + ")",
-            definition.body.location
+
+        std::vector<int32_t> choices;
+        if (fsm.IsEndState(state)) {
+          choices.push_back(builder_.AddEmptyStr());
+        }
+        for (const auto& transition : transitions) {
+          int32_t character = builder_.AddCharacterClass({{transition.min, transition.max}});
+          choices.push_back(builder_.AddSequence(
+              {character, builder_.AddRuleRef(state_rules.at(transition.target))}
+          ));
+        }
+        int32_t body;
+        if (choices.empty()) {
+          body = builder_.AddCharacterClass({});
+        } else if (choices.size() == 1) {
+          body = choices[0];
+        } else {
+          body = builder_.AddChoices(choices);
+        }
+        builder_.UpdateRuleBody(state_rules.at(state), body);
+      }
+      return builder_.AddRuleRef(state_rules.at(fsm.GetStart()));
+    }
+
+    const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {
+      auto input_it = named_grammars_.inputs.find(name);
+      if (input_it == named_grammars_.inputs.end()) {
+        RaiseLarkError(source_, location, "unknown named grammar '@" + name + "'");
+      }
+      if (std::holds_alternative<Grammar>(input_it->second)) {
+        return std::get<Grammar>(input_it->second);
+      }
+      auto compiled_it = named_grammars_.compiled.find(name);
+      if (compiled_it != named_grammars_.compiled.end()) {
+        return compiled_it->second;
+      }
+
+      auto active_it =
+          std::find(named_grammars_.active.begin(), named_grammars_.active.end(), name);
+      if (active_it != named_grammars_.active.end()) {
+        std::ostringstream cycle;
+        for (auto it = active_it; it != named_grammars_.active.end(); ++it) {
+          if (it != active_it) {
+            cycle << " -> ";
+          }
+          cycle << "@" << *it;
+        }
+        cycle << " -> @" << name;
+        RaiseLarkError(source_, location, "circular named grammar reference: " + cycle.str());
+      }
+
+      named_grammars_.active.push_back(name);
+      try {
+        const std::string& named_source = std::get<std::string>(input_it->second);
+        auto tokens = LarkLexer(named_source).Tokenize();
+        auto document = LarkParser(named_source, std::move(tokens)).Parse();
+        Grammar compiled =
+            LarkCompiler(named_source, std::move(document), tokenizer_info_, named_grammars_)
+                .Compile();
+        auto compiled_it = named_grammars_.compiled.emplace(name, std::move(compiled)).first;
+        named_grammars_.active.pop_back();
+        return compiled_it->second;
+      } catch (const std::exception& error) {
+        named_grammars_.active.pop_back();
+        RaiseLarkError(
+            source_,
+            location,
+            "failed to compile named grammar '@" + name + "': " + std::string(error.what())
         );
       }
-      return CompileNode(definition.body, definition.name, true);
     }
-    int32_t empty_rule = builder_.AddRuleWithHint("lark_lazy_end", builder_.AddEmptyStr());
-    int32_t result;
-    if (trigger->level == Trigger::Level::kString) {
-      result = builder_.AddTagDispatch({{{trigger->string, empty_rule}}, false, {}});
-    } else {
-      Grammar::Impl::TokenTagDispatch dispatch;
-      for (int32_t token_id : trigger->token_ids) {
-        dispatch.trigger_rule_pairs.push_back({token_id, empty_rule});
+
+    int32_t CompileNode(
+        const Node& node, const std::string& rule_hint, bool terminal_mode, bool append_skip = true
+    ) {
+      switch (node.kind) {
+        case Node::Kind::kSequence: {
+          if (node.children.empty()) {
+            return builder_.AddEmptyStr();
+          }
+          std::vector<int32_t> elements;
+          elements.reserve(node.children.size());
+          for (const Node& child : node.children) {
+            elements.push_back(CompileNode(child, rule_hint, terminal_mode, append_skip));
+          }
+          return elements.size() == 1 ? elements[0] : builder_.AddSequence(elements);
+        }
+        case Node::Kind::kChoice: {
+          std::vector<int32_t> choices;
+          choices.reserve(node.children.size());
+          for (const Node& child : node.children) {
+            choices.push_back(CompileNode(child, rule_hint, terminal_mode, append_skip));
+          }
+          return choices.size() == 1 ? choices[0] : builder_.AddChoices(choices);
+        }
+        case Node::Kind::kRepeat: {
+          int32_t child =
+              CompileNode(node.children[0], rule_hint + "_repeat", terminal_mode, append_skip);
+          return builder_.AddRepeatFromExpr(
+              rule_hint + "_repeat", child, node.min_repeat, node.max_repeat
+          );
+        }
+        case Node::Kind::kName: {
+          auto definition_it = definition_by_name_.find(node.text);
+          if (definition_it == definition_by_name_.end()) {
+            RaiseLarkError(source_, node.location, "unknown name '" + node.text + "'");
+          }
+          if (terminal_mode && !definition_it->second->is_terminal) {
+            RaiseLarkError(
+                source_, node.location, "terminal cannot reference rule '" + node.text + "'"
+            );
+          }
+          int32_t result = builder_.AddRuleRef(rule_ids_.at(node.text));
+          // Lazy rules are compiled like terminals (lexemes), so they also take a trailing skip.
+          // Temperature rules are also compiled like terminals.
+          bool is_lexeme = definition_it->second->is_terminal ||
+                           HasLazySemantics(*definition_it->second) ||
+                           definition_it->second->temperature.has_value();
+          return !terminal_mode && append_skip && is_lexeme ? AppendSkip(result) : result;
+        }
+        case Node::Kind::kString: {
+          int32_t result = CompileStringLiteral(node);
+          return !terminal_mode && append_skip && !node.text.empty() ? AppendSkip(result) : result;
+        }
+        case Node::Kind::kRange: {
+          auto begin = ParseUTF8(node.text.c_str());
+          auto end = ParseUTF8(node.text2.c_str());
+          if (begin.size() != 1 || end.size() != 1 || begin[0] == CharHandlingError::kInvalidUTF8 ||
+              end[0] == CharHandlingError::kInvalidUTF8) {
+            RaiseLarkError(
+                source_, node.location, "character range endpoints must be one character"
+            );
+          }
+          if (begin[0] > end[0]) {
+            RaiseLarkError(source_, node.location, "character range start must not exceed end");
+          }
+          if (allow_invalid_utf8_ && (begin[0] > 0x7F || end[0] > 0x7F)) {
+            RaiseLarkError(
+                source_,
+                node.location,
+                "non-ASCII character ranges are not available when allow_invalid_utf8 is enabled"
+            );
+          }
+          int32_t result = builder_.AddCharacterClass({{begin[0], end[0]}});
+          return terminal_mode || !append_skip ? result : AppendSkip(result);
+        }
+        case Node::Kind::kRegex: {
+          RegexFlags flags = ParseRegexFlags(node);
+          std::string pattern = RewriteRegexDots(node.text, flags.dot_all);
+          if (allow_invalid_utf8_) {
+            if (flags.case_insensitive) {
+              pattern = "(?i)" + pattern;
+            }
+            int32_t regex_rule_id = builder_.AddRuleWithHint(
+                rule_hint + "_regex", CompileTerminalPattern(pattern, node.location)
+            );
+            int32_t result = builder_.AddRuleRef(regex_rule_id);
+            return terminal_mode || !append_skip ? result : AppendSkip(result);
+          }
+          if (flags.case_insensitive) {
+            // The FSM regex engine handles the (?i) prefix with ASCII case folding. Validate the
+            // pattern eagerly so that errors carry the source location.
+            std::string flagged_pattern = "(?i)" + pattern;
+            auto matches_empty = RegexFSMBuilder::MatchesEmpty(flagged_pattern);
+            if (matches_empty.IsErr()) {
+              RaiseLarkError(
+                  source_,
+                  node.location,
+                  "failed to compile regular expression: " +
+                      std::string(std::move(matches_empty).UnwrapErr().what())
+              );
+            }
+            int32_t regex_rule_id =
+                builder_.AddRuleWithHint(rule_hint + "_regex", builder_.AddRegex(flagged_pattern));
+            int32_t result = builder_.AddRuleRef(regex_rule_id);
+            return terminal_mode || !append_skip ? result : AppendSkip(result);
+          }
+          try {
+            int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromRegex(pattern));
+            int32_t result = builder_.AddRuleRef(root);
+            return terminal_mode || !append_skip ? result : AppendSkip(result);
+          } catch (const std::exception& error) {
+            RaiseLarkError(
+                source_,
+                node.location,
+                "failed to compile regular expression: " + std::string(error.what())
+            );
+          }
+        }
+        case Node::Kind::kJson: {
+          if (terminal_mode) {
+            RaiseLarkError(source_, node.location, "%json cannot be used in terminals");
+          }
+          try {
+            int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromJSONSchema(node.text));
+            int32_t result = builder_.AddRuleRef(root);
+            return terminal_mode || !append_skip ? result : AppendSkip(result);
+          } catch (const std::exception& error) {
+            RaiseLarkError(
+                source_,
+                node.location,
+                "failed to compile inline JSON schema: " + std::string(error.what())
+            );
+          }
+        }
+        case Node::Kind::kStructuralTag: {
+          if (terminal_mode) {
+            RaiseLarkError(source_, node.location, "%structural_tag cannot be used in terminals");
+          }
+          auto root_it = structural_tag_roots_.find(node.text);
+          if (root_it == structural_tag_roots_.end()) {
+            std::optional<int32_t> root;
+            std::string error_message;
+            try {
+              auto converted = Grammar::FromStructuralTag(node.text, tokenizer_info_);
+              if (std::holds_alternative<StructuralTagError>(converted)) {
+                error_message = GetMessageFromVariantError(std::get<StructuralTagError>(converted));
+              } else {
+                root = SubGrammarAdder::Apply(&builder_, std::get<Grammar>(converted));
+              }
+            } catch (const std::exception& error) {
+              error_message = error.what();
+            }
+            if (!root.has_value()) {
+              RaiseLarkError(
+                  source_,
+                  node.location,
+                  "failed to compile inline structural tag: " + error_message
+              );
+            }
+            root_it = structural_tag_roots_.emplace(node.text, root.value()).first;
+          }
+          int32_t result = builder_.AddRuleRef(root_it->second);
+          return append_skip ? AppendSkip(result) : result;
+        }
+        case Node::Kind::kNestedLark: {
+          if (terminal_mode) {
+            RaiseLarkError(source_, node.location, "nested %lark cannot be used in terminals");
+          }
+          try {
+            LarkCompiler compiler(source_, *node.nested, tokenizer_info_, named_grammars_);
+            int32_t root = SubGrammarAdder::Apply(&builder_, compiler.Compile());
+            int32_t result = builder_.AddRuleRef(root);
+            return terminal_mode || !append_skip ? result : AppendSkip(result);
+          } catch (const std::exception& error) {
+            RaiseLarkError(
+                source_,
+                node.location,
+                "failed to compile nested Lark grammar: " + std::string(error.what())
+            );
+          }
+        }
+        case Node::Kind::kSpecialToken: {
+          if (terminal_mode) {
+            RaiseLarkError(source_, node.location, "special tokens cannot be used in terminals");
+          }
+          SpecialTokenSet token_set = ResolveSpecialToken(node.text, node.location);
+          int32_t result = token_set.excluded ? builder_.AddExcludeTokenSet(token_set.token_ids)
+                                              : builder_.AddTokenSet(token_set.token_ids);
+          return append_skip ? AppendSkip(result) : result;
+        }
+        case Node::Kind::kRegexExt: {
+          int32_t result = CompileStructuredRegex(node, rule_hint);
+          return terminal_mode || !append_skip ? result : AppendSkip(result);
+        }
+        case Node::Kind::kGrammarRef: {
+          if (terminal_mode) {
+            RaiseLarkError(source_, node.location, "named grammars cannot be used in terminals");
+          }
+          std::string name = node.text.substr(1);
+          auto root_it = named_grammar_roots_.find(name);
+          if (root_it == named_grammar_roots_.end()) {
+            int32_t root =
+                SubGrammarAdder::Apply(&builder_, ResolveNamedGrammar(name, node.location));
+            root_it = named_grammar_roots_.emplace(name, root).first;
+          }
+          int32_t result = builder_.AddRuleRef(root_it->second);
+          return append_skip ? AppendSkip(result) : result;
+        }
+        case Node::Kind::kIntersection: {
+          if (!terminal_mode) {
+            RaiseLarkError(source_, node.location, "'&' is only supported in terminal definitions");
+          }
+          auto fsm = TerminalNodeToFSM(node);
+          if (fsm.IsErr()) {
+            auto error = std::move(fsm).UnwrapErr();
+            RaiseLarkError(
+                source_,
+                node.location,
+                "failed to compile terminal intersection: " + std::string(error.what())
+            );
+          }
+          return AddTerminalFSM(std::move(fsm).Unwrap(), rule_hint);
+        }
+        case Node::Kind::kNot:
+          RaiseLarkError(
+              source_, node.location, "regular-expression complement '~' is not supported"
+          );
+        case Node::Kind::kNever: {
+          if (never_rule_id_ == -1) {
+            never_rule_id_ = builder_.AddEmptyRuleWithHint("lark_never");
+            builder_.UpdateRuleBody(never_rule_id_, builder_.AddRuleRef(never_rule_id_));
+          }
+          return builder_.AddRuleRef(never_rule_id_);
+        }
       }
-      dispatch.loop_after_dispatch = false;
-      result = builder_.AddTokenTagDispatch(dispatch);
+      RaiseLarkError(source_, node.location, "unsupported grammar node");
     }
-    return AppendSkip(result);
-  }
 
-  static std::vector<Node> FlattenSequence(const Node& node) {
-    if (node.kind == Node::Kind::kSequence) {
-      return node.children;
+    int32_t AppendSkip(int32_t expression) {
+      if (skip_rule_id_ == -1) {
+        return expression;
+      }
+      return builder_.AddSequence({expression, builder_.AddRuleRef(skip_rule_id_)});
     }
-    return {node};
-  }
 
-  std::optional<int32_t> CompileDynamicStart(const Definition& start) {
-    std::unordered_set<std::string> unused_rules;
-    std::vector<Node> start_elements = FlattenSequence(start.body);
-    if (start_elements.size() != 2) {
+    /*! \brief Compile a rule with a token or character budget. */
+    int32_t CompileBudgetRule(const Definition& definition) {
+      int32_t rule_id = rule_ids_.at(definition.name);
+      if (definition.max_tokens.has_value()) {
+        builder_.UpdateMaxTokens(rule_id, definition.max_tokens.value());
+      }
+      if (definition.max_chars.has_value()) {
+        builder_.UpdateMaxChars(rule_id, definition.max_chars.value());
+      }
+      if (HasLazySemantics(definition)) {
+        return CompileLazyRule(definition);
+      }
+      return CompileNode(definition.body, definition.name, false);
+    }
+
+    SpecialTokenSet ResolveSpecialToken(const std::string& token, const Location& location) const {
+      if (token.size() >= 4 && token.substr(0, 2) == "<[" &&
+          token.substr(token.size() - 2) == "]>") {
+        std::string contents = token.substr(2, token.size() - 4);
+        SpecialTokenSet result;
+        if (!contents.empty() && contents[0] == '^') {
+          result.excluded = true;
+          contents.erase(contents.begin());
+        }
+        if (contents == "*") {
+          if (result.excluded) {
+            RaiseLarkError(source_, location, "negated wildcard special token is not supported");
+          }
+          if (!tokenizer_info_.has_value()) {
+            RaiseLarkError(source_, location, "wildcard special token requires tokenizer_info");
+          }
+          result.token_ids.reserve(tokenizer_info_->GetVocabSize());
+          for (int32_t token_id = 0; token_id < tokenizer_info_->GetVocabSize(); ++token_id) {
+            result.token_ids.push_back(token_id);
+          }
+          return result;
+        }
+        if (contents.find('*') != std::string::npos) {
+          RaiseLarkError(source_, location, "wildcard cannot be mixed with token ranges");
+        }
+        size_t offset = 0;
+        while (offset <= contents.size()) {
+          size_t comma = contents.find(',', offset);
+          std::string range = Trim(contents.substr(offset, comma - offset));
+          if (!range.empty()) {
+            size_t dash = range.find('-');
+            if (dash != std::string::npos && range.find('-', dash + 1) != std::string::npos) {
+              RaiseLarkError(
+                  source_, location, "invalid numeric special-token range '" + range + "'"
+              );
+            }
+            int64_t first;
+            int64_t last;
+            try {
+              auto parse_token_id = [](const std::string& value) {
+                std::string trimmed = Trim(value);
+                size_t parsed = 0;
+                int64_t result = std::stoll(trimmed, &parsed);
+                if (parsed != trimmed.size()) {
+                  throw std::invalid_argument("trailing characters");
+                }
+                return result;
+              };
+              first = parse_token_id(range.substr(0, dash));
+              last = dash == std::string::npos ? first : parse_token_id(range.substr(dash + 1));
+            } catch (const std::exception&) {
+              RaiseLarkError(
+                  source_, location, "invalid numeric special-token range '" + range + "'"
+              );
+            }
+            if (first < 0 || last < first || last > std::numeric_limits<int32_t>::max()) {
+              RaiseLarkError(
+                  source_, location, "invalid numeric special-token range '" + range + "'"
+              );
+            }
+            if (last - first > 1'000'000) {
+              RaiseLarkError(source_, location, "special-token range is too large");
+            }
+            for (int64_t token_id = first; token_id <= last; ++token_id) {
+              result.token_ids.push_back(static_cast<int32_t>(token_id));
+            }
+          }
+          if (comma == std::string::npos) {
+            break;
+          }
+          offset = comma + 1;
+        }
+        if (result.token_ids.empty()) {
+          RaiseLarkError(source_, location, "empty numeric special-token range");
+        }
+        std::sort(result.token_ids.begin(), result.token_ids.end());
+        result.token_ids.erase(
+            std::unique(result.token_ids.begin(), result.token_ids.end()), result.token_ids.end()
+        );
+        return result;
+      }
+
+      if (!tokenizer_info_.has_value()) {
+        RaiseLarkError(
+            source_, location, "named special token " + token + " requires tokenizer_info"
+        );
+      }
+      SpecialTokenSet result;
+      const auto& decoded_vocab = tokenizer_info_->GetDecodedVocab();
+      for (int32_t token_id = 0; token_id < static_cast<int32_t>(decoded_vocab.size());
+           ++token_id) {
+        if (decoded_vocab[token_id] == token) {
+          result.token_ids.push_back(token_id);
+        }
+      }
+      if (result.token_ids.empty()) {
+        RaiseLarkError(source_, location, "unknown special token " + token);
+      }
+      return result;
+    }
+
+    static const Node* UnwrapSingle(const Node* node) {
+      while (node->kind == Node::Kind::kSequence && node->children.size() == 1) {
+        node = &node->children[0];
+      }
+      return node;
+    }
+
+    bool IsAnyText(const Node& node, std::unordered_set<std::string>* visiting = nullptr) const {
+      if (node.kind == Node::Kind::kRegex) {
+        std::string pattern;
+        for (char c : node.text) {
+          if (c != ' ' && c != '\t' && c != '\r') {
+            pattern.push_back(c);
+          }
+        }
+        if (node.flags.find_first_not_of("isu") != std::string::npos) {
+          return false;
+        }
+        if (node.flags.find('s') != std::string::npos) {
+          return pattern == ".*";
+        }
+        return pattern == "(.|\\n)*" || pattern == "(\\n|.)*" || pattern == "(?s:.*)" ||
+               pattern == "(?:.|\\n)*" || pattern == "(?:\\n|.)*" || pattern == "[\\s\\S]*";
+      }
+      if (node.kind == Node::Kind::kSequence && node.children.size() == 1) {
+        return IsAnyText(node.children[0], visiting);
+      }
+      if (node.kind == Node::Kind::kName) {
+        std::unordered_set<std::string> local_visiting;
+        if (visiting == nullptr) {
+          visiting = &local_visiting;
+        }
+        if (visiting->count(node.text)) {
+          return false;
+        }
+        auto it = definition_by_name_.find(node.text);
+        if (it == definition_by_name_.end()) {
+          return false;
+        }
+        visiting->insert(node.text);
+        bool result = IsAnyText(it->second->body, visiting);
+        visiting->erase(node.text);
+        return result;
+      }
+      return false;
+    }
+
+    std::optional<Trigger> ExtractLazyRegexTrigger(const Node& node) const {
+      if (node.kind != Node::Kind::kRegex) {
+        return std::nullopt;
+      }
+      if (node.flags.find('i') != std::string::npos ||
+          node.flags.find_first_not_of("su") != std::string::npos) {
+        return std::nullopt;
+      }
+      std::vector<std::string> prefixes;
+      if (node.flags.find('s') != std::string::npos) {
+        prefixes = {".*"};
+      } else {
+        prefixes = {"(.|\\n)*", "(\\n|.)*", "(?:.|\\n)*", "(?:\\n|.)*", "[\\s\\S]*", "(?s:.*)"};
+      }
+      for (const std::string& prefix : prefixes) {
+        if (node.text.size() <= prefix.size() || node.text.compare(0, prefix.size(), prefix) != 0) {
+          continue;
+        }
+        auto trigger = ParseFixedRegexLiteral(node.text.substr(prefix.size()));
+        if (trigger.has_value() && !trigger->empty()) {
+          return Trigger{Trigger::Level::kString, std::move(trigger.value()), {}, node.location};
+        }
+      }
       return std::nullopt;
     }
-    const Node* loop = UnwrapSingle(&start_elements[0]);
-    if (loop->kind != Node::Kind::kRepeat || loop->min_repeat != 0 || loop->max_repeat != -1) {
-      return std::nullopt;
-    }
-    const Node* loop_body = UnwrapSingle(&loop->children[0]);
-    std::vector<std::string> tool_names;
-    if (loop_body->kind == Node::Kind::kChoice) {
-      for (const Node& alternative : loop_body->children) {
-        const Node* name = UnwrapSingle(&alternative);
-        if (name->kind != Node::Kind::kName) {
+
+    std::optional<Trigger> ExtractLazyTrigger(const Definition& definition) const {
+      if (definition.stop.has_value()) {
+        const Node& marker = definition.stop.value();
+        if (!IsAnyText(definition.body) || marker.kind != Node::Kind::kString ||
+            !marker.flags.empty()) {
           return std::nullopt;
         }
-        tool_names.push_back(name->text);
+        return Trigger{Trigger::Level::kString, marker.text, {}, definition.stop_location};
       }
-    } else if (loop_body->kind == Node::Kind::kName) {
-      tool_names.push_back(loop_body->text);
-    } else {
-      return std::nullopt;
-    }
-
-    const Node* tail_name = UnwrapSingle(&start_elements[1]);
-    if (tail_name->kind != Node::Kind::kName) {
-      return std::nullopt;
-    }
-    auto tail_it = definition_by_name_.find(tail_name->text);
-    if (tail_it == definition_by_name_.end() || !IsAnyText(tail_it->second->body)) {
-      return std::nullopt;
-    }
-    unused_rules.insert(tail_name->text);
-
-    std::vector<DynamicAlternative> alternatives;
-    for (const std::string& tool_name : tool_names) {
-      auto tool_it = definition_by_name_.find(tool_name);
-      if (tool_it == definition_by_name_.end() || tool_it->second->is_terminal) {
+      if (definition.suffix.has_value()) {
+        const Node& marker = definition.suffix.value();
+        if (!IsAnyText(definition.body) || marker.kind != Node::Kind::kString ||
+            !marker.flags.empty()) {
+          return std::nullopt;
+        }
+        return Trigger{Trigger::Level::kString, marker.text, {}, definition.suffix_location};
+      }
+      if (!definition.lazy) {
         return std::nullopt;
       }
-      unused_rules.insert(tool_name);
-      std::vector<Node> tool_elements = FlattenSequence(tool_it->second->body);
-      if (tool_elements.empty()) {
+      const Node* body = UnwrapSingle(&definition.body);
+      if (body->kind == Node::Kind::kRegex) {
+        auto regex_trigger = ExtractLazyRegexTrigger(*body);
+        if (regex_trigger.has_value()) {
+          return regex_trigger;
+        }
+      }
+      if (definition.body.kind != Node::Kind::kSequence || definition.body.children.size() != 2 ||
+          !IsAnyText(definition.body.children[0])) {
+        return std::nullopt;
+      }
+      const Node& trigger = definition.body.children[1];
+      if (trigger.kind == Node::Kind::kString && !trigger.text.empty() && trigger.flags.empty()) {
+        return Trigger{Trigger::Level::kString, trigger.text, {}, trigger.location};
+      }
+      if (trigger.kind == Node::Kind::kSpecialToken) {
+        SpecialTokenSet token_set = ResolveSpecialToken(trigger.text, trigger.location);
+        if (token_set.excluded) {
+          RaiseLarkError(source_, trigger.location, "lazy special-token trigger cannot be negated");
+        }
+        return Trigger{Trigger::Level::kToken, "", token_set.token_ids, trigger.location};
+      }
+      return std::nullopt;
+    }
+
+    int32_t CompileLazyRule(const Definition& definition) {
+      const Node* unwrapped_body = UnwrapSingle(&definition.body);
+      if (unwrapped_body->kind == Node::Kind::kStructuralTag) {
+        RaiseLarkError(
+            source_,
+            unwrapped_body->location,
+            "%structural_tag cannot be used with lazy, suffix, or stop"
+        );
+      }
+      int32_t rule_id = rule_ids_.at(definition.name);
+      const Node* marker = definition.suffix.has_value()
+                               ? &definition.suffix.value()
+                               : (definition.stop.has_value() ? &definition.stop.value() : nullptr);
+      bool marker_has_fixed_byte_length = marker != nullptr && marker->kind == Node::Kind::kString;
+      int32_t hidden_bytes =
+          marker_has_fixed_byte_length ? static_cast<int32_t>(marker->text.size()) : 1;
+      Grammar::Impl::SuffixStopInfo suffix_stop_info;
+      if (definition.suffix.has_value()) {
+        suffix_stop_info.hidden_suffix_bytes = hidden_bytes;
+      } else if (definition.stop.has_value()) {
+        suffix_stop_info.hidden_stop_bytes = hidden_bytes;
+      }
+      if (definition.stop_capture_name.has_value()) {
+        suffix_stop_info.stop_capture_name = definition.stop_capture_name.value();
+      }
+      const Node* body = UnwrapSingle(&definition.body);
+      if (!definition.suffix.has_value() && !definition.stop.has_value() &&
+          body->kind == Node::Kind::kRegex && ExtractLazyRegexTrigger(*body).has_value()) {
+        RaiseLarkError(
+            source_,
+            definition.location,
+            "lazy regex suffix is only supported on a head used by dynamic dispatch"
+        );
+      }
+      std::optional<std::string> body_pattern;
+      std::optional<std::string> marker_pattern;
+      if (marker != nullptr &&
+          (!marker_has_fixed_byte_length || definition.max_tokens.has_value() ||
+           definition.max_chars.has_value())) {
+        body_pattern = TerminalNodeToRegex(definition.body);
+        marker_pattern = TerminalNodeToRegex(*marker);
+        int32_t body_helper_expr =
+            CompileTerminalPattern(body_pattern.value(), definition.body.location);
+        int32_t body_helper_rule =
+            builder_.AddRuleWithHint(definition.name + "_stop_body", body_helper_expr);
+        int32_t marker_helper_expr =
+            CompileTerminalPattern(marker_pattern.value(), marker->location);
+        int32_t marker_helper_rule =
+            builder_.AddRuleWithHint(definition.name + "_stop_marker", marker_helper_expr);
+        suffix_stop_info.body_rule_id = body_helper_rule;
+        suffix_stop_info.marker_rule_id = marker_helper_rule;
+      }
+      builder_.UpdateSuffixStopInfo(rule_id, suffix_stop_info);
+      auto trigger = ExtractLazyTrigger(definition);
+      if (!trigger.has_value()) {
+        // General committed-shortest lazy rule: compiled like a terminal (no skip insertion);
+        // the terminal-like requirement is validated after grammar optimization. suffix="s" and
+        // stop="s" both desugar to the lazy rule over (body "s"); their only difference is capture
+        // scope, represented by the metadata set above.
+        builder_.UpdateLazy(rule_id, true);
+        if (marker != nullptr) {
+          if (!body_pattern.has_value()) {
+            body_pattern = TerminalNodeToRegex(definition.body);
+            marker_pattern = TerminalNodeToRegex(*marker);
+          }
+          return CompileTerminalPattern(
+              "(?:" + body_pattern.value() + ")(?:" + marker_pattern.value() + ")",
+              definition.body.location
+          );
+        }
+        return CompileNode(definition.body, definition.name, true);
+      }
+      int32_t empty_rule = builder_.AddRuleWithHint("lark_lazy_end", builder_.AddEmptyStr());
+      int32_t result;
+      if (trigger->level == Trigger::Level::kString) {
+        result = builder_.AddTagDispatch({{{trigger->string, empty_rule}}, false, {}});
+      } else {
+        Grammar::Impl::TokenTagDispatch dispatch;
+        for (int32_t token_id : trigger->token_ids) {
+          dispatch.trigger_rule_pairs.push_back({token_id, empty_rule});
+        }
+        dispatch.loop_after_dispatch = false;
+        result = builder_.AddTokenTagDispatch(dispatch);
+      }
+      return AppendSkip(result);
+    }
+
+    static std::vector<Node> FlattenSequence(const Node& node) {
+      if (node.kind == Node::Kind::kSequence) {
+        return node.children;
+      }
+      return {node};
+    }
+
+    std::optional<int32_t> CompileDynamicStart(const Definition& start) {
+      std::unordered_set<std::string> unused_rules;
+      std::vector<Node> start_elements = FlattenSequence(start.body);
+      if (start_elements.size() != 2) {
+        return std::nullopt;
+      }
+      const Node* loop = UnwrapSingle(&start_elements[0]);
+      if (loop->kind != Node::Kind::kRepeat || loop->min_repeat != 0 || loop->max_repeat != -1) {
+        return std::nullopt;
+      }
+      const Node* loop_body = UnwrapSingle(&loop->children[0]);
+      std::vector<std::string> tool_names;
+      if (loop_body->kind == Node::Kind::kChoice) {
+        for (const Node& alternative : loop_body->children) {
+          const Node* name = UnwrapSingle(&alternative);
+          if (name->kind != Node::Kind::kName) {
+            return std::nullopt;
+          }
+          tool_names.push_back(name->text);
+        }
+      } else if (loop_body->kind == Node::Kind::kName) {
+        tool_names.push_back(loop_body->text);
+      } else {
         return std::nullopt;
       }
 
-      std::optional<Trigger> trigger;
-      int32_t marker_event_rule_id = -1;
-      size_t remainder_begin = 0;
-      const Node* first = UnwrapSingle(&tool_elements[0]);
-      if (first->kind == Node::Kind::kName) {
-        auto head_it = definition_by_name_.find(first->text);
-        if (head_it != definition_by_name_.end()) {
-          trigger = ExtractLazyTrigger(*head_it->second);
-          if (trigger.has_value()) {
-            unused_rules.insert(first->text);
-            remainder_begin = 1;
-            const Definition& head = *head_it->second;
-            if (head.stop.has_value() || head.stop_capture_name.has_value()) {
-              // The dispatch FSM consumes the trigger before entering the remainder. Insert a
-              // zero-width rule there so capture materialization can recover that preceding
-              // marker without giving up the deterministic dispatch path.
-              int32_t event_expr = builder_.AddEmptyStr();
-              marker_event_rule_id =
-                  builder_.AddRuleWithHint(head.name + "_dynamic_marker", event_expr);
-              int32_t marker_expr = builder_.AddByteString(trigger->string);
-              int32_t marker_rule_id =
-                  builder_.AddRuleWithHint(head.name + "_dynamic_marker_text", marker_expr);
-              Grammar::Impl::SuffixStopInfo suffix_stop_info;
-              suffix_stop_info.body_rule_id = marker_event_rule_id;
-              suffix_stop_info.marker_rule_id = marker_rule_id;
-              int32_t hidden_bytes = static_cast<int32_t>(trigger->string.size());
-              if (head.stop.has_value()) {
-                suffix_stop_info.hidden_stop_bytes = hidden_bytes;
-              } else {
-                suffix_stop_info.hidden_suffix_bytes = hidden_bytes;
+      const Node* tail_name = UnwrapSingle(&start_elements[1]);
+      if (tail_name->kind != Node::Kind::kName) {
+        return std::nullopt;
+      }
+      auto tail_it = definition_by_name_.find(tail_name->text);
+      if (tail_it == definition_by_name_.end() || !IsAnyText(tail_it->second->body)) {
+        return std::nullopt;
+      }
+      unused_rules.insert(tail_name->text);
+
+      std::vector<DynamicAlternative> alternatives;
+      for (const std::string& tool_name : tool_names) {
+        auto tool_it = definition_by_name_.find(tool_name);
+        if (tool_it == definition_by_name_.end() || tool_it->second->is_terminal) {
+          return std::nullopt;
+        }
+        unused_rules.insert(tool_name);
+        std::vector<Node> tool_elements = FlattenSequence(tool_it->second->body);
+        if (tool_elements.empty()) {
+          return std::nullopt;
+        }
+
+        std::optional<Trigger> trigger;
+        int32_t marker_event_rule_id = -1;
+        size_t remainder_begin = 0;
+        const Node* first = UnwrapSingle(&tool_elements[0]);
+        if (first->kind == Node::Kind::kName) {
+          auto head_it = definition_by_name_.find(first->text);
+          if (head_it != definition_by_name_.end()) {
+            trigger = ExtractLazyTrigger(*head_it->second);
+            if (trigger.has_value()) {
+              unused_rules.insert(first->text);
+              remainder_begin = 1;
+              const Definition& head = *head_it->second;
+              if (head.stop.has_value() || head.stop_capture_name.has_value()) {
+                // The dispatch FSM consumes the trigger before entering the remainder. Insert a
+                // zero-width rule there so capture materialization can recover that preceding
+                // marker without giving up the deterministic dispatch path.
+                int32_t event_expr = builder_.AddEmptyStr();
+                marker_event_rule_id =
+                    builder_.AddRuleWithHint(head.name + "_dynamic_marker", event_expr);
+                int32_t marker_expr = builder_.AddByteString(trigger->string);
+                int32_t marker_rule_id =
+                    builder_.AddRuleWithHint(head.name + "_dynamic_marker_text", marker_expr);
+                Grammar::Impl::SuffixStopInfo suffix_stop_info;
+                suffix_stop_info.body_rule_id = marker_event_rule_id;
+                suffix_stop_info.marker_rule_id = marker_rule_id;
+                int32_t hidden_bytes = static_cast<int32_t>(trigger->string.size());
+                if (head.stop.has_value()) {
+                  suffix_stop_info.hidden_stop_bytes = hidden_bytes;
+                } else {
+                  suffix_stop_info.hidden_suffix_bytes = hidden_bytes;
+                }
+                if (head.stop_capture_name.has_value()) {
+                  suffix_stop_info.stop_capture_name = head.stop_capture_name.value();
+                }
+                builder_.UpdateSuffixStopInfo(marker_event_rule_id, suffix_stop_info);
               }
-              if (head.stop_capture_name.has_value()) {
-                suffix_stop_info.stop_capture_name = head.stop_capture_name.value();
-              }
-              builder_.UpdateSuffixStopInfo(marker_event_rule_id, suffix_stop_info);
             }
           }
         }
-      }
-      if (!trigger.has_value() && tool_elements.size() >= 2 && IsAnyText(tool_elements[0])) {
-        const Node* token_trigger = UnwrapSingle(&tool_elements[1]);
-        if (token_trigger->kind == Node::Kind::kSpecialToken) {
-          SpecialTokenSet token_set =
-              ResolveSpecialToken(token_trigger->text, token_trigger->location);
-          if (token_set.excluded) {
-            RaiseLarkError(
-                source_, token_trigger->location, "dynamic special-token trigger cannot be negated"
-            );
+        if (!trigger.has_value() && tool_elements.size() >= 2 && IsAnyText(tool_elements[0])) {
+          const Node* token_trigger = UnwrapSingle(&tool_elements[1]);
+          if (token_trigger->kind == Node::Kind::kSpecialToken) {
+            SpecialTokenSet token_set =
+                ResolveSpecialToken(token_trigger->text, token_trigger->location);
+            if (token_set.excluded) {
+              RaiseLarkError(
+                  source_,
+                  token_trigger->location,
+                  "dynamic special-token trigger cannot be negated"
+              );
+            }
+            trigger =
+                Trigger{Trigger::Level::kToken, "", token_set.token_ids, token_trigger->location};
+            remainder_begin = 2;
           }
-          trigger =
-              Trigger{Trigger::Level::kToken, "", token_set.token_ids, token_trigger->location};
-          remainder_begin = 2;
         }
-      }
-      if (!trigger.has_value()) {
-        return std::nullopt;
-      }
+        if (!trigger.has_value()) {
+          return std::nullopt;
+        }
 
-      Node remainder;
-      remainder.kind = Node::Kind::kSequence;
-      remainder.location = tool_it->second->location;
-      remainder.children.assign(
-          tool_elements.begin() + static_cast<std::ptrdiff_t>(remainder_begin), tool_elements.end()
-      );
-      alternatives.push_back(
-          {std::move(trigger.value()), std::move(remainder), marker_event_rule_id}
-      );
-    }
-
-    if (alternatives.empty()) {
-      return std::nullopt;
-    }
-    Trigger::Level level = alternatives[0].trigger.level;
-    for (const auto& alternative : alternatives) {
-      if (alternative.trigger.level != level) {
-        RaiseLarkError(
-            source_,
-            start.location,
-            "a dynamic Lark start rule cannot mix string and token triggers"
+        Node remainder;
+        remainder.kind = Node::Kind::kSequence;
+        remainder.location = tool_it->second->location;
+        remainder.children.assign(
+            tool_elements.begin() + static_cast<std::ptrdiff_t>(remainder_begin),
+            tool_elements.end()
+        );
+        alternatives.push_back(
+            {std::move(trigger.value()), std::move(remainder), marker_event_rule_id}
         );
       }
-    }
 
-    if (level == Trigger::Level::kString) {
-      std::unordered_map<std::string, std::vector<const DynamicAlternative*>> grouped;
-      std::vector<std::string> trigger_order;
-      for (const auto& alternative : alternatives) {
-        if (!grouped.count(alternative.trigger.string)) {
-          trigger_order.push_back(alternative.trigger.string);
-        }
-        grouped[alternative.trigger.string].push_back(&alternative);
+      if (alternatives.empty()) {
+        return std::nullopt;
       }
-      Grammar::Impl::TagDispatch dispatch;
-      dispatch.loop_after_dispatch = true;
-      for (const std::string& trigger : trigger_order) {
-        std::vector<int32_t> remainder_choices;
-        for (const DynamicAlternative* alternative : grouped.at(trigger)) {
-          int32_t remainder = CompileNode(alternative->remainder, "lark_dynamic_body", false);
-          if (alternative->marker_event_rule_id >= 0) {
-            remainder = builder_.AddSequence(
-                {builder_.AddRuleRef(alternative->marker_event_rule_id), remainder}
-            );
+      Trigger::Level level = alternatives[0].trigger.level;
+      for (const auto& alternative : alternatives) {
+        if (alternative.trigger.level != level) {
+          RaiseLarkError(
+              source_,
+              start.location,
+              "a dynamic Lark start rule cannot mix string and token triggers"
+          );
+        }
+      }
+
+      if (level == Trigger::Level::kString) {
+        std::unordered_map<std::string, std::vector<const DynamicAlternative*>> grouped;
+        std::vector<std::string> trigger_order;
+        for (const auto& alternative : alternatives) {
+          if (!grouped.count(alternative.trigger.string)) {
+            trigger_order.push_back(alternative.trigger.string);
           }
-          remainder_choices.push_back(remainder);
+          grouped[alternative.trigger.string].push_back(&alternative);
+        }
+        Grammar::Impl::TagDispatch dispatch;
+        dispatch.loop_after_dispatch = true;
+        for (const std::string& trigger : trigger_order) {
+          std::vector<int32_t> remainder_choices;
+          for (const DynamicAlternative* alternative : grouped.at(trigger)) {
+            int32_t remainder = CompileNode(alternative->remainder, "lark_dynamic_body", false);
+            if (alternative->marker_event_rule_id >= 0) {
+              remainder = builder_.AddSequence(
+                  {builder_.AddRuleRef(alternative->marker_event_rule_id), remainder}
+              );
+            }
+            remainder_choices.push_back(remainder);
+          }
+          int32_t body = remainder_choices.size() == 1 ? remainder_choices[0]
+                                                       : builder_.AddChoices(remainder_choices);
+          int32_t body_rule = builder_.AddRuleWithHint("lark_dynamic_body", body);
+          dispatch.tag_rule_pairs.push_back({trigger, body_rule});
+        }
+        dynamic_unused_rules_ = std::move(unused_rules);
+        return builder_.AddTagDispatch(dispatch);
+      }
+
+      std::unordered_map<int32_t, std::vector<const DynamicAlternative*>> grouped;
+      std::vector<int32_t> token_order;
+      for (const auto& alternative : alternatives) {
+        for (int32_t token_id : alternative.trigger.token_ids) {
+          if (!grouped.count(token_id)) {
+            token_order.push_back(token_id);
+          }
+          grouped[token_id].push_back(&alternative);
+        }
+      }
+      Grammar::Impl::TokenTagDispatch dispatch;
+      dispatch.loop_after_dispatch = true;
+      for (int32_t token_id : token_order) {
+        std::vector<int32_t> remainder_choices;
+        for (const DynamicAlternative* alternative : grouped.at(token_id)) {
+          remainder_choices.push_back(
+              CompileNode(alternative->remainder, "lark_dynamic_token_body", false)
+          );
         }
         int32_t body = remainder_choices.size() == 1 ? remainder_choices[0]
                                                      : builder_.AddChoices(remainder_choices);
-        int32_t body_rule = builder_.AddRuleWithHint("lark_dynamic_body", body);
-        dispatch.tag_rule_pairs.push_back({trigger, body_rule});
+        int32_t body_rule = builder_.AddRuleWithHint("lark_dynamic_token_body", body);
+        dispatch.trigger_rule_pairs.push_back({token_id, body_rule});
       }
       dynamic_unused_rules_ = std::move(unused_rules);
-      return builder_.AddTagDispatch(dispatch);
+      return builder_.AddTokenTagDispatch(dispatch);
     }
 
-    std::unordered_map<int32_t, std::vector<const DynamicAlternative*>> grouped;
-    std::vector<int32_t> token_order;
-    for (const auto& alternative : alternatives) {
-      for (int32_t token_id : alternative.trigger.token_ids) {
-        if (!grouped.count(token_id)) {
-          token_order.push_back(token_id);
-        }
-        grouped[token_id].push_back(&alternative);
-      }
-    }
-    Grammar::Impl::TokenTagDispatch dispatch;
-    dispatch.loop_after_dispatch = true;
-    for (int32_t token_id : token_order) {
-      std::vector<int32_t> remainder_choices;
-      for (const DynamicAlternative* alternative : grouped.at(token_id)) {
-        remainder_choices.push_back(
-            CompileNode(alternative->remainder, "lark_dynamic_token_body", false)
-        );
-      }
-      int32_t body = remainder_choices.size() == 1 ? remainder_choices[0]
-                                                   : builder_.AddChoices(remainder_choices);
-      int32_t body_rule = builder_.AddRuleWithHint("lark_dynamic_token_body", body);
-      dispatch.trigger_rule_pairs.push_back({token_id, body_rule});
-    }
-    dynamic_unused_rules_ = std::move(unused_rules);
-    return builder_.AddTokenTagDispatch(dispatch);
-  }
-
-  const std::string& source_;
-  Document document_;
-  const std::optional<TokenizerInfo>& tokenizer_info_;
-  NamedGrammarRegistry& named_grammars_;
-  GrammarBuilder builder_;
-  std::unordered_map<std::string, Definition*> definition_by_name_;
-  std::unordered_map<std::string, int32_t> rule_ids_;
-  std::unordered_map<std::string, int32_t> named_grammar_roots_;
-  std::unordered_map<std::string, int32_t> structural_tag_roots_;
-  int32_t skip_rule_id_ = -1;
-  int32_t never_rule_id_ = -1;
-  bool allow_initial_skip_ = false;
-  bool ignore_once_ = false;
-  bool allow_invalid_utf8_ = false;
-  bool no_forcing_ = false;
-  std::unordered_set<std::string> dynamic_unused_rules_;
-};
+    const std::string& source_;
+    Document document_;
+    const std::optional<TokenizerInfo>& tokenizer_info_;
+    NamedGrammarRegistry & named_grammars_;
+    GrammarBuilder builder_;
+    std::unordered_map<std::string, Definition*> definition_by_name_;
+    std::unordered_map<std::string, int32_t> rule_ids_;
+    std::unordered_map<std::string, int32_t> named_grammar_roots_;
+    std::unordered_map<std::string, int32_t> structural_tag_roots_;
+    int32_t skip_rule_id_ = -1;
+    int32_t never_rule_id_ = -1;
+    bool allow_initial_skip_ = false;
+    bool ignore_once_ = false;
+    bool allow_invalid_utf8_ = false;
+    bool no_forcing_ = false;
+    std::unordered_set<std::string> dynamic_unused_rules_;
+  };
 
 }  // namespace
 
-Grammar LarkToGrammar(
+Grammar
+LarkToGrammar(
     const std::string& lark_string,
     const std::optional<TokenizerInfo>& tokenizer_info,
     const std::vector<NamedGrammar>& named_grammars
