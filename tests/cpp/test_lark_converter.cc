@@ -106,7 +106,7 @@ TEST(LarkConverterTest, NumericAndNamedSpecialTokens) {
 
 TEST(LarkConverterTest, StringAndRegexFlags) {
   auto grammar = Grammar::FromLark(R"(
-    start: "Ab-1"i /a.b/s
+    start: "Ab-1"i /a[^x].b/isu
   )");
   std::string printed = grammar.ToString();
   EXPECT_NE(printed.find("root"), std::string::npos);
@@ -159,9 +159,9 @@ TEST(LarkConverterTest, ErrorsContainSourceLocations) {
       "intersection '&' is not supported"
   );
   XGRAMMAR_EXPECT_THROW(
-      Grammar::FromLark("start: /abc/i"),
+      Grammar::FromLark("start: /abc/m"),
       XGrammarError,
-      "only the regular-expression flag 's' is currently supported"
+      "regular-expression flag 'm' is not supported"
   );
   XGRAMMAR_EXPECT_THROW(
       Grammar::FromLark("start: \"\\u00c4\"i"),

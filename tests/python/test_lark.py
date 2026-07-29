@@ -170,6 +170,30 @@ def _assert_lark_error(
             id="regex-dotall-preserves-character-class-dot",
         ),
         pytest.param(
+            r"start: /hello[0-2]\x21/iu",
+            ["hello0!", "HELLO1!", "HeLlO2!"],
+            ["hello3!", "hello1", "héllo1!"],
+            id="regex-ascii-case-insensitive-and-unicode-flags",
+        ),
+        pytest.param(
+            "start: /a.b/is",
+            ["a b", "A😀B", "a\nb"],
+            ["ab", "a\n\nb", "ä\nb"],
+            id="regex-case-insensitive-dotall-flags",
+        ),
+        pytest.param(
+            "start: /[^a-c]+/i",
+            ["Z", "09", "Ä"],
+            ["a", "B", "xyzC"],
+            id="regex-case-insensitive-negative-class",
+        ),
+        pytest.param(
+            "start: TOKEN\nTOKEN: /[A-Cx-z]+/i",
+            ["abc", "ABC", "XyZ", "cZ"],
+            ["", "d", "w", "abcd"],
+            id="regex-case-insensitive-terminal-range",
+        ),
+        pytest.param(
             'start: "a".."z"+ "0".."9"?',
             ["a", "xyz", "hello7"],
             ["", "A", "7", "abc78"],
@@ -606,6 +630,21 @@ def test_lark_dynamic_lazy_dotall_regex_suffix() -> None:
     )
 
 
+def test_lark_dynamic_lazy_dotall_unicode_regex_flags() -> None:
+    grammar = r"""
+        start: tool* tail
+        tail: TEXT
+        head[lazy]: /.*<call>/su
+        tool: head "ok" "</call>"
+        TEXT: /.*/su
+    """
+    _assert_language(
+        grammar,
+        ["line 1\nline 2", "x\n<call>ok</call>tail"],
+        ["<call>", "<call>bad</call>", "x\n<call>ok"],
+    )
+
+
 def test_lark_dynamic_fixed_string_suffix_attribute() -> None:
     grammar = r"""
         start: tool* tail
@@ -787,6 +826,17 @@ def test_lark_serialization_round_trip_for_core_and_dynamic_grammars() -> None:
     )
 
 
+def test_lark_regex_flags_ebnf_and_serialization_round_trip() -> None:
+    grammar = xgr.Grammar.from_lark("start: /ab[^x]/isu")
+    _assert_grammar_language(grammar, ["abz", "ABZ", "aB\n"], ["abx", "ABX", "ab"])
+
+    ebnf_restored = xgr.Grammar.from_ebnf(str(grammar))
+    _assert_grammar_language(ebnf_restored, ["abz", "ABZ", "aB\n"], ["abx", "ABX", "ab"])
+
+    json_restored = xgr.Grammar.deserialize_json(grammar.serialize_json())
+    _assert_grammar_language(json_restored, ["abz", "ABZ", "aB\n"], ["abx", "ABX", "ab"])
+
+
 def test_lark_serialization_round_trip_for_token_dispatch() -> None:
     tokenizer_info = xgr.TokenizerInfo(["plain", "<|call|>", "x", "</call>"])
     grammar = xgr.Grammar.from_lark(
@@ -944,12 +994,22 @@ def test_lark_large_choice_grammar() -> None:
             id="non-ascii-string-flag",
         ),
         pytest.param(
-            "start: /abc/i",
-            "only the regular-expression flag 's' is currently supported",
+            "start: /abc/m",
+            "regular-expression flag 'm' is not supported",
             id="unsupported-regex-flag",
         ),
         pytest.param(
             "start: /abc/l", "regular-expression flag 'l' is not supported", id="unsupported-l-flag"
+        ),
+        pytest.param(
+            "start: /abc/x",
+            "regular-expression flag 'x' is not supported",
+            id="unsupported-verbose-regex-flag",
+        ),
+        pytest.param(
+            "start: item\nitem[suffix=/end/i]: /[a-z]*/",
+            "regular-expression flag 'i' is not supported with suffix or stop attributes",
+            id="case-insensitive-regex-suffix",
         ),
         pytest.param(
             'start: "a"i.."z"', "flags are not allowed on character ranges", id="range-start-flag"

@@ -1228,6 +1228,84 @@ std::string RewriteRegexDots(const std::string& pattern, bool dot_matches_newlin
   return result;
 }
 
+class ASCIICaseInsensitiveRegexMutator final : public GrammarMutator {
+ public:
+  using GrammarMutator::Apply;
+
+ private:
+  using CharacterClassElement = GrammarBuilder::CharacterClassElement;
+
+  static bool IsASCIIAlpha(int32_t byte) {
+    return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z');
+  }
+
+  static std::vector<CharacterClassElement> FoldCharacterRanges(const GrammarExpr& grammar_expr) {
+    std::vector<CharacterClassElement> ranges;
+    ranges.reserve((grammar_expr.data_len - 1) / 2 + 2);
+    for (int32_t i = 1; i + 1 < grammar_expr.data_len; i += 2) {
+      int32_t lower = grammar_expr[i];
+      int32_t upper = grammar_expr[i + 1];
+      ranges.push_back({lower, upper});
+
+      int32_t uppercase_lower = std::max<int32_t>(lower, 'A');
+      int32_t uppercase_upper = std::min<int32_t>(upper, 'Z');
+      if (uppercase_lower <= uppercase_upper) {
+        ranges.push_back({uppercase_lower + ('a' - 'A'), uppercase_upper + ('a' - 'A')});
+      }
+      int32_t lowercase_lower = std::max<int32_t>(lower, 'a');
+      int32_t lowercase_upper = std::min<int32_t>(upper, 'z');
+      if (lowercase_lower <= lowercase_upper) {
+        ranges.push_back({lowercase_lower - ('a' - 'A'), lowercase_upper - ('a' - 'A')});
+      }
+    }
+    std::sort(ranges.begin(), ranges.end(), [](const auto& lhs, const auto& rhs) {
+      return lhs.lower < rhs.lower || (lhs.lower == rhs.lower && lhs.upper < rhs.upper);
+    });
+    std::vector<CharacterClassElement> result;
+    for (const auto& range : ranges) {
+      if (!result.empty() && range.lower <= result.back().upper + 1) {
+        result.back().upper = std::max(result.back().upper, range.upper);
+      } else {
+        result.push_back(range);
+      }
+    }
+    return result;
+  }
+
+  int32_t VisitByteString(const GrammarExpr& grammar_expr) final {
+    std::vector<int32_t> sequence;
+    std::vector<int32_t> literal_bytes;
+    auto flush_literal = [&]() {
+      if (!literal_bytes.empty()) {
+        sequence.push_back(builder_->AddByteString(literal_bytes));
+        literal_bytes.clear();
+      }
+    };
+    for (int32_t byte : grammar_expr) {
+      if (!IsASCIIAlpha(byte)) {
+        literal_bytes.push_back(byte);
+        continue;
+      }
+      flush_literal();
+      int32_t lowercase = byte >= 'A' && byte <= 'Z' ? byte + ('a' - 'A') : byte;
+      int32_t uppercase = byte >= 'a' && byte <= 'z' ? byte - ('a' - 'A') : byte;
+      sequence.push_back(
+          builder_->AddCharacterClass({{uppercase, uppercase}, {lowercase, lowercase}})
+      );
+    }
+    flush_literal();
+    return sequence.size() == 1 ? sequence[0] : builder_->AddSequence(sequence);
+  }
+
+  int32_t VisitCharacterClass(const GrammarExpr& grammar_expr) final {
+    return builder_->AddCharacterClass(FoldCharacterRanges(grammar_expr), grammar_expr[0] != 0);
+  }
+
+  int32_t VisitCharacterClassStar(const GrammarExpr& grammar_expr) final {
+    return builder_->AddCharacterClassStar(FoldCharacterRanges(grammar_expr), grammar_expr[0] != 0);
+  }
+};
+
 std::optional<std::string> ParseFixedRegexLiteral(const std::string& pattern) {
   std::string result;
   for (size_t i = 0; i < pattern.size();) {
@@ -1659,19 +1737,35 @@ class LarkCompiler {
     return elements.size() == 1 ? elements[0] : builder_.AddSequence(elements);
   }
 
+  struct RegexFlags {
+    bool case_insensitive = false;
+    bool dot_all = false;
+  };
+
+  RegexFlags ParseRegexFlags(const Node& node) const {
+    RegexFlags result;
+    for (char flag : node.flags) {
+      if (flag == 'i') {
+        result.case_insensitive = true;
+      } else if (flag == 's') {
+        result.dot_all = true;
+      } else if (flag == 'u') {
+        // XGrammar regular expressions use Unicode codepoint semantics by default.
+      } else if (flag == 'l') {
+        RaiseLarkError(source_, node.location, "regular-expression flag 'l' is not supported");
+      } else {
+        RaiseLarkError(
+            source_,
+            node.location,
+            "regular-expression flag '" + std::string(1, flag) + "' is not supported"
+        );
+      }
+    }
+    return result;
+  }
+
   std::string PrepareRegexPattern(const Node& node) const {
-    if (node.flags.empty()) {
-      return RewriteRegexDots(node.text, false);
-    }
-    if (node.flags == "s") {
-      return RewriteRegexDots(node.text, true);
-    }
-    if (node.flags.find('l') != std::string::npos) {
-      RaiseLarkError(source_, node.location, "regular-expression flag 'l' is not supported");
-    }
-    RaiseLarkError(
-        source_, node.location, "only the regular-expression flag 's' is currently supported"
-    );
+    return RewriteRegexDots(node.text, ParseRegexFlags(node).dot_all);
   }
 
   static std::string EscapeRegexLiteral(const std::string& value) {
@@ -1789,6 +1883,13 @@ class LarkCompiler {
       case Node::Kind::kString:
         return StringLiteralToRegex(node);
       case Node::Kind::kRegex:
+        if (ParseRegexFlags(node).case_insensitive) {
+          RaiseLarkError(
+              source_,
+              node.location,
+              "regular-expression flag 'i' is not supported with suffix or stop attributes"
+          );
+        }
         return "(?:" + PrepareRegexPattern(node) + ")";
       case Node::Kind::kRange: {
         std::vector<TCodepoint> begin = ParseUTF8(node.text.c_str());
@@ -1963,9 +2064,13 @@ class LarkCompiler {
         return terminal_mode || !append_skip ? result : AppendSkip(result);
       }
       case Node::Kind::kRegex: {
-        std::string pattern = PrepareRegexPattern(node);
+        RegexFlags flags = ParseRegexFlags(node);
         try {
-          int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromRegex(pattern));
+          Grammar grammar = Grammar::FromRegex(RewriteRegexDots(node.text, flags.dot_all));
+          if (flags.case_insensitive) {
+            grammar = ASCIICaseInsensitiveRegexMutator().Apply(grammar);
+          }
+          int32_t root = SubGrammarAdder::Apply(&builder_, grammar);
           int32_t result = builder_.AddRuleRef(root);
           return terminal_mode || !append_skip ? result : AppendSkip(result);
         } catch (const std::exception& error) {
@@ -2178,11 +2283,11 @@ class LarkCompiler {
           pattern.push_back(c);
         }
       }
-      if (node.flags == "s") {
-        return pattern == ".*";
-      }
-      if (!node.flags.empty()) {
+      if (node.flags.find_first_not_of("isu") != std::string::npos) {
         return false;
+      }
+      if (node.flags.find('s') != std::string::npos) {
+        return pattern == ".*";
       }
       return pattern == "(.|\\n)*" || pattern == "(\\n|.)*" || pattern == "(?s:.*)" ||
              pattern == "(?:.|\\n)*" || pattern == "(?:\\n|.)*" || pattern == "[\\s\\S]*";
@@ -2214,13 +2319,15 @@ class LarkCompiler {
     if (node.kind != Node::Kind::kRegex) {
       return std::nullopt;
     }
+    if (node.flags.find('i') != std::string::npos ||
+        node.flags.find_first_not_of("su") != std::string::npos) {
+      return std::nullopt;
+    }
     std::vector<std::string> prefixes;
-    if (node.flags.empty()) {
-      prefixes = {"(.|\\n)*", "(\\n|.)*", "(?:.|\\n)*", "(?:\\n|.)*", "[\\s\\S]*", "(?s:.*)"};
-    } else if (node.flags == "s") {
+    if (node.flags.find('s') != std::string::npos) {
       prefixes = {".*"};
     } else {
-      return std::nullopt;
+      prefixes = {"(.|\\n)*", "(\\n|.)*", "(?:.|\\n)*", "(?:\\n|.)*", "[\\s\\S]*", "(?s:.*)"};
     }
     for (const std::string& prefix : prefixes) {
       if (node.text.size() <= prefix.size() || node.text.compare(0, prefix.size(), prefix) != 0) {
