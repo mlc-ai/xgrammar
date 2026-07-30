@@ -1197,7 +1197,6 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
   }
 
   const int32_t num_tasks = static_cast<int32_t>(adaptive_token_mask_tasks.size());
-  std::vector<std::optional<AdaptiveTokenMask>> adaptive_token_masks(num_tasks);
   auto compute_adaptive_token_mask = [&](int32_t task_id) {
     const auto& task = adaptive_token_mask_tasks[task_id];
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(
@@ -1207,7 +1206,7 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
         tokenizer_info_,
         rule_level_cache_
     );
-    adaptive_token_masks[task_id] = grammar_matcher.GetAdaptiveTokenMask(task.is_root_rule);
+    return grammar_matcher.GetAdaptiveTokenMask(task.is_root_rule);
   };
 
   const int32_t num_task_groups = static_cast<int32_t>(adaptive_token_mask_task_groups.size());
@@ -1215,29 +1214,40 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
   if (num_threads == 1) {
     for (const auto& task_group : adaptive_token_mask_task_groups) {
       for (int32_t task_id : task_group) {
-        compute_adaptive_token_mask(task_id);
+        const auto& task = adaptive_token_mask_tasks[task_id];
+        compiled_grammar_impl->adaptive_token_mask_cache.emplace(
+            task.state, compute_adaptive_token_mask(task_id)
+        );
       }
     }
   } else {
     std::atomic<int32_t> next_task_group_id{0};
+    // Build maps independently so workers perform node allocation in parallel. Merging transfers
+    // the completed nodes into the final cache without copying their masks.
+    using AdaptiveTokenMaskMap = decltype(compiled_grammar_impl->adaptive_token_mask_cache);
+    std::vector<AdaptiveTokenMaskMap> worker_results(num_threads);
+    for (auto& worker_result : worker_results) {
+      worker_result.reserve((num_tasks + num_threads - 1) / num_threads);
+    }
     for (int32_t thread_id = 0; thread_id < num_threads; ++thread_id) {
-      thread_pool->Execute([&]() {
+      thread_pool->Execute([&, thread_id]() {
+        auto& worker_result = worker_results[thread_id];
         int32_t task_group_id;
         while ((task_group_id = next_task_group_id.fetch_add(1, std::memory_order_relaxed)) <
                num_task_groups) {
           for (int32_t task_id : adaptive_token_mask_task_groups[task_group_id]) {
-            compute_adaptive_token_mask(task_id);
+            const auto& task = adaptive_token_mask_tasks[task_id];
+            worker_result.emplace(task.state, compute_adaptive_token_mask(task_id));
           }
         }
       });
     }
     thread_pool->Wait();
-  }
-
-  for (int32_t task_id = 0; task_id < num_tasks; ++task_id) {
-    compiled_grammar_impl->adaptive_token_mask_cache.emplace(
-        adaptive_token_mask_tasks[task_id].state, std::move(adaptive_token_masks[task_id]).value()
-    );
+    auto& result = compiled_grammar_impl->adaptive_token_mask_cache;
+    result.reserve(num_tasks);
+    for (auto& worker_result : worker_results) {
+      result.merge(worker_result);
+    }
   }
 
   return CompiledGrammar(compiled_grammar_impl);
