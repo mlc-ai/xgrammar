@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <iomanip>
 #include <limits>
+#include <locale>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -51,7 +52,12 @@ std::string NumberSpec::ToString() const {
          ", exclusive_minimum=" +
          (exclusive_minimum.has_value() ? std::to_string(*exclusive_minimum) : "null") +
          ", exclusive_maximum=" +
-         (exclusive_maximum.has_value() ? std::to_string(*exclusive_maximum) : "null") + "}";
+         (exclusive_maximum.has_value() ? std::to_string(*exclusive_maximum) : "null") +
+         ", multiple_of=" +
+         (multiple_of.has_value()
+              ? std::to_string(multiple_of->coefficient) + "e-" + std::to_string(multiple_of->scale)
+              : "null") +
+         "}";
 }
 
 std::string StringSpec::ToString() const {
@@ -155,6 +161,9 @@ using SchemaError = TypedError<SchemaErrorType>;
 // Fail closed above the cap to keep generated grammars bounded.
 constexpr int64_t kIntegerMultipleOfMax = 1024;
 constexpr int64_t kIntegerMultipleOfRangeWidthMax = 10000;
+constexpr int32_t kDecimalMultipleOfScaleMax = 256;
+constexpr int64_t kDecimalMultipleOfStateBudget = 8192;
+constexpr int64_t kNumberMultipleOfRangeSizeMax = 10000;
 
 bool IsMultipleOf(int64_t value, int64_t multiple_of) { return (value % multiple_of) == 0; }
 
@@ -385,6 +394,406 @@ EffectiveIntegerRange ComputeEffectiveIntegerRange(const IntegerSpec& spec) {
     range.end = range.end.has_value() ? std::min(*range.end, excl_end) : excl_end;
   }
   return range;
+}
+
+std::string ShortestRoundTripDecimal(double value) {
+  for (int precision = 1; precision <= std::numeric_limits<double>::max_digits10; ++precision) {
+    std::ostringstream output;
+    output.imbue(std::locale::classic());
+    output << std::setprecision(precision) << std::defaultfloat << value;
+    std::string decimal = output.str();
+
+    std::istringstream input(decimal);
+    input.imbue(std::locale::classic());
+    double reparsed = 0;
+    input >> reparsed;
+    if (input && input.peek() == std::char_traits<char>::eof() && reparsed == value) {
+      return decimal;
+    }
+  }
+  XGRAMMAR_LOG(FATAL) << "Failed to format a finite JSON number";
+  XGRAMMAR_UNREACHABLE();
+}
+
+struct ExactDecimal {
+  bool negative;
+  std::string digits;
+  int64_t scale;
+};
+
+ExactDecimal ParseExactDecimal(double value) {
+  XGRAMMAR_CHECK(std::isfinite(value));
+  std::string decimal = ShortestRoundTripDecimal(value);
+  bool negative = !decimal.empty() && decimal.front() == '-';
+  if (negative) {
+    decimal.erase(decimal.begin());
+  }
+  size_t exponent_pos = decimal.find_first_of("eE");
+  std::string mantissa = decimal.substr(0, exponent_pos);
+  int64_t exponent = 0;
+  if (exponent_pos != std::string::npos) {
+    size_t pos = exponent_pos + 1;
+    bool negative_exponent = false;
+    if (decimal[pos] == '+' || decimal[pos] == '-') {
+      negative_exponent = decimal[pos] == '-';
+      ++pos;
+    }
+    for (; pos < decimal.size(); ++pos) {
+      exponent = exponent * 10 + (decimal[pos] - '0');
+    }
+    if (negative_exponent) {
+      exponent = -exponent;
+    }
+  }
+  size_t decimal_pos = mantissa.find('.');
+  int64_t fractional_digits =
+      decimal_pos == std::string::npos ? 0 : mantissa.size() - decimal_pos - 1;
+  if (decimal_pos != std::string::npos) {
+    mantissa.erase(decimal_pos, 1);
+  }
+  size_t first_nonzero = mantissa.find_first_not_of('0');
+  if (first_nonzero == std::string::npos) {
+    return ExactDecimal{false, "0", 0};
+  }
+  mantissa.erase(0, first_nonzero);
+  int64_t scale = fractional_digits - exponent;
+  while (mantissa.size() > 1 && mantissa.back() == '0') {
+    mantissa.pop_back();
+    --scale;
+  }
+  return ExactDecimal{negative, std::move(mantissa), scale};
+}
+
+ExactDecimal ScaledMultipleAsDecimal(int64_t quotient, const DecimalMultipleOf& multiple_of) {
+  int64_t scaled_value = quotient * multiple_of.coefficient;
+  bool negative = scaled_value < 0;
+  uint64_t magnitude = negative ? static_cast<uint64_t>(-(scaled_value + 1)) + 1
+                                : static_cast<uint64_t>(scaled_value);
+  if (magnitude == 0) {
+    return ExactDecimal{false, "0", 0};
+  }
+  std::string digits = std::to_string(magnitude);
+  int64_t scale = multiple_of.scale;
+  while (digits.size() > 1 && digits.back() == '0') {
+    digits.pop_back();
+    --scale;
+  }
+  return ExactDecimal{negative, std::move(digits), scale};
+}
+
+int CompareExactDecimals(const ExactDecimal& lhs, const ExactDecimal& rhs) {
+  if (lhs.negative != rhs.negative) {
+    return lhs.negative ? -1 : 1;
+  }
+  int64_t lhs_integer_places = static_cast<int64_t>(lhs.digits.size()) - lhs.scale;
+  int64_t rhs_integer_places = static_cast<int64_t>(rhs.digits.size()) - rhs.scale;
+  int magnitude_result = 0;
+  if (lhs_integer_places != rhs_integer_places) {
+    magnitude_result = lhs_integer_places < rhs_integer_places ? -1 : 1;
+  } else {
+    int64_t common_scale = std::max(lhs.scale, rhs.scale);
+    size_t lhs_size = lhs.digits.size() + static_cast<size_t>(common_scale - lhs.scale);
+    size_t rhs_size = rhs.digits.size() + static_cast<size_t>(common_scale - rhs.scale);
+    XGRAMMAR_CHECK(lhs_size == rhs_size);
+    for (size_t i = 0; i < lhs_size; ++i) {
+      char lhs_digit = i < lhs.digits.size() ? lhs.digits[i] : '0';
+      char rhs_digit = i < rhs.digits.size() ? rhs.digits[i] : '0';
+      if (lhs_digit != rhs_digit) {
+        magnitude_result = lhs_digit < rhs_digit ? -1 : 1;
+        break;
+      }
+    }
+  }
+  return lhs.negative ? -magnitude_result : magnitude_result;
+}
+
+Result<DecimalMultipleOf, SchemaError> ParseDecimalMultipleOf(const picojson::value& value) {
+  if (!value.is<int64_t>() && !value.is<double>()) {
+    return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Value must be a number");
+  }
+
+  double numeric_value =
+      value.is<int64_t>() ? static_cast<double>(value.get<int64_t>()) : value.get<double>();
+  if (!std::isfinite(numeric_value)) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kInvalidSchema, "multipleOf must be a finite number greater than 0"
+    );
+  }
+  if (numeric_value <= 0) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kInvalidSchema, "multipleOf must be greater than 0"
+    );
+  }
+
+  std::string decimal = value.is<int64_t>() ? std::to_string(value.get<int64_t>())
+                                            : ShortestRoundTripDecimal(numeric_value);
+  size_t exponent_pos = decimal.find_first_of("eE");
+  std::string mantissa = decimal.substr(0, exponent_pos);
+  int64_t exponent = 0;
+  if (exponent_pos != std::string::npos) {
+    size_t pos = exponent_pos + 1;
+    bool negative_exponent = false;
+    if (pos < decimal.size() && (decimal[pos] == '+' || decimal[pos] == '-')) {
+      negative_exponent = decimal[pos] == '-';
+      ++pos;
+    }
+    if (pos == decimal.size()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "Invalid exponent in multipleOf"
+      );
+    }
+    for (; pos < decimal.size(); ++pos) {
+      if (!std::isdigit(static_cast<unsigned char>(decimal[pos]))) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "Invalid exponent in multipleOf"
+        );
+      }
+      if (exponent > kDecimalMultipleOfScaleMax + 20) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsupportedSchema,
+            "multipleOf requires more than " + std::to_string(kDecimalMultipleOfScaleMax) +
+                " decimal places"
+        );
+      }
+      exponent = exponent * 10 + (decimal[pos] - '0');
+    }
+    if (negative_exponent) {
+      exponent = -exponent;
+    }
+  }
+
+  size_t decimal_pos = mantissa.find('.');
+  int64_t fractional_digits =
+      decimal_pos == std::string::npos ? 0 : mantissa.size() - decimal_pos - 1;
+  if (decimal_pos != std::string::npos) {
+    mantissa.erase(decimal_pos, 1);
+  }
+  size_t first_nonzero = mantissa.find_first_not_of('0');
+  XGRAMMAR_CHECK(first_nonzero != std::string::npos);
+  mantissa.erase(0, first_nonzero);
+
+  int64_t scale = fractional_digits - exponent;
+  if (scale < 0) {
+    int64_t zeros_to_append = -scale;
+    if (zeros_to_append > kDecimalMultipleOfScaleMax ||
+        mantissa.size() + static_cast<size_t>(zeros_to_append) > 19) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "multipleOf requires more than " + std::to_string(kDecimalMultipleOfStateBudget) +
+              " decimal states"
+      );
+    }
+    mantissa.append(static_cast<size_t>(zeros_to_append), '0');
+    scale = 0;
+  }
+  while (scale > 0 && mantissa.back() == '0') {
+    mantissa.pop_back();
+    --scale;
+  }
+  if (scale > kDecimalMultipleOfScaleMax) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "multipleOf requires more than " + std::to_string(kDecimalMultipleOfScaleMax) +
+            " decimal places"
+    );
+  }
+
+  int64_t coefficient = 0;
+  for (char digit : mantissa) {
+    if (coefficient > kDecimalMultipleOfStateBudget / 10) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "multipleOf requires more than " + std::to_string(kDecimalMultipleOfStateBudget) +
+              " decimal states"
+      );
+    }
+    coefficient = coefficient * 10 + (digit - '0');
+    if (coefficient > kDecimalMultipleOfStateBudget) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "multipleOf requires more than " + std::to_string(kDecimalMultipleOfStateBudget) +
+              " decimal states"
+      );
+    }
+  }
+  if (coefficient > kDecimalMultipleOfStateBudget / (scale + 1)) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "multipleOf requires more than " + std::to_string(kDecimalMultipleOfStateBudget) +
+            " decimal states"
+    );
+  }
+  return ResultOk(DecimalMultipleOf{coefficient, static_cast<int32_t>(scale)});
+}
+
+int64_t IntegerStepForDecimalMultipleOf(const DecimalMultipleOf& multiple_of) {
+  int64_t result = multiple_of.coefficient;
+  for (int32_t i = 0; i < multiple_of.scale && result % 2 == 0; ++i) {
+    result /= 2;
+  }
+  for (int32_t i = 0; i < multiple_of.scale && result % 5 == 0; ++i) {
+    result /= 5;
+  }
+  return result;
+}
+
+struct EffectiveNumberRange {
+  std::optional<double> start;
+  std::optional<double> end;
+  bool exclusive_start = false;
+  bool exclusive_end = false;
+};
+
+EffectiveNumberRange ComputeEffectiveNumberRange(const NumberSpec& spec) {
+  EffectiveNumberRange range;
+  range.start = spec.minimum;
+  range.end = spec.maximum;
+  if (spec.exclusive_minimum.has_value() &&
+      (!range.start.has_value() || *spec.exclusive_minimum >= *range.start)) {
+    range.start = spec.exclusive_minimum;
+    range.exclusive_start = true;
+  }
+  if (spec.exclusive_maximum.has_value() &&
+      (!range.end.has_value() || *spec.exclusive_maximum <= *range.end)) {
+    range.end = spec.exclusive_maximum;
+    range.exclusive_end = true;
+  }
+  return range;
+}
+
+long double DecimalMultipleOfValue(const DecimalMultipleOf& multiple_of) {
+  long double result = static_cast<long double>(multiple_of.coefficient);
+  for (int32_t i = 0; i < multiple_of.scale; ++i) {
+    result /= 10;
+  }
+  return result;
+}
+
+long double SnapNearInteger(long double value) {
+  long double nearest = std::round(value);
+  long double tolerance =
+      16 * std::numeric_limits<double>::epsilon() * std::max(1.0L, std::fabs(value));
+  return std::fabs(value - nearest) <= tolerance ? nearest : value;
+}
+
+struct NumberMultipleRange {
+  int64_t start;
+  int64_t end;
+};
+
+Result<NumberMultipleRange, SchemaError> ComputeNumberMultipleRange(
+    const NumberSpec& spec, const EffectiveNumberRange& range
+) {
+  XGRAMMAR_CHECK(spec.multiple_of.has_value());
+  if (!range.start.has_value() || !range.end.has_value()) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "multipleOf combined with a number range requires both minimum and maximum bounds"
+    );
+  }
+
+  long double multiple = DecimalMultipleOfValue(*spec.multiple_of);
+  long double lower_ratio = SnapNearInteger(static_cast<long double>(*range.start) / multiple);
+  long double upper_ratio = SnapNearInteger(static_cast<long double>(*range.end) / multiple);
+  long double start = range.exclusive_start ? std::floor(lower_ratio) + 1 : std::ceil(lower_ratio);
+  long double end = range.exclusive_end ? std::ceil(upper_ratio) - 1 : std::floor(upper_ratio);
+  if (start < static_cast<long double>(std::numeric_limits<int64_t>::min()) ||
+      start > static_cast<long double>(std::numeric_limits<int64_t>::max()) ||
+      end < static_cast<long double>(std::numeric_limits<int64_t>::min()) ||
+      end > static_cast<long double>(std::numeric_limits<int64_t>::max())) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema, "multipleOf range exceeds the supported integer domain"
+    );
+  }
+
+  int64_t first = static_cast<int64_t>(start);
+  int64_t last = static_cast<int64_t>(end);
+
+  int64_t coefficient = spec.multiple_of->coefficient;
+  if (first < std::numeric_limits<int64_t>::min() / coefficient ||
+      first > std::numeric_limits<int64_t>::max() / coefficient ||
+      last < std::numeric_limits<int64_t>::min() / coefficient ||
+      last > std::numeric_limits<int64_t>::max() / coefficient) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema, "multipleOf range exceeds the supported decimal domain"
+    );
+  }
+
+  ExactDecimal lower = ParseExactDecimal(*range.start);
+  ExactDecimal upper = ParseExactDecimal(*range.end);
+  auto satisfies_lower = [&](int64_t quotient) {
+    int comparison =
+        CompareExactDecimals(ScaledMultipleAsDecimal(quotient, *spec.multiple_of), lower);
+    return range.exclusive_start ? comparison > 0 : comparison >= 0;
+  };
+  auto satisfies_upper = [&](int64_t quotient) {
+    int comparison =
+        CompareExactDecimals(ScaledMultipleAsDecimal(quotient, *spec.multiple_of), upper);
+    return range.exclusive_end ? comparison < 0 : comparison <= 0;
+  };
+  while (!satisfies_lower(first)) {
+    if (first == std::numeric_limits<int64_t>::max() / coefficient) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "multipleOf range exceeds the supported decimal domain"
+      );
+    }
+    ++first;
+  }
+  while (first > std::numeric_limits<int64_t>::min() / coefficient && satisfies_lower(first - 1)) {
+    --first;
+  }
+  while (!satisfies_upper(last)) {
+    if (last == std::numeric_limits<int64_t>::min() / coefficient) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "multipleOf range exceeds the supported decimal domain"
+      );
+    }
+    --last;
+  }
+  while (last < std::numeric_limits<int64_t>::max() / coefficient && satisfies_upper(last + 1)) {
+    ++last;
+  }
+
+  if (first > last) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema, "range contains no multipleOf value"
+    );
+  }
+  if (IsRangeWidthOverCap(first, last, kNumberMultipleOfRangeSizeMax)) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "multipleOf range contains more than " + std::to_string(kNumberMultipleOfRangeSizeMax) +
+            " values"
+    );
+  }
+  return ResultOk(NumberMultipleRange{first, last});
+}
+
+std::string FormatScaledMultiple(int64_t quotient, const DecimalMultipleOf& multiple_of) {
+  int64_t scaled_value = quotient * multiple_of.coefficient;
+  bool negative = scaled_value < 0;
+  uint64_t magnitude = negative ? static_cast<uint64_t>(-(scaled_value + 1)) + 1
+                                : static_cast<uint64_t>(scaled_value);
+  std::string result = std::to_string(magnitude);
+  if (multiple_of.scale > 0) {
+    size_t required_digits = static_cast<size_t>(multiple_of.scale) + 1;
+    if (result.size() < required_digits) {
+      result.insert(0, required_digits - result.size(), '0');
+    }
+    result.insert(result.size() - multiple_of.scale, 1, '.');
+    while (result.back() == '0') {
+      result.pop_back();
+    }
+    if (result.back() == '.') {
+      result.pop_back();
+    }
+  }
+  if (negative && magnitude != 0) {
+    result.insert(result.begin(), '-');
+  }
+  return result;
 }
 
 bool TypeSetsOverlap(
@@ -936,31 +1345,25 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
 
   auto checkAndConvertMultipleOf = [](const picojson::value& value
                                    ) -> Result<int64_t, SchemaError> {
-    double val;
-    if (value.is<int64_t>()) {
-      val = static_cast<double>(value.get<int64_t>());
-    } else if (value.is<double>()) {
-      val = value.get<double>();
-    } else {
-      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Value must be a number");
+    auto decimal_result = ParseDecimalMultipleOf(value);
+    if (decimal_result.IsErr()) {
+      if (decimal_result.ErrRef().Type() == SchemaErrorType::kUnsupportedSchema) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsupportedSchema,
+            "multipleOf for type:integer must be > 0 and <= " +
+                std::to_string(kIntegerMultipleOfMax)
+        );
+      }
+      return ResultErr(std::move(decimal_result).UnwrapErr());
     }
-    if (val <= 0) {
-      return ResultErr<SchemaError>(
-          SchemaErrorType::kInvalidSchema, "multipleOf must be greater than 0"
-      );
-    }
-    if (val != std::floor(val)) {
-      return ResultErr<SchemaError>(
-          SchemaErrorType::kUnsupportedSchema, "multipleOf for type:integer must be an integer"
-      );
-    }
-    if (val > static_cast<double>(kIntegerMultipleOfMax)) {
+    int64_t integer_step = IntegerStepForDecimalMultipleOf(std::move(decimal_result).Unwrap());
+    if (integer_step > kIntegerMultipleOfMax) {
       return ResultErr<SchemaError>(
           SchemaErrorType::kUnsupportedSchema,
           "multipleOf for type:integer must be > 0 and <= " + std::to_string(kIntegerMultipleOfMax)
       );
     }
-    return ResultOk<int64_t>(static_cast<int64_t>(val));
+    return ResultOk<int64_t>(integer_step);
   };
 
   if (schema.count("multipleOf")) {
@@ -1037,21 +1440,14 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
 }
 
 Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object& schema) {
-  if (schema.count("multipleOf")) {
-    const auto& value = schema.at("multipleOf");
-    if (!value.is<int64_t>() && !value.is<double>()) {
-      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Value must be a number");
-    }
-    double multiple_of =
-        value.is<int64_t>() ? static_cast<double>(value.get<int64_t>()) : value.get<double>();
-    if (multiple_of <= 0) {
-      return ResultErr<SchemaError>(
-          SchemaErrorType::kInvalidSchema, "multipleOf must be greater than 0"
-      );
-    }
-    XGRAMMAR_LOG(WARNING) << "multipleOf is not supported for type:number; ignoring multipleOf";
-  }
   NumberSpec spec;
+  if (schema.count("multipleOf")) {
+    auto result = ParseDecimalMultipleOf(schema.at("multipleOf"));
+    if (result.IsErr()) {
+      return ResultErr(std::move(result).UnwrapErr());
+    }
+    spec.multiple_of = std::move(result).Unwrap();
+  }
 
   auto getDouble = [](const picojson::value& value) -> Result<double, SchemaError> {
     if (!value.is<double>() && !value.is<int64_t>()) {
@@ -1105,6 +1501,15 @@ Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object
   if (spec.exclusive_minimum && spec.exclusive_maximum &&
       *spec.exclusive_minimum >= *spec.exclusive_maximum) {
     return empty();
+  }
+  if (spec.multiple_of.has_value()) {
+    EffectiveNumberRange range = ComputeEffectiveNumberRange(spec);
+    if (range.start.has_value() || range.end.has_value()) {
+      auto multiple_range = ComputeNumberMultipleRange(spec, range);
+      if (multiple_range.IsErr()) {
+        return ResultErr(std::move(multiple_range).UnwrapErr());
+      }
+    }
   }
   return ResultOk(std::move(spec));
 }
@@ -2302,25 +2707,193 @@ int32_t JSONSchemaConverter::GenerateIntegerMultipleOfDFA(
   );
 }
 
+int32_t JSONSchemaConverter::GenerateDecimalMultipleOfDFA(
+    const DecimalMultipleOf& multiple_of, const std::string& rule_name
+) {
+  const int64_t coefficient = multiple_of.coefficient;
+  const int32_t scale = multiple_of.scale;
+  auto next_remainder = [coefficient](int64_t remainder, int64_t digit) {
+    return (remainder * 10 + digit) % coefficient;
+  };
+  auto power_of_ten_modulo = [coefficient](int32_t exponent) {
+    int64_t result = 1 % coefficient;
+    for (int32_t i = 0; i < exponent; ++i) {
+      result = (result * 10) % coefficient;
+    }
+    return result;
+  };
+
+  int32_t zero = ByteString("0");
+  int32_t trailing_zero_star = Repeat(rule_name + "_trailing_zero", zero, 0, -1);
+  int32_t trailing_zero_plus = Repeat(rule_name + "_fractional_zero", zero, 1, -1);
+
+  std::vector<std::vector<bool>> productive(
+      static_cast<size_t>(scale + 1), std::vector<bool>(static_cast<size_t>(coefficient), false)
+  );
+  std::vector<std::vector<bool>> accepting = productive;
+  for (int32_t position = scale; position >= 1; --position) {
+    int64_t remaining_factor = power_of_ten_modulo(scale - position);
+    for (int64_t remainder = 0; remainder < coefficient; ++remainder) {
+      accepting[position][remainder] = (remainder * remaining_factor) % coefficient == 0;
+      productive[position][remainder] = accepting[position][remainder];
+      if (position < scale) {
+        for (int64_t digit = 0; digit <= 9; ++digit) {
+          if (productive[position + 1][next_remainder(remainder, digit)]) {
+            productive[position][remainder] = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  std::vector<std::vector<int32_t>> fraction_states(
+      static_cast<size_t>(scale + 1), std::vector<int32_t>(static_cast<size_t>(coefficient), -1)
+  );
+  for (int32_t position = 1; position <= scale; ++position) {
+    for (int64_t remainder = 0; remainder < coefficient; ++remainder) {
+      if (!productive[position][remainder]) {
+        continue;
+      }
+      fraction_states[position][remainder] = builder_.AddEmptyRuleWithHint(
+          rule_name + "_multiple_of_fraction_" + std::to_string(position) + "_mod_" +
+          std::to_string(remainder)
+      );
+    }
+  }
+  for (int32_t position = 1; position <= scale; ++position) {
+    for (int64_t remainder = 0; remainder < coefficient; ++remainder) {
+      int32_t state = fraction_states[position][remainder];
+      if (state == -1) {
+        continue;
+      }
+      std::vector<int32_t> transitions;
+      if (position == scale && accepting[position][remainder]) {
+        transitions.push_back(trailing_zero_star);
+      } else if (accepting[position][remainder]) {
+        transitions.push_back(Empty());
+      }
+      if (position < scale) {
+        for (int64_t digit = 0; digit <= 9; ++digit) {
+          int64_t next = next_remainder(remainder, digit);
+          int32_t next_state = fraction_states[position + 1][next];
+          if (next_state != -1) {
+            transitions.push_back(Sequence({ByteString(std::to_string(digit)), RuleRef(next_state)})
+            );
+          }
+        }
+      }
+      XGRAMMAR_CHECK(!transitions.empty());
+      builder_.UpdateRuleBody(state, Choice(transitions));
+    }
+  }
+
+  std::vector<int32_t> integer_states(static_cast<size_t>(coefficient));
+  for (int64_t remainder = 0; remainder < coefficient; ++remainder) {
+    integer_states[remainder] = builder_.AddEmptyRuleWithHint(
+        rule_name + "_multiple_of_integer_mod_" + std::to_string(remainder)
+    );
+  }
+
+  int64_t integer_scale_factor = power_of_ten_modulo(scale);
+  for (int64_t remainder = 0; remainder < coefficient; ++remainder) {
+    std::vector<int32_t> transitions;
+    if ((remainder * integer_scale_factor) % coefficient == 0) {
+      if (scale == 0) {
+        transitions.push_back(Choice({Empty(), Sequence({ByteString("."), trailing_zero_plus})}));
+      } else {
+        transitions.push_back(Empty());
+      }
+    }
+    for (int64_t digit = 0; digit <= 9; ++digit) {
+      int64_t next = next_remainder(remainder, digit);
+      transitions.push_back(
+          Sequence({ByteString(std::to_string(digit)), RuleRef(integer_states[next])})
+      );
+    }
+    if (scale > 0) {
+      for (int64_t digit = 0; digit <= 9; ++digit) {
+        int64_t next = next_remainder(remainder, digit);
+        int32_t next_state = fraction_states[1][next];
+        if (next_state != -1) {
+          transitions.push_back(
+              Sequence({ByteString("."), ByteString(std::to_string(digit)), RuleRef(next_state)})
+          );
+        }
+      }
+    }
+    builder_.UpdateRuleBody(integer_states[remainder], Choice(transitions));
+  }
+
+  std::vector<int32_t> zero_suffixes = {Empty()};
+  if (scale == 0) {
+    zero_suffixes.push_back(Sequence({ByteString("."), trailing_zero_plus}));
+  } else {
+    for (int64_t digit = 0; digit <= 9; ++digit) {
+      int32_t next_state = fraction_states[1][digit % coefficient];
+      if (next_state != -1) {
+        zero_suffixes.push_back(
+            Sequence({ByteString("."), ByteString(std::to_string(digit)), RuleRef(next_state)})
+        );
+      }
+    }
+  }
+
+  std::vector<int32_t> non_zero_starts;
+  for (int64_t digit = 1; digit <= 9; ++digit) {
+    non_zero_starts.push_back(
+        Sequence({ByteString(std::to_string(digit)), RuleRef(integer_states[digit % coefficient])})
+    );
+  }
+  int32_t magnitude =
+      Choice({Sequence({ByteString("0"), Choice(zero_suffixes)}), Choice(non_zero_starts)});
+  return Sequence({Choice({Empty(), ByteString("-")}), magnitude});
+}
+
 int32_t JSONSchemaConverter::GenerateNumber(const NumberSpec& spec, const std::string& rule_name) {
-  std::optional<double> start = spec.minimum;
-  std::optional<double> end = spec.maximum;
-  bool exclusive_start = false;
-  bool exclusive_end = false;
-  // When both bounds are present the larger lower bound wins; on a tie the
-  // exclusive one is stricter.
-  if (spec.exclusive_minimum.has_value() &&
-      (!start.has_value() || *spec.exclusive_minimum >= *start)) {
-    start = spec.exclusive_minimum;
-    exclusive_start = true;
+  EffectiveNumberRange range = ComputeEffectiveNumberRange(spec);
+  if (spec.multiple_of.has_value()) {
+    if (range.start.has_value() || range.end.has_value()) {
+      auto multiple_range_result = ComputeNumberMultipleRange(spec, range);
+      XGRAMMAR_CHECK(multiple_range_result.IsOk());
+      NumberMultipleRange multiple_range = std::move(multiple_range_result).Unwrap();
+      int32_t zero = ByteString("0");
+      int32_t trailing_zero_star = Repeat(rule_name + "_trailing_zero", zero, 0, -1);
+      int32_t trailing_zero_plus = Repeat(rule_name + "_fractional_zero", zero, 1, -1);
+      std::vector<int32_t> values;
+      for (int64_t quotient = multiple_range.start; quotient <= multiple_range.end; ++quotient) {
+        std::string value = FormatScaledMultiple(quotient, *spec.multiple_of);
+        std::vector<int32_t> representations;
+        if (value.find('.') != std::string::npos) {
+          representations.push_back(Sequence({ByteString(value), trailing_zero_star}));
+        } else {
+          representations.push_back(ByteString(value));
+          representations.push_back(
+              Sequence({ByteString(value), ByteString("."), trailing_zero_plus})
+          );
+        }
+        if (quotient == 0) {
+          representations.push_back(ByteString("-0"));
+          representations.push_back(Sequence({ByteString("-0."), trailing_zero_plus}));
+        }
+        values.push_back(Choice(representations));
+        if (quotient == std::numeric_limits<int64_t>::max()) {
+          break;
+        }
+      }
+      return Choice(values);
+    }
+    return GenerateDecimalMultipleOfDFA(*spec.multiple_of, rule_name);
   }
-  if (spec.exclusive_maximum.has_value() && (!end.has_value() || *spec.exclusive_maximum <= *end)) {
-    end = spec.exclusive_maximum;
-    exclusive_end = true;
-  }
-  if (start.has_value() || end.has_value()) {
+  if (range.start.has_value() || range.end.has_value()) {
     return RegexExpression(
-        GenerateFloatRangeRegex(start, end, /*precision=*/6, exclusive_start, exclusive_end),
+        GenerateFloatRangeRegex(
+            range.start,
+            range.end,
+            /*precision=*/6,
+            range.exclusive_start,
+            range.exclusive_end
+        ),
         false,
         /*force_cfg_expansion=*/true
     );

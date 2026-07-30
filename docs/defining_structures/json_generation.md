@@ -62,6 +62,17 @@ person_schema = {
 compiled_grammar = compiler.compile_json_schema(json.dumps(person_schema))
 ```
 
+## Numeric Multiples
+
+The JSON Schema `multipleOf` keyword supports decimal divisors for `number` schemas. It also
+supports fractional divisors for `integer` schemas by reducing them to the equivalent integer
+constraint. For example, an integer that is a multiple of `2.5` must be divisible by `5`.
+
+Constrained numbers are generated in fixed-point notation, including equivalent spellings with
+trailing fractional zeros. Scientific notation is not generated for `multipleOf` constraints.
+When `multipleOf` is combined with numeric bounds, both a lower and an upper bound are required,
+and the bounded range may contain at most 10,000 matching values.
+
 With the compiled grammar, we can instantiate a [`xgr.GrammarMatcher`](xgrammar.GrammarMatcher)
 and generate the token masks in the generation loop.
 

@@ -1,6 +1,7 @@
 import json
 import re
 import sys
+from decimal import Decimal
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
@@ -299,18 +300,6 @@ def test_integer_multiple_of(
     "schema, warning_message, accepted_instances, rejected_instances",
     [
         (
-            {"type": "number", "multipleOf": 2},
-            "multipleOf is not supported for type:number; ignoring multipleOf",
-            [3, 5.5],
-            [],
-        ),
-        (
-            {"type": "integer", "multipleOf": 2.5},
-            "multipleOf for type:integer must be an integer; ignoring multipleOf",
-            [2, 3],
-            [1.5],
-        ),
-        (
             {"type": "integer", "multipleOf": 1025},
             "multipleOf for type:integer must be > 0 and <= 1024; ignoring multipleOf",
             [1025, 1026],
@@ -387,6 +376,120 @@ def test_integer_multiple_of_sweep(
         expected = minimum <= value <= maximum and value % multiple_of == 0
         accepted = _is_grammar_accept_string(json_schema_grammar, json.dumps(value))
         assert accepted == expected, (schema, value, expected, accepted)
+
+
+@pytest.mark.parametrize(
+    "multiple_of, accepted_instances, rejected_instances",
+    [
+        (2, ["0", "2", "2.0", "4", "-6"], ["1", "2.5", "3"]),
+        (0.1, ["0", "-0", "0.1", "0.10", "0.2", "1", "1.0", "-2.3"], ["0.05", "0.11", "1.01"]),
+        (0.25, ["0", "0.25", "0.5", "0.50", "0.75", "1", "1.0", "1.25"], ["0.1", "0.3", "1.2"]),
+        (2.5, ["0", "2.5", "5", "5.0", "7.5", "-2.5", "10"], ["1", "2", "3", "5.5"]),
+        (0.06, ["0", "0.06", "0.12", "0.3", "0.30", "1.2"], ["0.01", "0.07", "0.31"]),
+        (0.001, ["0", "0.001", "0.01", "0.010", "1", "1.000"], ["0.0001", "0.0011"]),
+    ],
+)
+def test_number_decimal_multiple_of(
+    multiple_of: float, accepted_instances: List[str], rejected_instances: List[str]
+):
+    schema = {"type": "number", "multipleOf": multiple_of}
+    for instance in accepted_instances:
+        check_schema_with_instance(schema, instance)
+    for instance in rejected_instances:
+        check_schema_with_instance(schema, instance, is_accepted=False)
+
+
+@pytest.mark.parametrize("multiple_of", [0.1, 0.25, 0.06, 2.5, 0.001, 2, 1.25])
+def test_number_decimal_multiple_of_sweep(multiple_of: float):
+    grammar = xgr.Grammar.from_json_schema(
+        json.dumps({"type": "number", "multipleOf": multiple_of})
+    )
+    divisor = Decimal(str(multiple_of))
+    for scale in range(4):
+        for numerator in range(-60, 61):
+            value = Decimal(numerator).scaleb(-scale)
+            instance = format(value, "f")
+            expected = value % divisor == 0
+            accepted = _is_grammar_accept_string(grammar, instance)
+            assert accepted == expected, (multiple_of, instance, expected, accepted)
+
+
+def test_integer_fractional_multiple_of():
+    schema = {"type": "integer", "multipleOf": 2.5}
+    for instance in [0, 5, 10, -5, -20]:
+        check_schema_with_instance(schema, instance)
+    for instance in [1, 2, 3, 6, 12]:
+        check_schema_with_instance(schema, instance, is_accepted=False)
+
+
+@pytest.mark.parametrize(
+    "schema, accepted_instances, rejected_instances",
+    [
+        (
+            {"type": "number", "minimum": 0.2, "maximum": 0.6, "multipleOf": 0.1},
+            ["0.2", "0.3", "0.6"],
+            ["0.1", "0.25", "0.7"],
+        ),
+        (
+            {
+                "type": "number",
+                "exclusiveMinimum": -0.5,
+                "exclusiveMaximum": 0.5,
+                "multipleOf": 0.25,
+            },
+            ["-0.25", "0", "0.25"],
+            ["-0.5", "0.1", "0.5"],
+        ),
+        (
+            {"type": "number", "minimum": 0.3, "maximum": 0.3, "multipleOf": 0.1},
+            ["0.3", "0.30"],
+            ["0.2", "0.4"],
+        ),
+        (
+            {"type": "number", "minimum": 0.30000000000000004, "maximum": 0.4, "multipleOf": 0.1},
+            ["0.4"],
+            ["0.3"],
+        ),
+        (
+            {"type": "number", "minimum": 0.2, "maximum": 0.29999999999999993, "multipleOf": 0.1},
+            ["0.2"],
+            ["0.3"],
+        ),
+    ],
+)
+def test_number_decimal_multiple_of_with_range(
+    schema: Dict[str, Any], accepted_instances: List[str], rejected_instances: List[str]
+):
+    for instance in accepted_instances:
+        check_schema_with_instance(schema, instance)
+    for instance in rejected_instances:
+        check_schema_with_instance(schema, instance, is_accepted=False)
+
+
+@pytest.mark.parametrize(
+    "schema, error_message",
+    [
+        (
+            {"type": "number", "multipleOf": 1.2345},
+            "multipleOf requires more than 8192 decimal states",
+        ),
+        (
+            {"type": "number", "minimum": 0, "multipleOf": 0.1},
+            "multipleOf combined with a number range requires both minimum and maximum bounds",
+        ),
+        (
+            {"type": "number", "minimum": 0, "maximum": 2000, "multipleOf": 0.1},
+            "multipleOf range contains more than 10000 values",
+        ),
+        (
+            {"type": "number", "minimum": 0.11, "maximum": 0.19, "multipleOf": 0.1},
+            "range contains no multipleOf value",
+        ),
+    ],
+)
+def test_number_multiple_of_compile_errors(schema: Dict[str, Any], error_message: str):
+    with pytest.raises(RuntimeError, match=error_message):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
 
 
 def test_optional():
