@@ -1700,6 +1700,7 @@ class ParametricExpander {
       PendingInstance instance = std::move(pending_.front());
       pending_.pop_front();
       const Definition& base = *definitions_.at(instance.base_name);
+      ValidateParametricDefinition(base);
       Definition generated = base;
       generated.name = instance.generated_name;
       generated.is_parametric = false;
@@ -1835,6 +1836,35 @@ class ParametricExpander {
     }
   }
 
+  void ValidateParametricDefinition(const Definition& definition) {
+    if (!validated_parametric_definitions_.insert(definition.name).second) {
+      return;
+    }
+    ValidateParametricNode(definition.body);
+  }
+
+  void ValidateParametricNode(const Node& node) {
+    if (node.kind == Node::Kind::kName) {
+      auto target = definitions_.find(node.text);
+      if (target == definitions_.end()) {
+        RaiseLarkError(source_, node.location, "unknown name '" + node.text + "'");
+      }
+      if (node.parameter.has_value()) {
+        if (!target->second->is_parametric) {
+          RaiseLarkError(source_, node.location, "rule '" + node.text + "' is not parametric");
+        }
+        ValidateParametricDefinition(*target->second);
+      } else if (target->second->is_parametric) {
+        RaiseLarkError(
+            source_, node.location, "parametric rule '" + node.text + "' requires a parameter"
+        );
+      }
+    }
+    for (const Node& child : node.children) {
+      ValidateParametricNode(child);
+    }
+  }
+
   Node RewriteNode(const Node& node, std::optional<uint64_t> current, bool terminal_context) {
     if (node.condition.has_value()) {
       if (terminal_context) {
@@ -1966,6 +1996,7 @@ class ParametricExpander {
   Document* document_;
   std::unordered_map<std::string, const Definition*> definitions_;
   std::unordered_set<std::string> used_names_;
+  std::unordered_set<std::string> validated_parametric_definitions_;
   std::unordered_map<std::string, std::string> instances_;
   std::deque<PendingInstance> pending_;
 };

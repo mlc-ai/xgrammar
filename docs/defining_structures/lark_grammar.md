@@ -251,7 +251,8 @@ pick::_: "" %if bit_count_ge(_, 1)
 
 Parameterized calls are only valid for parametric rules, and a parametric rule must use its current
 parameter. Terminals cannot contain parameterized calls or `%if`. Stop-like behavior,
-`temperature`, and `max_tokens` are not supported on parametric rules.
+`temperature`, and `max_tokens` are not supported on parametric rules. The `capture` and
+`max_chars` attributes are supported and apply to every invocation of the parametric rule.
 
 Compilation is limited to 4096 reachable rule instances per Lark document. Grammars whose state
 transitions exceed that limit are rejected with a located error instead of consuming unbounded

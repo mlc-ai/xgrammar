@@ -466,6 +466,91 @@ def test_lark_parametric_increment_and_decrement_saturate() -> None:
     _assert_language(grammar, ["H+L-"], ["H+L", "HL-", "H+L--"])
 
 
+def test_lark_parametric_nested_empty_rule_chain() -> None:
+    grammar = """
+        start: perm::0 "X"
+        perm::_: empty_a::_ empty_b::_ %if is_zeros([10:12])
+              | "a" perm::set_bit(0) %if bit_clear(0)
+              | "b" perm::set_bit(1) %if bit_clear(1)
+              | "c" perm::set_bit(2) %if bit_clear(2)
+        empty_a::_: "" %if is_ones([0:1])
+        empty_b::_: empty_c::_ %if is_ones([1:2])
+        empty_c::_: "" %if is_ones([2:3])
+    """
+    _assert_language(
+        grammar, ["abcX", "acbX", "bacX", "bcaX", "cabX", "cbaX"], ["X", "abX", "abc", "aabcX"]
+    )
+
+
+def test_lark_parametric_unconditional_recursion() -> None:
+    grammar = """
+        start: seen::0
+        seen::_: "" %if is_ones([0:3])
+              | "a" seen::set_bit(0)
+              | "b" seen::set_bit(1)
+              | "c" seen::set_bit(2)
+    """
+    _assert_language(grammar, ["abc", "caba", "aaabbbc"], ["", "a", "ab", "aaaa", "abcaax"])
+
+
+def test_lark_parametric_independent_bit_slice_counters() -> None:
+    grammar = """
+        start: counts::0
+        counts::_: "a" counts::incr([0:2]) %if lt([0:2], 2)
+                | "b" counts::incr([2:4]) %if lt([2:4], 2)
+                | "c" counts::incr([4:7]) %if lt([4:7], 3)
+                | "" %if and(eq([0:2], 2), and(eq([2:4], 2), eq([4:7], 3)))
+    """
+    _assert_language(
+        grammar, ["aabbccc", "cabcbac", "ccbabac"], ["", "aabbcc", "aaabbbccc", "aabbcccc"]
+    )
+
+
+def test_lark_parametric_long_counter() -> None:
+    count = 900
+    grammar = f"""
+        start: count_up::0 "X"
+        count_up::_: "a" count_up::incr([0:10]) %if lt([0:10], {count})
+                  | count_down::_ %if eq([0:10], {count})
+        count_down::_: "b" count_down::decr([0:10]) %if gt([0:10], 0)
+                    | "" %if eq([0:10], 0)
+    """
+    accepted = "a" * count + "b" * count + "X"
+    _assert_language(
+        grammar,
+        [accepted],
+        ["a" * (count - 1) + "b" * count + "X", "a" * count + "b" * (count - 1) + "X"],
+    )
+
+
+def test_lark_parametric_conditions_inside_groups_and_repetitions() -> None:
+    grammar = """
+        start: choice::0 "|" choice::1
+        choice::_: ("a" %if bit_clear(0) | "b" %if bit_set(0)) ("x" %if bit_set(0))?
+    """
+    _assert_language(grammar, ["a|b", "a|bx"], ["b|b", "ax|b", "a|a", "a|bxx"])
+
+
+def test_lark_parametric_capture_and_max_chars_attributes() -> None:
+    capture_grammar = """
+        start: item::0
+        item::_[capture="item"]: "a" item::set_bit(0) %if bit_clear(0)
+                                | "b" %if bit_set(0)
+    """
+    compiled = _compile_lark(capture_grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string("ab")
+    assert matcher.is_terminated()
+    assert matcher.get_captures() == [("item", b"b"), ("item", b"ab")]
+
+    budget_grammar = """
+        start: item::0
+        item::_[max_chars=2]: "a" item::incr(_) %if lt(_, 3)
+                            | ""
+    """
+    _assert_language(budget_grammar, ["", "a", "aa"], ["aaa", "aaaa"])
+
+
 def test_lark_parametric_false_only_state_is_empty_language() -> None:
     grammar = """
         start: dead::0 | "ok"
@@ -602,6 +687,28 @@ def test_lark_parametric_generated_names_do_not_collide() -> None:
             "start: foo::18446744073709551616\nfoo::_: foo::_",
             "invalid 64-bit parameter value",
             id="parameter-overflow",
+        ),
+        pytest.param(
+            'start: state::0\nstate::_: "ok" %if bit_clear(0) | missing %if bit_set(0)',
+            "unknown name 'missing'",
+            id="unknown-name-in-false-branch",
+        ),
+        pytest.param(
+            'start: state::0\nstate::_: "ok" %if bit_clear(0) | plain::_ %if bit_set(0)\nplain: "x"',
+            "rule 'plain' is not parametric",
+            id="argument-to-ordinary-rule-in-false-branch",
+        ),
+        pytest.param(
+            'start: state::0\nstate::_: "ok" %if bit_clear(0) | other %if bit_set(0)\n'
+            'other::_: "x" %if bit_set(0)',
+            "parametric rule 'other' requires a parameter",
+            id="missing-argument-in-false-branch",
+        ),
+        pytest.param(
+            'start: state::0\nstate::_: "ok" %if bit_clear(0) | other::_ %if bit_set(0)\n'
+            "other::_: missing %if bit_set(0)",
+            "unknown name 'missing'",
+            id="invalid-rule-reachable-only-through-false-branch",
         ),
         pytest.param(
             "start::_: start::_", "start rule cannot be parametric", id="parametric-start"
