@@ -13,7 +13,6 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
-#include <map>
 #include <memory>
 #include <optional>
 #include <set>
@@ -1926,67 +1925,11 @@ class LarkCompiler {
   }
 
   int32_t CompileStructuredRegex(const Node& node, const std::string& rule_hint) {
-    struct State {
-      int32_t length = 0;
-      int32_t suffix_link = -1;
-      std::map<std::string, int32_t> transitions;
-    };
-
     std::vector<std::string> chunks = ParseStructuredRegexChunks(node);
-    std::vector<State> states(1);
-    int32_t last = 0;
-    for (const std::string& chunk : chunks) {
-      int32_t current = static_cast<int32_t>(states.size());
-      states.push_back({states[last].length + 1, -1, {}});
-
-      int32_t parent = last;
-      while (parent != -1 && !states[parent].transitions.count(chunk)) {
-        states[parent].transitions[chunk] = current;
-        parent = states[parent].suffix_link;
-      }
-      if (parent == -1) {
-        states[current].suffix_link = 0;
-      } else {
-        int32_t target = states[parent].transitions.at(chunk);
-        if (states[parent].length + 1 == states[target].length) {
-          states[current].suffix_link = target;
-        } else {
-          int32_t clone = static_cast<int32_t>(states.size());
-          states.push_back(states[target]);
-          states[clone].length = states[parent].length + 1;
-          while (parent != -1) {
-            auto transition = states[parent].transitions.find(chunk);
-            if (transition == states[parent].transitions.end() || transition->second != target) {
-              break;
-            }
-            transition->second = clone;
-            parent = states[parent].suffix_link;
-          }
-          states[target].suffix_link = clone;
-          states[current].suffix_link = clone;
-        }
-      }
-      last = current;
-    }
-
-    std::vector<int32_t> state_rule_ids;
-    state_rule_ids.reserve(states.size());
-    for (size_t index = 0; index < states.size(); ++index) {
-      state_rule_ids.push_back(builder_.AddEmptyRuleWithHint(rule_hint + "_substring"));
-    }
-    for (size_t index = 0; index < states.size(); ++index) {
-      std::vector<int32_t> choices{builder_.AddEmptyStr()};
-      choices.reserve(states[index].transitions.size() + 1);
-      for (const auto& [chunk, target] : states[index].transitions) {
-        int32_t target_ref = builder_.AddRuleRef(state_rule_ids[target]);
-        choices.push_back(
-            chunk.empty() ? target_ref
-                          : builder_.AddSequence({builder_.AddByteString(chunk), target_ref})
-        );
-      }
-      builder_.UpdateRuleBody(state_rule_ids[index], builder_.AddChoices(choices));
-    }
-    return builder_.AddRuleRef(state_rule_ids[0]);
+    // A substring expr can only be the body of a rule, so wrap it and return a reference.
+    int32_t substring_expr_id = builder_.AddSubstring(chunks);
+    int32_t rule_id = builder_.AddRuleWithHint(rule_hint + "_substring", substring_expr_id);
+    return builder_.AddRuleRef(rule_id);
   }
 
   const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {

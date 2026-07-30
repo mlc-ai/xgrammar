@@ -108,6 +108,8 @@ std::string GrammarPrinter::PrintGrammarExpr(const GrammarExpr& grammar_expr) {
       return PrintTokenTagDispatch(grammar_expr);
     case GrammarExprType::kRegex:
       return PrintRegex(grammar_expr);
+    case GrammarExprType::kSubstring:
+      return PrintSubstring(grammar_expr);
     default:
       XGRAMMAR_LOG(FATAL) << "Unexpected GrammarExpr type: " << static_cast<int>(grammar_expr.type);
       XGRAMMAR_UNREACHABLE();
@@ -189,6 +191,41 @@ std::string GrammarPrinter::PrintRegex(const GrammarExpr& grammar_expr) {
   std::string result = "Regex(" + PrintString(grammar_->GetRegexString(grammar_expr));
   if (grammar_->GetRegexIsJSONString(grammar_expr)) {
     result += ", json_string=true";
+  }
+  return result + ")";
+}
+
+std::string GrammarPrinter::PrintSubstring(const GrammarExpr& grammar_expr) {
+  // EscapeString(std::string) stops at embedded NUL bytes, so escape codepoint by codepoint to
+  // keep NUL chunks (allowed by substring expressions) re-parseable.
+  auto escape_chunk = [](const std::string& chunk) {
+    std::string result = "\"";
+    size_t offset = 0;
+    while (offset < chunk.size()) {
+      if (chunk[offset] == '\0') {
+        result += "\\0";
+        ++offset;
+        continue;
+      }
+      auto [codepoint, length] = ParseNextUTF8(chunk.c_str() + offset);
+      if (codepoint == CharHandlingError::kInvalidUTF8) {
+        result += EscapeString(static_cast<uint8_t>(chunk[offset]));
+        ++offset;
+        continue;
+      }
+      result += EscapeString(codepoint);
+      offset += static_cast<size_t>(length);
+    }
+    return result + "\"";
+  };
+
+  auto chunks = grammar_->GetSubstringChunks(grammar_expr);
+  std::string result = "Substring(";
+  for (size_t i = 0; i < chunks.size(); ++i) {
+    if (i > 0) {
+      result += ", ";
+    }
+    result += escape_chunk(chunks[i]);
   }
   return result + ")";
 }
