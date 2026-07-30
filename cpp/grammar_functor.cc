@@ -2640,23 +2640,35 @@ std::optional<Grammar::Impl::FSMStateCacheKey> GrammarFSMHasherImpl::HashFsmStat
   // Domain-separate state-continuation keys from whole-FSM hashes because both use the same
   // RuleLevelCache.
   uint64_t hash_result = 0x53544154455f4653ULL;
-  std::map<int32_t, int32_t> original_state_id_to_new_id;
-  original_state_id_to_new_id[start_state] = 0;
-  std::queue<int32_t> bfs_queue;
-  bfs_queue.push(start_state);
+  const int32_t state_offset = fsm_state_offsets_[fsm_index];
+  std::vector<int32_t> original_state_id_to_new_id(
+      grammar_->ImplPtr()->per_rule_fsms[fsm_index]->GetNodeNum(), -1
+  );
+  auto mapped_id = [&](int32_t state_id) -> int32_t& {
+    XGRAMMAR_DCHECK(
+        state_id >= state_offset &&
+        state_id < state_offset + static_cast<int32_t>(original_state_id_to_new_id.size())
+    );
+    return original_state_id_to_new_id[state_id - state_offset];
+  };
+  mapped_id(start_state) = 0;
+  int32_t next_new_state_id = 1;
+  std::vector<int32_t> bfs_queue;
+  bfs_queue.reserve(original_state_id_to_new_id.size());
+  bfs_queue.push_back(start_state);
+  std::vector<std::pair<uint64_t, int32_t>> labeled_targets;
   int32_t edge_count = 0;
 
-  while (!bfs_queue.empty()) {
-    const int32_t current_old_state_id = bfs_queue.front();
-    bfs_queue.pop();
-    const int32_t current_new_state_id = original_state_id_to_new_id[current_old_state_id];
+  for (size_t queue_index = 0; queue_index < bfs_queue.size(); ++queue_index) {
+    const int32_t current_old_state_id = bfs_queue[queue_index];
+    const int32_t current_new_state_id = mapped_id(current_old_state_id);
     hash_result = HashCombine(
         hash_result,
         current_new_state_id,
         fsm.IsEndState(current_old_state_id) ? kEndStateFlag : kNotEndStateFlag
     );
 
-    std::vector<std::pair<uint64_t, int32_t>> labeled_targets;
+    labeled_targets.clear();
     labeled_targets.reserve(sorted_edges_[current_old_state_id].size());
     for (const auto& edge : sorted_edges_[current_old_state_id]) {
       uint64_t label_hash = HashCombine(uint64_t{0}, edge.min);
@@ -2698,20 +2710,17 @@ std::optional<Grammar::Impl::FSMStateCacheKey> GrammarFSMHasherImpl::HashFsmStat
     std::sort(labeled_targets.begin(), labeled_targets.end());
 
     for (const auto& [label_hash, target] : labeled_targets) {
-      auto [target_it, inserted] = original_state_id_to_new_id.emplace(
-          target, static_cast<int32_t>(original_state_id_to_new_id.size())
-      );
-      if (inserted) {
-        bfs_queue.push(target);
+      int32_t& target_new_state_id = mapped_id(target);
+      if (target_new_state_id == -1) {
+        target_new_state_id = next_new_state_id++;
+        bfs_queue.push_back(target);
       }
-      hash_result = HashCombine(hash_result, current_new_state_id, label_hash, target_it->second);
+      hash_result = HashCombine(hash_result, current_new_state_id, label_hash, target_new_state_id);
       ++edge_count;
     }
   }
 
-  return Grammar::Impl::FSMStateCacheKey{
-      hash_result, static_cast<int32_t>(original_state_id_to_new_id.size()), edge_count
-  };
+  return Grammar::Impl::FSMStateCacheKey{hash_result, next_new_state_id, edge_count};
 }
 
 std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
