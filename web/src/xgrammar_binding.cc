@@ -194,6 +194,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
           bool,
           std::optional<int>,
           JSONFormat,
+          bool,
           bool
       )>(&JSONSchemaToEBNF)
   );

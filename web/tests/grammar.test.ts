@@ -86,6 +86,43 @@ d_1 ::= ("" | ("d"))
     expect(grammar0).not.toEqual(grammar2);
   });
 
+  test("Test unsupported JSON Schema formats", async () => {
+    const unsupportedFormat = JSON.stringify({
+      type: "string",
+      format: "custom-format",
+    });
+    await expect(
+      Testings._jsonSchemaToEBNF(unsupportedFormat, false)
+    ).rejects.toThrow("Unsupported string format");
+    const grammar = await Testings._jsonSchemaToEBNF(
+      unsupportedFormat,
+      false,
+      2,
+      undefined,
+      true,
+      undefined,
+      "json",
+      false,
+      true
+    );
+    expect(grammar).toContain("root ::=");
+
+    await expect(
+      Grammar.fromJSONSchema(unsupportedFormat, false)
+    ).rejects.toThrow("Unsupported string format");
+    const compiled = await Grammar.fromJSONSchema(
+      unsupportedFormat,
+      false,
+      2,
+      undefined,
+      true,
+      undefined,
+      false,
+      true
+    );
+    expect(compiled.toString()).toContain("root");
+  });
+
   test("Test indent Grammar.fromJSONSchema()", async () => {
     const grammar0 = (await Grammar.fromJSONSchema(schema, false, -1)).toString();
     const grammar1 = (await Grammar.fromJSONSchema(schema, false)).toString();
