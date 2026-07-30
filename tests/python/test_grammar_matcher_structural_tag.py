@@ -161,7 +161,8 @@ def test_structural_tag():
         assert _is_grammar_accept_string(grammar, input, print_time=True)
 
 
-def test_structural_tag_compiler():
+@pytest.mark.parametrize("max_threads", [1, 8])
+def test_structural_tag_compiler(max_threads: int):
     class Schema1(BaseModel):
         arg1: str
         arg2: int
@@ -180,9 +181,19 @@ def test_structural_tag_compiler():
     # but here we use two triggers for testing such cases
     triggers = ["<function=f", "<function=g"]
 
-    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), max_threads=max_threads)
     compiled_grammar = compiler.compile_structural_tag(tags, triggers)
     assert str(compiled_grammar.grammar) == expected_grammar_test_structural_tag_after_optimization
+
+
+def test_parallel_structural_tag_schema_error():
+    tags = [
+        xgr.StructuralTagItem(begin="<function=f>", schema='{"type":"object"}', end="</function>"),
+        xgr.StructuralTagItem(begin="<function=g>", schema="not-json", end="</function>"),
+    ]
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), max_threads=8)
+    with pytest.raises(json.JSONDecodeError, match="Expecting value"):
+        compiler.compile_structural_tag(tags, ["<function="])
 
 
 @pytest.mark.hf_token_required

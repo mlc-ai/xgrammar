@@ -8,12 +8,16 @@
 #include <xgrammar/exception.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <exception>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 
 #include "grammar_builder.h"
@@ -22,6 +26,7 @@
 #include "json_schema_converter.h"
 #include "support/logging.h"
 #include "support/recursion_guard.h"
+#include "support/thread_pool.h"
 #include "support/utils.h"
 #include "tokenizer_info_impl.h"
 #include "xgrammar/grammar.h"
@@ -1747,10 +1752,13 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(RepeatFormat* format) {
 
 class StructuralTagGrammarConverter {
  public:
-  static Result<Grammar, ISTError> Convert(const StructuralTag& structural_tag);
+  static Result<Grammar, ISTError> Convert(
+      const StructuralTag& structural_tag, int max_threads, ThreadPool* thread_pool
+  );
 
  private:
-  StructuralTagGrammarConverter() = default;
+  explicit StructuralTagGrammarConverter(int max_threads, ThreadPool* thread_pool)
+      : max_threads_(max_threads), thread_pool_(thread_pool) {}
 
   /*!
    * \brief Visit a Format and return the rule id of the added rule.
@@ -1779,6 +1787,9 @@ class StructuralTagGrammarConverter {
   Result<int, ISTError> VisitSub(const RepeatFormat& format);
   Result<int, ISTError> VisitSub(const DispatchFormat& format);
   Result<int, ISTError> VisitSub(const TokenDispatchFormat& format);
+  static std::string GetJSONSchemaFingerprint(const JSONSchemaFormat& format);
+  static Result<Grammar, ISTError> ConvertJSONSchemaFormat(const JSONSchemaFormat& format);
+  Result<int, ISTError> AddJSONSchemaGrammar(Grammar sub_grammar);
   Grammar AddRootRuleAndGetGrammar(int ref_rule_id);
 
   bool IsPrefix(const std::string& prefix, const std::string& full_str);
@@ -1792,6 +1803,8 @@ class StructuralTagGrammarConverter {
    * This enables deduplication of identical formats to reduce grammar size.
    */
   std::unordered_map<std::string, int> serialization_to_rule_id_;
+  int max_threads_;
+  ThreadPool* thread_pool_;
 };
 
 bool StructuralTagGrammarConverter::IsPrefix(
@@ -1801,9 +1814,10 @@ bool StructuralTagGrammarConverter::IsPrefix(
          std::string_view(full_str).substr(0, prefix.size()) == prefix;
 }
 
-Result<Grammar, ISTError> StructuralTagGrammarConverter::Convert(const StructuralTag& structural_tag
+Result<Grammar, ISTError> StructuralTagGrammarConverter::Convert(
+    const StructuralTag& structural_tag, int max_threads, ThreadPool* thread_pool
 ) {
-  StructuralTagGrammarConverter converter;
+  StructuralTagGrammarConverter converter(max_threads, thread_pool);
   auto result = converter.Visit(structural_tag.format);
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
@@ -1824,13 +1838,11 @@ Grammar StructuralTagGrammarConverter::AddRootRuleAndGetGrammar(int ref_rule_id)
 Result<int, ISTError> StructuralTagGrammarConverter::Visit(const Format& format) {
   std::string fingerprint = FormatToJSONValue(format).serialize();
 
-  // Check if we've already processed an identical format
   auto it = serialization_to_rule_id_.find(fingerprint);
   if (it != serialization_to_rule_id_.end()) {
     return ResultOk(it->second);
   }
 
-  // Process the format and cache the result
   auto result =
       std::visit([&](auto&& arg) -> Result<int, ISTError> { return VisitSub(arg); }, format);
   if (result.IsOk()) {
@@ -1850,12 +1862,26 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const ConstStringF
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFormat& format) {
+  auto result = ConvertJSONSchemaFormat(format);
+  if (result.IsErr()) {
+    return ResultErr(std::move(result).UnwrapErr());
+  }
+  return AddJSONSchemaGrammar(std::move(result).Unwrap());
+}
+
+std::string StructuralTagGrammarConverter::GetJSONSchemaFingerprint(const JSONSchemaFormat& format
+) {
+  return FormatToJSONValue(Format{format}).serialize();
+}
+
+Result<Grammar, ISTError> StructuralTagGrammarConverter::ConvertJSONSchemaFormat(
+    const JSONSchemaFormat& format
+) {
   auto json_format = JSONFormatFromString(format.style);
   if (!json_format.has_value()) {
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
-  // The whitespace cap comes from the JSONSchemaFormat node (per-tag).
-  auto sub_grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
+  return ResultOk(GrammarNormalizer::Apply(JSONSchemaToGrammar(
       format.json_schema,
       /*any_whitespace=*/true,
       /*indent=*/std::nullopt,
@@ -1864,7 +1890,10 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
       /*max_whitespace_cnt=*/format.max_whitespace_cnt,
       /*any_order=*/format.any_order,
       /*json_format=*/*json_format
-  ));
+  )));
+}
+
+Result<int, ISTError> StructuralTagGrammarConverter::AddJSONSchemaGrammar(Grammar sub_grammar) {
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }
@@ -1978,6 +2007,60 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
   std::vector<int> tag_content_rule_ids;
   tag_content_rule_ids.reserve(format.tags.size());
 
+  bool can_parallelize_json_schemas = max_threads_ > 1 && format.tags.size() > 1;
+  std::vector<int32_t> tag_to_schema_index(format.tags.size(), -1);
+  std::vector<const JSONSchemaFormat*> unique_schemas;
+  std::vector<std::string> schema_fingerprints(format.tags.size());
+  std::unordered_map<std::string, int32_t> fingerprint_to_schema_index;
+  if (can_parallelize_json_schemas) {
+    for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
+      const auto* schema = std::get_if<JSONSchemaFormat>(format.tags[it_tag].content.get());
+      if (schema == nullptr) {
+        can_parallelize_json_schemas = false;
+        break;
+      }
+      schema_fingerprints[it_tag] = GetJSONSchemaFingerprint(*schema);
+      auto [it, inserted] = fingerprint_to_schema_index.emplace(
+          schema_fingerprints[it_tag], static_cast<int32_t>(unique_schemas.size())
+      );
+      if (inserted) {
+        unique_schemas.push_back(schema);
+      }
+      tag_to_schema_index[it_tag] = it->second;
+    }
+  }
+
+  std::vector<std::optional<Result<Grammar, ISTError>>> schema_results;
+  std::vector<std::exception_ptr> schema_errors;
+  if (can_parallelize_json_schemas) {
+    int num_threads = std::min<int>(max_threads_, static_cast<int>(unique_schemas.size()));
+    schema_results.resize(unique_schemas.size());
+    schema_errors.resize(unique_schemas.size());
+    std::atomic<int32_t> next_schema_index{0};
+    std::optional<ThreadPool> owned_thread_pool;
+    ThreadPool* active_thread_pool = thread_pool_;
+    if (active_thread_pool == nullptr) {
+      owned_thread_pool.emplace(num_threads);
+      active_thread_pool = &owned_thread_pool.value();
+    }
+    for (int thread_id = 0; thread_id < num_threads; ++thread_id) {
+      active_thread_pool->Execute([&]() {
+        int32_t schema_index;
+        while ((schema_index = next_schema_index.fetch_add(1, std::memory_order_relaxed)) <
+               static_cast<int32_t>(unique_schemas.size())) {
+          try {
+            schema_results[schema_index].emplace(
+                ConvertJSONSchemaFormat(*unique_schemas[schema_index])
+            );
+          } catch (...) {
+            schema_errors[schema_index] = std::current_exception();
+          }
+        }
+      });
+    }
+    active_thread_pool->Wait();
+  }
+
   for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
     const auto& tag = format.tags[it_tag];
     if (!std::holds_alternative<std::string>(tag.begin)) {
@@ -2002,13 +2085,34 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
     }
     trigger_to_tag_ids[matched_trigger_id].push_back(it_tag);
 
-    auto result = Visit(*tag.content);
-    if (result.IsErr()) {
-      return result;
+    if (can_parallelize_json_schemas) {
+      const auto& fingerprint = schema_fingerprints[it_tag];
+      auto cached = serialization_to_rule_id_.find(fingerprint);
+      if (cached != serialization_to_rule_id_.end()) {
+        tag_content_rule_ids.push_back(cached->second);
+        continue;
+      }
+      int32_t schema_index = tag_to_schema_index[it_tag];
+      if (schema_errors[schema_index]) {
+        std::rethrow_exception(schema_errors[schema_index]);
+      }
+      auto result = std::move(schema_results[schema_index].value());
+      schema_results[schema_index].reset();
+      if (result.IsErr()) {
+        return ResultErr(std::move(result).UnwrapErr());
+      }
+      auto added = AddJSONSchemaGrammar(std::move(result).Unwrap());
+      int rule_id = std::move(added).Unwrap();
+      serialization_to_rule_id_[fingerprint] = rule_id;
+      tag_content_rule_ids.push_back(rule_id);
+    } else {
+      auto result = Visit(*tag.content);
+      if (result.IsErr()) {
+        return result;
+      }
+      tag_content_rule_ids.push_back(std::move(result).Unwrap());
     }
-    tag_content_rule_ids.push_back(std::move(result).Unwrap());
   }
-
   // Step 2. Special Case: at_least_one && stop_after_first.
   if (format.at_least_one && format.stop_after_first) {
     std::vector<int> choice_elements;
@@ -2411,7 +2515,10 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TokenDispatc
 /************** StructuralTag Conversion Public API **************/
 
 Result<Grammar, StructuralTagError> StructuralTagToGrammar(
-    const std::string& structural_tag_json, const std::optional<TokenizerInfo>& tokenizer_info
+    const std::string& structural_tag_json,
+    const std::optional<TokenizerInfo>& tokenizer_info,
+    int max_threads,
+    ThreadPool* thread_pool
 ) {
   auto structural_tag_result = StructuralTagParser::FromJSON(structural_tag_json);
   if (structural_tag_result.IsErr()) {
@@ -2429,7 +2536,7 @@ Result<Grammar, StructuralTagError> StructuralTagToGrammar(
     return ResultErr(std::move(err).value());
   }
 
-  auto result = StructuralTagGrammarConverter::Convert(structural_tag);
+  auto result = StructuralTagGrammarConverter::Convert(structural_tag, max_threads, thread_pool);
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
   }
