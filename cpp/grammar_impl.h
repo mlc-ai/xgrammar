@@ -196,12 +196,19 @@ class Grammar::Impl {
     // / intersection of such expressions. Like kRegex, the operands are carried through the
     // grammar passes as-is; GrammarFSMBuilder compiles them into automata and intersects them.
     kIntersect,
+    // data format: [grammar_expr_id]
+    // The complement of the operand language with respect to all valid UTF-8 strings. The
+    // operand must compile into a leaf FSM (no rule references), like an intersection operand.
+    // GrammarFSMBuilder complements the operand automaton and intersects the result with the
+    // valid-UTF-8 universe.
+    kComplement,
   };
 
   /*! \brief Whether the expr type is compiled directly into an automaton by GrammarFSMBuilder
    * and contains no rule references. */
   static bool IsRegexExpressionType(GrammarExprType type) {
-    return type == GrammarExprType::kRegex || type == GrammarExprType::kIntersect;
+    return type == GrammarExprType::kRegex || type == GrammarExprType::kIntersect ||
+           type == GrammarExprType::kComplement;
   }
 
   /*! \brief The object representing a grammar expr. */

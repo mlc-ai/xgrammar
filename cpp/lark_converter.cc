@@ -1869,18 +1869,19 @@ class LarkCompiler {
     RaiseLarkError(source_, node.location, "unsupported terminal node");
   }
 
-  /*! \brief Whether the terminal node contains an intersection anywhere below, resolving
-   * terminal name references. Unknown, invalid or recursive references are reported by the
-   * regular compilation path. */
-  bool ContainsIntersection(const Node& node, std::unordered_set<std::string>* visiting) {
+  /*! \brief Whether the terminal node contains an intersection or complement anywhere below,
+   * resolving terminal name references. Unknown, invalid or recursive references are reported
+   * by the regular compilation path. */
+  bool ContainsFsmOperation(const Node& node, std::unordered_set<std::string>* visiting) {
     switch (node.kind) {
       case Node::Kind::kIntersection:
+      case Node::Kind::kNot:
         return true;
       case Node::Kind::kSequence:
       case Node::Kind::kChoice:
       case Node::Kind::kRepeat: {
         for (const Node& child : node.children) {
-          if (ContainsIntersection(child, visiting)) {
+          if (ContainsFsmOperation(child, visiting)) {
             return true;
           }
         }
@@ -1892,7 +1893,7 @@ class LarkCompiler {
             !visiting->insert(node.text).second) {
           return false;
         }
-        bool result = ContainsIntersection(definition_it->second->body, visiting);
+        bool result = ContainsFsmOperation(definition_it->second->body, visiting);
         visiting->erase(node.text);
         return result;
       }
@@ -1903,9 +1904,10 @@ class LarkCompiler {
 
   /*!
    * \brief Compile a terminal node into a leaf grammar expression: a regex, or a sequence /
-   * choices / intersection of leaf expressions, containing no rule references. Such an
-   * expression can be used as an intersection operand or a lazy rule body, and compiles into a
-   * single FSM. A subtree without intersections is converted to one regex expression.
+   * choices / intersection / complement of leaf expressions, containing no rule references.
+   * Such an expression can be used as an intersection or complement operand or a lazy rule
+   * body, and compiles into a single FSM. A subtree without intersections or complements is
+   * converted to one regex expression.
    */
   int32_t CompileTerminalLeafExpr(
       const Node& node, std::unordered_set<std::string>* visiting = nullptr
@@ -1914,7 +1916,7 @@ class LarkCompiler {
     if (visiting == nullptr) {
       visiting = &local_visiting;
     }
-    if (!ContainsIntersection(node, visiting)) {
+    if (!ContainsFsmOperation(node, visiting)) {
       return builder_.AddRegex(TerminalNodeToRegex(node, visiting));
     }
     switch (node.kind) {
@@ -1926,6 +1928,8 @@ class LarkCompiler {
         }
         return builder_.AddIntersection(operand_expr_ids);
       }
+      case Node::Kind::kNot:
+        return builder_.AddComplement(CompileTerminalLeafExpr(node.children[0], visiting));
       case Node::Kind::kSequence: {
         std::vector<int32_t> element_expr_ids;
         element_expr_ids.reserve(node.children.size());
@@ -1949,7 +1953,7 @@ class LarkCompiler {
           RaiseLarkError(
               source_,
               node.location,
-              "unbounded repetition over a terminal intersection is not supported"
+              "unbounded repetition over a terminal intersection or complement is not supported"
           );
         }
         int32_t child_expr_id = CompileTerminalLeafExpr(node.children[0], visiting);
@@ -1973,7 +1977,7 @@ class LarkCompiler {
         return builder_.AddSequence(element_expr_ids);
       }
       case Node::Kind::kName: {
-        // ContainsIntersection returned true, so the name resolves to a terminal that is not
+        // ContainsFsmOperation returned true, so the name resolves to a terminal that is not
         // currently being expanded.
         auto definition_it = definition_by_name_.find(node.text);
         XGRAMMAR_DCHECK(
@@ -1986,7 +1990,7 @@ class LarkCompiler {
         return result;
       }
       default:
-        XGRAMMAR_LOG(FATAL) << "Unexpected node kind in a terminal intersection";
+        XGRAMMAR_LOG(FATAL) << "Unexpected node kind in a terminal intersection or complement";
         XGRAMMAR_UNREACHABLE();
     }
   }
@@ -2175,16 +2179,13 @@ class LarkCompiler {
         int32_t result = builder_.AddRuleRef(root_it->second);
         return append_skip ? AppendSkip(result) : result;
       }
-      case Node::Kind::kIntersection: {
-        if (!terminal_mode) {
-          RaiseLarkError(source_, node.location, "'&' is only supported in terminal definitions");
-        }
-        return CompileTerminalLeafExpr(node);
+      case Node::Kind::kIntersection:
+      case Node::Kind::kNot: {
+        // Intersections and complements compile like terminals (into a single FSM), so in a
+        // rule they behave as lexemes and take a trailing skip.
+        int32_t result = CompileTerminalLeafExpr(node);
+        return terminal_mode || !append_skip ? result : AppendSkip(result);
       }
-      case Node::Kind::kNot:
-        RaiseLarkError(
-            source_, node.location, "regular-expression complement '~' is not supported"
-        );
     }
     RaiseLarkError(source_, node.location, "unsupported grammar node");
   }

@@ -566,6 +566,9 @@ std::variant<EBNFLexer::Token, std::vector<EBNFLexer::Token>> EBNFLexer::Impl::N
     case '&':
       Consume();
       return EBNFLexer::Token{TokenType::Amp, "&", "", start_line, start_column};
+    case '~':
+      Consume();
+      return EBNFLexer::Token{TokenType::Tilde, "~", "", start_line, start_column};
     case ',':
       Consume();
       return EBNFLexer::Token{TokenType::Comma, ",", "", start_line, start_column};
@@ -1045,7 +1048,16 @@ int32_t EBNFParser::HandleQuestionQuantifier(int32_t grammar_expr_id) {
 }
 
 int32_t EBNFParser::ParseElementWithQuantifier() {
+  // The prefix '~' complements the element that follows; a quantifier applies to the complement.
+  bool is_complement = false;
+  if (Peek().type == TokenType::Tilde) {
+    Consume();
+    is_complement = true;
+  }
   int32_t grammar_expr_id = ParseElement();
+  if (is_complement) {
+    grammar_expr_id = builder_.AddComplement(grammar_expr_id);
+  }
 
   if (Peek().type == TokenType::Star) {
     Consume();

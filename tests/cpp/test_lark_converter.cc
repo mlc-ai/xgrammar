@@ -154,9 +154,14 @@ TEST(LarkConverterTest, ErrorsContainSourceLocations) {
       "capture name must only contain letters, digits"
   );
   XGRAMMAR_EXPECT_THROW(
-      Grammar::FromLark("start: A & B\nA: \"a\"\nB: \"b\""),
+      Grammar::FromLark("start: a & b\na: \"a\"\nb: \"b\""),
       XGrammarError,
-      "'&' is only supported in terminal definitions"
+      "terminal cannot reference rule 'a'"
+  );
+  XGRAMMAR_EXPECT_THROW(
+      Grammar::FromLark("start: ~item\nitem: \"a\""),
+      XGrammarError,
+      "terminal cannot reference rule 'item'"
   );
   XGRAMMAR_EXPECT_THROW(
       Grammar::FromLark("start: /abc/i"),
