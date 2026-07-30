@@ -1,5 +1,7 @@
 """This test uses the optimized JSON grammar provided by the grammar library."""
 
+import json
+import string
 import sys
 import threading
 import time
@@ -527,6 +529,61 @@ def test_sharded_rule_cache_concurrent_compilation():
 
     compiler.clear_cache()
     assert compiler.get_cache_size_bytes() == 0
+
+
+def _make_compiler_pool_schema(index: int) -> str:
+    return json.dumps(
+        {
+            "type": "object",
+            "properties": {
+                "id": {"type": "string", "const": f"compiler-pool-{index}"},
+                "kind": {"type": "string", "enum": [f"kind-{item}" for item in range(64)]},
+                "values": {
+                    "type": "array",
+                    "minItems": 8,
+                    "maxItems": 8,
+                    "items": {"type": "integer"},
+                },
+            },
+            "required": ["id", "kind", "values"],
+            "additionalProperties": False,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def test_persistent_compiler_pool_concurrent_compilation():
+    """A shared compiler bounds native workers and remains reusable across concurrent calls."""
+    tokens = list(string.printable) + ["<eos>"]
+    tokenizer_info = xgr.TokenizerInfo(
+        tokens, vocab_size=len(tokens), stop_token_ids=[len(tokens) - 1]
+    )
+    serial_compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=False)
+    parallel_compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=4, cache_enabled=False)
+
+    expected = serial_compiler.compile_json_schema(_make_compiler_pool_schema(0)).serialize_json()
+    actual = parallel_compiler.compile_json_schema(_make_compiler_pool_schema(0)).serialize_json()
+    assert actual == expected
+    assert len(json.loads(actual)["adaptive_token_mask_cache"]) >= 64
+    xgr.CompiledGrammar.deserialize_json(actual, tokenizer_info)
+
+    def compile_one(index: int) -> str:
+        serialized = parallel_compiler.compile_json_schema(
+            _make_compiler_pool_schema(index)
+        ).serialize_json()
+        xgr.CompiledGrammar.deserialize_json(serialized, tokenizer_info)
+        return serialized
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(compile_one, index) for index in range(32)]
+        compiled = [future.result() for future in futures]
+
+    assert len(set(compiled)) == len(compiled)
+
+    # Exercise another large compile after all workers have gone idle. This
+    # regresses the old create-and-join behavior, which made a pool one-shot.
+    compile_one(1000)
 
 
 if __name__ == "__main__":

@@ -397,7 +397,10 @@ class Grammar::Impl {
   friend class GrammarCompiler;
 
   friend std::size_t MemorySize(const Impl& impl);
-  friend struct member_trait<Impl>;
+  friend picojson::value SerializeJSONValue(const Impl& impl);
+  friend std::optional<SerializationError> DeserializeJSONValue(
+      Impl* impl, const picojson::value& value, const std::string& type_name
+  );
 };
 
 XGRAMMAR_MEMBER_ARRAY(
@@ -423,26 +426,9 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::SuffixStopInfo::stop_capture_name
 );
 
-XGRAMMAR_MEMBER_TABLE(
-    Grammar::Impl,
-    "rules",
-    &Grammar::Impl::rules_,
-    "suffix_stop_infos",
-    &Grammar::Impl::suffix_stop_infos_,
-    "grammar_expr_data",
-    &Grammar::Impl::grammar_expr_indptr_,
-    "grammar_expr_indptr",
-    &Grammar::Impl::grammar_expr_data_,
-    "root_rule_id",
-    &Grammar::Impl::root_rule_id_,
-    "complete_fsm",
-    &Grammar::Impl::complete_fsm,
-    "per_rule_fsms",
-    &Grammar::Impl::per_rule_fsms,
-    "allow_empty_rule_ids",
-    &Grammar::Impl::allow_empty_rule_ids,
-    "optimized",
-    &Grammar::Impl::optimized
+picojson::value SerializeJSONValue(const Grammar::Impl& impl);
+std::optional<SerializationError> DeserializeJSONValue(
+    Grammar::Impl* impl, const picojson::value& value, const std::string& type_name = ""
 );
 
 }  // namespace xgrammar

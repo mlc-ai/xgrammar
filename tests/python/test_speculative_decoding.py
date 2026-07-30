@@ -41,6 +41,13 @@ def compiled_grammar():
     return compiler.compile_grammar(grammar)
 
 
+@pytest.fixture(scope="module")
+def literal_compiled_grammar():
+    """Compile a small deterministic grammar for batch traversal parity tests."""
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c"], vocab_size=3, stop_token_ids=[])
+    return xgr.GrammarCompiler(tokenizer_info).compile_grammar('root ::= "ab"')
+
+
 def _run_traverse(compiled_grammar, tree, **traverse_kwargs):
     """Run traverse_draft_tree on a tree and return (result, bitmask)."""
     retrieve_next_token, retrieve_next_sibling, draft_tokens = tree
@@ -183,6 +190,160 @@ def test_traverse_draft_tree_shape_assertion(compiled_grammar):
     with pytest.raises(RuntimeError):
         matcher.traverse_draft_tree(
             retrieve_next_token, torch.tensor([1, -1, -1], dtype=torch.int64), draft_tokens, bitmask
+        )
+
+
+# ── Batched traversal tests ──────────────────────────────────────────────────
+
+
+def test_batch_traverse_draft_tree_matches_scalar_and_reuses_pool(literal_compiled_grammar):
+    batch_size = 3
+    num_nodes = 3
+    retrieve_next_token = torch.tensor([1, 2, -1], dtype=torch.int64)
+    retrieve_next_sibling = torch.full((num_nodes,), -1, dtype=torch.int64)
+    draft_tokens = torch.tensor([[2, 0, 1], [2, 0, 2], [2, 0, 1]], dtype=torch.int64)
+    batch_mask = torch.zeros((batch_size * num_nodes, 1), dtype=torch.int32)
+    scalar_mask = torch.full_like(batch_mask, -1)
+    indices = [0, 2]
+    batch_matchers = [xgr.GrammarMatcher(literal_compiled_grammar) for _ in indices]
+    scalar_matchers = [xgr.GrammarMatcher(literal_compiled_grammar) for _ in indices]
+    batch = xgr.BatchGrammarMatcher(max_threads=2)
+
+    completed = batch.batch_traverse_draft_tree(
+        batch_matchers,
+        retrieve_next_token,
+        retrieve_next_sibling,
+        draft_tokens,
+        batch_mask,
+        indices,
+    )
+    assert completed == [True, True]
+
+    for matcher, index in zip(scalar_matchers, indices):
+        start = index * num_nodes
+        assert matcher.traverse_draft_tree(
+            retrieve_next_token,
+            retrieve_next_sibling,
+            draft_tokens[index],
+            scalar_mask[start : start + num_nodes],
+        )
+
+    torch.testing.assert_close(batch_mask, scalar_mask)
+    assert torch.equal(
+        batch_mask[num_nodes : 2 * num_nodes], torch.full((num_nodes, 1), -1, dtype=torch.int32)
+    )
+
+    # A BatchGrammarMatcher owns one persistent native pool. Reusing it must
+    # produce the same result without reconstructing joined worker threads.
+    batch_mask.zero_()
+    assert batch.batch_traverse_draft_tree(
+        batch_matchers,
+        retrieve_next_token,
+        retrieve_next_sibling,
+        draft_tokens,
+        batch_mask,
+        indices,
+    ) == [True, True]
+    torch.testing.assert_close(batch_mask, scalar_mask)
+
+
+def test_batch_traverse_draft_tree_batched_trees_and_roots(literal_compiled_grammar):
+    retrieve_next_token = torch.tensor([[1, 2, 3, -1], [-1, -1, 3, -1]], dtype=torch.int64)
+    retrieve_next_sibling = torch.full((2, 4), -1, dtype=torch.int64)
+    draft_tokens = torch.tensor([[2, 0, 1, 2], [2, 2, 2, 0]], dtype=torch.int64)
+    root_positions = [0, 2]
+    batch_mask = torch.empty((8, 1), dtype=torch.int32)
+    scalar_mask = torch.full_like(batch_mask, -1)
+    batch_matchers = [xgr.GrammarMatcher(literal_compiled_grammar) for _ in range(2)]
+    scalar_matchers = [xgr.GrammarMatcher(literal_compiled_grammar) for _ in range(2)]
+
+    completed = xgr.BatchGrammarMatcher(max_threads=2).batch_traverse_draft_tree(
+        batch_matchers,
+        retrieve_next_token,
+        retrieve_next_sibling,
+        draft_tokens,
+        batch_mask,
+        root_positions=root_positions,
+    )
+    assert completed == [True, True]
+
+    for index, matcher in enumerate(scalar_matchers):
+        start = index * 4
+        assert matcher.traverse_draft_tree(
+            retrieve_next_token[index],
+            retrieve_next_sibling[index],
+            draft_tokens[index],
+            scalar_mask[start : start + 4],
+            root_position=root_positions[index],
+        )
+    torch.testing.assert_close(batch_mask, scalar_mask)
+
+
+def test_batch_traverse_draft_tree_honors_tensor_storage_offsets(literal_compiled_grammar):
+    retrieve_next_token = torch.tensor([99, 1, 2, -1], dtype=torch.int64)[1:]
+    retrieve_next_sibling = torch.tensor([99, -1, -1, -1], dtype=torch.int64)[1:]
+    draft_tokens = torch.tensor([99, 2, 0, 1, 2, 0, 1], dtype=torch.int64)[1:].view(2, 3)
+    offset_mask = torch.empty((7, 1), dtype=torch.int32)[1:]
+    expected_mask = torch.empty_like(offset_mask)
+    assert retrieve_next_token.is_contiguous() and retrieve_next_token.storage_offset() > 0
+    assert retrieve_next_sibling.is_contiguous() and retrieve_next_sibling.storage_offset() > 0
+    assert draft_tokens.is_contiguous() and draft_tokens.storage_offset() > 0
+    assert offset_mask.is_contiguous() and offset_mask.storage_offset() > 0
+
+    batch = xgr.BatchGrammarMatcher(max_threads=2)
+    completed = batch.batch_traverse_draft_tree(
+        [xgr.GrammarMatcher(literal_compiled_grammar) for _ in range(2)],
+        retrieve_next_token,
+        retrieve_next_sibling,
+        draft_tokens,
+        offset_mask,
+    )
+    assert completed == [True, True]
+
+    completed = batch.batch_traverse_draft_tree(
+        [xgr.GrammarMatcher(literal_compiled_grammar) for _ in range(2)],
+        retrieve_next_token.clone(),
+        retrieve_next_sibling.clone(),
+        draft_tokens.clone(),
+        expected_mask,
+    )
+    assert completed == [True, True]
+    torch.testing.assert_close(offset_mask, expected_mask, rtol=0, atol=0)
+
+
+def test_batch_traverse_draft_tree_rejects_racy_or_noncontiguous_input(literal_compiled_grammar):
+    batch = xgr.BatchGrammarMatcher(max_threads=2)
+    matchers = [xgr.GrammarMatcher(literal_compiled_grammar) for _ in range(2)]
+    retrieve_next_token = torch.tensor([1, 2, -1], dtype=torch.int64)
+    retrieve_next_sibling = torch.full((3,), -1, dtype=torch.int64)
+    draft_tokens = torch.tensor([[2, 0, 1], [2, 0, 1]], dtype=torch.int64)
+    bitmask = torch.empty((6, 1), dtype=torch.int32)
+
+    with pytest.raises(RuntimeError, match="assigned to more than one matcher"):
+        batch.batch_traverse_draft_tree(
+            matchers,
+            retrieve_next_token,
+            retrieve_next_sibling,
+            draft_tokens,
+            bitmask,
+            indices=[0, 0],
+        )
+
+    noncontiguous_tokens = torch.zeros((2, 6), dtype=torch.int64)[:, ::2]
+    assert not noncontiguous_tokens.is_contiguous()
+    with pytest.raises(RuntimeError, match="requires contiguous tensors"):
+        batch.batch_traverse_draft_tree(
+            matchers, retrieve_next_token, retrieve_next_sibling, noncontiguous_tokens, bitmask
+        )
+
+    with pytest.raises(RuntimeError, match="root position"):
+        batch.batch_traverse_draft_tree(
+            matchers,
+            retrieve_next_token,
+            retrieve_next_sibling,
+            draft_tokens,
+            bitmask,
+            root_positions=[0, 3],
         )
 
 

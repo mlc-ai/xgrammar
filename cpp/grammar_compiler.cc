@@ -10,6 +10,8 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <future>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -1016,8 +1018,8 @@ class GrammarCompilerSub {
       std::optional<RuleLevelCache> rule_level_cache
   )
       : tokenizer_info_(tokenizer_info),
-        max_threads_(max_threads),
-        rule_level_cache_(rule_level_cache) {}
+        rule_level_cache_(rule_level_cache),
+        thread_pool_(max_threads > 1 ? std::make_unique<ThreadPool>(max_threads) : nullptr) {}
 
   CompiledGrammar CompileBuiltinJSONGrammar();
 
@@ -1054,11 +1056,12 @@ class GrammarCompilerSub {
 
   /*! \brief The vocabulary associated with this storage class. */
   const TokenizerInfo tokenizer_info_;
-  /*! \brief The maximum number of threads to use. */
-  const int max_threads_;
 
   /*! \brief The manager of the rule level cache.*/
   std::optional<RuleLevelCache> rule_level_cache_;
+
+  /*! \brief A persistent pool shared by concurrent grammar compilations. */
+  std::unique_ptr<ThreadPool> thread_pool_;
 };
 
 CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
@@ -1081,13 +1084,33 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   // 2. All byte strings (with element_in_string=0, 1, 2, ...)
   // since other positions will be expanded to the above positions
 
-  // TODO(Charlie): Figure out how to support ThreadPool and std::mutex in WebAssembly.
-  // Only declare ThreadPool and mutex if max_threads > 1, so when max_threads = 1, we do
-  // not need ThreadPool or std::mutex, which throws error in runtime in WebAssembly.
-  std::optional<ThreadPool> thread_pool;
+  auto root_rule_id = compiled_grammar_impl->grammar->GetRootRuleId();
+  std::vector<std::pair<ParserState, bool>> adaptive_states;
+  for (int32_t rule_id = 0; rule_id < static_cast<int>(compiled_grammar_impl->grammar->NumRules());
+       ++rule_id) {
+    auto rule = compiled_grammar_impl->grammar->GetRule(rule_id);
+    const auto& rule_fsm = compiled_grammar_impl->grammar->per_rule_fsms[rule_id];
+    XGRAMMAR_DCHECK(rule_fsm.has_value());
+    auto cur_stack_element =
+        ParserState(rule_id, rule.body_expr_id, 0, ParserState::kNoPrevInputPos, 0);
+    std::unordered_set<int> reachable_states;
+    rule_fsm->GetFsm().GetReachableStates(&reachable_states);
+    for (int state : reachable_states) {
+      cur_stack_element.element_id = state;
+      if (!rule_fsm->GetFsm().IsScanableState(state)) {
+        continue;
+      }
+      adaptive_states.emplace_back(cur_stack_element, rule_id == root_rule_id);
+    }
+  }
+
+  // Small grammars compile faster inline on independent outer compiler workers. Larger
+  // FSMs amortize native queueing and use the shared pool, which bounds total native
+  // concurrency across simultaneous compilations.
+  constexpr std::size_t kMinParallelStates = 64;
+  const bool use_thread_pool = thread_pool_ && adaptive_states.size() >= kMinParallelStates;
   std::optional<std::mutex> adaptive_token_mask_cache_mutex;
-  if (max_threads_ > 1) {
-    thread_pool.emplace(max_threads_);
+  if (use_thread_pool) {
     adaptive_token_mask_cache_mutex.emplace();
   }
 
@@ -1100,7 +1123,7 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
         rule_level_cache_
     );
     auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(is_root_rule);
-    if (max_threads_ > 1) {
+    if (use_thread_pool) {
       std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex.value());
       compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
     } else {
@@ -1108,39 +1131,37 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
     }
   };
 
-  auto add_task_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
-    // Execute depending on whether we use thread_pool
-    if (max_threads_ > 1) {
-      thread_pool->Execute([add_adaptive_token_mask, state, is_root_rule]() {
-        add_adaptive_token_mask(state, is_root_rule);
-      });
-    } else {
+  if (!use_thread_pool) {
+    for (const auto& [state, is_root_rule] : adaptive_states) {
       add_adaptive_token_mask(state, is_root_rule);
     }
-  };
-
-  auto root_rule_id = compiled_grammar_impl->grammar->GetRootRuleId();
-
-  for (int32_t rule_id = 0; rule_id < static_cast<int>(compiled_grammar_impl->grammar->NumRules());
-       ++rule_id) {
-    auto rule = compiled_grammar_impl->grammar->GetRule(rule_id);
-    const auto& rule_fsm = compiled_grammar_impl->grammar->per_rule_fsms[rule_id];
-    XGRAMMAR_DCHECK(rule_fsm.has_value());
-    auto cur_stack_element =
-        ParserState(rule_id, rule.body_expr_id, 0, ParserState::kNoPrevInputPos, 0);
-    std::unordered_set<int> reachable_states;
-    rule_fsm->GetFsm().GetReachableStates(&reachable_states);
-    for (int i : reachable_states) {
-      cur_stack_element.element_id = i;
-      if (!rule_fsm->GetFsm().IsScanableState(i)) {
-        continue;
-      }
-      add_task_adaptive_token_mask(cur_stack_element, rule_id == root_rule_id);
-    }
+    return CompiledGrammar(compiled_grammar_impl);
   }
 
-  if (max_threads_ > 1) {
-    thread_pool->Join();
+  std::vector<std::shared_future<void>> pending_tasks;
+  pending_tasks.reserve(adaptive_states.size());
+  try {
+    for (const auto& adaptive_state : adaptive_states) {
+      // Capturing names introduced by a structured binding requires C++20.
+      // XGrammar targets C++17, so copy the pair members into ordinary locals.
+      const ParserState state = adaptive_state.first;
+      const bool is_root_rule = adaptive_state.second;
+      pending_tasks.emplace_back(
+          thread_pool_->Submit([add_adaptive_token_mask, state, is_root_rule]() {
+            add_adaptive_token_mask(state, is_root_rule);
+          })
+      );
+    }
+    for (auto& task : pending_tasks) {
+      task.get();
+    }
+  } catch (...) {
+    // Tasks capture function-local compilation state. Drain the shared pool before
+    // unwinding so no task can outlive that state.
+    if (thread_pool_) {
+      thread_pool_->Wait();
+    }
+    throw;
   }
 
   return CompiledGrammar(compiled_grammar_impl);

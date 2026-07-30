@@ -1,0 +1,244 @@
+#include <dlpack/dlpack.h>
+#include <gtest/gtest.h>
+#include <xgrammar/xgrammar.h>
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <vector>
+
+#include "test_utils.h"
+
+namespace {
+
+DLTensor MakeTensor(
+    void* data, int32_t ndim, DLDataType dtype, int64_t* shape, uint64_t byte_offset = 0
+) {
+  return DLTensor{data, DLDevice{kDLCPU, 0}, ndim, dtype, shape, nullptr, byte_offset};
+}
+
+}  // namespace
+
+TEST(XGrammarMatcherTest, TraverseDraftTreeHonorsBitmaskByteOffset) {
+  using namespace xgrammar;
+
+  const TokenizerInfo tokenizer_info({"a", "b", "c"}, VocabType::RAW, 3, std::vector<int32_t>{});
+  GrammarCompiler compiler(tokenizer_info);
+  const CompiledGrammar grammar = compiler.CompileGrammar(R"(root ::= "ab")");
+
+  std::array<int64_t, 3> retrieve_next_token = {1, 2, -1};
+  std::array<int64_t, 3> retrieve_next_sibling = {-1, -1, -1};
+  std::array<int64_t, 3> draft_tokens = {2, 0, 1};
+  std::array<int64_t, 1> tree_shape = {3};
+  std::array<int64_t, 2> bitmask_shape = {3, GetBitmaskSize(3)};
+
+  DLTensor next_token_tensor =
+      MakeTensor(retrieve_next_token.data(), 1, DLDataType{kDLInt, 64, 1}, tree_shape.data());
+  DLTensor next_sibling_tensor =
+      MakeTensor(retrieve_next_sibling.data(), 1, DLDataType{kDLInt, 64, 1}, tree_shape.data());
+  DLTensor draft_token_tensor =
+      MakeTensor(draft_tokens.data(), 1, DLDataType{kDLInt, 64, 1}, tree_shape.data());
+
+  std::array<int32_t, 3> reference_storage = {};
+  DLTensor reference_bitmask =
+      MakeTensor(reference_storage.data(), 2, GetBitmaskDLType(), bitmask_shape.data());
+
+  constexpr int32_t kGuardValue = 0x12345678;
+  std::array<int32_t, 4> offset_storage = {kGuardValue, 0, 0, 0};
+  DLTensor offset_bitmask = MakeTensor(
+      offset_storage.data(), 2, GetBitmaskDLType(), bitmask_shape.data(), sizeof(offset_storage[0])
+  );
+
+  GrammarMatcher reference_matcher(grammar);
+  GrammarMatcher offset_matcher(grammar);
+  ASSERT_TRUE(reference_matcher.TraverseDraftTree(
+      &next_token_tensor, &next_sibling_tensor, &draft_token_tensor, &reference_bitmask
+  ));
+  ASSERT_TRUE(offset_matcher.TraverseDraftTree(
+      &next_token_tensor, &next_sibling_tensor, &draft_token_tensor, &offset_bitmask
+  ));
+
+  EXPECT_EQ(offset_storage[0], kGuardValue);
+  EXPECT_EQ(
+      std::vector<int32_t>(offset_storage.begin() + 1, offset_storage.end()),
+      std::vector<int32_t>(reference_storage.begin(), reference_storage.end())
+  );
+}
+
+TEST(XGrammarMatcherTest, RejectsMisalignedDLTensorData) {
+  using namespace xgrammar;
+
+  const TokenizerInfo tokenizer_info({"a", "b", "c"}, VocabType::RAW, 3, std::vector<int32_t>{});
+  GrammarCompiler compiler(tokenizer_info);
+  const CompiledGrammar grammar = compiler.CompileGrammar(R"(root ::= "ab")");
+
+  std::array<int64_t, 3> retrieve_next_token = {1, 2, -1};
+  std::array<int64_t, 3> retrieve_next_sibling = {-1, -1, -1};
+  std::array<int64_t, 3> draft_tokens = {2, 0, 1};
+  std::array<int64_t, 1> tree_shape = {3};
+  std::array<int64_t, 2> draft_shape = {1, 3};
+  std::array<int64_t, 2> bitmask_shape = {3, GetBitmaskSize(3)};
+
+  DLTensor next_token_tensor =
+      MakeTensor(retrieve_next_token.data(), 1, DLDataType{kDLInt, 64, 1}, tree_shape.data());
+  DLTensor next_sibling_tensor =
+      MakeTensor(retrieve_next_sibling.data(), 1, DLDataType{kDLInt, 64, 1}, tree_shape.data());
+  DLTensor draft_token_tensor =
+      MakeTensor(draft_tokens.data(), 1, DLDataType{kDLInt, 64, 1}, tree_shape.data());
+  DLTensor batched_draft_token_tensor =
+      MakeTensor(draft_tokens.data(), 2, DLDataType{kDLInt, 64, 1}, draft_shape.data());
+
+  std::array<int32_t, 3> bitmask_storage = {};
+  DLTensor bitmask =
+      MakeTensor(bitmask_storage.data(), 2, GetBitmaskDLType(), bitmask_shape.data());
+
+  alignas(int64_t) std::array<std::byte, sizeof(int64_t) * 3 + 1> int64_storage = {};
+  DLTensor misaligned_next_token =
+      MakeTensor(int64_storage.data(), 1, DLDataType{kDLInt, 64, 1}, tree_shape.data(), 1);
+  DLTensor misaligned_batched_draft =
+      MakeTensor(int64_storage.data(), 2, DLDataType{kDLInt, 64, 1}, draft_shape.data(), 1);
+
+  alignas(int32_t) std::array<std::byte, sizeof(int32_t) * 3 + 1> int32_storage = {};
+  DLTensor misaligned_bitmask =
+      MakeTensor(int32_storage.data(), 2, GetBitmaskDLType(), bitmask_shape.data(), 1);
+
+  GrammarMatcher matcher(grammar);
+  XGRAMMAR_EXPECT_THROW(
+      matcher.TraverseDraftTree(
+          &misaligned_next_token, &next_sibling_tensor, &draft_token_tensor, &bitmask
+      ),
+      std::runtime_error,
+      "must be aligned"
+  );
+  XGRAMMAR_EXPECT_THROW(
+      matcher.TraverseDraftTree(
+          &next_token_tensor, &next_sibling_tensor, &draft_token_tensor, &misaligned_bitmask
+      ),
+      std::runtime_error,
+      "must be aligned"
+  );
+  XGRAMMAR_EXPECT_THROW(
+      matcher.FillNextTokenBitmask(&misaligned_bitmask), std::runtime_error, "must be aligned"
+  );
+
+  std::fill(bitmask_storage.begin(), bitmask_storage.end(), int32_t{0x12345678});
+  std::vector<GrammarMatcher> matchers = {GrammarMatcher(grammar)};
+  BatchGrammarMatcher batch_matcher(2);
+  XGRAMMAR_EXPECT_THROW(
+      batch_matcher.BatchTraverseDraftTree(
+          &matchers, &next_token_tensor, &next_sibling_tensor, &misaligned_batched_draft, &bitmask
+      ),
+      std::runtime_error,
+      "must be aligned"
+  );
+  EXPECT_EQ(
+      bitmask_storage,
+      (std::array<int32_t, 3>{int32_t{0x12345678}, int32_t{0x12345678}, int32_t{0x12345678}})
+  );
+
+  XGRAMMAR_EXPECT_THROW(
+      batch_matcher.BatchTraverseDraftTree(
+          &matchers,
+          &next_token_tensor,
+          &next_sibling_tensor,
+          &batched_draft_token_tensor,
+          &misaligned_bitmask
+      ),
+      std::runtime_error,
+      "must be aligned"
+  );
+}
+
+TEST(XGrammarMatcherTest, BatchFillPropagatesWorkerExceptionsAndReusesPool) {
+  using namespace xgrammar;
+
+  const TokenizerInfo tokenizer_info(
+      {"a", "b", "</s>"}, VocabType::RAW, 3, std::vector<int32_t>{2}
+  );
+  GrammarCompiler compiler(tokenizer_info);
+  const CompiledGrammar grammar = compiler.CompileGrammar(R"(root ::= "ab")");
+
+  std::vector<GrammarMatcher> matchers;
+  matchers.emplace_back(grammar);
+  matchers.emplace_back(grammar);
+  ASSERT_TRUE(matchers[0].AcceptToken(0));
+  ASSERT_TRUE(matchers[0].AcceptToken(1));
+  ASSERT_TRUE(matchers[0].AcceptToken(2));
+  ASSERT_TRUE(matchers[0].IsTerminated());
+
+  std::array<int32_t, 2> bitmask_storage = {};
+  std::array<int64_t, 2> bitmask_shape = {2, GetBitmaskSize(3)};
+  DLTensor bitmask =
+      MakeTensor(bitmask_storage.data(), 2, GetBitmaskDLType(), bitmask_shape.data());
+
+  BatchGrammarMatcher batch_matcher(2);
+  XGRAMMAR_EXPECT_THROW(
+      batch_matcher.BatchFillNextTokenBitmask(&matchers, &bitmask, std::nullopt, false),
+      std::runtime_error,
+      "has terminated"
+  );
+
+  matchers[0].Reset();
+  EXPECT_NO_THROW(batch_matcher.BatchFillNextTokenBitmask(&matchers, &bitmask, std::nullopt, false)
+  );
+}
+
+TEST(XGrammarMatcherTest, BatchTraversePropagatesWorkerExceptionsAndReusesPool) {
+  using namespace xgrammar;
+
+  const TokenizerInfo tokenizer_info({"a", "b", "c"}, VocabType::RAW, 3, std::vector<int32_t>{});
+  GrammarCompiler compiler(tokenizer_info);
+  const CompiledGrammar grammar = compiler.CompileGrammar(R"(root ::= "ab")");
+  std::vector<GrammarMatcher> matchers = {GrammarMatcher(grammar), GrammarMatcher(grammar)};
+
+  std::array<int64_t, 6> retrieve_next_token = {1, 2, -1, 1, 2, -1};
+  std::array<int64_t, 6> retrieve_next_sibling = {1, -1, -1, -1, -1, -1};
+  std::array<int64_t, 6> draft_tokens = {2, 0, 1, 2, 0, 1};
+  std::array<int64_t, 2> tree_shape = {2, 3};
+  DLTensor next_token_tensor =
+      MakeTensor(retrieve_next_token.data(), 2, DLDataType{kDLInt, 64, 1}, tree_shape.data());
+  DLTensor next_sibling_tensor =
+      MakeTensor(retrieve_next_sibling.data(), 2, DLDataType{kDLInt, 64, 1}, tree_shape.data());
+  DLTensor draft_token_tensor =
+      MakeTensor(draft_tokens.data(), 2, DLDataType{kDLInt, 64, 1}, tree_shape.data());
+
+  std::array<int32_t, 6> bitmask_storage = {};
+  std::array<int64_t, 2> bitmask_shape = {6, GetBitmaskSize(3)};
+  DLTensor bitmask =
+      MakeTensor(bitmask_storage.data(), 2, GetBitmaskDLType(), bitmask_shape.data());
+
+  BatchGrammarMatcher batch_matcher(2);
+  XGRAMMAR_EXPECT_THROW(
+      batch_matcher.BatchTraverseDraftTree(
+          &matchers,
+          &next_token_tensor,
+          &next_sibling_tensor,
+          &draft_token_tensor,
+          &bitmask,
+          std::nullopt,
+          std::nullopt,
+          -1.0
+      ),
+      std::runtime_error,
+      "root node must not have siblings"
+  );
+
+  retrieve_next_sibling[0] = -1;
+  std::vector<uint8_t> completed;
+  EXPECT_NO_THROW(
+      completed = batch_matcher.BatchTraverseDraftTree(
+          &matchers,
+          &next_token_tensor,
+          &next_sibling_tensor,
+          &draft_token_tensor,
+          &bitmask,
+          std::nullopt,
+          std::nullopt,
+          -1.0
+      )
+  );
+  EXPECT_EQ(completed, std::vector<uint8_t>({1, 1}));
+}

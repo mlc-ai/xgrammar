@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from typing import List, Sequence
 
 import pytest
 
@@ -14,7 +14,7 @@ def _compile(
     )
 
 
-def _allowed_token_ids(matcher: xgr.GrammarMatcher, tokenizer_info: xgr.TokenizerInfo) -> list[int]:
+def _allowed_token_ids(matcher: xgr.GrammarMatcher, tokenizer_info: xgr.TokenizerInfo) -> List[int]:
     bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
     matcher.fill_next_token_bitmask(bitmask)
     return [

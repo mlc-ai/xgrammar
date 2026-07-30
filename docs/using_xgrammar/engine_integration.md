@@ -114,7 +114,35 @@ traverses a draft token tree once and fills the bitmask for every node. The tree
 with three int64 tensors: `draft_tokens[i]` is the token id of node `i`,
 `retrieve_next_token[i]` is the first child of node `i`, and `retrieve_next_sibling[i]` is the
 next sibling of node `i` (`-1` means none). The `time_threshold` parameter bounds the traversal
-time: if exceeded, the method stops and returns `False`.
+time: if exceeded, the method stops and returns `False`. Set `root_position` when the root is
+not node zero; the root's draft token is ignored.
+
+For a serving batch, use
+[`xgr.BatchGrammarMatcher.batch_traverse_draft_tree`](xgrammar.BatchGrammarMatcher.batch_traverse_draft_tree)
+to traverse all request trees in one native call. It reuses the batch matcher's worker pool
+across decoding steps:
+
+```python
+batch_matcher = xgr.BatchGrammarMatcher(max_threads=8)
+draft_tokens = torch.empty((batch_size, num_nodes), dtype=torch.int64)
+draft_bitmask = xgr.allocate_token_bitmask(
+    batch_size * num_nodes, tokenizer_info.vocab_size
+)
+
+completed = batch_matcher.batch_traverse_draft_tree(
+    matchers,
+    retrieve_next_token,    # (num_nodes,) shared, or (batch_size, num_nodes)
+    retrieve_next_sibling,  # (num_nodes,) shared, or (batch_size, num_nodes)
+    draft_tokens,
+    draft_bitmask,
+)
+```
+
+The mask rows for request `i` are
+`draft_bitmask[i * num_nodes : (i + 1) * num_nodes]`. All tensors must be contiguous CPU
+tensors; tree and token tensors use `int64`, while the mask uses `int32`. For a mixed engine
+batch, pass unique `indices` to map each matcher to a request row. `root_positions` can select
+a different root node for each matcher.
 
 As the figure shows, the traversal runs on the CPU while the target model verifies the same
 tree on the GPU, so mask generation overlaps with the verification. This draft tree traversal

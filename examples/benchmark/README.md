@@ -26,6 +26,7 @@ python3 examples/benchmark/bench_apply_token_bitmask_inplace.py
 
 #### Results
 H100
+
 |   Batch |   Vocab |   Masked cnt |   Torch Compile |         Triton  |           CUDA  |
 |    size |    size |              |     Baseline us |    us (speedup) |    us (speedup) |
 |--------:|--------:|-------------:|----------------:|----------------:|----------------:|
@@ -44,3 +45,14 @@ H100
 |    4096 |  128000 |            1 |         2895.83 |  494.47 (5.86x) | 249.96 (11.59x) |
 |    4096 |  128000 |        64000 |         2863.31 | 2517.85 (1.14x) | 1993.29 (1.44x) |
 |    4096 |  128000 |       127000 |         2720.67 | 1935.24 (1.41x) | 1207.38 (2.25x) |
+
+### Benchmark Batched Draft-Tree Traversal
+
+Compare one native batched call with scalar Python dispatch for speculative-decoding
+draft trees. The benchmark uses a synthetic tokenizer and grammar, so it does not
+download a model:
+
+```bash
+python3 examples/benchmark/bench_batch_draft_tree.py \
+  --batch-size 96 --num-nodes 6 --threads 1 2 4 8
+```

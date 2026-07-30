@@ -262,6 +262,19 @@ def test_batch_fill_temperature_with_indices() -> None:
         )
 
 
+def test_batch_fill_temperature_honors_storage_offset() -> None:
+    grammar_temperature = xgr.GrammarMatcher(_compile_lark('start[temperature=0.2]: "a"'))
+    no_temperature = xgr.GrammarMatcher(_compile_lark('start: "a"'))
+    temperatures = torch.full((4,), 99.0, dtype=torch.float32)[1:]
+    assert temperatures.is_contiguous() and temperatures.storage_offset() > 0
+
+    xgr.BatchGrammarMatcher.batch_fill_temperature(
+        [grammar_temperature, no_temperature], temperatures, indices=[0, 2]
+    )
+
+    torch.testing.assert_close(temperatures, torch.tensor([0.2, 99.0, -1.0]))
+
+
 def test_traverse_draft_tree_fills_temperatures() -> None:
     item_grammar = xgr.Grammar.from_lark('start: "x"+')
     compiled_grammar = _compile_lark(
@@ -280,6 +293,34 @@ def test_traverse_draft_tree_fills_temperatures() -> None:
 
     assert completed
     torch.testing.assert_close(temperatures, torch.tensor([0.1, 0.6, 0.6, 0.1]))
+    assert matcher.temperature == pytest.approx(0.1)
+
+
+def test_traverse_draft_tree_combines_root_position_and_storage_offsets() -> None:
+    item_grammar = xgr.Grammar.from_lark('start: "x"+')
+    compiled_grammar = _compile_lark(
+        'start: "a" value "z"\nvalue[temperature=0.6]: @item', named_grammars={"item": item_grammar}
+    )
+    matcher = xgr.GrammarMatcher(compiled_grammar, default_temperature=0.1)
+    retrieve_next_token = torch.tensor([99, -1, 2, 3, 4, -1], dtype=torch.int64)[1:]
+    retrieve_next_sibling = torch.tensor([99, -1, -1, -1, -1, -1], dtype=torch.int64)[1:]
+    draft_tokens = torch.tensor([99, 4, 0, 0, 2, 3], dtype=torch.int64)[1:]
+    bitmask = xgr.allocate_token_bitmask(6, len(VOCAB))[1:]
+    temperatures = torch.empty(6, dtype=torch.float32)[1:]
+    tensors = [retrieve_next_token, retrieve_next_sibling, draft_tokens, bitmask, temperatures]
+    assert all(tensor.is_contiguous() and tensor.storage_offset() > 0 for tensor in tensors)
+
+    completed = matcher.traverse_draft_tree(
+        retrieve_next_token,
+        retrieve_next_sibling,
+        draft_tokens,
+        bitmask,
+        temperatures=temperatures,
+        root_position=1,
+    )
+
+    assert completed
+    torch.testing.assert_close(temperatures, torch.tensor([-1.0, 0.1, 0.6, 0.6, 0.1]))
     assert matcher.temperature == pytest.approx(0.1)
 
 

@@ -86,9 +86,14 @@ compiled_grammar = grammar_compiler.compile_grammar(ebnf_string)
 
 ### Multi-threaded Compilation
 
-To accelerate computation, [`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) is multithreaded. It uses multiple threads to process a single grammar and can also compile multiple grammars in parallel. `xgr.GrammarCompiler.compile_*` functions releases the GIL, so you can use asyncio to compile multiple grammars in parallel.
+To accelerate computation, [`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) is multithreaded. It uses multiple threads to process a single grammar and can also compile multiple grammars in parallel. `xgr.GrammarCompiler.compile_*` functions release the GIL, so you can use asyncio to compile multiple grammars in parallel.
 
-The `max_threads` parameter controls the maximum number of threads used. We recommend setting it to half the number of your CPU’s virtual cores for optimal performance.
+The `max_threads` parameter controls the compiler's native worker pool. The pool is created once
+per compiler and reused across calls, including concurrent calls, so each request does not create
+and tear down another set of threads. Concurrent compilations share this bounded pool for adaptive
+token-mask work. Small grammars run that work inline when native queueing would cost more than it
+saves. We recommend setting `max_threads` to half the number of your CPU's virtual cores as a
+starting point.
 
 ```python
 grammar_compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=8)
