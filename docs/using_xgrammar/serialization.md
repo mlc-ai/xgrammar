@@ -80,6 +80,10 @@ Deserialization validates the view count, state bounds, sorted unique end states
 before rebuilding the shared views. This avoids duplicating the complete FSM for every rule while
 preserving exact round trips.
 
+This compact representation uses serialization version `v17`. Version `v16` was already assigned
+to the sampling-temperature representation, so compiled-grammar caches created by `v16` or earlier
+releases must be cleared when upgrading.
+
 ```python
 # Construct CompiledGrammar
 compiler: xgr.GrammarCompiler = xgr.GrammarCompiler(tokenizer_info_deserialized)
