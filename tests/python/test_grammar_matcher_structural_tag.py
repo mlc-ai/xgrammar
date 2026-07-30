@@ -196,6 +196,21 @@ def test_parallel_structural_tag_schema_error():
         compiler.compile_structural_tag(tags, ["<function="])
 
 
+def test_compiler_thread_pool_reuse():
+    tags = [
+        xgr.StructuralTagItem(begin="<function=f>", schema='{"type":"object"}', end="</function>"),
+        xgr.StructuralTagItem(begin="<function=g>", schema='{"type":"array"}', end="</function>"),
+    ]
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), max_threads=4)
+
+    first = compiler.compile_structural_tag(tags, ["<function="])
+    second = compiler.compile_structural_tag(tags, ["<function="])
+    plain = compiler.compile_grammar('root ::= "ok"')
+
+    assert str(first.grammar) == str(second.grammar)
+    assert _is_grammar_accept_string(plain.grammar, "ok")
+
+
 @pytest.mark.hf_token_required
 def test_structural_tag_mask_gen():
     # Define schemas for the test

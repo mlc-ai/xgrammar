@@ -1018,6 +1018,7 @@ class GrammarCompilerSub {
   )
       : tokenizer_info_(tokenizer_info),
         max_threads_(max_threads),
+        thread_pool_(max_threads > 1 ? std::make_unique<ThreadPool>(max_threads) : nullptr),
         rule_level_cache_(rule_level_cache) {}
 
   CompiledGrammar CompileBuiltinJSONGrammar();
@@ -1057,6 +1058,8 @@ class GrammarCompilerSub {
   const TokenizerInfo tokenizer_info_;
   /*! \brief The maximum number of threads to use. */
   const int max_threads_;
+  /*! \brief Workers reused across grammar conversion, optimization, and mask generation. */
+  const std::unique_ptr<ThreadPool> thread_pool_;
 
   /*! \brief The manager of the rule level cache.*/
   std::optional<RuleLevelCache> rule_level_cache_;
@@ -1064,7 +1067,8 @@ class GrammarCompilerSub {
 
 CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
-  compiled_grammar_impl->grammar = GrammarOptimizer::Apply(grammar_unoptimized, max_threads_);
+  compiled_grammar_impl->grammar =
+      GrammarOptimizer::Apply(grammar_unoptimized, max_threads_, thread_pool_.get());
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
@@ -1083,12 +1087,9 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   // since other positions will be expanded to the above positions
 
   // TODO(Charlie): Figure out how to support ThreadPool and std::mutex in WebAssembly.
-  // Only declare ThreadPool and mutex if max_threads > 1, so when max_threads = 1, we do
-  // not need ThreadPool or std::mutex, which throws error in runtime in WebAssembly.
-  std::optional<ThreadPool> thread_pool;
+  // Only declare the mutex if max_threads > 1, so single-threaded WebAssembly does not require it.
   std::optional<std::mutex> adaptive_token_mask_cache_mutex;
   if (max_threads_ > 1) {
-    thread_pool.emplace(max_threads_);
     adaptive_token_mask_cache_mutex.emplace();
   }
 
@@ -1112,7 +1113,7 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   auto add_task_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
     // Execute depending on whether we use thread_pool
     if (max_threads_ > 1) {
-      thread_pool->Execute([add_adaptive_token_mask, state, is_root_rule]() {
+      thread_pool_->Execute([add_adaptive_token_mask, state, is_root_rule]() {
         add_adaptive_token_mask(state, is_root_rule);
       });
     } else {
@@ -1141,7 +1142,7 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   }
 
   if (max_threads_ > 1) {
-    thread_pool->Join();
+    thread_pool_->Wait();
   }
 
   return CompiledGrammar(compiled_grammar_impl);
@@ -1173,8 +1174,9 @@ CompiledGrammar GrammarCompilerSub::CompileJSONSchema(
 }
 
 CompiledGrammar GrammarCompilerSub::CompileStructuralTag(const std::string& structural_tag_json) {
-  auto result = StructuralTagToGrammar(structural_tag_json, tokenizer_info_, max_threads_, nullptr)
-                    .ToVariant();
+  auto result =
+      StructuralTagToGrammar(structural_tag_json, tokenizer_info_, max_threads_, thread_pool_.get())
+          .ToVariant();
   XGRAMMAR_CHECK(std::holds_alternative<Grammar>(result))
       << GetMessageFromVariantError(std::get<1>(result));
   return MultiThreadCompileGrammar(std::get<0>(result));
