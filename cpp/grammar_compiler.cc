@@ -55,6 +55,32 @@ namespace xgrammar {
  */
 class FirstByteTokenMaskCache {
  public:
+  struct VocabBucket {
+    int32_t begin = -1;
+    int32_t end = -1;
+    size_t max_suffix_bytes = 0;
+  };
+  using VocabBuckets = std::array<VocabBucket, 256>;
+
+  static std::shared_ptr<const VocabBuckets> BuildVocabBuckets(
+      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab
+  ) {
+    auto result = std::make_shared<VocabBuckets>();
+    for (int32_t i = 0; i < static_cast<int32_t>(sorted_decoded_vocab.size()); ++i) {
+      const auto& token = sorted_decoded_vocab[i].second;
+      if (token.empty()) {
+        continue;
+      }
+      auto& bucket = (*result)[static_cast<uint8_t>(token[0])];
+      if (bucket.begin == -1) {
+        bucket.begin = i;
+      }
+      bucket.end = i + 1;
+      bucket.max_suffix_bytes = std::max(bucket.max_suffix_bytes, token.size() - 1);
+    }
+    return result;
+  }
+
   struct Key {
     uint8_t first_byte;
     bool collect_rejected;
@@ -85,7 +111,14 @@ class FirstByteTokenMaskCache {
     }
   };
 
-  explicit FirstByteTokenMaskCache(size_t max_memory_bytes) : max_memory_bytes_(max_memory_bytes) {}
+  FirstByteTokenMaskCache(
+      size_t max_memory_bytes, std::shared_ptr<const VocabBuckets> vocab_buckets
+  )
+      : max_memory_bytes_(max_memory_bytes), vocab_buckets_(std::move(vocab_buckets)) {}
+
+  const VocabBucket& GetVocabBucket(uint8_t first_byte) const {
+    return (*vocab_buckets_)[first_byte];
+  }
 
 #ifdef XGRAMMAR_PROFILE_COMPILE
   ~FirstByteTokenMaskCache() {
@@ -167,6 +200,7 @@ class FirstByteTokenMaskCache {
   const size_t max_memory_bytes_;
   size_t memory_bytes_ = 0;
   std::unordered_map<Key, std::shared_ptr<const Result>, KeyHash> cache_;
+  std::shared_ptr<const VocabBuckets> vocab_buckets_;
 #ifdef XGRAMMAR_PROFILE_COMPILE
   uint64_t profile_hits_ = 0;
   uint64_t profile_misses_ = 0;
@@ -1310,22 +1344,10 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     while (group_begin < interval.second) {
       XGRAMMAR_DCHECK(!sorted_decoded_vocab[group_begin].second.empty());
       const uint8_t first_byte = static_cast<uint8_t>(sorted_decoded_vocab[group_begin].second[0]);
-      size_t first_byte_group_max_suffix_bytes =
-          sorted_decoded_vocab[group_begin].second.size() - 1;
-      int first_byte_group_end = group_begin + 1;
-      while (first_byte_group_end < interval.second &&
-             !sorted_decoded_vocab[first_byte_group_end].second.empty() &&
-             static_cast<uint8_t>(sorted_decoded_vocab[first_byte_group_end].second[0]) ==
-                 first_byte) {
-        first_byte_group_max_suffix_bytes = std::max(
-            first_byte_group_max_suffix_bytes,
-            sorted_decoded_vocab[first_byte_group_end].second.size() - 1
-        );
-        ++first_byte_group_end;
-      }
-
-      int group_end = first_byte_group_end;
-      size_t group_max_suffix_bytes = first_byte_group_max_suffix_bytes;
+      const auto& bucket = first_byte_cache_->GetVocabBucket(first_byte);
+      XGRAMMAR_DCHECK(bucket.begin == group_begin && bucket.end <= interval.second);
+      const int group_end = bucket.end;
+      const size_t group_max_suffix_bytes = bucket.max_suffix_bytes;
 
       const bool collect_rejected = fill_reject_indices;
       auto first_byte_cache_key =
@@ -2017,6 +2039,9 @@ class GrammarCompilerSub {
       std::optional<RuleLevelCache> rule_level_cache
   )
       : tokenizer_info_(tokenizer_info),
+        first_byte_vocab_buckets_(
+            FirstByteTokenMaskCache::BuildVocabBuckets(tokenizer_info.GetSortedDecodedVocab())
+        ),
         max_threads_(max_threads),
         thread_pool_(max_threads > 1 ? std::make_unique<ThreadPool>(max_threads) : nullptr),
         rule_level_cache_(rule_level_cache) {}
@@ -2056,6 +2081,8 @@ class GrammarCompilerSub {
 
   /*! \brief The vocabulary associated with this storage class. */
   const TokenizerInfo tokenizer_info_;
+  /*! \brief Immutable first-byte ranges shared by every grammar compiled for this tokenizer. */
+  const std::shared_ptr<const FirstByteTokenMaskCache::VocabBuckets> first_byte_vocab_buckets_;
   /*! \brief The maximum number of threads to use. */
   const int max_threads_;
   /*! \brief Reused workers so each compile avoids thread startup and teardown. */
@@ -2141,7 +2168,8 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
     active_rule_level_cache.emplace(kLocalRuleCacheMaxBytes);
   }
   constexpr size_t kFirstByteCacheMaxBytes = 64 * 1024 * 1024;
-  auto first_byte_cache = std::make_shared<FirstByteTokenMaskCache>(kFirstByteCacheMaxBytes);
+  auto first_byte_cache =
+      std::make_shared<FirstByteTokenMaskCache>(kFirstByteCacheMaxBytes, first_byte_vocab_buckets_);
   auto optional_character_class_token_summary_cache =
       std::make_shared<OptionalCharacterClassTokenSummaryCache>();
 #ifdef XGRAMMAR_PROFILE_COMPILE
