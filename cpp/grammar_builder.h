@@ -65,6 +65,9 @@ class GrammarBuilder {
    */
   Grammar Get(int32_t root_rule_id);
 
+  /*! \brief Disable matcher jump-forward output. Enabling is monotonic across composed grammars. */
+  void SetNoForcing(bool no_forcing);
+
   /****************** GrammarExpr handling ******************/
 
   /*! \brief Add a grammar_expr and return the grammar_expr id. */

@@ -1450,6 +1450,7 @@ class LarkCompiler {
       root_rule_id =
           builder_.AddRuleWithHint("start_with_skip", builder_.AddSequence(std::move(elements)));
     }
+    builder_.SetNoForcing(no_forcing_);
     return DeadCodeEliminator::Apply(GrammarNormalizer().Apply(builder_.Get(root_rule_id)));
   }
 
@@ -1523,7 +1524,12 @@ class LarkCompiler {
             RaiseLarkError(source_, location, "allow_initial_skip must be a boolean");
           }
           allow_initial_skip_ = allow_initial_skip_ || option.get<bool>();
-        } else if (key == "no_forcing" || key == "allow_invalid_utf8") {
+        } else if (key == "no_forcing") {
+          if (!option.is<bool>()) {
+            RaiseLarkError(source_, location, key + " must be a boolean");
+          }
+          no_forcing_ = no_forcing_ || option.get<bool>();
+        } else if (key == "allow_invalid_utf8") {
           if (!option.is<bool>()) {
             RaiseLarkError(source_, location, key + " must be a boolean");
           }
@@ -2561,6 +2567,7 @@ class LarkCompiler {
   std::unordered_map<std::string, int32_t> named_grammar_roots_;
   int32_t skip_rule_id_ = -1;
   bool allow_initial_skip_ = false;
+  bool no_forcing_ = false;
   std::unordered_set<std::string> dynamic_unused_rules_;
 };
 
