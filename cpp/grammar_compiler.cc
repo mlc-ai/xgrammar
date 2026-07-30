@@ -6,6 +6,7 @@
 #include <xgrammar/compiler.h>
 
 #include <algorithm>
+#include <atomic>
 #include <bitset>
 #include <cctype>
 #include <cstddef>
@@ -1086,39 +1087,21 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   // 2. All byte strings (with element_in_string=0, 1, 2, ...)
   // since other positions will be expanded to the above positions
 
-  // TODO(Charlie): Figure out how to support ThreadPool and std::mutex in WebAssembly.
-  // Only declare the mutex if max_threads > 1, so single-threaded WebAssembly does not require it.
-  std::optional<std::mutex> adaptive_token_mask_cache_mutex;
-  if (max_threads_ > 1) {
-    adaptive_token_mask_cache_mutex.emplace();
-  }
+  struct AdaptiveTokenMaskTask {
+    ParserState state;
+    bool is_root_rule;
+  };
+  std::vector<AdaptiveTokenMaskTask> adaptive_token_mask_tasks;
 
-  auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
+  auto compute_adaptive_token_mask = [&](const AdaptiveTokenMaskTask& task) {
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(
         compiled_grammar_impl->grammar,
-        state,
+        task.state,
         tag_dispatch_rule_id_to_second_slicing_bitset,
         tokenizer_info_,
         rule_level_cache_
     );
-    auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(is_root_rule);
-    if (max_threads_ > 1) {
-      std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex.value());
-      compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
-    } else {
-      compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
-    }
-  };
-
-  auto add_task_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
-    // Execute depending on whether we use thread_pool
-    if (max_threads_ > 1) {
-      thread_pool_->Execute([add_adaptive_token_mask, state, is_root_rule]() {
-        add_adaptive_token_mask(state, is_root_rule);
-      });
-    } else {
-      add_adaptive_token_mask(state, is_root_rule);
-    }
+    return grammar_matcher.GetAdaptiveTokenMask(task.is_root_rule);
   };
 
   auto root_rule_id = compiled_grammar_impl->grammar->GetRootRuleId();
@@ -1137,12 +1120,43 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
       if (!rule_fsm->GetFsm().IsScanableState(i)) {
         continue;
       }
-      add_task_adaptive_token_mask(cur_stack_element, rule_id == root_rule_id);
+      adaptive_token_mask_tasks.push_back({cur_stack_element, rule_id == root_rule_id});
     }
   }
 
-  if (max_threads_ > 1) {
+  const int32_t num_tasks = static_cast<int32_t>(adaptive_token_mask_tasks.size());
+  if (max_threads_ == 1) {
+    for (const auto& task : adaptive_token_mask_tasks) {
+      compiled_grammar_impl->adaptive_token_mask_cache.emplace(
+          task.state, compute_adaptive_token_mask(task)
+      );
+    }
+  } else if (num_tasks > 0) {
+    const int32_t num_workers = std::min(max_threads_, num_tasks);
+    using AdaptiveTokenMaskMap = decltype(compiled_grammar_impl->adaptive_token_mask_cache);
+    std::vector<AdaptiveTokenMaskMap> worker_results(num_workers);
+    for (auto& worker_result : worker_results) {
+      worker_result.reserve((num_tasks + num_workers - 1) / num_workers);
+    }
+
+    std::atomic<int32_t> next_task_id{0};
+    for (int32_t worker_id = 0; worker_id < num_workers; ++worker_id) {
+      thread_pool_->Execute([&, worker_id]() {
+        auto& worker_result = worker_results[worker_id];
+        int32_t task_id;
+        while ((task_id = next_task_id.fetch_add(1, std::memory_order_relaxed)) < num_tasks) {
+          const auto& task = adaptive_token_mask_tasks[task_id];
+          worker_result.emplace(task.state, compute_adaptive_token_mask(task));
+        }
+      });
+    }
     thread_pool_->Wait();
+
+    auto& result = compiled_grammar_impl->adaptive_token_mask_cache;
+    result.reserve(num_tasks);
+    for (auto& worker_result : worker_results) {
+      result.merge(worker_result);
+    }
   }
 
   return CompiledGrammar(compiled_grammar_impl);
