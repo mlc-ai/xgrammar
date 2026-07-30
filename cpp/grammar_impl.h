@@ -197,7 +197,20 @@ class Grammar::Impl {
     // and is carried through the grammar passes as-is; when GrammarFSMBuilder runs, it is
     // compiled into an automaton via a chunk-level suffix automaton (see SuffixAutomata).
     kSubstring,
+    // data format: [grammar_expr_id0, grammar_expr_id1, ...]
+    // The intersection of the operand languages. Each operand must compile into a leaf FSM
+    // (no rule references): a regex, a byte string, a character class, or a sequence / choices
+    // / intersection of such expressions. Like kRegex, the operands are carried through the
+    // grammar passes as-is; GrammarFSMBuilder compiles them into automata and intersects them.
+    kIntersect,
   };
+
+  /*! \brief Whether the expr type is compiled directly into an automaton by GrammarFSMBuilder
+   * and contains no rule references. */
+  static bool IsRegexExpressionType(GrammarExprType type) {
+    return type == GrammarExprType::kRegex || type == GrammarExprType::kSubstring ||
+           type == GrammarExprType::kIntersect;
+  }
 
   /*! \brief The object representing a grammar expr. */
   struct GrammarExpr {

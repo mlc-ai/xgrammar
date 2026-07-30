@@ -568,6 +568,9 @@ std::variant<EBNFLexer::Token, std::vector<EBNFLexer::Token>> EBNFLexer::Impl::N
     case '|':
       Consume();
       return EBNFLexer::Token{TokenType::Pipe, "|", "", start_line, start_column};
+    case '&':
+      Consume();
+      return EBNFLexer::Token{TokenType::Amp, "&", "", start_line, start_column};
     case ',':
       Consume();
       return EBNFLexer::Token{TokenType::Comma, ",", "", start_line, start_column};
@@ -707,6 +710,9 @@ class EBNFParser {
   int32_t ParseElementWithQuantifier();
   int32_t ParseLookaheadAssertion();
   int32_t ParseSequence();
+  /*! \brief Parse an intersection of sequences separated by '&'. The '&' operator binds
+   * tighter than '|' and looser than sequence concatenation. */
+  int32_t ParseIntersection();
   int32_t ParseChoices();
   ParsedRule ParseRule();
 
@@ -1076,21 +1082,36 @@ int32_t EBNFParser::ParseSequence() {
 
   do {
     elements.push_back(ParseElementWithQuantifier());
-  } while (Peek().type != TokenType::Pipe && Peek().type != TokenType::RParen &&
-           Peek().type != TokenType::LookaheadLParen && Peek().type != TokenType::RuleName &&
-           Peek().type != TokenType::EndOfFile);
+  } while (Peek().type != TokenType::Pipe && Peek().type != TokenType::Amp &&
+           Peek().type != TokenType::RParen && Peek().type != TokenType::LookaheadLParen &&
+           Peek().type != TokenType::RuleName && Peek().type != TokenType::EndOfFile);
 
   return builder_.AddSequence(elements);
+}
+
+int32_t EBNFParser::ParseIntersection() {
+  int32_t first_operand = ParseSequence();
+
+  if (Peek().type != TokenType::Amp) {
+    return first_operand;
+  }
+
+  std::vector<int32_t> operands{first_operand};
+  while (Peek().type == TokenType::Amp) {
+    Consume();
+    operands.push_back(ParseSequence());
+  }
+  return builder_.AddIntersection(operands);
 }
 
 int32_t EBNFParser::ParseChoices() {
   std::vector<int32_t> choices;
 
-  choices.push_back(ParseSequence());
+  choices.push_back(ParseIntersection());
 
   while (Peek().type == TokenType::Pipe) {
     Consume();
-    choices.push_back(ParseSequence());
+    choices.push_back(ParseIntersection());
   }
 
   return builder_.AddChoices(choices);

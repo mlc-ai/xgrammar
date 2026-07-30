@@ -119,6 +119,8 @@ std::string GrammarPrinter::PrintGrammarExpr(const GrammarExpr& grammar_expr) {
       return PrintRegex(grammar_expr);
     case GrammarExprType::kSubstring:
       return PrintSubstring(grammar_expr);
+    case GrammarExprType::kIntersect:
+      return PrintIntersect(grammar_expr);
     default:
       XGRAMMAR_LOG(FATAL) << "Unexpected GrammarExpr type: " << static_cast<int>(grammar_expr.type);
       XGRAMMAR_UNREACHABLE();
@@ -265,6 +267,18 @@ std::string GrammarPrinter::PrintSubstring(const GrammarExpr& grammar_expr) {
     result += escape_chunk(chunks[i]);
   }
   return result + ")";
+}
+
+std::string GrammarPrinter::PrintIntersect(const GrammarExpr& grammar_expr) {
+  std::string result = "(";
+  for (int i = 0; i < grammar_expr.data_len; ++i) {
+    result += PrintGrammarExpr(grammar_expr[i]);
+    if (i + 1 != grammar_expr.data_len) {
+      result += " & ";
+    }
+  }
+  result += ")";
+  return result;
 }
 
 std::string GrammarPrinter::PrintString(const std::string& str) {

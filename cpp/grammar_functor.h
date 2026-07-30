@@ -166,6 +166,8 @@ class GrammarFunctor {
         return VisitRegex(grammar_expr);
       case GrammarExprType::kSubstring:
         return VisitSubstring(grammar_expr);
+      case GrammarExprType::kIntersect:
+        return VisitIntersection(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
         XGRAMMAR_UNREACHABLE();
@@ -265,6 +267,24 @@ class GrammarFunctor {
 
   /*! \brief Visit a substring GrammarExpr. It is a leaf: the chunk list is carried as-is. */
   virtual T VisitSubstring(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
+
+  /*! \brief Visit an intersection GrammarExpr. Its children are operand expr ids. */
+  virtual T VisitIntersection(const GrammarExpr& grammar_expr) {
+    if constexpr (std::is_same<T, void>::value) {
+      for (int32_t operand_expr_id : grammar_expr) {
+        VisitExpr(operand_expr_id);
+      }
+    } else if constexpr (std::is_same<T, int32_t>::value) {
+      std::vector<int32_t> operand_expr_ids;
+      operand_expr_ids.reserve(grammar_expr.size());
+      for (int32_t operand_expr_id : grammar_expr) {
+        operand_expr_ids.push_back(VisitExpr(operand_expr_id));
+      }
+      return builder_->AddIntersection(operand_expr_ids);
+    } else {
+      return T();
+    }
+  }
 
   /*! \brief The grammar to visit or mutate. */
   Grammar base_grammar_{NullObj{}};
@@ -418,6 +438,11 @@ class GrammarFSMBuilder {
   static Result<FSMWithStartEnd> Regex(
       const std::string& regex, bool json_string = false, bool byte_mode = false
   );
+  /*!
+   * \brief Build the automaton of an intersection expr: compile each operand into a leaf FSM
+   * and intersect them. Returns the error message on failure.
+   */
+  static Result<FSMWithStartEnd> Intersect(const GrammarExpr& expr, const Grammar& grammar);
   /*! \brief The characters that must be escaped inside a JSON string literal: the control
    * characters 0x00-0x1F, the quote '"' and the backslash '\\'. */
   static const std::bitset<256>& JSONStringForbiddenChars();

@@ -225,6 +225,45 @@ def test_lark_terminal_intersection_round_trip() -> None:
         _assert_grammar_language(candidate, ["你好", "您好"], ["", "你", "大家好"])
 
 
+def test_lark_terminal_intersection_bounded_group_repetition() -> None:
+    _assert_language(
+        "start: PAIR\nPAIR: (/[abc]/ & /[bcd]/){1,2}",
+        ["b", "c", "bb", "bc", "cb", "cc"],
+        ["", "a", "d", "bbb"],
+    )
+
+
+def test_lark_terminal_intersection_unbounded_group_repetition() -> None:
+    # In a normal rule the intersection is hoisted into a helper rule, so unbounded repetition
+    # over it is supported through rule references.
+    _assert_language(
+        "start: LOOP\nLOOP: (/[ab]/ & /[bc]/)+", ["b", "bb", "bbb"], ["", "a", "c", "ab", "bc"]
+    )
+
+
+def test_lark_suffix_marker_with_unbounded_intersection_repetition_is_rejected() -> None:
+    # A suffix marker must compile into a single leaf FSM, where unbounded repetition over an
+    # intersection cannot be expanded.
+    _assert_lark_error(
+        """
+        start: head "z"
+        head[suffix=END]: /[a-z]*/
+        END: (/e.d/ & /.n./)+
+        """,
+        "unbounded repetition over a terminal intersection is not supported",
+    )
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_marker_with_intersection(attribute: str) -> None:
+    grammar = f"""
+        start: head "z"
+        head[{attribute}=END]: /[a-z]*/
+        END: /e.d/ & /.n./
+    """
+    _assert_language(grammar, ["endz", "abcendz"], ["", "z", "abcz", "abcend", "abcendendz"])
+
+
 @pytest.mark.parametrize(
     "attributes, message, location, caret",
     [

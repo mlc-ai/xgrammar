@@ -28,6 +28,7 @@ class EBNFLexer {
     LBrace,          // {
     RBrace,          // }
     Pipe,            // |
+    Amp,             // &
     Comma,           // ,
     EndOfFile,       // End of file
 

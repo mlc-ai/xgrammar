@@ -112,6 +112,19 @@ int32_t GrammarBuilder::AddSubstring(const std::vector<std::string>& chunks) {
   );
 }
 
+int32_t GrammarBuilder::AddIntersection(const std::vector<int32_t>& operand_expr_ids) {
+  XGRAMMAR_CHECK(operand_expr_ids.size() >= 2) << "Intersection requires at least two operands.";
+  for (int32_t operand_expr_id : operand_expr_ids) {
+    XGRAMMAR_CHECK(operand_expr_id >= 0 && operand_expr_id < grammar_->NumGrammarExprs())
+        << "Intersection operand expr id " << operand_expr_id << " is out of range.";
+  }
+  return AddGrammarExpr(
+      {GrammarExprType::kIntersect,
+       operand_expr_ids.data(),
+       static_cast<int32_t>(operand_expr_ids.size())}
+  );
+}
+
 int32_t GrammarBuilder::AddCharacterClass(
     const std::vector<CharacterClassElement>& elements, bool is_negative
 ) {

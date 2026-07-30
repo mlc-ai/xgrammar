@@ -105,6 +105,13 @@ class GrammarBuilder {
   int32_t AddSubstring(const std::vector<std::string>& chunks);
 
   /*!
+   * \brief Add a GrammarExpr for the intersection of the operand languages. Each operand must
+   * compile into a leaf FSM without rule references; GrammarFSMBuilder builds and intersects
+   * the operand automata.
+   */
+  int32_t AddIntersection(const std::vector<int32_t>& operand_expr_ids);
+
+  /*!
    * \brief Add a GrammarExpr for a character class.
    * \param elements A vector of CharacterClassElement, each containing a lower and a upper bound.
    * \param is_negative Whether the character class is negated.
