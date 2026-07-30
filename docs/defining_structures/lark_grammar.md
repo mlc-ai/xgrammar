@@ -121,9 +121,9 @@ String literals use double quotes and JSON escape syntax: `\"`, `\\`, `\/`, `\b`
 `\r`, `\t`, and `\uXXXX`. Non-ASCII characters may be written directly (`"中文"`, `"😀"`) or with
 Unicode escapes (`"\u03bb"` matches `λ`).
 
-A trailing `i` makes the literal case-insensitive: `"yes"i` matches `yes`, `YES`, `Yes`, and so
-on. Case-insensitive literals currently support ASCII characters only; a case-insensitive literal
-containing non-ASCII characters is rejected.
+A trailing `i` applies Unicode simple case folding: `"yes"i` matches `yes`, `YES`, and `Yes`, while
+`"Żółw"i` also matches `żółw` and `ŻÓŁW`. Simple folding maps one Unicode codepoint to equivalent
+single codepoints; it does not expand one character into a multi-character sequence.
 
 ### Character Ranges
 
@@ -141,7 +141,7 @@ usual escapes. A `/` inside the pattern is written `\/`.
 `.` matches one Unicode character. By default it does not match newline. Regular expressions
 support the following trailing flags, in any order:
 
-- `i`: match ASCII letters case-insensitively. Non-ASCII characters retain their original case.
+- `i`: apply Unicode 16.0.0 simple case folding to literals and character classes.
 - `s`: make `.` match newline as well.
 - `u`: explicitly select Unicode semantics. This is a no-op because XGrammar regular expressions
   already use Unicode codepoints.
@@ -152,7 +152,7 @@ expression used with a `suffix` or `stop` attribute. The `l`, `m`, and `x` flags
 ```text
 start: /a.b/      // accepts "acb", "a😀b"; rejects "a\nb"
 line: /a.b/s      // also accepts "a\nb"
-word: /hello/iu   // accepts "hello", "HELLO", and "HeLLo"
+word: /Żółw/iu    // accepts "Żółw", "żółw", and "ŻÓŁW"
 ```
 
 ### Sequences, Alternatives, and Groups

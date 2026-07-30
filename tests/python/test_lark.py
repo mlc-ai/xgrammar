@@ -173,7 +173,25 @@ def _assert_lark_error(
             r"start: /hello[0-2]\x21/iu",
             ["hello0!", "HELLO1!", "HeLlO2!"],
             ["hello3!", "hello1", "héllo1!"],
-            id="regex-ascii-case-insensitive-and-unicode-flags",
+            id="regex-case-insensitive-and-unicode-flags",
+        ),
+        pytest.param(
+            "start: /Żółw|Σ|k|ß/iu",
+            ["Żółw", "żółw", "ŻÓŁW", "Σ", "σ", "ς", "k", "K", "K", "ß", "ẞ"],
+            ["zółw", "ss", "SS"],
+            id="regex-unicode-simple-case-folding",
+        ),
+        pytest.param(
+            "start: /[^kσ]+/i",
+            ["A", "ż", "😀"],
+            ["k", "K", "K", "σ", "Σ", "ς", "aK"],
+            id="regex-unicode-case-insensitive-negative-class",
+        ),
+        pytest.param(
+            "start: /[À-Ö]+/i",
+            ["À", "à", "Ö", "ö", "Àéö"],
+            ["×", "÷", "A", ""],
+            id="regex-unicode-case-insensitive-range",
         ),
         pytest.param(
             "start: /a.b/is",
@@ -213,6 +231,12 @@ def _assert_lark_error(
             ["Ab-C9", "ab-c9", "AB-C9", "aB-c9"],
             ["", "ab-c", "ab_c9", "äb-c9"],
             id="ascii-case-insensitive-string",
+        ),
+        pytest.param(
+            'start: "Żółw Σkß"i',
+            ["Żółw Σkß", "żółw σKẞ", "ŻÓŁW ςKß"],
+            ["Zółw Σkß", "Żółw Σkss"],
+            id="unicode-case-insensitive-string",
         ),
         pytest.param(
             'start: TOKEN\nTOKEN: "Yes"i | "no"',
@@ -827,14 +851,16 @@ def test_lark_serialization_round_trip_for_core_and_dynamic_grammars() -> None:
 
 
 def test_lark_regex_flags_ebnf_and_serialization_round_trip() -> None:
-    grammar = xgr.Grammar.from_lark("start: /ab[^x]/isu")
-    _assert_grammar_language(grammar, ["abz", "ABZ", "aB\n"], ["abx", "ABX", "ab"])
+    grammar = xgr.Grammar.from_lark("start: /Żółw[^k]/isu")
+    accepted = ["Żółwz", "żÓŁWZ", "Żółw\n"]
+    rejected = ["Żółwk", "żółwK", "Żółw"]
+    _assert_grammar_language(grammar, accepted, rejected)
 
     ebnf_restored = xgr.Grammar.from_ebnf(str(grammar))
-    _assert_grammar_language(ebnf_restored, ["abz", "ABZ", "aB\n"], ["abx", "ABX", "ab"])
+    _assert_grammar_language(ebnf_restored, accepted, rejected)
 
     json_restored = xgr.Grammar.deserialize_json(grammar.serialize_json())
-    _assert_grammar_language(json_restored, ["abz", "ABZ", "aB\n"], ["abx", "ABX", "ab"])
+    _assert_grammar_language(json_restored, accepted, rejected)
 
 
 def test_lark_serialization_round_trip_for_token_dispatch() -> None:
@@ -988,11 +1014,6 @@ def test_lark_large_choice_grammar() -> None:
             'start: A & B\nA: "a"\nB: "b"', "intersection '&' is not supported", id="intersection"
         ),
         pytest.param("start: ~/[a]/", "complement '~' is not supported", id="complement"),
-        pytest.param(
-            'start: "\\u00c4"i',
-            "case-insensitive string literals currently support ASCII characters only",
-            id="non-ascii-string-flag",
-        ),
         pytest.param(
             "start: /abc/m",
             "regular-expression flag 'm' is not supported",
@@ -2249,8 +2270,8 @@ def test_lark_suffix_stop_named_terminal_marker(attribute: str) -> None:
 
 @pytest.mark.parametrize("attribute", ["suffix", "stop"])
 def test_lark_suffix_stop_case_insensitive_string_marker(attribute: str) -> None:
-    grammar = f'start: r "z"\nr[{attribute}="END"i]: /[a-z]*/'
-    _assert_language(grammar, ["abcENDz", "abcendz", "abcEnDz"], ["abcENz", "abcENDENDz"])
+    grammar = f'start: r "z"\nr[{attribute}="ΣK"i]: /[a-z]*/'
+    _assert_language(grammar, ["abcΣKz", "abcσkz", "abcςKz"], ["abcΣz", "abcΣKΣKz"])
 
 
 @pytest.mark.parametrize("attribute", ["suffix", "stop"])

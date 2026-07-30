@@ -106,7 +106,7 @@ TEST(LarkConverterTest, NumericAndNamedSpecialTokens) {
 
 TEST(LarkConverterTest, StringAndRegexFlags) {
   auto grammar = Grammar::FromLark(R"(
-    start: "Ab-1"i /a[^x].b/isu
+    start: "Żółw"i /Σ[^k].ß/isu
   )");
   std::string printed = grammar.ToString();
   EXPECT_NE(printed.find("root"), std::string::npos);
@@ -162,11 +162,6 @@ TEST(LarkConverterTest, ErrorsContainSourceLocations) {
       Grammar::FromLark("start: /abc/m"),
       XGrammarError,
       "regular-expression flag 'm' is not supported"
-  );
-  XGRAMMAR_EXPECT_THROW(
-      Grammar::FromLark("start: \"\\u00c4\"i"),
-      XGrammarError,
-      "currently support ASCII characters only"
   );
   XGRAMMAR_EXPECT_THROW(
       Grammar::FromLark("start: TOKEN\nTOKEN: %json {}"),
