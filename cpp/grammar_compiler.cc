@@ -1028,7 +1028,8 @@ class GrammarCompilerSub {
       std::optional<std::pair<std::string, std::string>> separators,
       bool strict_mode,
       std::optional<int> max_whitespace_cnt,
-      bool any_order
+      bool any_order,
+      bool allow_unsupported_formats
   );
 
   CompiledGrammar CompileRegex(const std::string& regex);
@@ -1157,7 +1158,8 @@ CompiledGrammar GrammarCompilerSub::CompileJSONSchema(
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
-    bool any_order
+    bool any_order,
+    bool allow_unsupported_formats
 ) {
   return MultiThreadCompileGrammar(Grammar::FromJSONSchema(
       schema,
@@ -1167,7 +1169,8 @@ CompiledGrammar GrammarCompilerSub::CompileJSONSchema(
       strict_mode,
       max_whitespace_cnt,
       /*print_converted_ebnf=*/false,
-      any_order
+      any_order,
+      allow_unsupported_formats
   ));
 }
 
@@ -1260,6 +1263,7 @@ class GrammarCompilerCacheKeys {
     bool strict_mode;
     std::optional<int> max_whitespace_cnt;
     bool any_order;
+    bool allow_unsupported_formats;
 
     XGRAMMAR_EQUAL_BY_MEMBERS(
         SchemaKey,
@@ -1269,7 +1273,8 @@ class GrammarCompilerCacheKeys {
         &SchemaKey::separators,
         &SchemaKey::strict_mode,
         &SchemaKey::max_whitespace_cnt,
-        &SchemaKey::any_order
+        &SchemaKey::any_order,
+        &SchemaKey::allow_unsupported_formats
     );
   };
 
@@ -1310,7 +1315,8 @@ XGRAMMAR_HASH_BY_MEMBERS(
     &xgrammar::GrammarCompilerCacheKeys::SchemaKey::separators,
     &xgrammar::GrammarCompilerCacheKeys::SchemaKey::strict_mode,
     &xgrammar::GrammarCompilerCacheKeys::SchemaKey::max_whitespace_cnt,
-    &xgrammar::GrammarCompilerCacheKeys::SchemaKey::any_order
+    &xgrammar::GrammarCompilerCacheKeys::SchemaKey::any_order,
+    &xgrammar::GrammarCompilerCacheKeys::SchemaKey::allow_unsupported_formats
 );
 
 XGRAMMAR_HASH_BY_MEMBERS(
@@ -1376,7 +1382,8 @@ class GrammarCompiler::Impl {
       std::optional<std::pair<std::string, std::string>> separators,
       bool strict_mode,
       std::optional<int> max_whitespace_cnt,
-      bool any_order
+      bool any_order,
+      bool allow_unsupported_formats
   );
 
   CompiledGrammar CompileStructuralTag(const std::string& structural_tag_json);
@@ -1435,10 +1442,17 @@ CompiledGrammar GrammarCompiler::Impl::Compute(const UnionKey& key) {
           const auto& [ebnf_str, root_rule_name] = key;
           return this->no_cache_compiler_.CompileGrammar(ebnf_str, root_rule_name);
         } else if constexpr (std::is_same_v<KeyType, SchemaKey>) {
-          const auto& [schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order] =
+          const auto& [schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order, allow_unsupported_formats] =
               key;
           return this->no_cache_compiler_.CompileJSONSchema(
-              schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+              schema,
+              any_whitespace,
+              indent,
+              separators,
+              strict_mode,
+              max_whitespace_cnt,
+              any_order,
+              allow_unsupported_formats
           );
         } else if constexpr (std::is_same_v<KeyType, StructuralTagKey>) {
           const auto& [structural_tag_json] = key;
@@ -1470,15 +1484,30 @@ CompiledGrammar GrammarCompiler::Impl::CompileJSONSchema(
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
-    bool any_order
+    bool any_order,
+    bool allow_unsupported_formats
 ) {
   if (!cache_enabled_) {
     return no_cache_compiler_.CompileJSONSchema(
-        schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+        schema,
+        any_whitespace,
+        indent,
+        separators,
+        strict_mode,
+        max_whitespace_cnt,
+        any_order,
+        allow_unsupported_formats
     );
   }
   return grammar_level_cache_.Get(SchemaKey{
-      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+      schema,
+      any_whitespace,
+      indent,
+      separators,
+      strict_mode,
+      max_whitespace_cnt,
+      any_order,
+      allow_unsupported_formats
   });
 }
 
@@ -1551,10 +1580,18 @@ CompiledGrammar GrammarCompiler::CompileJSONSchema(
     std::optional<std::pair<std::string, std::string>> separators,
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
-    bool any_order
+    bool any_order,
+    bool allow_unsupported_formats
 ) {
   return pimpl_->CompileJSONSchema(
-      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+      schema,
+      any_whitespace,
+      indent,
+      separators,
+      strict_mode,
+      max_whitespace_cnt,
+      any_order,
+      allow_unsupported_formats
   );
 }
 

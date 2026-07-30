@@ -1899,6 +1899,65 @@ def test_generate_range_regex():
     assert _generate_range_regex(10000000000, 10000000002) == r"^((1000000000[0-2]))$"
 
 
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "string", "format": "my_custom_format"},
+        {"format": "my_custom_format"},
+        {"type": ["integer", "string"], "format": "my_custom_format"},
+        {
+            "type": "object",
+            "properties": {"value": {"type": "string", "format": "my_custom_format"}},
+        },
+    ],
+    ids=["string", "implicit-type", "type-array", "nested"],
+)
+def test_unsupported_string_format_is_rejected(schema):
+    with pytest.raises(RuntimeError, match="Unsupported string format.*my_custom_format"):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "integer", "format": "my_custom_format"},
+        {"type": ["integer", "null"], "format": "my_custom_format"},
+        {"type": "integer", "format": 1},
+    ],
+)
+def test_format_is_ignored_when_string_values_are_excluded(schema):
+    xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [{"type": "string", "format": 1}, {"format": 1}, {"type": ["string", "null"], "format": 1}],
+)
+def test_string_format_must_be_a_string(schema):
+    with pytest.raises(RuntimeError, match="format must be a string"):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
+def test_allow_unsupported_string_formats():
+    schema = {"type": "string", "format": "my_custom_format"}
+    schema_json = json.dumps(schema)
+
+    grammar = xgr.Grammar.from_json_schema(schema_json, allow_unsupported_formats=True)
+    assert _is_grammar_accept_string(grammar, '"anything"')
+
+    ebnf = _json_schema_to_ebnf(schema, allow_unsupported_formats=True)
+    assert "root ::=" in ebnf
+
+
+def test_allow_unsupported_formats_is_part_of_compiler_cache_key():
+    schema = json.dumps({"type": "string", "format": "my_custom_format"})
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=True)
+
+    compiler.compile_json_schema(schema, allow_unsupported_formats=True)
+    with pytest.raises(RuntimeError, match="Unsupported string format.*my_custom_format"):
+        compiler.compile_json_schema(schema)
+
+
 instance__accepted__test_email_format = [
     (r"simple@example.com", True),
     (r"very.common@example.com", True),

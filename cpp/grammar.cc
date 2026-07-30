@@ -51,10 +51,19 @@ Grammar Grammar::FromJSONSchema(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     bool print_converted_ebnf,
-    bool any_order
+    bool any_order,
+    bool allow_unsupported_formats
 ) {
   auto grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
-      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+      schema,
+      any_whitespace,
+      indent,
+      separators,
+      strict_mode,
+      max_whitespace_cnt,
+      any_order,
+      JSONFormat::kJSON,
+      allow_unsupported_formats
   ));
   if (print_converted_ebnf) {
     XGRAMMAR_LOG(INFO) << "Converted EBNF: " << grammar.ToString() << std::endl;

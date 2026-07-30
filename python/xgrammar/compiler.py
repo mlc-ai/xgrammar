@@ -150,6 +150,7 @@ class GrammarCompiler(XGRObject):
         strict_mode: bool = True,
         max_whitespace_cnt: Optional[int] = None,
         any_order: bool = False,
+        allow_unsupported_formats: bool = False,
     ) -> CompiledGrammar:
         """Get CompiledGrammar from the specified JSON schema and format. The indent
         and separators parameters follow the same convention as in json.dumps().
@@ -194,6 +195,10 @@ class GrammarCompiler(XGRObject):
 
             Applies to every object, nested included.
 
+        allow_unsupported_formats : bool, default: False
+            Whether unsupported string formats should be ignored instead of rejected. Invalid
+            non-string format values are always rejected when the schema can match strings.
+
         Returns
         -------
         compiled_grammar : CompiledGrammar
@@ -209,6 +214,7 @@ class GrammarCompiler(XGRObject):
                 strict_mode,
                 max_whitespace_cnt,
                 any_order,
+                allow_unsupported_formats,
             )
         )
 

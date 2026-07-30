@@ -656,6 +656,7 @@ class SchemaParser {
   struct Config {
     bool strict_mode = false;
     JSONFormat json_format;
+    bool allow_unsupported_formats = false;
   };
 
   explicit SchemaParser(const picojson::value& root_schema, const Config& config)
@@ -799,6 +800,37 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
   WarnUnsupportedKeywords(
       schema_obj, {"not", "if", "then", "else", "dependentRequired", "dependentSchemas"}
   );
+
+  if (schema_obj.count("format")) {
+    bool can_match_string = true;
+    auto type_it = schema_obj.find("type");
+    if (type_it != schema_obj.end()) {
+      can_match_string = false;
+      if (type_it->second.is<std::string>()) {
+        can_match_string = type_it->second.get<std::string>() == "string";
+      } else if (type_it->second.is<picojson::array>()) {
+        for (const auto& type : type_it->second.get<picojson::array>()) {
+          if (type.is<std::string>() && type.get<std::string>() == "string") {
+            can_match_string = true;
+            break;
+          }
+        }
+      }
+    }
+    if (can_match_string) {
+      const auto& format = schema_obj.at("format");
+      if (!format.is<std::string>()) {
+        return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "format must be a string");
+      }
+      const auto& format_name = format.get<std::string>();
+      if (!config_.allow_unsupported_formats &&
+          !JSONSchemaConverter::IsSupportedStringFormat(format_name)) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsupportedSchema, "Unsupported string format \"" + format_name + "\""
+        );
+      }
+    }
+  }
 
   SchemaSpecPtr result;
 
@@ -3222,6 +3254,10 @@ std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(const s
   return it->second;
 }
 
+bool JSONSchemaConverter::IsSupportedStringFormat(const std::string& format) {
+  return JSONFormatToRegexPattern(format).has_value();
+}
+
 // ==================== Range Regex Generation ====================
 
 // Stateless utility that turns a numeric range into an anchored regex matching
@@ -4054,13 +4090,14 @@ Grammar JSONSchemaToGrammar(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     bool any_order,
-    JSONFormat json_format
+    JSONFormat json_format,
+    bool allow_unsupported_formats
 ) {
   picojson::value schema_value;
   std::string error = picojson::parse(schema_value, schema);
   XGRAMMAR_CHECK(error.empty()) << "Failed to parse JSON: " << error
                                 << ". The JSON string is:" << schema;
-  SchemaParser parser(schema_value, {strict_mode, json_format});
+  SchemaParser parser(schema_value, {strict_mode, json_format, allow_unsupported_formats});
   auto spec_result = parser.Parse(schema_value, "root");
   if (spec_result.IsErr()) {
     XGRAMMAR_LOG(FATAL) << std::move(spec_result).UnwrapErr().what();
@@ -4115,7 +4152,8 @@ std::string JSONSchemaToEBNF(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     JSONFormat json_format,
-    bool any_order
+    bool any_order,
+    bool allow_unsupported_formats
 ) {
   picojson::value schema_value;
   std::string err = picojson::parse(schema_value, schema);
@@ -4129,7 +4167,8 @@ std::string JSONSchemaToEBNF(
       strict_mode,
       max_whitespace_cnt,
       json_format,
-      any_order
+      any_order,
+      allow_unsupported_formats
   );
 }
 
@@ -4141,10 +4180,11 @@ std::string JSONSchemaToEBNF(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     JSONFormat json_format,
-    bool any_order
+    bool any_order,
+    bool allow_unsupported_formats
 ) {
   // Parse JSON Schema to SchemaSpec
-  SchemaParser parser(schema, {strict_mode, json_format});
+  SchemaParser parser(schema, {strict_mode, json_format, allow_unsupported_formats});
   auto spec_result = parser.Parse(schema, "root");
   if (spec_result.IsErr()) {
     XGRAMMAR_LOG(FATAL) << std::move(spec_result).UnwrapErr().what();

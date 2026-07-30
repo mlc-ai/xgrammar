@@ -62,6 +62,26 @@ person_schema = {
 compiled_grammar = compiler.compile_json_schema(json.dumps(person_schema))
 ```
 
+## String Formats
+
+The JSON Schema converter enforces these built-in string formats:
+`email`, `date`, `time`, `date-time`, `duration`, `ipv4`, `ipv6`, `hostname`, `uuid`, `uri`,
+`uri-reference`, `uri-template`, `json-pointer`, and `relative-json-pointer`.
+
+An unsupported format is rejected by default because silently ignoring it would make the generated
+grammar less restrictive than the schema. To preserve an unsupported format as an annotation
+without enforcing it, opt in explicitly:
+
+```python
+compiled_grammar = compiler.compile_json_schema(
+    schema,
+    allow_unsupported_formats=True,
+)
+```
+
+This option only ignores unsupported format names. A `format` value must still be a string whenever
+the schema can match string values.
+
 With the compiled grammar, we can instantiate a [`xgr.GrammarMatcher`](xgrammar.GrammarMatcher)
 and generate the token masks in the generation loop.
 

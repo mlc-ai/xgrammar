@@ -361,7 +361,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              bool strict_mode,
              ffi::AnyView max_whitespace_cnt,
              bool print_converted_ebnf,
-             bool any_order) {
+             bool any_order,
+             bool allow_unsupported_formats) {
             XGRAMMAR_FFI_TRY_BEGIN();
             auto g = Grammar::FromJSONSchema(
                 schema,
@@ -371,7 +372,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 strict_mode,
                 OptionalIntFromView(max_whitespace_cnt),
                 print_converted_ebnf,
-                any_order
+                any_order,
+                allow_unsupported_formats
             );
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(g)));
             XGRAMMAR_FFI_TRY_END();
@@ -514,7 +516,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              ffi::AnyView separators,
              bool strict_mode,
              ffi::AnyView max_whitespace_cnt,
-             bool any_order) {
+             bool any_order,
+             bool allow_unsupported_formats) {
             XGRAMMAR_FFI_TRY_BEGIN();
             CompiledGrammar cg = o->value.CompileJSONSchema(
                 schema,
@@ -523,7 +526,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 OptionalSeparatorsFromView(separators),
                 strict_mode,
                 OptionalIntFromView(max_whitespace_cnt),
-                any_order
+                any_order,
+                allow_unsupported_formats
             );
             return ffi::ObjectRef(ffi::make_object<CompiledGrammarObj>(std::move(cg)));
             XGRAMMAR_FFI_TRY_END();
@@ -786,7 +790,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              bool strict_mode,
              ffi::AnyView max_whitespace_cnt,
              ffi::String json_format,
-             bool any_order) {
+             bool any_order,
+             bool allow_unsupported_formats) {
             auto format = JSONFormatFromString(json_format);
             if (!format.has_value()) {
               TVM_FFI_THROW(RuntimeError) << "Invalid json_format: " << std::string(json_format);
@@ -799,7 +804,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 strict_mode,
                 OptionalIntFromView(max_whitespace_cnt),
                 *format,
-                any_order
+                any_order,
+                allow_unsupported_formats
             ));
           }
       )

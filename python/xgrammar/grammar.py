@@ -185,6 +185,7 @@ class Grammar(XGRObject):
         max_whitespace_cnt: Optional[int] = None,
         print_converted_ebnf: bool = False,
         any_order: bool = False,
+        allow_unsupported_formats: bool = False,
     ) -> "Grammar":
         """Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
         used to specify the schema.
@@ -249,6 +250,10 @@ class Grammar(XGRObject):
 
             Applies to every object, nested included.
 
+        allow_unsupported_formats : bool, default: False
+            Whether unsupported string formats should be ignored instead of rejected. Invalid
+            non-string format values are always rejected when the schema can match strings.
+
         Returns
         -------
         grammar : Grammar
@@ -270,6 +275,7 @@ class Grammar(XGRObject):
                 max_whitespace_cnt,
                 print_converted_ebnf,
                 any_order,
+                allow_unsupported_formats,
             )
         )
 
