@@ -1154,59 +1154,89 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
   if (!lhs.IsLeaf() || !rhs.IsLeaf()) {
     return ResultErr("Intersect only support leaf fsm!");
   }
-  auto lhs_dfa_raw = lhs.ToDFA(max_result_num_states);
-  auto rhs_dfa_raw = rhs.ToDFA(max_result_num_states);
-
-  if (lhs_dfa_raw.IsErr()) {
-    return lhs_dfa_raw;
-  }
-  if (rhs_dfa_raw.IsErr()) {
-    return rhs_dfa_raw;
-  }
-
-  auto lhs_dfa = std::move(lhs_dfa_raw).Unwrap();
-  auto rhs_dfa = std::move(rhs_dfa_raw).Unwrap();
-  // Initialize the result FSM.
+  // The product construction runs directly on the NFAs: it is correct without determinization
+  // and bounds the result by |lhs| * |rhs| states, while converting to DFAs first can blow up
+  // exponentially. An epsilon edge advances one side of the pair while the other side stays,
+  // so the epsilon closure is represented by explicit epsilon edges in the product.
   FSM result_fsm(0);
-  FSMWithStartEnd result(result_fsm, 0, std::vector<int32_t>(), true);
+  FSMWithStartEnd result(result_fsm, 0, std::vector<int32_t>(), false);
   std::unordered_map<std::pair<int, int>, int> state_map;
-  std::unordered_set<std::pair<int, int>> visited;
   std::queue<std::pair<int, int>> queue;
-  queue.push({lhs_dfa.GetStart(), rhs_dfa.GetStart()});
-  result.AddState();
-  state_map[{lhs_dfa.GetStart(), rhs_dfa.GetStart()}] = 0;
+
+  // Returns the product state of the pair, creating it on first use; FSM::kNoNextState means the
+  // state limit is exceeded.
+  auto get_product_state = [&](std::pair<int, int> state_pair) {
+    auto it = state_map.find(state_pair);
+    if (it != state_map.end()) {
+      return it->second;
+    }
+    if (static_cast<int>(state_map.size()) >= max_result_num_states) {
+      return FSM::kNoNextState;
+    }
+    int product_state = result.AddState();
+    state_map.emplace(state_pair, product_state);
+    queue.push(state_pair);
+    return product_state;
+  };
+  const auto state_limit_error = [&]() -> Result<FSMWithStartEnd> {
+    return ResultErr(
+        "The number of states in the intersection FSM exceeds the limit of " +
+        std::to_string(max_result_num_states)
+    );
+  };
+
+  get_product_state({lhs.GetStart(), rhs.GetStart()});
   while (!queue.empty()) {
     auto [lhs_state, rhs_state] = std::move(queue.front());
-    if (lhs_dfa.IsEndState(lhs_state) && rhs_dfa.IsEndState(rhs_state)) {
-      result.AddEndState(state_map[{lhs_state, rhs_state}]);
-    }
     queue.pop();
-    for (const auto& lhs_edge : lhs_dfa.GetFsm().GetEdges(lhs_state)) {
-      for (const auto& rhs_edge : rhs_dfa.GetFsm().GetEdges(rhs_state)) {
-        XGRAMMAR_DCHECK(lhs_edge.IsCharRange() && rhs_edge.IsCharRange());
+    int current_state = state_map.at({lhs_state, rhs_state});
+    if (lhs.IsEndState(lhs_state) && rhs.IsEndState(rhs_state)) {
+      result.AddEndState(current_state);
+    }
+    for (const auto& lhs_edge : lhs.GetFsm().GetEdges(lhs_state)) {
+      if (lhs_edge.IsEpsilon()) {
+        int target_state = get_product_state({lhs_edge.target, rhs_state});
+        if (target_state == FSM::kNoNextState) {
+          return state_limit_error();
+        }
+        result.GetFsm().AddEpsilonEdge(current_state, target_state);
+        continue;
+      }
+      if (!lhs_edge.IsCharRange()) {
+        return ResultErr("Intersect only supports character and epsilon transitions!");
+      }
+      for (const auto& rhs_edge : rhs.GetFsm().GetEdges(rhs_state)) {
+        if (rhs_edge.IsEpsilon()) {
+          continue;  // Handled in the separate loop below.
+        }
+        if (!rhs_edge.IsCharRange()) {
+          return ResultErr("Intersect only supports character and epsilon transitions!");
+        }
         // Check if the edges intersect.
         if (lhs_edge.min > rhs_edge.max || rhs_edge.min > lhs_edge.max) {
           continue;  // No intersection.
         }
         int min_value = std::max(lhs_edge.min, rhs_edge.min);
         int max_value = std::min(lhs_edge.max, rhs_edge.max);
-        if (state_map.find(std::make_pair(lhs_edge.target, rhs_edge.target)) == state_map.end()) {
-          if (static_cast<int>(state_map.size()) >= max_result_num_states) {
-            return ResultErr(
-                "The number of states in the intersection FSM exceeds the limit of " +
-                std::to_string(max_result_num_states)
-            );
-          }
-          state_map[{lhs_edge.target, rhs_edge.target}] = result.AddState();
-          queue.push({lhs_edge.target, rhs_edge.target});
+        int target_state = get_product_state({lhs_edge.target, rhs_edge.target});
+        if (target_state == FSM::kNoNextState) {
+          return state_limit_error();
         }
-        int target_state = state_map[{lhs_edge.target, rhs_edge.target}];
-        result.GetFsm().AddEdge(
-            state_map[{lhs_state, rhs_state}], target_state, min_value, max_value
-        );
+        result.GetFsm().AddEdge(current_state, target_state, min_value, max_value);
       }
     }
+    for (const auto& rhs_edge : rhs.GetFsm().GetEdges(rhs_state)) {
+      if (!rhs_edge.IsEpsilon()) {
+        continue;
+      }
+      int target_state = get_product_state({lhs_state, rhs_edge.target});
+      if (target_state == FSM::kNoNextState) {
+        return state_limit_error();
+      }
+      result.GetFsm().AddEpsilonEdge(current_state, target_state);
+    }
   }
+  result = result.SimplifyEpsilon().MergeEquivalentStates();
   return ResultOk(std::move(result));
 }
 
@@ -1458,9 +1488,11 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
     }
 
     // Case 1: Like ab | ac | ad, then they can be merged into a(b | c | d).
+    // The start state must not participate: it is active without taking any incoming edge, so
+    // "same incoming edges" does not imply it is always active together with its sibling.
     bool is_equiv_successor = false;
     for (int i = 0; i < n; i++) {
-      if (incoming_distinct_count[i] != 1 || union_find_set.Count(i)) {
+      if (incoming_distinct_count[i] != 1 || union_find_set.Count(i) || i == result.GetStart()) {
         continue;
       }
       int previous_state = single_incoming_source[i];
@@ -1475,7 +1507,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
         }
         auto edges_to_sibling = siblings.Slice(group_begin, group_end);
         group_begin = group_end;
-        if (sibling <= i || incoming_distinct_count[sibling] != 1 ||
+        if (sibling <= i || sibling == result.GetStart() || incoming_distinct_count[sibling] != 1 ||
             result.IsEndState(sibling) != result.IsEndState(i)) {
           continue;
         }
@@ -1509,10 +1541,15 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
     for (int i = 0; i < n; i++) {
       int outgoing_count = outgoing_distinct_count[i];
       if (outgoing_count == 0) {
-        if (result.IsEndState(i)) {
-          no_successor_end_states.push_back(i);
-        } else {
-          no_successor_non_end_states.push_back(i);
+        // States already merged by Case 1 must not join the no-successor merging below:
+        // chaining two different merge rules through the union-find closure can merge states
+        // that satisfy neither rule and grow the language.
+        if (!union_find_set.Count(i)) {
+          if (result.IsEndState(i)) {
+            no_successor_end_states.push_back(i);
+          } else {
+            no_successor_non_end_states.push_back(i);
+          }
         }
         continue;  // Skip states with no successors.
       }
