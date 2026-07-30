@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 
 import pytest
 
@@ -62,6 +62,31 @@ def _assert_token_language(
         assert _matches_token_sequence(compiled, token_ids), token_ids
     for token_ids in rejected:
         assert not _matches_token_sequence(compiled, token_ids), token_ids
+
+
+def _assert_byte_language(
+    grammar: Union[str, xgr.Grammar], accepted: Sequence[bytes], rejected: Sequence[bytes]
+) -> None:
+    vocabulary = list(dict.fromkeys(value for value in [*accepted, *rejected] if value))
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, vocab_size=len(vocabulary), stop_token_ids=[])
+    grammar_obj = (
+        xgr.Grammar.from_lark(grammar, tokenizer_info=tokenizer_info)
+        if isinstance(grammar, str)
+        else grammar
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar_obj)
+    token_ids = {value: token_id for token_id, value in enumerate(vocabulary)}
+
+    def matches(value: bytes) -> bool:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        if value and not matcher.accept_token(token_ids[value]):
+            return False
+        return matcher.is_terminated()
+
+    for value in accepted:
+        assert matches(value), value
+    for value in rejected:
+        assert not matches(value), value
 
 
 def _assert_lark_error(
@@ -388,6 +413,164 @@ def test_lark_default_disallows_initial_skip_but_allows_trailing_skip() -> None:
         start: "a" "b"
     """
     _assert_language(grammar, ["ab", "a b", "ab  "], [" ab", "a\nb"])
+
+
+def test_lark_allow_invalid_utf8_dot_and_dot_all() -> None:
+    grammar = '%grammar_options {"allow_invalid_utf8": true}\nstart: /./'
+    _assert_byte_language(
+        grammar, accepted=[b"a", b"\x80", b"\xc2"], rejected=[b"", b"\n", b"\xc2\xa2", "é".encode()]
+    )
+    _assert_byte_language(
+        '%grammar_options {"allow_invalid_utf8": true}\nstart: /./s',
+        accepted=[b"a", b"\n", b"\x80"],
+        rejected=[b"", b"\xc2\xa2"],
+    )
+
+    _assert_byte_language(
+        "start: /./", accepted=[b"a", b"\xc2\xa2"], rejected=[b"", b"\n", b"\x80", b"\xc2"]
+    )
+
+
+def test_lark_allow_invalid_utf8_byte_classes_and_escapes() -> None:
+    option = '%grammar_options {"allow_invalid_utf8": true}\n'
+    _assert_byte_language(
+        option + r"start: /[\x80-\xFF]+/",
+        accepted=[b"\x80", b"\xff", b"\xc2\xa2", "é".encode()],
+        rejected=[b"", b"a", b"\x7f"],
+    )
+    _assert_byte_language(
+        option + r"start: /[^\x00-\x7F]/",
+        accepted=[b"\x80", b"\xff"],
+        rejected=[b"", b"a", b"\xc2\xa2"],
+    )
+    _assert_byte_language(
+        option + r"start: /\x80\xFF/",
+        accepted=[b"\x80\xff"],
+        rejected=[b"\x80", b"\xff", b"\xc2\xbf"],
+    )
+    _assert_byte_language(
+        option + r"start: /[^\x00-\xFF]/", accepted=[], rejected=[b"", b"a", b"\x80", b"\xff"]
+    )
+
+
+@pytest.mark.parametrize(
+    "pattern, accepted, rejected",
+    [
+        (r"\d", [b"0"], [b"a", b"\x80"]),
+        (r"\D", [b"a", b"\x80"], [b"0", b"ab"]),
+        (r"\w", [b"a", b"A", b"0", b"_"], [b" ", b"\x80"]),
+        (r"\W", [b" ", b"!", b"\x80"], [b"a", b"_", b"ab"]),
+        (r"\s", [b" ", b"\t", b"\n", b"\r", b"\x0b", b"\x0c"], [b"a", b"\x80"]),
+        (r"\S", [b"a", b"!", b"\x80"], [b" ", b"\t", b"\n"]),
+    ],
+)
+def test_lark_allow_invalid_utf8_ascii_shorthand_classes(
+    pattern: str, accepted: Sequence[bytes], rejected: Sequence[bytes]
+) -> None:
+    grammar = f'%grammar_options {{"allow_invalid_utf8": true}}\nstart: /{pattern}/'
+    _assert_byte_language(grammar, accepted, rejected)
+
+
+def test_lark_allow_invalid_utf8_regex_structure_and_literals() -> None:
+    option = '%grammar_options {"allow_invalid_utf8": true}\n'
+    _assert_byte_language(
+        option + r"start: /(?:ab|c){1,2}/",
+        accepted=[b"ab", b"c", b"abab", b"abc", b"cab", b"cc"],
+        rejected=[b"", b"a", b"ac", b"abcab"],
+    )
+    _assert_byte_language(
+        option + 'start: /é/ | "¢"',
+        accepted=["é".encode(), "¢".encode()],
+        rejected=[b"\xe9", b"\xa2", b"\xc3", b"\xc2"],
+    )
+    _assert_byte_language(option + r"start: /a??/", accepted=[b"", b"a"], rejected=[b"aa", b"b"])
+    _assert_byte_language(
+        option + r"start: /(?:|a|bc)/", accepted=[b"", b"a", b"bc"], rejected=[b"b", b"abc"]
+    )
+
+
+def test_lark_allow_invalid_utf8_options_merge_monotonically() -> None:
+    grammar = r"""
+        %grammar_options {"allow_invalid_utf8": false}
+        %grammar_options {"allow_invalid_utf8": true}
+        %grammar_options {"allow_invalid_utf8": false}
+        start: /\x80/
+    """
+    _assert_byte_language(grammar, accepted=[b"\x80"], rejected=[b"", b"\xc2\x80"])
+
+
+def test_lark_allow_invalid_utf8_ignore_and_terminal_composition() -> None:
+    grammar = r"""
+        %grammar_options {"allow_invalid_utf8": true}
+        %ignore /[\x80-\xFF]+/
+        start: "a" PAIR "z"
+        PAIR: /\x00/ /[^a]/
+    """
+    _assert_byte_language(
+        grammar,
+        accepted=[b"a\x00!z", b"a\x80\x00!\xffz"],
+        rejected=[b"a\x00az", b"\x80a\x00!z", b"a\x00!"],
+    )
+
+
+def test_lark_allow_invalid_utf8_is_local_to_nested_grammars() -> None:
+    outer_byte_mode = r"""
+        %grammar_options {"allow_invalid_utf8": true}
+        start: "A" %lark {
+          start: /./
+        } "B"
+    """
+    _assert_byte_language(
+        outer_byte_mode, accepted=[b"AaB", b"A\xc2\xa2B"], rejected=[b"A\x80B", b"A\xc2B"]
+    )
+
+    nested_byte_mode = r"""
+        start: "A" %lark {
+          %grammar_options {"allow_invalid_utf8": true}
+          start: /./
+        } "B"
+    """
+    _assert_byte_language(
+        nested_byte_mode, accepted=[b"AaB", b"A\x80B", b"A\xc2B"], rejected=[b"A\xc2\xa2B"]
+    )
+
+
+def test_lark_allow_invalid_utf8_round_trips() -> None:
+    source = (
+        '%grammar_options {"allow_invalid_utf8": true}\n' r"start: /\x80(?:[^\x00-\x7F]|\x00){1,2}/"
+    )
+    grammar = xgr.Grammar.from_lark(source)
+    restored_json = xgr.Grammar.deserialize_json(grammar.serialize_json())
+    restored_ebnf = xgr.Grammar.from_ebnf(str(grammar))
+    accepted = [b"\x80\x80", b"\x80\xff\x00", b"\x80\x00\x81"]
+    rejected = [b"", b"\x80", b"\x80a", b"\x80\x00a"]
+    _assert_byte_language(grammar, accepted, rejected)
+    _assert_byte_language(restored_json, accepted, rejected)
+    _assert_byte_language(restored_ebnf, accepted, rejected)
+
+
+@pytest.mark.parametrize(
+    "pattern, message",
+    [
+        (r"\p{L}", "Unicode character classes are not available"),
+        (r"\P{Letter}", "Unicode character classes are not available"),
+        (r"[é]", "non-ASCII characters are not available in byte character classes"),
+        (r"a^b", "start anchor is only allowed at the beginning"),
+        (r"a$b", "end anchor is only allowed at the end"),
+        (r"\bword\b", "word-boundary assertions are not supported"),
+        (r"(?=a)", "lookaround assertions are not supported"),
+        (r"\1", "backreferences are not supported"),
+        (r"\x{80}", "Unicode character escapes are not available"),
+        (r"\xG0", "must contain exactly two hexadecimal digits"),
+        (r"[a-\d]", "range endpoint must be a single byte"),
+        (r"a{2,1}", "upper bound is smaller"),
+        (r"\q", "unrecognized byte escape"),
+    ],
+)
+def test_lark_allow_invalid_utf8_regex_diagnostics(pattern: str, message: str) -> None:
+    _assert_lark_error(
+        f'%grammar_options {{"allow_invalid_utf8": true}}\nstart: /{pattern}/', message
+    )
 
 
 @pytest.mark.parametrize(
@@ -1082,9 +1265,9 @@ def test_lark_large_choice_grammar() -> None:
             id="no-forcing-option",
         ),
         pytest.param(
-            '%grammar_options {"allow_invalid_utf8": true}\nstart: "a"',
-            "%grammar_options option 'allow_invalid_utf8' is not supported",
-            id="invalid-utf8-option",
+            '%grammar_options {"allow_invalid_utf8": 1}\nstart: "a"',
+            "allow_invalid_utf8 must be a boolean",
+            id="invalid-utf8-option-type",
         ),
         pytest.param(
             '%grammar_options {"unknown": false}\nstart: "a"',

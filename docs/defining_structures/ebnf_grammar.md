@@ -420,6 +420,19 @@ expression from consuming characters that must be escaped in JSON:
 string_body ::= Regex("\\S+", json_string=true)
 ```
 
+### `ByteString`
+
+`ByteString` matches an exact sequence of raw bytes. Each positional argument is a decimal integer
+from 0 through 255; named arguments are not accepted.
+
+```text
+root ::= ByteString(0, 128, 255)
+```
+
+This form is used when a grammar contains a byte sequence that cannot be represented by a valid
+UTF-8 string literal. The grammar printer emits it automatically when needed, which preserves raw
+bytes across `str(grammar)` / `Grammar.from_ebnf()` round trips.
+
 ### `TagDispatch`
 
 `TagDispatch` implements the common tool-calling pattern: the model produces free text until a

@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "byte_regex_converter.h"
 #include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "support/encoding.h"
@@ -1523,7 +1524,12 @@ class LarkCompiler {
             RaiseLarkError(source_, location, "allow_initial_skip must be a boolean");
           }
           allow_initial_skip_ = allow_initial_skip_ || option.get<bool>();
-        } else if (key == "no_forcing" || key == "allow_invalid_utf8") {
+        } else if (key == "allow_invalid_utf8") {
+          if (!option.is<bool>()) {
+            RaiseLarkError(source_, location, "allow_invalid_utf8 must be a boolean");
+          }
+          allow_invalid_utf8_ = allow_invalid_utf8_ || option.get<bool>();
+        } else if (key == "no_forcing") {
           if (!option.is<bool>()) {
             RaiseLarkError(source_, location, key + " must be a boolean");
           }
@@ -1608,7 +1614,16 @@ class LarkCompiler {
     }
     std::vector<int32_t> ignore_choices;
     for (const Node& ignore : document_.ignores) {
-      ignore_choices.push_back(CompileNode(ignore, "lark_ignore", true));
+      int32_t ignore_expr = CompileNode(ignore, "lark_ignore", true);
+      if (allow_invalid_utf8_) {
+        auto expr = builder_.GetGrammarExpr(ignore_expr);
+        if (expr.type == GrammarBuilder::GrammarExprType::kRepeat && expr[1] <= 1 && expr[2] != 0) {
+          // Repeating X* or X+ as an ignored item is exactly X*. Removing the nested repeat also
+          // keeps raw-byte alternatives out of character-oriented repetition optimizations.
+          ignore_expr = builder_.AddRuleRef(expr[0]);
+        }
+      }
+      ignore_choices.push_back(ignore_expr);
     }
     int32_t ignore_body =
         ignore_choices.size() == 1 ? ignore_choices[0] : builder_.AddChoices(ignore_choices);
@@ -1850,6 +1865,11 @@ class LarkCompiler {
     RaiseLarkError(source_, node.location, "unsupported terminal node");
   }
 
+  int32_t CompileTerminalPattern(const std::string& pattern, const std::string& rule_hint) {
+    return allow_invalid_utf8_ ? ByteRegexToGrammarExpr(&builder_, pattern, rule_hint)
+                               : builder_.AddRegex(pattern);
+  }
+
   const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {
     auto input_it = named_grammars_.inputs.find(name);
     if (input_it == named_grammars_.inputs.end()) {
@@ -1959,12 +1979,23 @@ class LarkCompiler {
         if (begin[0] > end[0]) {
           RaiseLarkError(source_, node.location, "character range start must not exceed end");
         }
+        if (allow_invalid_utf8_ && (begin[0] > 0x7F || end[0] > 0x7F)) {
+          RaiseLarkError(
+              source_,
+              node.location,
+              "non-ASCII character ranges are not available when allow_invalid_utf8 is enabled"
+          );
+        }
         int32_t result = builder_.AddCharacterClass({{begin[0], end[0]}});
         return terminal_mode || !append_skip ? result : AppendSkip(result);
       }
       case Node::Kind::kRegex: {
         std::string pattern = PrepareRegexPattern(node);
         try {
+          if (allow_invalid_utf8_) {
+            int32_t result = ByteRegexToGrammarExpr(&builder_, pattern, rule_hint);
+            return terminal_mode || !append_skip ? result : AppendSkip(result);
+          }
           int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromRegex(pattern));
           int32_t result = builder_.AddRuleRef(root);
           return terminal_mode || !append_skip ? result : AppendSkip(result);
@@ -2311,10 +2342,12 @@ class LarkCompiler {
                               definition.max_chars.has_value())) {
       body_pattern = TerminalNodeToRegex(definition.body);
       marker_pattern = TerminalNodeToRegex(*marker);
-      int32_t body_helper_expr = builder_.AddRegex(body_pattern.value());
+      int32_t body_helper_expr =
+          CompileTerminalPattern(body_pattern.value(), definition.name + "_stop_body");
       int32_t body_helper_rule =
           builder_.AddRuleWithHint(definition.name + "_stop_body", body_helper_expr);
-      int32_t marker_helper_expr = builder_.AddRegex(marker_pattern.value());
+      int32_t marker_helper_expr =
+          CompileTerminalPattern(marker_pattern.value(), definition.name + "_stop_marker");
       int32_t marker_helper_rule =
           builder_.AddRuleWithHint(definition.name + "_stop_marker", marker_helper_expr);
       suffix_stop_info.body_rule_id = body_helper_rule;
@@ -2333,8 +2366,9 @@ class LarkCompiler {
           body_pattern = TerminalNodeToRegex(definition.body);
           marker_pattern = TerminalNodeToRegex(*marker);
         }
-        return builder_.AddRegex(
-            "(?:" + body_pattern.value() + ")(?:" + marker_pattern.value() + ")"
+        return CompileTerminalPattern(
+            "(?:" + body_pattern.value() + ")(?:" + marker_pattern.value() + ")",
+            definition.name + "_lazy"
         );
       }
       return CompileNode(definition.body, definition.name, true);
@@ -2561,6 +2595,7 @@ class LarkCompiler {
   std::unordered_map<std::string, int32_t> named_grammar_roots_;
   int32_t skip_rule_id_ = -1;
   bool allow_initial_skip_ = false;
+  bool allow_invalid_utf8_ = false;
   std::unordered_set<std::string> dynamic_unused_rules_;
 };
 
