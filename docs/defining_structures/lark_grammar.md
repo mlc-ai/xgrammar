@@ -259,10 +259,11 @@ arguments: %json {
 value is controlled by the surrounding Lark grammar; whitespace inside the value follows the JSON
 Schema converter's normal behavior. `%json` cannot be used inside terminals.
 
-### Structured `%regex`
+### Substring
 
-`%regex` can match any contiguous sequence of a fixed list of chunks. The empty sequence is also
-accepted:
+The substring extension matches any contiguous sequence of a fixed list of chunks, including the
+empty sequence. For compatibility with llguidance, it is written with the `%regex { ... }`
+directive, although it is not a regular expression:
 
 ```text
 start: %regex {"substring_chunks": ["abc", "de", "fg"]}
