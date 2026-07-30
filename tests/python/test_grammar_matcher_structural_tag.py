@@ -440,6 +440,35 @@ body ::= "!"
             ) == direct_accepted, f"cached mask disagrees at prefix={prefix!r}, token={token!r}"
 
 
+def test_tag_dispatch_sparse_candidates_with_character_budget():
+    """Sparse tag-dispatch masks must preserve character-budget uncertainty."""
+    vocab = ["a", "aa", "b", "go", "xgo", "ordinary"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_ebnf(
+        """root ::= TagDispatch(("go", body), loop_after_dispatch=false)
+body[max_chars=1] ::= [a]*
+"""
+    )
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False
+    ).compile_grammar(grammar)
+
+    for prefix in ["", "x", "g", "go"]:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert matcher.accept_string(prefix)
+        token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        matcher.fill_next_token_bitmask(token_bitmask)
+        rejected = set(_get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size))
+
+        for token_id, token in enumerate(vocab):
+            direct_matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+            assert direct_matcher.accept_string(prefix)
+            direct_accepted = direct_matcher.accept_token(token_id)
+            assert (
+                token_id not in rejected
+            ) == direct_accepted, f"cached mask disagrees at prefix={prefix!r}, token={token!r}"
+
+
 @pytest.mark.hf_token_required
 def test_utf8_structural_tag_begin_end():
     model = "deepseek-ai/DeepSeek-V3-0324"
