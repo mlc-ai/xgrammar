@@ -734,6 +734,37 @@ def test_reference_schema():
     )
 
 
+@pytest.mark.parametrize(
+    "uri",
+    ["https://example.com/schema.json", "other.json", "other.json#/$defs/value", "#named-anchor"],
+)
+def test_external_reference_is_rejected(uri):
+    with pytest.raises(RuntimeError) as error:
+        xgr.Grammar.from_json_schema(json.dumps({"$ref": uri}), any_whitespace=False)
+
+    message = str(error.value)
+    assert "only local references '#' and '#/...' are supported" in message
+    assert f"Unsupported $ref '{uri}'" in message
+
+
+def test_empty_reference_resolves_to_root():
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "child": {"$ref": ""}},
+        "required": ["name"],
+    }
+
+    check_schema_with_instance(
+        schema, {"name": "root", "child": {"name": "leaf"}}, any_whitespace=False
+    )
+    check_schema_with_instance(
+        schema,
+        {"name": "root", "child": {"child": {"name": "leaf"}}},
+        is_accepted=False,
+        any_whitespace=False,
+    )
+
+
 def test_union():
     class Cat(BaseModel):
         name: str

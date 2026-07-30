@@ -1439,6 +1439,9 @@ Result<RefSpec, SchemaError> SchemaParser::ParseRef(const picojson::object& sche
   }
   RefSpec spec;
   spec.uri = schema.at("$ref").get<std::string>();
+  if (spec.uri.empty()) {
+    spec.uri = "#";
+  }
   return ResultOk(std::move(spec));
 }
 
@@ -1458,8 +1461,10 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
   }
 
   if (uri.size() < 2 || uri[0] != '#' || uri[1] != '/') {
-    XGRAMMAR_LOG(WARNING) << "URI should either be '#' or start with '#/' but got " << uri;
-    return ResultOk(SchemaSpec::Make(AnySpec{}, "", "any"));
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kInvalidSchema,
+        "Unsupported $ref '" + uri + "': only local references '#' and '#/...' are supported"
+    );
   }
 
   std::vector<std::string> parts;
