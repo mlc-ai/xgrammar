@@ -22,6 +22,8 @@
 
 namespace xgrammar {
 
+class ThreadPool;
+
 /*!
  * \brief Base class for visitors and mutators of the BNF grammar.
  * \tparam T The type of the return value of visitor functions. Typical values:
@@ -383,6 +385,8 @@ class GrammarFSMBuilder {
 
  public:
   static void Apply(Grammar* grammar);
+  static void Apply(Grammar* grammar, int max_threads);
+  static void Apply(Grammar* grammar, int max_threads, ThreadPool* thread_pool);
   static FSMWithStartEnd RuleRef(const GrammarExpr& expr);
   static FSMWithStartEnd CharacterClass(const GrammarExpr& expr);
   static FSMWithStartEnd ByteString(const GrammarExpr& expr);
@@ -440,6 +444,8 @@ class RepetitionRangeExpander {
 class GrammarOptimizer {
  public:
   static Grammar Apply(const Grammar& grammar);
+  static Grammar Apply(const Grammar& grammar, int max_threads);
+  static Grammar Apply(const Grammar& grammar, int max_threads, ThreadPool* thread_pool);
 };
 
 /*!
