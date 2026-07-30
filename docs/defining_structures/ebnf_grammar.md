@@ -189,6 +189,25 @@ value[max_tokens=32, max_chars=128, capture="answer", lazy, temperature=0.7] ::=
 Each option may appear at most once. Options without a value, such as `capture` and `lazy`, are
 written as bare names; the other options use `name=value`.
 
+### Jump-Forward Control
+
+`no_forcing` is a grammar-wide option written as a bare rule option:
+
+```text
+root[no_forcing] ::= "answer:" value
+value ::= [a-z]+
+```
+
+It makes
+[`GrammarMatcher.find_jump_forward_string`](xgrammar.GrammarMatcher.find_jump_forward_string)
+return an empty string while leaving token masks, accepted strings and tokens, captures, rollback,
+and reset behavior unchanged. Placing it on any rule enables it for the whole grammar.
+
+When `str(grammar)` prints a grammar with this option enabled, it writes `no_forcing` on the
+selected root rule. Parsing the printed EBNF restores the option, including after grammar
+serialization, optimization, nesting, union, or concatenation. Grammars without the option keep
+the existing EBNF output unchanged.
+
 ### Token Budgets
 
 The `max_tokens` option gives each occurrence of a rule a token budget:

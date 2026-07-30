@@ -340,7 +340,7 @@ The `%ignore` expression may be a terminal name, a string, a regex, or a combina
 `%grammar_options` takes a JSON object that configures the whole grammar:
 
 ```text
-%grammar_options {"allow_initial_skip": true}
+%grammar_options {"allow_initial_skip": true, "no_forcing": true}
 ```
 
 `allow_initial_skip` (boolean, default `false`) allows `%ignore` content to appear before the
@@ -366,9 +366,16 @@ present. The `i`, `s`, and `u` flags remain available; case folding is ASCII-onl
 escapes and properties, non-ASCII characters inside classes, word boundaries, lookarounds, and
 backreferences are rejected.
 
-The option applies only to the grammar that declares it. Nested `%lark` blocks and named grammars
-use their own options. Multiple declarations merge monotonically, so a later `false` does not
-disable an earlier `true`; unknown option names are rejected.
+`no_forcing` (boolean, default `false`) makes
+[`GrammarMatcher.find_jump_forward_string`](xgrammar.GrammarMatcher.find_jump_forward_string)
+return an empty string. It leaves token masks, accepted strings and tokens, captures, rollback, and
+reset behavior unchanged; only the optional jump-forward output is disabled.
+
+`allow_invalid_utf8` and `ignore_once` apply only to the grammar that declares them. Nested `%lark`
+blocks and named grammars use their own values. An enabled `no_forcing` option in a nested or named
+grammar also disables jump-forward output for the containing matcher. Multiple declarations merge
+monotonically, so a later `false` does not disable an earlier `true`; unknown option names and
+non-boolean values are rejected.
 
 ### `%json`
 
@@ -471,8 +478,9 @@ All three substring forms are supported in rules and terminal definitions.
 
 `%lark { ... }` embeds a complete Lark grammar as one element. The nested grammar has its own
 independent namespace: it must define its own `start` rule, and it may declare its own imports,
-`%ignore`, and `%grammar_options` without affecting the outer grammar. Rule names may be reused
-across the boundary.
+`%ignore`, and `%grammar_options`. Rule names may be reused across the boundary. Initial-skip
+behavior remains local to the nested grammar; an enabled `no_forcing` option propagates to the
+containing matcher because jump-forward control is matcher-wide.
 
 ```text
 start: "[" %lark {

@@ -151,8 +151,8 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
   // name[capture="x"] ::= ...,
   // name[capture_hidden_suffix_bytes=3] ::= ..., name[capture_hidden_stop_bytes=3] ::= ...,
   // name[capture_hidden_body_rule_id=1, capture_hidden_marker_rule_id=2] ::= ...,
-  // name[stop_capture="marker"] ::= ..., name[lazy] ::= ..., name[temperature=0.7] ::= ..., or a
-  // comma-separated combination.
+  // name[stop_capture="marker"] ::= ..., name[lazy] ::= ..., name[no_forcing] ::= ...,
+  // name[temperature=0.7] ::= ..., or a comma-separated combination.
   // The bracket group is treated as an attribute block only when it is followed by "::=";
   // otherwise it is left to be lexed as a character class.
   if (*cur_ == '[') {
@@ -184,6 +184,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
     bool has_capture_hidden_marker_rule_id = false;
     bool has_stop_capture = false;
     bool has_lazy = false;
+    bool has_no_forcing = false;
     bool has_temperature = false;
     double temperature_value = 0;
     int64_t max_tokens_value = -1;
@@ -296,6 +297,8 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
         }
       } else if (!has_lazy && match_keyword("lazy")) {
         has_lazy = true;
+      } else if (!has_no_forcing && match_keyword("no_forcing")) {
+        has_no_forcing = true;
       } else if (!has_temperature && match_keyword("temperature")) {
         has_temperature = true;
         matched = parse_float_value(&temperature_value);
@@ -381,6 +384,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
           static_cast<int32_t>(capture_hidden_marker_rule_id_value);
       token.stop_capture_name = stop_capture_value;
       token.is_lazy = has_lazy;
+      token.no_forcing = has_no_forcing;
       if (has_temperature) {
         token.temperature = static_cast<float>(temperature_value);
       }
@@ -689,6 +693,7 @@ class EBNFParser {
   struct ParsedRule {
     Rule rule;
     SuffixStopInfo suffix_stop_info;
+    bool no_forcing = false;
   };
 
   // Parsing different parts of the grammar
@@ -1510,6 +1515,7 @@ EBNFParser::ParsedRule EBNFParser::ParseRule() {
   int32_t capture_hidden_marker_rule_id = Peek().capture_hidden_marker_rule_id;
   std::string stop_capture_name = Peek().stop_capture_name;
   bool is_lazy = Peek().is_lazy;
+  bool no_forcing = Peek().no_forcing;
   std::optional<float> temperature = Peek().temperature;
   Consume();
 
@@ -1534,6 +1540,7 @@ EBNFParser::ParsedRule EBNFParser::ParseRule() {
   result.suffix_stop_info.body_rule_id = capture_hidden_body_rule_id;
   result.suffix_stop_info.marker_rule_id = capture_hidden_marker_rule_id;
   result.suffix_stop_info.stop_capture_name = std::move(stop_capture_name);
+  result.no_forcing = no_forcing;
   return result;
 }
 
@@ -1580,6 +1587,7 @@ Grammar EBNFParser::Parse(
     builder_.UpdateSuffixStopInfo(rule.name, parsed_rule.suffix_stop_info);
     builder_.UpdateLazy(rule.name, rule.is_lazy);
     builder_.UpdateRuleTemperature(builder_.GetRuleId(rule.name), rule.temperature);
+    builder_.SetNoForcing(parsed_rule.no_forcing);
   }
 
   return builder_.Get(root_rule_name);

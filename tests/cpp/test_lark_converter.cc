@@ -148,6 +148,18 @@ TEST(LarkConverterTest, StringAndRegexFlags) {
   );
 }
 
+TEST(LarkConverterTest, NoForcingOptionRoundTripsThroughEBNF) {
+  auto grammar = Grammar::FromLark(R"(
+    %grammar_options {"no_forcing": true}
+    start[capture="all"]: "abb"
+  )");
+  std::string printed = grammar.ToString();
+  EXPECT_NE(printed.find(R"(root[capture="all", no_forcing] ::=)"), std::string::npos);
+
+  auto reparsed = Grammar::FromEBNF(printed);
+  EXPECT_EQ(reparsed.ToString(), printed);
+}
+
 TEST(LarkConverterTest, DynamicRegexSuffixAndSuffixAttribute) {
   auto grammar = Grammar::FromLark(R"(
     start: (foo | bar)* tail
