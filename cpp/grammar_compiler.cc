@@ -2147,7 +2147,7 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
 #ifdef XGRAMMAR_PROFILE_COMPILE
   const auto fsm_hash_started_at = std::chrono::steady_clock::now();
 #endif
-  GrammarFSMHasher().Apply(&compiled_grammar_impl->grammar);
+  GrammarFSMHasher::Apply(&compiled_grammar_impl->grammar, max_threads_, thread_pool_.get());
 #ifdef XGRAMMAR_PROFILE_COMPILE
   const auto fsm_hash_finished_at = std::chrono::steady_clock::now();
   const auto fsm_hash_elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(

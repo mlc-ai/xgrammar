@@ -8,6 +8,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include <array>
+#include <atomic>
 #include <bitset>
 #include <cstdint>
 #include <map>
@@ -28,6 +29,7 @@
 #include "support/container.h"
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/thread_pool.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -2095,7 +2097,7 @@ class RootRuleRenamerImpl {
 
 class GrammarFSMHasherImpl {
  public:
-  void Apply(Grammar* grammar);
+  void Apply(Grammar* grammar, int max_threads, ThreadPool* thread_pool);
   static std::optional<uint64_t> HashSequence(const Grammar& grammar, int32_t sequence_id);
 
   static constexpr int16_t kNotEndStateFlag = -0x100;
@@ -2252,7 +2254,7 @@ void GrammarFSMHasherImpl::RemoveHashedFsmFromRefGraph(int32_t fsm_index) {
   }
 }
 
-void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
+void GrammarFSMHasherImpl::Apply(Grammar* grammar, int max_threads, ThreadPool* thread_pool) {
   grammar_ = grammar;
   grammar->ImplPtr()->per_rule_fsm_hashes =
       std::vector<std::optional<uint64_t>>((*grammar)->NumRules());
@@ -2361,7 +2363,14 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
     grammar->ImplPtr()->per_rule_fsm_hashes[rule_id] = hash_value;
   }
 
+  struct StateHashTask {
+    int32_t rule_id;
+    int32_t state_id;
+    std::optional<Grammar::Impl::FSMStateCacheKey> cache_key;
+  };
+
   grammar->ImplPtr()->per_rule_fsm_state_cache_keys.resize((*grammar)->NumRules());
+  std::vector<StateHashTask> state_hash_tasks;
   for (int32_t rule_id = 0; rule_id < (*grammar)->NumRules(); ++rule_id) {
     if (!grammar_->ImplPtr()->per_rule_fsm_hashes[rule_id].has_value() ||
         !grammar_->ImplPtr()->per_rule_fsms[rule_id].has_value()) {
@@ -2370,13 +2379,44 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
     const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[rule_id]->GetFsm();
     std::unordered_set<int> reachable_states;
     fsm.GetReachableStates(&reachable_states);
-    auto& state_cache_keys = grammar_->ImplPtr()->per_rule_fsm_state_cache_keys[rule_id];
-    state_cache_keys.reserve(reachable_states.size());
-    for (int32_t state_id : reachable_states) {
-      auto cache_key = HashFsmState(rule_id, state_id);
-      if (cache_key.has_value()) {
-        state_cache_keys.emplace_back(state_id, *cache_key);
-      }
+    std::vector<int32_t> sorted_reachable_states(reachable_states.begin(), reachable_states.end());
+    std::sort(sorted_reachable_states.begin(), sorted_reachable_states.end());
+    for (int32_t state_id : sorted_reachable_states) {
+      state_hash_tasks.push_back(StateHashTask{rule_id, state_id, std::nullopt});
+    }
+  }
+
+  auto compute_state_hash = [&](size_t task_id) {
+    auto& task = state_hash_tasks[task_id];
+    task.cache_key = HashFsmState(task.rule_id, task.state_id);
+  };
+  const int num_workers =
+      std::min<int>(std::max(max_threads, 1), static_cast<int>(state_hash_tasks.size()));
+  constexpr size_t kMinParallelStateHashTasks = 256;
+  if (thread_pool != nullptr && num_workers > 1 &&
+      state_hash_tasks.size() >= kMinParallelStateHashTasks) {
+    std::atomic<size_t> next_task_id{0};
+    for (int worker_id = 0; worker_id < num_workers; ++worker_id) {
+      thread_pool->Execute([&]() {
+        size_t task_id;
+        while ((task_id = next_task_id.fetch_add(1, std::memory_order_relaxed)) <
+               state_hash_tasks.size()) {
+          compute_state_hash(task_id);
+        }
+      });
+    }
+    thread_pool->Wait();
+  } else {
+    for (size_t task_id = 0; task_id < state_hash_tasks.size(); ++task_id) {
+      compute_state_hash(task_id);
+    }
+  }
+
+  for (const auto& task : state_hash_tasks) {
+    if (task.cache_key.has_value()) {
+      grammar_->ImplPtr()->per_rule_fsm_state_cache_keys[task.rule_id].emplace_back(
+          task.state_id, *task.cache_key
+      );
     }
   }
 }
@@ -3065,7 +3105,9 @@ void GrammarFSMBuilder::Apply(Grammar* grammar) { GrammarFSMBuilderImpl().Apply(
 
 void RepetitionNormalizer::Apply(Grammar* grammar) { RepetitionNormalizerImpl().Apply(grammar); }
 
-void GrammarFSMHasher::Apply(Grammar* grammar) { GrammarFSMHasherImpl().Apply(grammar); }
+void GrammarFSMHasher::Apply(Grammar* grammar, int max_threads, ThreadPool* thread_pool) {
+  GrammarFSMHasherImpl().Apply(grammar, max_threads, thread_pool);
+}
 
 std::optional<uint64_t> GrammarFSMHasher::HashSequence(
     const Grammar& grammar, int32_t sequence_id

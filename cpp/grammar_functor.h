@@ -22,6 +22,8 @@
 
 namespace xgrammar {
 
+class ThreadPool;
+
 /*!
  * \brief Base class for visitors and mutators of the BNF grammar.
  * \tparam T The type of the return value of visitor functions. Typical values:
@@ -442,7 +444,7 @@ class RootRuleRenamer {
  */
 class GrammarFSMHasher {
  public:
-  static void Apply(Grammar* grammar);
+  static void Apply(Grammar* grammar, int max_threads = 1, ThreadPool* thread_pool = nullptr);
   static std::optional<uint64_t> HashSequence(const Grammar& grammar, int32_t sequence_id);
 };
 
