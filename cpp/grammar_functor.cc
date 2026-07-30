@@ -11,6 +11,7 @@
 #include <atomic>
 #include <bitset>
 #include <cstdint>
+#include <limits>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -2132,6 +2133,13 @@ class GrammarFSMHasherImpl {
    */
   std::optional<Grammar::Impl::FSMStateCacheKey> HashFsmState(int fsm_index, int32_t start_state);
 
+  /*! \brief Hash all state continuations of an acyclic FSM in linear time. */
+  std::optional<std::vector<std::pair<int32_t, Grammar::Impl::FSMStateCacheKey>>>
+  HashAcyclicFsmStates(int fsm_index);
+
+  /*! \brief Get the structural label hash of one FSM edge. */
+  std::optional<uint64_t> HashFsmEdgeLabel(const FSMEdge& edge);
+
   /*!
    * \brief Find a simple cycle in the reference graph, And hash the
    * fsms in the simple cycle.
@@ -2377,6 +2385,10 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar, int max_threads, ThreadPool* 
       continue;
     }
     const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[rule_id]->GetFsm();
+    if (auto acyclic_state_keys = HashAcyclicFsmStates(rule_id)) {
+      grammar_->ImplPtr()->per_rule_fsm_state_cache_keys[rule_id] = std::move(*acyclic_state_keys);
+      continue;
+    }
     std::unordered_set<int> reachable_states;
     fsm.GetReachableStates(&reachable_states);
     std::vector<int32_t> sorted_reachable_states(reachable_states.begin(), reachable_states.end());
@@ -2666,6 +2678,139 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
   return hash_result;
 }
 
+std::optional<uint64_t> GrammarFSMHasherImpl::HashFsmEdgeLabel(const FSMEdge& edge) {
+  const auto& complete_fsm = grammar_->ImplPtr()->complete_fsm;
+  uint64_t label_hash = HashCombine(uint64_t{0}, edge.min);
+  if (edge.IsRuleRef()) {
+    const int32_t ref_rule_id = edge.GetRefRuleId();
+    if (!grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value()) {
+      return std::nullopt;
+    }
+    label_hash =
+        HashCombine(label_hash, grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value());
+  } else if (edge.IsRepeatRef()) {
+    const auto info = complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+    if (!grammar_->ImplPtr()->per_rule_fsm_hashes[info.RuleId()].has_value()) {
+      return std::nullopt;
+    }
+    label_hash = HashCombine(
+        label_hash,
+        grammar_->ImplPtr()->per_rule_fsm_hashes[info.RuleId()].value(),
+        info.Lower(),
+        info.Upper()
+    );
+  } else if (edge.IsToken()) {
+    const auto info = complete_fsm.GetTokenEdgeInfo(edge.GetAuxIndex());
+    label_hash = HashCombine(label_hash, info.Count());
+    for (int32_t i = 0; i < info.Count(); ++i) {
+      label_hash = HashCombine(label_hash, info.TokenIds()[i]);
+    }
+  } else if (edge.IsExcludeToken()) {
+    const auto info = complete_fsm.GetExcludeTokenEdgeInfo(edge.GetAuxIndex());
+    label_hash = HashCombine(label_hash, info.Count());
+    for (int32_t i = 0; i < info.Count(); ++i) {
+      label_hash = HashCombine(label_hash, info.TokenIds()[i]);
+    }
+  } else {
+    label_hash = HashCombine(label_hash, edge.max);
+  }
+  return label_hash;
+}
+
+std::optional<std::vector<std::pair<int32_t, Grammar::Impl::FSMStateCacheKey>>>
+GrammarFSMHasherImpl::HashAcyclicFsmStates(int fsm_index) {
+  XGRAMMAR_DCHECK(
+      fsm_index >= 0 && fsm_index < (*grammar_)->NumRules() &&
+      grammar_->ImplPtr()->per_rule_fsms[fsm_index].has_value() &&
+      grammar_->ImplPtr()->per_rule_fsm_hashes[fsm_index].has_value()
+  );
+  const auto& sized_fsm = grammar_->ImplPtr()->per_rule_fsms[fsm_index].value();
+  const auto& fsm = sized_fsm.GetFsm();
+  const int32_t state_offset = fsm_state_offsets_[fsm_index];
+  const int32_t node_count = sized_fsm.GetNodeNum();
+  auto local_id = [&](int32_t state_id) {
+    XGRAMMAR_DCHECK(state_id >= state_offset && state_id < state_offset + node_count);
+    return state_id - state_offset;
+  };
+
+  std::unordered_set<int> reachable_state_set;
+  fsm.GetReachableStates(&reachable_state_set);
+  std::vector<int32_t> reachable_states(reachable_state_set.begin(), reachable_state_set.end());
+  std::sort(reachable_states.begin(), reachable_states.end());
+
+  std::vector<int32_t> indegree(node_count, 0);
+  for (int32_t state_id : reachable_states) {
+    for (const auto& edge : sorted_edges_[state_id]) {
+      ++indegree[local_id(edge.target)];
+    }
+  }
+  std::vector<int32_t> topological_order;
+  topological_order.reserve(reachable_states.size());
+  for (int32_t state_id : reachable_states) {
+    if (indegree[local_id(state_id)] == 0) {
+      topological_order.push_back(state_id);
+    }
+  }
+  for (size_t order_index = 0; order_index < topological_order.size(); ++order_index) {
+    for (const auto& edge : sorted_edges_[topological_order[order_index]]) {
+      int32_t& target_indegree = indegree[local_id(edge.target)];
+      if (--target_indegree == 0) {
+        topological_order.push_back(edge.target);
+      }
+    }
+  }
+  if (topological_order.size() != reachable_states.size()) {
+    return std::nullopt;
+  }
+
+  std::vector<std::optional<Grammar::Impl::FSMStateCacheKey>> state_keys(node_count);
+  using LabeledKey = std::pair<uint64_t, Grammar::Impl::FSMStateCacheKey>;
+  std::vector<LabeledKey> labeled_targets;
+  for (auto state_it = topological_order.rbegin(); state_it != topological_order.rend();
+       ++state_it) {
+    const int32_t state_id = *state_it;
+    labeled_targets.clear();
+    labeled_targets.reserve(sorted_edges_[state_id].size());
+    for (const auto& edge : sorted_edges_[state_id]) {
+      auto label_hash = HashFsmEdgeLabel(edge);
+      const auto& target_key = state_keys[local_id(edge.target)];
+      if (!label_hash.has_value() || !target_key.has_value()) {
+        return std::nullopt;
+      }
+      labeled_targets.emplace_back(*label_hash, *target_key);
+    }
+    std::sort(labeled_targets.begin(), labeled_targets.end());
+
+    uint64_t hash_result = HashCombine(
+        uint64_t{0x4441475f53544154ULL},
+        fsm.IsEndState(state_id) ? kEndStateFlag : kNotEndStateFlag,
+        static_cast<int32_t>(labeled_targets.size())
+    );
+    int64_t state_count = 1;
+    int64_t edge_count = static_cast<int64_t>(labeled_targets.size());
+    for (const auto& [label_hash, target_key] : labeled_targets) {
+      hash_result = HashCombine(
+          hash_result, label_hash, target_key.hash, target_key.state_count, target_key.edge_count
+      );
+      state_count += target_key.state_count;
+      edge_count += target_key.edge_count;
+    }
+    state_keys[local_id(state_id)] = Grammar::Impl::FSMStateCacheKey{
+        hash_result,
+        static_cast<int32_t>(std::min<int64_t>(state_count, std::numeric_limits<int32_t>::max())),
+        static_cast<int32_t>(std::min<int64_t>(edge_count, std::numeric_limits<int32_t>::max()))
+    };
+  }
+
+  std::vector<std::pair<int32_t, Grammar::Impl::FSMStateCacheKey>> result;
+  result.reserve(reachable_states.size());
+  for (int32_t state_id : reachable_states) {
+    XGRAMMAR_DCHECK(state_keys[local_id(state_id)].has_value());
+    result.emplace_back(state_id, *state_keys[local_id(state_id)]);
+  }
+  return result;
+}
+
 std::optional<Grammar::Impl::FSMStateCacheKey> GrammarFSMHasherImpl::HashFsmState(
     int fsm_index, int32_t start_state
 ) {
@@ -2675,7 +2820,6 @@ std::optional<Grammar::Impl::FSMStateCacheKey> GrammarFSMHasherImpl::HashFsmStat
       grammar_->ImplPtr()->per_rule_fsm_hashes[fsm_index].has_value()
   );
   const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[fsm_index]->GetFsm();
-  const auto& complete_fsm = grammar_->ImplPtr()->complete_fsm;
 
   // Domain-separate state-continuation keys from whole-FSM hashes because both use the same
   // RuleLevelCache.
@@ -2711,41 +2855,11 @@ std::optional<Grammar::Impl::FSMStateCacheKey> GrammarFSMHasherImpl::HashFsmStat
     labeled_targets.clear();
     labeled_targets.reserve(sorted_edges_[current_old_state_id].size());
     for (const auto& edge : sorted_edges_[current_old_state_id]) {
-      uint64_t label_hash = HashCombine(uint64_t{0}, edge.min);
-      if (edge.IsRuleRef()) {
-        const int32_t ref_rule_id = edge.GetRefRuleId();
-        if (!grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value()) {
-          return std::nullopt;
-        }
-        label_hash =
-            HashCombine(label_hash, grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value());
-      } else if (edge.IsRepeatRef()) {
-        const auto info = complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
-        if (!grammar_->ImplPtr()->per_rule_fsm_hashes[info.RuleId()].has_value()) {
-          return std::nullopt;
-        }
-        label_hash = HashCombine(
-            label_hash,
-            grammar_->ImplPtr()->per_rule_fsm_hashes[info.RuleId()].value(),
-            info.Lower(),
-            info.Upper()
-        );
-      } else if (edge.IsToken()) {
-        const auto info = complete_fsm.GetTokenEdgeInfo(edge.GetAuxIndex());
-        label_hash = HashCombine(label_hash, info.Count());
-        for (int32_t i = 0; i < info.Count(); ++i) {
-          label_hash = HashCombine(label_hash, info.TokenIds()[i]);
-        }
-      } else if (edge.IsExcludeToken()) {
-        const auto info = complete_fsm.GetExcludeTokenEdgeInfo(edge.GetAuxIndex());
-        label_hash = HashCombine(label_hash, info.Count());
-        for (int32_t i = 0; i < info.Count(); ++i) {
-          label_hash = HashCombine(label_hash, info.TokenIds()[i]);
-        }
-      } else {
-        label_hash = HashCombine(label_hash, edge.max);
+      auto label_hash = HashFsmEdgeLabel(edge);
+      if (!label_hash.has_value()) {
+        return std::nullopt;
       }
-      labeled_targets.emplace_back(label_hash, edge.target);
+      labeled_targets.emplace_back(*label_hash, edge.target);
     }
     std::sort(labeled_targets.begin(), labeled_targets.end());
 
