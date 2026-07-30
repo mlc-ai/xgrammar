@@ -24,11 +24,11 @@
 #include <utility>
 #include <vector>
 
+#include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "support/encoding.h"
 #include "support/logging.h"
-#include "support/unicode_case_folding.h"
 
 namespace xgrammar {
 namespace {
@@ -1229,135 +1229,6 @@ std::string RewriteRegexDots(const std::string& pattern, bool dot_matches_newlin
   return result;
 }
 
-std::vector<TCodepoint> UnicodeCaseEquivalents(TCodepoint codepoint) {
-  std::vector<TCodepoint> result = {codepoint};
-  AppendUnicodeSimpleCaseFold(codepoint, codepoint, &result);
-  std::sort(result.begin(), result.end());
-  result.erase(std::unique(result.begin(), result.end()), result.end());
-  return result;
-}
-
-class UnicodeCaseInsensitiveRegexMutator final : public GrammarMutator {
- public:
-  using GrammarMutator::Apply;
-
- private:
-  using CharacterClassElement = GrammarBuilder::CharacterClassElement;
-
-  static std::vector<CharacterClassElement> FoldCharacterRanges(const GrammarExpr& grammar_expr) {
-    std::vector<CharacterClassElement> ranges;
-    std::vector<TCodepoint> folded;
-    for (int32_t i = 1; i + 1 < grammar_expr.data_len; i += 2) {
-      TCodepoint lower = grammar_expr[i];
-      TCodepoint upper = grammar_expr[i + 1];
-      ranges.push_back({lower, upper});
-      AppendUnicodeSimpleCaseFold(lower, upper, &folded);
-    }
-    ranges.reserve(ranges.size() + folded.size());
-    for (TCodepoint codepoint : folded) {
-      ranges.push_back({codepoint, codepoint});
-    }
-    std::sort(ranges.begin(), ranges.end(), [](const auto& lhs, const auto& rhs) {
-      return lhs.lower < rhs.lower || (lhs.lower == rhs.lower && lhs.upper < rhs.upper);
-    });
-    std::vector<CharacterClassElement> result;
-    for (const auto& range : ranges) {
-      if (!result.empty() && range.lower <= result.back().upper + 1) {
-        result.back().upper = std::max(result.back().upper, range.upper);
-      } else {
-        result.push_back(range);
-      }
-    }
-    return result;
-  }
-
-  static std::vector<CharacterClassElement> ComplementCharacterRanges(
-      const std::vector<CharacterClassElement>& ranges
-  ) {
-    constexpr TCodepoint kMaxUnicodeCodepoint = 0x10FFFF;
-    std::vector<CharacterClassElement> result;
-    TCodepoint next = 0;
-    for (const auto& range : ranges) {
-      if (next < range.lower) {
-        result.push_back({next, range.lower - 1});
-      }
-      if (range.upper >= kMaxUnicodeCodepoint) {
-        return result;
-      }
-      next = std::max(next, range.upper + 1);
-    }
-    if (next <= kMaxUnicodeCodepoint) {
-      result.push_back({next, kMaxUnicodeCodepoint});
-    }
-    return result;
-  }
-
-  int32_t VisitByteString(const GrammarExpr& grammar_expr) final {
-    std::string bytes;
-    bytes.reserve(grammar_expr.data_len);
-    for (int32_t byte : grammar_expr) {
-      bytes.push_back(static_cast<char>(byte));
-    }
-
-    std::vector<int32_t> sequence;
-    std::vector<int32_t> literal_bytes;
-    auto flush_literal = [&]() {
-      if (!literal_bytes.empty()) {
-        sequence.push_back(builder_->AddByteString(literal_bytes));
-        literal_bytes.clear();
-      }
-    };
-
-    for (size_t position = 0; position < bytes.size();) {
-      auto [codepoint, byte_count] = ParseNextUTF8(bytes.c_str() + position);
-      if (codepoint == CharHandlingError::kInvalidUTF8 ||
-          position + static_cast<size_t>(byte_count) > bytes.size()) {
-        literal_bytes.push_back(static_cast<uint8_t>(bytes[position]));
-        ++position;
-        continue;
-      }
-      std::vector<TCodepoint> equivalents = UnicodeCaseEquivalents(codepoint);
-      if (equivalents.size() == 1) {
-        for (int32_t index = 0; index < byte_count; ++index) {
-          literal_bytes.push_back(static_cast<uint8_t>(bytes[position + index]));
-        }
-        position += byte_count;
-        continue;
-      }
-
-      flush_literal();
-      std::vector<CharacterClassElement> ranges;
-      ranges.reserve(equivalents.size());
-      for (TCodepoint equivalent : equivalents) {
-        ranges.push_back({equivalent, equivalent});
-      }
-      sequence.push_back(builder_->AddCharacterClass(ranges));
-      position += byte_count;
-    }
-    flush_literal();
-    if (sequence.empty()) {
-      return builder_->AddEmptyStr();
-    }
-    return sequence.size() == 1 ? sequence[0] : builder_->AddSequence(sequence);
-  }
-
-  int32_t VisitCharacterClass(const GrammarExpr& grammar_expr) final {
-    std::vector<CharacterClassElement> ranges = FoldCharacterRanges(grammar_expr);
-    if (grammar_expr[0] != 0) {
-      ranges = ComplementCharacterRanges(ranges);
-    }
-    return builder_->AddCharacterClass(ranges);
-  }
-
-  int32_t VisitCharacterClassStar(const GrammarExpr& grammar_expr) final {
-    std::vector<CharacterClassElement> ranges = FoldCharacterRanges(grammar_expr);
-    if (grammar_expr[0] != 0) {
-      ranges = ComplementCharacterRanges(ranges);
-    }
-    return builder_->AddCharacterClassStar(ranges);
-  }
-};
-
 std::optional<std::string> ParseFixedRegexLiteral(const std::string& pattern) {
   std::string result;
   for (size_t i = 0; i < pattern.size();) {
@@ -1764,14 +1635,21 @@ class LarkCompiler {
     std::vector<int32_t> elements;
     elements.reserve(codepoints.size());
     for (TCodepoint codepoint : codepoints) {
-      std::vector<TCodepoint> equivalents = UnicodeCaseEquivalents(codepoint);
-      if (equivalents.size() > 1) {
-        std::vector<GrammarBuilder::CharacterClassElement> ranges;
-        ranges.reserve(equivalents.size());
-        for (TCodepoint equivalent : equivalents) {
-          ranges.push_back({equivalent, equivalent});
-        }
-        elements.push_back(builder_.AddCharacterClass(ranges));
+      if (codepoint > 0x7F) {
+        RaiseLarkError(
+            source_,
+            node.location,
+            "case-insensitive string literals currently support ASCII characters only"
+        );
+      }
+      if ((codepoint >= 'a' && codepoint <= 'z') || (codepoint >= 'A' && codepoint <= 'Z')) {
+        TCodepoint lowercase =
+            static_cast<TCodepoint>(std::tolower(static_cast<unsigned char>(codepoint)));
+        TCodepoint uppercase =
+            static_cast<TCodepoint>(std::toupper(static_cast<unsigned char>(codepoint)));
+        elements.push_back(
+            builder_.AddCharacterClass({{lowercase, lowercase}, {uppercase, uppercase}})
+        );
       } else {
         elements.push_back(builder_.AddByteString(CharToUTF8(codepoint)));
       }
@@ -1855,18 +1733,23 @@ class LarkCompiler {
     }
     std::string result;
     for (TCodepoint codepoint : codepoints) {
-      std::vector<TCodepoint> equivalents = UnicodeCaseEquivalents(codepoint);
-      if (equivalents.size() > 1) {
-        result += "(?:";
+      if (codepoint > 0x7F) {
+        RaiseLarkError(
+            source_,
+            node.location,
+            "case-insensitive string literals currently support ASCII characters only"
+        );
       }
-      for (size_t index = 0; index < equivalents.size(); ++index) {
-        if (index != 0) {
-          result += "|";
-        }
-        result += EscapeRegexLiteral(CharToUTF8(equivalents[index]));
-      }
-      if (equivalents.size() > 1) {
-        result += ")";
+      char character = static_cast<char>(codepoint);
+      if ((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z')) {
+        char lower = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+        char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(character)));
+        result += "[";
+        result += lower;
+        result += upper;
+        result += "]";
+      } else {
+        result += EscapeRegexLiteral(std::string(1, character));
       }
     }
     return result;
@@ -2105,12 +1988,27 @@ class LarkCompiler {
       }
       case Node::Kind::kRegex: {
         RegexFlags flags = ParseRegexFlags(node);
-        try {
-          Grammar grammar = Grammar::FromRegex(RewriteRegexDots(node.text, flags.dot_all));
-          if (flags.case_insensitive) {
-            grammar = UnicodeCaseInsensitiveRegexMutator().Apply(grammar);
+        std::string pattern = RewriteRegexDots(node.text, flags.dot_all);
+        if (flags.case_insensitive) {
+          // The FSM regex engine handles the (?i) prefix with ASCII case folding. Validate the
+          // pattern eagerly so that errors carry the source location.
+          std::string flagged_pattern = "(?i)" + pattern;
+          auto matches_empty = RegexFSMBuilder::MatchesEmpty(flagged_pattern);
+          if (matches_empty.IsErr()) {
+            RaiseLarkError(
+                source_,
+                node.location,
+                "failed to compile regular expression: " +
+                    std::string(std::move(matches_empty).UnwrapErr().what())
+            );
           }
-          int32_t root = SubGrammarAdder::Apply(&builder_, grammar);
+          int32_t regex_rule_id =
+              builder_.AddRuleWithHint(rule_hint + "_regex", builder_.AddRegex(flagged_pattern));
+          int32_t result = builder_.AddRuleRef(regex_rule_id);
+          return terminal_mode || !append_skip ? result : AppendSkip(result);
+        }
+        try {
+          int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromRegex(pattern));
           int32_t result = builder_.AddRuleRef(root);
           return terminal_mode || !append_skip ? result : AppendSkip(result);
         } catch (const std::exception& error) {

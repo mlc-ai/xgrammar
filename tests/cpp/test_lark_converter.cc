@@ -105,11 +105,18 @@ TEST(LarkConverterTest, NumericAndNamedSpecialTokens) {
 }
 
 TEST(LarkConverterTest, StringAndRegexFlags) {
+  // The i flag folds ASCII letters; non-ASCII characters in the regex are matched literally.
   auto grammar = Grammar::FromLark(R"(
-    start: "Żółw"i /Σ[^k].ß/isu
+    start: "Case"i /Σ[^k].x/isu
   )");
   std::string printed = grammar.ToString();
   EXPECT_NE(printed.find("root"), std::string::npos);
+
+  XGRAMMAR_EXPECT_THROW(
+      Grammar::FromLark("start: \"Żółw\"i"),
+      XGrammarError,
+      "case-insensitive string literals currently support ASCII characters only"
+  );
 }
 
 TEST(LarkConverterTest, DynamicRegexSuffixAndSuffixAttribute) {
