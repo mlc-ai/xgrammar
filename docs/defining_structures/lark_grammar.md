@@ -233,12 +233,21 @@ The `%ignore` expression may be a terminal name, a string, a regex, or a combina
 `%grammar_options` takes a JSON object that configures the whole grammar:
 
 ```text
-%grammar_options {"allow_initial_skip": true}
+%grammar_options {"allow_initial_skip": true, "no_forcing": true}
 ```
 
 `allow_initial_skip` (boolean, default `false`) allows `%ignore` content to appear before the
-first lexeme of the output. Multiple `%grammar_options` declarations are merged; unknown option
-names are rejected.
+first lexeme of the output.
+
+`no_forcing` (boolean, default `false`) makes
+[`GrammarMatcher.find_jump_forward_string`](xgrammar.GrammarMatcher.find_jump_forward_string)
+return an empty string. It leaves token masks, accepted strings and tokens, captures, rollback, and
+reset behavior unchanged; only the optional jump-forward output is disabled.
+
+Multiple `%grammar_options` declarations are merged monotonically: once either boolean option is
+`true`, a later `false` declaration does not turn it off. An enabled `no_forcing` option in a
+nested or named grammar also disables jump-forward output for the containing matcher. Unknown
+option names and non-boolean values are rejected.
 
 ### `%json`
 
@@ -263,8 +272,9 @@ Schema converter's normal behavior. `%json` cannot be used inside terminals.
 
 `%lark { ... }` embeds a complete Lark grammar as one element. The nested grammar has its own
 independent namespace: it must define its own `start` rule, and it may declare its own imports,
-`%ignore`, and `%grammar_options` without affecting the outer grammar. Rule names may be reused
-across the boundary.
+`%ignore`, and `%grammar_options`. Rule names may be reused across the boundary. Initial-skip
+behavior remains local to the nested grammar; an enabled `no_forcing` option propagates to the
+containing matcher because jump-forward control is matcher-wide.
 
 ```text
 start: "[" %lark {

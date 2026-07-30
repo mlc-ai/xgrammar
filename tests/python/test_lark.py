@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Sequence
+from typing import List, Optional, Sequence
 
 import pytest
 
@@ -410,7 +410,7 @@ def test_lark_no_forcing_option_disables_jump_forward_only() -> None:
     for matcher in all_matchers:
         assert matcher.accept_token(0)
 
-    def next_mask(matcher: xgr.GrammarMatcher) -> list[int]:
+    def next_mask(matcher: xgr.GrammarMatcher) -> List[int]:
         mask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
         matcher.fill_next_token_bitmask(mask)
         return mask.tolist()
@@ -448,6 +448,84 @@ def test_lark_no_forcing_option_disables_jump_forward_only() -> None:
         assert matcher.accept_string("abb")
         assert matcher.is_terminated()
         assert matcher.get_captures() == [("all", b"abb")]
+
+
+def test_lark_no_forcing_survives_serialization_optimization_and_ebnf() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["a", "bb", "c"])
+    grammar = xgr.Grammar.from_lark(
+        """
+        %grammar_options {"no_forcing": true}
+        start[capture="all"]: "abb"
+        """
+    )
+
+    serialized_grammar = grammar.serialize_json()
+    assert json.loads(serialized_grammar)["no_forcing"] is True
+    recovered_grammar = xgr.Grammar.deserialize_json(serialized_grammar)
+
+    printed = str(grammar)
+    assert 'root[capture="all", no_forcing] ::=' in printed
+    reparsed_grammar = xgr.Grammar.from_ebnf(printed)
+    assert str(reparsed_grammar) == printed
+
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    compiled = compiler.compile_grammar(grammar)
+    assert json.loads(compiled.grammar.serialize_json())["no_forcing"] is True
+    serialized_compiled = compiled.serialize_json()
+    assert json.loads(serialized_compiled)["grammar"]["no_forcing"] is True
+    recovered_compiled = xgr.CompiledGrammar.deserialize_json(serialized_compiled, tokenizer_info)
+
+    compiled_variants = [
+        compiled,
+        compiler.compile_grammar(recovered_grammar),
+        compiler.compile_grammar(reparsed_grammar),
+        recovered_compiled,
+    ]
+    for compiled_variant in compiled_variants:
+        matcher = xgr.GrammarMatcher(compiled_variant, terminate_without_stop_token=True)
+        assert matcher.accept_string("a")
+        assert matcher.find_jump_forward_string() == ""
+        assert matcher.accept_string("bb")
+        assert matcher.get_captures() == [("all", b"abb")]
+
+
+def test_lark_no_forcing_propagates_through_nested_named_and_composed_grammars() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["a", "bb", "c"])
+    enabled = xgr.Grammar.from_lark(
+        """
+        %grammar_options {"no_forcing": true}
+        start: "abb"
+        """
+    )
+    enabled_suffix = xgr.Grammar.from_lark(
+        """
+        %grammar_options {"no_forcing": true}
+        start: "bb"
+        """
+    )
+
+    nested = xgr.Grammar.from_lark(
+        """
+        start: %lark {
+          %grammar_options {"no_forcing": true}
+          start: "abb"
+        }
+        """
+    )
+    named = xgr.Grammar.from_lark("start: @child", named_grammars={"child": enabled})
+    union = xgr.Grammar.union(xgr.Grammar.from_ebnf('root ::= "c"'), enabled)
+    concat = xgr.Grammar.concat(xgr.Grammar.from_ebnf('root ::= "a"'), enabled_suffix)
+
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    for grammar in [nested, named, union, concat]:
+        assert str(grammar).startswith("root[no_forcing] ::=")
+        matcher = xgr.GrammarMatcher(
+            compiler.compile_grammar(grammar), terminate_without_stop_token=True
+        )
+        assert matcher.accept_string("a")
+        assert matcher.find_jump_forward_string() == ""
+        assert matcher.accept_string("bb")
+        assert matcher.is_terminated()
 
 
 def test_lark_default_disallows_initial_skip_but_allows_trailing_skip() -> None:

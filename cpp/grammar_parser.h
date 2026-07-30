@@ -76,6 +76,8 @@ class EBNFLexer {
     std::string stop_capture_name = {};
     // Whether the identifier is a rule name carrying the [lazy] attribute, e.g. r[lazy] ::= ...
     bool is_lazy = false;
+    // Whether this rule definition enables the grammar-wide no-forcing option.
+    bool no_forcing = false;
     // The sampling temperature attached to a rule-definition identifier via name[temperature=T].
     std::optional<float> temperature = std::nullopt;
   };
