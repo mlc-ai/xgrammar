@@ -8,6 +8,7 @@ from xgrammar.testing import (
     GrammarFunctor,
     _ebnf_to_grammar_no_normalization,
     _get_allow_empty_rule_ids,
+    _is_grammar_accept_string,
 )
 
 
@@ -204,6 +205,95 @@ def test_character_class_star():
     grammar = _ebnf_to_grammar_no_normalization(before)
     after = str(grammar)
     assert after == expected
+
+
+def test_intersection():
+    """Test '&' intersection: binds tighter than '|' and looser than sequence."""
+    before = """root ::= ("a" | "b") & "b"
+"""
+    expected = """root ::= ((((("a") | ("b"))) & ("b")))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_complement():
+    """Test prefix '~' complement of an element."""
+    before = """root ::= ~"bad" "!"
+"""
+    expected = """root ::= ((~("bad") "!"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_intersection_complement_matching():
+    """Test that '&' and '~' compile into FSMs with the expected languages."""
+    grammar = xgr.Grammar.from_ebnf('root ::= (("a" | "b") & "b") ~"bad" "!"')
+    for instance in ["b!", "bx!", "bbadx!", "b你好!"]:
+        assert _is_grammar_accept_string(grammar, instance), instance
+    for instance in ["", "a!", "bbad!", "b!extra"]:
+        assert not _is_grammar_accept_string(grammar, instance), instance
+
+
+def test_intersection_of_concatenations_matching():
+    """Intersection operands whose concatenations produce epsilon edges in the product NFA."""
+    # [b]+ "c" concatenates two automata with an epsilon edge in between; the product with
+    # [bc]* must accept exactly b+c and in particular reject "c" (a start-state regression).
+    grammar = xgr.Grammar.from_ebnf('root ::= [b]* "b" "c" & [bc]*')
+    for instance in ["bc", "bbc", "bbbc"]:
+        assert _is_grammar_accept_string(grammar, instance), instance
+    for instance in ["", "c", "b", "cc", "bcb"]:
+        assert not _is_grammar_accept_string(grammar, instance), instance
+
+    # Both operands are concatenations of nullable pieces.
+    grammar = xgr.Grammar.from_ebnf('root ::= [a]* [b]* & ("ab" | "a" | "b")')
+    for instance in ["a", "b", "ab"]:
+        assert _is_grammar_accept_string(grammar, instance), instance
+    for instance in ["", "ba", "aab", "abb"]:
+        assert not _is_grammar_accept_string(grammar, instance), instance
+
+    # Chained intersection with three operands.
+    grammar = xgr.Grammar.from_ebnf('root ::= [ab]* & [bc]* & ("b" | "bb")')
+    for instance in ["b", "bb"]:
+        assert _is_grammar_accept_string(grammar, instance), instance
+    for instance in ["", "a", "c", "bbb"]:
+        assert not _is_grammar_accept_string(grammar, instance), instance
+
+
+def test_complement_of_intersection_matching():
+    """A complement whose operand is an intersection determinizes the NFA product."""
+    grammar = xgr.Grammar.from_ebnf("root ::= ~([ab]* & [bc]*)")
+    # The operand's language is b*, so the complement accepts anything that is not b*.
+    for instance in ["a", "c", "ab", "cb", "abc"]:
+        assert _is_grammar_accept_string(grammar, instance), instance
+    for instance in ["", "b", "bb", "bbb"]:
+        assert not _is_grammar_accept_string(grammar, instance), instance
+
+
+def test_intersection_operand_with_repetition_range_is_rejected():
+    """String quantifiers inside '&'/'~' operands compile into repetition ranges, which cannot
+    become a single leaf automaton and must raise a clear error."""
+    tokenizer_info = xgr.TokenizerInfo([])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    with pytest.raises(RuntimeError, match="repetition ranges"):
+        compiler.compile_grammar(xgr.Grammar.from_ebnf('root ::= "a"* & [ab]*'))
+
+
+def test_complement_with_quantifier():
+    """Test that a quantifier applies to the complemented element."""
+    grammar = xgr.Grammar.from_ebnf('root ::= ~("," | ";")*')
+    # Each repetition matches one string that is neither "," nor ";"; the concatenations cover
+    # every string, including ones containing commas, so only direct rejection is observable
+    # for the single-repetition rule below.
+    single = xgr.Grammar.from_ebnf('root ::= ~("," | ";")')
+    for instance in ["", "a", "你", ",,"]:
+        assert _is_grammar_accept_string(single, instance), instance
+    for instance in [",", ";"]:
+        assert not _is_grammar_accept_string(single, instance), instance
+    assert _is_grammar_accept_string(grammar, "a,b")
 
 
 def test_repetition_range_exact():

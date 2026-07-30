@@ -125,6 +125,12 @@ int32_t GrammarBuilder::AddIntersection(const std::vector<int32_t>& operand_expr
   );
 }
 
+int32_t GrammarBuilder::AddComplement(int32_t operand_expr_id) {
+  XGRAMMAR_CHECK(operand_expr_id >= 0 && operand_expr_id < grammar_->NumGrammarExprs())
+      << "Complement operand expr id " << operand_expr_id << " is out of range.";
+  return AddGrammarExpr({GrammarExprType::kComplement, &operand_expr_id, 1});
+}
+
 int32_t GrammarBuilder::AddCharacterClass(
     const std::vector<CharacterClassElement>& elements, bool is_negative
 ) {
