@@ -8,6 +8,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include <array>
+#include <atomic>
 #include <bitset>
 #include <cstdint>
 #include <map>
@@ -28,6 +29,7 @@
 #include "support/container.h"
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/thread_pool.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -1306,14 +1308,38 @@ class GrammarFSMBuilderImpl {
   explicit GrammarFSMBuilderImpl(FSM& target_fsm, const std::string* rule_name = nullptr)
       : target_fsm_(target_fsm), rule_name_(rule_name) {}
 
-  static void Apply(Grammar* grammar) {
+  static void Apply(Grammar* grammar, int max_threads, ThreadPool* thread_pool) {
     FSM complete_fsm;
     std::vector<std::optional<FSMWithStartEndWithSize>> per_rule_fsms((*grammar)->NumRules());
     std::vector<int> state_mapping;
 
-    for (int i = 0; i < (*grammar)->NumRules(); ++i) {
-      auto rule_fsm = BuildRuleFSM(*grammar, i);
-      per_rule_fsms[i] = rule_fsm.AddToCompleteFSM(&complete_fsm, &state_mapping);
+    const int num_rules = (*grammar)->NumRules();
+    const int num_threads = std::max(1, std::min(max_threads, num_rules));
+    if (num_threads == 1) {
+      for (int i = 0; i < num_rules; ++i) {
+        auto rule_fsm = BuildRuleFSM(*grammar, i);
+        per_rule_fsms[i] = rule_fsm.AddToCompleteFSM(&complete_fsm, &state_mapping);
+      }
+    } else {
+      std::vector<std::optional<FSMWithStartEnd>> built_rule_fsms(num_rules);
+      std::atomic<int> next_rule_id{0};
+      std::optional<ThreadPool> owned_thread_pool;
+      if (thread_pool == nullptr) {
+        owned_thread_pool.emplace(num_threads);
+        thread_pool = &owned_thread_pool.value();
+      }
+      for (int thread_id = 0; thread_id < num_threads; ++thread_id) {
+        thread_pool->Execute([&]() {
+          int rule_id;
+          while ((rule_id = next_rule_id.fetch_add(1, std::memory_order_relaxed)) < num_rules) {
+            built_rule_fsms[rule_id] = BuildRuleFSM(*grammar, rule_id);
+          }
+        });
+      }
+      thread_pool->Wait();
+      for (int i = 0; i < num_rules; ++i) {
+        per_rule_fsms[i] = built_rule_fsms[i]->AddToCompleteFSM(&complete_fsm, &state_mapping);
+      }
     }
 
     for (int i = 0; i < (*grammar)->NumRules(); ++i) {
@@ -2981,7 +3007,7 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
 
 class GrammarOptimizerImpl {
  public:
-  static Grammar Apply(const Grammar& grammar) {
+  static Grammar Apply(const Grammar& grammar, int max_threads, ThreadPool* thread_pool) {
     // ByteStringFuser and RuleInliner rewrite the grammar in place, so work on a private copy: the
     // input grammar may be shared (e.g. a cached grammar) and must not be mutated. Copy the impl
     // directly (contiguous vector copies) instead of going through GrammarBuilder, which would
@@ -2996,7 +3022,7 @@ class GrammarOptimizerImpl {
     result->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(result);
     ValidateLazyRules(result);
     RepetitionNormalizer::Apply(&result);
-    GrammarFSMBuilder::Apply(&result);
+    GrammarFSMBuilder::Apply(&result, max_threads, thread_pool);
     result->optimized = true;
     return result;
   }
@@ -3906,7 +3932,17 @@ Grammar StructureNormalizer::Apply(const Grammar& grammar) {
 
 /*************************** Forward grammar optimizers to their impl ***************************/
 
-void GrammarFSMBuilder::Apply(Grammar* grammar) { GrammarFSMBuilderImpl::Apply(grammar); }
+void GrammarFSMBuilder::Apply(Grammar* grammar) {
+  GrammarFSMBuilderImpl::Apply(grammar, 1, nullptr);
+}
+
+void GrammarFSMBuilder::Apply(Grammar* grammar, int max_threads) {
+  GrammarFSMBuilderImpl::Apply(grammar, max_threads, nullptr);
+}
+
+void GrammarFSMBuilder::Apply(Grammar* grammar, int max_threads, ThreadPool* thread_pool) {
+  GrammarFSMBuilderImpl::Apply(grammar, max_threads, thread_pool);
+}
 
 void RepetitionNormalizer::Apply(Grammar* grammar) { RepetitionNormalizerImpl().Apply(grammar); }
 
@@ -3998,7 +4034,15 @@ Grammar RepetitionRangeExpander::Apply(const Grammar& grammar) {
 }
 
 Grammar GrammarOptimizer::Apply(const Grammar& grammar) {
-  return GrammarOptimizerImpl::Apply(grammar);
+  return GrammarOptimizerImpl::Apply(grammar, 1, nullptr);
+}
+
+Grammar GrammarOptimizer::Apply(const Grammar& grammar, int max_threads) {
+  return GrammarOptimizerImpl::Apply(grammar, max_threads, nullptr);
+}
+
+Grammar GrammarOptimizer::Apply(const Grammar& grammar, int max_threads, ThreadPool* thread_pool) {
+  return GrammarOptimizerImpl::Apply(grammar, max_threads, thread_pool);
 }
 
 void ByteStringFuser::Apply(Grammar* grammar) { ByteStringFuserImpl().Apply(grammar); }
