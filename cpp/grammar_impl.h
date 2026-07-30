@@ -9,8 +9,8 @@
 
 #include <xgrammar/xgrammar.h>
 
-#include <algorithm>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -85,6 +85,10 @@ class Grammar::Impl {
      * occurrence of this rule to at most max_tokens LLM tokens, forcing it to end at the
      * earliest possible position once the budget is exhausted. -1 means no budget. */
     int32_t max_tokens = -1;
+    /*! \brief The Unicode codepoint budget of the rule. When non-negative, the matcher bounds
+     * each occurrence of this rule to at most max_chars codepoints, forcing it to end at the
+     * earliest possible position once the budget is exhausted. -1 means no budget. */
+    int32_t max_chars = -1;
     /*! \brief The capture group name of the rule. When non-empty, the matcher records the input
      * span matched by this rule on every completion, retrievable via GrammarMatcher::GetCaptures.
      * Empty means no capture. */
@@ -92,6 +96,8 @@ class Grammar::Impl {
     /*! \brief Whether the rule matches with committed-shortest (lazy) semantics: at the first
      * position where the body can complete, it must complete. */
     bool is_lazy = false;
+    /*! \brief The sampling temperature to use while matching this rule. */
+    std::optional<float> temperature = std::nullopt;
   };
 
   /*! \brief Sparse per-rule metadata used to materialize suffix and stop captures. */
@@ -277,7 +283,7 @@ class Grammar::Impl {
   };
 
   /*! \brief Get the tag dispatch from the grammar expr. */
-  TagDispatch GetTagDispatch(const GrammarExpr& grammar_expr) {
+  TagDispatch GetTagDispatch(const GrammarExpr& grammar_expr) const {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kTagDispatch)
         << "GrammarExpr is not a tag dispatch";
 
@@ -309,7 +315,7 @@ class Grammar::Impl {
   }
 
   /*! \brief Get the tag dispatch from the grammar expr with the given id. */
-  TagDispatch GetTagDispatch(int32_t grammar_expr_id) {
+  TagDispatch GetTagDispatch(int32_t grammar_expr_id) const {
     return GetTagDispatch(GetGrammarExpr(grammar_expr_id));
   }
 
@@ -321,7 +327,7 @@ class Grammar::Impl {
   };
 
   /*! \brief Decode a kTokenTagDispatch expr into the TokenTagDispatch struct. */
-  TokenTagDispatch GetTokenTagDispatch(const GrammarExpr& grammar_expr) {
+  TokenTagDispatch GetTokenTagDispatch(const GrammarExpr& grammar_expr) const {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kTokenTagDispatch);
     TokenTagDispatch result;
     int pos = 0;
@@ -341,7 +347,7 @@ class Grammar::Impl {
   }
 
   /*! \brief Get the token tag dispatch from the grammar expr with the given id. */
-  TokenTagDispatch GetTokenTagDispatch(int32_t grammar_expr_id) {
+  TokenTagDispatch GetTokenTagDispatch(int32_t grammar_expr_id) const {
     return GetTokenTagDispatch(GetGrammarExpr(grammar_expr_id));
   }
 
@@ -404,8 +410,10 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::Rule::lookahead_assertion_id,
     &Grammar::Impl::Rule::is_exact_lookahead,
     &Grammar::Impl::Rule::max_tokens,
+    &Grammar::Impl::Rule::max_chars,
     &Grammar::Impl::Rule::capture_name,
-    &Grammar::Impl::Rule::is_lazy
+    &Grammar::Impl::Rule::is_lazy,
+    &Grammar::Impl::Rule::temperature
 );
 
 XGRAMMAR_MEMBER_ARRAY(

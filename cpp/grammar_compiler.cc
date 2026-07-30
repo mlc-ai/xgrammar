@@ -524,6 +524,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 
   XGRAMMAR_DCHECK(init_rule_id_ != -1 && grammar_->per_rule_fsms[init_rule_id_].has_value());
   auto [speculative_calculation, speculative_mask] = GetSpeculativeCalculation();
+  if (has_char_budget_rules_) {
+    speculative_calculation = false;
+  }
 
   int prev_matched_size = 0;
   int last_rejected_range = 0;
@@ -643,12 +646,18 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       bool can_reach_end = tmp_can_reach_end_prefix_or_stack_.back();
 
       if (accepted) {
-        tmp_accepted_indices_.push_back(i);
+        if (HasEnteredCharBudget()) {
+          tmp_uncertain_indices_.push_back(i);
+        } else {
+          tmp_accepted_indices_.push_back(i);
+        }
       } else if (can_reach_end && prev_matched_size > 0) {
         auto [lookahead_accepted, lookahead_completed] =
             IsTokenPassLookaheadAssertion(token, tmp_can_reach_end_stack_);
         if ((!is_root_rule) && lookahead_accepted) {
           if (lookahead_completed || !is_exact_lookahead) {
+            tmp_uncertain_indices_.push_back(i);
+          } else if (HasEnteredCharBudget()) {
             tmp_uncertain_indices_.push_back(i);
           } else {
             tmp_accepted_indices_.push_back(i);
@@ -797,8 +806,8 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   tmp_can_reach_end_prefix_or_stack_.push_back(false);
 
   // Try to get the crossing cache.
-  bool rule_level_cache_is_available =
-      rule_level_cache_.has_value() && grammar_->per_rule_fsm_hashes[init_rule_id_].has_value();
+  bool rule_level_cache_is_available = !has_char_budget_rules_ && rule_level_cache_.has_value() &&
+                                       grammar_->per_rule_fsm_hashes[init_rule_id_].has_value();
   std::optional<uint64_t> fsm_hash = std::nullopt;
   int32_t new_state_id = -1;
   std::optional<AdaptiveTokenMask> crossing_cache = std::nullopt;
@@ -855,14 +864,16 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
     );
   }
 
-  // Merge: token edge accepted overrides byte path classification.
-  // accepted  = accepted + token_edge_accepted
-  // rejected  = rejected - token_edge_accepted
-  // uncertain = uncertain - token_edge_accepted
+  // Token edges are rechecked at runtime when a character budget is present because accepting
+  // one can enter a budgeted rule within the same token.
   if (!token_edge_accepted.empty()) {
-    IntsetUnion(&tmp_accepted_indices_, token_edge_accepted);
+    if (has_char_budget_rules_) {
+      IntsetUnion(&tmp_uncertain_indices_, token_edge_accepted);
+    } else {
+      IntsetUnion(&tmp_accepted_indices_, token_edge_accepted);
+      IntsetDifference(&tmp_uncertain_indices_, token_edge_accepted);
+    }
     IntsetDifference(&tmp_rejected_indices_, token_edge_accepted);
-    IntsetDifference(&tmp_uncertain_indices_, token_edge_accepted);
   }
   if (rejected_filled) {
     auto return_value = AdaptiveTokenMask(
@@ -1130,7 +1141,11 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   std::vector<std::shared_future<void>> pending_tasks;
   pending_tasks.reserve(adaptive_states.size());
   try {
-    for (const auto& [state, is_root_rule] : adaptive_states) {
+    for (const auto& adaptive_state : adaptive_states) {
+      // Capturing names introduced by a structured binding requires C++20.
+      // XGrammar targets C++17, so copy the pair members into ordinary locals.
+      const ParserState state = adaptive_state.first;
+      const bool is_root_rule = adaptive_state.second;
       pending_tasks.emplace_back(
           thread_pool_->Submit([add_adaptive_token_mask, state, is_root_rule]() {
             add_adaptive_token_mask(state, is_root_rule);

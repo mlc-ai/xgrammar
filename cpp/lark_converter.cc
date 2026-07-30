@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -519,6 +520,7 @@ struct Definition {
   bool is_terminal = false;
   bool lazy = false;
   std::optional<Node> suffix;
+  std::optional<float> temperature;
   Location suffix_location;
   std::optional<Node> stop;
   Location stop_location;
@@ -526,6 +528,8 @@ struct Definition {
   Location stop_capture_location;
   std::optional<int32_t> max_tokens;
   Location max_tokens_location;
+  std::optional<int32_t> max_chars;
+  Location max_chars_location;
   std::optional<std::string> capture_name;
   Location capture_location;
   Node body;
@@ -763,6 +767,14 @@ class LarkParser {
         }
         definition->max_tokens = value;
         definition->max_tokens_location = key.location;
+      } else if (key.text == "max_chars") {
+        Consume(TokenType::kEquals, "expected '=' after max_chars attribute");
+        int32_t value = ParseInteger();
+        if (definition->max_chars.has_value()) {
+          RaiseLarkError(source_, key.location, "max_chars attribute is specified more than once");
+        }
+        definition->max_chars = value;
+        definition->max_chars_location = key.location;
       } else if (key.text == "capture") {
         std::string capture_name;
         Location capture_location = key.location;
@@ -836,6 +848,29 @@ class LarkParser {
         Location stop_capture_location = name_node.location;
         definition->stop_capture_name = std::move(name_node.text);
         definition->stop_capture_location = stop_capture_location;
+      } else if (key.text == "temperature") {
+        Consume(TokenType::kEquals, "expected '=' after temperature attribute");
+        Token value = Consume(TokenType::kNumber, "expected number after temperature=");
+        if (definition->temperature.has_value()) {
+          RaiseLarkError(
+              source_, key.location, "temperature attribute is specified more than once"
+          );
+        }
+        try {
+          size_t parsed_length = 0;
+          float temperature = std::stof(value.text, &parsed_length);
+          if (parsed_length != value.text.size() || !std::isfinite(temperature) ||
+              temperature < 0) {
+            RaiseLarkError(
+                source_, value.location, "temperature must be a finite non-negative number"
+            );
+          }
+          definition->temperature = temperature;
+        } catch (const std::exception&) {
+          RaiseLarkError(
+              source_, value.location, "temperature must be a finite non-negative number"
+          );
+        }
       } else {
         RaiseLarkError(
             source_,
@@ -1325,7 +1360,9 @@ class LarkCompiler {
     CompileIgnore();
 
     const Definition& start_definition = *definition_by_name_.at("start");
-    std::optional<int32_t> dynamic_start_body = CompileDynamicStart(start_definition);
+    std::optional<int32_t> dynamic_start_body = start_definition.temperature.has_value()
+                                                    ? std::nullopt
+                                                    : CompileDynamicStart(start_definition);
 
     for (const auto& definition : document_.definitions) {
       if (definition.is_terminal) {
@@ -1339,6 +1376,10 @@ class LarkCompiler {
               "max_tokens is not supported on rules consumed by dynamic dispatch"
           );
         }
+        if (definition.max_chars.has_value()) {
+          XGRAMMAR_LOG(WARNING) << "Ignoring max_chars on rule '" << definition.name
+                                << "' because it is consumed by dynamic dispatch.";
+        }
         if (definition.capture_name.has_value()) {
           RaiseLarkError(
               source_,
@@ -1350,7 +1391,12 @@ class LarkCompiler {
         continue;
       }
       int32_t body_expr_id;
-      if (definition.name == "start") {
+      if (definition.temperature.has_value()) {
+        body_expr_id = CompileTemperatureRule(definition);
+        if (definition.max_chars.has_value()) {
+          builder_.UpdateMaxChars(rule_ids_.at(definition.name), definition.max_chars.value());
+        }
+      } else if (definition.name == "start") {
         if (dynamic_start_body.has_value()) {
           if (definition.max_tokens.has_value()) {
             RaiseLarkError(
@@ -1359,9 +1405,13 @@ class LarkCompiler {
                 "max_tokens is not supported on a dynamic dispatch start rule"
             );
           }
+          if (definition.max_chars.has_value()) {
+            XGRAMMAR_LOG(WARNING) << "Ignoring max_chars on dynamic dispatch start rule '"
+                                  << definition.name << "'.";
+          }
           body_expr_id = dynamic_start_body.value();
-        } else if (definition.max_tokens.has_value()) {
-          body_expr_id = CompileMaxTokensRule(definition);
+        } else if (definition.max_tokens.has_value() || definition.max_chars.has_value()) {
+          body_expr_id = CompileBudgetRule(definition);
         } else if (HasLazySemantics(definition)) {
           body_expr_id = CompileLazyRule(definition);
         } else {
@@ -1370,24 +1420,37 @@ class LarkCompiler {
         if (allow_initial_skip_ && skip_rule_id_ != -1) {
           body_expr_id = builder_.AddSequence({builder_.AddRuleRef(skip_rule_id_), body_expr_id});
         }
-      } else if (definition.max_tokens.has_value()) {
-        body_expr_id = CompileMaxTokensRule(definition);
+      } else if (definition.max_tokens.has_value() || definition.max_chars.has_value()) {
+        body_expr_id = CompileBudgetRule(definition);
       } else if (HasLazySemantics(definition)) {
         body_expr_id = CompileLazyRule(definition);
       } else {
         body_expr_id = CompileNode(definition.body, definition.name, false);
       }
-      builder_.UpdateRuleBody(rule_ids_.at(definition.name), body_expr_id);
+      int32_t rule_id = rule_ids_.at(definition.name);
+      builder_.UpdateRuleBody(rule_id, body_expr_id);
       if (definition.capture_name.has_value()) {
-        builder_.UpdateCaptureName(rule_ids_.at(definition.name), definition.capture_name.value());
+        builder_.UpdateCaptureName(rule_id, definition.capture_name.value());
       }
+      builder_.UpdateRuleTemperature(rule_id, definition.temperature);
     }
 
     auto start_it = rule_ids_.find("start");
     if (start_it == rule_ids_.end()) {
       RaiseLarkError(source_, {1, 1}, "no start rule found");
     }
-    return DeadCodeEliminator::Apply(GrammarNormalizer().Apply(builder_.Get(start_it->second)));
+    int32_t root_rule_id = start_it->second;
+    if (start_definition.temperature.has_value() && skip_rule_id_ != -1) {
+      std::vector<int32_t> elements;
+      if (allow_initial_skip_) {
+        elements.push_back(builder_.AddRuleRef(skip_rule_id_));
+      }
+      elements.push_back(builder_.AddRuleRef(root_rule_id));
+      elements.push_back(builder_.AddRuleRef(skip_rule_id_));
+      root_rule_id =
+          builder_.AddRuleWithHint("start_with_skip", builder_.AddSequence(std::move(elements)));
+    }
+    return DeadCodeEliminator::Apply(GrammarNormalizer().Apply(builder_.Get(root_rule_id)));
   }
 
  private:
@@ -1411,6 +1474,23 @@ class LarkCompiler {
 
   static bool HasLazySemantics(const Definition& definition) {
     return definition.lazy || definition.suffix.has_value() || definition.stop.has_value();
+  }
+
+  int32_t CompileTemperatureRule(const Definition& definition) {
+    const Node* body = UnwrapSingle(&definition.body);
+    if (body->kind == Node::Kind::kJson || body->kind == Node::Kind::kNestedLark ||
+        body->kind == Node::Kind::kGrammarRef) {
+      return CompileNode(*body, definition.name, false, false);
+    }
+    try {
+      return CompileNode(definition.body, definition.name, true, false);
+    } catch (const std::exception& error) {
+      RaiseLarkError(
+          source_,
+          definition.location,
+          std::string(error.what()) + "; temperature is only supported on terminals and subgrammars"
+      );
+    }
   }
 
   void ExpandImports() {
@@ -1817,7 +1897,9 @@ class LarkCompiler {
     }
   }
 
-  int32_t CompileNode(const Node& node, const std::string& rule_hint, bool terminal_mode) {
+  int32_t CompileNode(
+      const Node& node, const std::string& rule_hint, bool terminal_mode, bool append_skip = true
+  ) {
     switch (node.kind) {
       case Node::Kind::kSequence: {
         if (node.children.empty()) {
@@ -1826,7 +1908,7 @@ class LarkCompiler {
         std::vector<int32_t> elements;
         elements.reserve(node.children.size());
         for (const Node& child : node.children) {
-          elements.push_back(CompileNode(child, rule_hint, terminal_mode));
+          elements.push_back(CompileNode(child, rule_hint, terminal_mode, append_skip));
         }
         return elements.size() == 1 ? elements[0] : builder_.AddSequence(elements);
       }
@@ -1834,12 +1916,13 @@ class LarkCompiler {
         std::vector<int32_t> choices;
         choices.reserve(node.children.size());
         for (const Node& child : node.children) {
-          choices.push_back(CompileNode(child, rule_hint, terminal_mode));
+          choices.push_back(CompileNode(child, rule_hint, terminal_mode, append_skip));
         }
         return choices.size() == 1 ? choices[0] : builder_.AddChoices(choices);
       }
       case Node::Kind::kRepeat: {
-        int32_t child = CompileNode(node.children[0], rule_hint + "_repeat", terminal_mode);
+        int32_t child =
+            CompileNode(node.children[0], rule_hint + "_repeat", terminal_mode, append_skip);
         return builder_.AddRepeatFromExpr(
             rule_hint + "_repeat", child, node.min_repeat, node.max_repeat
         );
@@ -1856,13 +1939,15 @@ class LarkCompiler {
         }
         int32_t result = builder_.AddRuleRef(rule_ids_.at(node.text));
         // Lazy rules are compiled like terminals (lexemes), so they also take a trailing skip.
-        bool skip_after =
-            definition_it->second->is_terminal || HasLazySemantics(*definition_it->second);
-        return !terminal_mode && skip_after ? AppendSkip(result) : result;
+        // Temperature rules are also compiled like terminals.
+        bool is_lexeme = definition_it->second->is_terminal ||
+                         HasLazySemantics(*definition_it->second) ||
+                         definition_it->second->temperature.has_value();
+        return !terminal_mode && append_skip && is_lexeme ? AppendSkip(result) : result;
       }
       case Node::Kind::kString: {
         int32_t result = CompileStringLiteral(node);
-        return !terminal_mode && !node.text.empty() ? AppendSkip(result) : result;
+        return !terminal_mode && append_skip && !node.text.empty() ? AppendSkip(result) : result;
       }
       case Node::Kind::kRange: {
         auto begin = ParseUTF8(node.text.c_str());
@@ -1875,14 +1960,14 @@ class LarkCompiler {
           RaiseLarkError(source_, node.location, "character range start must not exceed end");
         }
         int32_t result = builder_.AddCharacterClass({{begin[0], end[0]}});
-        return terminal_mode ? result : AppendSkip(result);
+        return terminal_mode || !append_skip ? result : AppendSkip(result);
       }
       case Node::Kind::kRegex: {
         std::string pattern = PrepareRegexPattern(node);
         try {
           int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromRegex(pattern));
           int32_t result = builder_.AddRuleRef(root);
-          return terminal_mode ? result : AppendSkip(result);
+          return terminal_mode || !append_skip ? result : AppendSkip(result);
         } catch (const std::exception& error) {
           RaiseLarkError(
               source_,
@@ -1898,7 +1983,7 @@ class LarkCompiler {
         try {
           int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromJSONSchema(node.text));
           int32_t result = builder_.AddRuleRef(root);
-          return terminal_mode ? result : AppendSkip(result);
+          return terminal_mode || !append_skip ? result : AppendSkip(result);
         } catch (const std::exception& error) {
           RaiseLarkError(
               source_,
@@ -1915,7 +2000,7 @@ class LarkCompiler {
           LarkCompiler compiler(source_, *node.nested, tokenizer_info_, named_grammars_);
           int32_t root = SubGrammarAdder::Apply(&builder_, compiler.Compile());
           int32_t result = builder_.AddRuleRef(root);
-          return terminal_mode ? result : AppendSkip(result);
+          return terminal_mode || !append_skip ? result : AppendSkip(result);
         } catch (const std::exception& error) {
           RaiseLarkError(
               source_,
@@ -1931,7 +2016,7 @@ class LarkCompiler {
         SpecialTokenSet token_set = ResolveSpecialToken(node.text, node.location);
         int32_t result = token_set.excluded ? builder_.AddExcludeTokenSet(token_set.token_ids)
                                             : builder_.AddTokenSet(token_set.token_ids);
-        return AppendSkip(result);
+        return append_skip ? AppendSkip(result) : result;
       }
       case Node::Kind::kRegexExt:
         RaiseLarkError(source_, node.location, "structured %regex is not supported");
@@ -1946,7 +2031,8 @@ class LarkCompiler {
               SubGrammarAdder::Apply(&builder_, ResolveNamedGrammar(name, node.location));
           root_it = named_grammar_roots_.emplace(name, root).first;
         }
-        return AppendSkip(builder_.AddRuleRef(root_it->second));
+        int32_t result = builder_.AddRuleRef(root_it->second);
+        return append_skip ? AppendSkip(result) : result;
       }
       case Node::Kind::kNot:
         RaiseLarkError(
@@ -1963,19 +2049,15 @@ class LarkCompiler {
     return builder_.AddSequence({expression, builder_.AddRuleRef(skip_rule_id_)});
   }
 
-  /*!
-   * \brief Compile a rule with the max_tokens attribute. The body compiles normally and the
-   * budget is recorded on the rule; the matcher then bounds each occurrence, forcing it to
-   * end at the earliest possible position once the budget is exhausted. Bodies that can end
-   * at any position (such as arbitrary text) therefore never exceed the budget.
-   */
-  int32_t CompileMaxTokensRule(const Definition& definition) {
-    if (!IsAnyText(definition.body) && !ExtractLazyTrigger(definition).has_value()) {
-      XGRAMMAR_LOG(WARNING) << "max_tokens on rule '" << definition.name
-                            << "' is best-effort: the budget may be exceeded when the rule "
-                               "cannot end at the position where it runs out.";
+  /*! \brief Compile a rule with a token or character budget. */
+  int32_t CompileBudgetRule(const Definition& definition) {
+    int32_t rule_id = rule_ids_.at(definition.name);
+    if (definition.max_tokens.has_value()) {
+      builder_.UpdateMaxTokens(rule_id, definition.max_tokens.value());
     }
-    builder_.UpdateMaxTokens(rule_ids_.at(definition.name), definition.max_tokens.value());
+    if (definition.max_chars.has_value()) {
+      builder_.UpdateMaxChars(rule_id, definition.max_chars.value());
+    }
     if (HasLazySemantics(definition)) {
       return CompileLazyRule(definition);
     }
@@ -2225,7 +2307,8 @@ class LarkCompiler {
     }
     std::optional<std::string> body_pattern;
     std::optional<std::string> marker_pattern;
-    if (marker != nullptr && (!marker_has_fixed_byte_length || definition.max_tokens.has_value())) {
+    if (marker != nullptr && (!marker_has_fixed_byte_length || definition.max_tokens.has_value() ||
+                              definition.max_chars.has_value())) {
       body_pattern = TerminalNodeToRegex(definition.body);
       marker_pattern = TerminalNodeToRegex(*marker);
       int32_t body_helper_expr = builder_.AddRegex(body_pattern.value());

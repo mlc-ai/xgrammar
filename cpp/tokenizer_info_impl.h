@@ -39,6 +39,9 @@ class TokenizerInfo::Impl {
   const std::vector<int32_t>& GetTokenIdToSortedVocabIndex() const {
     return token_id_to_sorted_vocab_index_;
   }
+  const std::vector<int32_t>& GetTokenCharCounts() const;
+  int32_t GetMaxTokenChars() const;
+  void BuildTokenCharData();
 
   std::string DumpMetadata() const;
   picojson::value DumpMetadataValue() const;
@@ -79,6 +82,9 @@ class TokenizerInfo::Impl {
   std::vector<int32_t> special_token_ids_;
   /*! \brief Reverse mapping: token_id -> index in sorted_decoded_vocab_. -1 if not present. */
   std::vector<int32_t> token_id_to_sorted_vocab_index_;
+  /*! \brief Unicode codepoint counts for the sorted decoded vocabulary. */
+  int32_t max_token_chars_ = 0;
+  std::vector<int32_t> token_char_counts_;
 
   /*!
    * \brief The tokens used to detect stop tokens from the vocabulary.

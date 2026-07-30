@@ -70,11 +70,13 @@ class GrammarFunctor {
         // Handle lookahead assertion
         builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
         builder_->UpdateMaxTokens(i, rule.max_tokens);
+        builder_->UpdateMaxChars(i, rule.max_chars);
         builder_->UpdateCaptureName(i, rule.capture_name);
         if (const auto* suffix_stop_info = base_grammar_->GetSuffixStopInfo(i)) {
           builder_->UpdateSuffixStopInfo(i, *suffix_stop_info);
         }
         builder_->UpdateLazy(i, rule.is_lazy);
+        builder_->UpdateRuleTemperature(i, rule.temperature);
       }
       return builder_->Get(base_grammar_->GetRootRule().name);
     } else {
@@ -328,11 +330,14 @@ class StructureNormalizer {
 /*************************** Grammar Optimizer ***************************/
 
 /*!
- * \brief Fuse the byte string elements in the grammar.
+ * \brief Fuse adjacent byte string elements in sequences.
+ * \details Rewrites *grammar in place. Only sequences that actually contain adjacent byte strings
+ * are rewritten; if nothing needs fusing, the grammar is left untouched. The caller must own the
+ * grammar, as the input is mutated directly.
  */
 class ByteStringFuser {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
@@ -345,10 +350,13 @@ class AllowEmptyRuleAnalyzer {
 
 /*!
  * \brief Inline the rule references in the grammar.
+ * \details Rewrites *grammar in place. Only choices with an inlinable leading rule reference are
+ * rewritten; if nothing can be inlined, the grammar is left untouched. The caller must own the
+ * grammar, as the input is mutated directly.
  */
 class RuleInliner {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
