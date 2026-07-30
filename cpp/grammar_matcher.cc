@@ -2697,6 +2697,9 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
   XGRAMMAR_CHECK(!IsStopTokenAccepted())
       << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
          "get the jump forward string";
+  if (grammar_->IsForcingDisabled()) {
+    return "";
+  }
 
   current_token_index_ = static_cast<int32_t>(token_length_history.size());
   if (budget_force_close_pending_) {

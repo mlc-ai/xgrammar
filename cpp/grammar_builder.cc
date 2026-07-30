@@ -54,6 +54,10 @@ Grammar GrammarBuilder::Get(int32_t root_rule_id) {
   return Grammar(grammar_);
 }
 
+void GrammarBuilder::SetNoForcing(bool no_forcing) {
+  grammar_->no_forcing_ = grammar_->no_forcing_ || no_forcing;
+}
+
 int32_t GrammarBuilder::AddGrammarExpr(const GrammarExpr& grammar_expr) {
   grammar_->grammar_expr_indptr_.push_back(grammar_->grammar_expr_data_.size());
   grammar_->grammar_expr_data_.push_back(static_cast<int32_t>(grammar_expr.type));

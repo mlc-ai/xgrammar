@@ -44,7 +44,7 @@ def construct_compiled_grammar():
 
 def test_get_serialization_version():
     """Test the version of the serialized JSON string."""
-    assert xgr.get_serialization_version() == "v17"
+    assert xgr.get_serialization_version() == "v18"
 
 
 def test_serialize_grammar():
@@ -64,11 +64,12 @@ def test_serialize_grammar():
         ],
         "grammar_expr_indptr": [0, 5, 8, 12, 14, 18, 21, 24, 28],
         "root_rule_id": 1,
+        "no_forcing": False,
         "complete_fsm": None,
         "per_rule_fsms": [],
         "allow_empty_rule_ids": [],
         "optimized": False,
-        "__VERSION__": "v17",
+        "__VERSION__": "v18",
     }
     # The fsms are the same one, but the start state and end states are different.
     assert json.loads(serialized) == expected_json
@@ -89,17 +90,18 @@ def test_serialize_grammar_exception():
         ],
         "grammar_expr_indptr": [0, 2, 7, 10, 14, 18, 21, 24, 28, 31],
         "root_rule_id": 1,
+        "no_forcing": False,
         "allow_empty_rule_ids": [],
         "complete_fsm": None,
         "per_rule_fsms": [],
-        "__VERSION__": "v17",
+        "__VERSION__": "v18",
     }
 
     expected_json["__VERSION__"] = "v1"  # Change version to trigger error
     with pytest.raises(xgr.DeserializeVersionError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
 
-    expected_json["__VERSION__"] = "v17"
+    expected_json["__VERSION__"] = "v18"
     expected_json.pop("rules")  # Remove required field to trigger error
     with pytest.raises(xgr.DeserializeFormatError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
@@ -118,10 +120,10 @@ def test_serialize_grammar_roundtrip():
 
 
 def test_serialize_byte_regex_flags_and_legacy_version_boundary():
-    """Byte flags round-trip in v17, while v16 data is rejected before interpreting them."""
+    """Byte flags round-trip in v18, while older data is rejected before interpreting them."""
     grammar = xgr.Grammar.from_ebnf(r'root ::= Regex("\\x80", byte_mode=true)')
     serialized_object = json.loads(grammar.serialize_json())
-    assert serialized_object["__VERSION__"] == "v17"
+    assert serialized_object["__VERSION__"] == "v18"
     assert serialized_object["grammar_expr_data"] == [12, 5, 2, 92, 120, 56, 48]
 
     restored = xgr.Grammar.deserialize_json(json.dumps(serialized_object))
@@ -133,15 +135,18 @@ def test_serialize_byte_regex_flags_and_legacy_version_boundary():
     assert accepted.accept_token(0) and accepted.is_terminated()
     assert not rejected.accept_token(1)
 
-    # A pre-byte v16 reader treated every nonzero Regex flag as json_string=true. Both the public
-    # byte flag (2) and the reserved combined value (3) must hit the version gate first.
-    for regex_flags in [2, 3]:
-        legacy_object = dict(serialized_object)
-        legacy_object["__VERSION__"] = "v16"
-        legacy_object["grammar_expr_data"] = list(serialized_object["grammar_expr_data"])
-        legacy_object["grammar_expr_data"][2] = regex_flags
-        with pytest.raises(xgr.DeserializeVersionError, match="Got v16, expected v17"):
-            xgr.Grammar.deserialize_json(json.dumps(legacy_object))
+    # A pre-byte v16 reader treated every nonzero Regex flag as json_string=true, while v17 does
+    # not carry no-forcing metadata. Both layouts must hit the version gate first.
+    for legacy_version in ["v16", "v17"]:
+        for regex_flags in [2, 3]:
+            legacy_object = dict(serialized_object)
+            legacy_object["__VERSION__"] = legacy_version
+            legacy_object["grammar_expr_data"] = list(serialized_object["grammar_expr_data"])
+            legacy_object["grammar_expr_data"][2] = regex_flags
+            with pytest.raises(
+                xgr.DeserializeVersionError, match=f"Got {legacy_version}, expected v18"
+            ):
+                xgr.Grammar.deserialize_json(json.dumps(legacy_object))
 
 
 def test_serialize_grammar_functional():
@@ -178,7 +183,7 @@ def test_serialize_tokenizer_info():
         '"decoded_vocab":["1","212","a","A","b","\\u00e4\\u00b8\\u0080","-","aBc","abc"],'
         '"sorted_decoded_vocab":[[6,"-"],[3,"A"],[2,"a"],[7,"aBc"],[8,"abc"],[4,"b"],[5,"\\u00e4\\u00b8\\u0080"]],'
         '"trie_subtree_nodes_range":[1,2,5,4,5,6,7],'
-        '"__VERSION__":"v17"}'
+        '"__VERSION__":"v18"}'
     )
     assert json.loads(serialized) == json.loads(expected_json)
 
@@ -289,6 +294,7 @@ def test_serialize_compiled_grammar():
                 ]
             ],
             # fmt: on
+            "no_forcing": False,
             "optimized": True,
         },
         "tokenizer_metadata": {
@@ -297,7 +303,7 @@ def test_serialize_compiled_grammar():
             "add_prefix_space": True,
             "stop_token_ids": [0, 1],
         },
-        "__VERSION__": "v17",
+        "__VERSION__": "v18",
     }
 
     class AdaptiveTokenMask(BaseModel):
@@ -329,15 +335,15 @@ def test_serialize_compiled_grammar_roundtrip():
 def test_deserialize_compiled_grammar_rejects_legacy_version_before_layout():
     """A legacy layout must fail as a version mismatch, not as a missing-field error."""
     _, tokenizer_info = construct_compiled_grammar()
-    legacy_v16_object = {
-        "__VERSION__": "v16",
+    legacy_v17_object = {
+        "__VERSION__": "v17",
         "grammar": {},
         "tokenizer_metadata": {},
         "adaptive_token_mask_cache": [],
     }
 
-    with pytest.raises(xgr.DeserializeVersionError, match="Got v16, expected v17"):
-        xgr.CompiledGrammar.deserialize_json(json.dumps(legacy_v16_object), tokenizer_info)
+    with pytest.raises(xgr.DeserializeVersionError, match="Got v17, expected v18"):
+        xgr.CompiledGrammar.deserialize_json(json.dumps(legacy_v17_object), tokenizer_info)
 
 
 def test_serialize_compiled_grammar_functional():

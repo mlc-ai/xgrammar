@@ -572,6 +572,75 @@ def test_lark_allow_initial_skip_options() -> None:
     _assert_language(grammar, ["ab", " a b", "\n\ta\n b  "], ["a c", " xab"])
 
 
+def test_lark_no_forcing_option_disables_jump_forward_only() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "bb", "c"])
+    default = _compile_lark('start[capture="all"]: "abb"', tokenizer_info)
+    explicitly_enabled = _compile_lark(
+        """
+        %grammar_options {"no_forcing": true}
+        %grammar_options {"no_forcing": false}
+        start[capture="all"]: "abb"
+        """,
+        tokenizer_info,
+    )
+    explicitly_disabled = _compile_lark(
+        """
+        %grammar_options {"no_forcing": false}
+        start[capture="all"]: "abb"
+        """,
+        tokenizer_info,
+    )
+
+    matchers = [
+        xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        for compiled in [default, explicitly_enabled, explicitly_disabled]
+    ]
+    enabled_control = xgr.GrammarMatcher(explicitly_enabled, terminate_without_stop_token=True)
+    all_matchers = [*matchers, enabled_control]
+
+    for matcher in all_matchers:
+        assert matcher.accept_token(0)
+
+    def next_mask(matcher: xgr.GrammarMatcher) -> list[int]:
+        mask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        matcher.fill_next_token_bitmask(mask)
+        return mask.tolist()
+
+    masks = [next_mask(matcher) for matcher in all_matchers]
+    assert masks[0] == masks[1] == masks[2] == masks[3]
+
+    assert matchers[0].find_jump_forward_string() == "bb"
+    assert matchers[1].find_jump_forward_string() == ""
+    assert matchers[2].find_jump_forward_string() == "bb"
+
+    assert matchers[1].get_captures() == enabled_control.get_captures() == []
+    assert next_mask(matchers[1]) == next_mask(enabled_control)
+
+    for matcher in all_matchers:
+        assert not matcher.accept_token(3)
+        assert matcher.accept_token(2)
+        assert matcher.is_terminated()
+        assert matcher.get_captures() == [("all", b"abb")]
+
+    for matcher in all_matchers:
+        matcher.rollback(1)
+        assert not matcher.is_terminated()
+        assert matcher.get_captures() == []
+
+    assert matchers[0].find_jump_forward_string() == "bb"
+    assert matchers[1].find_jump_forward_string() == ""
+    assert matchers[2].find_jump_forward_string() == "bb"
+    assert next_mask(matchers[1]) == next_mask(enabled_control)
+
+    for matcher in all_matchers:
+        matcher.reset()
+        assert matcher.get_captures() == []
+        assert not matcher.accept_string("c")
+        assert matcher.accept_string("abb")
+        assert matcher.is_terminated()
+        assert matcher.get_captures() == [("all", b"abb")]
+
+
 def test_lark_default_disallows_initial_skip_but_allows_trailing_skip() -> None:
     grammar = """
         %import common.WS_INLINE
@@ -2293,9 +2362,9 @@ def test_lark_large_choice_grammar() -> None:
             id="ignore-once-type",
         ),
         pytest.param(
-            '%grammar_options {"no_forcing": true}\nstart: "a"',
-            "%grammar_options option 'no_forcing' is not supported",
-            id="no-forcing-option",
+            '%grammar_options {"no_forcing": 1}\nstart: "a"',
+            "no_forcing must be a boolean",
+            id="no-forcing-type",
         ),
         pytest.param(
             '%grammar_options {"allow_invalid_utf8": 1}\nstart: "a"',

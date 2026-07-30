@@ -2152,6 +2152,7 @@ class LarkCompiler {
       root_rule_id =
           builder_.AddRuleWithHint("start_with_skip", builder_.AddSequence(std::move(elements)));
     }
+    builder_.SetNoForcing(no_forcing_);
     return DeadCodeEliminator::Apply(GrammarNormalizer().Apply(builder_.Get(root_rule_id)));
   }
 
@@ -2230,20 +2231,16 @@ class LarkCompiler {
             RaiseLarkError(source_, location, "ignore_once must be a boolean");
           }
           ignore_once_ = ignore_once_ || option.get<bool>();
+        } else if (key == "no_forcing") {
+          if (!option.is<bool>()) {
+            RaiseLarkError(source_, location, "no_forcing must be a boolean");
+          }
+          no_forcing_ = no_forcing_ || option.get<bool>();
         } else if (key == "allow_invalid_utf8") {
           if (!option.is<bool>()) {
             RaiseLarkError(source_, location, "allow_invalid_utf8 must be a boolean");
           }
           allow_invalid_utf8_ = allow_invalid_utf8_ || option.get<bool>();
-        } else if (key == "no_forcing") {
-          if (!option.is<bool>()) {
-            RaiseLarkError(source_, location, "no_forcing must be a boolean");
-          }
-          if (option.get<bool>()) {
-            RaiseLarkError(
-                source_, location, "%grammar_options option '" + key + "' is not supported"
-            );
-          }
         } else {
           RaiseLarkError(source_, location, "unknown %grammar_options option '" + key + "'");
         }
@@ -3529,6 +3526,7 @@ class LarkCompiler {
   bool allow_initial_skip_ = false;
   bool ignore_once_ = false;
   bool allow_invalid_utf8_ = false;
+  bool no_forcing_ = false;
   std::unordered_set<std::string> dynamic_unused_rules_;
 };
 

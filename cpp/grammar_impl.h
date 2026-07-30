@@ -153,6 +153,8 @@ class Grammar::Impl {
         << "root_rule_id " << root_rule_id_ << " is out of bound";
     return rules_[root_rule_id_];
   }
+  /*! \brief Whether matcher jump-forward output is disabled for this grammar. */
+  bool IsForcingDisabled() const { return no_forcing_; }
 
   /*! \brief The type of the grammar expr. */
   enum class GrammarExprType : int32_t {
@@ -399,6 +401,8 @@ class Grammar::Impl {
   std::vector<int32_t> grammar_expr_indptr_;
   /*! \brief The id of the root rule. */
   int32_t root_rule_id_ = -1;
+  /*! \brief Whether matchers should leave uniquely determined bytes to model tokenization. */
+  bool no_forcing_ = false;
 
  public:
   /******************* Aux information for matching *******************/
@@ -471,6 +475,8 @@ XGRAMMAR_MEMBER_TABLE(
     &Grammar::Impl::grammar_expr_indptr_,
     "root_rule_id",
     &Grammar::Impl::root_rule_id_,
+    "no_forcing",
+    &Grammar::Impl::no_forcing_,
     "complete_fsm",
     &Grammar::Impl::complete_fsm,
     "per_rule_fsms",
