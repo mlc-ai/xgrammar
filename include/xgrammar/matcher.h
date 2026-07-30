@@ -146,10 +146,23 @@ class GrammarMatcher {
 
   /*!
    * \brief Find the jump-forward string for jump-forward decoding. This is the longest string that
-   will be valid according to the current syntax.
+   * will be valid according to the current syntax.
    * \note This method does not change the grammar state.
    */
   std::string FindJumpForwardString();
+
+  /*!
+   * \brief Find a compact token sequence for jump-forward decoding.
+   *
+   * The decoded bytes of the returned tokens form a stable tokenizable prefix of
+   * FindJumpForwardString(). A token is kept only when no grammar-valid continuation can extend
+   * across its boundary into another vocabulary token. Among tokenizations of the stable prefix,
+   * this method minimizes the number of tokens. Every returned token is verified on a matcher
+   * copy, so this method also respects token-level constraints without changing the matcher state.
+   *
+   * \return The token ids that can be accepted without model decoding.
+   */
+  std::vector<int32_t> FindJumpForwardTokens();
 
   /*!
    * \brief Rollback the matcher to a previous state.

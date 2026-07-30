@@ -484,6 +484,55 @@ sub_rule ::= "b"
     assert matcher.find_jump_forward_string() == "bb"
 
 
+def test_get_jump_forward_tokens_uses_fewest_tokens():
+    vocab = ["</s>", "a", "ab", "b", "bb", "c", "x", "y"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[0])
+    grammar = xgr.Grammar.from_ebnf('root ::= "abbbc" ("x" | "y")')
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+
+    expected = [vocab.index("ab"), vocab.index("bb"), vocab.index("c")]
+    assert matcher.find_jump_forward_tokens() == expected
+    assert matcher.find_jump_forward_tokens() == expected
+    for token_id in expected:
+        assert matcher.accept_token(token_id)
+    assert matcher.find_jump_forward_string() == ""
+
+
+def test_get_jump_forward_tokens_keeps_an_unstable_boundary_pending():
+    vocab = ["</s>", "a", "ab", "b", "abc", "c", "d"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[0])
+    grammar = xgr.Grammar.from_ebnf('root ::= "ab" ("c" | "d")')
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+
+    assert matcher.find_jump_forward_string() == "ab"
+    assert matcher.find_jump_forward_tokens() == []
+
+    stable_vocab = ["</s>", "a", "ab", "b", "c", "d"]
+    stable_tokenizer_info = xgr.TokenizerInfo(stable_vocab, stop_token_ids=[0])
+    stable_matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, stable_tokenizer_info)
+    assert stable_matcher.find_jump_forward_tokens() == [stable_vocab.index("ab")]
+
+
+def test_get_jump_forward_tokens_returns_longest_tokenizable_prefix():
+    vocab = ["</s>", "ab", "x"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[0])
+    grammar = xgr.Grammar.from_ebnf('root ::= "abc" ("x" | "y")')
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+
+    assert matcher.find_jump_forward_tokens() == [vocab.index("ab")]
+    assert matcher.accept_token(vocab.index("ab"))
+    assert matcher.find_jump_forward_string() == "c"
+
+
+def test_get_jump_forward_tokens_supports_utf8_and_duplicate_tokens():
+    vocab = ["</s>", "你", "你好", "你好", "好", "!", "?"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[0])
+    grammar = xgr.Grammar.from_ebnf('root ::= "你好" ("!" | "?")')
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+
+    assert matcher.find_jump_forward_tokens() == [2]
+
+
 def test_vocab_size():
     vocab = [
         # fmt: off

@@ -133,7 +133,12 @@ with independent states, duplicate the matcher with
 [`xgr.GrammarMatcher.find_jump_forward_string`](xgrammar.GrammarMatcher.find_jump_forward_string)
 returns the longest string that certainly follows the current state under the grammar. The
 engine can append this string to the output directly without LLM decoding, saving decoding
-steps.
+steps. When the engine works directly with token ids,
+[`xgr.GrammarMatcher.find_jump_forward_tokens`](xgrammar.GrammarMatcher.find_jump_forward_tokens)
+returns a minimum-length tokenization of the stable tokenizable prefix. It leaves a token pending
+when a grammar-valid continuation could extend across that token boundary. The returned tokens
+are verified against a matcher copy and can be submitted without changing the current matcher
+state.
 
 ## Real-World Integrations
 

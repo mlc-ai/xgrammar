@@ -726,6 +726,16 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           [](GrammarMatcherObj* o) { return ffi::String(o->value.FindJumpForwardString()); }
       )
       .def(
+          "find_jump_forward_tokens",
+          [](GrammarMatcherObj* o) {
+            ffi::Array<int64_t> result;
+            for (int32_t token_id : o->value.FindJumpForwardTokens()) {
+              result.push_back(token_id);
+            }
+            return result;
+          }
+      )
+      .def(
           "rollback",
           [](GrammarMatcherObj* o, int64_t num_tokens) {
             o->value.Rollback(static_cast<int>(num_tokens));
