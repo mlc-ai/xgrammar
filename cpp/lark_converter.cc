@@ -15,12 +15,14 @@
 #include <deque>
 #include <iomanip>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -31,6 +33,7 @@
 #include "grammar_functor.h"
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/unicode_char_class.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -2634,14 +2637,52 @@ class LarkCompiler {
     if (fields.size() != 1) {
       RaiseLarkError(source_, node.location, "only one field can be set on %regex");
     }
-
     const std::string& field = fields[0];
     const picojson::value& field_value = object.at(field);
     if (field == "substring_words") {
       if (!field_value.is<std::string>()) {
         RaiseLarkError(source_, node.location, "substring_words must be a string");
       }
-      RaiseLarkError(source_, node.location, "substring_words is not supported yet");
+      enum class ChunkType { kWhitespace, kWord, kOther };
+      auto classify = [](TCodepoint codepoint) {
+        if (IsUnicodeWhitespace(codepoint)) {
+          return ChunkType::kWhitespace;
+        }
+        if (IsUnicodeAlphanumeric(codepoint) || codepoint == '_') {
+          return ChunkType::kWord;
+        }
+        return ChunkType::kOther;
+      };
+
+      const std::string& text = field_value.get<std::string>();
+      std::vector<std::string> chunks;
+      size_t chunk_start = 0;
+      std::optional<ChunkType> current_type;
+      for (size_t offset = 0; offset < text.size();) {
+        TCodepoint codepoint;
+        int32_t length;
+        if (text[offset] == '\0') {
+          codepoint = 0;
+          length = 1;
+        } else {
+          std::tie(codepoint, length) = ParseNextUTF8(text.c_str() + offset);
+          if (codepoint == CharHandlingError::kInvalidUTF8) {
+            RaiseLarkError(source_, node.location, "substring_words must be valid UTF-8");
+          }
+        }
+
+        ChunkType type = classify(codepoint);
+        if (current_type.has_value() && type != current_type.value()) {
+          chunks.push_back(text.substr(chunk_start, offset - chunk_start));
+          chunk_start = offset;
+        }
+        current_type = type;
+        offset += length;
+      }
+      if (chunk_start < text.size()) {
+        chunks.push_back(text.substr(chunk_start));
+      }
+      return chunks;
     }
     if (field == "substring_chars") {
       if (!field_value.is<std::string>()) {

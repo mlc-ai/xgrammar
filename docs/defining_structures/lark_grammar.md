@@ -451,8 +451,21 @@ start: %regex {"substring_chars": "abc"}
 ```
 
 It therefore accepts every codepoint-aligned substring such as `"a"`, `"bc"`, and `"abc"`.
-`substring_chunks` and `substring_chars` are supported in rules and terminal definitions.
-`substring_words`, which requires Unicode word-class segmentation, is not yet supported.
+
+`substring_words` first splits a fixed source string whenever its Unicode character class changes,
+then accepts any contiguous sequence of those chunks, including the empty sequence:
+
+```text
+start: %regex {"substring_words": "The quick brown fox."}
+```
+
+Letters, numbers, and underscore form word chunks; whitespace forms whitespace chunks; all
+remaining characters form punctuation chunks. Consecutive characters in the same class stay in
+one chunk. The example therefore accepts `"The quick"`, `"quick brown"`, and `"fox."`, but not
+`"he quick"` or `"fo"`.
+
+The classification follows Unicode 16.0.0 and is independent of the operating system locale.
+All three substring forms are supported in rules and terminal definitions.
 
 ### `%lark`
 
