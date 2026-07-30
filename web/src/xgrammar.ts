@@ -70,6 +70,8 @@ export class Testings {
    * JSON elements when anyWhitespace is true. Undefined means unlimited.
    * @param {"json" | "xml"} [jsonFormat="json"] The JSON schema output format.
    * @param {boolean} [anyOrder=false] Whether to allow object properties to appear in any order.
+   * @param {boolean} [coerceOneOf=false] Whether to approximate overlapping or
+   * non-provably-disjoint oneOf branches with anyOf semantics.
    * @returns {string} The EBNF grammar string.
    */
   static async _jsonSchemaToEBNF(
@@ -80,7 +82,8 @@ export class Testings {
     strictMode = true,
     maxWhitespaceCnt?: number,
     jsonFormat: "json" | "xml" = "json",
-    anyOrder: boolean = false
+    anyOrder: boolean = false,
+    coerceOneOf: boolean = false
   ): Promise<string> {
     const separatorsPair = toSeparatorPair(separators);
     await asyncInitBinding();
@@ -99,7 +102,8 @@ export class Testings {
       strictMode,
       maxWhitespaceCnt,
       formatEnum,
-      anyOrder
+      anyOrder,
+      coerceOneOf
     );
   }
 
@@ -247,6 +251,8 @@ export class Grammar {
    * @param {number} [maxWhitespaceCnt] Maximum number of whitespace characters allowed between
    * JSON elements when anyWhitespace is true. Undefined means unlimited.
    * @param {boolean} [anyOrder=false] Whether to allow object properties to appear in any order.
+   * @param {boolean} [coerceOneOf=false] Whether to approximate overlapping or
+   * non-provably-disjoint oneOf branches with anyOf semantics.
    * @returns {Grammar} The generated BNF grammar.
    */
   static async fromJSONSchema(
@@ -256,7 +262,8 @@ export class Grammar {
     separators?: [string, string],
     strictMode = true,
     maxWhitespaceCnt?: number,
-    anyOrder: boolean = false
+    anyOrder: boolean = false,
+    coerceOneOf: boolean = false
   ): Promise<Grammar> {
     const separatorsPair = toSeparatorPair(separators);
     await asyncInitBinding();
@@ -275,7 +282,8 @@ export class Grammar {
         strictMode,
         maxWhitespaceCnt,
         printConvertedEBNF,
-        anyOrder
+        anyOrder,
+        coerceOneOf
       ));
   }
 

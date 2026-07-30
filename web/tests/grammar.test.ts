@@ -86,6 +86,27 @@ d_1 ::= ("" | ("d"))
     expect(grammar0).not.toEqual(grammar2);
   });
 
+  test("Test overlapping oneOf handling", async () => {
+    const overlappingOneOf = JSON.stringify({
+      oneOf: [{ type: "integer" }, { type: "number" }],
+    });
+    await expect(
+      Testings._jsonSchemaToEBNF(overlappingOneOf, false)
+    ).rejects.toThrow("coerce_one_of");
+    const grammar = await Testings._jsonSchemaToEBNF(
+      overlappingOneOf,
+      false,
+      2,
+      undefined,
+      true,
+      undefined,
+      "json",
+      false,
+      true
+    );
+    expect(grammar).toContain("root ::=");
+  });
+
   test("Test indent Grammar.fromJSONSchema()", async () => {
     const grammar0 = (await Grammar.fromJSONSchema(schema, false, -1)).toString();
     const grammar1 = (await Grammar.fromJSONSchema(schema, false)).toString();

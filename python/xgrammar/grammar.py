@@ -185,6 +185,7 @@ class Grammar(XGRObject):
         max_whitespace_cnt: Optional[int] = None,
         print_converted_ebnf: bool = False,
         any_order: bool = False,
+        coerce_one_of: bool = False,
     ) -> "Grammar":
         """Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
         used to specify the schema.
@@ -249,6 +250,11 @@ class Grammar(XGRObject):
 
             Applies to every object, nested included.
 
+        coerce_one_of : bool, default: False
+            Whether unsupported ``oneOf`` constraints may be approximated as ``anyOf``. By
+            default, overlapping or non-provably-disjoint branches raise an error because their
+            exclusive semantics cannot be represented exactly.
+
         Returns
         -------
         grammar : Grammar
@@ -270,6 +276,7 @@ class Grammar(XGRObject):
                 max_whitespace_cnt,
                 print_converted_ebnf,
                 any_order,
+                coerce_one_of,
             )
         )
 

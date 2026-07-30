@@ -794,6 +794,34 @@ def test_anyof_oneof():
     check_schema_with_instance(schema, schema_rejected, is_accepted=False, any_whitespace=False)
 
 
+def test_oneof_unsupported_overlap_rejected_by_default():
+    schema = {"oneOf": [{"type": "integer"}, {"type": "number"}]}
+    error = "coerce_one_of"
+
+    with pytest.raises(RuntimeError, match=error):
+        xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    with pytest.raises(RuntimeError, match=error):
+        _json_schema_to_ebnf(schema, any_whitespace=False)
+    assert "root ::=" in _json_schema_to_ebnf(schema, any_whitespace=False, coerce_one_of=True)
+
+
+@pytest.mark.parametrize("coerce_one_of", [False, True])
+def test_oneof_empty_or_all_unsatisfiable_rejected(coerce_one_of: bool):
+    for schema in [{"oneOf": []}, {"oneOf": [False, False]}]:
+        with pytest.raises(RuntimeError, match="cannot accept|no satisfiable"):
+            xgr.Grammar.from_json_schema(schema, coerce_one_of=coerce_one_of)
+
+
+def test_oneof_ignores_unsatisfiable_branches():
+    schema = {"oneOf": [False, {"type": "string"}]}
+    check_schema_with_instance(schema, '"x"', any_whitespace=False)
+    check_schema_with_instance(schema, "1", is_accepted=False, any_whitespace=False)
+
+    schema = {"oneOf": [{"$ref": "#/$defs/value"}], "$defs": {"value": {"type": "integer"}}}
+    check_schema_with_instance(schema, "1", any_whitespace=False)
+    check_schema_with_instance(schema, '"x"', is_accepted=False, any_whitespace=False)
+
+
 def test_oneof_unsupported_overlap_warns_and_falls_back(capfd):
     def assert_oneof_falls_back(
         schema: Union[Dict[str, Any], str],
@@ -801,9 +829,11 @@ def test_oneof_unsupported_overlap_warns_and_falls_back(capfd):
         rejected_instances: Optional[List[str]] = None,
     ):
         schema_input = schema if isinstance(schema, str) else json.dumps(schema)
-        grammar = xgr.Grammar.from_json_schema(schema_input, any_whitespace=False)
+        grammar = xgr.Grammar.from_json_schema(
+            schema_input, any_whitespace=False, coerce_one_of=True
+        )
         captured = capfd.readouterr()
-        assert "falling back to anyOf semantics" in captured.err
+        assert "treating oneOf as anyOf because coerce_one_of is enabled" in captured.err
         for instance in accepted_instances or []:
             assert _is_grammar_accept_string(grammar, instance)
         for instance in rejected_instances or []:
@@ -858,7 +888,7 @@ def test_oneof_disjoint_cases(capfd):
     # verify the disjointness prover actually fired.
     def assert_no_fallback():
         captured = capfd.readouterr()
-        assert "falling back to anyOf semantics" not in captured.err
+        assert "treating oneOf as anyOf" not in captured.err
 
     schema = {"oneOf": [{"type": "string"}, {"type": "integer"}]}
     check_schema_with_instance(schema, '"x"', any_whitespace=False)
@@ -3408,6 +3438,20 @@ def test_compile_json_schema_any_order(cache_enabled: bool):
     assert "root_item" not in ordered
     assert "root_item" in any_order
     assert ordered != any_order
+
+
+@pytest.mark.parametrize("cache_enabled", [True, False])
+def test_compile_json_schema_coerce_one_of_is_part_of_cache_key(cache_enabled: bool):
+    tokenizer_info = xgr.TokenizerInfo([])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=cache_enabled)
+    schema = {"oneOf": [{"type": "integer"}, {"type": "number"}]}
+
+    coerced = compiler.compile_json_schema(schema, any_whitespace=False, coerce_one_of=True).grammar
+    assert _is_grammar_accept_string(coerced, "1")
+    assert _is_grammar_accept_string(coerced, "1.5")
+
+    with pytest.raises(RuntimeError, match="coerce_one_of"):
+        compiler.compile_json_schema(schema, any_whitespace=False)
 
 
 if __name__ == "__main__":

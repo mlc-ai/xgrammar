@@ -113,6 +113,8 @@ class Grammar {
    *
    * This helps LLM to generate accurate output in the grammar-guided generation with JSON
    * schema. Default: true.
+   * \param coerce_one_of Whether unsupported oneOf constraints may be approximated as anyOf.
+   * Default: false.
    */
   static Grammar FromJSONSchema(
       const std::string& schema,
@@ -122,7 +124,8 @@ class Grammar {
       bool strict_mode = true,
       std::optional<int> max_whitespace_cnt = std::nullopt,
       bool print_converted_ebnf = false,
-      bool any_order = false
+      bool any_order = false,
+      bool coerce_one_of = false
   );
 
   /*!

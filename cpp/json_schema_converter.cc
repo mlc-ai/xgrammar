@@ -168,7 +168,7 @@ bool HasMultipleInRange(int64_t start, int64_t end, int64_t multiple_of) {
 
 constexpr const char* kUnsupportedOneOfMessage =
     "oneOf with overlapping or non-provably-disjoint branches cannot be represented exactly; "
-    "falling back to anyOf semantics";
+    "set coerce_one_of=true to approximate oneOf with anyOf";
 
 bool IsSchemaAnnotationKey(const std::string& key) {
   static const std::unordered_set<std::string> kAnnotationKeys = {
@@ -656,6 +656,7 @@ class SchemaParser {
   struct Config {
     bool strict_mode = false;
     JSONFormat json_format;
+    bool coerce_one_of = false;
   };
 
   explicit SchemaParser(const picojson::value& root_schema, const Config& config)
@@ -821,17 +822,8 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     result = SchemaSpec::Make(std::move(anyof_result).Unwrap(), cache_key, rule_name_hint);
   } else if (schema_obj.count("oneOf")) {
     auto oneof_result = ParseOneOf(schema_obj);
-    if (oneof_result.IsErr()) {
-      if (oneof_result.ErrRef().Type() != SchemaErrorType::kUnsupportedSchema) {
-        return ResultErr(std::move(oneof_result).UnwrapErr());
-      }
-      XGRAMMAR_LOG(WARNING) << oneof_result.ErrRef().what();
-      auto anyof_result = ParseAnyOf(schema_obj, "oneOf");
-      if (anyof_result.IsErr()) return ResultErr(std::move(anyof_result).UnwrapErr());
-      result = SchemaSpec::Make(std::move(anyof_result).Unwrap(), cache_key, rule_name_hint);
-    } else {
-      result = SchemaSpec::Make(std::move(oneof_result).Unwrap(), cache_key, rule_name_hint);
-    }
+    if (oneof_result.IsErr()) return ResultErr(std::move(oneof_result).UnwrapErr());
+    result = SchemaSpec::Make(std::move(oneof_result).Unwrap(), cache_key, rule_name_hint);
   } else if (schema_obj.count("allOf")) {
     auto allof_result = ParseAllOf(schema_obj);
     if (allof_result.IsErr()) return ResultErr(std::move(allof_result).UnwrapErr());
@@ -1516,19 +1508,39 @@ Result<OneOfSpec, SchemaError> SchemaParser::ParseOneOf(const picojson::object& 
 
   const auto& options = schema.at("oneOf").get<picojson::array>();
   if (options.empty()) {
-    return ResultErr<SchemaError>(SchemaErrorType::kUnsupportedSchema, kUnsupportedOneOfMessage);
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema, "oneOf is empty and cannot accept any value"
+    );
   }
 
+  picojson::array satisfiable_options;
   int idx = 0;
   for (const auto& option : options) {
     auto option_result = Parse(option, "case_" + std::to_string(idx));
-    if (option_result.IsErr()) return ResultErr(std::move(option_result).UnwrapErr());
+    if (option_result.IsErr()) {
+      if (option_result.ErrRef().Type() == SchemaErrorType::kUnsatisfiableSchema) {
+        ++idx;
+        continue;
+      }
+      return ResultErr(std::move(option_result).UnwrapErr());
+    }
     spec.options.push_back(std::move(option_result).Unwrap());
+    satisfiable_options.push_back(option);
     ++idx;
   }
 
-  if (!TryProvePairwiseDisjointOneOf(options)) {
-    return ResultErr<SchemaError>(SchemaErrorType::kUnsupportedSchema, kUnsupportedOneOfMessage);
+  if (spec.options.empty()) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema, "oneOf has no satisfiable branches"
+    );
+  }
+
+  if (satisfiable_options.size() > 1 && !TryProvePairwiseDisjointOneOf(satisfiable_options)) {
+    if (!config_.coerce_one_of) {
+      return ResultErr<SchemaError>(SchemaErrorType::kUnsupportedSchema, kUnsupportedOneOfMessage);
+    }
+    XGRAMMAR_LOG(WARNING) << kUnsupportedOneOfMessage
+                          << "; treating oneOf as anyOf because coerce_one_of is enabled";
   }
 
   return ResultOk(std::move(spec));
@@ -4054,13 +4066,14 @@ Grammar JSONSchemaToGrammar(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     bool any_order,
-    JSONFormat json_format
+    JSONFormat json_format,
+    bool coerce_one_of
 ) {
   picojson::value schema_value;
   std::string error = picojson::parse(schema_value, schema);
   XGRAMMAR_CHECK(error.empty()) << "Failed to parse JSON: " << error
                                 << ". The JSON string is:" << schema;
-  SchemaParser parser(schema_value, {strict_mode, json_format});
+  SchemaParser parser(schema_value, {strict_mode, json_format, coerce_one_of});
   auto spec_result = parser.Parse(schema_value, "root");
   if (spec_result.IsErr()) {
     XGRAMMAR_LOG(FATAL) << std::move(spec_result).UnwrapErr().what();
@@ -4115,7 +4128,8 @@ std::string JSONSchemaToEBNF(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     JSONFormat json_format,
-    bool any_order
+    bool any_order,
+    bool coerce_one_of
 ) {
   picojson::value schema_value;
   std::string err = picojson::parse(schema_value, schema);
@@ -4129,7 +4143,8 @@ std::string JSONSchemaToEBNF(
       strict_mode,
       max_whitespace_cnt,
       json_format,
-      any_order
+      any_order,
+      coerce_one_of
   );
 }
 
@@ -4141,10 +4156,11 @@ std::string JSONSchemaToEBNF(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     JSONFormat json_format,
-    bool any_order
+    bool any_order,
+    bool coerce_one_of
 ) {
   // Parse JSON Schema to SchemaSpec
-  SchemaParser parser(schema, {strict_mode, json_format});
+  SchemaParser parser(schema, {strict_mode, json_format, coerce_one_of});
   auto spec_result = parser.Parse(schema, "root");
   if (spec_result.IsErr()) {
     XGRAMMAR_LOG(FATAL) << std::move(spec_result).UnwrapErr().what();

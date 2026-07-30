@@ -26,6 +26,7 @@ def _json_schema_to_ebnf(
     strict_mode: bool = True,
     json_format: Literal["json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml"] = "json",
     any_order: bool = False,
+    coerce_one_of: bool = False,
 ) -> str:
     """Convert JSON schema string to BNF grammar string. For test purposes.
 
@@ -61,6 +62,9 @@ def _json_schema_to_ebnf(
         "deepseek_xml", "glm_xml". Formats other than "json" generate an XML-style root object
         for tool calling, while the inner values remain JSON-style.
 
+    coerce_one_of : bool, default: False
+        Whether unsupported ``oneOf`` constraints may be approximated as ``anyOf``.
+
     Returns
     -------
     bnf_string : str
@@ -76,6 +80,7 @@ def _json_schema_to_ebnf(
         max_whitespace_cnt,
         json_format,
         any_order,
+        coerce_one_of,
     )
 
 

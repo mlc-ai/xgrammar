@@ -71,7 +71,10 @@ class GrammarCompiler {
       int64_t max_memory_bytes = -1  // unlimited
   );
 
-  /*! \brief Get the compiled grammar for a JSON schema string. */
+  /*!
+   * \brief Get the compiled grammar for a JSON schema string.
+   * \param coerce_one_of Whether unsupported oneOf constraints may be approximated as anyOf.
+   */
   CompiledGrammar CompileJSONSchema(
       const std::string& schema,
       bool any_whitespace = true,
@@ -79,7 +82,8 @@ class GrammarCompiler {
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
       bool strict_mode = true,
       std::optional<int> max_whitespace_cnt = std::nullopt,
-      bool any_order = false
+      bool any_order = false,
+      bool coerce_one_of = false
   );
 
   /*! \brief Get the compiled grammar for pure JSON. */

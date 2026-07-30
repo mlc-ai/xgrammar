@@ -150,6 +150,7 @@ class GrammarCompiler(XGRObject):
         strict_mode: bool = True,
         max_whitespace_cnt: Optional[int] = None,
         any_order: bool = False,
+        coerce_one_of: bool = False,
     ) -> CompiledGrammar:
         """Get CompiledGrammar from the specified JSON schema and format. The indent
         and separators parameters follow the same convention as in json.dumps().
@@ -194,6 +195,11 @@ class GrammarCompiler(XGRObject):
 
             Applies to every object, nested included.
 
+        coerce_one_of : bool, default: False
+            Whether unsupported ``oneOf`` constraints may be approximated as ``anyOf``. By
+            default, overlapping or non-provably-disjoint branches raise an error because their
+            exclusive semantics cannot be represented exactly.
+
         Returns
         -------
         compiled_grammar : CompiledGrammar
@@ -209,6 +215,7 @@ class GrammarCompiler(XGRObject):
                 strict_mode,
                 max_whitespace_cnt,
                 any_order,
+                coerce_one_of,
             )
         )
 

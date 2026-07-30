@@ -62,6 +62,20 @@ person_schema = {
 compiled_grammar = compiler.compile_json_schema(json.dumps(person_schema))
 ```
 
+## Exact `oneOf` Handling
+
+`oneOf` requires each accepted value to match exactly one branch. XGrammar compiles it when the
+branches can be proven pairwise disjoint, including distinct primitive types, disjoint finite
+values, and object branches with distinct required discriminator values.
+
+Overlapping or non-provably-disjoint branches raise an error by default because treating them as
+`anyOf` would accept values that violate the schema. Applications that intentionally prefer that
+approximation can opt in explicitly:
+
+```python
+compiled_grammar = compiler.compile_json_schema(schema, coerce_one_of=True)
+```
+
 With the compiled grammar, we can instantiate a [`xgr.GrammarMatcher`](xgrammar.GrammarMatcher)
 and generate the token masks in the generation loop.
 

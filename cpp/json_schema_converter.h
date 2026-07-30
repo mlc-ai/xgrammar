@@ -516,7 +516,8 @@ Grammar JSONSchemaToGrammar(
     bool strict_mode = true,
     std::optional<int> max_whitespace_cnt = std::nullopt,
     bool any_order = false,
-    JSONFormat json_format = JSONFormat::kJSON
+    JSONFormat json_format = JSONFormat::kJSON,
+    bool coerce_one_of = false
 );
 
 // ==================== Public API functions (backward compatible) ====================
@@ -544,6 +545,8 @@ Grammar JSONSchemaToGrammar(
  * format of the object. If it's JSONFormat::kJSON, then it will generate a fully JSON-style
  * grammar. If it's JSONFormat::kXML, then it will generate a grammar with the root format is
  * XML-style, while the inner format is JSON-style. Default: JSONFormat::kJSON.
+ * \param coerce_one_of Whether unsupported oneOf constraints may be approximated as anyOf.
+ * Default: false.
  * \returns The EBNF grammar string.
  */
 
@@ -555,7 +558,8 @@ std::string JSONSchemaToEBNF(
     bool strict_mode = true,
     std::optional<int> max_whitespace_cnt = std::nullopt,
     JSONFormat json_format = JSONFormat::kJSON,
-    bool any_order = false
+    bool any_order = false,
+    bool coerce_one_of = false
 );
 
 /*!
@@ -581,6 +585,8 @@ std::string JSONSchemaToEBNF(
  * then it will generate a fully JSON-style grammar. If it's JSONFormat::kXML, then it will
  * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
  * Default: JSONFormat::kJSON.
+ * \param coerce_one_of Whether unsupported oneOf constraints may be approximated as anyOf.
+ * Default: false.
  * \returns The EBNF grammar string.
  */
 std::string JSONSchemaToEBNF(
@@ -591,7 +597,8 @@ std::string JSONSchemaToEBNF(
     bool strict_mode = true,
     std::optional<int> max_whitespace_cnt = std::nullopt,
     JSONFormat json_format = JSONFormat::kJSON,
-    bool any_order = false
+    bool any_order = false,
+    bool coerce_one_of = false
 );
 
 /*!
