@@ -1742,6 +1742,13 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
   fsm_.GetEpsilonClosure(&closure);
   closures.push_back(closure);
   while (now_process < static_cast<int>(closures.size())) {
+    // The subset construction can create far more states than the input NFA has, so the limit
+    // must also be enforced on the states generated during the construction.
+    if (static_cast<int>(closures.size()) > max_num_states) {
+      return ResultErr(
+          "The number of states in the DFA exceeds the limit of " + std::to_string(max_num_states)
+      );
+    }
     rules.clear();
     repeat_aux_indices.clear();
     std::unordered_set<int32_t> token_aux_indices;
