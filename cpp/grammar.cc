@@ -6,6 +6,7 @@
 #include <xgrammar/grammar.h>
 
 #include <string>
+#include <utility>
 
 #include "grammar_functor.h"
 #include "grammar_parser.h"
@@ -51,10 +52,19 @@ Grammar Grammar::FromJSONSchema(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     bool print_converted_ebnf,
-    bool any_order
+    bool any_order,
+    std::optional<std::string> whitespace_pattern
 ) {
   auto grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
-      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+      schema,
+      any_whitespace,
+      indent,
+      separators,
+      strict_mode,
+      max_whitespace_cnt,
+      any_order,
+      JSONFormat::kJSON,
+      std::move(whitespace_pattern)
   ));
   if (print_converted_ebnf) {
     XGRAMMAR_LOG(INFO) << "Converted EBNF: " << grammar.ToString() << std::endl;

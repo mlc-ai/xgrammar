@@ -94,6 +94,16 @@ d_1 ::= ("" | ("d"))
     expect(grammar0).not.toEqual(grammar2);
   });
 
+  test("Test whitespace pattern Grammar.fromJSONSchema()", async () => {
+    const compact = (await Grammar.fromJSONSchema(
+      schema, true, -1, undefined, true, undefined, false, ""
+    )).toString();
+    const spaces = (await Grammar.fromJSONSchema(
+      schema, true, -1, undefined, true, undefined, false, " *"
+    )).toString();
+    expect(compact).not.toEqual(spaces);
+  });
+
   test("Test Grammar.builtinJSONGrammar()", async () => {
     const grammar = await Grammar.builtinJSONGrammar();
     const outputStr = grammar.toString();

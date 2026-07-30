@@ -26,6 +26,7 @@ def _json_schema_to_ebnf(
     strict_mode: bool = True,
     json_format: Literal["json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml"] = "json",
     any_order: bool = False,
+    whitespace_pattern: Optional[str] = None,
 ) -> str:
     """Convert JSON schema string to BNF grammar string. For test purposes.
 
@@ -56,6 +57,9 @@ def _json_schema_to_ebnf(
         If specified, it will limit the number of whitespace characters to at most max_whitespace_cnt.
         It should be a positive integer.
 
+    whitespace_pattern : Optional[str], default: None
+        A regular expression that defines the whitespace allowed between JSON elements.
+
     json_format : str, default: "json"
         The root format of the generated grammar. One of "json", "qwen_xml", "minimax_xml",
         "deepseek_xml", "glm_xml". Formats other than "json" generate an XML-style root object
@@ -76,6 +80,7 @@ def _json_schema_to_ebnf(
         max_whitespace_cnt,
         json_format,
         any_order,
+        whitespace_pattern,
     )
 
 

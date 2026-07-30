@@ -113,6 +113,9 @@ class Grammar {
    *
    * This helps LLM to generate accurate output in the grammar-guided generation with JSON
    * schema. Default: true.
+   * \param whitespace_pattern Optional regular expression defining the whitespace allowed between
+   * JSON elements. The pattern may match only space, tab, carriage return, and line feed. It
+   * requires any_whitespace=true and cannot be combined with max_whitespace_cnt.
    */
   static Grammar FromJSONSchema(
       const std::string& schema,
@@ -122,7 +125,8 @@ class Grammar {
       bool strict_mode = true,
       std::optional<int> max_whitespace_cnt = std::nullopt,
       bool print_converted_ebnf = false,
-      bool any_order = false
+      bool any_order = false,
+      std::optional<std::string> whitespace_pattern = std::nullopt
   );
 
   /*!

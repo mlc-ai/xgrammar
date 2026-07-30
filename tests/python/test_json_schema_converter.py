@@ -2998,6 +2998,70 @@ basic_string_sub_4 ::= ((basic_string_sub_2))
     assert not _is_grammar_accept_string(grammar, '{    "key"  :  "value"    }')
 
 
+def test_custom_whitespace_pattern():
+    schema = {"type": "object", "properties": {"key": {"type": "string"}}, "required": ["key"]}
+    grammar = xgr.Grammar.from_json_schema(schema, whitespace_pattern=r"(?: |\n  )?")
+
+    for text in ('{"key":"value"}', '{ "key" : "value" }', '{\n  "key":\n  "value"\n  }'):
+        assert _is_grammar_accept_string(grammar, text)
+
+    for text in ('{  "key":"value"}', '{\n "key":"value"}', '{\t"key":"value"}'):
+        assert not _is_grammar_accept_string(grammar, text)
+
+    ebnf = _json_schema_to_ebnf(schema, whitespace_pattern=r"(?: |\n  )?")
+    assert "root ::=" in ebnf
+
+
+def test_custom_whitespace_pattern_empty_and_compiler_cache():
+    schema = {"type": "array", "items": {"type": "integer"}}
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
+
+    compact = compiler.compile_json_schema(schema, whitespace_pattern="").grammar
+    spaces = compiler.compile_json_schema(schema, whitespace_pattern=" *").grammar
+
+    assert _is_grammar_accept_string(compact, "[1,2]")
+    assert not _is_grammar_accept_string(compact, "[ 1, 2 ]")
+    assert _is_grammar_accept_string(spaces, "[1,2]")
+    assert _is_grammar_accept_string(spaces, "[ 1, 2 ]")
+    assert str(compact) != str(spaces)
+
+
+def test_custom_whitespace_pattern_json_whitespace():
+    schema = {"type": "array", "items": {"type": "integer"}}
+    grammar = xgr.Grammar.from_json_schema(schema, whitespace_pattern=r"[\t\r\n ]*")
+
+    assert _is_grammar_accept_string(grammar, "[\r\n\t 1,\r 2\n]")
+
+
+def test_custom_whitespace_pattern_qwen_xml():
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}, "b": {"type": "string"}},
+        "required": ["a", "b"],
+        "additionalProperties": False,
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format="qwen_xml", whitespace_pattern=" ?")
+
+    prefix = "<parameter=a>1</parameter>"
+    suffix = "<parameter=b>x</parameter>"
+    assert _is_grammar_accept_string(grammar, prefix + suffix)
+    assert _is_grammar_accept_string(grammar, prefix + " " + suffix)
+    assert not _is_grammar_accept_string(grammar, prefix + "  " + suffix)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"any_whitespace": False, "whitespace_pattern": " *"}, "requires any_whitespace=True"),
+        ({"max_whitespace_cnt": 2, "whitespace_pattern": " *"}, "cannot both be specified"),
+        ({"whitespace_pattern": "[ x]*"}, "only JSON whitespace characters"),
+    ],
+)
+def test_custom_whitespace_pattern_invalid_options(kwargs, message):
+    with pytest.raises(RuntimeError, match=message):
+        xgr.Grammar.from_json_schema({"type": "integer"}, **kwargs)
+
+
 def test_utf8_in_enum():
     schema = {"type": "string", "enum": ["こんにちは", "😊", "你好", "hello", "\n"]}
     grammar = xgr.Grammar.from_json_schema(schema)

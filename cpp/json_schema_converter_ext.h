@@ -30,7 +30,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       std::optional<int> max_whitespace_cnt,
       RefResolver ref_resolver = nullptr,
       JSONFormat json_format = JSONFormat::kQwenXML,
-      bool any_order = false
+      bool any_order = false,
+      std::optional<std::string> whitespace_pattern = std::nullopt
   );
 
   /*! \brief Convert SchemaSpec to grammar with XML format for root object. Note that this function

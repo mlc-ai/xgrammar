@@ -4140,12 +4140,17 @@ def test_json_schema_format_any_order_via_pydantic():
 _WS_SCHEMA = {"type": "object", "properties": {"a": {"type": "integer"}}, "required": ["a"]}
 
 
-def _ws_stag(*, max_whitespace_cnt: Optional[int] = None) -> StructuralTag:
+def _ws_stag(
+    *, max_whitespace_cnt: Optional[int] = None, whitespace_pattern: Optional[str] = None
+) -> StructuralTag:
     return StructuralTag(
         format=TagFormat(
             begin="<call>",
             content=JSONSchemaFormat(
-                json_schema=_WS_SCHEMA, style="json", max_whitespace_cnt=max_whitespace_cnt
+                json_schema=_WS_SCHEMA,
+                style="json",
+                max_whitespace_cnt=max_whitespace_cnt,
+                whitespace_pattern=whitespace_pattern,
             ),
             end="</call>",
         )
@@ -4166,6 +4171,26 @@ def test_structural_tag_max_whitespace_cnt():
     # Beyond the bound: accepted only without the limit.
     assert _is_grammar_accept_string(g_unbounded, _ws_instance(5))
     assert not _is_grammar_accept_string(g_bounded, _ws_instance(5))
+
+
+def test_structural_tag_whitespace_pattern():
+    grammar = xgr.Grammar.from_structural_tag(_ws_stag(whitespace_pattern=" ?"))
+
+    assert _is_grammar_accept_string(grammar, _ws_instance(0))
+    assert _is_grammar_accept_string(grammar, _ws_instance(1))
+    assert not _is_grammar_accept_string(grammar, _ws_instance(2))
+
+
+@pytest.mark.parametrize(
+    ("tag", "message"),
+    [
+        (_ws_stag(max_whitespace_cnt=2, whitespace_pattern=" ?"), "cannot both be specified"),
+        (_ws_stag(whitespace_pattern="[ x]*"), "only JSON whitespace characters"),
+    ],
+)
+def test_structural_tag_whitespace_pattern_invalid(tag: StructuralTag, message: str):
+    with pytest.raises(RuntimeError, match=message):
+        xgr.Grammar.from_structural_tag(tag)
 
 
 def test_structural_tag_per_tag_whitespace_independent():

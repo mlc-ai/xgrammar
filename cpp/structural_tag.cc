@@ -106,6 +106,11 @@ picojson::value JSONSchemaFormat::ToJSON() const {
   } else {
     obj["max_whitespace_cnt"] = picojson::value();
   }
+  if (whitespace_pattern.has_value()) {
+    obj["whitespace_pattern"] = picojson::value(*whitespace_pattern);
+  } else {
+    obj["whitespace_pattern"] = picojson::value();
+  }
   return picojson::value(std::move(obj));
 }
 
@@ -567,9 +572,21 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     }
     max_whitespace_cnt = static_cast<int>(max_whitespace_cnt_it->second.get<int64_t>());
   }
+  std::optional<std::string> whitespace_pattern = std::nullopt;
+  auto whitespace_pattern_it = obj.find("whitespace_pattern");
+  if (whitespace_pattern_it != obj.end() && !whitespace_pattern_it->second.is<picojson::null>()) {
+    if (!whitespace_pattern_it->second.is<std::string>()) {
+      return ResultErr<ISTError>("whitespace_pattern must be a string or null");
+    }
+    whitespace_pattern = whitespace_pattern_it->second.get<std::string>();
+  }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
   return ResultOk<JSONSchemaFormat>(
-      json_schema_it->second.serialize(false), style, any_order, max_whitespace_cnt
+      json_schema_it->second.serialize(false),
+      style,
+      any_order,
+      max_whitespace_cnt,
+      std::move(whitespace_pattern)
   );
 }
 
@@ -1863,7 +1880,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
       /*strict_mode=*/true,
       /*max_whitespace_cnt=*/format.max_whitespace_cnt,
       /*any_order=*/format.any_order,
-      /*json_format=*/*json_format
+      /*json_format=*/*json_format,
+      /*whitespace_pattern=*/format.whitespace_pattern
   ));
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);

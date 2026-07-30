@@ -185,6 +185,7 @@ class Grammar(XGRObject):
         max_whitespace_cnt: Optional[int] = None,
         print_converted_ebnf: bool = False,
         any_order: bool = False,
+        whitespace_pattern: Optional[str] = None,
     ) -> "Grammar":
         """Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
         used to specify the schema.
@@ -249,6 +250,12 @@ class Grammar(XGRObject):
 
             Applies to every object, nested included.
 
+        whitespace_pattern : Optional[str], default: None
+            A regular expression that defines the whitespace allowed between JSON elements.
+            The pattern may contain only JSON whitespace characters (space, tab, carriage return,
+            and line feed). It requires ``any_whitespace=True`` and cannot be combined with
+            ``max_whitespace_cnt``.
+
         Returns
         -------
         grammar : Grammar
@@ -270,6 +277,7 @@ class Grammar(XGRObject):
                 max_whitespace_cnt,
                 print_converted_ebnf,
                 any_order,
+                whitespace_pattern,
             )
         )
 

@@ -12,6 +12,7 @@ export interface ConstStringFormat {
 export interface JSONSchemaFormat {
   type: "json_schema";
   json_schema: JSONSchemaValue;
+  whitespace_pattern?: string;
 }
 
 export interface QwenXMLParameterFormat {

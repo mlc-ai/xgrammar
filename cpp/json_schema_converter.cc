@@ -1581,11 +1581,40 @@ Result<TypeArraySpec, SchemaError> SchemaParser::ParseTypeArray(
 
 // ==================== IndentManager Implementation ====================
 
+namespace {
+
+void ValidateWhitespacePattern(const std::string& pattern) {
+  Grammar grammar = Grammar::FromRegex(pattern);
+  GrammarFSMBuilder::Apply(&grammar);
+
+  auto is_json_whitespace = [](int32_t byte) {
+    return byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r';
+  };
+  for (int32_t state = 0; state < grammar->complete_fsm.NumStates(); ++state) {
+    for (const auto& edge : grammar->complete_fsm.GetEdges(state)) {
+      if (!edge.IsCharRange()) {
+        continue;
+      }
+      if (edge.min < 0 || edge.max > 0xff) {
+        XGRAMMAR_LOG(FATAL) << "whitespace_pattern may match only JSON whitespace characters.";
+      }
+      for (int32_t byte = edge.min; byte <= edge.max; ++byte) {
+        if (!is_json_whitespace(byte)) {
+          XGRAMMAR_LOG(FATAL) << "whitespace_pattern may match only JSON whitespace characters.";
+        }
+      }
+    }
+  }
+}
+
+}  // namespace
+
 IndentManager::IndentManager(
     std::optional<int> indent,
     const std::string& separator,
     bool any_whitespace,
-    std::optional<int> max_whitespace_cnt
+    std::optional<int> max_whitespace_cnt,
+    std::optional<std::string> whitespace_pattern
 )
     : any_whitespace_(any_whitespace),
       enable_newline_(indent.has_value()),
@@ -1593,10 +1622,21 @@ IndentManager::IndentManager(
       separator_(separator),
       total_indent_(0),
       is_first_({true}),
-      max_whitespace_cnt_(max_whitespace_cnt) {
+      max_whitespace_cnt_(max_whitespace_cnt),
+      whitespace_pattern_(std::move(whitespace_pattern)) {
   if (max_whitespace_cnt.has_value() && max_whitespace_cnt.value() <= 0) {
     XGRAMMAR_LOG(FATAL) << "max_whitespace_cnt must be positive.";
   }
+}
+
+std::string IndentManager::WhitespacePattern() const {
+  if (whitespace_pattern_.has_value()) {
+    return *whitespace_pattern_;
+  }
+  if (!max_whitespace_cnt_.has_value()) {
+    return "[ \\n\\t]*";
+  }
+  return "[ \\n\\t]{0," + std::to_string(*max_whitespace_cnt_) + "}";
 }
 
 void IndentManager::StartIndent() {
@@ -1611,11 +1651,7 @@ void IndentManager::EndIndent() {
 
 std::string IndentManager::StartSeparator() {
   if (any_whitespace_) {
-    if (!max_whitespace_cnt_.has_value()) {
-      return "[ \\n\\t]*";
-    } else {
-      return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
-    }
+    return WhitespacePattern();
   }
   if (!enable_newline_) {
     return "\"\"";
@@ -1625,12 +1661,7 @@ std::string IndentManager::StartSeparator() {
 
 std::string IndentManager::MiddleSeparator() {
   if (any_whitespace_) {
-    std::string whitespace_part;
-    if (!max_whitespace_cnt_.has_value()) {
-      whitespace_part = "[ \\n\\t]*";
-    } else {
-      whitespace_part = "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
-    }
+    std::string whitespace_part = WhitespacePattern();
     return whitespace_part + " \"" + separator_ + "\" " + whitespace_part;
   }
   if (!enable_newline_) {
@@ -1641,11 +1672,7 @@ std::string IndentManager::MiddleSeparator() {
 
 std::string IndentManager::EndSeparator() {
   if (any_whitespace_) {
-    if (!max_whitespace_cnt_.has_value()) {
-      return "[ \\n\\t]*";
-    } else {
-      return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
-    }
+    return WhitespacePattern();
   }
   if (!enable_newline_) {
     return "\"\"";
@@ -1655,11 +1682,7 @@ std::string IndentManager::EndSeparator() {
 
 std::string IndentManager::EmptySeparator() {
   if (any_whitespace_) {
-    if (!max_whitespace_cnt_.has_value()) {
-      return "[ \\n\\t]*";
-    } else {
-      return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
-    }
+    return WhitespacePattern();
   }
   return "\"\"";
 }
@@ -1668,18 +1691,9 @@ std::string IndentManager::NextSeparator(bool is_end) {
   if (any_whitespace_) {
     if (is_first_.back() || is_end) {
       is_first_.back() = false;
-      if (!max_whitespace_cnt_.has_value()) {
-        return "[ \\n\\t]*";
-      } else {
-        return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
-      }
+      return WhitespacePattern();
     } else {
-      std::string whitespace_part;
-      if (!max_whitespace_cnt_.has_value()) {
-        whitespace_part = "[ \\n\\t]*";
-      } else {
-        whitespace_part = "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
-      }
+      std::string whitespace_part = WhitespacePattern();
       return whitespace_part + " \"" + separator_ + "\" " + whitespace_part;
     }
   }
@@ -1724,19 +1738,31 @@ JSONSchemaConverter::JSONSchemaConverter(
     bool any_whitespace,
     std::optional<int> max_whitespace_cnt,
     RefResolver ref_resolver,
-    bool any_order
+    bool any_order,
+    std::optional<std::string> whitespace_pattern
 )
     : indent_manager_(
           indent,
           separators.has_value() ? separators->first
                                  : (any_whitespace ? "," : (indent.has_value() ? "," : ", ")),
           any_whitespace,
-          max_whitespace_cnt
+          max_whitespace_cnt,
+          whitespace_pattern
       ),
       any_whitespace_(any_whitespace),
       max_whitespace_cnt_(max_whitespace_cnt),
+      whitespace_pattern_(std::move(whitespace_pattern)),
       any_order_(any_order),
       ref_resolver_(std::move(ref_resolver)) {
+  if (whitespace_pattern_.has_value() && !any_whitespace_) {
+    XGRAMMAR_LOG(FATAL) << "whitespace_pattern requires any_whitespace=True.";
+  }
+  if (whitespace_pattern_.has_value() && max_whitespace_cnt_.has_value()) {
+    XGRAMMAR_LOG(FATAL) << "whitespace_pattern and max_whitespace_cnt cannot both be specified.";
+  }
+  if (whitespace_pattern_.has_value()) {
+    ValidateWhitespacePattern(*whitespace_pattern_);
+  }
   std::string colon_sep =
       separators.has_value() ? separators->second : (any_whitespace ? ":" : ": ");
   std::string whitespace = GetWhitespacePattern();
@@ -1798,7 +1824,8 @@ void JSONSchemaConverter::AddBasicRules(const std::vector<std::string>& addition
       std::nullopt,
       any_whitespace_ ? "," : ", ",
       any_whitespace_,
-      any_whitespace_ ? max_whitespace_cnt_ : std::nullopt
+      any_whitespace_ ? max_whitespace_cnt_ : std::nullopt,
+      whitespace_pattern_
   );
 
   // basic_any - use "{}" as the cache key for empty schema
@@ -1986,6 +2013,9 @@ int32_t JSONSchemaConverter::AddSubGrammar(const Grammar& grammar) {
 }
 
 std::string JSONSchemaConverter::GetWhitespacePattern() const {
+  if (whitespace_pattern_.has_value()) {
+    return *whitespace_pattern_;
+  }
   if (!max_whitespace_cnt_.has_value()) {
     return "[ \\n\\t]*";
   }
@@ -1993,6 +2023,12 @@ std::string JSONSchemaConverter::GetWhitespacePattern() const {
 }
 
 int32_t JSONSchemaConverter::WhitespaceExpression() {
+  if (whitespace_pattern_.has_value()) {
+    if (!whitespace_expr_id_.has_value()) {
+      whitespace_expr_id_ = RegexExpression(*whitespace_pattern_);
+    }
+    return *whitespace_expr_id_;
+  }
   std::vector<CharacterClassElement> elements = {{' ', ' '}, {'\n', '\n'}, {'\t', '\t'}};
   if (!max_whitespace_cnt_.has_value()) {
     if (!whitespace_expr_id_.has_value()) {
@@ -4054,7 +4090,8 @@ Grammar JSONSchemaToGrammar(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     bool any_order,
-    JSONFormat json_format
+    JSONFormat json_format,
+    std::optional<std::string> whitespace_pattern
 ) {
   picojson::value schema_value;
   std::string error = picojson::parse(schema_value, schema);
@@ -4082,7 +4119,8 @@ Grammar JSONSchemaToGrammar(
           any_whitespace,
           max_whitespace_cnt,
           std::move(ref_resolver),
-          any_order
+          any_order,
+          whitespace_pattern
       );
       return converter.Convert(spec);
     }
@@ -4097,7 +4135,8 @@ Grammar JSONSchemaToGrammar(
           max_whitespace_cnt,
           std::move(ref_resolver),
           json_format,
-          any_order
+          any_order,
+          whitespace_pattern
       );
       return converter.Convert(spec);
     }
@@ -4115,7 +4154,8 @@ std::string JSONSchemaToEBNF(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     JSONFormat json_format,
-    bool any_order
+    bool any_order,
+    std::optional<std::string> whitespace_pattern
 ) {
   picojson::value schema_value;
   std::string err = picojson::parse(schema_value, schema);
@@ -4129,7 +4169,8 @@ std::string JSONSchemaToEBNF(
       strict_mode,
       max_whitespace_cnt,
       json_format,
-      any_order
+      any_order,
+      std::move(whitespace_pattern)
   );
 }
 
@@ -4141,7 +4182,8 @@ std::string JSONSchemaToEBNF(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     JSONFormat json_format,
-    bool any_order
+    bool any_order,
+    std::optional<std::string> whitespace_pattern
 ) {
   // Parse JSON Schema to SchemaSpec
   SchemaParser parser(schema, {strict_mode, json_format});
@@ -4163,7 +4205,13 @@ std::string JSONSchemaToEBNF(
   switch (json_format) {
     case JSONFormat::kJSON: {
       JSONSchemaConverter converter(
-          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
+          indent,
+          separators,
+          any_whitespace,
+          max_whitespace_cnt,
+          ref_resolver,
+          any_order,
+          whitespace_pattern
       );
       return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
     }
@@ -4178,7 +4226,8 @@ std::string JSONSchemaToEBNF(
           max_whitespace_cnt,
           ref_resolver,
           json_format,
-          any_order
+          any_order,
+          whitespace_pattern
       );
       return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
     }

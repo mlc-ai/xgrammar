@@ -40,10 +40,17 @@ XMLToolCallingConverter::XMLToolCallingConverter(
     std::optional<int> max_whitespace_cnt,
     RefResolver ref_resolver,
     JSONFormat json_format,
-    bool any_order
+    bool any_order,
+    std::optional<std::string> whitespace_pattern
 )
     : JSONSchemaConverter(
-          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
+          indent,
+          separators,
+          any_whitespace,
+          max_whitespace_cnt,
+          ref_resolver,
+          any_order,
+          std::move(whitespace_pattern)
       ),
       json_format_(json_format),
       nested_object_level_(0),

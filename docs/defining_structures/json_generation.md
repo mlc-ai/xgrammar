@@ -62,6 +62,24 @@ person_schema = {
 compiled_grammar = compiler.compile_json_schema(json.dumps(person_schema))
 ```
 
+## Whitespace Control
+
+JSON Schema grammars allow spaces, tabs, and line feeds between elements by default. Use
+`whitespace_pattern` when the output needs a narrower layout. For example, the following grammar
+allows either no whitespace, one space, or a line feed followed by two spaces at every JSON
+separator:
+
+```python
+compiled_grammar = compiler.compile_json_schema(
+    Person,
+    whitespace_pattern=r"(?: |\n  )?",
+)
+```
+
+The pattern may contain only JSON whitespace characters: space, tab, carriage return, and line
+feed. It requires `any_whitespace=True` and cannot be combined with `max_whitespace_cnt`. An empty
+pattern (`whitespace_pattern=""`) enforces compact JSON with no whitespace between elements.
+
 With the compiled grammar, we can instantiate a [`xgr.GrammarMatcher`](xgrammar.GrammarMatcher)
 and generate the token masks in the generation loop.
 

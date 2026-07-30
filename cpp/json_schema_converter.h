@@ -241,7 +241,8 @@ class IndentManager {
       std::optional<int> indent,
       const std::string& separator,
       bool any_whitespace,
-      std::optional<int> max_whitespace_cnt
+      std::optional<int> max_whitespace_cnt,
+      std::optional<std::string> whitespace_pattern = std::nullopt
   );
 
   void StartIndent();
@@ -260,6 +261,9 @@ class IndentManager {
   int64_t total_indent_;
   std::vector<bool> is_first_;
   std::optional<int> max_whitespace_cnt_;
+  std::optional<std::string> whitespace_pattern_;
+
+  std::string WhitespacePattern() const;
 
   friend class JSONSchemaConverter;
 };
@@ -281,7 +285,8 @@ class JSONSchemaConverter {
       bool any_whitespace,
       std::optional<int> max_whitespace_cnt,
       RefResolver ref_resolver = nullptr,
-      bool any_order = false
+      bool any_order = false,
+      std::optional<std::string> whitespace_pattern = std::nullopt
   );
 
   virtual ~JSONSchemaConverter() = default;
@@ -438,6 +443,7 @@ class JSONSchemaConverter {
   int32_t colon_expr_id_;
   bool any_whitespace_;
   std::optional<int> max_whitespace_cnt_;
+  std::optional<std::string> whitespace_pattern_;
   // When true, object properties may appear in any order (see GetAnyOrderRuleForProperties).
   // Applies to all objects (including nested ones). Default false preserves the fixed-order
   // behavior.
@@ -516,7 +522,8 @@ Grammar JSONSchemaToGrammar(
     bool strict_mode = true,
     std::optional<int> max_whitespace_cnt = std::nullopt,
     bool any_order = false,
-    JSONFormat json_format = JSONFormat::kJSON
+    JSONFormat json_format = JSONFormat::kJSON,
+    std::optional<std::string> whitespace_pattern = std::nullopt
 );
 
 // ==================== Public API functions (backward compatible) ====================
@@ -540,6 +547,9 @@ Grammar JSONSchemaToGrammar(
  * \param max_whitespace_cnt The maximum number of whitespace characters for the whitespace
  * which is used for indentation or JSON elements separation when any_whitespace is True. If
  * std::nullopt, it means unlimited. Default: std::nullopt.
+ * \param whitespace_pattern Optional regular expression defining the whitespace allowed between
+ * JSON elements. It may match only JSON whitespace characters and cannot be combined with
+ * max_whitespace_cnt.
  * \param json_format Define the root
  * format of the object. If it's JSONFormat::kJSON, then it will generate a fully JSON-style
  * grammar. If it's JSONFormat::kXML, then it will generate a grammar with the root format is
@@ -555,7 +565,8 @@ std::string JSONSchemaToEBNF(
     bool strict_mode = true,
     std::optional<int> max_whitespace_cnt = std::nullopt,
     JSONFormat json_format = JSONFormat::kJSON,
-    bool any_order = false
+    bool any_order = false,
+    std::optional<std::string> whitespace_pattern = std::nullopt
 );
 
 /*!
@@ -577,6 +588,9 @@ std::string JSONSchemaToEBNF(
  * \param max_whitespace_cnt The maximum number of whitespace characters for the whitespace
  * which is used for indentation or JSON elements separation when any_whitespace is True. If
  * std::nullopt, it means unlimited. Default: std::nullopt.
+ * \param whitespace_pattern Optional regular expression defining the whitespace allowed between
+ * JSON elements. It may match only JSON whitespace characters and cannot be combined with
+ * max_whitespace_cnt.
  * \param json_format Define the root format of the object. If it's JSONFormat::kJSON,
  * then it will generate a fully JSON-style grammar. If it's JSONFormat::kXML, then it will
  * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
@@ -591,7 +605,8 @@ std::string JSONSchemaToEBNF(
     bool strict_mode = true,
     std::optional<int> max_whitespace_cnt = std::nullopt,
     JSONFormat json_format = JSONFormat::kJSON,
-    bool any_order = false
+    bool any_order = false,
+    std::optional<std::string> whitespace_pattern = std::nullopt
 );
 
 /*!

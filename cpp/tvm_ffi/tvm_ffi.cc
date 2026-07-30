@@ -80,6 +80,11 @@ static std::optional<bool> OptionalBoolFromView(ffi::AnyView v) {
   return static_cast<bool>(v.cast<int64_t>());
 }
 
+static std::optional<std::string> OptionalStringFromView(ffi::AnyView v) {
+  if (v == nullptr) return std::nullopt;
+  return std::string(v.cast<ffi::String>());
+}
+
 static std::optional<std::vector<int32_t>> OptionalInt32VectorFromView(ffi::AnyView v) {
   if (v == nullptr) return std::nullopt;
   ffi::Array<int64_t> array = v.cast<ffi::Array<int64_t>>();
@@ -361,7 +366,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              bool strict_mode,
              ffi::AnyView max_whitespace_cnt,
              bool print_converted_ebnf,
-             bool any_order) {
+             bool any_order,
+             ffi::AnyView whitespace_pattern) {
             XGRAMMAR_FFI_TRY_BEGIN();
             auto g = Grammar::FromJSONSchema(
                 schema,
@@ -371,7 +377,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 strict_mode,
                 OptionalIntFromView(max_whitespace_cnt),
                 print_converted_ebnf,
-                any_order
+                any_order,
+                OptionalStringFromView(whitespace_pattern)
             );
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(g)));
             XGRAMMAR_FFI_TRY_END();
@@ -514,7 +521,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              ffi::AnyView separators,
              bool strict_mode,
              ffi::AnyView max_whitespace_cnt,
-             bool any_order) {
+             bool any_order,
+             ffi::AnyView whitespace_pattern) {
             XGRAMMAR_FFI_TRY_BEGIN();
             CompiledGrammar cg = o->value.CompileJSONSchema(
                 schema,
@@ -523,7 +531,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 OptionalSeparatorsFromView(separators),
                 strict_mode,
                 OptionalIntFromView(max_whitespace_cnt),
-                any_order
+                any_order,
+                OptionalStringFromView(whitespace_pattern)
             );
             return ffi::ObjectRef(ffi::make_object<CompiledGrammarObj>(std::move(cg)));
             XGRAMMAR_FFI_TRY_END();
@@ -786,7 +795,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              bool strict_mode,
              ffi::AnyView max_whitespace_cnt,
              ffi::String json_format,
-             bool any_order) {
+             bool any_order,
+             ffi::AnyView whitespace_pattern) {
             auto format = JSONFormatFromString(json_format);
             if (!format.has_value()) {
               TVM_FFI_THROW(RuntimeError) << "Invalid json_format: " << std::string(json_format);
@@ -799,7 +809,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 strict_mode,
                 OptionalIntFromView(max_whitespace_cnt),
                 *format,
-                any_order
+                any_order,
+                OptionalStringFromView(whitespace_pattern)
             ));
           }
       )

@@ -160,6 +160,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
 
   // Register std::optional used in Grammar::FromJSONSchema
   register_optional<int>();
+  register_optional<std::string>();
   value_object<std::pair<std::string, std::string>>("StringPair")
       .field("first", &std::pair<std::string, std::string>::first)
       .field("second", &std::pair<std::string, std::string>::second);
@@ -184,19 +185,9 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
   function("vecIntToView", &vecIntToView);
 
   // Testing methods
-  function(
-      "_JSONSchemaToEBNF",
-      select_overload<std::string(
-          const std::string&,
-          bool,
-          std::optional<int>,
-          std::optional<std::pair<std::string, std::string>>,
-          bool,
-          std::optional<int>,
-          JSONFormat,
-          bool
-      )>(&JSONSchemaToEBNF)
-  );
+  using JSONSchemaToEBNFFunction = std::
+      string(const std::string&, bool, std::optional<int>, std::optional<std::pair<std::string, std::string>>, bool, std::optional<int>, JSONFormat, bool, std::optional<std::string>);
+  function("_JSONSchemaToEBNF", select_overload<JSONSchemaToEBNFFunction>(&JSONSchemaToEBNF));
   function("DebugGetMaskedTokensFromBitmask", &Testing_DebugGetMaskedTokensFromBitmask);
   function("EBNFToGrammarNoNormalization", &_EBNFToGrammarNoNormalization);
 

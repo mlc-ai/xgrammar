@@ -150,6 +150,7 @@ class GrammarCompiler(XGRObject):
         strict_mode: bool = True,
         max_whitespace_cnt: Optional[int] = None,
         any_order: bool = False,
+        whitespace_pattern: Optional[str] = None,
     ) -> CompiledGrammar:
         """Get CompiledGrammar from the specified JSON schema and format. The indent
         and separators parameters follow the same convention as in json.dumps().
@@ -194,6 +195,12 @@ class GrammarCompiler(XGRObject):
 
             Applies to every object, nested included.
 
+        whitespace_pattern : Optional[str], default: None
+            A regular expression that defines the whitespace allowed between JSON elements.
+            The pattern may contain only JSON whitespace characters (space, tab, carriage return,
+            and line feed). It requires ``any_whitespace=True`` and cannot be combined with
+            ``max_whitespace_cnt``.
+
         Returns
         -------
         compiled_grammar : CompiledGrammar
@@ -209,6 +216,7 @@ class GrammarCompiler(XGRObject):
                 strict_mode,
                 max_whitespace_cnt,
                 any_order,
+                whitespace_pattern,
             )
         )
 
