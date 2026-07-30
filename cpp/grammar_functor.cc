@@ -1175,7 +1175,10 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
       if (grammar_expr.type == GrammarExprType::kRegex) {
         // A regex rule allows empty iff an end state is in the epsilon closure of the start
         // state of its automaton. Build errors are reported by GrammarFSMBuilder later.
-        auto regex_fsm_result = RegexFSMBuilder::Build(base_grammar_->GetRegexString(grammar_expr));
+        auto regex_fsm_result = RegexFSMBuilder::Build(
+            base_grammar_->GetRegexString(grammar_expr),
+            base_grammar_->GetRegexIsByteMode(grammar_expr)
+        );
         if (regex_fsm_result.IsOk()) {
           auto regex_fsm = std::move(regex_fsm_result).Unwrap();
           std::unordered_set<int> start_closure{regex_fsm.GetStart()};
@@ -1264,45 +1267,8 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
   }
 };
 
-// Convert a Unicode codepoint to the packed UTF-8 format used by AddCharacterRange.
-// The packed format stores UTF-8 bytes as: (byte0 << 24) | (byte1 << 16) | (byte2 << 8) | byte3
-// where byte0 is the first UTF-8 byte (leading byte) and subsequent bytes are continuation bytes.
-inline uint32_t CodepointToPackedUTF8(uint32_t codepoint) {
-  if (codepoint <= 0x7F) {
-    // 1-byte sequence (ASCII)
-    return codepoint;
-  } else if (codepoint <= 0x7FF) {
-    // 2-byte sequence: byte0 = 110xxxxx, byte1 = 10xxxxxx
-    uint8_t byte0 = 0xC0 | ((codepoint >> 6) & 0x1F);
-    uint8_t byte1 = 0x80 | (codepoint & 0x3F);
-    return (static_cast<uint32_t>(byte0) << 8) | byte1;
-  } else if (codepoint <= 0xFFFF) {
-    // 3-byte sequence: byte0 = 1110xxxx, byte1 = 10xxxxxx, byte2 = 10xxxxxx
-    uint8_t byte0 = 0xE0 | ((codepoint >> 12) & 0x0F);
-    uint8_t byte1 = 0x80 | ((codepoint >> 6) & 0x3F);
-    uint8_t byte2 = 0x80 | (codepoint & 0x3F);
-    return (static_cast<uint32_t>(byte0) << 16) | (static_cast<uint32_t>(byte1) << 8) | byte2;
-  } else {
-    // 4-byte sequence: byte0 = 11110xxx, byte1-3 = 10xxxxxx
-    uint8_t byte0 = 0xF0 | ((codepoint >> 18) & 0x07);
-    uint8_t byte1 = 0x80 | ((codepoint >> 12) & 0x3F);
-    uint8_t byte2 = 0x80 | ((codepoint >> 6) & 0x3F);
-    uint8_t byte3 = 0x80 | (codepoint & 0x3F);
-    return (static_cast<uint32_t>(byte0) << 24) | (static_cast<uint32_t>(byte1) << 16) |
-           (static_cast<uint32_t>(byte2) << 8) | byte3;
-  }
-}
-
 class GrammarFSMBuilderImpl {
  public:
-  const static uint32_t kMax1ByteUnicode = 0x7F;
-  const static uint32_t kMin2BytesUnicode = 0xC080;
-  const static uint32_t kMax2BytesUnicode = 0xDFBF;
-  const static uint32_t kMin3BytesUnicode = 0xE08080;
-  const static uint32_t kMax3BytesUnicode = 0xEFBFBF;
-  const static uint32_t kMin4BytesUnicode = 0xF0808080;
-  const static uint32_t kMax4BytesUnicode = 0xF7BFBFBF;
-
   explicit GrammarFSMBuilderImpl(FSM& target_fsm, const std::string* rule_name = nullptr)
       : target_fsm_(target_fsm), rule_name_(rule_name) {}
 
@@ -1355,7 +1321,9 @@ class GrammarFSMBuilderImpl {
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
-  static Result<FSMWithStartEnd> Regex(const std::string& regex, bool json_string = false);
+  static Result<FSMWithStartEnd> Regex(
+      const std::string& regex, bool json_string = false, bool byte_mode = false
+  );
   /* Building tool functions.*/
   static std::optional<FSMWithStartEnd> BuildTagDispatchFSM(
       const std::vector<std::pair<std::string, int>>& string_trigger_rules,
@@ -1389,7 +1357,11 @@ class GrammarFSMBuilderImpl {
       const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
   );
   void BuildRegex(
-      const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
+      const std::string& regex,
+      bool json_string,
+      bool byte_mode,
+      int start_state,
+      std::vector<int32_t>* end_states
   );
   void BuildTagDispatch(
       const Grammar::Impl::TagDispatch& tag_dispatch,
@@ -1416,220 +1388,10 @@ class GrammarFSMBuilderImpl {
   void AddCharacterClassTransitions(const GrammarExpr& expr, int start_state, int end_state);
   void BuildNegativeCharacterClass(const GrammarExpr& expr, int start_state, int end_state);
   void AppendFSM(FSMWithStartEnd fsm, int start_state, std::vector<int32_t>* end_states);
-  void AddCharacterRange(int from, int to, uint32_t min, uint32_t max);
 
   FSM& target_fsm_;
   const std::string* rule_name_;
 };
-
-// This function will add a range [min, max] of characters to the FSM, and the length
-// of the characters are the same.
-void AddSameLengthCharacterRange(FSM& fsm, int from, int to, uint32_t min, uint32_t max) {
-  uint8_t byte_min[4] = {
-      static_cast<uint8_t>(min & 0xFF),
-      static_cast<uint8_t>(min >> 8),
-      static_cast<uint8_t>(min >> 16),
-      static_cast<uint8_t>(min >> 24)
-  };
-  uint8_t byte_max[4] = {
-      static_cast<uint8_t>(max & 0xFF),
-      static_cast<uint8_t>(max >> 8),
-      static_cast<uint8_t>(max >> 16),
-      static_cast<uint8_t>(max >> 24)
-  };
-
-  // ASCII.
-  if (byte_max[1] == 0) {
-    fsm.AddEdge(from, to, byte_min[0], byte_max[0]);
-    return;
-  }
-
-  if (byte_max[3] != 0) {
-    // 4-byte unicode.
-    if (byte_max[3] == byte_min[3]) {
-      int tmp_state = fsm.AddState();
-      fsm.AddEdge(from, tmp_state, byte_min[3], byte_max[3]);
-      min = (min & 0x00FFFFFF);
-      max = (max & 0x00FFFFFF);
-      AddSameLengthCharacterRange(fsm, tmp_state, to, min, max);
-      return;
-    }
-    if ((min & 0x00FFFFFF) != 0x808080) {
-      int tmp_state_min = fsm.AddState();
-      fsm.AddEdge(from, tmp_state_min, byte_min[3], byte_min[3]);
-      AddSameLengthCharacterRange(fsm, tmp_state_min, to, (min & 0x00FFFFFF), 0x00BFBFBF);
-    } else {
-      byte_min[3]--;
-    }
-    if ((max & 0x00FFFFFF) != 0xBFBFBF) {
-      int tmp_state_max = fsm.AddState();
-      fsm.AddEdge(from, tmp_state_max, byte_max[3], byte_max[3]);
-      AddSameLengthCharacterRange(fsm, tmp_state_max, to, 0x00808080, (max & 0x00FFFFFF));
-    } else {
-      byte_max[3]++;
-    }
-    if (byte_max[3] - byte_min[3] > 1) {
-      int tmp_state_mid = fsm.AddState();
-      // First byte.
-      fsm.AddEdge(from, tmp_state_mid, byte_min[3] + 1, byte_max[3] - 1);
-      int tmp_state_mid2 = fsm.AddState();
-      // Second byte.
-      fsm.AddEdge(tmp_state_mid, tmp_state_mid2, 0x80, 0xBF);
-      int tmp_state_mid3 = fsm.AddState();
-      // Third byte.
-      fsm.AddEdge(tmp_state_mid2, tmp_state_mid3, 0x80, 0xBF);
-      // Last byte.
-      fsm.AddEdge(tmp_state_mid3, to, 0x80, 0xBF);
-    }
-    return;
-  }
-  if (byte_max[2] != 0) {
-    // 3 byte unicode.
-    if (byte_max[2] == byte_min[2]) {
-      int tmp_state = fsm.AddState();
-      fsm.AddEdge(from, tmp_state, byte_min[2], byte_max[2]);
-      min = (min & 0x00FFFF);
-      max = (max & 0x00FFFF);
-      AddSameLengthCharacterRange(fsm, tmp_state, to, min, max);
-      return;
-    }
-    if ((min & 0x00FFFF) != 0x8080) {
-      int tmp_state_min = fsm.AddState();
-      fsm.AddEdge(from, tmp_state_min, byte_min[2], byte_min[2]);
-      AddSameLengthCharacterRange(fsm, tmp_state_min, to, (min & 0x00FFFF), 0x00BFBF);
-    } else {
-      byte_min[2]--;
-    }
-    if ((max & 0x00FFFF) != 0xBFBF) {
-      int tmp_state_max = fsm.AddState();
-      fsm.AddEdge(from, tmp_state_max, byte_max[2], byte_max[2]);
-      AddSameLengthCharacterRange(fsm, tmp_state_max, to, 0x0080, (max & 0x00FFFF));
-    } else {
-      byte_max[2]++;
-    }
-    if (byte_max[2] - byte_min[2] > 1) {
-      int tmp_state_mid = fsm.AddState();
-      // First byte.
-      fsm.AddEdge(from, tmp_state_mid, byte_min[2] + 1, byte_max[2] - 1);
-      int tmp_state_mid2 = fsm.AddState();
-      // Second byte.
-      fsm.AddEdge(tmp_state_mid, tmp_state_mid2, 0x80, 0xBF);
-      // Last byte.
-      fsm.AddEdge(tmp_state_mid2, to, 0x80, 0xBF);
-    }
-    return;
-  }
-
-  // 2 byte unicode.
-  if (byte_max[1] == byte_min[1]) {
-    int tmp_state = fsm.AddState();
-    fsm.AddEdge(from, tmp_state, byte_min[1], byte_max[1]);
-    min = (min & 0x00FF);
-    max = (max & 0x00FF);
-    AddSameLengthCharacterRange(fsm, tmp_state, to, min, max);
-    return;
-  }
-  if ((min & 0x00FF) != 0x80) {
-    int tmp_state_min = fsm.AddState();
-    fsm.AddEdge(from, tmp_state_min, byte_min[1], byte_min[1]);
-    AddSameLengthCharacterRange(fsm, tmp_state_min, to, (min & 0x00FF), 0x00BF);
-  } else {
-    byte_min[1]--;
-  }
-  if ((max & 0x00FF) != 0xBF) {
-    int tmp_state_max = fsm.AddState();
-    fsm.AddEdge(from, tmp_state_max, byte_max[1], byte_max[1]);
-    AddSameLengthCharacterRange(fsm, tmp_state_max, to, 0x0080, (max & 0x00FF));
-  } else {
-    byte_max[1]++;
-  }
-  if (byte_max[1] - byte_min[1] > 1) {
-    int tmp_state_mid = fsm.AddState();
-    // First byte.
-    fsm.AddEdge(from, tmp_state_mid, byte_min[1] + 1, byte_max[1] - 1);
-    fsm.AddEdge(tmp_state_mid, to, 0x80, 0xBF);
-  }
-  return;
-}
-
-// This function will add a range [min, max] of unicode characters to the FSM.
-void GrammarFSMBuilderImpl::AddCharacterRange(int from, int to, uint32_t min, uint32_t max) {
-  XGRAMMAR_CHECK(min <= max) << "Invalid character range: min (" << min << ") > max (" << max
-                             << ")";
-  // Ensure max and min are valid unicode value.
-  if (max > kMax4BytesUnicode) {
-    max = kMax4BytesUnicode;
-  } else if (max > kMax3BytesUnicode) {
-    if (max < kMin4BytesUnicode) {
-      max = kMax3BytesUnicode;
-    }
-  } else if (max > kMax2BytesUnicode) {
-    if (max < kMin3BytesUnicode) {
-      max = kMax2BytesUnicode;
-    }
-  } else if (max < kMin2BytesUnicode && (max > kMax1ByteUnicode)) {
-    max = kMax1ByteUnicode;
-  }
-
-  if (min > kMax4BytesUnicode) {
-    min = kMax4BytesUnicode;
-  } else if (min > kMax3BytesUnicode) {
-    if (min < kMin4BytesUnicode) {
-      min = kMin4BytesUnicode;
-    }
-  } else if (min > kMax2BytesUnicode) {
-    if (min < kMin3BytesUnicode) {
-      min = kMin3BytesUnicode;
-    }
-  } else if (min < kMin2BytesUnicode && (min > kMax1ByteUnicode)) {
-    min = kMin2BytesUnicode;
-  }
-
-  // Step2. Divide the range into several ranges, which contain characters with different lengths.
-  if (max <= kMax1ByteUnicode) {
-    AddSameLengthCharacterRange(target_fsm_, from, to, min, max);
-    return;
-  }
-  if (max <= kMax2BytesUnicode) {
-    if (min >= kMin2BytesUnicode) {
-      AddSameLengthCharacterRange(target_fsm_, from, to, min, max);
-    } else {
-      AddSameLengthCharacterRange(target_fsm_, from, to, min, kMax1ByteUnicode);
-      AddSameLengthCharacterRange(target_fsm_, from, to, kMin2BytesUnicode, max);
-    }
-    return;
-  }
-  if (max <= kMax3BytesUnicode) {
-    if (min >= kMin3BytesUnicode) {
-      AddSameLengthCharacterRange(target_fsm_, from, to, min, max);
-    } else if (min >= kMin2BytesUnicode) {
-      AddSameLengthCharacterRange(target_fsm_, from, to, min, kMax2BytesUnicode);
-      AddSameLengthCharacterRange(target_fsm_, from, to, kMin3BytesUnicode, max);
-    } else {
-      AddSameLengthCharacterRange(target_fsm_, from, to, min, kMax1ByteUnicode);
-      AddSameLengthCharacterRange(target_fsm_, from, to, kMin2BytesUnicode, kMax2BytesUnicode);
-      AddSameLengthCharacterRange(target_fsm_, from, to, kMin3BytesUnicode, max);
-    }
-    return;
-  }
-  XGRAMMAR_CHECK(max <= kMax4BytesUnicode);
-  if (min >= kMin4BytesUnicode) {
-    AddSameLengthCharacterRange(target_fsm_, from, to, min, max);
-  } else if (min >= kMin3BytesUnicode) {
-    AddSameLengthCharacterRange(target_fsm_, from, to, min, kMax3BytesUnicode);
-    AddSameLengthCharacterRange(target_fsm_, from, to, kMin4BytesUnicode, max);
-  } else if (min >= kMin2BytesUnicode) {
-    AddSameLengthCharacterRange(target_fsm_, from, to, min, kMax2BytesUnicode);
-    AddSameLengthCharacterRange(target_fsm_, from, to, kMin3BytesUnicode, kMax3BytesUnicode);
-    AddSameLengthCharacterRange(target_fsm_, from, to, kMin4BytesUnicode, max);
-  } else {
-    AddSameLengthCharacterRange(target_fsm_, from, to, min, kMax1ByteUnicode);
-    AddSameLengthCharacterRange(target_fsm_, from, to, kMin2BytesUnicode, kMax2BytesUnicode);
-    AddSameLengthCharacterRange(target_fsm_, from, to, kMin3BytesUnicode, kMax3BytesUnicode);
-    AddSameLengthCharacterRange(target_fsm_, from, to, kMin4BytesUnicode, max);
-  }
-  return;
-}
 
 void GrammarFSMBuilderImpl::BuildNegativeCharacterClass(
     const GrammarExpr& expr, int start_state, int end_state
@@ -1669,7 +1431,7 @@ void GrammarFSMBuilderImpl::BuildNegativeCharacterClass(
       i = right_bound;
     }
   }
-  AddCharacterRange(start_state, end_state, kMin2BytesUnicode, kMax4BytesUnicode);
+  AddCharacterRange(target_fsm_, start_state, end_state, kMin2BytesUnicode, kMax4BytesUnicode);
 }
 
 void GrammarFSMBuilderImpl::AddCharacterClassTransitions(
@@ -1688,7 +1450,7 @@ void GrammarFSMBuilderImpl::AddCharacterClassTransitions(
       // Convert Unicode codepoints to packed UTF-8 format for AddCharacterRange
       uint32_t packed_min = CodepointToPackedUTF8(codepoint_min);
       uint32_t packed_max = CodepointToPackedUTF8(codepoint_max);
-      AddCharacterRange(start_state, end_state, packed_min, packed_max);
+      AddCharacterRange(target_fsm_, start_state, end_state, packed_min, packed_max);
     }
   }
 }
@@ -1825,6 +1587,7 @@ void GrammarFSMBuilderImpl::BuildExpression(
       return BuildRegex(
           grammar->GetRegexString(expr),
           grammar->GetRegexIsJSONString(expr),
+          grammar->GetRegexIsByteMode(expr),
           start_state,
           end_states
       );
@@ -2021,12 +1784,16 @@ void GrammarFSMBuilderImpl::AppendFSM(
 }
 
 void GrammarFSMBuilderImpl::BuildRegex(
-    const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
+    const std::string& regex,
+    bool json_string,
+    bool byte_mode,
+    int start_state,
+    std::vector<int32_t>* end_states
 ) {
   auto build_result = json_string ? RegexFSMBuilder::BuildWithForbiddenChars(
                                         regex, GrammarFSMBuilder::JSONStringForbiddenChars()
                                     )
-                                  : RegexFSMBuilder::Build(regex);
+                                  : RegexFSMBuilder::Build(regex, byte_mode);
   if (build_result.IsErr()) {
     auto error = std::move(build_result).UnwrapErr();
     if (rule_name_ != nullptr) {
@@ -2148,11 +1915,13 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TagDispatch(
   );
 }
 
-Result<FSMWithStartEnd> GrammarFSMBuilderImpl::Regex(const std::string& regex, bool json_string) {
+Result<FSMWithStartEnd> GrammarFSMBuilderImpl::Regex(
+    const std::string& regex, bool json_string, bool byte_mode
+) {
   auto build_result = json_string ? RegexFSMBuilder::BuildWithForbiddenChars(
                                         regex, GrammarFSMBuilder::JSONStringForbiddenChars()
                                     )
-                                  : RegexFSMBuilder::Build(regex);
+                                  : RegexFSMBuilder::Build(regex, byte_mode);
   if (build_result.IsErr()) {
     return build_result;
   }
@@ -3956,8 +3725,10 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilder::Choices(
   return GrammarFSMBuilderImpl::Choices(expr, grammar);
 }
 
-Result<FSMWithStartEnd> GrammarFSMBuilder::Regex(const std::string& regex, bool json_string) {
-  return GrammarFSMBuilderImpl::Regex(regex, json_string);
+Result<FSMWithStartEnd> GrammarFSMBuilder::Regex(
+    const std::string& regex, bool json_string, bool byte_mode
+) {
+  return GrammarFSMBuilderImpl::Regex(regex, json_string, byte_mode);
 }
 
 const std::bitset<256>& GrammarFSMBuilder::JSONStringForbiddenChars() {

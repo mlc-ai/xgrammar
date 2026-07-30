@@ -24,7 +24,7 @@
 #include <utility>
 #include <vector>
 
-#include "byte_regex_converter.h"
+#include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "support/encoding.h"
@@ -1614,16 +1614,7 @@ class LarkCompiler {
     }
     std::vector<int32_t> ignore_choices;
     for (const Node& ignore : document_.ignores) {
-      int32_t ignore_expr = CompileNode(ignore, "lark_ignore", true);
-      if (allow_invalid_utf8_) {
-        auto expr = builder_.GetGrammarExpr(ignore_expr);
-        if (expr.type == GrammarBuilder::GrammarExprType::kRepeat && expr[1] <= 1 && expr[2] != 0) {
-          // Repeating X* or X+ as an ignored item is exactly X*. Removing the nested repeat also
-          // keeps raw-byte alternatives out of character-oriented repetition optimizations.
-          ignore_expr = builder_.AddRuleRef(expr[0]);
-        }
-      }
-      ignore_choices.push_back(ignore_expr);
+      ignore_choices.push_back(CompileNode(ignore, "lark_ignore", true));
     }
     int32_t ignore_body =
         ignore_choices.size() == 1 ? ignore_choices[0] : builder_.AddChoices(ignore_choices);
@@ -1865,9 +1856,22 @@ class LarkCompiler {
     RaiseLarkError(source_, node.location, "unsupported terminal node");
   }
 
-  int32_t CompileTerminalPattern(const std::string& pattern, const std::string& rule_hint) {
-    return allow_invalid_utf8_ ? ByteRegexToGrammarExpr(&builder_, pattern, rule_hint)
-                               : builder_.AddRegex(pattern);
+  int32_t CompileTerminalPattern(const std::string& pattern, const Location& location) {
+    if (!allow_invalid_utf8_) {
+      return builder_.AddRegex(pattern);
+    }
+    // Byte-mode patterns are validated eagerly so that errors carry the grammar location
+    // instead of surfacing when the automaton is built.
+    auto build_result = RegexFSMBuilder::Build(pattern, /*byte_mode=*/true);
+    if (build_result.IsErr()) {
+      RaiseLarkError(
+          source_,
+          location,
+          "failed to compile regular expression: " +
+              std::string(std::move(build_result).UnwrapErr().what())
+      );
+    }
+    return builder_.AddRegex(pattern, /*json_string=*/false, /*byte_mode=*/true);
   }
 
   const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {
@@ -1991,11 +1995,11 @@ class LarkCompiler {
       }
       case Node::Kind::kRegex: {
         std::string pattern = PrepareRegexPattern(node);
+        if (allow_invalid_utf8_) {
+          int32_t result = CompileTerminalPattern(pattern, node.location);
+          return terminal_mode || !append_skip ? result : AppendSkip(result);
+        }
         try {
-          if (allow_invalid_utf8_) {
-            int32_t result = ByteRegexToGrammarExpr(&builder_, pattern, rule_hint);
-            return terminal_mode || !append_skip ? result : AppendSkip(result);
-          }
           int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromRegex(pattern));
           int32_t result = builder_.AddRuleRef(root);
           return terminal_mode || !append_skip ? result : AppendSkip(result);
@@ -2343,11 +2347,10 @@ class LarkCompiler {
       body_pattern = TerminalNodeToRegex(definition.body);
       marker_pattern = TerminalNodeToRegex(*marker);
       int32_t body_helper_expr =
-          CompileTerminalPattern(body_pattern.value(), definition.name + "_stop_body");
+          CompileTerminalPattern(body_pattern.value(), definition.body.location);
       int32_t body_helper_rule =
           builder_.AddRuleWithHint(definition.name + "_stop_body", body_helper_expr);
-      int32_t marker_helper_expr =
-          CompileTerminalPattern(marker_pattern.value(), definition.name + "_stop_marker");
+      int32_t marker_helper_expr = CompileTerminalPattern(marker_pattern.value(), marker->location);
       int32_t marker_helper_rule =
           builder_.AddRuleWithHint(definition.name + "_stop_marker", marker_helper_expr);
       suffix_stop_info.body_rule_id = body_helper_rule;
@@ -2368,7 +2371,7 @@ class LarkCompiler {
         }
         return CompileTerminalPattern(
             "(?:" + body_pattern.value() + ")(?:" + marker_pattern.value() + ")",
-            definition.name + "_lazy"
+            definition.body.location
         );
       }
       return CompileNode(definition.body, definition.name, true);

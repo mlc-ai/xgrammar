@@ -250,7 +250,7 @@ class Grammar::Impl {
   /*! \brief Get the regex pattern string of the regex grammar expr. */
   std::string GetRegexString(const GrammarExpr& grammar_expr) const {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kRegex) << "GrammarExpr is not a regex";
-    XGRAMMAR_DCHECK(grammar_expr.size() >= 1) << "Regex expr must contain the json_string flag";
+    XGRAMMAR_DCHECK(grammar_expr.size() >= 1) << "Regex expr must contain the flags element";
     std::string str;
     str.reserve(grammar_expr.size() - 1);
     for (int i = 1; i < grammar_expr.size(); ++i) {
@@ -267,8 +267,16 @@ class Grammar::Impl {
   /*! \brief Get whether the regex grammar expr matches the body of a JSON string literal. */
   bool GetRegexIsJSONString(const GrammarExpr& grammar_expr) const {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kRegex) << "GrammarExpr is not a regex";
-    XGRAMMAR_DCHECK(grammar_expr.size() >= 1) << "Regex expr must contain the json_string flag";
-    return grammar_expr[0] != 0;
+    XGRAMMAR_DCHECK(grammar_expr.size() >= 1) << "Regex expr must contain the flags element";
+    return (grammar_expr[0] & 1) != 0;
+  }
+
+  /*! \brief Get whether the regex grammar expr is matched over raw bytes (0-255) instead of
+   * Unicode characters. */
+  bool GetRegexIsByteMode(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kRegex) << "GrammarExpr is not a regex";
+    XGRAMMAR_DCHECK(grammar_expr.size() >= 1) << "Regex expr must contain the flags element";
+    return (grammar_expr[0] & 2) != 0;
   }
 
   /*! \brief The object representing a tag dispatch. */

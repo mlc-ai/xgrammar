@@ -420,18 +420,15 @@ expression from consuming characters that must be escaped in JSON:
 string_body ::= Regex("\\S+", json_string=true)
 ```
 
-### `ByteString`
-
-`ByteString` matches an exact sequence of raw bytes. Each positional argument is a decimal integer
-from 0 through 255; named arguments are not accepted.
+The `byte_mode=true` named argument switches the pattern from Unicode characters to raw bytes
+(0 through 255): `\xHH` escapes denote single bytes, `.` matches any byte, and negated character
+classes complement within the 256 byte values, so the pattern can require byte sequences that are
+not valid UTF-8. It cannot be combined with `json_string`. This form is produced by Lark grammars
+compiled with the `allow_invalid_utf8` option:
 
 ```text
-root ::= ByteString(0, 128, 255)
+root ::= Regex("[\\x80-\\xFF]+", byte_mode=true)
 ```
-
-This form is used when a grammar contains a byte sequence that cannot be represented by a valid
-UTF-8 string literal. The grammar printer emits it automatically when needed, which preserves raw
-bytes across `str(grammar)` / `Grammar.from_ebnf()` round trips.
 
 ### `TagDispatch`
 

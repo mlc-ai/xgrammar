@@ -16,6 +16,36 @@
 namespace xgrammar {
 
 /*!
+ * \brief Boundaries of the packed UTF-8 representation used by AddCharacterRange. The packed
+ * format stores the UTF-8 bytes of one character as: (byte0 << 24) | (byte1 << 16) |
+ * (byte2 << 8) | byte3, aligned to the low end, so it is monotonic in the codepoint.
+ */
+inline constexpr uint32_t kMax1ByteUnicode = 0x7F;
+inline constexpr uint32_t kMin2BytesUnicode = 0xC080;
+inline constexpr uint32_t kMax2BytesUnicode = 0xDFBF;
+inline constexpr uint32_t kMin3BytesUnicode = 0xE08080;
+inline constexpr uint32_t kMax3BytesUnicode = 0xEFBFBF;
+inline constexpr uint32_t kMin4BytesUnicode = 0xF0808080;
+inline constexpr uint32_t kMax4BytesUnicode = 0xF7BFBFBF;
+
+/*! \brief Convert a Unicode codepoint to the packed UTF-8 format used by AddCharacterRange. */
+uint32_t CodepointToPackedUTF8(uint32_t codepoint);
+
+/*!
+ * \brief Add transitions from `from` to `to` accepting every character in the packed UTF-8 range
+ * [min, max], where min and max encode characters of the same UTF-8 length. Multi-byte characters
+ * are lowered to chains of byte edges through freshly added intermediate states.
+ */
+void AddSameLengthCharacterRange(FSM& fsm, int from, int to, uint32_t min, uint32_t max);
+
+/*!
+ * \brief Add transitions from `from` to `to` accepting every character in the packed UTF-8 range
+ * [min, max]. The range is split by UTF-8 encoded length and each part is lowered with
+ * AddSameLengthCharacterRange.
+ */
+void AddCharacterRange(FSM& fsm, int from, int to, uint32_t min, uint32_t max);
+
+/*!
  * \brief A builder that converts a regex string to a FSM.
  */
 class RegexFSMBuilder {
@@ -23,9 +53,12 @@ class RegexFSMBuilder {
   /*!
    * \brief Converts a regex string to a FSM.
    * \param regex The regex string.
+   * \param byte_mode Whether the regex is matched over raw bytes (0-255) instead of Unicode
+   * characters. In byte mode, \xHH escapes denote single bytes, negated character classes
+   * complement within the 256 byte values, and Unicode-specific constructs are rejected.
    * \return The FSM with start and end states.
    */
-  static Result<FSMWithStartEnd> Build(const std::string& regex);
+  static Result<FSMWithStartEnd> Build(const std::string& regex, bool byte_mode = false);
 
   /*!
    * \brief Converts a regex string to a FSM, then removes the forbidden characters from every

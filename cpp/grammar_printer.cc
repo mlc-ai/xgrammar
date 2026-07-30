@@ -14,51 +14,6 @@
 #include "support/encoding.h"
 
 namespace xgrammar {
-namespace {
-
-bool IsStrictUTF8(const std::string& value) {
-  auto continuation = [&](size_t index) {
-    return index < value.size() && (static_cast<uint8_t>(value[index]) & 0xC0) == 0x80;
-  };
-  for (size_t index = 0; index < value.size();) {
-    uint8_t first = static_cast<uint8_t>(value[index]);
-    if (first == 0) {
-      return false;
-    }
-    if (first <= 0x7F) {
-      ++index;
-    } else if (first >= 0xC2 && first <= 0xDF) {
-      if (!continuation(index + 1)) {
-        return false;
-      }
-      index += 2;
-    } else if (first >= 0xE0 && first <= 0xEF) {
-      if (index + 2 >= value.size() || !continuation(index + 1) || !continuation(index + 2)) {
-        return false;
-      }
-      uint8_t second = static_cast<uint8_t>(value[index + 1]);
-      if ((first == 0xE0 && second < 0xA0) || (first == 0xED && second > 0x9F)) {
-        return false;
-      }
-      index += 3;
-    } else if (first >= 0xF0 && first <= 0xF4) {
-      if (index + 3 >= value.size() || !continuation(index + 1) || !continuation(index + 2) ||
-          !continuation(index + 3)) {
-        return false;
-      }
-      uint8_t second = static_cast<uint8_t>(value[index + 1]);
-      if ((first == 0xF0 && second < 0x90) || (first == 0xF4 && second > 0x8F)) {
-        return false;
-      }
-      index += 4;
-    } else {
-      return false;
-    }
-  }
-  return true;
-}
-
-}  // namespace
 
 std::string GrammarPrinter::PrintRule(const Rule& rule, const SuffixStopInfo* suffix_stop_info) {
   std::string res = rule.name;
@@ -169,16 +124,6 @@ std::string GrammarPrinter::PrintByteString(const GrammarExpr& grammar_expr) {
   for (int i = 0; i < grammar_expr.data_len; ++i) {
     internal_str += static_cast<char>(grammar_expr[i]);
   }
-  if (!IsStrictUTF8(internal_str)) {
-    std::string result = "ByteString(";
-    for (int i = 0; i < grammar_expr.data_len; ++i) {
-      if (i != 0) {
-        result += ", ";
-      }
-      result += std::to_string(grammar_expr[i]);
-    }
-    return result + ")";
-  }
   return "\"" + EscapeString(internal_str) + "\"";
 }
 
@@ -244,6 +189,9 @@ std::string GrammarPrinter::PrintRegex(const GrammarExpr& grammar_expr) {
   std::string result = "Regex(" + PrintString(grammar_->GetRegexString(grammar_expr));
   if (grammar_->GetRegexIsJSONString(grammar_expr)) {
     result += ", json_string=true";
+  }
+  if (grammar_->GetRegexIsByteMode(grammar_expr)) {
+    result += ", byte_mode=true";
   }
   return result + ")";
 }

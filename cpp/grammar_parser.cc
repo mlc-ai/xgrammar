@@ -745,7 +745,6 @@ class EBNFParser {
   int32_t ParseExcludeToken();
   int32_t ParseTokenTagDispatch();
   int32_t ParseRegexMacro();
-  int32_t ParseByteStringMacro();
 
   // Helper functions
 
@@ -798,7 +797,6 @@ const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>>
         {"ExcludeToken", [](EBNFParser* parser) { return parser->ParseExcludeToken(); }},
         {"TokenTagDispatch", [](EBNFParser* parser) { return parser->ParseTokenTagDispatch(); }},
         {"Regex", [](EBNFParser* parser) { return parser->ParseRegexMacro(); }},
-        {"ByteString", [](EBNFParser* parser) { return parser->ParseByteStringMacro(); }},
 };
 
 const EBNFParser::Token& EBNFParser::Peek(int delta) const { return *(current_token_ + delta); }
@@ -1279,45 +1277,28 @@ int32_t EBNFParser::ParseRegexMacro() {
     ReportParseError("Regex pattern must be a string literal", delta_element);
   }
 
-  bool json_string = false;
   for (const auto& [name, _] : args.named_arguments) {
-    if (name != "json_string") {
+    if (name != "json_string" && name != "byte_mode") {
       ReportParseError("Regex does not support the named argument " + name, delta_element);
     }
   }
-  if (auto it = args.named_arguments.find("json_string"); it != args.named_arguments.end()) {
+  auto get_boolean_argument = [&](const std::string& name) {
+    auto it = args.named_arguments.find(name);
+    if (it == args.named_arguments.end()) {
+      return false;
+    }
     auto bool_node = std::get_if<MacroIR::BooleanNode>(it->second.get());
     if (bool_node == nullptr) {
-      ReportParseError("json_string must be a boolean", delta_element);
+      ReportParseError(name + " must be a boolean", delta_element);
     }
-    json_string = bool_node->value;
+    return bool_node->value;
+  };
+  bool json_string = get_boolean_argument("json_string");
+  bool byte_mode = get_boolean_argument("byte_mode");
+  if (json_string && byte_mode) {
+    ReportParseError("Regex does not support json_string together with byte_mode", delta_element);
   }
-  return builder_.AddRegex(pattern_node->value, json_string);
-}
-
-int32_t EBNFParser::ParseByteStringMacro() {
-  Consume();  // Consume ByteString operator
-  auto start = current_token_;
-  auto args = ParseMacroArguments();
-  auto delta_element = start - current_token_;
-
-  if (!args.named_arguments.empty()) {
-    ReportParseError("ByteString does not support named arguments", delta_element);
-  }
-  if (args.arguments.empty()) {
-    ReportParseError("ByteString expects at least one byte", delta_element);
-  }
-
-  std::vector<int32_t> bytes;
-  bytes.reserve(args.arguments.size());
-  for (const auto& argument : args.arguments) {
-    auto integer = std::get_if<MacroIR::IntegerNode>(argument.get());
-    if (integer == nullptr || integer->value < 0 || integer->value > 255) {
-      ReportParseError("ByteString arguments must be integers from 0 through 255", delta_element);
-    }
-    bytes.push_back(static_cast<int32_t>(integer->value));
-  }
-  return builder_.AddByteString(bytes);
+  return builder_.AddRegex(pattern_node->value, json_string, byte_mode);
 }
 
 int32_t EBNFParser::ParseTokenSet() {

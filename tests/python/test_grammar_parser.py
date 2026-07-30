@@ -33,14 +33,12 @@ def test_empty_string():
     assert after == expected
 
 
-def test_byte_string_macro_round_trip_and_matching():
-    grammar = xgr.Grammar.from_ebnf("root ::= ByteString(0, 128, 255)")
-    assert str(grammar) == "root ::= ((ByteString(0, 128, 255)))\n"
+def test_regex_byte_mode_round_trip_and_matching():
+    grammar = xgr.Grammar.from_ebnf(r'root ::= Regex("\\x80[^\\x00-\\x7F]", byte_mode=true)')
+    assert str(grammar) == 'root ::= Regex("\\\\x80[^\\\\x00-\\\\x7F]", byte_mode=true)\n'
     restored = xgr.Grammar.from_ebnf(str(grammar))
     restored_json = xgr.Grammar.deserialize_json(grammar.serialize_json())
-    tokenizer_info = xgr.TokenizerInfo(
-        [b"\x00\x80\xff", b"\x00\x80", b"\xc2\x80\xc3\xbf"], stop_token_ids=[]
-    )
+    tokenizer_info = xgr.TokenizerInfo([b"\x80\xff", b"\x80a", b"\xc2\x80"], stop_token_ids=[])
 
     for candidate in [grammar, restored, restored_json]:
         compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(
@@ -54,34 +52,36 @@ def test_byte_string_macro_round_trip_and_matching():
             assert not accepted or not matcher.is_terminated()
 
 
+def test_regex_byte_mode_differs_from_default_mode():
+    # In byte mode [^\x00-\x7F] matches exactly one raw byte; in the default mode it matches
+    # one full non-ASCII character encoded in UTF-8.
+    byte_grammar = xgr.Grammar.from_ebnf(r'root ::= Regex("[^\\x00-\\x7F]", byte_mode=true)')
+    char_grammar = xgr.Grammar.from_ebnf(r'root ::= Regex("[^\\x00-\\x7F]")')
+    tokenizer_info = xgr.TokenizerInfo([b"\x80", b"\xc2\x80"], stop_token_ids=[])
+
+    def matches(grammar, token_id: int) -> bool:
+        compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar)
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        return matcher.accept_token(token_id) and matcher.is_terminated()
+
+    assert matches(byte_grammar, 0) and not matches(byte_grammar, 1)
+    assert not matches(char_grammar, 0) and matches(char_grammar, 1)
+
+
 @pytest.mark.parametrize(
     "grammar, message",
     [
-        ("root ::= ByteString()", "expects at least one byte"),
-        ('root ::= ByteString("128")', "must be integers from 0 through 255"),
-        ("root ::= ByteString(256)", "must be integers from 0 through 255"),
-        ("root ::= ByteString(128, encoding=1)", "does not support named arguments"),
+        ('root ::= Regex("a", byte_mode=1)', "byte_mode must be a boolean"),
+        (
+            'root ::= Regex("a", json_string=true, byte_mode=true)',
+            "Regex does not support json_string together with byte_mode",
+        ),
+        ('root ::= Regex("a", encoding=true)', "does not support the named argument"),
     ],
 )
-def test_byte_string_macro_errors(grammar: str, message: str):
+def test_regex_byte_mode_errors(grammar: str, message: str):
     with pytest.raises(RuntimeError, match=message):
         xgr.Grammar.from_ebnf(grammar)
-
-
-@pytest.mark.parametrize(
-    "raw_bytes", [[0], [128], [192, 128], [237, 160, 128], [244, 144, 128, 128], [226, 130]]
-)
-def test_byte_string_macro_preserves_non_utf8_sequences(raw_bytes):
-    arguments = ", ".join(str(byte) for byte in raw_bytes)
-    grammar = xgr.Grammar.from_ebnf(f"root ::= ByteString({arguments})")
-    assert f"ByteString({arguments})" in str(grammar)
-    assert str(xgr.Grammar.from_ebnf(str(grammar))) == str(grammar)
-
-
-def test_byte_string_macro_prints_valid_utf8_as_a_string():
-    grammar = xgr.Grammar.from_ebnf("root ::= ByteString(195, 169)")
-    assert str(grammar) == 'root ::= (("\\xe9"))\n'
-    assert str(xgr.Grammar.from_ebnf(str(grammar))) == str(grammar)
 
 
 def test_character_class():

@@ -467,3 +467,70 @@ TEST(XGrammarFSMBuilderTest, TestRegexRepeatZero) {
   EXPECT_TRUE(RegexFSMBuilder::Build("a{3,1}").IsErr());
   EXPECT_TRUE(RegexFSMBuilder::Build("a{1,0}").IsErr());
 }
+
+TEST(XGrammarFSMBuilderTest, TestRegexUnicodeCharacterClass) {
+  // A negated class complements over Unicode codepoints: it matches full multi-byte
+  // characters and rejects standalone invalid UTF-8 bytes.
+  auto fsm_wse = RegexFSMBuilder::Build("[^a]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("b"));
+  EXPECT_TRUE(fsm_wse.AcceptString("é"));
+  EXPECT_TRUE(fsm_wse.AcceptString("你"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\x80"));
+  EXPECT_FALSE(fsm_wse.AcceptString("你好"));
+
+  // '.' matches exactly one character of any UTF-8 length.
+  fsm_wse = RegexFSMBuilder::Build(".").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("你"));
+  EXPECT_FALSE(fsm_wse.AcceptString("你好"));
+
+  // \xHH and \u{...} escapes denote codepoints and are encoded in UTF-8.
+  fsm_wse = RegexFSMBuilder::Build("\\xe9").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("é"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\xe9"));
+  fsm_wse = RegexFSMBuilder::Build("\\u{4f60}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("你"));
+
+  // A multi-byte literal is a single atom for quantifiers.
+  fsm_wse = RegexFSMBuilder::Build("é+").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("éé"));
+  EXPECT_FALSE(fsm_wse.AcceptString("é\xa9"));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexByteMode) {
+  // In byte mode, classes and their complements stay within the 256 byte values.
+  auto fsm_wse = RegexFSMBuilder::Build("[^\\x00-\\x7F]+", /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\x80"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\xff\x80"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+
+  // '.' matches exactly one byte.
+  fsm_wse = RegexFSMBuilder::Build(".", /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\x80"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\n"));
+  EXPECT_FALSE(fsm_wse.AcceptString("é"));
+
+  // \xHH denotes a single raw byte; a non-ASCII literal matches its encoded bytes.
+  fsm_wse = RegexFSMBuilder::Build("\\x80\\xFFé", /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\x80\xff\xc3\xa9"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\x80\xff"));
+
+  // The empty complement never matches anything.
+  fsm_wse = RegexFSMBuilder::Build("[^\\x00-\\xFF]", /*byte_mode=*/true).Unwrap();
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+
+  // Unicode-specific constructs are rejected with clear messages.
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{L}", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\x{80}", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("[é]", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("a^b", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("a$b", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\bword\\b", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("(?=a)", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\1", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\q", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("[a-\\d]", true).IsErr());
+}
