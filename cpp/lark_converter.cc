@@ -1197,38 +1197,6 @@ std::string Trim(std::string value) {
   return value.substr(begin, end - begin);
 }
 
-std::string RewriteRegexDots(const std::string& pattern, bool dot_matches_newline) {
-  if (dot_matches_newline) {
-    return pattern;
-  }
-  std::string result;
-  result.reserve(pattern.size());
-  bool escaped = false;
-  bool in_character_class = false;
-  for (char c : pattern) {
-    if (escaped) {
-      result.push_back(c);
-      escaped = false;
-      continue;
-    }
-    if (c == '\\') {
-      result.push_back(c);
-      escaped = true;
-    } else if (c == '[') {
-      result.push_back(c);
-      in_character_class = true;
-    } else if (c == ']' && in_character_class) {
-      result.push_back(c);
-      in_character_class = false;
-    } else if (c == '.' && !in_character_class) {
-      result += "[^\\n]";
-    } else {
-      result.push_back(c);
-    }
-  }
-  return result;
-}
-
 std::optional<std::string> ParseFixedRegexLiteral(const std::string& pattern) {
   std::string result;
   for (size_t i = 0; i < pattern.size();) {

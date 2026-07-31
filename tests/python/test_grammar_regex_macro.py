@@ -206,6 +206,71 @@ def test_regex_macro_engine_features(ebnf_str: str, input_str: str, accepted: bo
     assert _is_grammar_accept_string(grammar, input_str) == accepted
 
 
+ebnf_str__input_str__accepted__test_regex_macro_flags = [
+    # The i flag folds ASCII letters, like the Lark /.../i literal.
+    ('root ::= Regex("abc", flags="i")', "aBc", True),
+    ('root ::= Regex("abc", flags="i")', "ABC", True),
+    ('root ::= Regex("abc", flags="i")', "abd", False),
+    ('root ::= Regex("[a-d]+", flags="i")', "AbCd", True),
+    ('root ::= Regex("[a-d]+", flags="i")', "E", False),
+    # Only ASCII letters are folded.
+    ('root ::= Regex("Σ", flags="i")', "Σ", True),
+    ('root ::= Regex("Σ", flags="i")', "σ", False),
+    # With the flags argument, '.' follows the standard semantics: no newline unless 's'.
+    ('root ::= Regex("a.b", flags="")', "acb", True),
+    ('root ::= Regex("a.b", flags="")', "a\nb", False),
+    ('root ::= Regex("a.b", flags="s")', "a\nb", True),
+    ('root ::= Regex("a.b", flags="is")', "A\nB", True),
+    ('root ::= Regex("a.b", flags="i")', "A\nB", False),
+    # 'u' is accepted as a no-op: patterns always use Unicode codepoint semantics.
+    ('root ::= Regex("a.b", flags="u")', "a😀b", True),
+    ('root ::= Regex("a.b", flags="u")', "a\nb", False),
+    # Without the flags argument the pattern is used verbatim: '.' matches every codepoint.
+    ('root ::= Regex("a.b")', "a\nb", True),
+    # An escaped dot or a dot inside a character class is not rewritten.
+    (r'root ::= Regex("a\\.b", flags="")', "a.b", True),
+    (r'root ::= Regex("a\\.b", flags="")', "acb", False),
+    ('root ::= Regex("a[.]b", flags="")', "a.b", True),
+    ('root ::= Regex("a[.]b", flags="")', "acb", False),
+    # An inline (?i) prefix combined with flags="i" is not applied twice.
+    ('root ::= Regex("(?i)abc", flags="i")', "ABC", True),
+    ('root ::= Regex("(?i)abc", flags="i")', "abd", False),
+]
+
+
+@pytest.mark.parametrize(
+    "ebnf_str, input_str, accepted", ebnf_str__input_str__accepted__test_regex_macro_flags
+)
+def test_regex_macro_flags(ebnf_str: str, input_str: str, accepted: bool):
+    grammar = xgr.Grammar.from_ebnf(ebnf_str)
+    assert _is_grammar_accept_string(grammar, input_str) == accepted
+
+
+def test_regex_macro_flags_json_string():
+    # flags combines with json_string: the folded letters match, but the JSON-forbidden
+    # characters stay excluded.
+    grammar = xgr.Grammar.from_ebnf(r'root ::= Regex("a[b-d]+", flags="i", json_string=true)')
+    assert _is_grammar_accept_string(grammar, "ABC")
+    assert not _is_grammar_accept_string(grammar, "AE")
+
+    grammar = xgr.Grammar.from_ebnf(r'root ::= Regex(".+", flags="i", json_string=true)')
+    assert _is_grammar_accept_string(grammar, "AbC")
+    assert not _is_grammar_accept_string(grammar, 'a"b')
+
+
+def test_regex_macro_flags_print_round_trip():
+    # The flags are folded into the stored pattern, which survives printing and re-parsing.
+    grammar = xgr.Grammar.from_ebnf('root ::= Regex("a.b", flags="is")')
+    restored = xgr.Grammar.from_ebnf(str(grammar))
+    assert _is_grammar_accept_string(restored, "A\nB")
+    assert not _is_grammar_accept_string(restored, "ab")
+
+    grammar = xgr.Grammar.from_ebnf('root ::= Regex("a.b", flags="")')
+    restored = xgr.Grammar.from_ebnf(str(grammar))
+    assert _is_grammar_accept_string(restored, "acb")
+    assert not _is_grammar_accept_string(restored, "a\nb")
+
+
 def test_regex_macro_case_insensitive_print_round_trip():
     # The (?i) prefix survives printing (the '?' is escaped) and re-parsing.
     grammar = xgr.Grammar.from_ebnf('root ::= Regex("(?i)abc")')
@@ -333,6 +398,9 @@ ebnf_str__expected_error_regex__test_regex_macro_parser_errors = [
     ('root ::= Regex("a", foo=true)', "Regex does not support the named argument foo"),
     ('root ::= Regex("a", json_string="yes")', "json_string must be a boolean"),
     ('root ::= Regex("a", json_string=1)', "json_string must be a boolean"),
+    ('root ::= Regex("a", flags=true)', "flags must be a string"),
+    ('root ::= Regex("a", flags="m")', "regular-expression flag 'm' is not supported"),
+    ('root ::= Regex("a", flags="l")', "regular-expression flag 'l' is not supported"),
 ]
 
 

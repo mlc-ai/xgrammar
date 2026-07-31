@@ -38,6 +38,13 @@ uint32_t CodepointToPackedUTF8(uint32_t codepoint);
 void AddPackedUTF8RangeEdges(FSM& fsm, int from, int to, uint32_t min, uint32_t max);
 
 /*!
+ * \brief Rewrite every unescaped '.' outside character classes to "[^\n]" unless
+ * `dot_matches_newline` is true. Used to implement the standard regex dot semantics (and the
+ * dot-all 's' flag) on top of the regex engine, whose '.' matches every codepoint.
+ */
+std::string RewriteRegexDots(const std::string& pattern, bool dot_matches_newline);
+
+/*!
  * \brief A builder that converts a regex string to a FSM.
  */
 class RegexFSMBuilder {
