@@ -459,6 +459,133 @@ def test_json_schema_style_glm_xml_format(instance: str, is_accepted: bool):
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+# JSONSchemaFormat with style="kimi_k3_xml"
+# (<|open|>argument key="key" type="type"<|sep|>value<|close|>argument<|sep|>)
+#
+# The type attribute is pinned to each declared property's schema type, because the Kimi-K3
+# tool-call parser reads it as a decoding switch: type="string" keeps the value as raw text,
+# any other type JSON-decodes it. A mismatched attribute would therefore change the decoded
+# argument's type.
+kimi_k3_xml_instance_is_accepted = [
+    (
+        '<|open|>argument key="name" type="string"<|sep|>Bob<|close|>argument<|sep|>'
+        '<|open|>argument key="age" type="number"<|sep|>100<|close|>argument<|sep|>',
+        True,
+    ),
+    # Whitespace between argument tags is tolerated.
+    (
+        '<|open|>argument key="name" type="string"<|sep|>Bob<|close|>argument<|sep|>\n'
+        '<|open|>argument key="age" type="number"<|sep|>\t100\n<|close|>argument<|sep|>',
+        True,
+    ),
+    # Raw string values may span lines and contain markup-ish text.
+    (
+        '<|open|>argument key="name" type="string"<|sep|><!DOCTYPE html>\n'
+        "<h1>Hello</h1><|close|>argument<|sep|>"
+        '<|open|>argument key="age" type="number"<|sep|>100<|close|>argument<|sep|>',
+        True,
+    ),
+    # An integer property renders as type="number"; the renderer never emits "integer".
+    (
+        '<|open|>argument key="name" type="string"<|sep|>Bob<|close|>argument<|sep|>'
+        '<|open|>argument key="age" type="integer"<|sep|>100<|close|>argument<|sep|>',
+        False,
+    ),
+    # A string property may not claim a non-string type: the parser would JSON-decode the
+    # body and return a number instead of a string.
+    (
+        '<|open|>argument key="name" type="number"<|sep|>123<|close|>argument<|sep|>'
+        '<|open|>argument key="age" type="number"<|sep|>100<|close|>argument<|sep|>',
+        False,
+    ),
+    # Nor may the integer property claim to be a string.
+    (
+        '<|open|>argument key="name" type="string"<|sep|>Bob<|close|>argument<|sep|>'
+        '<|open|>argument key="age" type="string"<|sep|>100<|close|>argument<|sep|>',
+        False,
+    ),
+    # Missing required property.
+    ('<|open|>argument key="name" type="string"<|sep|>Bob<|close|>argument<|sep|>', False),
+    # Other XML parameter styles are rejected.
+    ('<parameter name="name">Bob</parameter><parameter name="age">100</parameter>', False),
+]
+
+
+@pytest.mark.parametrize("instance, is_accepted", kimi_k3_xml_instance_is_accepted)
+def test_json_schema_style_kimi_k3_xml_format(instance: str, is_accepted: bool):
+    """Test JSONSchemaFormat with style='kimi_k3_xml'."""
+    stag_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+            "required": ["name", "age"],
+        },
+        "style": "kimi_k3_xml",
+    }
+    structural_tag = {"type": "structural_tag", "format": stag_format}
+    stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    grammar_str = str(stag_grammar)
+    assert '<|open|>argument key=\\"' in grammar_str
+    assert "<|close|>argument<|sep|>" in grammar_str
+
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+def test_json_schema_style_kimi_k3_xml_empty_object():
+    """style='kimi_k3_xml' with no properties accepts an empty argument list."""
+    stag_format = {
+        "type": "json_schema",
+        "json_schema": {"type": "object", "properties": {}},
+        "style": "kimi_k3_xml",
+    }
+    check_stag_with_instance(stag_format, "", True)
+    check_stag_with_instance(stag_format, "\n", True)
+
+
+@pytest.mark.parametrize("type_attr", ["string", "number", "integer", "boolean", "object", "array"])
+def test_json_schema_style_kimi_k3_xml_free_form_keys_allow_any_type(type_attr: str):
+    """style='kimi_k3_xml' keeps every type attribute for keys with no declared schema.
+
+    Only declared properties pin the attribute to their schema type. A free-form key (here
+    from an unconstrained schema) may hold any value, so every type name stays legal.
+    """
+    stag_format = {"type": "json_schema", "json_schema": True, "style": "kimi_k3_xml"}
+    check_stag_with_instance(
+        stag_format,
+        f'<|open|>argument key="k" type="{type_attr}"<|sep|>x<|close|>argument<|sep|>',
+        True,
+    )
+
+
+def test_json_schema_style_kimi_k3_xml_escapes_key_attribute():
+    r"""style='kimi_k3_xml' escapes & and " in the key attribute like the K3 renderer.
+
+    The parser matches attribute values as [^"]* and then reverses `&quot;` / `&amp;`, so a
+    raw quote in a key would truncate the attribute, and a key that literally contains
+    `&amp;` would be decoded back into `&`.
+    """
+    stag_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "type": "object",
+            "properties": {'we"ird&key': {"type": "string"}},
+            "required": ['we"ird&key'],
+        },
+        "style": "kimi_k3_xml",
+    }
+    check_stag_with_instance(
+        stag_format,
+        '<|open|>argument key="we&quot;ird&amp;key" type="string"<|sep|>v<|close|>argument<|sep|>',
+        True,
+    )
+    check_stag_with_instance(
+        stag_format,
+        '<|open|>argument key="we"ird&key" type="string"<|sep|>v<|close|>argument<|sep|>',
+        False,
+    )
+
+
 ebnf_grammar_stag_grammar = [
     (
         {
@@ -2587,7 +2714,7 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "style": "not_string"}}',
-        'style must be "json", "qwen_xml", "minimax_xml", "deepseek_xml", or "glm_xml"',
+        'style must be "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml", or "kimi_k3_xml"',
     ),
     # RepeatFormat Errors - illegal min/max
     (

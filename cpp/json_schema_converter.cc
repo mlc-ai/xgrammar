@@ -2453,14 +2453,20 @@ int32_t JSONSchemaConverter::GenerateArray(const ArraySpec& spec, const std::str
   );
 }
 
-int32_t JSONSchemaConverter::FormatPropertyKey(const std::string& key) {
+int32_t JSONSchemaConverter::FormatPropertyKey(
+    const std::string& key, const SchemaSpecPtr& schema
+) {
   return ByteString(picojson::value(key).serialize());
 }
 
 int32_t JSONSchemaConverter::FormatProperty(
-    const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
+    const std::string& key,
+    int32_t value_rule_id,
+    const std::string& rule_name,
+    int64_t idx,
+    const SchemaSpecPtr& schema
 ) {
-  return Sequence({FormatPropertyKey(key), colon_expr_id_, RuleRef(value_rule_id)});
+  return Sequence({FormatPropertyKey(key, schema), colon_expr_id_, RuleRef(value_rule_id)});
 }
 
 int32_t JSONSchemaConverter::FormatOtherProperty(
@@ -2508,7 +2514,9 @@ int32_t JSONSchemaConverter::GetAnyOrderRuleForProperties(
     const auto& property = properties[index];
     int32_t value_rule_id =
         CreateRule(property.schema, rule_name + "_prop_" + std::to_string(index));
-    items.push_back(FormatProperty(property.name, value_rule_id, rule_name, index));
+    items.push_back(
+        FormatProperty(property.name, value_rule_id, rule_name, index, property.schema)
+    );
   }
   if (additional != nullptr) {
     if (additional_property_override.has_value()) {
@@ -2570,9 +2578,9 @@ int32_t JSONSchemaConverter::GetPartialRuleForProperties(
   for (size_t index = 0; index < properties.size(); ++index) {
     int32_t value_rule_id =
         CreateRule(properties[index].schema, rule_name + "_prop_" + std::to_string(index));
-    property_patterns.push_back(
-        FormatProperty(properties[index].name, value_rule_id, rule_name, index)
-    );
+    property_patterns.push_back(FormatProperty(
+        properties[index].name, value_rule_id, rule_name, index, properties[index].schema
+    ));
   }
 
   bool allow_additional = additional != nullptr;
@@ -4038,6 +4046,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"minimax_xml", JSONFormat::kMiniMaxXML},
       {"deepseek_xml", JSONFormat::kDeepSeekXML},
       {"glm_xml", JSONFormat::kGlmXML},
+      {"kimi_k3_xml", JSONFormat::kKimiK3XML},
   };
   auto it = kNameToFormat.find(format);
   if (it == kNameToFormat.end()) {
@@ -4089,7 +4098,8 @@ Grammar JSONSchemaToGrammar(
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
     case JSONFormat::kDeepSeekXML:
-    case JSONFormat::kGlmXML: {
+    case JSONFormat::kGlmXML:
+    case JSONFormat::kKimiK3XML: {
       XMLToolCallingConverter converter(
           indent,
           std::move(separators),
@@ -4170,7 +4180,8 @@ std::string JSONSchemaToEBNF(
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
     case JSONFormat::kDeepSeekXML:
-    case JSONFormat::kGlmXML: {
+    case JSONFormat::kGlmXML:
+    case JSONFormat::kKimiK3XML: {
       XMLToolCallingConverter converter(
           indent,
           separators,
