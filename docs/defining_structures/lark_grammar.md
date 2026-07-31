@@ -146,6 +146,48 @@ start: /a.b/      // accepts "acb", "a😀b"; rejects "a\nb"
 line: /a.b/s      // also accepts "a\nb"
 ```
 
+### Terminal Intersections
+
+The `&` operator intersects two terminal expressions: the result accepts only strings accepted by
+both operands. Every operand must have a regular language that can be represented by a
+finite-state automaton: it may contain regexes, strings, character ranges, groups, repetitions,
+and uppercase terminal references, but no lowercase rule references. Intersections can be used in
+uppercase terminal definitions and directly in lowercase rules, where they behave like terminals.
+
+`&` binds more tightly than `|`, so `A & B | C` means `(A & B) | C`. Use parentheses when an
+alternative should be one operand of an intersection.
+
+```text
+start: IDENTIFIER
+
+IDENTIFIER: ASCII_NAME & NO_LEADING_DIGIT
+ASCII_NAME: /[A-Za-z0-9_]+/
+NO_LEADING_DIGIT: /[A-Za-z_][A-Za-z0-9_]*/
+```
+
+Intersection can be more expensive to compile than an equivalent plain regular expression because
+the compiler constructs the product of the operands' automata. Compilation fails instead of
+growing without bound if the built-in automaton state limit is exceeded.
+
+### Regular-Expression Complements
+
+Prefix `~` complements one terminal expression: it accepts every valid Unicode string that the
+operand rejects, including the empty string when the operand does not match it. The operand
+follows the same rules as an intersection operand. Complements can be used in uppercase terminal
+definitions and directly in lowercase rules, and can be combined with `&` (for example
+`A & ~B` matches the strings in `A` but not in `B`).
+
+```text
+start: WITHOUT_CONTROL
+
+WITHOUT_CONTROL: ~/.*[\x00-\x1F].*/s
+```
+
+Complement construction determinizes the operand's automaton, which can be expensive; compilation
+fails instead of growing without bound if the built-in automaton state limit is exceeded.
+Lowercase rule references, special tokens, and subgrammars cannot be complemented because they
+are not regular terminal expressions.
+
 ### Sequences, Alternatives, and Groups
 
 | Form | Example | Meaning |

@@ -501,6 +501,7 @@ struct Node {
     kNestedLark,
     kSpecialToken,
     kGrammarRef,
+    kIntersection,
     kNot,
   };
 
@@ -894,9 +895,9 @@ class LarkParser {
   Node ParseChoice() {
     Location location = Peek().location;
     std::vector<Node> alternatives;
-    alternatives.push_back(ParseSequence());
+    alternatives.push_back(ParseIntersection());
     while (MatchAlternativeSeparator()) {
-      alternatives.push_back(ParseSequence());
+      alternatives.push_back(ParseIntersection());
     }
     if (alternatives.size() == 1) {
       return std::move(alternatives[0]);
@@ -905,6 +906,23 @@ class LarkParser {
     result.kind = Node::Kind::kChoice;
     result.location = location;
     result.children = std::move(alternatives);
+    return result;
+  }
+
+  Node ParseIntersection() {
+    Location location = Peek().location;
+    std::vector<Node> operands;
+    operands.push_back(ParseSequence());
+    while (Match(TokenType::kAnd)) {
+      operands.push_back(ParseSequence());
+    }
+    if (operands.size() == 1) {
+      return std::move(operands[0]);
+    }
+    Node result;
+    result.kind = Node::Kind::kIntersection;
+    result.location = location;
+    result.children = std::move(operands);
     return result;
   }
 
@@ -933,9 +951,6 @@ class LarkParser {
     }
     if (Match(TokenType::kArrow)) {
       Consume(TokenType::kName, "expected alias name after '->'");
-    }
-    if (Peek().type == TokenType::kAnd) {
-      RaiseLarkError(source_, Peek().location, "terminal intersection '&' is not supported");
     }
     if (Peek().type == TokenType::kIf) {
       RaiseLarkError(source_, Peek().location, "parametric %if conditions are not supported");
@@ -1842,12 +1857,142 @@ class LarkCompiler {
         RaiseLarkError(source_, node.location, "structured %regex is not supported");
       case Node::Kind::kGrammarRef:
         RaiseLarkError(source_, node.location, "named grammars cannot be used in terminals");
+      case Node::Kind::kIntersection:
+        RaiseLarkError(
+            source_, node.location, "nested terminal intersection could not be compiled"
+        );
       case Node::Kind::kNot:
         RaiseLarkError(
             source_, node.location, "regular-expression complement '~' is not supported"
         );
     }
     RaiseLarkError(source_, node.location, "unsupported terminal node");
+  }
+
+  /*! \brief Whether the terminal node contains an intersection or complement anywhere below,
+   * resolving terminal name references. Unknown, invalid or recursive references are reported
+   * by the regular compilation path. */
+  bool ContainsFsmOperation(const Node& node, std::unordered_set<std::string>* visiting) {
+    switch (node.kind) {
+      case Node::Kind::kIntersection:
+      case Node::Kind::kNot:
+        return true;
+      case Node::Kind::kSequence:
+      case Node::Kind::kChoice:
+      case Node::Kind::kRepeat: {
+        for (const Node& child : node.children) {
+          if (ContainsFsmOperation(child, visiting)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      case Node::Kind::kName: {
+        auto definition_it = definition_by_name_.find(node.text);
+        if (definition_it == definition_by_name_.end() || !definition_it->second->is_terminal ||
+            !visiting->insert(node.text).second) {
+          return false;
+        }
+        bool result = ContainsFsmOperation(definition_it->second->body, visiting);
+        visiting->erase(node.text);
+        return result;
+      }
+      default:
+        return false;
+    }
+  }
+
+  /*!
+   * \brief Compile a terminal node into a leaf grammar expression: a regex, or a sequence /
+   * choices / intersection / complement of leaf expressions, containing no rule references.
+   * Such an expression can be used as an intersection or complement operand or a lazy rule
+   * body, and compiles into a single FSM. A subtree without intersections or complements is
+   * converted to one regex expression.
+   */
+  int32_t CompileTerminalLeafExpr(
+      const Node& node, std::unordered_set<std::string>* visiting = nullptr
+  ) {
+    std::unordered_set<std::string> local_visiting;
+    if (visiting == nullptr) {
+      visiting = &local_visiting;
+    }
+    if (!ContainsFsmOperation(node, visiting)) {
+      return builder_.AddRegex(TerminalNodeToRegex(node, visiting));
+    }
+    switch (node.kind) {
+      case Node::Kind::kIntersection: {
+        std::vector<int32_t> operand_expr_ids;
+        operand_expr_ids.reserve(node.children.size());
+        for (const Node& child : node.children) {
+          operand_expr_ids.push_back(CompileTerminalLeafExpr(child, visiting));
+        }
+        return builder_.AddIntersection(operand_expr_ids);
+      }
+      case Node::Kind::kNot:
+        return builder_.AddComplement(CompileTerminalLeafExpr(node.children[0], visiting));
+      case Node::Kind::kSequence: {
+        std::vector<int32_t> element_expr_ids;
+        element_expr_ids.reserve(node.children.size());
+        for (const Node& child : node.children) {
+          element_expr_ids.push_back(CompileTerminalLeafExpr(child, visiting));
+        }
+        return builder_.AddSequence(element_expr_ids);
+      }
+      case Node::Kind::kChoice: {
+        std::vector<int32_t> choice_expr_ids;
+        choice_expr_ids.reserve(node.children.size());
+        for (const Node& child : node.children) {
+          choice_expr_ids.push_back(CompileTerminalLeafExpr(child, visiting));
+        }
+        return builder_.AddChoices(choice_expr_ids);
+      }
+      case Node::Kind::kRepeat: {
+        // A bounded repetition is expanded by duplicating the child expression; an unbounded
+        // one cannot be expanded this way.
+        if (node.max_repeat == -1) {
+          RaiseLarkError(
+              source_,
+              node.location,
+              "unbounded repetition over a terminal intersection or complement is not supported"
+          );
+        }
+        int32_t child_expr_id = CompileTerminalLeafExpr(node.children[0], visiting);
+        std::vector<int32_t> element_expr_ids;
+        element_expr_ids.reserve(node.max_repeat);
+        for (int32_t i = 0; i < node.min_repeat; ++i) {
+          element_expr_ids.push_back(child_expr_id);
+        }
+        if (node.min_repeat < node.max_repeat) {
+          int32_t optional_expr_id = builder_.AddChoices({builder_.AddEmptyStr(), child_expr_id});
+          for (int32_t i = node.min_repeat; i < node.max_repeat; ++i) {
+            element_expr_ids.push_back(optional_expr_id);
+          }
+        }
+        if (element_expr_ids.empty()) {
+          return builder_.AddEmptyStr();
+        }
+        if (element_expr_ids.size() == 1) {
+          return element_expr_ids[0];
+        }
+        return builder_.AddSequence(element_expr_ids);
+      }
+      case Node::Kind::kName: {
+        // ContainsFsmOperation returned true, so the name resolves to a terminal that is not
+        // currently being expanded.
+        auto definition_it = definition_by_name_.find(node.text);
+        XGRAMMAR_DCHECK(
+            definition_it != definition_by_name_.end() && definition_it->second->is_terminal
+        );
+        bool inserted = visiting->insert(node.text).second;
+        XGRAMMAR_DCHECK(inserted);
+        int32_t result = CompileTerminalLeafExpr(definition_it->second->body, visiting);
+        visiting->erase(node.text);
+        return result;
+      }
+      default:
+        XGRAMMAR_LOG(FATAL) << "Unexpected node kind in a terminal intersection or complement";
+        XGRAMMAR_UNREACHABLE();
+    }
   }
 
   const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {
@@ -2034,10 +2179,13 @@ class LarkCompiler {
         int32_t result = builder_.AddRuleRef(root_it->second);
         return append_skip ? AppendSkip(result) : result;
       }
-      case Node::Kind::kNot:
-        RaiseLarkError(
-            source_, node.location, "regular-expression complement '~' is not supported"
-        );
+      case Node::Kind::kIntersection:
+      case Node::Kind::kNot: {
+        // Intersections and complements compile like terminals (into a single FSM), so in a
+        // rule they behave as lexemes and take a trailing skip.
+        int32_t result = CompileTerminalLeafExpr(node);
+        return terminal_mode || !append_skip ? result : AppendSkip(result);
+      }
     }
     RaiseLarkError(source_, node.location, "unsupported grammar node");
   }
@@ -2305,18 +2453,16 @@ class LarkCompiler {
           "lazy regex suffix is only supported on a head used by dynamic dispatch"
       );
     }
-    std::optional<std::string> body_pattern;
-    std::optional<std::string> marker_pattern;
+    std::optional<int32_t> body_leaf_expr;
+    std::optional<int32_t> marker_leaf_expr;
     if (marker != nullptr && (!marker_has_fixed_byte_length || definition.max_tokens.has_value() ||
                               definition.max_chars.has_value())) {
-      body_pattern = TerminalNodeToRegex(definition.body);
-      marker_pattern = TerminalNodeToRegex(*marker);
-      int32_t body_helper_expr = builder_.AddRegex(body_pattern.value());
+      body_leaf_expr = CompileTerminalLeafExpr(definition.body);
+      marker_leaf_expr = CompileTerminalLeafExpr(*marker);
       int32_t body_helper_rule =
-          builder_.AddRuleWithHint(definition.name + "_stop_body", body_helper_expr);
-      int32_t marker_helper_expr = builder_.AddRegex(marker_pattern.value());
+          builder_.AddRuleWithHint(definition.name + "_stop_body", body_leaf_expr.value());
       int32_t marker_helper_rule =
-          builder_.AddRuleWithHint(definition.name + "_stop_marker", marker_helper_expr);
+          builder_.AddRuleWithHint(definition.name + "_stop_marker", marker_leaf_expr.value());
       suffix_stop_info.body_rule_id = body_helper_rule;
       suffix_stop_info.marker_rule_id = marker_helper_rule;
     }
@@ -2329,13 +2475,11 @@ class LarkCompiler {
       // scope, represented by the metadata set above.
       builder_.UpdateLazy(rule_id, true);
       if (marker != nullptr) {
-        if (!body_pattern.has_value()) {
-          body_pattern = TerminalNodeToRegex(definition.body);
-          marker_pattern = TerminalNodeToRegex(*marker);
+        if (!body_leaf_expr.has_value()) {
+          body_leaf_expr = CompileTerminalLeafExpr(definition.body);
+          marker_leaf_expr = CompileTerminalLeafExpr(*marker);
         }
-        return builder_.AddRegex(
-            "(?:" + body_pattern.value() + ")(?:" + marker_pattern.value() + ")"
-        );
+        return builder_.AddSequence({body_leaf_expr.value(), marker_leaf_expr.value()});
       }
       return CompileNode(definition.body, definition.name, true);
     }

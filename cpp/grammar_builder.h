@@ -94,6 +94,19 @@ class GrammarBuilder {
   int32_t AddRegex(const std::string& regex_str, bool json_string = false);
 
   /*!
+   * \brief Add a GrammarExpr for the intersection of the operand languages. Each operand must
+   * compile into a leaf FSM without rule references; GrammarFSMBuilder builds and intersects
+   * the operand automata.
+   */
+  int32_t AddIntersection(const std::vector<int32_t>& operand_expr_ids);
+
+  /*!
+   * \brief Add a GrammarExpr for the complement of the operand language with respect to all
+   * valid UTF-8 strings. The operand must compile into a leaf FSM without rule references.
+   */
+  int32_t AddComplement(int32_t operand_expr_id);
+
+  /*!
    * \brief Add a GrammarExpr for a character class.
    * \param elements A vector of CharacterClassElement, each containing a lower and a upper bound.
    * \param is_negative Whether the character class is negated.

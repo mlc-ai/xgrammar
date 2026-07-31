@@ -282,6 +282,243 @@ TEST(XGrammarFSMTest, FunctionTest) {
   std::cout << "--------- Function Test Passed! -----------" << std::endl;
 }
 
+TEST(XGrammarFSMTest, IntersectionStateLimit) {
+  FSM lhs_fsm(2);
+  lhs_fsm.AddEdge(0, 1, 'a', 'a');
+  lhs_fsm.AddEdge(0, 0, 'b', 'b');
+  lhs_fsm.AddEdge(1, 0, 'a', 'a');
+  lhs_fsm.AddEdge(1, 1, 'b', 'b');
+  const FSMWithStartEnd lhs(lhs_fsm, 0, {0}, true);
+
+  FSM rhs_fsm(2);
+  rhs_fsm.AddEdge(0, 0, 'a', 'a');
+  rhs_fsm.AddEdge(0, 1, 'b', 'b');
+  rhs_fsm.AddEdge(1, 1, 'a', 'a');
+  rhs_fsm.AddEdge(1, 0, 'b', 'b');
+  const FSMWithStartEnd rhs(rhs_fsm, 0, {0}, true);
+
+  auto limited = FSMWithStartEnd::Intersect(lhs, rhs, 3);
+  ASSERT_TRUE(limited.IsErr());
+  EXPECT_EQ(
+      std::move(limited).UnwrapErr().what(),
+      std::string("The number of states in the intersection FSM exceeds the limit of 3")
+  );
+
+  auto sufficient = FSMWithStartEnd::Intersect(lhs, rhs, 4);
+  ASSERT_TRUE(sufficient.IsOk());
+  auto result = std::move(sufficient).Unwrap();
+  EXPECT_TRUE(result.AcceptString(""));
+  EXPECT_TRUE(result.AcceptString("aabb"));
+  EXPECT_FALSE(result.AcceptString("a"));
+  EXPECT_FALSE(result.AcceptString("b"));
+}
+
+TEST(XGrammarFSMTest, IntersectNfaExhaustiveEquivalence) {
+  // Intersect runs the product construction directly on NFAs with epsilon edges. Check the
+  // defining property of intersection exhaustively: for every pair of automata and every string
+  // over {a, b, c} up to length 6, the product accepts iff both operands accept.
+  std::vector<FSMWithStartEnd> fsms;
+  const std::vector<std::string> regexes = {
+      "a*",
+      "a+",
+      "(a|b)(b|c)",
+      "(a|bb)*",
+      "a*b*c*",
+      "(ab)+",
+      "[a-b]+",
+      "[b-c]+",
+      "((a|b)*c)+",
+      "a{2,4}",
+      "abc|ab|a",
+      "(a|b|c)*b(a|b|c)*",
+  };
+  for (const auto& regex : regexes) {
+    fsms.push_back(RegexFSMBuilder::Build(regex).Unwrap());
+  }
+  // Concat and Union introduce extra epsilon edges beyond what the regex builder produces.
+  fsms.push_back(FSMWithStartEnd::Concat(
+      {RegexFSMBuilder::Build("b+").Unwrap(), RegexFSMBuilder::Build("c").Unwrap()}
+  ));
+  fsms.push_back(FSMWithStartEnd::Concat(
+      {RegexFSMBuilder::Build("a*").Unwrap(), RegexFSMBuilder::Build("b*").Unwrap()}
+  ));
+  fsms.push_back(FSMWithStartEnd::Union(
+      {RegexFSMBuilder::Build("ab").Unwrap(), RegexFSMBuilder::Build("(a|b)+c").Unwrap()}
+  ));
+
+  std::vector<std::string> strings = {""};
+  size_t previous_begin = 0;
+  for (int length = 1; length <= 6; ++length) {
+    size_t previous_end = strings.size();
+    for (size_t i = previous_begin; i < previous_end; ++i) {
+      for (char character : {'a', 'b', 'c'}) {
+        strings.push_back(strings[i] + character);
+      }
+    }
+    previous_begin = previous_end;
+  }
+
+  for (size_t i = 0; i < fsms.size(); ++i) {
+    for (size_t j = 0; j < fsms.size(); ++j) {
+      auto product_result = FSMWithStartEnd::Intersect(fsms[i], fsms[j]);
+      ASSERT_TRUE(product_result.IsOk()) << "pair (" << i << ", " << j << ")";
+      auto product = std::move(product_result).Unwrap();
+      for (const auto& value : strings) {
+        bool expected = fsms[i].AcceptString(value) && fsms[j].AcceptString(value);
+        EXPECT_EQ(product.AcceptString(value), expected)
+            << "pair (" << i << ", " << j << "), string \"" << value << "\"";
+      }
+    }
+  }
+}
+
+TEST(XGrammarFSMTest, IntersectEpsilonEdgeCases) {
+  // Epsilon cycle between the start and the state carrying the only character edge. Language: a.
+  FSM cycle_fsm(3);
+  cycle_fsm.AddEpsilonEdge(0, 1);
+  cycle_fsm.AddEpsilonEdge(1, 0);
+  cycle_fsm.AddEdge(1, 2, 'a', 'a');
+  const FSMWithStartEnd cycle(cycle_fsm, 0, {2}, false);
+
+  FSM ab_fsm(2);
+  ab_fsm.AddEdge(0, 1, 'a', 'b');
+  const FSMWithStartEnd ab(ab_fsm, 0, {1}, true);  // Language: a|b.
+
+  auto cycle_and_ab = std::move(FSMWithStartEnd::Intersect(cycle, ab)).Unwrap();
+  EXPECT_TRUE(cycle_and_ab.AcceptString("a"));
+  EXPECT_FALSE(cycle_and_ab.AcceptString(""));
+  EXPECT_FALSE(cycle_and_ab.AcceptString("b"));
+  EXPECT_FALSE(cycle_and_ab.AcceptString("aa"));
+
+  // The end state is reachable from the start through a pure epsilon chain. Language: "" | a.
+  FSM chain_fsm(3);
+  chain_fsm.AddEpsilonEdge(0, 1);
+  chain_fsm.AddEpsilonEdge(1, 2);
+  chain_fsm.AddEdge(0, 2, 'a', 'a');
+  const FSMWithStartEnd chain(chain_fsm, 0, {2}, false);
+
+  auto chain_and_astar =
+      std::move(FSMWithStartEnd::Intersect(chain, RegexFSMBuilder::Build("a*").Unwrap())).Unwrap();
+  EXPECT_TRUE(chain_and_astar.AcceptString(""));
+  EXPECT_TRUE(chain_and_astar.AcceptString("a"));
+  EXPECT_FALSE(chain_and_astar.AcceptString("aa"));
+
+  auto chain_and_aplus =
+      std::move(FSMWithStartEnd::Intersect(chain, RegexFSMBuilder::Build("a+").Unwrap())).Unwrap();
+  EXPECT_FALSE(chain_and_aplus.AcceptString(""));
+  EXPECT_TRUE(chain_and_aplus.AcceptString("a"));
+  EXPECT_FALSE(chain_and_aplus.AcceptString("aa"));
+
+  // Both operands have epsilon edges that must interleave in the product. Languages: a*b and
+  // (ab | b), so the intersection is exactly { b, ab }.
+  auto both_epsilon =
+      std::move(
+          FSMWithStartEnd::Intersect(
+              FSMWithStartEnd::Concat(
+                  {RegexFSMBuilder::Build("a*").Unwrap(), RegexFSMBuilder::Build("b").Unwrap()}
+              ),
+              FSMWithStartEnd::Union(
+                  {RegexFSMBuilder::Build("ab").Unwrap(), RegexFSMBuilder::Build("b").Unwrap()}
+              )
+          )
+      )
+          .Unwrap();
+  EXPECT_TRUE(both_epsilon.AcceptString("b"));
+  EXPECT_TRUE(both_epsilon.AcceptString("ab"));
+  EXPECT_FALSE(both_epsilon.AcceptString(""));
+  EXPECT_FALSE(both_epsilon.AcceptString("a"));
+  EXPECT_FALSE(both_epsilon.AcceptString("aab"));
+
+  // Empty intersection: the operands share no string.
+  auto empty =
+      std::move(FSMWithStartEnd::Intersect(
+                    RegexFSMBuilder::Build("a{2}").Unwrap(), RegexFSMBuilder::Build("a{3}").Unwrap()
+                ))
+          .Unwrap();
+  for (const std::string& value : std::vector<std::string>{"", "a", "aa", "aaa", "aaaa"}) {
+    EXPECT_FALSE(empty.AcceptString(value)) << "string \"" << value << "\"";
+  }
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesKeepsStartStateSeparate) {
+  // Regression test: state 1 (the start) and state 4 have identical incoming edges (a single
+  // epsilon edge from state 0), but the start state is active without taking any edge, so
+  // merging them would give the start state the 'c' edge and wrongly accept "c". The automaton
+  // is the shape the NFA product construction produces for /b+/ "c" & /b+c/. Language: b+c.
+  FSM fsm(6);
+  fsm.AddEpsilonEdge(0, 1);
+  fsm.AddEpsilonEdge(0, 2);
+  fsm.AddEpsilonEdge(0, 3);
+  fsm.AddEpsilonEdge(0, 4);
+  fsm.AddEdge(1, 0, 'b', 'b');
+  fsm.AddEdge(4, 5, 'c', 'c');
+  const FSMWithStartEnd original(fsm, 1, {5}, false);
+  auto merged = original.MergeEquivalentStates();
+
+  for (const std::string& value : std::vector<std::string>{"bc", "bbc", "bbbc"}) {
+    EXPECT_TRUE(original.AcceptString(value)) << "string \"" << value << "\"";
+    EXPECT_TRUE(merged.AcceptString(value)) << "string \"" << value << "\"";
+  }
+  for (const std::string& value : std::vector<std::string>{"", "c", "b", "cc", "cb", "bcb"}) {
+    EXPECT_FALSE(original.AcceptString(value)) << "string \"" << value << "\"";
+    EXPECT_FALSE(merged.AcceptString(value)) << "string \"" << value << "\"";
+  }
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesDoesNotChainDifferentRules) {
+  // Regression test: states 1 and 2 have identical incoming edges, so the same-incoming-edges
+  // rule merges them; state 2 and state 4 are both dead states (no successors, not accepting),
+  // so the no-successor rule merges them. Chaining both merges through the union-find would put
+  // the live state 1 and state 4 in one class, giving state 3 (predecessor of 4) an epsilon
+  // path back to the 'a' edge and wrongly accepting "aab". Language: ab.
+  FSM fsm(6);
+  fsm.AddEpsilonEdge(0, 1);
+  fsm.AddEpsilonEdge(0, 2);
+  fsm.AddEdge(1, 3, 'a', 'a');
+  fsm.AddEpsilonEdge(3, 4);
+  fsm.AddEdge(3, 5, 'b', 'b');
+  const FSMWithStartEnd original(fsm, 0, {5}, false);
+  auto merged = original.MergeEquivalentStates();
+
+  EXPECT_TRUE(original.AcceptString("ab"));
+  EXPECT_TRUE(merged.AcceptString("ab"));
+  for (const std::string& value : std::vector<std::string>{"", "a", "b", "aab", "abb", "aa"}) {
+    EXPECT_FALSE(original.AcceptString(value)) << "string \"" << value << "\"";
+    EXPECT_FALSE(merged.AcceptString(value)) << "string \"" << value << "\"";
+  }
+}
+
+TEST(XGrammarFSMTest, IntersectResultSupportsDownstreamOperations) {
+  // The product is an NFA (possibly with epsilon edges), so downstream operations that
+  // determinize must still work on it.
+  auto product = std::move(FSMWithStartEnd::Intersect(
+                               RegexFSMBuilder::Build("a*b").Unwrap(),
+                               RegexFSMBuilder::Build("(a|b)+").Unwrap()
+                           ))
+                     .Unwrap();  // Language: a*b.
+
+  auto dfa = std::move(product.ToDFA()).Unwrap();
+  EXPECT_TRUE(dfa.AcceptString("b"));
+  EXPECT_TRUE(dfa.AcceptString("aab"));
+  EXPECT_FALSE(dfa.AcceptString(""));
+  EXPECT_FALSE(dfa.AcceptString("ba"));
+
+  auto complement = std::move(product.Not()).Unwrap();
+  EXPECT_FALSE(complement.AcceptString("b"));
+  EXPECT_FALSE(complement.AcceptString("aab"));
+  EXPECT_TRUE(complement.AcceptString(""));
+  EXPECT_TRUE(complement.AcceptString("a"));
+  EXPECT_TRUE(complement.AcceptString("ba"));
+
+  auto chained =
+      std::move(FSMWithStartEnd::Intersect(product, RegexFSMBuilder::Build("b|ab").Unwrap()))
+          .Unwrap();  // Language: { b, ab }.
+  EXPECT_TRUE(chained.AcceptString("b"));
+  EXPECT_TRUE(chained.AcceptString("ab"));
+  EXPECT_FALSE(chained.AcceptString(""));
+  EXPECT_FALSE(chained.AcceptString("aab"));
+}
+
 TEST(XGrammarFSMTest, EfficiencyTest) {
   std::cout << "--------- Efficiency Test Starts! -----------" << std::endl;
   // i.e ([a-z]0123456789){10}. Use this way to test the performance.

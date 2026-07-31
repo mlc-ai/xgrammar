@@ -1,5 +1,7 @@
+import itertools
 import json
-from typing import Optional, Sequence
+import re
+from typing import List, Optional, Sequence
 
 import pytest
 
@@ -74,6 +76,348 @@ def _assert_lark_error(
     assert "Lark error at line " in error
     assert ", column " in error
     return error
+
+
+def test_lark_terminal_intersection() -> None:
+    _assert_language(
+        """
+        start: INTERSECTION
+        INTERSECTION: LOWER & ABC
+        LOWER: /[a-z]+/
+        ABC: /[abcABC]+/
+        """,
+        ["a", "abc", "bbb"],
+        ["", "A", "d", "1"],
+    )
+
+
+@pytest.mark.parametrize(
+    "terminal, accepted, rejected",
+    [
+        pytest.param(
+            "/[a-z]+/ & /[abcABC]+/", ["a", "abc", "bbb"], ["", "A", "d", "1"], id="direct-regexes"
+        ),
+        pytest.param(
+            "/[ab]+/ | /[cd]+/ & /[def]+/",
+            ["a", "ab", "d", "dd"],
+            ["", "c", "e", "f"],
+            id="intersection-binds-tighter-than-choice",
+        ),
+        pytest.param(
+            "(/[abf]+/ | /[cd]+/) & /[def]+/",
+            ["d", "f"],
+            ["", "a", "b", "c", "e"],
+            id="parenthesized-choice",
+        ),
+        pytest.param(
+            "/[abc]/ & /[bcd]/ & /[cde]/",
+            ["c"],
+            ["", "a", "b", "d", "e"],
+            id="chained-intersection",
+        ),
+        pytest.param("/a*/ & /a+/", ["a", "aa"], ["", "b"], id="empty-string-boundary"),
+        pytest.param("/a/? & /a{2}/", [], ["", "a", "aa"], id="empty-language"),
+        pytest.param(
+            "/a/ /b/ & /b/", [], ["", "a", "b", "ab", "abb"], id="sequence-is-one-operand"
+        ),
+        pytest.param(
+            # Regression test: the concatenation's epsilon edges once made the product NFA's
+            # start state merge with a state that reaches the end, wrongly accepting "x".
+            '/[b]+/ "x" & /b+x/',
+            ["bx", "bbx"],
+            ["", "x", "b", "ax"],
+            id="concatenation-with-epsilon-edges",
+        ),
+        pytest.param("/.+/ & /你好/", ["你好"], ["", "你", "您好"], id="unicode"),
+        pytest.param(
+            "/./s & /./s",
+            [
+                "\x7f",
+                "\u0080",
+                "\u07ff",
+                "\u0800",
+                "\ud7ff",
+                "\ue000",
+                "\uffff",
+                "\U00010000",
+                "\U0010ffff",
+            ],
+            ["", "ab"],
+            id="utf8-boundaries",
+        ),
+        pytest.param(
+            "/(ab|cd)+/ & /.*d/", ["cd", "abcd", "cdcd"], ["", "ab", "abc"], id="repeated-group"
+        ),
+        pytest.param(
+            "/a{2,5}/ & /a{3,}/",
+            ["aaa", "aaaa", "aaaaa"],
+            ["", "a", "aa", "aaaaaa"],
+            id="bounded-repetition",
+        ),
+        pytest.param(
+            "/[α-ω]+/ & /[βγ]+/",
+            ["β", "γ", "βγ"],
+            ["", "α", "δ", "A"],
+            id="unicode-character-class",
+        ),
+        pytest.param(
+            "/a*/ /b*/ & /ab?/",
+            ["a", "ab"],
+            ["", "b", "aa", "abb", "ba"],
+            id="nullable-concatenation",
+        ),
+        pytest.param(
+            "(/a/ | /b/) (/b/ | /c/) & /ab|bc/",
+            ["ab", "bc"],
+            ["", "ac", "bb", "a", "b", "abc"],
+            id="choice-concatenation",
+        ),
+        pytest.param(
+            "/(ab)+/ /c/ & /ababc/",
+            ["ababc"],
+            ["", "abc", "ababab", "ababcc"],
+            id="repeated-group-concatenation",
+        ),
+        pytest.param(
+            '"ab" /c*/ & /abc/', ["abc"], ["", "ab", "abcc", "bc"], id="literal-concatenation"
+        ),
+        pytest.param("/a*/ & /b*/", [""], ["a", "b", "ab", "ba"], id="only-empty-string-in-common"),
+        pytest.param(
+            '/你+/ "好" & /你你?好/',
+            ["你好", "你你好"],
+            ["", "好", "你你你好", "你"],
+            id="unicode-concatenation",
+        ),
+        pytest.param(
+            "/[ab]/ /[bc]/ /[cd]/ & /abc|bcd|bbb/",
+            ["abc", "bcd"],
+            ["", "bbb", "acd", "abcd", "ab"],
+            id="three-part-concatenation",
+        ),
+        pytest.param(
+            "(/a+/ /b/ | /c/) & /a{2}b|c/",
+            ["aab", "c"],
+            ["", "ab", "aaab", "cc", "aabc"],
+            id="choice-of-concatenations",
+        ),
+        pytest.param(
+            "/a?/ /a?/ /b/ & /a*b/",
+            ["b", "ab", "aab"],
+            ["", "a", "aaab", "ba"],
+            id="stacked-optional-concatenation",
+        ),
+    ],
+)
+def test_lark_terminal_intersection_semantics(
+    terminal: str, accepted: Sequence[str], rejected: Sequence[str]
+) -> None:
+    _assert_language(f"start: INTERSECTION\nINTERSECTION: {terminal}", accepted, rejected)
+
+
+def test_lark_intersection_in_rule() -> None:
+    # An intersection compiles like a terminal, so it can also be used directly in a rule.
+    _assert_language("start: /[a-z]+/ & /[abcABC]+/", ["a", "abc", "bbb"], ["", "A", "d", "1"])
+
+
+def test_lark_intersection_operands_cannot_reference_rules() -> None:
+    _assert_lark_error(
+        """
+        start: lower & abc
+        lower: /[a-z]+/
+        abc: /[abcABC]+/
+        """,
+        "terminal cannot reference rule 'lower'",
+    )
+
+
+def test_lark_terminal_intersection_nested_reference() -> None:
+    grammar = """
+        start: WRAPPED
+        WRAPPED: BASE "x" & /b+x/
+        BASE: /[ab]+/ & /[bc]+/
+    """
+    _assert_language(grammar, ["bx", "bbx"], ["", "ax", "bcx", "x"])
+
+
+def _all_strings_up_to_length(alphabet: str, max_length: int) -> List[str]:
+    return [
+        "".join(characters)
+        for length in range(max_length + 1)
+        for characters in itertools.product(alphabet, repeat=length)
+    ]
+
+
+# These regexes only use syntax whose semantics is identical in xgrammar and Python's re module,
+# so re.fullmatch can serve as the reference implementation.
+_INTERSECTION_PARITY_REGEX_PAIRS = [
+    ("a*", "a+"),
+    ("(a|b)(b|c)", "(a|b)(b|c)"),
+    ("a*b*c*", "(ab)+c?"),
+    ("(a|bb)*", "[ab]{2,4}"),
+    ("[ab]+", "[bc]+"),
+    ("((a|b)*c)+", "[abc]*c"),
+    ("a{2,4}", "a{3,}"),
+    ("abc|ab|a", "[abc]*b[abc]*"),
+    ("(ab|ba)+", "[ab]{4}"),
+    ("b+c", "[bc]+"),
+    ("a?b?c?", "[abc]{2}"),
+    ("(a*b)+", "[ab]*bb?"),
+]
+
+
+@pytest.mark.parametrize(("left", "right"), _INTERSECTION_PARITY_REGEX_PAIRS)
+def test_lark_intersection_exhaustive_against_python_re(left: str, right: str) -> None:
+    # Exhaustively check the defining property of intersection on every string over {a, b, c}
+    # up to length 5, using Python's re module as the reference.
+    compiled = _compile_lark(f"start: /{left}/ & /{right}/")
+    for value in _all_strings_up_to_length("abc", 5):
+        expected = bool(re.fullmatch(left, value)) and bool(re.fullmatch(right, value))
+        assert _matches_string(compiled, value) == expected, repr(value)
+
+
+@pytest.mark.parametrize(("left", "right"), _INTERSECTION_PARITY_REGEX_PAIRS)
+def test_lark_intersection_with_complement_exhaustive_against_python_re(
+    left: str, right: str
+) -> None:
+    # A & ~B is the set difference; every string over {a, b, c} is valid UTF-8, so the
+    # complement's UTF-8 restriction does not affect the reference.
+    compiled = _compile_lark(f"start: /{left}/ & ~/{right}/")
+    for value in _all_strings_up_to_length("abc", 5):
+        expected = bool(re.fullmatch(left, value)) and not re.fullmatch(right, value)
+        assert _matches_string(compiled, value) == expected, repr(value)
+
+
+@pytest.mark.parametrize(
+    "operand",
+    ["a*", "(a|b)(b|c)", "a*b*c*", "(ab|ba)+", "abc|ab|a", "[abc]*b[abc]*", "a{2,4}", "(a*b)+"],
+)
+def test_lark_complement_exhaustive_against_python_re(operand: str) -> None:
+    compiled = _compile_lark(f"start: ~/{operand}/")
+    for value in _all_strings_up_to_length("abc", 5):
+        expected = not re.fullmatch(operand, value)
+        assert _matches_string(compiled, value) == expected, repr(value)
+
+
+def test_lark_terminal_intersection_does_not_insert_ignore() -> None:
+    grammar = """
+        %ignore / +/
+        start: PHRASE "!"
+        PHRASE: /a b/ & /a b/
+    """
+    _assert_language(grammar, ["a b!", "a b !"], ["ab!", "a  b!"])
+
+
+def test_lark_terminal_intersection_round_trip() -> None:
+    grammar = xgr.Grammar.from_lark(
+        """
+        start: VALUE
+        VALUE: /.+/ & /你好|您好/
+        """
+    )
+    recovered = xgr.Grammar.deserialize_json(grammar.serialize_json())
+    reparsed = xgr.Grammar.from_ebnf(str(grammar))
+    for candidate in [grammar, recovered, reparsed]:
+        _assert_grammar_language(candidate, ["你好", "您好"], ["", "你", "大家好"])
+
+
+def test_lark_terminal_intersection_bounded_group_repetition() -> None:
+    _assert_language(
+        "start: PAIR\nPAIR: (/[abc]/ & /[bcd]/){1,2}",
+        ["b", "c", "bb", "bc", "cb", "cc"],
+        ["", "a", "d", "bbb"],
+    )
+
+
+def test_lark_terminal_intersection_unbounded_group_repetition() -> None:
+    # In a normal rule the intersection is hoisted into a helper rule, so unbounded repetition
+    # over it is supported through rule references.
+    _assert_language(
+        "start: LOOP\nLOOP: (/[ab]/ & /[bc]/)+", ["b", "bb", "bbb"], ["", "a", "c", "ab", "bc"]
+    )
+
+
+def test_lark_suffix_marker_with_unbounded_intersection_repetition_is_rejected() -> None:
+    # A suffix marker must compile into a single leaf FSM, where unbounded repetition over an
+    # intersection cannot be expanded.
+    _assert_lark_error(
+        """
+        start: head "z"
+        head[suffix=END]: /[a-z]*/
+        END: (/e.d/ & /.n./)+
+        """,
+        "unbounded repetition over a terminal intersection or complement is not supported",
+    )
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_marker_with_intersection(attribute: str) -> None:
+    grammar = f"""
+        start: head "z"
+        head[{attribute}=END]: /[a-z]*/
+        END: /e.d/ & /.n./
+    """
+    _assert_language(grammar, ["endz", "abcendz"], ["", "z", "abcz", "abcend", "abcendendz"])
+
+
+@pytest.mark.parametrize(
+    "expression, accepted, rejected",
+    [
+        pytest.param("~/[ab]+/", ["", "c", "ac", "你好"], ["a", "b", "aa", "abba"], id="regex"),
+        pytest.param("~(/a/ | /b/)", ["", "ab", "c", "你"], ["a", "b"], id="grouped-choice"),
+        pytest.param("~TOKEN", ["", "a", "abc", "🙂"], ["ab", "cd"], id="terminal-reference"),
+        pytest.param("~(/a/+)", ["", "b", "ab", "你好"], ["a", "aa", "aaa"], id="repeated-group"),
+        pytest.param("~/你好/", ["", "你", "您好", "x"], ["你好"], id="unicode-literal"),
+        pytest.param(
+            "~/./s", ["", "ab", "你好"], ["a", "\n", "你", "🙂"], id="dotall-single-codepoint"
+        ),
+        pytest.param("~/.*/s", [], ["", "a", "\n", "你", "🙂", "ab"], id="universal-language"),
+        pytest.param("~(~/ab/)", ["ab"], ["", "a", "abc"], id="double-complement"),
+        pytest.param(
+            "/[a-z]+/ & ~/(\\n|.)*bad(\\n|.)*/",
+            ["good", "b", "bda"],
+            ["", "bad", "xbady", "badly", "BAD"],
+            id="difference-via-intersection",
+        ),
+    ],
+)
+def test_lark_regex_complement(
+    expression: str, accepted: Sequence[str], rejected: Sequence[str]
+) -> None:
+    grammar = f"start: {expression}\nTOKEN: /ab|cd/"
+    _assert_language(grammar, accepted, rejected)
+
+
+def test_lark_regex_complement_in_terminal_and_with_ignore() -> None:
+    grammar = """
+        %ignore / +/
+        start: VALUE "!"
+        VALUE: ~FORBIDDEN
+        FORBIDDEN: /bad|worse/
+    """
+    _assert_language(
+        grammar, ["!", "ok!", "ok !", "badly!", "bad !", "worse !", "你好 !"], ["bad!", "worse!"]
+    )
+
+
+def test_lark_regex_complement_round_trip() -> None:
+    grammar = xgr.Grammar.from_lark("start: ~/你好|good/")
+    for candidate in (
+        grammar,
+        xgr.Grammar.from_ebnf(str(grammar)),
+        xgr.Grammar.deserialize_json(grammar.serialize_json()),
+    ):
+        _assert_grammar_language(candidate, ["", "你", "goodbye", "bad", "🙂"], ["你好", "good"])
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_lark_suffix_stop_body_with_complement(attribute: str) -> None:
+    # The body of a suffix/stop rule must compile into a single leaf FSM; a complement body
+    # exercises that path.
+    grammar = f"""
+        start: head "z"
+        head[{attribute}="!"]: ~/(\\n|.)*bad(\\n|.)*/
+    """
+    _assert_language(grammar, ["!z", "ok!z", "b!z"], ["bad!z", "!", "z"])
 
 
 @pytest.mark.parametrize(
@@ -935,9 +1279,10 @@ def test_lark_large_choice_grammar() -> None:
             id="parametric-if",
         ),
         pytest.param(
-            'start: A & B\nA: "a"\nB: "b"', "intersection '&' is not supported", id="intersection"
+            'start: ~item\nitem: "a"',
+            "terminal cannot reference rule 'item'",
+            id="complement-rule-reference",
         ),
-        pytest.param("start: ~/[a]/", "complement '~' is not supported", id="complement"),
         pytest.param(
             'start: "\\u00c4"i',
             "case-insensitive string literals currently support ASCII characters only",

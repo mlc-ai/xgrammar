@@ -155,6 +155,10 @@ class GrammarFunctor {
         return VisitTokenTagDispatch(grammar_expr);
       case GrammarExprType::kRegex:
         return VisitRegex(grammar_expr);
+      case GrammarExprType::kIntersect:
+        return VisitIntersection(grammar_expr);
+      case GrammarExprType::kComplement:
+        return VisitComplement(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
         XGRAMMAR_UNREACHABLE();
@@ -251,6 +255,35 @@ class GrammarFunctor {
 
   /*! \brief Visit a regex GrammarExpr. It is a leaf: the pattern string is carried as-is. */
   virtual T VisitRegex(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
+
+  /*! \brief Visit an intersection GrammarExpr. Its children are operand expr ids. */
+  virtual T VisitIntersection(const GrammarExpr& grammar_expr) {
+    if constexpr (std::is_same<T, void>::value) {
+      for (int32_t operand_expr_id : grammar_expr) {
+        VisitExpr(operand_expr_id);
+      }
+    } else if constexpr (std::is_same<T, int32_t>::value) {
+      std::vector<int32_t> operand_expr_ids;
+      operand_expr_ids.reserve(grammar_expr.size());
+      for (int32_t operand_expr_id : grammar_expr) {
+        operand_expr_ids.push_back(VisitExpr(operand_expr_id));
+      }
+      return builder_->AddIntersection(operand_expr_ids);
+    } else {
+      return T();
+    }
+  }
+
+  /*! \brief Visit a complement GrammarExpr. Its only child is the operand expr id. */
+  virtual T VisitComplement(const GrammarExpr& grammar_expr) {
+    if constexpr (std::is_same<T, void>::value) {
+      VisitExpr(grammar_expr[0]);
+    } else if constexpr (std::is_same<T, int32_t>::value) {
+      return builder_->AddComplement(VisitExpr(grammar_expr[0]));
+    } else {
+      return T();
+    }
+  }
 
   /*! \brief The grammar to visit or mutate. */
   Grammar base_grammar_{NullObj{}};
@@ -401,6 +434,18 @@ class GrammarFSMBuilder {
    * the characters in JSONStringForbiddenChars() are excluded from every character match.
    */
   static Result<FSMWithStartEnd> Regex(const std::string& regex, bool json_string = false);
+  /*!
+   * \brief Build the automaton of an intersection expr: compile each operand into a leaf FSM
+   * and intersect them. Returns the error message on failure (e.g. an operand contains rule
+   * references, or the product automaton exceeds the state limit).
+   */
+  static Result<FSMWithStartEnd> Intersect(const GrammarExpr& expr, const Grammar& grammar);
+  /*!
+   * \brief Build the automaton of a complement expr: compile the operand into a leaf FSM,
+   * complement it over the byte alphabet, and intersect the result with the valid-UTF-8
+   * universe. Returns the error message on failure.
+   */
+  static Result<FSMWithStartEnd> Complement(const GrammarExpr& expr, const Grammar& grammar);
   /*! \brief The characters that must be escaped inside a JSON string literal: the control
    * characters 0x00-0x1F, the quote '"' and the backslash '\\'. */
   static const std::bitset<256>& JSONStringForbiddenChars();
