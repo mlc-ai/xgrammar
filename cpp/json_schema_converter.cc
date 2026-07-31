@@ -2195,12 +2195,6 @@ int32_t JSONSchemaConverter::RegexExpression(
     const std::string& regex, bool json_string, bool force_cfg_expansion
 ) {
   bool can_use_fsm = !force_cfg_expansion;
-  if (json_string) {
-    can_use_fsm =
-        can_use_fsm && std::all_of(regex.begin(), regex.end(), [](unsigned char character) {
-          return character >= 0x20 && character <= 0x7e;
-        });
-  }
   if (can_use_fsm) {
     auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
     if (fsm_result.IsOk()) {
