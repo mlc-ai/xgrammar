@@ -761,8 +761,10 @@ class RegexIR {
 };
 
 Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& start) {
+  // 10^9 fits in an int; longer counts would overflow.
+  constexpr size_t kMaxRepeatDigits = 9;
   if (regex[start] != '{') {
-    return ResultErr("Invalid repeat format1");
+    return ResultErr("Invalid repetition: expected '{'");
   }
   int lower_bound = 0;
   int upper_bound = RegexIR::kRepeatNoUpperBound;
@@ -777,7 +779,10 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
     start++;
   }
   if (num_str.empty()) {
-    return ResultErr("Invalid repeat format2");
+    return ResultErr("Invalid repetition count: expected a number after '{'");
+  }
+  if (num_str.size() > kMaxRepeatDigits) {
+    return ResultErr("Invalid repetition count: the count " + num_str + " is too large");
   }
   lower_bound = std::stoi(num_str);
   while (static_cast<size_t>(start) < regex.size() && regex[start] == ' ') {
@@ -789,7 +794,7 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
     return ResultOk(std::make_pair(lower_bound, upper_bound));
   }
   if (regex[start] != ',') {
-    return ResultErr("Invalid repeat format3");
+    return ResultErr("Invalid repetition count: expected ',' or '}' after the lower bound");
   }
   XGRAMMAR_DCHECK(regex[start] == ',');
   start++;
@@ -806,17 +811,23 @@ Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& 
     start++;
   }
   if (num_str.empty()) {
-    return ResultErr("Invalid repeat format4");
+    return ResultErr("Invalid repetition count: expected a number or '}' after ','");
+  }
+  if (num_str.size() > kMaxRepeatDigits) {
+    return ResultErr("Invalid repetition count: the count " + num_str + " is too large");
   }
   upper_bound = std::stoi(num_str);
   if (upper_bound < lower_bound) {
-    return ResultErr("Invalid repeat: the lower bound is larger than the upper bound");
+    return ResultErr(
+        "Invalid repetition count: the lower bound " + std::to_string(lower_bound) +
+        " is larger than the upper bound " + std::to_string(upper_bound)
+    );
   }
   while (static_cast<size_t>(start) < regex.size() && regex[start] == ' ') {
     start++;
   }
   if (regex[start] != '}') {
-    return ResultErr("Invalid repeat format5");
+    return ResultErr("Invalid repetition count: expected '}' after the upper bound");
   }
   XGRAMMAR_DCHECK(regex[start] == '}');
   return ResultOk(std::make_pair(lower_bound, upper_bound));
@@ -891,14 +902,15 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Union& state) const {
     fsm_list.push_back(std::move(visited).Unwrap());
   }
   if (fsm_list.size() <= 1) {
-    return ResultErr("Invalid union");
+    return ResultErr("Internal error: a union node in the regex IR has fewer than two branches");
   }
   return ResultOk(FSMWithStartEnd::Union(fsm_list));
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Symbol& state) const {
   if (state.state.size() != 1) {
-    return ResultErr("Invalid symbol");
+    return ResultErr("Internal error: a quantifier node in the regex IR must hold exactly one child"
+    );
   }
   Result<FSMWithStartEnd> child_result =
       std::visit([&](auto&& arg) { return RegexIR::visit(arg); }, state.state[0]);
@@ -960,7 +972,8 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::RepeatSubrule& state) cons
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   if (state.states.size() != 1) {
-    return ResultErr("Invalid repeat");
+    return ResultErr("Internal error: a repetition node in the regex IR must hold exactly one child"
+    );
   }
   bool has_upper_bound = state.upper_bound != RegexIR::kRepeatNoUpperBound;
   if (has_upper_bound && state.upper_bound == 0) {
@@ -1200,10 +1213,19 @@ Result<RegexIR> ParseRegexToIR(
 ) {
   RegexIR ir;
   std::string regex = regex_with_flags;
+  int flag_prefix_length = 0;
   if (regex.size() >= 4 && regex.compare(0, 4, "(?i)") == 0) {
     ir.case_insensitive = true;
     regex = regex.substr(4);
+    flag_prefix_length = 4;
   }
+
+  // Mirror the error format of the RegexConverter path: a 1-based position in the pattern
+  // (including the "(?i)" prefix when present), followed by the description.
+  auto error_at = [&](int pos, const std::string& message) {
+    return "Regex parsing error at position " + std::to_string(pos + flag_prefix_length + 1) +
+           ": " + message;
+  };
 
   std::vector<RegexStackEntry> stack;
   int size = static_cast<int>(regex.size());
@@ -1221,14 +1243,14 @@ Result<RegexIR> ParseRegexToIR(
     if (current_char == '[') {
       size_t class_end = SkipCharacterClass(regex, i);
       if (class_end == std::string::npos) {
-        return ResultErr("Unclosed character class in regex: " + regex);
+        return ResultErr(error_at(i, "Unclosed '['"));
       }
       size_t content_begin = i + 1;
       if (content_begin < regex.size() && regex[content_begin] == '^') {
         ++content_begin;
       }
       if (content_begin + 1 == class_end) {
-        return ResultErr("Empty character class is not allowed in regex: " + regex);
+        return ResultErr(error_at(i, "Empty character class is not allowed in regex"));
       }
       RegexIR::Leaf leaf;
       leaf.regex = regex.substr(i, class_end - i);
@@ -1237,12 +1259,14 @@ Result<RegexIR> ParseRegexToIR(
       continue;
     }
     if (current_char == ']') {
-      return ResultErr("Unmatched ']' in regex: " + regex);
+      return ResultErr(error_at(i, "Unmatched ']'"));
     }
     // Handle quantifiers.
     if (current_char == '+' || current_char == '*' || current_char == '?') {
       if (stack.empty() || std::holds_alternative<char>(stack.back().item)) {
-        return ResultErr("Invalid regex: no state before operator!");
+        return ResultErr(
+            error_at(i, std::string("There is nothing to repeat before '") + current_char + "'")
+        );
       }
       RegexStackEntry atom = std::move(stack.back());
       stack.pop_back();
@@ -1274,7 +1298,7 @@ Result<RegexIR> ParseRegexToIR(
     if (current_char == '(') {
       if (i + 1 < size && regex[i + 1] == '?') {
         if (i + 2 >= size) {
-          return ResultErr("Invalid group modifier at the end of regex: " + regex);
+          return ResultErr(error_at(i, "Group modifier is not finished"));
         }
         char modifier = regex[i + 2];
         if (modifier == ':') {
@@ -1294,9 +1318,10 @@ Result<RegexIR> ParseRegexToIR(
               continue;
             }
             if (regex[j] == '[') {
+              size_t class_begin = j;
               j = SkipCharacterClass(regex, j);
               if (j == std::string::npos) {
-                return ResultErr("Unclosed character class in regex: " + regex);
+                return ResultErr(error_at(static_cast<int>(class_begin), "Unclosed '['"));
               }
               continue;
             }
@@ -1308,7 +1333,7 @@ Result<RegexIR> ParseRegexToIR(
             j++;
           }
           if (depth != 0) {
-            return ResultErr("Invalid regex: no paired bracket!");
+            return ResultErr(error_at(i, "The parenthesis is not closed"));
           }
           stack.push_back({RegexIR::Leaf{""}, i, static_cast<int>(j)});
           i = static_cast<int>(j) - 1;
@@ -1317,7 +1342,7 @@ Result<RegexIR> ParseRegexToIR(
         if (modifier == '<' || (modifier == 'P' && i + 3 < size && regex[i + 3] == '<')) {
           size_t name_begin = (modifier == '<') ? i + 3 : i + 4;
           if (name_begin < regex.size() && (regex[name_begin] == '=' || regex[name_begin] == '!')) {
-            return ResultErr("Lookbehind assertion is not supported in regex: " + regex);
+            return ResultErr(error_at(i, "Lookbehind assertion is not supported in regex"));
           }
           size_t j = name_begin;
           while (j < regex.size() &&
@@ -1325,7 +1350,7 @@ Result<RegexIR> ParseRegexToIR(
             j++;
           }
           if (j == name_begin || j >= regex.size() || regex[j] != '>') {
-            return ResultErr("Invalid named group in regex: " + regex);
+            return ResultErr(error_at(i, "Invalid named capturing group"));
           }
           // Ignore the group name and compile the content as a normal group.
           stack.push_back({'(', i, i + 1});
@@ -1333,7 +1358,7 @@ Result<RegexIR> ParseRegexToIR(
           continue;
         }
         return ResultErr(
-            "Unsupported group modifier '(?" + std::string(1, modifier) + "' in regex: " + regex
+            error_at(i, "Unsupported group modifier '(?" + std::string(1, modifier) + "'")
         );
       }
       stack.push_back({'(', i, i + 1});
@@ -1364,7 +1389,7 @@ Result<RegexIR> ParseRegexToIR(
         popped.push_back(std::move(entry));
       }
       if (!paired) {
-        return ResultErr("Invalid regex: no paired bracket!");
+        return ResultErr(error_at(i, "Unmatched ')'"));
       }
       // `popped` stores the group content from right to left.
       if (!unioned) {
@@ -1395,13 +1420,14 @@ Result<RegexIR> ParseRegexToIR(
     // Handle repetitions.
     if (current_char == '{') {
       if (stack.empty() || std::holds_alternative<char>(stack.back().item)) {
-        return ResultErr("Invalid regex: no state before repeat!");
+        return ResultErr(error_at(i, "There is nothing to repeat before the repetition"));
       }
       RegexStackEntry atom = std::move(stack.back());
       stack.pop_back();
+      int repeat_begin = i;
       auto bounds_result = RegexIR::CheckRepeat(regex, i);
       if (bounds_result.IsErr()) {
-        return ResultErr(std::move(bounds_result).UnwrapErr());
+        return ResultErr(error_at(repeat_begin, std::move(bounds_result).UnwrapErr().what()));
       }
       auto [lower_bound, upper_bound] = std::move(bounds_result).Unwrap();
       // Skip the non-greedy modifier.
@@ -1466,7 +1492,7 @@ Result<RegexIR> ParseRegexToIR(
       size_t escape_end = i;
       auto escape_result = ParseRegexEscape(regex, &escape_end, /*in_class=*/false);
       if (escape_result.IsErr()) {
-        return ResultErr(std::move(escape_result).UnwrapErr());
+        return ResultErr(error_at(i, std::move(escape_result).UnwrapErr().what()));
       }
       leaf.regex = regex.substr(i, escape_end - i);
       stack.push_back({std::move(leaf), i, static_cast<int>(escape_end)});
@@ -1496,7 +1522,7 @@ Result<RegexIR> ParseRegexToIR(
         unioned = true;
         continue;
       }
-      return ResultErr("Invalid regex: no paired bracket!");
+      return ResultErr(error_at(entry.span_begin, "The parenthesis is not closed"));
     }
     segment.push_back(std::move(std::get<RegexIR::State>(entry.item)));
   }

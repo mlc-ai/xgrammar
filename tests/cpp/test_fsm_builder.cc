@@ -581,6 +581,53 @@ TEST(XGrammarFSMBuilderTest, TestRegexUnsupportedFeatures) {
   EXPECT_TRUE(fsm_wse.AcceptString(""));
 }
 
+TEST(XGrammarFSMBuilderTest, TestRegexErrorMessages) {
+  // Parse errors mirror the RegexConverter format and carry the 1-based position.
+  auto error_message = [](const std::string& regex) {
+    return std::string(RegexFSMBuilder::Build(regex).UnwrapErr().what());
+  };
+  EXPECT_EQ(
+      error_message("+a"),
+      "Regex parsing error at position 1: There is nothing to repeat before '+'"
+  );
+  EXPECT_EQ(error_message("ab)"), "Regex parsing error at position 3: Unmatched ')'");
+  EXPECT_EQ(error_message("a]"), "Regex parsing error at position 2: Unmatched ']'");
+  EXPECT_EQ(
+      error_message("a(bc"), "Regex parsing error at position 2: The parenthesis is not closed"
+  );
+  EXPECT_EQ(error_message("a[bc"), "Regex parsing error at position 2: Unclosed '['");
+  EXPECT_EQ(
+      error_message("a[]"),
+      "Regex parsing error at position 2: Empty character class is not allowed in regex"
+  );
+  EXPECT_EQ(
+      error_message("a{,2}"),
+      "Regex parsing error at position 2: Invalid repetition count: expected a number after '{'"
+  );
+  EXPECT_EQ(
+      error_message("a{3,1}"),
+      "Regex parsing error at position 2: Invalid repetition count: the lower bound 3 is larger "
+      "than the upper bound 1"
+  );
+  EXPECT_EQ(
+      error_message("a{1,9999999999}"),
+      "Regex parsing error at position 2: Invalid repetition count: the count 9999999999 is too "
+      "large"
+  );
+  EXPECT_EQ(
+      error_message("a\\b"),
+      "Regex parsing error at position 2: Word boundary assertion \\b is not supported in regex"
+  );
+  EXPECT_EQ(
+      error_message("(?<name)a"), "Regex parsing error at position 1: Invalid named capturing group"
+  );
+  // The position includes the "(?i)" prefix when present.
+  EXPECT_EQ(
+      error_message("(?i)+a"),
+      "Regex parsing error at position 5: There is nothing to repeat before '+'"
+  );
+}
+
 TEST(XGrammarFSMBuilderTest, TestRegexMatchesEmpty) {
   EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("a*").Unwrap());
   EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("(a|)").Unwrap());
