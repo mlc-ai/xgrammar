@@ -121,9 +121,9 @@ String literals use double quotes and JSON escape syntax: `\"`, `\\`, `\/`, `\b`
 `\r`, `\t`, and `\uXXXX`. Non-ASCII characters may be written directly (`"中文"`, `"😀"`) or with
 Unicode escapes (`"\u03bb"` matches `λ`).
 
-A trailing `i` applies Unicode simple case folding: `"yes"i` matches `yes`, `YES`, and `Yes`, while
-`"Żółw"i` also matches `żółw` and `ŻÓŁW`. Simple folding maps one Unicode codepoint to equivalent
-single codepoints; it does not expand one character into a multi-character sequence.
+A trailing `i` makes the literal case-insensitive: `"yes"i` matches `yes`, `YES`, `Yes`, and so
+on. Case-insensitive literals currently support ASCII characters only; a case-insensitive literal
+containing non-ASCII characters is rejected.
 
 ### Character Ranges
 
@@ -141,7 +141,8 @@ usual escapes. A `/` inside the pattern is written `\/`.
 `.` matches one Unicode character. By default it does not match newline. Regular expressions
 support the following trailing flags, in any order:
 
-- `i`: apply Unicode 16.0.0 simple case folding to literals and character classes.
+- `i`: make the match ASCII case-insensitive. ASCII letters in literals and character classes
+  match both cases; non-ASCII characters match literally.
 - `s`: make `.` match newline as well.
 - `u`: explicitly select Unicode semantics. This is a no-op because XGrammar regular expressions
   already use Unicode codepoints.
@@ -149,10 +150,14 @@ support the following trailing flags, in any order:
 The `i` flag is supported in ordinary rules, terminals, and `lazy` rules, but not on a regular
 expression used with a `suffix` or `stop` attribute. The `l`, `m`, and `x` flags are not supported.
 
+Word boundaries (`\b`, `\B`), Unicode property escapes (`\p{…}`), backreferences, and lookaround
+assertions are not supported. Large bounded repetitions such as `{0,10000}` are compiled through
+the grammar-level repetition mechanism and do not expand the automaton.
+
 ```text
 start: /a.b/      // accepts "acb", "a😀b"; rejects "a\nb"
 line: /a.b/s      // also accepts "a\nb"
-word: /Żółw/iu    // accepts "Żółw", "żółw", and "ŻÓŁW"
+word: /Σk+/i      // accepts "Σk", "ΣKK"; only ASCII letters fold, "Σ" matches literally
 ```
 
 ### Sequences, Alternatives, and Groups
