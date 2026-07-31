@@ -10,12 +10,15 @@
 #include <xgrammar/matcher.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -31,6 +34,7 @@
 #include "support/int_set.h"
 #include "support/logging.h"
 #include "support/thread_pool.h"
+#include "support/utils.h"
 #include "testing.h"
 #include "tokenizer_info_impl.h"
 
@@ -466,13 +470,17 @@ class GrammarMatcher::Impl : public EarleyParser {
       int max_rollback_tokens = -1,
       std::optional<float> default_temperature = std::nullopt
   )
-      : EarleyParser(compiled_grammar->grammar),
+      : EarleyParser(compiled_grammar->grammar, compiled_grammar->earley_parser_metadata),
         compiled_grammar_(compiled_grammar),
         tokenizer_info_(compiled_grammar->tokenizer_info),
         stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
         terminate_without_stop_token_(terminate_without_stop_token),
         default_temperature_(default_temperature),
-        tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
+        resolved_uncertain_mask_cache_(this),
+        tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()),
+        tmp_deferred_uncertain_accepted_bitset_(tokenizer_info_.GetVocabSize()),
+        tmp_unresolved_uncertain_bitset_(tokenizer_info_.GetVocabSize()),
+        tmp_suffix_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
     if (has_budget_rules_ || has_char_budget_rules_) {
@@ -531,10 +539,1431 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   const std::vector<int>& GetStopTokenIds() const { return stop_token_ids_; }
 
+  void RebindAfterFork() { resolved_uncertain_mask_cache_.RebindMatcher(this); }
+
   std::string _DebugPrintInternalState() const { return PrintStates(); }
 
  private:
   using StoreType = AdaptiveTokenMask::StoreType;
+
+  struct WhitespaceContinuationBatchCacheEntry {
+    ParserState source_state;
+    std::vector<ParserState> continuation_states;
+    std::shared_ptr<DynamicBitset> batched_tokens;
+  };
+
+  static bool ParserStateLessIgnoringPosition(const ParserState& lhs, const ParserState& rhs) {
+    if (lhs.rule_id != rhs.rule_id) return lhs.rule_id < rhs.rule_id;
+    if (lhs.sequence_id != rhs.sequence_id) return lhs.sequence_id < rhs.sequence_id;
+    if (lhs.element_id != rhs.element_id) return lhs.element_id < rhs.element_id;
+    if (lhs.sub_element_id != rhs.sub_element_id) {
+      return lhs.sub_element_id < rhs.sub_element_id;
+    }
+    if (lhs.repeat_count != rhs.repeat_count) return lhs.repeat_count < rhs.repeat_count;
+    return lhs.partial_codepoint < rhs.partial_codepoint;
+  }
+
+  static bool ParserStateEqualIgnoringPosition(const ParserState& lhs, const ParserState& rhs) {
+    return lhs.rule_id == rhs.rule_id && lhs.sequence_id == rhs.sequence_id &&
+           lhs.element_id == rhs.element_id && lhs.sub_element_id == rhs.sub_element_id &&
+           lhs.repeat_count == rhs.repeat_count && lhs.partial_codepoint == rhs.partial_codepoint;
+  }
+
+  std::unique_ptr<DynamicBitset> BuildWhitespaceContinuationBatch(
+      const ParserState& source_state,
+      const std::vector<ParserState>& continuation_states,
+      const AdaptiveTokenMask& source_mask
+  ) {
+    const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
+    const auto& suffix_sorted_indices = tokenizer_info_->GetMixedWhitespaceSuffixSortedIndices();
+    const auto& suffix_offsets = tokenizer_info_->GetMixedWhitespaceSuffixOffsets();
+    const auto& suffix_lcps = tokenizer_info_->GetMixedWhitespaceSuffixLcpWithPrevious();
+    const int32_t suffix_count = static_cast<int32_t>(suffix_sorted_indices.size());
+    if (continuation_states.empty() || suffix_count == 0) {
+      return nullptr;
+    }
+    XGRAMMAR_DCHECK(
+        suffix_offsets.size() == suffix_sorted_indices.size() &&
+        suffix_lcps.size() == suffix_sorted_indices.size()
+    );
+
+    std::vector<uint8_t> source_candidates(suffix_count, 0);
+    std::vector<uint8_t> locally_accepted(suffix_count, 0);
+    std::unordered_map<std::string, bool> prefix_proofs;
+    prefix_proofs.reserve(32);
+    uint64_t source_candidate_count = 0;
+
+    const bool has_uncertain_bitset = source_mask.uncertain_bitset.Size() != 0;
+    for (int32_t suffix_index = 0; suffix_index < suffix_count; ++suffix_index) {
+      const int32_t sorted_vocab_index = suffix_sorted_indices[suffix_index];
+      const auto& [token_id, token] = sorted_vocab[sorted_vocab_index];
+      const bool is_uncertain = has_uncertain_bitset ? source_mask.uncertain_bitset[token_id]
+                                                     : std::binary_search(
+                                                           source_mask.uncertain_indices.begin(),
+                                                           source_mask.uncertain_indices.end(),
+                                                           sorted_vocab_index
+                                                       );
+      if (!is_uncertain) {
+        continue;
+      }
+
+      const int32_t suffix_offset = suffix_offsets[suffix_index];
+      const std::string prefix = token.substr(0, suffix_offset);
+      auto proof_it = prefix_proofs.find(prefix);
+      if (proof_it == prefix_proofs.end()) {
+        EarleyParser source_parser(
+            grammar_, compiled_grammar_->earley_parser_metadata, source_state, false
+        );
+        bool prefix_accepted = true;
+        for (uint8_t byte : prefix) {
+          if (!source_parser.Advance(byte)) {
+            prefix_accepted = false;
+            break;
+          }
+        }
+        bool returned_to_source_state = false;
+        if (prefix_accepted) {
+          for (const auto& reached_state : source_parser.GetLatestScanableStates()) {
+            if (ParserStateEqualIgnoringPosition(reached_state, source_state)) {
+              returned_to_source_state = true;
+              break;
+            }
+          }
+        }
+        proof_it = prefix_proofs.emplace(prefix, returned_to_source_state).first;
+      }
+      if (proof_it->second) {
+        source_candidates[suffix_index] = 1;
+        ++source_candidate_count;
+      }
+    }
+    constexpr uint64_t kMinSourceCandidates = 1024;
+    if (source_candidate_count < kMinSourceCandidates) {
+      return nullptr;
+    }
+
+    EarleyParser continuation_parser(
+        grammar_, compiled_grammar_->earley_parser_metadata, continuation_states.front(), false
+    );
+    continuation_parser.PushStatesToCheck(continuation_states);
+    int32_t previous_matched_size = 0;
+    for (int32_t suffix_index = 0; suffix_index < suffix_count; ++suffix_index) {
+      const int32_t sorted_vocab_index = suffix_sorted_indices[suffix_index];
+      const auto& token = sorted_vocab[sorted_vocab_index].second;
+      const int32_t suffix_offset = suffix_offsets[suffix_index];
+      const std::string_view suffix(token.data() + suffix_offset, token.size() - suffix_offset);
+      const int32_t lcp_length = suffix_lcps[suffix_index];
+      bool byte_path_accepted = true;
+      if (suffix_index != 0 && lcp_length > previous_matched_size) {
+        byte_path_accepted = false;
+      } else if (lcp_length < previous_matched_size) {
+        continuation_parser.PopLastStates(previous_matched_size - lcp_length);
+        previous_matched_size = lcp_length;
+      }
+      if (byte_path_accepted) {
+        for (int32_t byte_index = previous_matched_size;
+             byte_index < static_cast<int32_t>(suffix.size());
+             ++byte_index) {
+          if (!continuation_parser.Advance(static_cast<uint8_t>(suffix[byte_index]))) {
+            byte_path_accepted = false;
+            break;
+          }
+          previous_matched_size = byte_index + 1;
+        }
+      }
+      // A surviving scanable state proves that the suffix has not depended on returning through
+      // the discarded absolute parent rows. Root completion alone is intentionally excluded.
+      locally_accepted[suffix_index] = source_candidates[suffix_index] && byte_path_accepted &&
+                                       continuation_parser.HasLatestScanableStates();
+    }
+    if (previous_matched_size != 0) {
+      continuation_parser.PopLastStates(previous_matched_size);
+    }
+
+    std::vector<int32_t> source_prefix_counts(suffix_count + 1, 0);
+    std::vector<int32_t> accepted_prefix_counts(suffix_count + 1, 0);
+    for (int32_t suffix_index = 0; suffix_index < suffix_count; ++suffix_index) {
+      source_prefix_counts[suffix_index + 1] =
+          source_prefix_counts[suffix_index] + source_candidates[suffix_index];
+      accepted_prefix_counts[suffix_index + 1] =
+          accepted_prefix_counts[suffix_index] + locally_accepted[suffix_index];
+    }
+
+    auto batched_tokens = std::make_unique<DynamicBitset>(tokenizer_info_.GetVocabSize());
+    int32_t covered_until = -1;
+    for (int32_t suffix_index = 0; suffix_index < suffix_count; ++suffix_index) {
+      if (suffix_index < covered_until || !locally_accepted[suffix_index]) {
+        continue;
+      }
+      const int32_t sorted_vocab_index = suffix_sorted_indices[suffix_index];
+      const auto& token = sorted_vocab[sorted_vocab_index].second;
+      const int32_t suffix_offset = suffix_offsets[suffix_index];
+      const std::string_view suffix(token.data() + suffix_offset, token.size() - suffix_offset);
+      int32_t complete_subtree_end = -1;
+      for (int32_t prefix_length = 1; prefix_length <= static_cast<int32_t>(suffix.size());
+           ++prefix_length) {
+        if (suffix_index != 0 && suffix_lcps[suffix_index] >= prefix_length) {
+          continue;
+        }
+        int32_t low = suffix_index + 1;
+        int32_t high = suffix_count;
+        while (low < high) {
+          const int32_t mid = low + (high - low) / 2;
+          const int32_t mid_sorted_vocab_index = suffix_sorted_indices[mid];
+          const auto& mid_token = sorted_vocab[mid_sorted_vocab_index].second;
+          const int32_t mid_suffix_offset = suffix_offsets[mid];
+          const std::string_view mid_suffix(
+              mid_token.data() + mid_suffix_offset, mid_token.size() - mid_suffix_offset
+          );
+          const bool shares_prefix =
+              mid_suffix.size() >= static_cast<size_t>(prefix_length) &&
+              mid_suffix.substr(0, prefix_length) == suffix.substr(0, prefix_length);
+          if (shares_prefix) {
+            low = mid + 1;
+          } else {
+            high = mid;
+          }
+        }
+        const int32_t source_count = source_prefix_counts[low] - source_prefix_counts[suffix_index];
+        const int32_t accepted_count =
+            accepted_prefix_counts[low] - accepted_prefix_counts[suffix_index];
+        if (source_count >= 2 && source_count == accepted_count) {
+          complete_subtree_end = low;
+          break;
+        }
+      }
+      if (complete_subtree_end == -1) {
+        continue;
+      }
+      for (int32_t covered_index = suffix_index; covered_index < complete_subtree_end;
+           ++covered_index) {
+        if (source_candidates[covered_index]) {
+          const int32_t covered_sorted_vocab_index = suffix_sorted_indices[covered_index];
+          batched_tokens->Set(sorted_vocab[covered_sorted_vocab_index].first);
+        }
+      }
+      covered_until = complete_subtree_end;
+    }
+    if (static_cast<uint64_t>(batched_tokens->Count()) < kMinSourceCandidates) {
+      return nullptr;
+    }
+    return batched_tokens;
+  }
+
+  const DynamicBitset* FindOrBuildWhitespaceContinuationBatch(
+      const ParserState& state, const AdaptiveTokenMask& source_mask
+  ) {
+    constexpr size_t kMinUncertainTokens = 8192;
+    constexpr size_t kMaxCacheEntries = 32;
+    if (state.rule_id < 0 || source_mask.uncertain_indices.size() < kMinUncertainTokens) {
+      return nullptr;
+    }
+    const uint8_t state_flags = GetFsmStateFlags(state.rule_id, state.element_id);
+    if (!(state_flags & EarleyParserGrammarMetadata::kFsmStateScanable)) {
+      return nullptr;
+    }
+
+    XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
+    const bool saved_accept_stop_token = tmp_accept_stop_token_;
+    const auto saved_states_to_be_added = tmp_states_to_be_added_;
+    tmp_states_visited_in_queue_.Clear();
+    tmp_states_to_be_added_.clear();
+    tmp_accept_stop_token_ = false;
+    rule_id_to_completable_states_.PushBackEmpty();
+    Complete(state);
+    while (!tmp_process_state_queue_.empty()) {
+      const ParserState& continuation_state = *tmp_process_state_queue_.front();
+      tmp_process_state_queue_.pop();
+      auto [scanable, completable] = Predict(continuation_state);
+      if (completable) {
+        Complete(continuation_state);
+      }
+      if (scanable) {
+        tmp_states_to_be_added_.push_back(&continuation_state);
+      }
+    }
+    std::vector<ParserState> continuation_states;
+    continuation_states.reserve(tmp_states_to_be_added_.size());
+    for (const ParserState* continuation_state : tmp_states_to_be_added_) {
+      ParserState normalized = *continuation_state;
+      normalized.rule_start_pos = ParserState::kNoPrevInputPos;
+      continuation_states.push_back(normalized);
+    }
+    std::sort(
+        continuation_states.begin(), continuation_states.end(), ParserStateLessIgnoringPosition
+    );
+    continuation_states.erase(
+        std::unique(
+            continuation_states.begin(), continuation_states.end(), ParserStateEqualIgnoringPosition
+        ),
+        continuation_states.end()
+    );
+    rule_id_to_completable_states_.PopBack(1);
+    tmp_states_visited_in_queue_.Clear();
+    tmp_states_to_be_added_ = saved_states_to_be_added;
+    tmp_accept_stop_token_ = saved_accept_stop_token;
+    if (continuation_states.empty()) {
+      return nullptr;
+    }
+
+    ParserState normalized_source = state;
+    normalized_source.rule_start_pos = ParserState::kNoPrevInputPos;
+    for (const auto& entry : whitespace_continuation_batch_cache_) {
+      if (!ParserStateEqualIgnoringPosition(entry.source_state, normalized_source) ||
+          entry.continuation_states.size() != continuation_states.size() ||
+          !std::equal(
+              entry.continuation_states.begin(),
+              entry.continuation_states.end(),
+              continuation_states.begin(),
+              ParserStateEqualIgnoringPosition
+          )) {
+        continue;
+      }
+      return entry.batched_tokens.get();
+    }
+    if (whitespace_continuation_batch_cache_.size() >= kMaxCacheEntries) {
+      return nullptr;
+    }
+    std::shared_ptr<DynamicBitset> batched_tokens =
+        BuildWhitespaceContinuationBatch(normalized_source, continuation_states, source_mask);
+    whitespace_continuation_batch_cache_.push_back(WhitespaceContinuationBatchCacheEntry{
+        normalized_source, std::move(continuation_states), std::move(batched_tokens)
+    });
+    return whitespace_continuation_batch_cache_.back().batched_tokens.get();
+  }
+
+  enum class CachedRowRefKind : uint8_t { kNone, kExternal, kCanonical, kCurrent };
+
+  struct CachedParserState {
+    int32_t rule_id;
+    int32_t sequence_id;
+    int32_t element_id;
+    CachedRowRefKind row_ref_kind;
+    int32_t row_ref_id;
+    int32_t sub_element_id;
+    int32_t repeat_count;
+    int32_t partial_codepoint;
+
+    bool operator==(const CachedParserState& other) const {
+      return rule_id == other.rule_id && sequence_id == other.sequence_id &&
+             element_id == other.element_id && row_ref_kind == other.row_ref_kind &&
+             row_ref_id == other.row_ref_id && sub_element_id == other.sub_element_id &&
+             repeat_count == other.repeat_count && partial_codepoint == other.partial_codepoint;
+    }
+  };
+
+  struct CanonicalCompletableRow {
+    std::vector<std::pair<int32_t, CachedParserState>> entries;
+
+    bool operator==(const CanonicalCompletableRow& other) const { return entries == other.entries; }
+  };
+
+  struct CanonicalConfiguration {
+    int32_t current_row_id;
+    bool is_completed;
+    std::vector<CachedParserState> scanable_states;
+
+    bool operator==(const CanonicalConfiguration& other) const {
+      return current_row_id == other.current_row_id && is_completed == other.is_completed &&
+             scanable_states == other.scanable_states;
+    }
+  };
+
+  // Cache the exact "all uncertain tokens accepted" result across mask calls. Earley row numbers
+  // are input positions, so equivalent recursive continuations at different positions would not
+  // compare equal directly. This interner recursively replaces every previous-row reference with
+  // an exact canonical row ID while preserving self references and every ParserState field.
+  class ResolvedUncertainMaskCache {
+   public:
+    explicit ResolvedUncertainMaskCache(Impl* matcher) : matcher_(matcher) {}
+
+    void RebindMatcher(Impl* matcher) { matcher_ = matcher; }
+
+    void BeginFill() {
+      const size_t row_count = matcher_->rule_id_to_completable_states_.size();
+      if (row_count > kMaxAbsoluteRowsPerFill ||
+          (row_count + 1) * sizeof(int32_t) > kMaxBytes - memory_bytes_) {
+        std::vector<int32_t>().swap(absolute_row_ids_);
+        usable_this_fill_ = false;
+        return;
+      }
+      absolute_row_ids_.assign(row_count + 1, -1);
+      if (TotalAccountedBytes() > kMaxBytes) {
+        std::vector<int32_t>().swap(absolute_row_ids_);
+        usable_this_fill_ = false;
+        return;
+      }
+      usable_this_fill_ = true;
+    }
+
+    std::optional<int32_t> InternCurrentConfiguration() {
+      if (!usable_this_fill_) {
+        return std::nullopt;
+      }
+      const int32_t current_row = matcher_->rule_id_to_completable_states_.size() - 1;
+      if (current_row < 0) {
+        return std::nullopt;
+      }
+      if (absolute_row_ids_.size() <= static_cast<size_t>(current_row)) {
+        absolute_row_ids_.resize(current_row + 1, -1);
+      }
+      absolute_row_ids_[current_row] = -1;
+      const auto current_row_id = InternAbsoluteRow(current_row);
+      if (!current_row_id.has_value()) {
+        return std::nullopt;
+      }
+
+      const auto scanable_states = matcher_->scanable_state_history_[current_row];
+      const auto additional_bytes = AccountedElementBytes(
+          sizeof(CanonicalConfiguration), scanable_states.size(), sizeof(CachedParserState)
+      );
+      if (!additional_bytes.has_value()) {
+        return std::nullopt;
+      }
+      CanonicalConfiguration normalized{*current_row_id, matcher_->is_completed_.back() != 0, {}};
+      normalized.scanable_states.reserve(scanable_states.size());
+      for (const auto& state : scanable_states) {
+        const auto normalized_state = NormalizeState(state, current_row);
+        if (!normalized_state.has_value()) {
+          return std::nullopt;
+        }
+        normalized.scanable_states.push_back(*normalized_state);
+      }
+      for (int32_t i = 0; i < static_cast<int32_t>(configurations_.size()); ++i) {
+        if (configurations_[i] == normalized) {
+          return i;
+        }
+      }
+      if (configurations_.size() >= kMaxConfigurations || !TryAccountBytes(*additional_bytes)) {
+        return std::nullopt;
+      }
+      configurations_.push_back(std::move(normalized));
+      return configurations_.size() - 1;
+    }
+
+    bool IsAllAccepted(const AdaptiveTokenMask* mask, int32_t configuration_id) {
+      ++queries_;
+      for (const auto& result : all_accepted_results_) {
+        if (result.mask == mask && result.configuration_id == configuration_id) {
+          ++hits_;
+          return true;
+        }
+      }
+      return false;
+    }
+
+    void InsertAllAccepted(const AdaptiveTokenMask* mask, int32_t configuration_id) {
+      for (const auto& result : all_accepted_results_) {
+        if (result.mask == mask && result.configuration_id == configuration_id) {
+          return;
+        }
+      }
+      if (all_accepted_results_.size() >= kMaxResults ||
+          !TryAccountBytes(sizeof(AllAcceptedResult))) {
+        return;
+      }
+      all_accepted_results_.push_back(AllAcceptedResult{mask, configuration_id});
+    }
+
+    bool MayHaveFullMask(uint64_t raw_state_hash) const {
+      for (const auto& result : full_mask_results_) {
+        if (result.raw_state_hash == raw_state_hash) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    const DynamicBitset* FindFullMask(uint64_t raw_state_hash, int32_t configuration_id) {
+      ++full_mask_queries_;
+      for (const auto& result : full_mask_results_) {
+        if (result.raw_state_hash == raw_state_hash &&
+            result.configuration_id == configuration_id) {
+          ++full_mask_hits_;
+          return &result.mask;
+        }
+      }
+      return nullptr;
+    }
+
+    void InsertFullMask(
+        uint64_t raw_state_hash, int32_t configuration_id, const DynamicBitset& mask
+    ) {
+      for (const auto& result : full_mask_results_) {
+        if (result.raw_state_hash == raw_state_hash &&
+            result.configuration_id == configuration_id) {
+          return;
+        }
+      }
+      const size_t additional_bytes = sizeof(FullMaskResult) + MemorySize(mask);
+      if (full_mask_results_.size() >= kMaxFullMaskResults || !TryAccountBytes(additional_bytes)) {
+        return;
+      }
+      DynamicBitset owned_mask(mask.Size());
+      owned_mask = mask;
+      full_mask_results_.push_back(
+          FullMaskResult{raw_state_hash, configuration_id, std::move(owned_mask)}
+      );
+    }
+
+    uint64_t Queries() const { return queries_; }
+    uint64_t Hits() const { return hits_; }
+    size_t NumRows() const { return rows_.size(); }
+    size_t NumConfigurations() const { return configurations_.size(); }
+    size_t NumResults() const { return all_accepted_results_.size(); }
+    size_t NumFullMaskResults() const { return full_mask_results_.size(); }
+    size_t Bytes() const { return TotalAccountedBytes(); }
+    uint64_t FullMaskQueries() const { return full_mask_queries_; }
+    uint64_t FullMaskHits() const { return full_mask_hits_; }
+
+   private:
+    static constexpr size_t kMaxBytes = 8 * 1024 * 1024;
+    static constexpr size_t kMaxAbsoluteRowsPerFill = 1 << 20;
+    static constexpr size_t kMaxRows = 4096;
+    static constexpr size_t kMaxConfigurations = 1024;
+    static constexpr size_t kMaxResults = 256;
+    static constexpr size_t kMaxFullMaskResults = 256;
+    struct AllAcceptedResult {
+      const AdaptiveTokenMask* mask;
+      int32_t configuration_id;
+    };
+
+    struct FullMaskResult {
+      uint64_t raw_state_hash;
+      int32_t configuration_id;
+      DynamicBitset mask;
+    };
+
+    std::optional<CachedParserState> NormalizeState(const ParserState& state, int32_t current_row) {
+      CachedRowRefKind row_ref_kind = CachedRowRefKind::kNone;
+      int32_t row_ref_id = -1;
+      if (state.rule_start_pos != ParserState::kNoPrevInputPos) {
+        if (state.rule_start_pos == current_row) {
+          row_ref_kind = CachedRowRefKind::kCurrent;
+        } else {
+          if (state.rule_start_pos < 0 || state.rule_start_pos >= current_row) {
+            return std::nullopt;
+          }
+          const auto canonical_row_id = InternAbsoluteRow(state.rule_start_pos);
+          if (!canonical_row_id.has_value()) {
+            return std::nullopt;
+          }
+          row_ref_kind = CachedRowRefKind::kCanonical;
+          row_ref_id = *canonical_row_id;
+        }
+      }
+      return CachedParserState{
+          state.rule_id,
+          state.sequence_id,
+          state.element_id,
+          row_ref_kind,
+          row_ref_id,
+          state.sub_element_id,
+          state.repeat_count,
+          state.partial_codepoint
+      };
+    }
+
+    std::optional<int32_t> InternAbsoluteRow(int32_t absolute_row) {
+      if (absolute_row < 0 || absolute_row >= static_cast<int32_t>(absolute_row_ids_.size())) {
+        return std::nullopt;
+      }
+      if (absolute_row_ids_[absolute_row] >= 0) {
+        return absolute_row_ids_[absolute_row];
+      }
+      const auto row = matcher_->rule_id_to_completable_states_[absolute_row];
+      const auto additional_bytes = AccountedElementBytes(
+          sizeof(CanonicalCompletableRow), row.size(), sizeof(std::pair<int32_t, CachedParserState>)
+      );
+      if (!additional_bytes.has_value()) {
+        return std::nullopt;
+      }
+      CanonicalCompletableRow normalized;
+      normalized.entries.reserve(row.size());
+      for (const auto& [ref_rule_id, parent_state] : row) {
+        const auto normalized_state = NormalizeState(parent_state, absolute_row);
+        if (!normalized_state.has_value()) {
+          return std::nullopt;
+        }
+        normalized.entries.emplace_back(ref_rule_id, *normalized_state);
+      }
+      for (int32_t i = 0; i < static_cast<int32_t>(rows_.size()); ++i) {
+        if (rows_[i] == normalized) {
+          absolute_row_ids_[absolute_row] = i;
+          return i;
+        }
+      }
+      if (rows_.size() >= kMaxRows || !TryAccountBytes(*additional_bytes)) {
+        return std::nullopt;
+      }
+      rows_.push_back(std::move(normalized));
+      const int32_t row_id = rows_.size() - 1;
+      absolute_row_ids_[absolute_row] = row_id;
+      return row_id;
+    }
+
+    std::optional<size_t> AccountedElementBytes(
+        size_t base_bytes, size_t element_count, size_t element_bytes
+    ) const {
+      const size_t total_bytes = TotalAccountedBytes();
+      if (base_bytes > kMaxBytes - total_bytes) {
+        return std::nullopt;
+      }
+      const size_t available_element_bytes = kMaxBytes - total_bytes - base_bytes;
+      if (element_count > available_element_bytes / element_bytes) {
+        return std::nullopt;
+      }
+      return base_bytes + element_count * element_bytes;
+    }
+
+    bool TryAccountBytes(size_t additional_bytes) {
+      if (additional_bytes > kMaxBytes - TotalAccountedBytes()) {
+        return false;
+      }
+      memory_bytes_ += additional_bytes;
+      return true;
+    }
+
+    size_t TotalAccountedBytes() const { return memory_bytes_ + MemorySize(absolute_row_ids_); }
+
+    Impl* matcher_;
+    bool usable_this_fill_ = true;
+    size_t memory_bytes_ = 0;
+    uint64_t queries_ = 0;
+    uint64_t hits_ = 0;
+    uint64_t full_mask_queries_ = 0;
+    uint64_t full_mask_hits_ = 0;
+    std::vector<int32_t> absolute_row_ids_;
+    std::vector<CanonicalCompletableRow> rows_;
+    std::vector<CanonicalConfiguration> configurations_;
+    std::vector<AllAcceptedResult> all_accepted_results_;
+    std::vector<FullMaskResult> full_mask_results_;
+  };
+
+  // During token-mask generation, trie traversal repeatedly reaches structurally identical Earley
+  // continuations at different temporary input positions. Rows retain absolute references to the
+  // matcher history, while temporary-row references are canonicalized by exact row contents and
+  // self references remain explicit. This makes (configuration, byte) an exact transition key.
+  // Cache hits stay virtual; an unseen transition or any resource limit first materializes the
+  // virtual prefix, then falls back to EarleyParser. The cache is destroyed after one ParserState.
+  class ContinuationTransitionCache {
+   public:
+    ContinuationTransitionCache(Impl* matcher, int32_t external_row_count)
+        : matcher_(matcher),
+          external_row_count_(external_row_count),
+          memory_bytes_(
+              kAdmissionQueries * sizeof(TransitionSlot) + kMaxVirtualDepth * sizeof(Transition)
+          ),
+          peak_bytes_(memory_bytes_) {
+      warmup_transitions_.reserve(kAdmissionQueries);
+      XGRAMMAR_DCHECK(matcher_->rule_id_to_completable_states_.size() == external_row_count_ + 1);
+      const auto initial_row_id = InternCurrentCompletableRow();
+      if (!initial_row_id.has_value()) {
+        Disable();
+        return;
+      }
+      const auto initial_configuration_id = InternCurrentConfiguration(*initial_row_id);
+      if (!initial_configuration_id.has_value()) {
+        Disable();
+        return;
+      }
+      PushVirtualRow(
+          Transition{TransitionStatus::kAccepted, *initial_row_id, *initial_configuration_id}
+      );
+      RecordMaterializedRow(*initial_row_id);
+      materialized_depth_ = 1;
+      if (!Admit()) {
+        Disable();
+        return;
+      }
+      fast_queries_remaining_ = kPostAdmissionReuseCheckQueries;
+    }
+
+    // The admitted-cache hit path runs once per vocabulary-trie byte and dominates the remaining
+    // mask tail. Keep it small enough to inline into FillNextTokenBitmask; admission checks,
+    // misses, and fallbacks stay out of line.
+#ifdef _MSC_VER
+    __forceinline bool Advance(uint8_t ch) {
+#else
+    __attribute__((always_inline)) inline bool Advance(uint8_t ch) {
+#endif
+      if (steady_fast_path_) {
+        const Transition cached = current_transition_row_[ch];
+        const TransitionStatus status = cached.Status();
+        if (status == TransitionStatus::kAccepted) {
+          PushVirtualRow(cached);
+          return true;
+        }
+        if (status == TransitionStatus::kRejected) {
+          return false;
+        }
+        return AdvanceSlow(ch);
+      }
+      if (enabled_ && admitted_ && fast_queries_remaining_ != 0) {
+        const Transition cached = current_transition_row_[ch];
+        const TransitionStatus status = cached.Status();
+        if (status == TransitionStatus::kAccepted) {
+          --fast_queries_remaining_;
+          PushVirtualRow(cached);
+          return true;
+        }
+        if (status == TransitionStatus::kRejected) {
+          --fast_queries_remaining_;
+          return false;
+        }
+      }
+      return AdvanceSlow(ch);
+    }
+
+    bool AdvanceSlow(uint8_t ch) {
+      if (!enabled_) {
+        return matcher_->EarleyParser::Advance(ch);
+      }
+      if (transition_depth_ >= kMaxVirtualDepth) {
+        DisableAndMaterialize();
+        return matcher_->EarleyParser::Advance(ch);
+      }
+      FlushFastQueries();
+      const uint64_t reuse_window_queries = queries_ - reuse_window_start_queries_;
+      const uint64_t reuse_window_misses = misses_ - reuse_window_start_misses_;
+      const uint64_t reuse_window_hits = reuse_window_queries - reuse_window_misses;
+      const uint64_t reuse_check_queries =
+          admitted_ ? kPostAdmissionReuseCheckQueries : kAdmissionQueries;
+      if (reuse_window_queries >= reuse_check_queries) {
+        const uint64_t min_reuse_hit_rate_denominator =
+            admitted_ ? kPostAdmissionMinReuseHitRateDenominator
+                      : kAdmissionMinReuseHitRateDenominator;
+        if (reuse_window_hits * min_reuse_hit_rate_denominator < reuse_window_queries) {
+          disabled_for_low_reuse_ = true;
+          DisableAndMaterialize();
+          return matcher_->EarleyParser::Advance(ch);
+        }
+        if (!admitted_ && !Admit()) {
+          DisableAndMaterialize();
+          return matcher_->EarleyParser::Advance(ch);
+        }
+        if (admitted_) {
+          steady_fast_path_ = true;
+        }
+        reuse_window_start_queries_ = queries_;
+        reuse_window_start_misses_ = misses_;
+        if (admitted_ && !steady_fast_path_) {
+          fast_queries_remaining_ = kPostAdmissionReuseCheckQueries;
+        }
+      }
+
+      const uint64_t transition_key =
+          (static_cast<uint64_t>(transition_history_[transition_depth_ - 1].OutputConfigurationId())
+           << 8) |
+          ch;
+      ++queries_;
+      if (const Transition* cached = FindTransition(transition_key)) {
+        if (cached->Status() == TransitionStatus::kRejected) {
+          return false;
+        }
+        PushVirtualRow(*cached);
+        return true;
+      }
+      ++misses_;
+
+      if (num_transitions_ >= kMaxEntries) {
+        DisableAndMaterialize();
+        return matcher_->EarleyParser::Advance(ch);
+      }
+
+      MaterializeVirtualPrefix();
+      const bool accepted = matcher_->EarleyParser::Advance(ch);
+      if (!accepted) {
+        InsertTransition(transition_key, Transition{TransitionStatus::kRejected, -1, -1});
+        return false;
+      }
+
+      const auto output_row_id = InternCurrentCompletableRow();
+      if (!output_row_id.has_value()) {
+        Disable();
+        return true;
+      }
+      const auto output_configuration_id = InternCurrentConfiguration(*output_row_id);
+      if (!output_configuration_id.has_value()) {
+        Disable();
+        return true;
+      }
+      const Transition output_transition{
+          TransitionStatus::kAccepted, *output_row_id, *output_configuration_id
+      };
+      InsertTransition(transition_key, output_transition);
+      PushVirtualRow(output_transition);
+      RecordMaterializedRow(*output_row_id);
+      ++materialized_depth_;
+      return true;
+    }
+
+    void PopLastStates(int32_t count) {
+      if (!enabled_) {
+        matcher_->EarleyParser::PopLastStates(count);
+        return;
+      }
+      XGRAMMAR_DCHECK(count >= 0 && count <= static_cast<int32_t>(transition_depth_));
+      const size_t target_depth = transition_depth_ - count;
+      if (materialized_depth_ > target_depth) {
+        matcher_->EarleyParser::PopLastStates(materialized_depth_ - target_depth);
+      }
+      while (materialized_depth_ > target_depth) {
+        const int32_t canonical_row_id = transition_history_[materialized_depth_ - 1].OutputRowId();
+        XGRAMMAR_DCHECK(!absolute_rows_by_canonical_id_[canonical_row_id].empty());
+        absolute_rows_by_canonical_id_[canonical_row_id].pop_back();
+        --materialized_depth_;
+      }
+      transition_depth_ = target_depth;
+      if (admitted_ && transition_depth_ != 0) {
+        current_configuration_id_ =
+            transition_history_[transition_depth_ - 1].OutputConfigurationId();
+        current_transition_row_ = transition_table_.data() + current_configuration_id_ * 256;
+      }
+    }
+
+    uint64_t Queries() const { return queries_ + PendingFastQueries(); }
+    uint64_t Hits() const { return Queries() - misses_; }
+    size_t NumTransitions() const { return num_transitions_; }
+    size_t PeakCanonicalRows() const { return peak_canonical_rows_; }
+    size_t PeakCanonicalConfigurations() const { return peak_canonical_configurations_; }
+    size_t PeakBytes() const { return peak_bytes_; }
+    bool IsEnabled() const { return enabled_; }
+    bool IsAdmitted() const { return admitted_; }
+    bool DisabledForLowReuse() const { return disabled_for_low_reuse_; }
+    static constexpr size_t MaxVirtualDepth() { return kMaxVirtualDepth; }
+
+    bool PrepareCurrentConfigurationSuffixCertificateMasks() {
+      if (!enabled_ || current_configuration_id_ < 0) {
+        return false;
+      }
+      XGRAMMAR_DCHECK(current_configuration_id_ < static_cast<int32_t>(configurations_.size()));
+      if (suffix_certificate_masks_ready_[current_configuration_id_]) {
+        return true;
+      }
+      auto& cached_masks = suffix_certificate_masks_[current_configuration_id_];
+      const auto& configuration = configurations_[current_configuration_id_];
+      cached_masks.reserve(configuration.scanable_states.size());
+      for (const auto& state : configuration.scanable_states) {
+        if (state.rule_id < 0 || matcher_->compiled_grammar_->earley_parser_metadata
+                                     .rule_has_atomic_token_edges[state.rule_id]) {
+          continue;
+        }
+        const ParserState lookup_state{
+            state.rule_id,
+            state.sequence_id,
+            state.element_id,
+            ParserState::kNoPrevInputPos,
+            -1,
+            state.sub_element_id,
+            state.repeat_count,
+            state.partial_codepoint
+        };
+        const AdaptiveTokenMask* mask = &matcher_->compiled_grammar_->GetAdaptiveTokenMask(
+            lookup_state, lookup_state.rule_id == matcher_->grammar_->GetRootRuleId()
+        );
+        cached_masks.push_back(mask);
+      }
+      std::stable_sort(
+          cached_masks.begin(),
+          cached_masks.end(),
+          [](const AdaptiveTokenMask* lhs, const AdaptiveTokenMask* rhs) {
+            const auto rank = [](StoreType store_type) {
+              if (store_type == StoreType::kRejected) {
+                return 0;
+              }
+              if (store_type == StoreType::kAcceptedBitset) {
+                return 1;
+              }
+              return 2;
+            };
+            return rank(lhs->store_type) < rank(rhs->store_type);
+          }
+      );
+      cached_masks.erase(std::unique(cached_masks.begin(), cached_masks.end()), cached_masks.end());
+      suffix_certificate_masks_ready_[current_configuration_id_] = 1;
+      return true;
+    }
+
+    std::optional<bool> CurrentConfigurationDefinitelyAccepts(
+        int32_t sorted_vocab_index, int32_t token_id
+    ) {
+      if (!PrepareCurrentConfigurationSuffixCertificateMasks()) {
+        return std::nullopt;
+      }
+      auto& cached_masks = suffix_certificate_masks_[current_configuration_id_];
+      constexpr uint32_t kQueriesBeforeSuffixAcceptedUnion = 64;
+      auto& accepted_union = suffix_certificate_accepted_unions_[current_configuration_id_];
+      if (accepted_union != nullptr) {
+        return (*accepted_union)[token_id];
+      }
+      uint32_t& configuration_queries = suffix_certificate_queries_[current_configuration_id_];
+      ++configuration_queries;
+      if (configuration_queries == kQueriesBeforeSuffixAcceptedUnion && !cached_masks.empty()) {
+        auto new_union = std::make_unique<DynamicBitset>(matcher_->tokenizer_info_.GetVocabSize());
+        for (const AdaptiveTokenMask* mask : cached_masks) {
+          if (mask->store_type == StoreType::kAcceptedBitset) {
+            *new_union |= mask->accepted_bitset;
+          } else if (mask->store_type == StoreType::kAccepted) {
+            for (int32_t accepted_index : mask->accepted_indices) {
+              new_union->Set(matcher_->tokenizer_info_.GetSortedDecodedVocab()[accepted_index].first
+              );
+            }
+          } else {
+            matcher_->tmp_suffix_accepted_bitset_.Set();
+            for (int32_t rejected_index : mask->rejected_indices) {
+              matcher_->tmp_suffix_accepted_bitset_.Reset(
+                  matcher_->tokenizer_info_.GetSortedDecodedVocab()[rejected_index].first
+              );
+            }
+            for (int32_t uncertain_index : mask->uncertain_indices) {
+              matcher_->tmp_suffix_accepted_bitset_.Reset(
+                  matcher_->tokenizer_info_.GetSortedDecodedVocab()[uncertain_index].first
+              );
+            }
+            *new_union |= matcher_->tmp_suffix_accepted_bitset_;
+          }
+        }
+        if (TryAccountBytes(MemorySize(*new_union))) {
+          accepted_union = std::move(new_union);
+          return (*accepted_union)[token_id];
+        }
+      }
+      for (const AdaptiveTokenMask* mask : cached_masks) {
+        if (mask->store_type == StoreType::kAcceptedBitset) {
+          if (mask->accepted_bitset[token_id]) {
+            return true;
+          }
+        } else if (mask->store_type == StoreType::kAccepted) {
+          if (std::binary_search(
+                  mask->accepted_indices.begin(), mask->accepted_indices.end(), sorted_vocab_index
+              )) {
+            return true;
+          }
+        } else if (!std::binary_search(
+                       mask->rejected_indices.begin(),
+                       mask->rejected_indices.end(),
+                       sorted_vocab_index
+                   ) &&
+                   !std::binary_search(
+                       mask->uncertain_indices.begin(),
+                       mask->uncertain_indices.end(),
+                       sorted_vocab_index
+                   )) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    const DynamicBitset* CurrentConfigurationAcceptedUnion() {
+      if (!PrepareCurrentConfigurationSuffixCertificateMasks()) {
+        return nullptr;
+      }
+      auto& accepted_union = suffix_certificate_accepted_unions_[current_configuration_id_];
+      if (accepted_union != nullptr) {
+        return accepted_union.get();
+      }
+      const auto& cached_masks = suffix_certificate_masks_[current_configuration_id_];
+      if (cached_masks.empty()) {
+        return nullptr;
+      }
+      auto new_union = std::make_unique<DynamicBitset>(matcher_->tokenizer_info_.GetVocabSize());
+      for (const AdaptiveTokenMask* mask : cached_masks) {
+        if (mask->store_type == StoreType::kAcceptedBitset) {
+          *new_union |= mask->accepted_bitset;
+        } else if (mask->store_type == StoreType::kAccepted) {
+          for (int32_t accepted_index : mask->accepted_indices) {
+            new_union->Set(matcher_->tokenizer_info_.GetSortedDecodedVocab()[accepted_index].first);
+          }
+        } else {
+          matcher_->tmp_suffix_accepted_bitset_.Set();
+          for (int32_t rejected_index : mask->rejected_indices) {
+            matcher_->tmp_suffix_accepted_bitset_.Reset(
+                matcher_->tokenizer_info_.GetSortedDecodedVocab()[rejected_index].first
+            );
+          }
+          for (int32_t uncertain_index : mask->uncertain_indices) {
+            matcher_->tmp_suffix_accepted_bitset_.Reset(
+                matcher_->tokenizer_info_.GetSortedDecodedVocab()[uncertain_index].first
+            );
+          }
+          *new_union |= matcher_->tmp_suffix_accepted_bitset_;
+        }
+      }
+      if (!TryAccountBytes(MemorySize(*new_union))) {
+        return nullptr;
+      }
+      accepted_union = std::move(new_union);
+      return accepted_union.get();
+    }
+
+   private:
+    static constexpr size_t kMaxEntries = 4096;
+    static constexpr size_t kMaxVirtualDepth = 1024;
+    static constexpr size_t kMaxBytes = 8 * 1024 * 1024;
+    static constexpr size_t kMaxCanonicalRows = 128;
+    static constexpr size_t kMaxCanonicalConfigurations = 128;
+    static constexpr uint64_t kAdmissionQueries = 16;
+    static constexpr uint64_t kPostAdmissionReuseCheckQueries = 4096;
+    static constexpr uint64_t kAdmissionMinReuseHitRateDenominator = 4;
+    static constexpr uint64_t kPostAdmissionMinReuseHitRateDenominator = 8;
+    static constexpr size_t kDenseTransitionCount = kMaxCanonicalConfigurations * 256;
+
+    enum class TransitionStatus : uint8_t { kEmpty, kRejected, kAccepted };
+
+    struct Transition {
+      Transition() = default;
+
+      Transition(TransitionStatus status, int32_t output_row_id, int32_t output_configuration_id) {
+        if (status == TransitionStatus::kEmpty) {
+          encoded_ = kEmpty;
+        } else if (status == TransitionStatus::kRejected) {
+          encoded_ = kRejected;
+        } else {
+          XGRAMMAR_DCHECK(
+              output_row_id >= 0 && output_row_id < static_cast<int32_t>(kMaxCanonicalRows) &&
+              output_configuration_id >= 0 &&
+              output_configuration_id < static_cast<int32_t>(kMaxCanonicalConfigurations)
+          );
+          encoded_ = static_cast<uint16_t>(
+              kAccepted | (output_row_id << kRowShift) |
+              (output_configuration_id << kConfigurationShift)
+          );
+        }
+      }
+
+      TransitionStatus Status() const {
+        switch (encoded_ & kStatusMask) {
+          case kRejected:
+            return TransitionStatus::kRejected;
+          case kAccepted:
+            return TransitionStatus::kAccepted;
+          default:
+            return TransitionStatus::kEmpty;
+        }
+      }
+
+      int32_t OutputRowId() const {
+        XGRAMMAR_DCHECK(Status() == TransitionStatus::kAccepted);
+        return (encoded_ >> kRowShift) & kIdMask;
+      }
+
+      int32_t OutputConfigurationId() const {
+        XGRAMMAR_DCHECK(Status() == TransitionStatus::kAccepted);
+        return (encoded_ >> kConfigurationShift) & kIdMask;
+      }
+
+     private:
+      static constexpr uint16_t kEmpty = 0;
+      static constexpr uint16_t kRejected = 1;
+      static constexpr uint16_t kAccepted = 2;
+      static constexpr uint16_t kStatusMask = 3;
+      static constexpr uint16_t kRowShift = 2;
+      static constexpr uint16_t kConfigurationShift = 9;
+      static constexpr uint16_t kIdMask = 127;
+      uint16_t encoded_ = kEmpty;
+    };
+    static_assert(sizeof(Transition) == sizeof(uint16_t));
+
+    struct TransitionSlot {
+      static constexpr uint64_t kEmptyKey = ~uint64_t{0};
+
+      uint64_t key = kEmptyKey;
+      Transition transition;
+    };
+
+    const Transition* FindTransition(uint64_t key) const {
+      if (!admitted_) {
+        for (const auto& slot : warmup_transitions_) {
+          if (slot.key == key) {
+            return &slot.transition;
+          }
+        }
+        return nullptr;
+      }
+      XGRAMMAR_DCHECK(key < transition_table_.size());
+      const auto& transition = transition_table_[key];
+      return transition.Status() == TransitionStatus::kEmpty ? nullptr : &transition;
+    }
+
+    void InsertTransitionIntoTable(uint64_t key, const Transition& transition) {
+      XGRAMMAR_DCHECK(
+          key < transition_table_.size() &&
+          transition_table_[key].Status() == TransitionStatus::kEmpty
+      );
+      transition_table_[key] = transition;
+    }
+
+    void InsertTransition(uint64_t key, const Transition& transition) {
+      if (admitted_) {
+        InsertTransitionIntoTable(key, transition);
+      } else {
+        XGRAMMAR_DCHECK(warmup_transitions_.size() < kAdmissionQueries);
+        warmup_transitions_.push_back(TransitionSlot{key, transition});
+      }
+      ++num_transitions_;
+    }
+
+    bool Admit() {
+      XGRAMMAR_DCHECK(!admitted_);
+      if (!TryAccountBytes(kDenseTransitionCount * sizeof(Transition))) {
+        return false;
+      }
+      transition_table_.resize(kDenseTransitionCount);
+      admitted_ = true;
+      for (const auto& slot : warmup_transitions_) {
+        InsertTransitionIntoTable(slot.key, slot.transition);
+      }
+      std::vector<TransitionSlot>().swap(warmup_transitions_);
+      current_configuration_id_ =
+          transition_history_[transition_depth_ - 1].OutputConfigurationId();
+      current_transition_row_ = transition_table_.data() + current_configuration_id_ * 256;
+      return true;
+    }
+
+    CachedParserState NormalizeState(const ParserState& state, int32_t current_row) const {
+      CachedRowRefKind row_ref_kind = CachedRowRefKind::kNone;
+      int32_t row_ref_id = -1;
+      if (state.rule_start_pos != ParserState::kNoPrevInputPos) {
+        if (state.rule_start_pos < external_row_count_) {
+          row_ref_kind = CachedRowRefKind::kExternal;
+          row_ref_id = state.rule_start_pos;
+        } else if (state.rule_start_pos == current_row) {
+          row_ref_kind = CachedRowRefKind::kCurrent;
+        } else {
+          const int32_t local_index = state.rule_start_pos - external_row_count_;
+          XGRAMMAR_DCHECK(
+              local_index >= 0 && local_index < static_cast<int32_t>(transition_depth_)
+          );
+          row_ref_kind = CachedRowRefKind::kCanonical;
+          row_ref_id = transition_history_[local_index].OutputRowId();
+        }
+      }
+      return CachedParserState{
+          state.rule_id,
+          state.sequence_id,
+          state.element_id,
+          row_ref_kind,
+          row_ref_id,
+          state.sub_element_id,
+          state.repeat_count,
+          state.partial_codepoint
+      };
+    }
+
+    ParserState MaterializeState(const CachedParserState& state, int32_t current_row) const {
+      int32_t rule_start_pos = ParserState::kNoPrevInputPos;
+      switch (state.row_ref_kind) {
+        case CachedRowRefKind::kNone:
+          break;
+        case CachedRowRefKind::kExternal:
+          rule_start_pos = state.row_ref_id;
+          break;
+        case CachedRowRefKind::kCanonical:
+          rule_start_pos = FindAbsoluteRow(state.row_ref_id);
+          break;
+        case CachedRowRefKind::kCurrent:
+          rule_start_pos = current_row;
+          break;
+      }
+      return ParserState{
+          state.rule_id,
+          state.sequence_id,
+          state.element_id,
+          rule_start_pos,
+          state.sub_element_id,
+          state.repeat_count,
+          state.partial_codepoint
+      };
+    }
+
+    std::optional<int32_t> InternCurrentCompletableRow() {
+      const int32_t current_row = matcher_->rule_id_to_completable_states_.size() - 1;
+      const auto row = matcher_->rule_id_to_completable_states_[current_row];
+      const auto additional_bytes = AccountedElementBytes(
+          sizeof(CanonicalCompletableRow) + sizeof(std::vector<int32_t>),
+          row.size(),
+          sizeof(std::pair<int32_t, CachedParserState>)
+      );
+      if (!additional_bytes.has_value()) {
+        return std::nullopt;
+      }
+      CanonicalCompletableRow normalized;
+      normalized.entries.reserve(row.size());
+      for (const auto& [ref_rule_id, parent_state] : row) {
+        normalized.entries.emplace_back(ref_rule_id, NormalizeState(parent_state, current_row));
+      }
+      for (int32_t i = 0; i < static_cast<int32_t>(rows_.size()); ++i) {
+        if (rows_[i] == normalized) {
+          return i;
+        }
+      }
+      if (rows_.size() >= kMaxCanonicalRows || !TryAccountBytes(*additional_bytes)) {
+        return std::nullopt;
+      }
+      rows_.push_back(std::move(normalized));
+      absolute_rows_by_canonical_id_.emplace_back();
+      peak_canonical_rows_ = std::max(peak_canonical_rows_, rows_.size());
+      return rows_.size() - 1;
+    }
+
+    std::optional<int32_t> InternCurrentConfiguration(int32_t current_row_id) {
+      const int32_t current_row = matcher_->rule_id_to_completable_states_.size() - 1;
+      const auto scanable_states = matcher_->scanable_state_history_[current_row];
+      const auto additional_bytes = AccountedElementBytes(
+          sizeof(CanonicalConfiguration), scanable_states.size(), sizeof(CachedParserState)
+      );
+      if (!additional_bytes.has_value()) {
+        return std::nullopt;
+      }
+      CanonicalConfiguration normalized{current_row_id, matcher_->is_completed_.back() != 0, {}};
+      normalized.scanable_states.reserve(scanable_states.size());
+      for (const auto& state : scanable_states) {
+        normalized.scanable_states.push_back(NormalizeState(state, current_row));
+      }
+      for (int32_t i = 0; i < static_cast<int32_t>(configurations_.size()); ++i) {
+        if (configurations_[i] == normalized) {
+          return i;
+        }
+      }
+      if (configurations_.size() >= kMaxCanonicalConfigurations ||
+          !TryAccountBytes(*additional_bytes)) {
+        return std::nullopt;
+      }
+      configurations_.push_back(std::move(normalized));
+      peak_canonical_configurations_ =
+          std::max(peak_canonical_configurations_, configurations_.size());
+      return configurations_.size() - 1;
+    }
+
+    int32_t FindAbsoluteRow(int32_t canonical_row_id) const {
+      XGRAMMAR_DCHECK(
+          canonical_row_id >= 0 &&
+          canonical_row_id < static_cast<int32_t>(absolute_rows_by_canonical_id_.size()) &&
+          !absolute_rows_by_canonical_id_[canonical_row_id].empty()
+      );
+      return absolute_rows_by_canonical_id_[canonical_row_id].back();
+    }
+
+    void RecordMaterializedRow(int32_t canonical_row_id) {
+      const int32_t absolute_row = external_row_count_ + materialized_depth_;
+      absolute_rows_by_canonical_id_[canonical_row_id].push_back(absolute_row);
+    }
+
+    void PushVirtualRow(const Transition& transition) {
+      XGRAMMAR_DCHECK(transition_depth_ < kMaxVirtualDepth);
+      transition_history_[transition_depth_++] = transition;
+      if (admitted_) {
+        const int32_t output_configuration_id = transition.OutputConfigurationId();
+        if (output_configuration_id != current_configuration_id_) {
+          current_configuration_id_ = output_configuration_id;
+          current_transition_row_ = transition_table_.data() + output_configuration_id * 256;
+        }
+      }
+    }
+
+    uint64_t PendingFastQueries() const {
+      return admitted_ && !steady_fast_path_
+                 ? kPostAdmissionReuseCheckQueries - fast_queries_remaining_
+                 : 0;
+    }
+
+    void FlushFastQueries() {
+      if (!admitted_ || steady_fast_path_) {
+        return;
+      }
+      queries_ += PendingFastQueries();
+      fast_queries_remaining_ = kPostAdmissionReuseCheckQueries;
+    }
+
+    void MaterializeTransition(const Transition& transition) {
+      const int32_t current_row = matcher_->rule_id_to_completable_states_.size();
+      const auto& cached_row = rows_[transition.OutputRowId()];
+      tmp_completable_states_.clear();
+      tmp_completable_states_.reserve(cached_row.entries.size());
+      for (const auto& [ref_rule_id, parent_state] : cached_row.entries) {
+        tmp_completable_states_.emplace_back(
+            ref_rule_id, MaterializeState(parent_state, current_row)
+        );
+      }
+
+      const auto& cached_configuration = configurations_[transition.OutputConfigurationId()];
+      XGRAMMAR_DCHECK(cached_configuration.current_row_id == transition.OutputRowId());
+      tmp_scanable_states_.clear();
+      tmp_scanable_states_.reserve(cached_configuration.scanable_states.size());
+      for (const auto& state : cached_configuration.scanable_states) {
+        tmp_scanable_states_.push_back(MaterializeState(state, current_row));
+      }
+
+      matcher_->rule_id_to_completable_states_.PushBack(tmp_completable_states_);
+      matcher_->is_completed_.push_back(cached_configuration.is_completed);
+      matcher_->scanable_state_history_.PushBack(tmp_scanable_states_);
+      matcher_->tmp_accept_stop_token_ = cached_configuration.is_completed;
+      matcher_->tmp_states_to_be_added_.clear();
+    }
+
+    void MaterializeVirtualPrefix() {
+      while (materialized_depth_ < transition_depth_) {
+        const Transition& transition = transition_history_[materialized_depth_];
+        MaterializeTransition(transition);
+        RecordMaterializedRow(transition.OutputRowId());
+        ++materialized_depth_;
+      }
+    }
+
+    std::optional<size_t> AccountedElementBytes(
+        size_t base_bytes, size_t element_count, size_t element_bytes
+    ) const {
+      if (base_bytes > kMaxBytes - memory_bytes_) {
+        return std::nullopt;
+      }
+      const size_t available_element_bytes = kMaxBytes - memory_bytes_ - base_bytes;
+      if (element_count > available_element_bytes / element_bytes) {
+        return std::nullopt;
+      }
+      return base_bytes + element_count * element_bytes;
+    }
+
+    bool TryAccountBytes(size_t additional_bytes) {
+      if (additional_bytes > kMaxBytes - memory_bytes_) {
+        return false;
+      }
+      memory_bytes_ += additional_bytes;
+      peak_bytes_ = std::max(peak_bytes_, memory_bytes_);
+      return true;
+    }
+
+    void Disable() {
+      enabled_ = false;
+      admitted_ = false;
+      steady_fast_path_ = false;
+      fast_queries_remaining_ = 0;
+      std::vector<TransitionSlot>().swap(warmup_transitions_);
+      std::vector<Transition>().swap(transition_table_);
+      std::vector<CanonicalCompletableRow>().swap(rows_);
+      std::vector<CanonicalConfiguration>().swap(configurations_);
+      std::vector<std::vector<int32_t>>().swap(absolute_rows_by_canonical_id_);
+      std::vector<std::pair<int32_t, ParserState>>().swap(tmp_completable_states_);
+      std::vector<ParserState>().swap(tmp_scanable_states_);
+      transition_depth_ = 0;
+      current_transition_row_ = nullptr;
+      current_configuration_id_ = -1;
+      materialized_depth_ = 0;
+      memory_bytes_ = 0;
+    }
+
+    void DisableAndMaterialize() {
+      MaterializeVirtualPrefix();
+      Disable();
+    }
+
+    Impl* matcher_;
+    int32_t external_row_count_;
+    bool enabled_ = true;
+    bool admitted_ = false;
+    bool steady_fast_path_ = false;
+    bool disabled_for_low_reuse_ = false;
+    uint64_t queries_ = 0;
+    uint64_t misses_ = 0;
+    uint64_t reuse_window_start_queries_ = 0;
+    uint64_t reuse_window_start_misses_ = 0;
+    uint64_t fast_queries_remaining_ = 0;
+    size_t memory_bytes_ = 0;
+    size_t peak_bytes_ = 0;
+    size_t peak_canonical_rows_ = 0;
+    size_t peak_canonical_configurations_ = 0;
+    size_t num_transitions_ = 0;
+    std::vector<TransitionSlot> warmup_transitions_;
+    std::vector<Transition> transition_table_;
+    std::vector<CanonicalCompletableRow> rows_;
+    std::vector<CanonicalConfiguration> configurations_;
+    std::vector<std::vector<int32_t>> absolute_rows_by_canonical_id_;
+    std::array<Transition, kMaxVirtualDepth> transition_history_;
+    size_t transition_depth_ = 0;
+    const Transition* current_transition_row_ = nullptr;
+    int32_t current_configuration_id_ = -1;
+    size_t materialized_depth_ = 0;
+    std::vector<std::pair<int32_t, ParserState>> tmp_completable_states_;
+    std::vector<ParserState> tmp_scanable_states_;
+    std::array<std::vector<const AdaptiveTokenMask*>, kMaxCanonicalConfigurations>
+        suffix_certificate_masks_;
+    std::array<uint8_t, kMaxCanonicalConfigurations> suffix_certificate_masks_ready_{};
+    std::array<uint32_t, kMaxCanonicalConfigurations> suffix_certificate_queries_{};
+    std::array<std::unique_ptr<DynamicBitset>, kMaxCanonicalConfigurations>
+        suffix_certificate_accepted_unions_;
+  };
+
+#ifdef _MSC_VER
+  __declspec(noinline)
+#else
+  __attribute__((noinline))
+#endif
+  int32_t
+  EvaluateDisjointUncertainTokens(
+      const AdaptiveTokenMask& adaptive_token_mask,
+      ContinuationTransitionCache* transition_cache,
+      bool* has_rejection
+  ) {
+    const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+    const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
+    const int32_t* uncertain_indices = adaptive_token_mask.uncertain_indices.data();
+    const int32_t* uncertain_lcps = adaptive_token_mask.uncertain_lcp_with_previous.data();
+    const size_t uncertain_count = adaptive_token_mask.uncertain_indices.size();
+    int32_t prev_matched_size = 0;
+    int32_t last_rejected_uncertain_range = 0;
+    int32_t lcp_with_last_evaluated_token = std::numeric_limits<int32_t>::max();
+
+    for (size_t position = 0; position < uncertain_count; ++position) {
+      const int32_t cur_token_idx = uncertain_indices[position];
+      if (position != 0) {
+        lcp_with_last_evaluated_token =
+            std::min(lcp_with_last_evaluated_token, uncertain_lcps[position]);
+      }
+      if (cur_token_idx < last_rejected_uncertain_range) {
+        if (!*has_rejection) {
+          tmp_deferred_uncertain_accepted_bitset_ = adaptive_token_mask.uncertain_bitset;
+          *has_rejection = true;
+        }
+        tmp_deferred_uncertain_accepted_bitset_.Reset(sorted_decoded_vocab[cur_token_idx].first);
+        continue;
+      }
+
+      const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
+      bool accepted = true;
+      if (position != 0) {
+        const int32_t lcp_len = lcp_with_last_evaluated_token;
+        if (lcp_len > prev_matched_size) {
+          last_rejected_uncertain_range = subtree_range[cur_token_idx];
+          accepted = false;
+        } else if (lcp_len < prev_matched_size) {
+          transition_cache->PopLastStates(prev_matched_size - lcp_len);
+        }
+        prev_matched_size = std::min(prev_matched_size, lcp_len);
+      }
+
+      if (accepted) {
+        for (int32_t j = prev_matched_size; j < static_cast<int32_t>(cur_token.size()); ++j) {
+          if (!transition_cache->Advance(cur_token[j])) {
+            last_rejected_uncertain_range = subtree_range[cur_token_idx];
+            accepted = false;
+            break;
+          }
+          prev_matched_size = j + 1;
+        }
+      }
+
+      if (!accepted) {
+        if (!*has_rejection) {
+          tmp_deferred_uncertain_accepted_bitset_ = adaptive_token_mask.uncertain_bitset;
+          *has_rejection = true;
+        }
+        tmp_deferred_uncertain_accepted_bitset_.Reset(sorted_decoded_vocab[cur_token_idx].first);
+      }
+      lcp_with_last_evaluated_token = std::numeric_limits<int32_t>::max();
+    }
+    return prev_matched_size;
+  }
 
   /*!
    * \brief If is_uncertain_saved is true, find the next token in uncertain_indices. Otherwise,
@@ -699,6 +2128,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   mutable bool has_warned_temperature_conflict_ = false;
   std::deque<int> token_length_history;
 
+  ResolvedUncertainMaskCache resolved_uncertain_mask_cache_;
   /*! \brief Set by the last mask computation when an exhausted budget could be enforced: the
    * next accept commits the same state transition used to compute that mask. */
   bool budget_enforce_pending_ = false;
@@ -736,8 +2166,13 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
   DynamicBitset tmp_accepted_bitset_;
+  DynamicBitset tmp_deferred_uncertain_accepted_bitset_;
+  DynamicBitset tmp_unresolved_uncertain_bitset_;
+  DynamicBitset tmp_suffix_accepted_bitset_;
+  std::vector<int32_t> tmp_unresolved_uncertain_indices_;
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
+  std::vector<WhitespaceContinuationBatchCacheEntry> whitespace_continuation_batch_cache_;
 };
 
 class BatchGrammarMatcher::Impl {
@@ -917,9 +2352,9 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
   while (!tmp_process_state_queue_.empty()) {
     const auto state = std::move(tmp_process_state_queue_.front());
     tmp_process_state_queue_.pop();
-    auto [scanable, completable] = Predict(state, debug_print);
+    auto [scanable, completable] = Predict(*state, debug_print);
     if (completable) {
-      Complete(state, debug_print);
+      Complete(*state, debug_print);
     }
     if (scanable) {
       tmp_states_to_be_added_.push_back(state);
@@ -932,7 +2367,7 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
   bool any_expired = false;
   bool any_alive = false;
   for (const auto& state : tmp_states_to_be_added_) {
-    if (IsExpiredState(state)) {
+    if (IsExpiredState(*state)) {
       any_expired = true;
     } else {
       any_alive = true;
@@ -946,7 +2381,7 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
         std::remove_if(
             tmp_states_to_be_added_.begin(),
             tmp_states_to_be_added_.end(),
-            [&](const ParserState& state) { return IsExpiredState(state); }
+            [&](const ParserState* state) { return IsExpiredState(*state); }
         ),
         tmp_states_to_be_added_.end()
     );
@@ -957,7 +2392,7 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
     return false;
   }
   scanable_state_history_.PopBack(1);
-  scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  scanable_state_history_.PushBackIndirect(tmp_states_to_be_added_);
   is_completed_.back() = tmp_accept_stop_token_;
   return true;
 }
@@ -1004,9 +2439,9 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
   while (!tmp_process_state_queue_.empty()) {
     const auto state = std::move(tmp_process_state_queue_.front());
     tmp_process_state_queue_.pop();
-    auto [scanable, completable] = Predict(state, debug_print);
+    auto [scanable, completable] = Predict(*state, debug_print);
     if (completable) {
-      Complete(state, debug_print);
+      Complete(*state, debug_print);
     }
     if (scanable) {
       tmp_states_to_be_added_.push_back(state);
@@ -1019,7 +2454,7 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
   bool any_expired = false;
   bool any_alive = false;
   for (const auto& state : tmp_states_to_be_added_) {
-    if (IsCharExpiredState(state)) {
+    if (IsCharExpiredState(*state)) {
       any_expired = true;
     } else {
       any_alive = true;
@@ -1030,7 +2465,7 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
         std::remove_if(
             tmp_states_to_be_added_.begin(),
             tmp_states_to_be_added_.end(),
-            [&](const ParserState& state) { return IsCharExpiredState(state); }
+            [&](const ParserState* state) { return IsCharExpiredState(*state); }
         ),
         tmp_states_to_be_added_.end()
     );
@@ -1047,7 +2482,7 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
     return false;
   }
   scanable_state_history_.PopBack(1);
-  scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  scanable_state_history_.PushBackIndirect(tmp_states_to_be_added_);
   is_completed_.back() = tmp_accept_stop_token_;
   return true;
 }
@@ -1830,17 +3265,48 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
 void GrammarMatcher::Impl::FillBitmaskForStates(
     int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
 ) {
+  const auto fill_started_at = details::Clock::now();
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
-  const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
   // We need to have a copy, because scanable_state_history_ will be modified during the
   // FillNextTokenBitmask process, which can lead to undefined behavior.
-  std::vector<ParserState> latest_states;
-  for (const auto& state : scanable_state_history_[scanable_state_history_.size() - 1]) {
-    if (skip_expired && IsExpiredState(state)) {
-      continue;
+  auto latest_states = GetLatestScanableStates();
+  if (skip_expired) {
+    latest_states.erase(
+        std::remove_if(
+            latest_states.begin(),
+            latest_states.end(),
+            [&](const ParserState& state) { return IsExpiredState(state); }
+        ),
+        latest_states.end()
+    );
+  }
+  uint64_t raw_state_hash = latest_states.size();
+  for (const auto& state : latest_states) {
+    HashCombineBinary(raw_state_hash, static_cast<uint32_t>(state.rule_id));
+    HashCombineBinary(raw_state_hash, static_cast<uint32_t>(state.sequence_id));
+    HashCombineBinary(raw_state_hash, static_cast<uint32_t>(state.element_id));
+    HashCombineBinary(raw_state_hash, static_cast<uint32_t>(state.sub_element_id));
+    HashCombineBinary(raw_state_hash, static_cast<uint32_t>(state.repeat_count));
+    HashCombineBinary(raw_state_hash, static_cast<uint32_t>(state.partial_codepoint));
+  }
+  bool resolved_mask_cache_started = false;
+  std::optional<int32_t> full_mask_configuration;
+  if (!has_char_budget_rules_ && resolved_uncertain_mask_cache_.MayHaveFullMask(raw_state_hash)) {
+    resolved_uncertain_mask_cache_.BeginFill();
+    resolved_mask_cache_started = true;
+    full_mask_configuration = resolved_uncertain_mask_cache_.InternCurrentConfiguration();
+    if (full_mask_configuration.has_value()) {
+      if (const auto* cached_mask = resolved_uncertain_mask_cache_.FindFullMask(
+              raw_state_hash, *full_mask_configuration
+          )) {
+        DynamicBitset output_mask(
+            tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
+        );
+        output_mask = *cached_mask;
+        return;
+      }
     }
-    latest_states.push_back(state);
   }
 
   // We check all the latest states of the earley parser, and check all the masks of the leaf
@@ -1858,168 +3324,382 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                        << ", num of states=" << latest_states.size();
   }
 
-  std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
-      latest_states_with_masks;
+  std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
-    XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+    const AdaptiveTokenMask* adaptive_token_mask =
+        &compiled_grammar_->GetAdaptiveTokenMask(state, state.rule_id == grammar_->GetRootRuleId());
     if (state.char_budget_deadline >= 0) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
-        FillBitmaskForCharBudgetBoundary(adaptive_token_mask, std::max(remaining_chars, 0));
+        FillBitmaskForCharBudgetBoundary(*adaptive_token_mask, std::max(remaining_chars, 0));
         continue;
       }
     }
-    latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
-    if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
-      tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
-    } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
-      for (auto idx : adaptive_token_mask.accepted_indices) {
+    latest_states_with_masks.emplace_back(state, adaptive_token_mask);
+    if (adaptive_token_mask->store_type == StoreType::kAcceptedBitset) {
+      tmp_accepted_bitset_ |= adaptive_token_mask->accepted_bitset;
+    } else if (adaptive_token_mask->store_type == StoreType::kAccepted) {
+      for (auto idx : adaptive_token_mask->accepted_indices) {
         tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
       }
     }
   }
 
-  for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+  constexpr bool used_full_configuration_hybrid = false;
 
-    // For each ParserState, we will check every uncertain token and put them into the accepted or
-    // rejected list.
+  if (!used_full_configuration_hybrid) {
+    for (const auto& [state, adaptive_token_mask_ptr] : latest_states_with_masks) {
+      const auto& adaptive_token_mask = *adaptive_token_mask_ptr;
+      constexpr size_t kMinUncertainTokensForTransitionCache = 128;
+      const bool use_transition_cache =
+          !has_char_budget_rules_ &&
+          adaptive_token_mask.uncertain_indices.size() >= kMinUncertainTokensForTransitionCache &&
+          adaptive_token_mask.max_uncertain_token_length <
+              static_cast<int32_t>(ContinuationTransitionCache::MaxVirtualDepth());
+      const int32_t external_row_count =
+          use_transition_cache ? rule_id_to_completable_states_.size() : -1;
+      std::unique_ptr<ContinuationTransitionCache> transition_cache;
 
-    // Step 2. Update the accepted tokens in accepted_indices_delta, or the rejected tokens in
-    // rejected_indices_delta.
+      // For each ParserState, we will check every uncertain token and put them into the accepted or
+      // rejected list.
 
-    // If the accepted tokens are saved, it means it is likely to be smaller than the rejected
-    // tokens, so we will just find the accepted tokens, and vice versa.
+      // Step 2. Update the accepted tokens in accepted_indices_delta, or the rejected tokens in
+      // rejected_indices_delta.
 
-    tmp_rejected_indices_delta_.clear();
+      // If the accepted tokens are saved, it means it is likely to be smaller than the rejected
+      // tokens, so we will just find the accepted tokens, and vice versa.
 
-    // Examine only the current one ParserState
-    std::optional<Impl> atomic_trial_base;
-    if (has_char_budget_rules_ && !adaptive_token_mask.uncertain_indices.empty()) {
-      atomic_trial_base.emplace(*this);
-      atomic_trial_base->capture_recording_ = false;
-    }
-    PushOneStateToCheck(state);
-    bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
-    int32_t saved_temporary_input_start_row = -1;
-    std::string saved_temporary_input_bytes;
-    if (track_temporary_input) {
-      saved_temporary_input_start_row = temporary_input_start_row_;
-      saved_temporary_input_bytes = std::move(temporary_input_bytes_);
-      temporary_input_start_row_ = scanable_state_history_.size() - 1;
-      temporary_input_bytes_.clear();
-    }
+      tmp_rejected_indices_delta_.clear();
 
-    const std::string* prev_token = nullptr;
-    int prev_matched_size = 0;
-    if (debug_print) {
-      XGRAMMAR_LOG(INFO) << "The ParserState is " << state << ", the mask is "
-                         << adaptive_token_mask.Print(tokenizer_info_);
-    }
-    int last_rejected_uncertain_range = 0;
-    for (const auto& cur_token_idx : adaptive_token_mask.uncertain_indices) {
-      // Check if the current token is already accepted. If it is, we can skip it.
-      if (tmp_accepted_bitset_[sorted_decoded_vocab[cur_token_idx].first]) {
-        continue;
-      }
-
-      // Check if the current token is in the rejected range. i.e. check if the current token
-      // is on the subtree of the rejected token.
-      if (cur_token_idx < last_rejected_uncertain_range) {
-        if (adaptive_token_mask.store_type == StoreType::kRejected) {
-          tmp_rejected_indices_delta_.push_back(cur_token_idx);
-        }
-        continue;
-      }
-
-      const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
-      bool accepted = !cur_token.empty() || !has_char_budget_rules_;
-
-      // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
-      // We can reuse the previous matched size to avoid unnecessary matching.
-      if (prev_token) {
-        int lcp_len = std::mismatch(
-                          cur_token.begin(), cur_token.end(), prev_token->begin(), prev_token->end()
-                      )
-                          .first -
-                      cur_token.begin();
-        if (lcp_len > prev_matched_size) {
-          last_rejected_uncertain_range = subtree_range[cur_token_idx];
-          accepted = false;
-        } else if (lcp_len < prev_matched_size) {
-          PopLastStates(prev_matched_size - lcp_len);
-          if (track_temporary_input) {
-            temporary_input_bytes_.resize(lcp_len);
-          }
-        }
-        prev_matched_size = std::min(prev_matched_size, lcp_len);
-      }
-
-      // Step 2.2. Find if the current token is accepted or rejected.
-      if (accepted) {
-        for (int j = prev_matched_size; j < static_cast<int>(cur_token.size()); ++j) {
-          bool byte_accepted = has_char_budget_rules_
-                                   ? AdvanceWithCharacterBudget(static_cast<uint8_t>(cur_token[j]))
-                                   : Advance(static_cast<uint8_t>(cur_token[j]));
-          if (!byte_accepted) {
-            last_rejected_uncertain_range = subtree_range[cur_token_idx];
-            accepted = false;
-            break;
-          }
-          if (track_temporary_input) {
-            temporary_input_bytes_.push_back(cur_token[j]);
-          }
-          prev_matched_size = j + 1;
+      if (!has_char_budget_rules_) {
+        if (const DynamicBitset* whitespace_continuation_batch =
+                FindOrBuildWhitespaceContinuationBatch(state, adaptive_token_mask)) {
+          tmp_accepted_bitset_ |= *whitespace_continuation_batch;
         }
       }
 
-      if (!accepted && has_char_budget_rules_) {
-        int32_t token_char_count = 0;
-        for (uint8_t byte : cur_token) {
-          token_char_count += StartsUTF8Codepoint(byte);
+      // Examine only the current one ParserState
+      std::optional<Impl> atomic_trial_base;
+      if (has_char_budget_rules_ && !adaptive_token_mask.uncertain_indices.empty()) {
+        atomic_trial_base.emplace(*this);
+        atomic_trial_base->capture_recording_ = false;
+      }
+      PushOneStateToCheck(state);
+      bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
+      int32_t saved_temporary_input_start_row = -1;
+      std::string saved_temporary_input_bytes;
+      if (track_temporary_input) {
+        saved_temporary_input_start_row = temporary_input_start_row_;
+        saved_temporary_input_bytes = std::move(temporary_input_bytes_);
+        temporary_input_start_row_ = scanable_state_history_.size() - 1;
+        temporary_input_bytes_.clear();
+      }
+
+      const std::string* prev_token = nullptr;
+      int prev_matched_size = 0;
+      if (debug_print) {
+        XGRAMMAR_LOG(INFO) << "The ParserState is " << state << ", the mask is "
+                           << adaptive_token_mask.Print(tokenizer_info_);
+      }
+      int last_rejected_uncertain_range = 0;
+      const bool has_uncertain_bitset = adaptive_token_mask.uncertain_bitset.Size() != 0;
+      const bool stores_accepted_tokens =
+          adaptive_token_mask.store_type == StoreType::kAcceptedBitset ||
+          adaptive_token_mask.store_type == StoreType::kAccepted;
+      const bool uncertain_already_accepted =
+          has_uncertain_bitset &&
+          adaptive_token_mask.uncertain_bitset.IsSubsetOf(tmp_accepted_bitset_);
+      std::optional<int32_t> resolved_mask_configuration;
+      bool resolved_mask_cache_hit = false;
+      if (!has_char_budget_rules_ && has_uncertain_bitset && stores_accepted_tokens &&
+          !uncertain_already_accepted) {
+        if (!resolved_mask_cache_started) {
+          resolved_uncertain_mask_cache_.BeginFill();
+          resolved_mask_cache_started = true;
         }
-        XGRAMMAR_DCHECK(atomic_trial_base.has_value());
-        Impl atomic_trial(atomic_trial_base.value());
-        atomic_trial.PushOneStateToCheck(state);
-        accepted = atomic_trial.AdvanceAtomicTokenWithCharacterBudget(
-            sorted_decoded_vocab[cur_token_idx].first, token_char_count
+        resolved_mask_configuration = resolved_uncertain_mask_cache_.InternCurrentConfiguration();
+        if (resolved_mask_configuration.has_value() &&
+            resolved_uncertain_mask_cache_.IsAllAccepted(
+                &adaptive_token_mask, *resolved_mask_configuration
+            )) {
+          tmp_accepted_bitset_ |= adaptive_token_mask.uncertain_bitset;
+          resolved_mask_cache_hit = true;
+        }
+      }
+      const bool skip_uncertain_evaluation = uncertain_already_accepted || resolved_mask_cache_hit;
+      const bool uncertain_tokens_are_disjoint =
+          has_uncertain_bitset &&
+          !adaptive_token_mask.uncertain_bitset.Intersects(tmp_accepted_bitset_);
+      const std::vector<int32_t>* uncertain_indices_to_evaluate =
+          &adaptive_token_mask.uncertain_indices;
+      bool evaluates_sparse_unresolved_tokens = false;
+      if (!skip_uncertain_evaluation && has_uncertain_bitset && !uncertain_tokens_are_disjoint) {
+        const int unresolved_count = tmp_unresolved_uncertain_bitset_.AssignDifference(
+            adaptive_token_mask.uncertain_bitset, tmp_accepted_bitset_
         );
-        if (accepted) {
-          last_rejected_uncertain_range = cur_token_idx + 1;
+        // A later leaf can overlap almost completely with tokens accepted by earlier leaves. In
+        // that case, scanning every lexicographically sorted uncertain token merely to test one
+        // random bit dominates mask latency. Enumerate the much smaller unresolved bitset by token
+        // ID, map it back to sorted-vocabulary indices, and restore lexicographic order.
+        constexpr size_t kSparseUnresolvedFraction = 8;
+        if (static_cast<size_t>(unresolved_count) * kSparseUnresolvedFraction <=
+            adaptive_token_mask.uncertain_indices.size()) {
+          tmp_unresolved_uncertain_indices_.clear();
+          tmp_unresolved_uncertain_indices_.reserve(unresolved_count);
+          const auto& token_id_to_sorted_vocab_index =
+              tokenizer_info_->GetTokenIdToSortedVocabIndex();
+          for (int token_id = tmp_unresolved_uncertain_bitset_.FindFirstOne(); token_id != -1;
+               token_id = tmp_unresolved_uncertain_bitset_.FindNextOne(token_id)) {
+            const int32_t sorted_vocab_index = token_id_to_sorted_vocab_index[token_id];
+            XGRAMMAR_DCHECK(sorted_vocab_index >= 0);
+            tmp_unresolved_uncertain_indices_.push_back(sorted_vocab_index);
+          }
+          XGRAMMAR_DCHECK(
+              tmp_unresolved_uncertain_indices_.size() == static_cast<size_t>(unresolved_count)
+          );
+          std::sort(
+              tmp_unresolved_uncertain_indices_.begin(), tmp_unresolved_uncertain_indices_.end()
+          );
+          uncertain_indices_to_evaluate = &tmp_unresolved_uncertain_indices_;
+          evaluates_sparse_unresolved_tokens = true;
+        }
+      }
+      // The precomputed adjacent LCPs remain valid when overlapping tokens are skipped: take the
+      // minimum across every skipped adjacency until the next evaluated token. Sparse unresolved
+      // indices are reordered from token-ID order, so only that path must fall back to a dynamic
+      // LCP.
+      const bool has_precomputed_uncertain_lcp =
+          !evaluates_sparse_unresolved_tokens &&
+          adaptive_token_mask.uncertain_lcp_with_previous.size() ==
+              adaptive_token_mask.uncertain_indices.size();
+      const bool evaluated_tokens_are_disjoint =
+          uncertain_tokens_are_disjoint || evaluates_sparse_unresolved_tokens;
+      const bool defer_uncertain_accepts =
+          !skip_uncertain_evaluation && has_uncertain_bitset && stores_accepted_tokens;
+      bool deferred_uncertain_has_rejection = false;
+      if (use_transition_cache && !skip_uncertain_evaluation &&
+          !adaptive_token_mask.uncertain_indices.empty()) {
+        transition_cache = std::make_unique<ContinuationTransitionCache>(this, external_row_count);
+      }
+      size_t uncertain_position = 0;
+      int lcp_with_last_evaluated_token = std::numeric_limits<int>::max();
+      if (use_transition_cache && uncertain_tokens_are_disjoint && has_precomputed_uncertain_lcp &&
+          defer_uncertain_accepts) {
+        // This is the dominant large-mask path: every uncertain token is unresolved, accepted
+        // results are accumulated as a complement bitset, and adjacent LCPs were precomputed at
+        // compile time. Keep the runtime loop free of the generic overlap, storage-mode, and
+        // dynamic-LCP branches that would otherwise run once per vocabulary token.
+        XGRAMMAR_DCHECK(transition_cache != nullptr);
+        prev_matched_size = EvaluateDisjointUncertainTokens(
+            adaptive_token_mask, transition_cache.get(), &deferred_uncertain_has_rejection
+        );
+
+        if (deferred_uncertain_has_rejection) {
+          tmp_accepted_bitset_ |= tmp_deferred_uncertain_accepted_bitset_;
+        } else {
+          tmp_accepted_bitset_ |= adaptive_token_mask.uncertain_bitset;
+          if (resolved_mask_configuration.has_value()) {
+            resolved_uncertain_mask_cache_.InsertAllAccepted(
+                &adaptive_token_mask, *resolved_mask_configuration
+            );
+          }
+        }
+      } else if (!skip_uncertain_evaluation) {
+        for (const auto& cur_token_idx : *uncertain_indices_to_evaluate) {
+          if (has_precomputed_uncertain_lcp && prev_token) {
+            lcp_with_last_evaluated_token = std::min(
+                lcp_with_last_evaluated_token,
+                adaptive_token_mask.uncertain_lcp_with_previous[uncertain_position]
+            );
+          }
+          // Check if the current token is already accepted. If it is, we can skip it.
+          if (!evaluated_tokens_are_disjoint &&
+              tmp_accepted_bitset_[sorted_decoded_vocab[cur_token_idx].first]) {
+            ++uncertain_position;
+            continue;
+          }
+
+          // Check if the current token is in the rejected range. i.e. check if the current token
+          // is on the subtree of the rejected token.
+          if (cur_token_idx < last_rejected_uncertain_range) {
+            if (defer_uncertain_accepts) {
+              if (!deferred_uncertain_has_rejection) {
+                tmp_deferred_uncertain_accepted_bitset_ = adaptive_token_mask.uncertain_bitset;
+                deferred_uncertain_has_rejection = true;
+              }
+              tmp_deferred_uncertain_accepted_bitset_.Reset(
+                  sorted_decoded_vocab[cur_token_idx].first
+              );
+            } else if (adaptive_token_mask.store_type == StoreType::kRejected) {
+              tmp_rejected_indices_delta_.push_back(cur_token_idx);
+            }
+            ++uncertain_position;
+            continue;
+          }
+
+          const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
+          bool accepted = !cur_token.empty() || !has_char_budget_rules_;
+
+          // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
+          // We can reuse the previous matched size to avoid unnecessary matching.
+          if (prev_token) {
+            const int lcp_len = has_precomputed_uncertain_lcp ? lcp_with_last_evaluated_token
+                                                              : static_cast<int>(
+                                                                    std::mismatch(
+                                                                        cur_token.begin(),
+                                                                        cur_token.end(),
+                                                                        prev_token->begin(),
+                                                                        prev_token->end()
+                                                                    )
+                                                                        .first -
+                                                                    cur_token.begin()
+                                                                );
+            if (lcp_len > prev_matched_size) {
+              last_rejected_uncertain_range = subtree_range[cur_token_idx];
+              accepted = false;
+            } else if (lcp_len < prev_matched_size) {
+              if (transition_cache) {
+                transition_cache->PopLastStates(prev_matched_size - lcp_len);
+              } else {
+                PopLastStates(prev_matched_size - lcp_len);
+                if (track_temporary_input) {
+                  temporary_input_bytes_.resize(lcp_len);
+                }
+              }
+            }
+            prev_matched_size = std::min(prev_matched_size, lcp_len);
+          }
+
+          // Step 2.2. Find if the current token is accepted or rejected.
+          if (accepted) {
+            for (int j = prev_matched_size; j < static_cast<int>(cur_token.size()); ++j) {
+              const bool char_accepted =
+                  transition_cache
+                      ? transition_cache->Advance(cur_token[j])
+                      : (has_char_budget_rules_
+                             ? AdvanceWithCharacterBudget(static_cast<uint8_t>(cur_token[j]))
+                             : Advance(static_cast<uint8_t>(cur_token[j])));
+              if (!char_accepted) {
+                last_rejected_uncertain_range = subtree_range[cur_token_idx];
+                accepted = false;
+                break;
+              }
+              if (track_temporary_input) {
+                temporary_input_bytes_.push_back(cur_token[j]);
+              }
+              prev_matched_size = j + 1;
+            }
+          }
+
+          if (!accepted && has_char_budget_rules_) {
+            int32_t token_char_count = 0;
+            for (uint8_t byte : cur_token) {
+              token_char_count += StartsUTF8Codepoint(byte);
+            }
+            XGRAMMAR_DCHECK(atomic_trial_base.has_value());
+            Impl atomic_trial(atomic_trial_base.value());
+            atomic_trial.PushOneStateToCheck(state);
+            accepted = atomic_trial.AdvanceAtomicTokenWithCharacterBudget(
+                sorted_decoded_vocab[cur_token_idx].first, token_char_count
+            );
+            if (accepted) {
+              last_rejected_uncertain_range = cur_token_idx + 1;
+            }
+          }
+
+          if (!accepted && defer_uncertain_accepts) {
+            if (!deferred_uncertain_has_rejection) {
+              tmp_deferred_uncertain_accepted_bitset_ = adaptive_token_mask.uncertain_bitset;
+              deferred_uncertain_has_rejection = true;
+            }
+            tmp_deferred_uncertain_accepted_bitset_.Reset(sorted_decoded_vocab[cur_token_idx].first
+            );
+          }
+
+          // Step 2.3. Push the result to the delta list.
+          if (stores_accepted_tokens) {
+            if (accepted && !defer_uncertain_accepts) {
+              tmp_accepted_bitset_.Set(sorted_decoded_vocab[cur_token_idx].first, true);
+            }
+          } else {
+            if (!accepted) {
+              tmp_rejected_indices_delta_.push_back(cur_token_idx);
+            }
+          }
+
+          prev_token = &cur_token;
+          lcp_with_last_evaluated_token = std::numeric_limits<int>::max();
+          ++uncertain_position;
+        }
+        if (defer_uncertain_accepts) {
+          if (deferred_uncertain_has_rejection) {
+            tmp_accepted_bitset_ |= tmp_deferred_uncertain_accepted_bitset_;
+          } else {
+            tmp_accepted_bitset_ |= adaptive_token_mask.uncertain_bitset;
+            // Overlap and sparse evaluation skip tokens already accepted by another leaf, so they
+            // cannot prove that this leaf alone accepts the complete uncertain set for a future
+            // configuration.
+            if (uncertain_tokens_are_disjoint && resolved_mask_configuration.has_value()) {
+              resolved_uncertain_mask_cache_.InsertAllAccepted(
+                  &adaptive_token_mask, *resolved_mask_configuration
+              );
+            }
+          }
         }
       }
 
-      // Step 2.3. Push the result to the delta list.
-      if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset ||
-          adaptive_token_mask.store_type == StoreType::kAccepted) {
-        if (accepted) {
-          tmp_accepted_bitset_.Set(sorted_decoded_vocab[cur_token_idx].first, true);
-        }
+      if (transition_cache) {
+        transition_cache->PopLastStates(prev_matched_size + 1);
       } else {
-        if (!accepted) {
-          tmp_rejected_indices_delta_.push_back(cur_token_idx);
-        }
+        PopLastStates(prev_matched_size + 1);
       }
+      if (track_temporary_input) {
+        temporary_input_start_row_ = saved_temporary_input_start_row;
+        temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
+      }
+      // Step 3. Update the accepted_indices or rejected_indices
+      if (adaptive_token_mask.store_type == StoreType::kRejected) {
+        // rejected_indices = Intersect(
+        //     rejected_indices,
+        //     adaptive_token_mask.rejected_indices + rejected_indices_delta)
+        IntsetUnion(&tmp_rejected_indices_delta_, adaptive_token_mask.rejected_indices);
+        IntsetIntersection(&tmp_rejected_indices_, tmp_rejected_indices_delta_);
+      }
+      if (debug_print && transition_cache) {
+        const double cache_hit_rate =
+            transition_cache->Queries() == 0
+                ? 0.0
+                : static_cast<double>(transition_cache->Hits()) / transition_cache->Queries();
+        XGRAMMAR_LOG(INFO
+        ) << "ContinuationTransitionCache("
+          << "state=" << state << ", rule_name=" << grammar_->GetRule(state.rule_id).name
+          << ", queries=" << transition_cache->Queries() << ", hits=" << transition_cache->Hits()
+          << ", hit_rate=" << cache_hit_rate
+          << ", transitions=" << transition_cache->NumTransitions()
+          << ", canonical_rows=" << transition_cache->PeakCanonicalRows()
+          << ", canonical_configurations=" << transition_cache->PeakCanonicalConfigurations()
+          << ", peak_bytes=" << transition_cache->PeakBytes()
+          << ", enabled=" << transition_cache->IsEnabled()
+          << ", admitted=" << transition_cache->IsAdmitted()
+          << ", low_reuse_fallback=" << transition_cache->DisabledForLowReuse() << ")";
+      }
+    }
+  }
 
-      prev_token = &cur_token;
-    }
-
-    PopLastStates(prev_matched_size + 1);
-    if (track_temporary_input) {
-      temporary_input_start_row_ = saved_temporary_input_start_row;
-      temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
-    }
-    // Step 3. Update the accepted_indices or rejected_indices
-    if (adaptive_token_mask.store_type == StoreType::kRejected) {
-      // rejected_indices = Intersect(
-      //     rejected_indices,
-      //     adaptive_token_mask.rejected_indices + rejected_indices_delta)
-      IntsetUnion(&tmp_rejected_indices_delta_, adaptive_token_mask.rejected_indices);
-      IntsetIntersection(&tmp_rejected_indices_, tmp_rejected_indices_delta_);
-    }
+  if (debug_print && (resolved_uncertain_mask_cache_.Queries() != 0 ||
+                      resolved_uncertain_mask_cache_.FullMaskQueries() != 0)) {
+    XGRAMMAR_LOG(INFO) << "ResolvedUncertainMaskCache(queries="
+                       << resolved_uncertain_mask_cache_.Queries()
+                       << ", hits=" << resolved_uncertain_mask_cache_.Hits()
+                       << ", full_mask_queries=" << resolved_uncertain_mask_cache_.FullMaskQueries()
+                       << ", full_mask_hits=" << resolved_uncertain_mask_cache_.FullMaskHits()
+                       << ", rows=" << resolved_uncertain_mask_cache_.NumRows()
+                       << ", configurations=" << resolved_uncertain_mask_cache_.NumConfigurations()
+                       << ", results=" << resolved_uncertain_mask_cache_.NumResults()
+                       << ", full_mask_results="
+                       << resolved_uncertain_mask_cache_.NumFullMaskResults()
+                       << ", bytes=" << resolved_uncertain_mask_cache_.Bytes() << ")";
   }
 
   // Finally update the rejected_ids bitset
@@ -2027,6 +3707,25 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   SetTokenBitmask(
       bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end, false
   );
+  constexpr auto kFullMaskCacheAdmissionLatency = std::chrono::microseconds(200);
+  if (!has_char_budget_rules_ &&
+      details::Clock::now() - fill_started_at >= kFullMaskCacheAdmissionLatency) {
+    if (!resolved_mask_cache_started) {
+      resolved_uncertain_mask_cache_.BeginFill();
+      resolved_mask_cache_started = true;
+    }
+    if (!full_mask_configuration.has_value()) {
+      full_mask_configuration = resolved_uncertain_mask_cache_.InternCurrentConfiguration();
+    }
+    if (full_mask_configuration.has_value()) {
+      const DynamicBitset output_mask(
+          tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
+      );
+      resolved_uncertain_mask_cache_.InsertFullMask(
+          raw_state_hash, *full_mask_configuration, output_mask
+      );
+    }
+  }
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }
@@ -2697,7 +4396,9 @@ bool GrammarMatcher::IsCompleted() const { return pimpl_->IsCompleted(); }
 void GrammarMatcher::Reset() { pimpl_->Reset(); }
 
 GrammarMatcher GrammarMatcher::Fork() const {
-  return GrammarMatcher(std::make_shared<Impl>(*pimpl_));
+  auto forked_impl = std::make_shared<Impl>(*pimpl_);
+  forked_impl->RebindAfterFork();
+  return GrammarMatcher(std::move(forked_impl));
 }
 
 int GrammarMatcher::GetMaxRollbackTokens() const { return pimpl_->GetMaxRollbackTokens(); }

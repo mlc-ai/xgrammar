@@ -10,6 +10,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -22,6 +24,10 @@
 #include "xgrammar/exception.h"
 
 namespace xgrammar {
+
+class RuleLevelCache;
+class FirstByteTokenMaskCache;
+class OptionalCharacterClassTokenSummaryCache;
 
 /******************* CompiledGrammar Datastructures *******************/
 
@@ -52,12 +58,17 @@ struct AdaptiveTokenMask {
   StoreType store_type;
 
   static constexpr int USE_BITSET_THRESHOLD = 1000;
+  static constexpr int UNCERTAIN_BITSET_THRESHOLD = 1024;
 
   std::vector<int32_t> accepted_indices;
   std::vector<int32_t> rejected_indices;
   DynamicBitset accepted_bitset;
 
   std::vector<int32_t> uncertain_indices;
+  // Derived, non-serialized data for batching large runtime uncertain-token operations.
+  DynamicBitset uncertain_bitset;
+  std::vector<int32_t> uncertain_lcp_with_previous;
+  int32_t max_uncertain_token_length = 0;
 
   /*! \brief Default constructor. Only for deserialization. */
   AdaptiveTokenMask() = default;
@@ -77,11 +88,23 @@ struct AdaptiveTokenMask {
       const std::vector<int32_t>& uncertain_indices
   );
 
+  AdaptiveTokenMask(
+      size_t vocab_size,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
+      std::vector<int32_t>&& accepted_indices,
+      std::vector<int32_t>&& uncertain_indices
+  );
+
+  void RebuildDerivedData(
+      size_t vocab_size, const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab
+  );
+
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask) {
     return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
-           MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset);
+           MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset) +
+           MemorySize(mask.uncertain_bitset) + MemorySize(mask.uncertain_lcp_with_previous);
   }
 };
 
@@ -112,12 +135,57 @@ class CompiledGrammar::Impl {
   /*! \brief The tokenizer information. */
   TokenizerInfo tokenizer_info{NullObj{}};
 
+  /*! \brief Grammar-only Earley metadata shared by compile-time tasks and runtime matchers. */
+  EarleyParserGrammarMetadata earley_parser_metadata;
+
   /*! \brief Default constructor. */
   Impl() = default;
 
-  /*! \brief Mapping from the parser state to the adaptive token mask. */
+  /*! \brief Structurally deduplicated adaptive token masks. */
+  std::vector<AdaptiveTokenMask> adaptive_token_masks;
+
+  /*! \brief Mapping from each parser state to an entry in adaptive_token_masks. */
+  std::unordered_map<ParserState, uint32_t, StateHashForCache, StateEqualForCache>
+      adaptive_token_mask_ids;
+
+  /*! \brief Address-stable storage for masks generated after compilation. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>
-      adaptive_token_mask_cache;
+      dynamic_adaptive_token_mask_cache;
+
+  const AdaptiveTokenMask* FindAdaptiveTokenMask(const ParserState& state) const {
+    const auto mask_id_it = adaptive_token_mask_ids.find(state);
+    if (mask_id_it == adaptive_token_mask_ids.end()) {
+      return nullptr;
+    }
+    XGRAMMAR_DCHECK(mask_id_it->second < adaptive_token_masks.size());
+    return &adaptive_token_masks[mask_id_it->second];
+  }
+
+  /*! \brief Protects on-demand token mask cache insertion and cache serialization. */
+  mutable std::mutex adaptive_token_mask_cache_mutex;
+
+  /*! \brief Whether missing token mask cache entries should be generated on demand. */
+  bool enable_dynamic_compilation{false};
+
+  /*! \brief Reusable cache shared by grammars created from the same compiler. */
+  std::shared_ptr<RuleLevelCache> rule_level_cache;
+
+  /*! \brief Per-grammar caches retained by on-demand mask compilation. */
+  std::shared_ptr<FirstByteTokenMaskCache> first_byte_cache;
+  std::shared_ptr<OptionalCharacterClassTokenSummaryCache>
+      optional_character_class_token_summary_cache;
+
+  /*! \brief Whether direct-mask entries may be retained in the cross-grammar cache. */
+  bool cache_direct_masks_across_grammars{false};
+
+  /*! \brief Tag dispatch data needed to generate token masks on demand. */
+  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
+
+  /*! \brief Get an existing token mask or generate and cache it on demand. */
+  const AdaptiveTokenMask& GetAdaptiveTokenMask(const ParserState& state, bool is_root_rule);
+
+  /*! \brief Generate every token mask before serialization. */
+  void MaterializeAdaptiveTokenMaskCache();
 
   Grammar GetGrammar() const { return grammar; }
 
@@ -139,8 +207,10 @@ XGRAMMAR_MEMBER_TABLE(
     &CompiledGrammar::Impl::grammar,
     "tokenizer_info",
     &CompiledGrammar::Impl::tokenizer_info,
-    "adaptive_token_mask_cache",
-    &CompiledGrammar::Impl::adaptive_token_mask_cache
+    "adaptive_token_masks",
+    &CompiledGrammar::Impl::adaptive_token_masks,
+    "adaptive_token_mask_ids",
+    &CompiledGrammar::Impl::adaptive_token_mask_ids
 );
 
 }  // namespace xgrammar

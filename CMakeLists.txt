@@ -80,6 +80,11 @@ list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/tvm_f
 add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
 target_include_directories(xgrammar PUBLIC include)
 target_include_directories(xgrammar SYSTEM PUBLIC ${XGRAMMAR_INCLUDE_PATH})
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-fno-semantic-interposition" XGRAMMAR_HAS_NO_SEMANTIC_INTERPOSITION)
+if(XGRAMMAR_HAS_NO_SEMANTIC_INTERPOSITION)
+  target_compile_options(xgrammar PRIVATE -fno-semantic-interposition)
+endif()
 
 # link to cpptrace
 if(XGRAMMAR_ENABLE_CPPTRACE)
