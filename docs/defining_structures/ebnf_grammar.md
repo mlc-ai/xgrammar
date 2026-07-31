@@ -155,6 +155,32 @@ Referencing an undefined rule is an error.
 | Group       | `("a" \| "b") "c"` | Group a sub-expression; may carry repetition.    |
 | Empty group | `( )`              | Matches the empty string.                        |
 
+### Intersections and Complements
+
+The `&` operator intersects two expressions: the result accepts only strings accepted by both
+operands. The prefix `~` operator complements one element: it accepts every valid Unicode string
+that the element rejects, including the empty string when the element does not match it.
+
+`&` binds more tightly than `|` and looser than a sequence, so `a b & c | d` means
+`((a b) & c) | d`. A repetition operator after `~x` applies to the complemented element:
+`~x{2}` matches two consecutive strings that each are not `x`.
+
+Both operators compile into a single finite-state automaton, so their operands must stay
+regular: they may contain string literals, character classes, sequences, alternatives, groups,
+character-class stars (`[...]*`), and nested `&` and `~`, but no rule references and no other
+repetition operators (write `[a-z] [a-z]*` instead of `[a-z]+` inside an operand). Combining
+them expresses set difference: `A & ~B` matches the strings in `A` but not in `B`.
+
+```text
+root       ::= identifier
+identifier ::= [a-z] [a-z]* & ~("let" | "if")
+```
+
+Intersection and complement can be more expensive to compile than a plain expression because
+the compiler builds the product of the operands' automata, and complement construction
+determinizes the operand's automaton. Compilation fails instead of growing without bound if the
+built-in automaton state limit is exceeded.
+
 ## Repetition
 
 A repetition operator follows an element — a string literal, a character class, a rule reference,
