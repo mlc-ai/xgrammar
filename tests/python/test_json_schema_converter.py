@@ -3410,5 +3410,30 @@ def test_compile_json_schema_any_order(cache_enabled: bool):
     assert ordered != any_order
 
 
+def test_pattern_format_with_length_constraints_raises():
+    """Combining pattern or format with minLength or maxLength must be rejected."""
+    unsupported_schemas = [
+        {"type": "string", "pattern": "^a+$", "maxLength": 2},
+        {"type": "string", "pattern": "^a+$", "minLength": 1},
+        {"type": "string", "pattern": "^a+$", "minLength": 0},
+        {"type": "string", "format": "email", "maxLength": 10},
+        {"type": "string", "format": "email", "minLength": 5},
+    ]
+    for schema in unsupported_schemas:
+        with pytest.raises(
+            RuntimeError,
+            match="Combining pattern/format with minLength/maxLength is currently unsupported",
+        ):
+            xgr.Grammar.from_json_schema(schema)
+
+    negative_schemas = [
+        ({"type": "string", "minLength": -1}, "minLength must be a non-negative integer"),
+        ({"type": "string", "maxLength": -1}, "maxLength must be a non-negative integer"),
+    ]
+    for schema, match_msg in negative_schemas:
+        with pytest.raises(RuntimeError, match=match_msg):
+            xgr.Grammar.from_json_schema(schema)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
