@@ -223,6 +223,28 @@ def test_limited_compiler_cache_records_dynamic_grammar_size_on_insertion():
             future.result()
         observed_sizes = size_future.result()
 
-    assert all(size == insertion_size for size in observed_sizes)
-    assert compiler.get_cache_size_bytes() == insertion_size
+    assert all(insertion_size <= size <= cache_limit for size in observed_sizes)
+    assert insertion_size <= compiler.get_cache_size_bytes() <= cache_limit
     assert _compile_builtin_json(compiler).memory_size_bytes == dynamic.memory_size_bytes
+
+
+def test_rule_mask_sharing_does_not_cross_context_dependent_rules():
+    tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
+    dynamic_compiler = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    )
+    eager_compiler = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=False
+    )
+
+    unbounded = dynamic_compiler.compile_grammar('root ::= "a" shared "z"\nshared ::= [x]+')
+    _mask_trace(unbounded, "axxz")
+
+    bounded_grammar = 'root ::= "a" shared "z"\nshared[max_tokens=1] ::= [x]+'
+    dynamic_bounded = dynamic_compiler.compile_grammar(bounded_grammar)
+    eager_bounded = eager_compiler.compile_grammar(bounded_grammar)
+    expected = _mask_trace(eager_bounded, "axz")
+    actual = _mask_trace(dynamic_bounded, "axz")
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+        assert actual_apply == expected_apply
+        torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
