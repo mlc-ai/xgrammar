@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -118,6 +119,19 @@ class CompiledGrammar::Impl {
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>
       adaptive_token_mask_cache;
+
+  /*! \brief Protects on-demand token mask lookup and insertion. */
+  mutable std::mutex adaptive_token_mask_cache_mutex;
+
+  /*! \brief Whether missing token masks should be generated on first use. */
+  bool enable_dynamic_compilation{false};
+
+  /*! \brief Tag-dispatch data retained for on-demand token mask generation. */
+  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
+
+  const AdaptiveTokenMask& GetAdaptiveTokenMask(const ParserState& state, bool is_root_rule);
+
+  void MaterializeAdaptiveTokenMaskCache();
 
   Grammar GetGrammar() const { return grammar; }
 
