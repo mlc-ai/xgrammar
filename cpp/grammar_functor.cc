@@ -3413,6 +3413,7 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
     bool is_start = current_old_state_id == fsm.GetStart();
     int current_new_state_id = original_state_id_to_new_id[current_old_state_id];
     bfs_queue.pop();
+    hash_and_target.clear();
 
     // Check if the current state is an end state.
     if (fsm.IsEndState(current_old_state_id)) {
@@ -3526,6 +3527,7 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
     int current_old_state_id = bfs_queue.front();
     int current_new_state_id = original_state_id_to_new_id[current_old_state_id];
     bfs_queue.pop();
+    hash_and_target.clear();
 
     // Check if the current state is an end state.
     if (fsm.IsEndState(current_old_state_id)) {
