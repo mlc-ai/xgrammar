@@ -563,6 +563,54 @@ def test_lark_inline_json_inside_sequence_and_repeat() -> None:
     )
 
 
+def test_lark_substring_words_ascii_chunks() -> None:
+    grammar = r"""
+        start: "A" SUB "B"
+        SUB: %regex {"substring_words":"The quick,brown  fox_2!"}
+    """
+    _assert_language(
+        grammar,
+        ["AB", "AThe quickB", "Aquick,brownB", "A,brown  B", "Abrown  fox_2!B", "Afox_2!B"],
+        ["Ahe quickB", "AThequickB", "AquickbrownB", "Abrown fox_2B", "Afox_2!!B"],
+    )
+
+
+def test_lark_substring_words_unicode_classes() -> None:
+    grammar = 'start: %regex {"substring_words":"빠른 café_2　١٢٣!? τέλος"}'
+    _assert_language(
+        grammar,
+        ["", "빠른 café_2", "café_2　١٢٣!?", "١٢٣!? τέλος", "!?"],
+        ["른 café_2", "café_2 ١٢٣", "١٢٣!", "τέλο"],
+    )
+
+    # U+0345 has the Unicode Alphabetic property, while Roman numerals and
+    # enclosed numbers have the Unicode Numeric property.
+    property_edges = 'start: %regex {"substring_words":"aͅb-Ⅷ①_"}'
+    _assert_language(property_edges, ["", "aͅb", "-", "Ⅷ①_", "aͅb-Ⅷ①_"], ["ͅ", "Ⅷ", "①_", "aͅ", "b-Ⅷ"])
+
+
+def test_lark_substring_words_empty_round_trip_and_serialization() -> None:
+    empty = xgr.Grammar.from_lark('start: %regex {"substring_words":""}')
+    _assert_grammar_language(empty, [""], ["a"])
+
+    grammar = xgr.Grammar.from_lark('start: "A" %regex {"substring_words":"alpha beta,gamma"} "B"')
+    accepted = ["AB", "Aalpha betaB", "Abeta,gammaB", "A,gammaB"]
+    rejected = ["Aalpha betB", "Aalpha gammaB"]
+    _assert_grammar_language(grammar, accepted, rejected)
+    _assert_grammar_language(xgr.Grammar.from_ebnf(str(grammar)), accepted, rejected)
+    _assert_grammar_language(
+        xgr.Grammar.deserialize_json(grammar.serialize_json()), accepted, rejected
+    )
+
+
+def test_lark_substring_words_large_input() -> None:
+    words = [f"word{index}" for index in range(2_500)]
+    source = " ".join(words)
+    grammar = xgr.Grammar.from_lark(f'start: %regex {{"substring_words":{json.dumps(source)}}}')
+    candidate = " ".join(words[50:100])
+    _assert_grammar_language(grammar, [candidate], [candidate + " missing"])
+
+
 def test_lark_nested_lark_has_an_independent_namespace() -> None:
     grammar = """
         start: item %lark {
@@ -1235,6 +1283,27 @@ def test_lark_large_choice_grammar() -> None:
             'start: %regex {"substring_chars":"abc"}',
             "structured %regex is not supported",
             id="structured-regex",
+        ),
+        pytest.param(
+            'start: %regex {"substring_words":true}',
+            "substring_words must be a string",
+            id="substring-words-type",
+        ),
+        pytest.param("start: %regex {}", "no fields set on %regex", id="substring-words-no-fields"),
+        pytest.param(
+            'start: %regex {"substring_words":null}',
+            "no fields set on %regex",
+            id="substring-words-null",
+        ),
+        pytest.param(
+            'start: %regex {"substring_words":"a","unknown":"b"}',
+            "unknown field 'unknown' in %regex",
+            id="substring-words-unknown-field",
+        ),
+        pytest.param(
+            'start: %regex {"substring_words":"a","substring_chars":"b"}',
+            "only one field can be set on %regex",
+            id="substring-words-multiple-fields",
         ),
         pytest.param("start: @other", "unknown named grammar '@other'", id="unknown-named-grammar"),
         pytest.param(

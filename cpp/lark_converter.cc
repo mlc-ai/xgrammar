@@ -13,12 +13,14 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -29,6 +31,7 @@
 #include "grammar_functor.h"
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/unicode_char_class.h"
 
 namespace xgrammar {
 namespace {
@@ -1831,7 +1834,9 @@ class LarkCompiler {
       case Node::Kind::kNestedLark:
         RaiseLarkError(source_, node.location, "nested %lark cannot be used in terminals");
       case Node::Kind::kRegexExt:
-        RaiseLarkError(source_, node.location, "structured %regex is not supported");
+        RaiseLarkError(
+            source_, node.location, "substring_words cannot be used with suffix or stop"
+        );
       case Node::Kind::kGrammarRef:
         RaiseLarkError(source_, node.location, "named grammars cannot be used in terminals");
       case Node::Kind::kNot:
@@ -1840,6 +1845,148 @@ class LarkCompiler {
         );
     }
     RaiseLarkError(source_, node.location, "unsupported terminal node");
+  }
+
+  std::string ParseSubstringWords(const Node& node) const {
+    picojson::value value;
+    std::string error = picojson::parse(value, node.text);
+    if (!error.empty()) {
+      RaiseLarkError(source_, node.location, "failed to parse %regex: " + error);
+    }
+    if (!value.is<picojson::object>()) {
+      RaiseLarkError(source_, node.location, "%regex value must be an object");
+    }
+
+    const auto& object = value.get<picojson::object>();
+    std::vector<std::string> fields;
+    for (const auto& [key, field_value] : object) {
+      if (key != "substring_chunks" && key != "substring_words" && key != "substring_chars") {
+        RaiseLarkError(source_, node.location, "unknown field '" + key + "' in %regex");
+      }
+      if (!field_value.is<picojson::null>()) {
+        fields.push_back(key);
+      }
+    }
+    if (fields.empty()) {
+      RaiseLarkError(source_, node.location, "no fields set on %regex");
+    }
+    if (fields.size() != 1) {
+      RaiseLarkError(source_, node.location, "only one field can be set on %regex");
+    }
+    if (fields[0] != "substring_words") {
+      RaiseLarkError(source_, node.location, "structured %regex is not supported");
+    }
+
+    const picojson::value& field_value = object.at("substring_words");
+    if (!field_value.is<std::string>()) {
+      RaiseLarkError(source_, node.location, "substring_words must be a string");
+    }
+    return field_value.get<std::string>();
+  }
+
+  std::vector<std::string> ChunkSubstringWords(const Node& node) const {
+    enum class ChunkType { kWhitespace, kWord, kOther };
+    auto classify = [](TCodepoint codepoint) {
+      if (IsUnicodeWhitespace(codepoint)) {
+        return ChunkType::kWhitespace;
+      }
+      if (IsUnicodeAlphanumeric(codepoint) || codepoint == '_') {
+        return ChunkType::kWord;
+      }
+      return ChunkType::kOther;
+    };
+
+    std::string text = ParseSubstringWords(node);
+    std::vector<std::string> chunks;
+    size_t chunk_start = 0;
+    std::optional<ChunkType> current_type;
+    for (size_t offset = 0; offset < text.size();) {
+      TCodepoint codepoint;
+      int32_t length;
+      if (text[offset] == '\0') {
+        codepoint = 0;
+        length = 1;
+      } else {
+        std::tie(codepoint, length) = ParseNextUTF8(text.c_str() + offset);
+        if (codepoint == CharHandlingError::kInvalidUTF8) {
+          RaiseLarkError(source_, node.location, "substring_words must be valid UTF-8");
+        }
+      }
+
+      ChunkType type = classify(codepoint);
+      if (current_type.has_value() && type != current_type.value()) {
+        chunks.push_back(text.substr(chunk_start, offset - chunk_start));
+        chunk_start = offset;
+      }
+      current_type = type;
+      offset += length;
+    }
+    if (chunk_start < text.size()) {
+      chunks.push_back(text.substr(chunk_start));
+    }
+    return chunks;
+  }
+
+  int32_t CompileSubstringWords(const Node& node, const std::string& rule_hint) {
+    struct State {
+      int32_t length = 0;
+      int32_t suffix_link = -1;
+      std::map<std::string, int32_t> transitions;
+    };
+
+    std::vector<std::string> chunks = ChunkSubstringWords(node);
+    std::vector<State> states(1);
+    int32_t last = 0;
+    for (const std::string& chunk : chunks) {
+      int32_t current = static_cast<int32_t>(states.size());
+      states.push_back({states[last].length + 1, -1, {}});
+
+      int32_t parent = last;
+      while (parent != -1 && !states[parent].transitions.count(chunk)) {
+        states[parent].transitions[chunk] = current;
+        parent = states[parent].suffix_link;
+      }
+      if (parent == -1) {
+        states[current].suffix_link = 0;
+      } else {
+        int32_t target = states[parent].transitions.at(chunk);
+        if (states[parent].length + 1 == states[target].length) {
+          states[current].suffix_link = target;
+        } else {
+          int32_t clone = static_cast<int32_t>(states.size());
+          states.push_back(states[target]);
+          states[clone].length = states[parent].length + 1;
+          while (parent != -1) {
+            auto transition = states[parent].transitions.find(chunk);
+            if (transition == states[parent].transitions.end() || transition->second != target) {
+              break;
+            }
+            transition->second = clone;
+            parent = states[parent].suffix_link;
+          }
+          states[target].suffix_link = clone;
+          states[current].suffix_link = clone;
+        }
+      }
+      last = current;
+    }
+
+    std::vector<int32_t> state_rule_ids;
+    state_rule_ids.reserve(states.size());
+    for (size_t index = 0; index < states.size(); ++index) {
+      state_rule_ids.push_back(builder_.AddEmptyRuleWithHint(rule_hint + "_substring_words"));
+    }
+    for (size_t index = 0; index < states.size(); ++index) {
+      std::vector<int32_t> choices{builder_.AddEmptyStr()};
+      choices.reserve(states[index].transitions.size() + 1);
+      for (const auto& [chunk, target] : states[index].transitions) {
+        choices.push_back(builder_.AddSequence(
+            {builder_.AddByteString(chunk), builder_.AddRuleRef(state_rule_ids[target])}
+        ));
+      }
+      builder_.UpdateRuleBody(state_rule_ids[index], builder_.AddChoices(choices));
+    }
+    return builder_.AddRuleRef(state_rule_ids[0]);
   }
 
   const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {
@@ -2029,8 +2176,10 @@ class LarkCompiler {
                                             : builder_.AddTokenSet(token_set.token_ids);
         return append_skip ? AppendSkip(result) : result;
       }
-      case Node::Kind::kRegexExt:
-        RaiseLarkError(source_, node.location, "structured %regex is not supported");
+      case Node::Kind::kRegexExt: {
+        int32_t result = CompileSubstringWords(node, rule_hint);
+        return terminal_mode || !append_skip ? result : AppendSkip(result);
+      }
       case Node::Kind::kGrammarRef: {
         if (terminal_mode) {
           RaiseLarkError(source_, node.location, "named grammars cannot be used in terminals");

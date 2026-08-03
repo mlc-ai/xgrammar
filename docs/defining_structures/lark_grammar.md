@@ -273,6 +273,23 @@ arguments: %json {
 value is controlled by the surrounding Lark grammar; whitespace inside the value follows the JSON
 Schema converter's normal behavior. `%json` cannot be used inside terminals.
 
+### Word-Aligned Substrings
+
+`%regex` with `substring_words` accepts any contiguous sequence of word-aligned chunks from a
+fixed source string. The empty sequence is also accepted:
+
+```text
+start: %regex {"substring_words": "The quick brown fox."}
+```
+
+The source is split whenever its Unicode character class changes. Letters, numbers, and underscore
+form word chunks; whitespace forms whitespace chunks; all remaining characters form punctuation
+chunks. Consecutive characters in the same class stay in one chunk. The example therefore accepts
+`"The quick"`, `"quick brown"`, and `"fox."`, but not `"he quick"` or `"fo"`.
+
+The classification follows Unicode 16.0.0 and is independent of the operating system locale.
+`substring_words` can be used directly in rules or in terminal definitions.
+
 ### `%lark`
 
 `%lark { ... }` embeds a complete Lark grammar as one element. The nested grammar has its own
