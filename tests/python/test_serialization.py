@@ -57,12 +57,12 @@ def test_serialize_grammar():
             ["root", 8, -1, False, -1, -1, "", False, None],
         ],
         "suffix_stop_infos": [],
-        "grammar_expr_data": [0, 5, 8, 12, 14, 18, 21, 24, 28],
-        "grammar_expr_indptr": [
+        "grammar_expr_data": [
             # fmt: off
             1,3,1,48,57,4,1,0,5,2,0,1,3,0,6,2,3,2,4,1,0,0,1,97,5,2,5,6,6,1,7
             # fmt: on
         ],
+        "grammar_expr_indptr": [0, 5, 8, 12, 14, 18, 21, 24, 28],
         "root_rule_id": 1,
         "complete_fsm": None,
         "per_rule_fsms": [],
@@ -82,12 +82,12 @@ def test_serialize_grammar_exception():
             ["root", 8, -1, False, -1, -1, "", False, None],
         ],
         "suffix_stop_infos": [],
-        "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28, 31],
-        "grammar_expr_indptr": [
+        "grammar_expr_data": [
             # fmt: off
             3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,4,1,0,0,1,97,5,2,5,6,6,1,7,5,1,6
             # fmt: on
         ],
+        "grammar_expr_indptr": [0, 2, 7, 10, 14, 18, 21, 24, 28, 31],
         "root_rule_id": 1,
         "allow_empty_rule_ids": [],
         "complete_fsm": None,
@@ -210,12 +210,12 @@ def test_serialize_compiled_grammar():
                 ["root", 8, -1, False, -1, -1, "", False, None],
             ],
             "suffix_stop_infos": [],
-            "grammar_expr_data": [0, 2, 7, 10, 14, 18, 21, 24, 28, 31],
-            "grammar_expr_indptr": [
+            "grammar_expr_data": [
                 # fmt: off
                 3,0,1,3,1,48,57,4,1,0,5,2,1,2,6,2,0,3,4,1,0,0,1,97,5,2,5,6,6,1,7,5,1,6
                 # fmt: on
             ],
+            "grammar_expr_indptr": [0, 2, 7, 10, 14, 18, 21, 24, 28, 31],
             "root_rule_id": 1,
             "allow_empty_rule_ids": [0],
             # fmt: off
