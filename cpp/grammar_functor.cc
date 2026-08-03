@@ -1138,6 +1138,32 @@ class RuleRefGraphFinder : public GrammarVisitor<std::vector<std::vector<int32_t
   int32_t cur_rule_id_;
 };
 
+static Result<const FSMWithStartEnd*> GetOrBuildRegexFSM(
+    const std::string& regex,
+    bool json_string,
+    std::unordered_map<std::string, FSMWithStartEnd>& regex_fsm_cache
+) {
+  std::string cache_key;
+  cache_key.reserve(regex.size() + 1);
+  cache_key.push_back(static_cast<char>(json_string));
+  cache_key.append(regex);
+
+  auto cached = regex_fsm_cache.find(cache_key);
+  if (cached != regex_fsm_cache.end()) {
+    return ResultOk<const FSMWithStartEnd*>(&cached->second);
+  }
+
+  auto build_result = json_string ? RegexFSMBuilder::BuildWithForbiddenChars(
+                                        regex, GrammarFSMBuilder::JSONStringForbiddenChars()
+                                    )
+                                  : RegexFSMBuilder::Build(regex);
+  if (build_result.IsErr()) {
+    return ResultErr(std::move(build_result).UnwrapErr());
+  }
+  cached = regex_fsm_cache.emplace(std::move(cache_key), std::move(build_result).Unwrap()).first;
+  return ResultOk<const FSMWithStartEnd*>(&cached->second);
+}
+
 /*!
  * \brief Analyzes which rules in a grammar can match the empty string.
  */
@@ -1146,11 +1172,18 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
   AllowEmptyRuleAnalyzerImpl() = default;
 
   std::vector<int32_t> Apply(const Grammar& grammar) final {
+    std::unordered_map<std::string, FSMWithStartEnd> regex_fsm_cache;
+    return Apply(grammar, regex_fsm_cache);
+  }
+
+  std::vector<int32_t> Apply(
+      const Grammar& grammar, std::unordered_map<std::string, FSMWithStartEnd>& regex_fsm_cache
+  ) {
     InitGrammar(grammar);
 
     // Step 1: Find rules that explicitly allow empty string
     std::unordered_set<int32_t> empty_rule_id_set;
-    FindExplicitEmptyRules(&empty_rule_id_set);
+    FindExplicitEmptyRules(&empty_rule_id_set, regex_fsm_cache);
 
     // Step 2: Find rules that indirectly allow empty string. Using the Bellman-Ford algorithm
     // on the rule reference graph.
@@ -1162,7 +1195,10 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
     return result;
   }
 
-  void FindExplicitEmptyRules(std::unordered_set<int32_t>* empty_rule_id_set) {
+  void FindExplicitEmptyRules(
+      std::unordered_set<int32_t>* empty_rule_id_set,
+      std::unordered_map<std::string, FSMWithStartEnd>& regex_fsm_cache
+  ) {
     for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
       auto rule = base_grammar_->GetRule(i);
       auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
@@ -1175,13 +1211,15 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
       if (grammar_expr.type == GrammarExprType::kRegex) {
         // A regex rule allows empty iff an end state is in the epsilon closure of the start
         // state of its automaton. Build errors are reported by GrammarFSMBuilder later.
-        auto regex_fsm_result = RegexFSMBuilder::Build(base_grammar_->GetRegexString(grammar_expr));
+        const auto& regex = base_grammar_->GetRegexString(grammar_expr);
+        const bool json_string = base_grammar_->GetRegexIsJSONString(grammar_expr);
+        auto regex_fsm_result = GetOrBuildRegexFSM(regex, json_string, regex_fsm_cache);
         if (regex_fsm_result.IsOk()) {
-          auto regex_fsm = std::move(regex_fsm_result).Unwrap();
-          std::unordered_set<int> start_closure{regex_fsm.GetStart()};
-          regex_fsm.GetFsm().GetEpsilonClosure(&start_closure);
+          const auto* regex_fsm = std::move(regex_fsm_result).Unwrap();
+          std::unordered_set<int> start_closure{regex_fsm->GetStart()};
+          regex_fsm->GetFsm().GetEpsilonClosure(&start_closure);
           if (std::any_of(start_closure.begin(), start_closure.end(), [&](int state) {
-                return regex_fsm.IsEndState(state);
+                return regex_fsm->IsEndState(state);
               })) {
             empty_rule_id_set->insert(i);
           }
@@ -1303,16 +1341,25 @@ class GrammarFSMBuilderImpl {
   const static uint32_t kMin4BytesUnicode = 0xF0808080;
   const static uint32_t kMax4BytesUnicode = 0xF7BFBFBF;
 
-  explicit GrammarFSMBuilderImpl(FSM& target_fsm, const std::string* rule_name = nullptr)
-      : target_fsm_(target_fsm), rule_name_(rule_name) {}
+  using RegexFSMCache = std::unordered_map<std::string, FSMWithStartEnd>;
 
-  static void Apply(Grammar* grammar) {
+  explicit GrammarFSMBuilderImpl(
+      FSM& target_fsm,
+      const std::string* rule_name = nullptr,
+      RegexFSMCache* regex_fsm_cache = nullptr
+  )
+      : target_fsm_(target_fsm), rule_name_(rule_name), regex_fsm_cache_(regex_fsm_cache) {}
+
+  static void Apply(Grammar* grammar, RegexFSMCache* supplied_regex_fsm_cache = nullptr) {
     FSM complete_fsm;
     std::vector<std::optional<FSMWithStartEndWithSize>> per_rule_fsms((*grammar)->NumRules());
     std::vector<int> state_mapping;
+    RegexFSMCache local_regex_fsm_cache;
+    RegexFSMCache* regex_fsm_cache =
+        supplied_regex_fsm_cache != nullptr ? supplied_regex_fsm_cache : &local_regex_fsm_cache;
 
     for (int i = 0; i < (*grammar)->NumRules(); ++i) {
-      auto rule_fsm = BuildRuleFSM(*grammar, i);
+      auto rule_fsm = BuildRuleFSM(*grammar, i, regex_fsm_cache);
       per_rule_fsms[i] = rule_fsm.AddToCompleteFSM(&complete_fsm, &state_mapping);
     }
 
@@ -1364,9 +1411,14 @@ class GrammarFSMBuilderImpl {
   );
 
  private:
-  static FSMWithStartEnd BuildRuleFSM(const Grammar& grammar, int rule_id);
+  static FSMWithStartEnd BuildRuleFSM(
+      const Grammar& grammar, int rule_id, RegexFSMCache* regex_fsm_cache = nullptr
+  );
   static FSMWithStartEnd BuildExpressionFSM(
-      const GrammarExpr& expr, const Grammar& grammar, const std::string* rule_name = nullptr
+      const GrammarExpr& expr,
+      const Grammar& grammar,
+      const std::string* rule_name = nullptr,
+      RegexFSMCache* regex_fsm_cache = nullptr
   );
   void BuildExpression(
       const GrammarExpr& expr,
@@ -1415,11 +1467,13 @@ class GrammarFSMBuilderImpl {
   );
   void AddCharacterClassTransitions(const GrammarExpr& expr, int start_state, int end_state);
   void BuildNegativeCharacterClass(const GrammarExpr& expr, int start_state, int end_state);
-  void AppendFSM(FSMWithStartEnd fsm, int start_state, std::vector<int32_t>* end_states);
+  void AppendFSM(FSMWithStartEnd&& fsm, int start_state, std::vector<int32_t>* end_states);
+  void AppendFSM(const FSMWithStartEnd& fsm, int start_state, std::vector<int32_t>* end_states);
   void AddCharacterRange(int from, int to, uint32_t min, uint32_t max);
 
   FSM& target_fsm_;
   const std::string* rule_name_;
+  RegexFSMCache* regex_fsm_cache_;
 };
 
 // This function will add a range [min, max] of characters to the FSM, and the length
@@ -1712,18 +1766,25 @@ void GrammarFSMBuilderImpl::BuildCharacterClassStar(
   end_states->push_back(start_state);
 }
 
-FSMWithStartEnd GrammarFSMBuilderImpl::BuildRuleFSM(const Grammar& grammar, int rule_id) {
+FSMWithStartEnd GrammarFSMBuilderImpl::BuildRuleFSM(
+    const Grammar& grammar, int rule_id, RegexFSMCache* regex_fsm_cache
+) {
   const auto& rule = grammar->GetRule(rule_id);
-  return BuildExpressionFSM(grammar->GetGrammarExpr(rule.body_expr_id), grammar, &rule.name);
+  return BuildExpressionFSM(
+      grammar->GetGrammarExpr(rule.body_expr_id), grammar, &rule.name, regex_fsm_cache
+  );
 }
 
 FSMWithStartEnd GrammarFSMBuilderImpl::BuildExpressionFSM(
-    const GrammarExpr& expr, const Grammar& grammar, const std::string* rule_name
+    const GrammarExpr& expr,
+    const Grammar& grammar,
+    const std::string* rule_name,
+    RegexFSMCache* regex_fsm_cache
 ) {
   FSM result_fsm;
   int start_state = result_fsm.AddState();
   std::vector<int32_t> end_states;
-  GrammarFSMBuilderImpl builder(result_fsm, rule_name);
+  GrammarFSMBuilderImpl builder(result_fsm, rule_name, regex_fsm_cache);
   builder.BuildExpression(expr, grammar, start_state, &end_states);
   FSMWithStartEnd result(result_fsm, start_state, std::move(end_states));
   if (expr.type != ExprType::kTagDispatch && expr.type != ExprType::kTokenTagDispatch) {
@@ -1999,7 +2060,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Choices(
 }
 
 void GrammarFSMBuilderImpl::AppendFSM(
-    FSMWithStartEnd fsm, int start_state, std::vector<int32_t>* end_states
+    FSMWithStartEnd&& fsm, int start_state, std::vector<int32_t>* end_states
 ) {
   const bool target_is_empty = target_fsm_.NumStates() == 1 && start_state == 0 &&
                                target_fsm_.GetEdges(0).empty() &&
@@ -2010,6 +2071,12 @@ void GrammarFSMBuilderImpl::AppendFSM(
     return;
   }
 
+  AppendFSM(static_cast<const FSMWithStartEnd&>(fsm), start_state, end_states);
+}
+
+void GrammarFSMBuilderImpl::AppendFSM(
+    const FSMWithStartEnd& fsm, int start_state, std::vector<int32_t>* end_states
+) {
   std::vector<int> state_mapping;
   target_fsm_.AddFSM(fsm.GetFsm(), &state_mapping);
   target_fsm_.AddEpsilonEdge(start_state, state_mapping[fsm.GetStart()]);
@@ -2023,6 +2090,21 @@ void GrammarFSMBuilderImpl::AppendFSM(
 void GrammarFSMBuilderImpl::BuildRegex(
     const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
 ) {
+  if (regex_fsm_cache_ != nullptr) {
+    auto regex_fsm_result = GetOrBuildRegexFSM(regex, json_string, *regex_fsm_cache_);
+    if (regex_fsm_result.IsErr()) {
+      auto error = std::move(regex_fsm_result).UnwrapErr();
+      if (rule_name_ != nullptr) {
+        XGRAMMAR_LOG(FATAL) << "Failed to build the automaton for rule " << *rule_name_
+                            << " with regex " << regex << ": " << error.what();
+      }
+      XGRAMMAR_LOG(FATAL) << "Failed to build the automaton for regex " << regex << ": "
+                          << error.what();
+    }
+    AppendFSM(*std::move(regex_fsm_result).Unwrap(), start_state, end_states);
+    return;
+  }
+
   auto build_result = json_string ? RegexFSMBuilder::BuildWithForbiddenChars(
                                         regex, GrammarFSMBuilder::JSONStringForbiddenChars()
                                     )
@@ -2993,10 +3075,11 @@ class GrammarOptimizerImpl {
     result = LazyBodyFlattenerImpl().Apply(result);
     result = DeadCodeEliminator::Apply(result);
     result = LookaheadAssertionAnalyzer::Apply(result);
-    result->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(result);
+    GrammarFSMBuilderImpl::RegexFSMCache regex_fsm_cache;
+    result->allow_empty_rule_ids = AllowEmptyRuleAnalyzerImpl().Apply(result, regex_fsm_cache);
     ValidateLazyRules(result);
     RepetitionNormalizer::Apply(&result);
-    GrammarFSMBuilder::Apply(&result);
+    GrammarFSMBuilderImpl::Apply(&result, &regex_fsm_cache);
     result->optimized = true;
     return result;
   }

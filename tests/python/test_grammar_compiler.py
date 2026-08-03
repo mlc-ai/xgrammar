@@ -447,6 +447,32 @@ def _compiled_accepts(compiled_grammar: xgr.CompiledGrammar, input_str: str) -> 
     return matcher.accept_string(input_str) and matcher.is_terminated()
 
 
+def test_repeated_regex_fsm_reuse_preserves_nullable_rules():
+    tokenizer_info = xgr.TokenizerInfo(["!", "a", "aa", "b"], stop_token_ids=[])
+    grammar = xgr.Grammar.from_lark('start: left "!" right\nleft: /a*/\nright: /a*/')
+
+    compiled = xgr.GrammarCompiler(tokenizer_info, max_threads=1).compile_grammar(grammar)
+    for value in ["!", "a!", "!a", "aa!aa"]:
+        assert _compiled_accepts(compiled, value)
+    for value in ["", "aa", "!!", "b!"]:
+        assert not _compiled_accepts(compiled, value)
+
+
+def test_regex_fsm_cache_distinguishes_json_string_mode():
+    tokenizer_info = xgr.TokenizerInfo([])
+    grammar = xgr.Grammar.from_ebnf(
+        'root ::= plain "!" plain json "!" json\n'
+        'plain ::= Regex(".")\n'
+        'json ::= Regex(".", json_string=true)'
+    )
+
+    compiled = xgr.GrammarCompiler(tokenizer_info, max_threads=1).compile_grammar(grammar)
+    for value in ['"!ab!c', "\\!ab!c", "a!bc!d"]:
+        assert _compiled_accepts(compiled, value)
+    for value in ['a!a"!b', "a!a\\!b", "a!ab!\n"]:
+        assert not _compiled_accepts(compiled, value)
+
+
 def _mask_trace(compiled_grammar: xgr.CompiledGrammar, input_str: str):
     matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
     bitmask = xgr.allocate_token_bitmask(1, compiled_grammar.tokenizer_info.vocab_size)
