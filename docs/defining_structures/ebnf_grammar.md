@@ -433,6 +433,28 @@ expression from consuming characters that must be escaped in JSON:
 string_body ::= Regex("\\S+", json_string=true)
 ```
 
+### `Substring`
+
+`Substring` matches every contiguous subsequence of a fixed list of chunks, including the empty
+one.
+
+```text
+root ::= Substring("abc", "de", "fg")
+```
+
+This grammar accepts `""`, `"abc"`, `"de"`, `"abcde"`, `"defg"`, and `"abcdefg"`, but not `"ab"`
+or `"cde"`: chunks are atomic and cannot be split.
+
+**Arguments**
+
+- Every positional argument must be a string. Chunks may be empty or repeated. Zero or more
+  chunks are accepted.
+- No named arguments are accepted.
+
+The chunk list is compiled into a suffix automaton, so the number of automaton states grows
+linearly with the number of chunks. This is also the compiled form of the Lark
+`%regex {"substring_chunks": ...}` and `%regex {"substring_chars": ...}` extensions.
+
 ### `TagDispatch`
 
 `TagDispatch` implements the common tool-calling pattern: the model produces free text until a

@@ -1831,7 +1831,9 @@ class LarkCompiler {
       case Node::Kind::kNestedLark:
         RaiseLarkError(source_, node.location, "nested %lark cannot be used in terminals");
       case Node::Kind::kRegexExt:
-        RaiseLarkError(source_, node.location, "structured %regex is not supported");
+        RaiseLarkError(
+            source_, node.location, "structured %regex cannot be used with suffix or stop"
+        );
       case Node::Kind::kGrammarRef:
         RaiseLarkError(source_, node.location, "named grammars cannot be used in terminals");
       case Node::Kind::kNot:
@@ -1840,6 +1842,86 @@ class LarkCompiler {
         );
     }
     RaiseLarkError(source_, node.location, "unsupported terminal node");
+  }
+
+  std::vector<std::string> ParseStructuredRegexChunks(const Node& node) const {
+    picojson::value value;
+    std::string error = picojson::parse(value, node.text);
+    if (!error.empty()) {
+      RaiseLarkError(source_, node.location, "failed to parse %regex: " + error);
+    }
+    if (!value.is<picojson::object>()) {
+      RaiseLarkError(source_, node.location, "%regex value must be an object");
+    }
+
+    const auto& object = value.get<picojson::object>();
+    std::vector<std::string> fields;
+    for (const auto& [key, field_value] : object) {
+      if (key != "substring_chunks" && key != "substring_chars" && key != "substring_words") {
+        RaiseLarkError(source_, node.location, "unknown field '" + key + "' in %regex");
+      }
+      if (!field_value.is<picojson::null>()) {
+        fields.push_back(key);
+      }
+    }
+    if (fields.empty()) {
+      RaiseLarkError(source_, node.location, "no fields set on %regex");
+    }
+    if (fields.size() != 1) {
+      RaiseLarkError(source_, node.location, "only one field can be set on %regex");
+    }
+
+    const std::string& field = fields[0];
+    const picojson::value& field_value = object.at(field);
+    if (field == "substring_words") {
+      if (!field_value.is<std::string>()) {
+        RaiseLarkError(source_, node.location, "substring_words must be a string");
+      }
+      RaiseLarkError(source_, node.location, "substring_words is not supported yet");
+    }
+    if (field == "substring_chars") {
+      if (!field_value.is<std::string>()) {
+        RaiseLarkError(source_, node.location, "substring_chars must be a string");
+      }
+      const std::string& text = field_value.get<std::string>();
+      std::vector<std::string> chunks;
+      for (size_t offset = 0; offset < text.size();) {
+        if (text[offset] == '\0') {
+          chunks.emplace_back(1, '\0');
+          ++offset;
+          continue;
+        }
+        auto [codepoint, length] = ParseNextUTF8(text.c_str() + offset);
+        if (codepoint == CharHandlingError::kInvalidUTF8) {
+          RaiseLarkError(source_, node.location, "substring_chars must be valid UTF-8");
+        }
+        chunks.push_back(text.substr(offset, length));
+        offset += length;
+      }
+      return chunks;
+    }
+
+    if (!field_value.is<picojson::array>()) {
+      RaiseLarkError(source_, node.location, "substring_chunks must be an array of strings");
+    }
+    std::vector<std::string> chunks;
+    const auto& array = field_value.get<picojson::array>();
+    chunks.reserve(array.size());
+    for (const picojson::value& chunk : array) {
+      if (!chunk.is<std::string>()) {
+        RaiseLarkError(source_, node.location, "substring_chunks must be an array of strings");
+      }
+      chunks.push_back(chunk.get<std::string>());
+    }
+    return chunks;
+  }
+
+  int32_t CompileStructuredRegex(const Node& node, const std::string& rule_hint) {
+    std::vector<std::string> chunks = ParseStructuredRegexChunks(node);
+    // A substring expr can only be the body of a rule, so wrap it and return a reference.
+    int32_t substring_expr_id = builder_.AddSubstring(chunks);
+    int32_t rule_id = builder_.AddRuleWithHint(rule_hint + "_substring", substring_expr_id);
+    return builder_.AddRuleRef(rule_id);
   }
 
   const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {
@@ -2029,8 +2111,10 @@ class LarkCompiler {
                                             : builder_.AddTokenSet(token_set.token_ids);
         return append_skip ? AppendSkip(result) : result;
       }
-      case Node::Kind::kRegexExt:
-        RaiseLarkError(source_, node.location, "structured %regex is not supported");
+      case Node::Kind::kRegexExt: {
+        int32_t result = CompileStructuredRegex(node, rule_hint);
+        return terminal_mode || !append_skip ? result : AppendSkip(result);
+      }
       case Node::Kind::kGrammarRef: {
         if (terminal_mode) {
           RaiseLarkError(source_, node.location, "named grammars cannot be used in terminals");

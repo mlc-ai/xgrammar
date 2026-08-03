@@ -94,6 +94,14 @@ class GrammarBuilder {
   int32_t AddRegex(const std::string& regex_str, bool json_string = false);
 
   /*!
+   * \brief Add a GrammarExpr for a substring expression, which matches every contiguous
+   * subsequence of the chunk list (including the empty one). The chunks are stored as-is and
+   * compiled into an automaton by GrammarFSMBuilder.
+   * \param chunks The list of byte string chunks. Chunks may be empty or repeated.
+   */
+  int32_t AddSubstring(const std::vector<std::string>& chunks);
+
+  /*!
    * \brief Add a GrammarExpr for a character class.
    * \param elements A vector of CharacterClassElement, each containing a lower and a upper bound.
    * \param is_negative Whether the character class is negated.

@@ -746,6 +746,7 @@ class EBNFParser {
   int32_t ParseExcludeToken();
   int32_t ParseTokenTagDispatch();
   int32_t ParseRegexMacro();
+  int32_t ParseSubstringMacro();
 
   // Helper functions
 
@@ -798,6 +799,7 @@ const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>>
         {"ExcludeToken", [](EBNFParser* parser) { return parser->ParseExcludeToken(); }},
         {"TokenTagDispatch", [](EBNFParser* parser) { return parser->ParseTokenTagDispatch(); }},
         {"Regex", [](EBNFParser* parser) { return parser->ParseRegexMacro(); }},
+        {"Substring", [](EBNFParser* parser) { return parser->ParseSubstringMacro(); }},
 };
 
 const EBNFParser::Token& EBNFParser::Peek(int delta) const { return *(current_token_ + delta); }
@@ -1321,6 +1323,29 @@ int32_t EBNFParser::ParseRegexMacro() {
     }
   }
   return builder_.AddRegex(pattern, json_string);
+}
+
+int32_t EBNFParser::ParseSubstringMacro() {
+  Consume();  // Consume Substring identifier
+  auto start = current_token_;
+  auto args = ParseMacroArguments();
+  auto delta_element = start - current_token_;
+
+  if (!args.named_arguments.empty()) {
+    ReportParseError("Substring() does not accept named arguments", delta_element);
+  }
+
+  std::vector<std::string> chunks;
+  chunks.reserve(args.arguments.size());
+  for (const auto& arg : args.arguments) {
+    auto string_node = std::get_if<MacroIR::StringNode>(arg.get());
+    if (string_node == nullptr) {
+      ReportParseError("Substring() arguments must be strings", delta_element);
+    }
+    chunks.push_back(string_node->value);
+  }
+
+  return builder_.AddSubstring(chunks);
 }
 
 int32_t EBNFParser::ParseTokenSet() {

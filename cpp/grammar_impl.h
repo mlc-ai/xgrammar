@@ -190,6 +190,12 @@ class Grammar::Impl {
     // JSON string literal: the characters that must be escaped in a JSON string (the control
     // characters, '"' and '\\') are excluded from every character match of the automaton.
     kRegex,
+    // data format: [chunk0_len, byte0_0, byte0_1, ..., chunk1_len, byte1_0, ...]
+    // A list of length-prefixed byte string chunks. Matches every contiguous subsequence of
+    // the chunk list, including the empty one. Like kRegex, it can only be the body of a rule
+    // and is carried through the grammar passes as-is; when GrammarFSMBuilder runs, it is
+    // compiled into an automaton via a chunk-level suffix automaton (see SuffixAutomata).
+    kSubstring,
   };
 
   /*! \brief The object representing a grammar expr. */
@@ -269,6 +275,30 @@ class Grammar::Impl {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kRegex) << "GrammarExpr is not a regex";
     XGRAMMAR_DCHECK(grammar_expr.size() >= 1) << "Regex expr must contain the json_string flag";
     return grammar_expr[0] != 0;
+  }
+
+  /*! \brief Get the chunk list of the substring grammar expr. */
+  std::vector<std::string> GetSubstringChunks(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSubstring)
+        << "GrammarExpr is not a substring";
+    std::vector<std::string> chunks;
+    for (int i = 0; i < grammar_expr.size();) {
+      int32_t chunk_len = grammar_expr[i++];
+      XGRAMMAR_DCHECK(chunk_len >= 0 && i + chunk_len <= grammar_expr.size())
+          << "Invalid substring chunk length";
+      std::string chunk;
+      chunk.reserve(chunk_len);
+      for (int32_t j = 0; j < chunk_len; ++j) {
+        chunk.push_back(static_cast<char>(static_cast<uint8_t>(grammar_expr[i++])));
+      }
+      chunks.push_back(std::move(chunk));
+    }
+    return chunks;
+  }
+
+  /*! \brief Get the chunk list of the substring grammar expr with the given id. */
+  std::vector<std::string> GetSubstringChunks(int32_t grammar_expr_id) const {
+    return GetSubstringChunks(GetGrammarExpr(grammar_expr_id));
   }
 
   /*! \brief The object representing a tag dispatch. */

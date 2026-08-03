@@ -563,6 +563,63 @@ def test_lark_inline_json_inside_sequence_and_repeat() -> None:
     )
 
 
+def test_lark_structured_regex_substring_chunks() -> None:
+    grammar = r"""
+        start: "A" SUB "B"
+        SUB: %regex {"substring_chunks":["abc","de","fg"]}
+    """
+    _assert_language(
+        grammar,
+        ["AB", "AabcB", "AdeB", "AfgB", "AabcdeB", "AdefgB", "AabcdefgB"],
+        ["AabB", "AcdeB", "AabcfgB", "AdeabcB"],
+    )
+
+
+def test_lark_structured_regex_substring_repeated_and_empty_chunks() -> None:
+    grammar = r'start: %regex {"substring_chunks":["a","","b","a","b"]}'
+    _assert_language(
+        grammar, ["", "a", "b", "ab", "ba", "aba", "bab", "abab"], ["aa", "bb", "abba", "baba"]
+    )
+
+
+def test_lark_structured_regex_substring_chars_ascii_and_unicode() -> None:
+    _assert_language(
+        'start: %regex {"substring_chars":"The fox."}',
+        ["", "The fox.", "he fo", "fox."],
+        ["Thefox", "he fx", "The fox.."],
+    )
+    _assert_language(
+        'start: %regex {"substring_chars":"a빠🙂b"}',
+        ["", "a", "빠", "🙂", "빠🙂", "🙂b", "a빠🙂b"],
+        ["a🙂", "빠b", "a빠b"],
+    )
+
+
+def test_lark_structured_regex_substring_chars_preserves_nul() -> None:
+    grammar = r'start: %regex {"substring_chars":"a\u0000b"}'
+    _assert_language(grammar, ["", "a", "\0", "b", "a\0", "\0b", "a\0b"], ["ab", "a\0\0b"])
+
+
+def test_lark_structured_regex_round_trip_and_serialization() -> None:
+    grammar = xgr.Grammar.from_lark(
+        'start: "A" %regex {"substring_chunks":["foo"," bar"," baz"]} "B"'
+    )
+    accepted = ["AB", "AfooB", "A bar bazB", "Afoo bar bazB"]
+    rejected = ["AfoB", "Afoo bazB"]
+    _assert_grammar_language(grammar, accepted, rejected)
+    _assert_grammar_language(xgr.Grammar.from_ebnf(str(grammar)), accepted, rejected)
+    _assert_grammar_language(
+        xgr.Grammar.deserialize_json(grammar.serialize_json()), accepted, rejected
+    )
+
+
+def test_lark_structured_regex_large_substring_chars() -> None:
+    source = "".join(chr(0x1000 + index) for index in range(4_000))
+    grammar = xgr.Grammar.from_lark(f'start: %regex {{"substring_chars":{json.dumps(source)}}}')
+    candidate = source[50:100]
+    _assert_grammar_language(grammar, [candidate], [candidate + "missing"])
+
+
 def test_lark_nested_lark_has_an_independent_namespace() -> None:
     grammar = """
         start: item %lark {
@@ -1232,9 +1289,40 @@ def test_lark_large_choice_grammar() -> None:
             id="nested-no-start",
         ),
         pytest.param(
-            'start: %regex {"substring_chars":"abc"}',
-            "structured %regex is not supported",
-            id="structured-regex",
+            'start: %regex {"substring_words":"abc def"}',
+            "substring_words is not supported yet",
+            id="substring-words",
+        ),
+        pytest.param(
+            "start: %regex []", "%regex value must be an object", id="structured-regex-not-object"
+        ),
+        pytest.param(
+            'start: %regex {"unknown":"abc"}',
+            "unknown field 'unknown' in %regex",
+            id="structured-regex-unknown-field",
+        ),
+        pytest.param(
+            "start: %regex {}", "no fields set on %regex", id="structured-regex-no-fields"
+        ),
+        pytest.param(
+            'start: %regex {"substring_chars":"abc","substring_chunks":["a"]}',
+            "only one field can be set on %regex",
+            id="structured-regex-multiple-fields",
+        ),
+        pytest.param(
+            'start: %regex {"substring_chars":["a"]}',
+            "substring_chars must be a string",
+            id="structured-regex-chars-type",
+        ),
+        pytest.param(
+            'start: %regex {"substring_chunks":"abc"}',
+            "substring_chunks must be an array of strings",
+            id="structured-regex-chunks-type",
+        ),
+        pytest.param(
+            'start: %regex {"substring_chunks":["a",1]}',
+            "substring_chunks must be an array of strings",
+            id="structured-regex-chunk-type",
         ),
         pytest.param("start: @other", "unknown named grammar '@other'", id="unknown-named-grammar"),
         pytest.param(

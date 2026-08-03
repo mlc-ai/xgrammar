@@ -25,6 +25,7 @@
 #include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
+#include "suffix_automata.h"
 #include "support/container.h"
 #include "support/encoding.h"
 #include "support/logging.h"
@@ -319,6 +320,9 @@ class StructureNormalizerImpl : public GrammarMutator {
       case GrammarExprType::kRegex:
         XGRAMMAR_LOG(FATAL) << "Regex should not be in lookahead assertion";
         XGRAMMAR_UNREACHABLE();
+      case GrammarExprType::kSubstring:
+        XGRAMMAR_LOG(FATAL) << "Substring should not be in lookahead assertion";
+        XGRAMMAR_UNREACHABLE();
       case GrammarExprType::kByteString:
       case GrammarExprType::kCharacterClass:
       case GrammarExprType::kCharacterClassStar:
@@ -361,7 +365,8 @@ class StructureNormalizerImpl : public GrammarMutator {
         return builder_->AddChoices({builder_->AddSequence({builder_->AddRuleRef(new_rule_id)})});
       }
       case GrammarExprType::kRegex:
-        // A regex is kept as the direct body of the rule, like a tag dispatch.
+      case GrammarExprType::kSubstring:
+        // A regex or substring is kept as the direct body of the rule, like a tag dispatch.
         return builder_->AddGrammarExpr(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
@@ -411,9 +416,10 @@ class StructureNormalizerImpl : public GrammarMutator {
           new_choice_ids.push_back(new_sequence_id);
           break;
         }
-        case GrammarExprType::kRegex: {
-          auto regex_expr_id = builder_->AddGrammarExpr(choice_expr);
-          auto new_rule_id = builder_->AddRuleWithHint(cur_rule_name_, regex_expr_id);
+        case GrammarExprType::kRegex:
+        case GrammarExprType::kSubstring: {
+          auto leaf_expr_id = builder_->AddGrammarExpr(choice_expr);
+          auto new_rule_id = builder_->AddRuleWithHint(cur_rule_name_, leaf_expr_id);
           auto new_sequence_id = builder_->AddSequence({builder_->AddRuleRef(new_rule_id)});
           new_choice_ids.push_back(new_sequence_id);
           break;
@@ -504,9 +510,10 @@ class StructureNormalizerImpl : public GrammarMutator {
           new_sequence_ids.push_back(builder_->AddRuleRef(new_rule_id));
           break;
         }
-        case GrammarExprType::kRegex: {
-          auto regex_expr_id = builder_->AddGrammarExpr(element_expr);
-          auto new_rule_id = builder_->AddRuleWithHint(cur_rule_name_, regex_expr_id);
+        case GrammarExprType::kRegex:
+        case GrammarExprType::kSubstring: {
+          auto leaf_expr_id = builder_->AddGrammarExpr(element_expr);
+          auto new_rule_id = builder_->AddRuleWithHint(cur_rule_name_, leaf_expr_id);
           new_sequence_ids.push_back(builder_->AddRuleRef(new_rule_id));
           break;
         }
@@ -982,7 +989,8 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
     auto root_grammar_expr = base_grammar_->GetGrammarExpr(root_rule.body_expr_id);
     if (root_grammar_expr.type == GrammarExprType::kTagDispatch ||
         root_grammar_expr.type == GrammarExprType::kTokenTagDispatch ||
-        root_grammar_expr.type == GrammarExprType::kRegex) {
+        root_grammar_expr.type == GrammarExprType::kRegex ||
+        root_grammar_expr.type == GrammarExprType::kSubstring) {
       return grammar;
     }
     BuildRuleLookaheadInfo();
@@ -1049,8 +1057,9 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
         }
         continue;
       }
-      if (grammar_expr.type == GrammarExprType::kRegex) {
-        // A regex rule is a leaf: it references no other rules.
+      if (grammar_expr.type == GrammarExprType::kRegex ||
+          grammar_expr.type == GrammarExprType::kSubstring) {
+        // A regex or substring rule is a leaf: it references no other rules.
         continue;
       }
       XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kChoices);
@@ -1168,6 +1177,12 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
       auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
       if (grammar_expr.type == GrammarExprType::kTagDispatch ||
           grammar_expr.type == GrammarExprType::kTokenTagDispatch) {
+        empty_rule_id_set->insert(i);
+        continue;
+      }
+
+      if (grammar_expr.type == GrammarExprType::kSubstring) {
+        // A substring automaton always accepts the empty string: every state is accepting.
         empty_rule_id_set->insert(i);
         continue;
       }
@@ -1375,6 +1390,9 @@ class GrammarFSMBuilderImpl {
   );
   void BuildRegex(
       const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
+  );
+  void BuildSubstring(
+      const std::vector<std::string>& chunks, int start_state, std::vector<int32_t>* end_states
   );
   void BuildTagDispatch(
       const Grammar::Impl::TagDispatch& tag_dispatch,
@@ -1618,6 +1636,8 @@ void GrammarFSMBuilderImpl::BuildExpression(
           start_state,
           end_states
       );
+    case ExprType::kSubstring:
+      return BuildSubstring(grammar->GetSubstringChunks(expr), start_state, end_states);
     case ExprType::kTagDispatch:
       return BuildTagDispatch(grammar->GetTagDispatch(expr), start_state, end_states);
     case ExprType::kTokenTagDispatch:
@@ -1830,6 +1850,12 @@ void GrammarFSMBuilderImpl::BuildRegex(
                         << error.what();
   }
   AppendFSM(std::move(build_result).Unwrap(), start_state, end_states);
+}
+
+void GrammarFSMBuilderImpl::BuildSubstring(
+    const std::vector<std::string>& chunks, int start_state, std::vector<int32_t>* end_states
+) {
+  AppendFSM(SuffixAutomata::Build(chunks), start_state, end_states);
 }
 
 void GrammarFSMBuilderImpl::BuildTagDispatch(
@@ -2283,7 +2309,8 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
 
  private:
   int32_t BuildFlattenedLazyBody(int32_t body_expr_id) {
-    if (base_grammar_->GetGrammarExpr(body_expr_id).type == GrammarExprType::kRegex) {
+    auto body_type = base_grammar_->GetGrammarExpr(body_expr_id).type;
+    if (body_type == GrammarExprType::kRegex || body_type == GrammarExprType::kSubstring) {
       return VisitExpr(body_expr_id);
     }
     // Unwrap chains of single rule references (r ::= (x), x ::= (y), ...) produced by regex
@@ -2807,7 +2834,8 @@ class GrammarOptimizerImpl {
         continue;
       }
       const auto& body = grammar->GetGrammarExpr(rule.body_expr_id);
-      if (body.type == Grammar::Impl::GrammarExprType::kRegex) {
+      if (body.type == Grammar::Impl::GrammarExprType::kRegex ||
+          body.type == Grammar::Impl::GrammarExprType::kSubstring) {
         continue;
       }
       XGRAMMAR_CHECK(body.type == Grammar::Impl::GrammarExprType::kChoices)
@@ -3456,8 +3484,9 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
       case (GrammarExprType::kTokenTagDispatch): {
         return std::nullopt;
       }
-      case (GrammarExprType::kRegex): {
-        // Hash the pattern content, like a byte string.
+      case (GrammarExprType::kRegex):
+      case (GrammarExprType::kSubstring): {
+        // Hash the content, like a byte string.
         for (const auto& element : expr) {
           hash_result = HashCombine(hash_result, element);
         }

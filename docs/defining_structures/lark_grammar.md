@@ -273,6 +273,29 @@ arguments: %json {
 value is controlled by the surrounding Lark grammar; whitespace inside the value follows the JSON
 Schema converter's normal behavior. `%json` cannot be used inside terminals.
 
+### Substring
+
+The substring extension matches any contiguous sequence of a fixed list of chunks, including the
+empty sequence. For compatibility with llguidance, it is written with the `%regex { ... }`
+directive, although it is not a regular expression:
+
+```text
+start: %regex {"substring_chunks": ["abc", "de", "fg"]}
+```
+
+This example accepts `""`, `"abc"`, `"de"`, `"abcde"`, `"defg"`, and `"abcdefg"`, but not
+`"ab"` or `"cde"`.
+
+`substring_chars` splits a string into Unicode codepoints before applying the same operation:
+
+```text
+start: %regex {"substring_chars": "abc"}
+```
+
+It therefore accepts every codepoint-aligned substring such as `"a"`, `"bc"`, and `"abc"`.
+`substring_chunks` and `substring_chars` are supported in rules and terminal definitions.
+`substring_words`, which requires Unicode word-class segmentation, is not yet supported.
+
 ### `%lark`
 
 `%lark { ... }` embeds a complete Lark grammar as one element. The nested grammar has its own
