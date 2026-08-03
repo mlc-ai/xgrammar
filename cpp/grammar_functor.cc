@@ -1459,7 +1459,14 @@ class GrammarFSMBuilderImpl {
       int start_state,
       std::vector<int32_t>* end_states
   );
-  void BuildChoices(
+  // Returns whether the specialized choice builder handled the whole expression.
+  bool BuildChoices(
+      const GrammarExpr& expr,
+      const Grammar& grammar,
+      int start_state,
+      std::vector<int32_t>* end_states
+  );
+  bool BuildByteStringRuleRefChoices(
       const GrammarExpr& expr,
       const Grammar& grammar,
       int start_state,
@@ -1785,11 +1792,18 @@ FSMWithStartEnd GrammarFSMBuilderImpl::BuildExpressionFSM(
   int start_state = result_fsm.AddState();
   std::vector<int32_t> end_states;
   GrammarFSMBuilderImpl builder(result_fsm, rule_name, regex_fsm_cache);
-  builder.BuildExpression(expr, grammar, start_state, &end_states);
+  bool skip_equivalent_state_merge = false;
+  if (expr.type == ExprType::kChoices) {
+    skip_equivalent_state_merge = builder.BuildChoices(expr, grammar, start_state, &end_states);
+  } else {
+    builder.BuildExpression(expr, grammar, start_state, &end_states);
+  }
   FSMWithStartEnd result(result_fsm, start_state, std::move(end_states));
   if (expr.type != ExprType::kTagDispatch && expr.type != ExprType::kTokenTagDispatch) {
     result = result.SimplifyEpsilon();
-    result = result.MergeEquivalentStates();
+    if (!skip_equivalent_state_merge) {
+      result = result.MergeEquivalentStates();
+    }
   }
   return result;
 }
@@ -1880,8 +1894,10 @@ void GrammarFSMBuilderImpl::BuildExpression(
       return BuildExcludeToken(expr, start_state, end_states);
     case ExprType::kSequence:
       return BuildSequence(expr, grammar, start_state, end_states);
-    case ExprType::kChoices:
-      return BuildChoices(expr, grammar, start_state, end_states);
+    case ExprType::kChoices: {
+      BuildChoices(expr, grammar, start_state, end_states);
+      return;
+    }
     case ExprType::kRegex:
       return BuildRegex(
           grammar->GetRegexString(expr),
@@ -1997,7 +2013,7 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Sequence(
   return FSMWithStartEnd(result_fsm, start_state, std::move(end_states));
 }
 
-void GrammarFSMBuilderImpl::BuildChoices(
+bool GrammarFSMBuilderImpl::BuildChoices(
     const GrammarExpr& expr,
     const Grammar& grammar,
     int start_state,
@@ -2020,7 +2036,7 @@ void GrammarFSMBuilderImpl::BuildChoices(
 
   if (non_empty_choice_count == 0) {
     end_states->push_back(start_state);
-    return;
+    return false;
   }
 
   if (non_empty_choice_count == 1 && !nullable) {
@@ -2028,10 +2044,14 @@ void GrammarFSMBuilderImpl::BuildChoices(
       const auto& choice_expr = grammar->GetGrammarExpr(choice_id);
       if (choice_expr.type != ExprType::kEmptyStr) {
         BuildExpression(choice_expr, grammar, start_state, end_states);
-        return;
+        return false;
       }
     }
     XGRAMMAR_UNREACHABLE();
+  }
+
+  if (!nullable && BuildByteStringRuleRefChoices(expr, grammar, start_state, end_states)) {
+    return true;
   }
 
   std::vector<int32_t> branch_end_states;
@@ -2051,6 +2071,79 @@ void GrammarFSMBuilderImpl::BuildChoices(
     target_fsm_.AddEpsilonEdge(start_state, nullable_branch_state);
     end_states->push_back(nullable_branch_state);
   }
+  return false;
+}
+
+bool GrammarFSMBuilderImpl::BuildByteStringRuleRefChoices(
+    const GrammarExpr& expr,
+    const Grammar& grammar,
+    int start_state,
+    std::vector<int32_t>* end_states
+) {
+  struct Branch {
+    std::string prefix;
+    int32_t rule_id;
+    std::string suffix;
+  };
+
+  std::vector<Branch> branches;
+  branches.reserve(expr.size());
+  std::vector<std::string> prefixes;
+  prefixes.reserve(expr.size());
+  for (int32_t choice_id : expr) {
+    const auto& sequence = grammar->GetGrammarExpr(choice_id);
+    if (sequence.type != ExprType::kSequence || sequence.size() != 3) {
+      return false;
+    }
+    const auto& prefix = grammar->GetGrammarExpr(sequence[0]);
+    const auto& rule_ref = grammar->GetGrammarExpr(sequence[1]);
+    const auto& suffix = grammar->GetGrammarExpr(sequence[2]);
+    if (prefix.type != ExprType::kByteString || rule_ref.type != ExprType::kRuleRef ||
+        suffix.type != ExprType::kByteString) {
+      return false;
+    }
+
+    Branch branch;
+    branch.prefix.reserve(prefix.size());
+    for (int32_t byte : prefix) {
+      branch.prefix.push_back(static_cast<char>(static_cast<uint8_t>(byte)));
+    }
+    branch.rule_id = rule_ref[0];
+    branch.suffix.reserve(suffix.size());
+    for (int32_t byte : suffix) {
+      branch.suffix.push_back(static_cast<char>(static_cast<uint8_t>(byte)));
+    }
+    prefixes.push_back(branch.prefix);
+    branches.push_back(std::move(branch));
+  }
+
+  std::vector<int32_t> prefix_end_states;
+  auto trie = TrieFSMBuilder::Build(prefixes, {}, &prefix_end_states, true, false);
+  XGRAMMAR_DCHECK(trie.has_value());
+
+  std::vector<int> state_mapping;
+  target_fsm_.AddFSM(trie->GetFsm(), &state_mapping);
+  target_fsm_.AddEpsilonEdge(start_state, state_mapping[trie->GetStart()]);
+
+  std::unordered_map<std::string, int32_t> suffix_start_states;
+  suffix_start_states.reserve(branches.size());
+  end_states->clear();
+  for (int index = 0; index < static_cast<int>(branches.size()); ++index) {
+    const auto& branch = branches[index];
+    auto [it, inserted] = suffix_start_states.emplace(branch.suffix, -1);
+    if (inserted) {
+      int32_t current_state = target_fsm_.AddState();
+      it->second = current_state;
+      for (uint8_t byte : branch.suffix) {
+        int32_t next_state = target_fsm_.AddState();
+        target_fsm_.AddEdge(current_state, next_state, byte, byte);
+        current_state = next_state;
+      }
+      end_states->push_back(current_state);
+    }
+    target_fsm_.AddRuleEdge(state_mapping[prefix_end_states[index]], it->second, branch.rule_id);
+  }
+  return true;
 }
 
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Choices(
