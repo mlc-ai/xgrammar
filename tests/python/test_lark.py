@@ -170,6 +170,123 @@ def _assert_lark_error(
             id="regex-dotall-preserves-character-class-dot",
         ),
         pytest.param(
+            r"start: /hello[0-2]\x21/iu",
+            ["hello0!", "HELLO1!", "HeLlO2!"],
+            ["hello3!", "hello1", "héllo1!"],
+            id="regex-case-insensitive-and-unicode-flags",
+        ),
+        pytest.param(
+            "start: /Żółw|Σ|k|ß/iu",
+            ["Żółw", "Σ", "k", "K", "ß"],
+            ["żółw", "ŻÓŁW", "zółw", "σ", "ς", "ẞ", "\u212a", "ss", "SS"],
+            id="regex-case-insensitive-folds-ascii-only",
+        ),
+        pytest.param(
+            "start: /[^kσ]+/i",
+            ["A", "ż", "😀", "Σ", "ς", "\u212a"],
+            ["k", "K", "σ", "aK"],
+            id="regex-case-insensitive-negative-class-ascii-folding",
+        ),
+        pytest.param(
+            "start: /[À-Ö]+/i",
+            ["À", "Ö", "ÀÉÖ"],
+            ["à", "ö", "×", "÷", "A", ""],
+            id="regex-case-insensitive-non-ascii-range-not-folded",
+        ),
+        pytest.param(
+            "start: /a.b/is",
+            ["a b", "A😀B", "a\nb"],
+            ["ab", "a\n\nb", "ä\nb"],
+            id="regex-case-insensitive-dotall-flags",
+        ),
+        pytest.param(
+            "start: /[^a-c]+/i",
+            ["Z", "09", "Ä"],
+            ["a", "B", "xyzC"],
+            id="regex-case-insensitive-negative-class",
+        ),
+        pytest.param(
+            "start: TOKEN\nTOKEN: /[A-Cx-z]+/i",
+            ["abc", "ABC", "XyZ", "cZ"],
+            ["", "d", "w", "abcd"],
+            id="regex-case-insensitive-terminal-range",
+        ),
+        pytest.param(
+            "start: /(ab){2,300}c/i",
+            ["abABc", "aBab" * 150 + "c"],
+            ["c", "abc", "aBab" * 150 + "abc"],
+            id="regex-case-insensitive-large-repeat-subrule",
+        ),
+        pytest.param(
+            # Physically unrolling this repetition would exceed the FSM state limit, so this
+            # only compiles if the repetition becomes a grammar-level repeat subrule.
+            "start: /(ab){2,50000}c/i",
+            ["abABc", "aBab" * 150 + "c"],
+            ["c", "abc", "ab" * 150],
+            id="regex-case-insensitive-huge-repeat-not-unrolled",
+        ),
+        pytest.param(
+            "start: /(ab){200,}c/i",
+            ["ab" * 200 + "c", "aB" * 321 + "c"],
+            ["ab" * 199 + "c", "c"],
+            id="regex-case-insensitive-unbounded-large-repeat",
+        ),
+        pytest.param(
+            # The repeated atom is nullable, so the lower bound is relaxed to zero.
+            "start: /(a?){2,300}b/i",
+            ["b", "ab", "A" * 300 + "b"],
+            ["a" * 301 + "b", ""],
+            id="regex-case-insensitive-nullable-large-repeat",
+        ),
+        pytest.param(
+            r"start: /\x41\u0062\u{43}/i",
+            ["AbC", "abc", "ABC"],
+            ["abd", "ab"],
+            id="regex-case-insensitive-folds-escapes",
+        ),
+        pytest.param(
+            r"start: /\u{1F600}+/i", ["😀", "😀😀"], ["", "😁"], id="regex-unicode-codepoint-escape"
+        ),
+        pytest.param(
+            r"start: /[\u0041-\u0043x]+/i",
+            ["ABC", "abc", "X"],
+            ["d", "D", ""],
+            id="regex-class-unicode-escape-folded",
+        ),
+        pytest.param(
+            r"start: /x\cAy/i", ["x\x01y", "X\x01Y"], ["xy", "xay"], id="regex-control-escape"
+        ),
+        pytest.param(
+            r"start: /a\sb/i",
+            ["a b", "A\tb", "a\nB", "a\fb", "a\vb"],
+            ["ab", "a\x00b", "a\x01b"],
+            id="regex-standard-whitespace-class",
+        ),
+        pytest.param(
+            r"start: /\S+/i",
+            ["好!x", "\x00"],
+            ["a b", ""],
+            id="regex-non-whitespace-codepoint-domain",
+        ),
+        pytest.param("start: /a(?=b)c/i", ["ac", "AC"], ["abc", "a"], id="regex-lookahead-ignored"),
+        pytest.param(
+            "start: /(?<name>ab)+(?P<other>c)/i",
+            ["abc", "ABabC"],
+            ["c", "ab"],
+            id="regex-named-groups-ignore-name",
+        ),
+        pytest.param("start: /(?:ab)+c/i", ["abc", "ababC"], ["c"], id="regex-non-capturing-group"),
+        pytest.param("start: /a^b$c/i", ["abc", "ABC"], ["ac"], id="regex-mid-anchors-ignored"),
+        pytest.param(
+            "start: /a+?b??c/i",
+            ["ac", "abc", "AAC"],
+            ["c", "abbc"],
+            id="regex-non-greedy-quantifiers",
+        ),
+        pytest.param(
+            "start: /(a|)b|c|/i", ["ab", "b", "c", ""], ["a"], id="regex-empty-alternatives"
+        ),
+        pytest.param(
             'start: "a".."z"+ "0".."9"?',
             ["a", "xyz", "hello7"],
             ["", "A", "7", "abc78"],
@@ -606,6 +723,21 @@ def test_lark_dynamic_lazy_dotall_regex_suffix() -> None:
     )
 
 
+def test_lark_dynamic_lazy_dotall_unicode_regex_flags() -> None:
+    grammar = r"""
+        start: tool* tail
+        tail: TEXT
+        head[lazy]: /.*<call>/su
+        tool: head "ok" "</call>"
+        TEXT: /.*/su
+    """
+    _assert_language(
+        grammar,
+        ["line 1\nline 2", "x\n<call>ok</call>tail"],
+        ["<call>", "<call>bad</call>", "x\n<call>ok"],
+    )
+
+
 def test_lark_dynamic_fixed_string_suffix_attribute() -> None:
     grammar = r"""
         start: tool* tail
@@ -787,6 +919,59 @@ def test_lark_serialization_round_trip_for_core_and_dynamic_grammars() -> None:
     )
 
 
+def test_lark_regex_flags_ebnf_and_serialization_round_trip() -> None:
+    grammar = xgr.Grammar.from_lark("start: /Żółw[^k]/isu")
+    accepted = ["Żółwz", "ŻółwZ", "Żółw\n"]
+    rejected = ["żółwz", "Żółwk", "ŻółwK", "Żółw"]
+    _assert_grammar_language(grammar, accepted, rejected)
+
+    ebnf_restored = xgr.Grammar.from_ebnf(str(grammar))
+    _assert_grammar_language(ebnf_restored, accepted, rejected)
+
+    json_restored = xgr.Grammar.deserialize_json(grammar.serialize_json())
+    _assert_grammar_language(json_restored, accepted, rejected)
+
+
+def test_lark_regex_large_repeat_ebnf_and_serialization_round_trip() -> None:
+    # The large repetition is compiled into a repeat subrule at automaton build time; the
+    # grammar representation (and thus printing and serialization) keeps the raw pattern.
+    grammar = xgr.Grammar.from_lark("start: /(ab){2,50000}c/i")
+    accepted = ["abABc", "aB" * 150 + "c"]
+    rejected = ["abc", "c", "ab" * 150]
+    _assert_grammar_language(grammar, accepted, rejected)
+
+    ebnf_restored = xgr.Grammar.from_ebnf(str(grammar))
+    _assert_grammar_language(ebnf_restored, accepted, rejected)
+
+    json_restored = xgr.Grammar.deserialize_json(grammar.serialize_json())
+    _assert_grammar_language(json_restored, accepted, rejected)
+
+
+def test_lark_regex_case_insensitive_token_bitmask() -> None:
+    from xgrammar.testing import _get_masked_tokens_from_bitmask
+
+    tokenizer_info = xgr.TokenizerInfo(["ab", "AB", "aB", "cd", "C", "c"])
+    compiled = _compile_lark("start: /(ab){2,300}c/i", tokenizer_info)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    # At the start only the "ab"-like tokens may begin the repetition.
+    matcher.fill_next_token_bitmask(bitmask)
+    assert set(_get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)) == {3, 4, 5}
+    assert matcher.accept_token(0)  # "ab"
+
+    # After one repetition the lower bound 2 is not reached yet, so "c" stays forbidden.
+    matcher.fill_next_token_bitmask(bitmask)
+    assert set(_get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)) == {3, 4, 5}
+    assert matcher.accept_token(1)  # "AB"
+
+    # Now the tail "c" (case-folded) becomes possible; "cd" is still impossible.
+    matcher.fill_next_token_bitmask(bitmask)
+    assert set(_get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)) == {3}
+    assert matcher.accept_token(4)  # "C"
+    assert matcher.is_terminated()
+
+
 def test_lark_serialization_round_trip_for_token_dispatch() -> None:
     tokenizer_info = xgr.TokenizerInfo(["plain", "<|call|>", "x", "</call>"])
     grammar = xgr.Grammar.from_lark(
@@ -944,12 +1129,22 @@ def test_lark_large_choice_grammar() -> None:
             id="non-ascii-string-flag",
         ),
         pytest.param(
-            "start: /abc/i",
-            "only the regular-expression flag 's' is currently supported",
+            "start: /abc/m",
+            "regular-expression flag 'm' is not supported",
             id="unsupported-regex-flag",
         ),
         pytest.param(
             "start: /abc/l", "regular-expression flag 'l' is not supported", id="unsupported-l-flag"
+        ),
+        pytest.param(
+            "start: /abc/x",
+            "regular-expression flag 'x' is not supported",
+            id="unsupported-verbose-regex-flag",
+        ),
+        pytest.param(
+            "start: item\nitem[suffix=/end/i]: /[a-z]*/",
+            "regular-expression flag 'i' is not supported with suffix or stop attributes",
+            id="case-insensitive-regex-suffix",
         ),
         pytest.param(
             'start: "a"i.."z"', "flags are not allowed on character ranges", id="range-start-flag"
@@ -958,6 +1153,18 @@ def test_lark_large_choice_grammar() -> None:
             'start: "a".."z"i', "flags are not allowed on character ranges", id="range-end-flag"
         ),
         pytest.param("start: /[abc/", "failed to compile regular expression", id="invalid-regex"),
+        pytest.param(r"start: /a\b/i", "Word boundary assertion", id="regex-word-boundary-error"),
+        pytest.param(
+            r"start: /\p{L}/i", "Unicode property escape", id="regex-unicode-property-error"
+        ),
+        pytest.param(r"start: /(a)\1/i", "Backreference", id="regex-backreference-error"),
+        pytest.param("start: /[]/i", "Empty character class", id="regex-empty-class-error"),
+        pytest.param("start: /(?<=a)b/i", "Lookbehind assertion", id="regex-lookbehind-error"),
+        pytest.param(
+            r"start: /\uZZ/i",
+            "must be followed by four hexadecimal digits",
+            id="regex-bad-unicode-escape-error",
+        ),
         pytest.param('start: "\\q"', "invalid string literal", id="invalid-string-escape"),
         pytest.param(
             'start: "unterminated', "unterminated string literal", id="unterminated-string"

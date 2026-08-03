@@ -405,12 +405,25 @@ This grammar accepts `ID-12345`.
 
 - `pattern` is the only positional argument. It is required and must be a string.
 - `json_string` is an optional named argument. It must be a boolean and defaults to `false`.
+- `flags` is an optional named argument. It must be a string of regular-expression flags, with
+  the same meaning as the flags of a Lark regex literal: `i` makes the match ASCII
+  case-insensitive, `s` makes `.` match newlines, and `u` is accepted as a no-op (patterns
+  always use Unicode codepoint semantics). Other flags raise an error. When `flags` is given,
+  `.` follows the standard semantics and does not match `\n` unless `s` is present; without the
+  argument, the pattern is used verbatim and `.` matches every codepoint.
 - No other positional or named arguments are accepted.
 
 `pattern` uses the same regular expression syntax as
 [`xgr.Grammar.from_regex`](xgrammar.Grammar.from_regex). Backslashes must be escaped for the
 surrounding EBNF string literal, so the regular expression `\d+\.\d+` is written as
 `Regex("\\d+\\.\\d+")`.
+
+```text
+root ::= Regex("hello, world.", flags="is")
+```
+
+This grammar matches `hello, world` in any ASCII case, followed by any character including a
+newline.
 
 When `json_string=true`, the regular expression is intended to match the body of a JSON string.
 Control characters, `"` and `\` are then excluded from every character match, preventing the

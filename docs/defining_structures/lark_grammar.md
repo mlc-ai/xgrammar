@@ -138,12 +138,26 @@ regex converter (the same engine as [`xgr.Grammar.from_regex`](xgrammar.Grammar.
 supports character classes, alternation, groups, repetition (`*`, `+`, `?`, `{m,n}`), and the
 usual escapes. A `/` inside the pattern is written `\/`.
 
-`.` matches one Unicode character. By default it does not match newline; adding the `s` flag
-(`/pattern/s`) makes `.` match newline as well. `s` is currently the only supported regex flag.
+`.` matches one Unicode character. By default it does not match newline. Regular expressions
+support the following trailing flags, in any order:
+
+- `i`: make the match ASCII case-insensitive. ASCII letters in literals and character classes
+  match both cases; non-ASCII characters match literally.
+- `s`: make `.` match newline as well.
+- `u`: explicitly select Unicode semantics. This is a no-op because XGrammar regular expressions
+  already use Unicode codepoints.
+
+The `i` flag is supported in ordinary rules, terminals, and `lazy` rules, but not on a regular
+expression used with a `suffix` or `stop` attribute. The `l`, `m`, and `x` flags are not supported.
+
+Word boundaries (`\b`, `\B`), Unicode property escapes (`\p{…}`), backreferences, and lookaround
+assertions are not supported. Large bounded repetitions such as `{0,10000}` are compiled through
+the grammar-level repetition mechanism and do not expand the automaton.
 
 ```text
 start: /a.b/      // accepts "acb", "a😀b"; rejects "a\nb"
 line: /a.b/s      // also accepts "a\nb"
+word: /Σk+/i      // accepts "Σk", "ΣKK"; only ASCII letters fold, "Σ" matches literally
 ```
 
 ### Sequences, Alternatives, and Groups
