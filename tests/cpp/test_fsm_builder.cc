@@ -359,11 +359,11 @@ TEST(XGrammarFSMBuilderTest, TestChoicesFSMBuilder) {
   auto fsm_rule2_result = GrammarFSMBuilder::Choices(
       grammar->GetGrammarExpr(grammar->GetRule(2).body_expr_id), grammar
   );
-  std::string expected_fsm_rule2 = R"(FSM(num_states=4, start=1, end=[0], edges=[
-0: []
-1: [Eps->2, 'B'->3]
-2: ['A'->0, [a-z]->2]
-3: [Rule(2)->0]
+  std::string expected_fsm_rule2 = R"(FSM(num_states=4, start=0, end=[3], edges=[
+0: [Eps->1, 'B'->2]
+1: ['A'->3, [a-z]->1]
+2: [Rule(2)->3]
+3: []
 ]))";
 
   EXPECT_TRUE(fsm_rule2_result.has_value());

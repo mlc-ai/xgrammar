@@ -485,11 +485,11 @@ TEST(XGrammarFSMTest, MergingNodesTest) {
   fsm_wse.GetFsm().AddEdge(7, 9, 'e', 'e');
   fsm_wse.GetFsm().AddEdge(8, 9, 'e', 'e');
   fsm_wse = fsm_wse.MergeEquivalentStates();
-  std::string expected_fsm = R"(FSM(num_states=5, start=3, end=[4], edges=[
-0: ['d'->2]
-1: ['b'->0, 'c'->0]
-2: ['e'->4]
-3: ['a'->1]
+  std::string expected_fsm = R"(FSM(num_states=5, start=0, end=[4], edges=[
+0: ['a'->1]
+1: ['b'->2, 'c'->2]
+2: ['d'->3]
+3: ['e'->4]
 4: []
 ]))";
   EXPECT_EQ(fsm_wse.ToString(), expected_fsm);
@@ -698,10 +698,10 @@ TEST(XGrammarFSMTest, MergeEquivalentStatesHandlesMultipleAndSpecialEdges) {
   EXPECT_EQ(merged_special_edges.GetFsm().NumStates(), 3);
   EXPECT_EQ(
       merged_special_edges.ToString(),
-      R"(FSM(num_states=3, start=2, end=[1], edges=[
-0: [EOS->1]
-1: []
-2: [Rule(7)->0]
+      R"(FSM(num_states=3, start=0, end=[2], edges=[
+0: [Rule(7)->1]
+1: [EOS->2]
+2: []
 ]))"
   );
   EXPECT_EQ(
@@ -722,15 +722,48 @@ TEST(XGrammarFSMTest, MergeEquivalentStatesCanonicalizesDuplicateAndSelfEdges) {
   auto merged = fsm.MergeEquivalentStates();
   EXPECT_EQ(
       merged.ToString(),
-      R"(FSM(num_states=3, start=2, end=[1], edges=[
-0: ['b'->1]
-1: []
-2: ['a'->0]
+      R"(FSM(num_states=3, start=0, end=[2], edges=[
+0: ['a'->1]
+1: ['b'->2]
+2: []
 ]))"
   );
   EXPECT_TRUE(merged.AcceptString("ab"));
   EXPECT_FALSE(merged.AcceptString("a"));
   EXPECT_EQ(merged.MergeEquivalentStates().ToString(), merged.ToString());
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesDoesNotChainLeafAndSuccessorMerges) {
+  // 3 and 4 are equivalent successors of 2 (Case 1, merge by equal reaching paths). 1 and 3 are
+  // both non-accepting leaves (merge by equal continuations). Chaining both groups through the
+  // shared state 3 would give the class {1, 3, 4}, and the dead leaf 1 would wrongly gain the
+  // continuation 'w' of state 4.
+  FSMWithStartEnd fsm(FSM(6), 0, {5});
+  fsm.GetFsm().AddEdge(0, 1, 'y', 'y');
+  fsm.GetFsm().AddEdge(0, 2, 'z', 'z');
+  fsm.GetFsm().AddEdge(2, 3, 'x', 'x');
+  fsm.GetFsm().AddEdge(2, 4, 'x', 'x');
+  fsm.GetFsm().AddEdge(4, 5, 'w', 'w');
+
+  auto merged = fsm.MergeEquivalentStates();
+  EXPECT_TRUE(merged.AcceptString("zxw"));
+  EXPECT_FALSE(merged.AcceptString("yw"));
+  EXPECT_FALSE(merged.AcceptString("y"));
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesDoesNotMergeStartByReachingPaths) {
+  // 0 and 1 look like equivalent successors of 1 (single predecessor 1, equal incoming labels).
+  // But 0 is the start state and is also reached "for free" by the empty string, so merging it
+  // with 1 would wrongly accept "c".
+  FSMWithStartEnd fsm(FSM(3), 0, {2});
+  fsm.GetFsm().AddEdge(1, 0, 'a', 'a');
+  fsm.GetFsm().AddEdge(1, 1, 'a', 'a');
+  fsm.GetFsm().AddEdge(1, 2, 'c', 'c');
+
+  auto merged = fsm.MergeEquivalentStates();
+  EXPECT_FALSE(merged.AcceptString(""));
+  EXPECT_FALSE(merged.AcceptString("c"));
+  EXPECT_EQ(merged.GetFsm().NumStates(), 3);
 }
 
 TEST(XGrammarFSMTest, MergeEquivalentStatesRandomizedPreservesLanguage) {

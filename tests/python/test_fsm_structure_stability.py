@@ -27,7 +27,7 @@ FSM_STRUCTURE_CASES = [
     (
         "ebnf",
         'root ::= "x" [^0-9] "y" [^a-z]* "z"',
-        "fd5ab210c129fe4da573c175bfd0e97440d30a88d038a160e5bcbeb2f9fc00d0",
+        "c078f43b05f1f6a2e2e62d5aa2ad8ee28b3aa9358ef26091041dcc89a9669e67",
     ),
     (
         "ebnf",
@@ -47,7 +47,7 @@ FSM_STRUCTURE_CASES = [
     (
         "ebnf",
         'root ::= "ab" [0-9] | "cd" sub | sub sub\nsub ::= [a-f] "q"',
-        "29090db9590a3b07af82126f08ec25663f657fde2b659c7d172bf6da227861ba",
+        "52f3bf57ed3057820c5e096486022f11daed6f44b1f0838a821d10fb28588ce5",
     ),
     (
         "ebnf",
@@ -57,7 +57,7 @@ FSM_STRUCTURE_CASES = [
     (
         "ebnf",
         'root ::= "中文" [\\u4e00-\\u9fff] "端"',
-        "a2d7f36e1d3a0453d4267fb3937ed07a4abaac7361e051d3aaaaf7a6a58de462",
+        "31f8a746759114a682fef038356e409a388be3e73bb327fff5f24bae4e0b1754",
     ),
     ("ebnf", 'root ::= "only"', "7880ea9fd56d9cca1976659fa1ccd4b7b347ab2688800e96bdafcfaa591019e5"),
     ("ebnf", "root ::= [0-9]", "e210303c507b9b23c732079d40b3f0b01af0de6deb86c8974148dbb92b92896c"),
@@ -69,7 +69,7 @@ FSM_STRUCTURE_CASES = [
     (
         "ebnf",
         'root ::= a b c\na ::= "x" [0-9]*\nb ::= a "y" | [^xyz]\nc ::= b{1,3} "end"',
-        "692de2ea3a886cc7aca953da58fe7dc66c26bc39a71b01fdeee53cfb58e89561",
+        "ad034a35713202f53ea01d16b48486edb9e475a1a79fcc44b2cf157cfd06663d",
     ),
     (
         "json_schema",
@@ -88,7 +88,7 @@ FSM_STRUCTURE_CASES = [
             "required": ["name", "age", "tags", "nested"],
             "additionalProperties": False,
         },
-        "4d050454cf0d4a9a579a7f0d33803c6a98a0354649945be7e4830505c473ab1c",
+        "42c5b5b7fd66abeae7946a0d2aadd427a7d237a52b6711a8ae3097f138b89b04",
     ),
     (
         "json_schema",
@@ -105,7 +105,7 @@ FSM_STRUCTURE_CASES = [
             "minItems": 1,
             "maxItems": 4,
         },
-        "a7a376ee74bc9e59e36da46fd7dddc9c322555c96110120260779bd07a9d14c5",
+        "76fa4d2475e1afcc9f230fabdb2c87655922e1786638db853478a5a1a2ce62d1",
     ),
     (
         "structural_tag",
@@ -121,7 +121,7 @@ FSM_STRUCTURE_CASES = [
                 "excludes": [],
             },
         },
-        "61e2ccf44a3c589547de488dfbd6cd84a9a4fa39ce86ed3f71a11e388cc4050c",
+        "542f8b15f4229b4fb842bb57d4372c066e6757dba14675c2d0de25dfb661a300",
     ),
 ]
 

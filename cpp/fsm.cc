@@ -1346,10 +1346,12 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
   FSMWithStartEnd result = Copy();
   result.GetFsm()->SortEdges();
 
-  // Keep equivalence classes over stable state IDs, revisit only neighborhoods changed by the
-  // previous round, and rebuild the physical FSM once after reaching a fixed point.
+  const int num_states = result.NumStates();
+
+  // A compact edge view. `peer` is the target state in outgoing rows and the source state in
+  // incoming rows, so both edge directions share the same representation.
   struct EndpointEdge {
-    int peer;  // source in incoming edges, target in outgoing edges
+    int peer;
     int32_t min;
     int32_t max;
 
@@ -1361,48 +1363,48 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
       return std::tie(peer, min, max) == std::tie(other.peer, other.min, other.max);
     }
   };
+  constexpr int kOutgoing = 0;
+  constexpr int kIncoming = 1;
+  Compact2DArray<EndpointEdge> directed_edges[2];
 
-  int original_num_states = 0;
-  bool input_edges_are_canonical = false;
-  Compact2DArray<EndpointEdge> original_incoming_edges;
-  while (true) {
-    original_num_states = result.NumStates();
-    input_edges_are_canonical = true;
-    bool may_have_non_leaf_merge = false;
-    std::vector<int32_t> original_incoming_row_sizes(original_num_states, 0);
-    for (int source = 0; source < original_num_states; ++source) {
-      const auto& edges = result.GetFsm().GetEdges(source);
-      for (int32_t edge_index = 0; edge_index < static_cast<int32_t>(edges.size()); ++edge_index) {
-        const auto& edge = edges[edge_index];
-        ++original_incoming_row_sizes[edge.target];
-        if ((edge.IsEpsilon() && edge.target == source) ||
-            (edge_index > 0 && edge == edges[edge_index - 1])) {
-          input_edges_are_canonical = false;
-        }
-        if (edge_index > 0 && edges[edge_index - 1].min == edge.min &&
-            edges[edge_index - 1].max == edge.max && edges[edge_index - 1].target != edge.target) {
-          int previous_target = edges[edge_index - 1].target;
-          bool merges_only_leaves =
-              result.GetFsm().GetEdges(previous_target).empty() &&
-              result.GetFsm().GetEdges(edge.target).empty() &&
-              result.IsEndState(previous_target) == result.IsEndState(edge.target);
-          may_have_non_leaf_merge |= !merges_only_leaves;
-        }
+  // First scan: count incoming edges per state, and detect two of the three patterns that can
+  // enable a merge: (a) two same-label edges from one source to different targets (successor
+  // merge), and (c) two leaf states with the same accepting status. Physical edges are sorted
+  // by (min, max, target), so same-label runs are contiguous.
+  bool merge_is_possible = false;
+  int num_leaves_by_end_status[2] = {0, 0};
+  std::vector<int32_t> incoming_row_sizes(num_states, 0);
+  for (int source = 0; source < num_states; ++source) {
+    const auto& edges = result.GetFsm().GetEdges(source);
+    if (edges.empty()) {
+      ++num_leaves_by_end_status[result.IsEndState(source)];
+    }
+    for (int32_t edge_index = 0; edge_index < static_cast<int32_t>(edges.size()); ++edge_index) {
+      const auto& edge = edges[edge_index];
+      ++incoming_row_sizes[edge.target];
+      if (edge_index > 0 && edges[edge_index - 1].min == edge.min &&
+          edges[edge_index - 1].max == edge.max && edges[edge_index - 1].target != edge.target) {
+        merge_is_possible = true;
       }
     }
+  }
+  merge_is_possible |= num_leaves_by_end_status[0] > 1 || num_leaves_by_end_status[1] > 1;
 
-    original_incoming_edges.ResetWithRowSizes(original_incoming_row_sizes);
-    std::vector<int32_t> original_incoming_write_positions(original_num_states, 0);
-    for (int source = 0; source < original_num_states; ++source) {
-      for (const auto& edge : result.GetFsm().GetEdges(source)) {
-        original_incoming_edges.MutableRowAt(edge.target
-        )[original_incoming_write_positions[edge.target]++] = {source, edge.min, edge.max};
-      }
+  directed_edges[kIncoming].ResetWithRowSizes(incoming_row_sizes);
+  std::vector<int32_t> incoming_write_positions(num_states, 0);
+  for (int source = 0; source < num_states; ++source) {
+    for (const auto& edge : result.GetFsm().GetEdges(source)) {
+      directed_edges[kIncoming].MutableRowAt(edge.target
+      )[incoming_write_positions[edge.target]++] = {source, edge.min, edge.max};
     }
+  }
 
+  // Detect the remaining pattern: (b) two same-label edges into one target from different
+  // sources (predecessor merge). If no pattern is present, no merge rule can ever apply.
+  if (!merge_is_possible) {
     std::vector<EndpointEdge> incoming_edge_scratch;
-    for (int state = 0; !may_have_non_leaf_merge && state < original_num_states; ++state) {
-      auto incoming_row = original_incoming_edges[state];
+    for (int state = 0; state < num_states && !merge_is_possible; ++state) {
+      auto incoming_row = directed_edges[kIncoming][state];
       if (incoming_row.size() < 2) {
         continue;
       }
@@ -1418,89 +1420,43 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
         if (incoming_edge_scratch[index - 1].min == incoming_edge_scratch[index].min &&
             incoming_edge_scratch[index - 1].max == incoming_edge_scratch[index].max &&
             incoming_edge_scratch[index - 1].peer != incoming_edge_scratch[index].peer) {
-          may_have_non_leaf_merge = true;
+          merge_is_possible = true;
           break;
         }
       }
     }
-
-    if (may_have_non_leaf_merge) {
-      break;
-    }
-
-    std::vector<int32_t> leaf_states[2];
-    for (int state = 0; state < original_num_states; ++state) {
-      if (result.GetFsm().GetEdges(state).empty()) {
-        leaf_states[result.IsEndState(state)].push_back(state);
-      }
-    }
-    if (leaf_states[0].size() < 2 && leaf_states[1].size() < 2) {
-      // No local rule can apply, so no later merge can be exposed.
-      return result;
-    }
-
-    UnionFindSet<int> union_find_set;
-    for (const auto& states : leaf_states) {
-      for (size_t index = 1; index < states.size(); ++index) {
-        union_find_set.Add(states[0]);
-        union_find_set.Add(states[index]);
-        union_find_set.Union(states[0], states[index]);
-      }
-    }
-    auto equivalent_classes = union_find_set.GetAllSets();
-    std::vector<int> old_to_new(original_num_states, -1);
-    for (size_t index = 0; index < equivalent_classes.size(); ++index) {
-      for (int state : equivalent_classes[index]) {
-        old_to_new[state] = index;
-      }
-    }
-    int new_num_states = equivalent_classes.size();
-    for (int state = 0; state < original_num_states; ++state) {
-      if (old_to_new[state] == -1) {
-        old_to_new[state] = new_num_states++;
-      }
-    }
-    result = result.RebuildWithMapping(old_to_new, new_num_states);
-    result.GetFsm()->SortEdges();
   }
-  constexpr int kNumStateDataArrays = 15;
-  std::vector<int> state_data(static_cast<size_t>(original_num_states) * kNumStateDataArrays, 0);
-  size_t state_data_offset = 0;
-  auto AllocateStateData = [&] {
-    int* data = state_data.data() + state_data_offset;
-    state_data_offset += original_num_states;
-    return data;
-  };
-  int* parent = AllocateStateData();
-  int* class_sizes = AllocateStateData();
-  int* first_members = AllocateStateData();
-  int* last_members = AllocateStateData();
-  int* next_members = AllocateStateData();
-  int* current_ids = AllocateStateData();
-  int* outgoing_peer_generations = AllocateStateData();
-  int* incoming_peer_generations = AllocateStateData();
-  int* single_outgoing_peers = AllocateStateData();
-  int* single_incoming_peers = AllocateStateData();
-  int* dirty_state_generations = AllocateStateData();
-  int* round_parents = AllocateStateData();
-  int* round_class_sizes = AllocateStateData();
-  int* round_component_indices = AllocateStateData();
-  int* merged_state_generations = AllocateStateData();
-  XGRAMMAR_DCHECK(state_data_offset == state_data.size());
-  std::fill(class_sizes, class_sizes + original_num_states, 1);
-  std::fill(next_members, next_members + original_num_states, -1);
-  std::fill(outgoing_peer_generations, outgoing_peer_generations + original_num_states, -1);
-  std::fill(incoming_peer_generations, incoming_peer_generations + original_num_states, -1);
-  std::fill(single_outgoing_peers, single_outgoing_peers + original_num_states, -1);
-  std::fill(single_incoming_peers, single_incoming_peers + original_num_states, -1);
-  std::fill(round_parents, round_parents + original_num_states, -1);
-  std::fill(round_component_indices, round_component_indices + original_num_states, -1);
-  std::vector<bool> is_end_state(original_num_states);
-  for (int state = 0; state < original_num_states; ++state) {
+  if (!merge_is_possible) {
+    return result;
+  }
+
+  std::vector<int32_t> outgoing_row_sizes(num_states, 0);
+  for (int source = 0; source < num_states; ++source) {
+    outgoing_row_sizes[source] = static_cast<int32_t>(result.GetFsm().GetEdges(source).size());
+  }
+  directed_edges[kOutgoing].ResetWithRowSizes(outgoing_row_sizes);
+  for (int source = 0; source < num_states; ++source) {
+    const auto& edges = result.GetFsm().GetEdges(source);
+    auto outgoing_row = directed_edges[kOutgoing].MutableRowAt(source);
+    for (int32_t edge_index = 0; edge_index < static_cast<int32_t>(edges.size()); ++edge_index) {
+      outgoing_row[edge_index] = {
+          edges[edge_index].target, edges[edge_index].min, edges[edge_index].max
+      };
+    }
+  }
+
+  // Union-find over the original state ids. Each class keeps an intrusive linked list of its
+  // member states so class-level edges can be enumerated without rebuilding the FSM.
+  std::vector<int> parent(num_states);
+  std::vector<int> class_size(num_states, 1);
+  std::vector<int> first_member(num_states);
+  std::vector<int> last_member(num_states);
+  std::vector<int> next_member(num_states, -1);
+  std::vector<bool> is_end_state(num_states);
+  for (int state = 0; state < num_states; ++state) {
     parent[state] = state;
-    first_members[state] = state;
-    last_members[state] = state;
-    current_ids[state] = state;
+    first_member[state] = state;
+    last_member[state] = state;
     is_end_state[state] = result.IsEndState(state);
   }
 
@@ -1517,101 +1473,65 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
     return root;
   };
 
-  bool has_rebuilt = false;
-  auto CollectOutgoingEdges = [&](int state, std::vector<EndpointEdge>* edges) {
+  // Class-level edges of `state`'s class in one direction: endpoints are mapped to their class
+  // roots, epsilon self-loops are dropped, and duplicates are removed. The result is sorted by
+  // (peer, min, max), so the edges of one neighbor class are contiguous and label-sorted. This
+  // matches what RebuildWithMapping produces physically at the end.
+  auto CollectClassEdges = [&](int direction, int state, std::vector<EndpointEdge>* edges) {
     int root = FindRoot(state);
     edges->clear();
-    for (int member = first_members[root]; member != -1; member = next_members[member]) {
-      for (const auto& edge : result.GetFsm().GetEdges(member)) {
-        int target = FindRoot(edge.target);
-        if (has_rebuilt && edge.IsEpsilon() && target == root) {
+    for (int member = first_member[root]; member != -1; member = next_member[member]) {
+      for (const auto& edge : directed_edges[direction][member]) {
+        int peer = FindRoot(edge.peer);
+        if (peer == root && edge.min == FSMEdge::EdgeType::kEpsilon) {
           continue;
         }
-        edges->push_back({target, edge.min, edge.max});
+        edges->push_back({peer, edge.min, edge.max});
       }
     }
     std::sort(edges->begin(), edges->end());
-    if (has_rebuilt) {
-      edges->erase(std::unique(edges->begin(), edges->end()), edges->end());
-    }
+    edges->erase(std::unique(edges->begin(), edges->end()), edges->end());
   };
 
-  auto CollectIncomingEdges = [&](int state, std::vector<EndpointEdge>* edges) {
-    int root = FindRoot(state);
-    edges->clear();
-    for (int member = first_members[root]; member != -1; member = next_members[member]) {
-      for (const auto& edge : original_incoming_edges[member]) {
-        int source = FindRoot(edge.peer);
-        if (has_rebuilt && edge.min == FSMEdge::EdgeType::kEpsilon && source == root) {
-          continue;
-        }
-        edges->push_back({source, edge.min, edge.max});
-      }
-    }
-    std::sort(edges->begin(), edges->end());
-    if (has_rebuilt) {
-      edges->erase(std::unique(edges->begin(), edges->end()), edges->end());
-    }
-  };
+  // The single neighbor class of `state`'s class in one direction: -1 when the class has no
+  // edge in that direction, -2 when it has two or more distinct neighbor classes. Merges can
+  // change any neighbor's root, so the cache is only valid within one round.
+  int round_number = 0;
+  std::vector<int> single_peer_cache[2];
+  std::vector<int> single_peer_cache_round[2];
+  for (int direction = 0; direction < 2; ++direction) {
+    single_peer_cache[direction].resize(num_states);
+    single_peer_cache_round[direction].assign(num_states, 0);
+  }
 
-  int graph_generation = 0;
-
-  auto GetSingleOutgoingPeer = [&](int state) {
+  auto GetSinglePeer = [&](int direction, int state) {
     int root = FindRoot(state);
-    if (outgoing_peer_generations[root] == graph_generation) {
-      return single_outgoing_peers[root];
+    if (single_peer_cache_round[direction][root] == round_number) {
+      return single_peer_cache[direction][root];
     }
-    outgoing_peer_generations[root] = graph_generation;
     int single_peer = -1;
-    for (int member = first_members[root]; member != -1; member = next_members[member]) {
-      for (const auto& edge : result.GetFsm().GetEdges(member)) {
-        int target = FindRoot(edge.target);
-        if (has_rebuilt && edge.IsEpsilon() && target == root) {
+    for (int member = first_member[root]; member != -1 && single_peer != -2;
+         member = next_member[member]) {
+      for (const auto& edge : directed_edges[direction][member]) {
+        int peer = FindRoot(edge.peer);
+        if (peer == root && edge.min == FSMEdge::EdgeType::kEpsilon) {
           continue;
         }
         if (single_peer == -1) {
-          single_peer = target;
-        } else if (single_peer != target) {
+          single_peer = peer;
+        } else if (single_peer != peer) {
           single_peer = -2;
           break;
         }
       }
-      if (single_peer == -2) {
-        break;
-      }
     }
-    single_outgoing_peers[root] = single_peer;
+    single_peer_cache_round[direction][root] = round_number;
+    single_peer_cache[direction][root] = single_peer;
     return single_peer;
   };
 
-  auto GetSingleIncomingPeer = [&](int state) {
-    int root = FindRoot(state);
-    if (incoming_peer_generations[root] == graph_generation) {
-      return single_incoming_peers[root];
-    }
-    incoming_peer_generations[root] = graph_generation;
-    int single_peer = -1;
-    for (int member = first_members[root]; member != -1; member = next_members[member]) {
-      for (const auto& edge : original_incoming_edges[member]) {
-        int source = FindRoot(edge.peer);
-        if (has_rebuilt && edge.min == FSMEdge::EdgeType::kEpsilon && source == root) {
-          continue;
-        }
-        if (single_peer == -1) {
-          single_peer = source;
-        } else if (single_peer != source) {
-          single_peer = -2;
-          break;
-        }
-      }
-      if (single_peer == -2) {
-        break;
-      }
-    }
-    single_incoming_peers[root] = single_peer;
-    return single_peer;
-  };
-
+  // A candidate class whose edges to/from the current center are edges[edge_begin, edge_end).
+  // Candidates of one center with equal accepting status and equal label sequences merge.
   struct MergeCandidate {
     int state;
     int32_t edge_begin;
@@ -1619,20 +1539,22 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
     bool is_end;
   };
 
+  std::vector<std::vector<int>> merge_groups;
+  std::vector<char> merged_by_case_1(num_states, 0);
+
   auto AppendCandidateGroups = [&](std::vector<MergeCandidate>* candidates,
                                    const std::vector<EndpointEdge>& edges,
-                                   std::vector<std::vector<int>>* merge_groups,
-                                   std::vector<bool>* states_merged_by_case_1) {
-    auto CompareEdgeRanges = [&](const MergeCandidate& lhs, const MergeCandidate& rhs) {
+                                   bool mark_case_1) {
+    auto CompareEdgeLabels = [&](const MergeCandidate& lhs, const MergeCandidate& rhs) {
       int32_t lhs_index = lhs.edge_begin;
       int32_t rhs_index = rhs.edge_begin;
       while (lhs_index < lhs.edge_end && rhs_index < rhs.edge_end) {
-        auto lhs_range = std::tie(edges[lhs_index].min, edges[lhs_index].max);
-        auto rhs_range = std::tie(edges[rhs_index].min, edges[rhs_index].max);
-        if (lhs_range < rhs_range) {
+        auto lhs_label = std::tie(edges[lhs_index].min, edges[lhs_index].max);
+        auto rhs_label = std::tie(edges[rhs_index].min, edges[rhs_index].max);
+        if (lhs_label < rhs_label) {
           return -1;
         }
-        if (rhs_range < lhs_range) {
+        if (rhs_label < lhs_label) {
           return 1;
         }
         ++lhs_index;
@@ -1651,11 +1573,11 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
           if (lhs.is_end != rhs.is_end) {
             return lhs.is_end < rhs.is_end;
           }
-          int range_comparison = CompareEdgeRanges(lhs, rhs);
-          if (range_comparison != 0) {
-            return range_comparison < 0;
+          int label_comparison = CompareEdgeLabels(lhs, rhs);
+          if (label_comparison != 0) {
+            return label_comparison < 0;
           }
-          return current_ids[lhs.state] < current_ids[rhs.state];
+          return lhs.state < rhs.state;
         }
     );
 
@@ -1664,17 +1586,16 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
       int32_t group_end = group_begin + 1;
       while (group_end < static_cast<int32_t>(candidates->size()) &&
              (*candidates)[group_begin].is_end == (*candidates)[group_end].is_end &&
-             CompareEdgeRanges((*candidates)[group_begin], (*candidates)[group_end]) == 0) {
+             CompareEdgeLabels((*candidates)[group_begin], (*candidates)[group_end]) == 0) {
         ++group_end;
       }
       if (group_end - group_begin > 1) {
-        auto& group = merge_groups->emplace_back();
+        auto& group = merge_groups.emplace_back();
         group.reserve(group_end - group_begin);
         for (int32_t index = group_begin; index < group_end; ++index) {
-          int state = (*candidates)[index].state;
-          group.push_back(state);
-          if (states_merged_by_case_1 != nullptr) {
-            (*states_merged_by_case_1)[state] = true;
+          group.push_back((*candidates)[index].state);
+          if (mark_case_1) {
+            merged_by_case_1[(*candidates)[index].state] = 1;
           }
         }
       }
@@ -1682,39 +1603,51 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
     }
   };
 
-  std::vector<int> dirty_states(original_num_states);
-  std::vector<int> active_states(original_num_states);
-  for (int state = 0; state < original_num_states; ++state) {
-    dirty_states[state] = state;
-    active_states[state] = state;
+  std::vector<int> pending_states(num_states);
+  for (int state = 0; state < num_states; ++state) {
+    pending_states[state] = state;
   }
-  int dirty_state_generation = 0;
-  int merged_state_generation = 0;
+  std::vector<int> dirty_roots;
+  std::vector<char> is_in_round(num_states, 0);
+  std::vector<char> is_merged_root(num_states, 0);
+  std::vector<int> merged_roots;
+  std::vector<int> leaf_candidates[2];
   int leaf_representatives[2] = {-1, -1};
-  int active_num_states = original_num_states;
   std::vector<EndpointEdge> center_edges;
-  std::vector<EndpointEdge> neighbor_edges;
   std::vector<MergeCandidate> candidates;
+  bool merged_any = false;
 
-  while (!dirty_states.empty()) {
-    ++graph_generation;
-    ++dirty_state_generation;
-    for (int state : dirty_states) {
-      dirty_state_generations[FindRoot(state)] = dirty_state_generation;
-    }
-    dirty_states.clear();
-    for (int state : active_states) {
-      if (dirty_state_generations[state] == dirty_state_generation) {
-        dirty_states.push_back(state);
+  // Worklist loop. Each round only examines the classes whose neighborhood changed in the
+  // previous round, collects all merge groups from the round's snapshot, and applies them at
+  // once. The two merge rules share the round boundary: a state grouped by Case 1 is excluded
+  // from Case 2 in the same round, which prevents over-merging through chained rules (see the
+  // MergeEquivalentStatesNoCrossRuleChaining test).
+  while (!pending_states.empty()) {
+    ++round_number;  // invalidates the single-peer caches
+    dirty_roots.clear();
+    for (int state : pending_states) {
+      int root = FindRoot(state);
+      if (!is_in_round[root]) {
+        is_in_round[root] = 1;
+        dirty_roots.push_back(root);
       }
     }
+    pending_states.clear();
+    std::sort(dirty_roots.begin(), dirty_roots.end());
+    for (int root : dirty_roots) {
+      is_in_round[root] = 0;
+    }
 
-    std::vector<std::vector<int>> merge_groups;
-    std::vector<bool> states_merged_by_case_1(original_num_states, false);
+    merge_groups.clear();
 
-    // Case 1: Like ab | ac | ad, merge the successors into a(b | c | d).
-    for (int center : dirty_states) {
-      CollectOutgoingEdges(center, &center_edges);
+    // Case 1: like ab | ac | ad, merge the successors into a(b | c | d). Successors of one
+    // center merge when the center is their only predecessor and their incoming labels are
+    // identical: any string that reaches one of them always reaches all of them. The start
+    // state's class never qualifies: it is also reachable "for free" by the empty string, so
+    // its reaching strings are not determined by its incoming edges.
+    int start_root = FindRoot(GetStart());
+    for (int center : dirty_roots) {
+      CollectClassEdges(kOutgoing, center, &center_edges);
       candidates.clear();
       int32_t edge_begin = 0;
       while (edge_begin < static_cast<int32_t>(center_edges.size())) {
@@ -1724,18 +1657,19 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
                center_edges[edge_end].peer == target) {
           ++edge_end;
         }
-        if (GetSingleIncomingPeer(target) == center) {
+        if (target != start_root && GetSinglePeer(kIncoming, target) == center) {
           candidates.push_back({target, edge_begin, edge_end, is_end_state[target]});
         }
         edge_begin = edge_end;
       }
-      AppendCandidateGroups(&candidates, center_edges, &merge_groups, &states_merged_by_case_1);
+      AppendCandidateGroups(&candidates, center_edges, /*mark_case_1=*/true);
     }
 
-    // Case 2: Like ba | ca | da, merge the precursors into (b | c | d)a. States already selected
-    // by Case 1 use stale outgoing neighborhoods until this logical round is applied.
-    for (int center : dirty_states) {
-      CollectIncomingEdges(center, &center_edges);
+    // Case 2: like ba | ca | da, merge the predecessors into (b | c | d)a. Predecessors of one
+    // center merge when all their outgoing edges lead to the center with identical labels:
+    // they provide identical continuations.
+    for (int center : dirty_roots) {
+      CollectClassEdges(kIncoming, center, &center_edges);
       candidates.clear();
       int32_t edge_begin = 0;
       while (edge_begin < static_cast<int32_t>(center_edges.size())) {
@@ -1745,185 +1679,116 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
                center_edges[edge_end].peer == source) {
           ++edge_end;
         }
-        if (!states_merged_by_case_1[source] && GetSingleOutgoingPeer(source) == center) {
+        if (!merged_by_case_1[source] && GetSinglePeer(kOutgoing, source) == center) {
           candidates.push_back({source, edge_begin, edge_end, is_end_state[source]});
         }
         edge_begin = edge_end;
       }
-      AppendCandidateGroups(&candidates, center_edges, &merge_groups, nullptr);
+      AppendCandidateGroups(&candidates, center_edges, /*mark_case_1=*/false);
     }
 
-    // Leaf states are the only candidates whose merge group has no adjacent center.
-    std::vector<int> leaf_candidates[2];
-    for (int state : dirty_states) {
-      if (GetSingleOutgoingPeer(state) == -1) {
-        leaf_candidates[is_end_state[state]].push_back(state);
+    // Leaf classes (no outgoing edges) merge by accepting status. A representative from
+    // earlier rounds joins the group so leaves discovered in later rounds still merge into the
+    // same class. Case 1 merges by equal reaching paths while leaf merges (like Case 2) merge
+    // by equal continuations; chaining the two kinds through a shared state in one round is
+    // unsound, so states grouped by Case 1 are excluded here as well.
+    leaf_candidates[0].clear();
+    leaf_candidates[1].clear();
+    for (int root : dirty_roots) {
+      if (!merged_by_case_1[root] && GetSinglePeer(kOutgoing, root) == -1) {
+        leaf_candidates[is_end_state[root]].push_back(root);
       }
     }
     for (int end_status = 0; end_status < 2; ++end_status) {
+      auto& candidates_of_status = leaf_candidates[end_status];
       if (leaf_representatives[end_status] != -1) {
         int representative = FindRoot(leaf_representatives[end_status]);
-        if (is_end_state[representative] == static_cast<bool>(end_status) &&
-            GetSingleOutgoingPeer(representative) == -1) {
-          leaf_candidates[end_status].push_back(representative);
+        if (!merged_by_case_1[representative] && GetSinglePeer(kOutgoing, representative) == -1) {
+          candidates_of_status.push_back(representative);
         }
       }
-      std::sort(leaf_candidates[end_status].begin(), leaf_candidates[end_status].end());
-      leaf_candidates[end_status].erase(
-          std::unique(leaf_candidates[end_status].begin(), leaf_candidates[end_status].end()),
-          leaf_candidates[end_status].end()
+      std::sort(candidates_of_status.begin(), candidates_of_status.end());
+      candidates_of_status.erase(
+          std::unique(candidates_of_status.begin(), candidates_of_status.end()),
+          candidates_of_status.end()
       );
-      std::sort(
-          leaf_candidates[end_status].begin(),
-          leaf_candidates[end_status].end(),
-          [&](int lhs, int rhs) { return current_ids[lhs] < current_ids[rhs]; }
-      );
-      if (!leaf_candidates[end_status].empty()) {
-        leaf_representatives[end_status] = leaf_candidates[end_status][0];
+      if (!candidates_of_status.empty()) {
+        leaf_representatives[end_status] = candidates_of_status[0];
       }
-      if (leaf_candidates[end_status].size() > 1) {
-        merge_groups.push_back(leaf_candidates[end_status]);
+      if (candidates_of_status.size() > 1) {
+        merge_groups.push_back(candidates_of_status);
       }
     }
 
     if (merge_groups.empty()) {
       break;
     }
+    merged_any = true;
 
-    // Combine overlapping groups found in the same logical round.
-    std::vector<int> round_touched_states;
-    auto FindRoundRoot = [&](int state) {
-      int root = state;
-      while (round_parents[root] != root) {
-        root = round_parents[root];
-      }
-      while (round_parents[state] != state) {
-        int next = round_parents[state];
-        round_parents[state] = root;
-        state = next;
-      }
-      return root;
-    };
+    // Apply all groups to the union-find. Groups may overlap (e.g. a state grouped by Case 1
+    // is also a leaf); overlapping groups merge transitively. Union by class size; the member
+    // lists are spliced in constant time.
     for (const auto& group : merge_groups) {
-      for (int state : group) {
-        if (round_parents[state] == -1) {
-          round_parents[state] = state;
-          round_class_sizes[state] = 1;
-          round_touched_states.push_back(state);
-        }
-      }
       for (size_t index = 1; index < group.size(); ++index) {
-        int lhs_root = FindRoundRoot(group[0]);
-        int rhs_root = FindRoundRoot(group[index]);
-        if (lhs_root == rhs_root) {
+        int root_a = FindRoot(group[0]);
+        int root_b = FindRoot(group[index]);
+        if (root_a == root_b) {
           continue;
         }
-        if (round_class_sizes[lhs_root] < round_class_sizes[rhs_root]) {
-          std::swap(lhs_root, rhs_root);
+        if (class_size[root_a] < class_size[root_b]) {
+          std::swap(root_a, root_b);
         }
-        round_parents[rhs_root] = lhs_root;
-        round_class_sizes[lhs_root] += round_class_sizes[rhs_root];
+        XGRAMMAR_DCHECK(is_end_state[root_a] == is_end_state[root_b]);
+        parent[root_b] = root_a;
+        class_size[root_a] += class_size[root_b];
+        next_member[last_member[root_a]] = first_member[root_b];
+        last_member[root_a] = last_member[root_b];
+      }
+      for (int state : group) {
+        merged_by_case_1[state] = 0;
       }
     }
 
-    std::vector<std::vector<int>> equivalent_classes;
-    for (int state : active_states) {
-      if (round_parents[state] == -1) {
-        continue;
+    // The next round revisits every merged class and all classes adjacent to it.
+    merged_roots.clear();
+    for (const auto& group : merge_groups) {
+      int root = FindRoot(group[0]);
+      if (!is_merged_root[root]) {
+        is_merged_root[root] = 1;
+        merged_roots.push_back(root);
       }
-      int round_root = FindRoundRoot(state);
-      if (round_component_indices[round_root] == -1) {
-        round_component_indices[round_root] = equivalent_classes.size();
-        equivalent_classes.emplace_back();
-      }
-      equivalent_classes[round_component_indices[round_root]].push_back(state);
     }
-
-    ++merged_state_generation;
-    std::vector<int> affected_states;
-    for (const auto& equivalent_class : equivalent_classes) {
-      for (int state : equivalent_class) {
-        merged_state_generations[state] = merged_state_generation;
-        affected_states.push_back(state);
-        CollectIncomingEdges(state, &neighbor_edges);
-        for (const auto& edge : neighbor_edges) {
-          affected_states.push_back(edge.peer);
+    for (int root : merged_roots) {
+      is_merged_root[root] = 0;
+      pending_states.push_back(root);
+      for (int member = first_member[root]; member != -1; member = next_member[member]) {
+        for (const auto& edge : directed_edges[kOutgoing][member]) {
+          pending_states.push_back(edge.peer);
         }
-        CollectOutgoingEdges(state, &neighbor_edges);
-        for (const auto& edge : neighbor_edges) {
-          affected_states.push_back(edge.peer);
+        for (const auto& edge : directed_edges[kIncoming][member]) {
+          pending_states.push_back(edge.peer);
         }
-      }
-    }
-
-    std::vector<int> merged_roots;
-    merged_roots.reserve(equivalent_classes.size());
-    for (const auto& equivalent_class : equivalent_classes) {
-      int merged_root = equivalent_class[0];
-      for (int state : equivalent_class) {
-        if (class_sizes[state] > class_sizes[merged_root]) {
-          merged_root = state;
-        }
-      }
-      for (int state : equivalent_class) {
-        XGRAMMAR_DCHECK(is_end_state[state] == is_end_state[merged_root]);
-        if (state == merged_root) {
-          continue;
-        }
-        parent[state] = merged_root;
-        class_sizes[merged_root] += class_sizes[state];
-        next_members[last_members[merged_root]] = first_members[state];
-        last_members[merged_root] = last_members[state];
-      }
-      merged_roots.push_back(merged_root);
-    }
-
-    std::vector<int> next_active_states;
-    next_active_states.reserve(
-        active_num_states - round_touched_states.size() + equivalent_classes.size()
-    );
-    next_active_states.insert(next_active_states.end(), merged_roots.begin(), merged_roots.end());
-    for (int state : active_states) {
-      if (merged_state_generations[state] != merged_state_generation) {
-        next_active_states.push_back(state);
-      }
-    }
-    active_states = std::move(next_active_states);
-    active_num_states = active_states.size();
-    for (int current_id = 0; current_id < active_num_states; ++current_id) {
-      current_ids[active_states[current_id]] = current_id;
-    }
-
-    for (const auto& equivalent_class : equivalent_classes) {
-      int round_root = FindRoundRoot(equivalent_class[0]);
-      round_component_indices[round_root] = -1;
-    }
-    for (int state : round_touched_states) {
-      round_parents[state] = -1;
-    }
-
-    bool first_rebuild = !has_rebuilt;
-    has_rebuilt = true;
-    dirty_states.clear();
-    if (first_rebuild && !input_edges_are_canonical) {
-      dirty_states = active_states;
-    } else {
-      affected_states.insert(affected_states.end(), merged_roots.begin(), merged_roots.end());
-      for (int state : affected_states) {
-        dirty_states.push_back(FindRoot(state));
       }
     }
   }
 
-  if (!has_rebuilt) {
+  if (!merged_any) {
     return result;
   }
 
-  std::vector<int> original_to_final(original_num_states);
-  for (int state = 0; state < original_num_states; ++state) {
-    original_to_final[state] = current_ids[FindRoot(state)];
+  // Rebuild the FSM once. Classes are numbered in the order of each class's smallest original
+  // state id, preserving the original relative order of the surviving states.
+  std::vector<int> class_new_id(num_states, -1);
+  std::vector<int> state_mapping(num_states);
+  int new_num_states = 0;
+  for (int state = 0; state < num_states; ++state) {
+    int root = FindRoot(state);
+    if (class_new_id[root] == -1) {
+      class_new_id[root] = new_num_states++;
+    }
+    state_mapping[state] = class_new_id[root];
   }
-  return result.RebuildWithMapping(original_to_final, active_num_states);
+  return result.RebuildWithMapping(state_mapping, new_num_states);
 }
 
 Result<FSMWithStartEnd> FSMWithStartEnd::MinimizeDFA(int max_num_states) const {
