@@ -1,6 +1,6 @@
 [project]
 name = "xgrammar"
-version = "0.2.3"
+version = "0.2.5"
 description = "Efficient, Flexible and Portable Structured Generation"
 authors = [{ name = "MLC Team" }]
 readme = "README.md"
@@ -18,9 +18,13 @@ dependencies = [
   "apache-tvm-ffi>=0.1.9",
   "pydantic",
   "torch>=1.10.0",
-  # transformers v5 breaks tokenizer loading for several models (e.g. internlm2_5,
-  # aya-23, deepseek-coder-v1.5), which breaks TokenizerInfo.from_huggingface.
-  "transformers>=4.38.0,<5",
+  # Keep the transformers bound in sync with docs/requirements.txt and the CI workflows.
+  # Note: transformers 5.0.0 cannot initialize remote-code tiktoken tokenizers and 5.13.0
+  # breaks `import mlx_lm`; both are fixed in the following release, and pip normally
+  # resolves to newer releases, so they are not excluded explicitly. No upper bound: an
+  # upper cap here would force resolver conflicts on downstream packages.
+  # v5 requires Python >=3.10, so on Python 3.8/3.9 pip resolves to v4.
+  "transformers>=4.38.0",
   "triton; platform_system == 'Linux' and platform_machine == 'x86_64'",
   "numpy",
   "typing-extensions>=4.9.0",
@@ -31,12 +35,19 @@ Homepage = "https://xgrammar.mlc.ai/"
 GitHub = "https://github.com/mlc-ai/xgrammar"
 
 [project.optional-dependencies]
-test = ["huggingface-hub[cli]", "protobuf", "pytest", "sentencepiece", "tiktoken"]
-metal = [
-  # transformers >=5.13 breaks `import mlx_lm`.
-  "mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'",
-  "transformers<5.13; platform_system == 'Darwin' and platform_machine == 'arm64'",
+test = [
+  "huggingface-hub[cli]",
+  "protobuf",
+  "pytest",
+  # sentencepiece 0.2.2 rejects vocabularies that contain a null character (e.g.
+  # internlm2_5's tokenizer.model), and transformers v4 turns that load failure into a
+  # broken tiktoken fallback. Python >= 3.10 resolves transformers v5, which does not load
+  # vocabularies through the sentencepiece library.
+  "sentencepiece<0.2.2; python_version < '3.10'",
+  "sentencepiece; python_version >= '3.10'",
+  "tiktoken",
 ]
+metal = ["mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'"]
 
 [build-system]
 requires = ["scikit-build-core>=0.10.0", "apache-tvm-ffi>=0.1.9"]
@@ -52,7 +63,10 @@ build.verbose = true
 # CMake configuration
 cmake.version = "CMakeLists.txt"
 cmake.args = []
-cmake.build-type = "RelWithDebInfo"
+# Use Release for wheels: debug info would multiply the binary size by >10x, and no error
+# reporting path needs it. Error messages carry file:line via __FILE__/__LINE__ macros,
+# which are preserved in any build type.
+cmake.build-type = "Release"
 
 # Logging
 logging.level = "INFO"

@@ -955,5 +955,31 @@ def test_repeat_ref_complex_nested():
     assert not _is_grammar_accept_string(grammar, "[" + body_few + "]")
 
 
+@pytest.mark.parametrize(
+    "grammar_str,accepted_inputs,rejected_inputs",
+    [
+        ('root ::= ("a" | "bc")? "z"', ["z", "az", "bcz"], ["", "a", "bc", "bz", "abcz"]),
+        ('root ::= ("a" | "bc")*', ["", "a", "bc", "abc", "bca", "bcbca"], ["b", "c", "ac", "ab"]),
+        ('root ::= ("a" | "bc")+', ["a", "bc", "abc", "bca", "bcbc"], ["", "b", "c", "ac"]),
+        ("root ::= [^a-cx-z]+", ["d", "w", "dw"], ["a", "x", "da", "wy"]),
+        (
+            'root ::= ("ab" | "ac" | "db" | "dc") ("x" | "yz")',
+            ["abx", "abyz", "acx", "dbyz", "dcx"],
+            ["ab", "x", "adx", "dcy", "abxyz"],
+        ),
+    ],
+    ids=["optional", "star", "plus", "complement", "state-remapping"],
+)
+def test_sparse_end_state_fsm_operations(
+    grammar_str: str, accepted_inputs: List[str], rejected_inputs: List[str]
+):
+    """Exercise FSM operations that create, combine, invert, or remap multiple end states."""
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    for input_str in accepted_inputs:
+        assert _is_grammar_accept_string(grammar, input_str)
+    for input_str in rejected_inputs:
+        assert not _is_grammar_accept_string(grammar, input_str)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

@@ -116,7 +116,8 @@ class CompiledGrammar::Impl {
   Impl() = default;
 
   /*! \brief Mapping from the parser state to the adaptive token mask. */
-  std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache> adaptive_token_mask_cache;
+  std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>
+      adaptive_token_mask_cache;
 
   Grammar GetGrammar() const { return grammar; }
 

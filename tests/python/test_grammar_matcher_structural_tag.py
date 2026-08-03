@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sys
 import threading
@@ -42,24 +43,22 @@ expected_grammar_test_structural_tag_after_optimization = r"""basic_escape ::= (
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
 basic_string ::= (("\"" basic_string_sub)) (=(root_part_0 [ \n\t]* "}"))
-root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer)) (=([ \n\t]* "}"))
 root_0 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0 [ \n\t]* "}"))
+root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer)) (=([ \n\t]* "}"))
 basic_integer_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub_1))
 basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
-basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1)) (=(root_part_0_1 [ \n\t]* "}"))
+basic_number_6 ::= ((basic_number_1_1 basic_number_2_1 basic_number_3_1 basic_number_5_1)) (=(root_part_0_1 [ \n\t]* "}"))
 basic_string_1 ::= (("\"" basic_string_sub_1))
-root_prop_1 ::= (("[" [ \n\t]* basic_string_1 root_prop_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+root_1 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number_6 root_part_0_1 [ \n\t]* "}")) (=("</function>"))
+root_prop_1 ::= (("[" [ \n\t]* basic_string_1 root_prop_1_2 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+root_prop_1_items ::= (([ \n\t]* "," [ \n\t]* basic_string_1)) (=(root_prop_1_1))
 root_part_0_1 ::= (([ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1)) (=([ \n\t]* "}"))
-root_1 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number_8 root_part_0_1 [ \n\t]* "}")) (=("</function>"))
-basic_number_1_1 ::= ("" | ("-")) (=(basic_number_7_1 basic_number_3_1 basic_number_6_1))
-basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
-basic_number_3_1 ::= ("" | ("." basic_number_2_1)) (=(basic_number_6_1))
-basic_number_4_1 ::= ("" | ([+\-])) (=(basic_number_5_1))
-basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
-basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
-root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 root_prop_1_1)) (=([ \n\t]* "]"))
-basic_number_7_1 ::= (("0") | ([1-9] [0-9]*)) (=(basic_number_3_1 basic_number_6_1))
+basic_number_1_1 ::= ("" | ("-")) (=(basic_number_2_1 basic_number_3_1 basic_number_5_1))
+basic_number_2_1 ::= (("0") | ([1-9] [0-9]*)) (=(basic_number_3_1 basic_number_5_1))
+basic_number_3_1 ::= ("" | ("." basic_number_3_3)) (=(basic_number_5_1))
+basic_number_4_1 ::= ("" | ([+\-])) (=(basic_number_3_3))
+basic_number_5_1 ::= ("" | ([eE] basic_number_4_1 basic_number_3_3))
 triggered_tags_group ::= (("1>" root_0 "</function>") | ("2>" root_0 "</function>"))
 triggered_tags_group_1 ::= ((">" root_1 "</function>"))
 triggered_tags ::= TagDispatch(
@@ -69,54 +68,56 @@ triggered_tags ::= TagDispatch(
   excludes=()
 )
 root ::= ((triggered_tags))
+basic_number_3_2 ::= ("" | ([0-9] basic_number_3_2))
+basic_number_3_3 ::= (([0-9] basic_number_3_2))
+root_prop_1_1 ::= ("" | (root_prop_1_items root_prop_1_1))
+root_prop_1_2 ::= ((root_prop_1_1)) (=([ \n\t]* "]"))
 """
 
 expected_grammar_test_structural_tag_before_optimization = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
-basic_number ::= ((basic_number_1 basic_number_7 basic_number_3 basic_number_6))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
 basic_string ::= (("\"" basic_string_sub))
 basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
-basic_array ::= (("[" [ \n\t]* basic_any basic_array_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer))
+basic_array ::= (("[" [ \n\t]* basic_any basic_array_items{0, -1} [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_properties{0, -1} [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\t]* "," [ \n\t]* basic_any))
+basic_object_properties ::= (([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any))
 root_0 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0 [ \n\t]* "}"))
+root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
-basic_number_2 ::= (([0-9] basic_number_2) | ([0-9]))
-basic_number_3 ::= ("" | ("." basic_number_2))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
 basic_number_4 ::= ("" | ([+\-]))
-basic_number_5 ::= (([0-9] basic_number_5) | ([0-9]))
-basic_number_6 ::= ("" | ([eE] basic_number_4 basic_number_5))
-basic_array_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any basic_array_1))
-basic_object_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_1))
-basic_number_7 ::= (("0") | ([1-9] [0-9]*))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
-basic_any_1 ::= ((basic_number_8) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_2) | (basic_object_2))
+basic_any_1 ::= ((basic_number_6) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_1) | (basic_object_1))
 basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
-basic_number_8 ::= ((basic_number_1_1 basic_number_7_1 basic_number_3_1 basic_number_6_1))
+basic_number_6 ::= ((basic_number_1_1 basic_number_2_1 basic_number_3_1 basic_number_5_1))
 basic_string_1 ::= (("\"" basic_string_sub_1))
 basic_boolean_1 ::= (("true") | ("false"))
 basic_null_1 ::= (("null"))
-basic_array_2 ::= (("[" [ \n\t]* basic_any_1 basic_array_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object_2 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1 [ \n\t]* "}") | ("{" [ \n\t]* "}"))
-root_prop_1 ::= (("[" [ \n\t]* basic_string_1 root_prop_1_1 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_array_1 ::= (("[" [ \n\t]* basic_any_1 basic_array_items_1{0, -1} [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+basic_object_1 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_properties_1{0, -1} [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_number_digits_1 ::= (([0-9]))
+basic_array_items_1 ::= (([ \n\t]* "," [ \n\t]* basic_any_1))
+basic_object_properties_1 ::= (([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1))
+root_1 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number_6 root_part_0_1 [ \n\t]* "}"))
+root_prop_1 ::= (("[" [ \n\t]* basic_string_1 root_prop_1_items{0, -1} [ \n\t]* "]") | ("[" [ \n\t]* "]"))
+root_prop_1_items ::= (([ \n\t]* "," [ \n\t]* basic_string_1))
 root_part_0_1 ::= (([ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1))
-root_1 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number_8 root_part_0_1 [ \n\t]* "}"))
 basic_integer_1_1 ::= ("" | ("-"))
 basic_number_1_1 ::= ("" | ("-"))
-basic_number_2_1 ::= (([0-9] basic_number_2_1) | ([0-9]))
-basic_number_3_1 ::= ("" | ("." basic_number_2_1))
+basic_number_2_1 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3_1 ::= ("" | ("." basic_number_digits_1{1, -1}))
 basic_number_4_1 ::= ("" | ([+\-]))
-basic_number_5_1 ::= (([0-9] basic_number_5_1) | ([0-9]))
-basic_number_6_1 ::= ("" | ([eE] basic_number_4_1 basic_number_5_1))
-basic_array_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_any_1 basic_array_1_1))
-basic_object_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_1_1))
-root_prop_1_1 ::= ("" | ([ \n\t]* "," [ \n\t]* basic_string_1 root_prop_1_1))
-basic_number_7_1 ::= (("0") | ([1-9] [0-9]*))
+basic_number_5_1 ::= ("" | ([eE] basic_number_4_1 basic_number_digits_1{1, -1}))
 triggered_tags_group ::= (("1>" root_0 "</function>") | ("2>" root_0 "</function>"))
 triggered_tags_group_1 ::= ((">" root_1 "</function>"))
 triggered_tags ::= TagDispatch(
@@ -291,6 +292,91 @@ def test_empty_tag_dispatch():
     assert _is_grammar_accept_string(grammar_with_excludes, "好")
     assert not _is_grammar_accept_string(grammar_with_excludes, "any stringend")
     assert not _is_grammar_accept_string(grammar_with_excludes, "endaaa")
+
+
+@pytest.mark.parametrize("loop", [False, True])
+def test_dense_tag_dispatch_end_states(loop: bool):
+    """Exercise dense accepting states and the post-dispatch final state."""
+    patterns = ["@" + hashlib.sha1(f"sparse-end-{i}".encode()).hexdigest()[:12] for i in range(32)]
+    dispatch = {
+        "type": "structural_tag",
+        "format": {
+            "type": "dispatch",
+            "rules": [
+                [pattern, {"type": "const_string", "value": f"X{i:02d}"}]
+                for i, pattern in enumerate(patterns)
+            ],
+            "loop": loop,
+            "excludes": [],
+        },
+    }
+    compiled = xgr.GrammarCompiler(
+        xgr.TokenizerInfo([]), cache_enabled=False
+    ).compile_structural_tag(dispatch)
+
+    def accepts(input_str: str) -> bool:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        return matcher.accept_string(input_str) and matcher.is_terminated()
+
+    for index in [0, 15, 31]:
+        assert accepts(f"free{patterns[index]}X{index:02d}")
+        assert not accepts(f"free{patterns[index]}WRONG")
+
+    repeated = f"free{patterns[0]}X00tail{patterns[31]}X31"
+    if loop:
+        assert accepts(repeated)
+    else:
+        assert not accepts(repeated)
+        assert not accepts(f"free{patterns[0]}X00tail")
+
+
+def test_excludes_overlapping_prefixes():
+    """An excluded pattern must be found even when its start lies inside an
+    already-followed trie branch of another excluded pattern. With excludes
+    {"bcd", "abce"}, input "abcd" follows the "abce" branch for "abc"; on 'd' the
+    Aho-Corasick failure link must resume at "bc" (a prefix of "bcd") and reject,
+    not fall back to the start state and miss the "bcd" match."""
+    grammar_str = """root ::= TagDispatch(
+  excludes=("bcd", "abce"),
+  loop_after_dispatch=true
+)
+"""
+    grammar = xgr.Grammar.from_ebnf(grammar_str)
+    assert _is_grammar_accept_string(grammar, "abc")
+    assert _is_grammar_accept_string(grammar, "hello")
+    assert not _is_grammar_accept_string(grammar, "abcd")
+    assert not _is_grammar_accept_string(grammar, "abcdX")
+    assert not _is_grammar_accept_string(grammar, "aabce")
+    assert not _is_grammar_accept_string(grammar, "abcbcd")
+
+    # The same defect through a structural tag's any_text excludes, with multi-byte
+    # UTF-8 patterns sharing an overlapping prefix ("<｜" commits to the second
+    # pattern's branch, then "｜DSML｜" must still be found as a suffix).
+    tag = {
+        "format": {
+            "type": "sequence",
+            "elements": [
+                {
+                    "type": "tag",
+                    "begin": "<think>",
+                    "content": {
+                        "type": "any_text",
+                        "excludes": ["｜DSML｜", "<｜end▁of▁sentence｜>"],
+                    },
+                    "end": "</think>",
+                },
+                {"type": "any_text"},
+            ],
+        }
+    }
+    grammar = xgr.Grammar.from_structural_tag(json.dumps(tag))
+    assert _is_grammar_accept_string(grammar, "<think>clean</think>x", require_termination=True)
+    assert not _is_grammar_accept_string(
+        grammar, "<think>a ｜DSML｜ b</think>x", require_termination=True
+    )
+    assert not _is_grammar_accept_string(
+        grammar, "<think>a <｜DSML｜tool_calls> b</think>x", require_termination=True
+    )
 
 
 @pytest.mark.hf_token_required

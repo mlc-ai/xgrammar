@@ -7,6 +7,7 @@
 #include <dlpack/dlpack.h>
 #include <tvm/ffi/any.h>
 #include <tvm/ffi/error.h>
+#include <tvm/ffi/extra/stl.h>
 #include <tvm/ffi/string.h>
 #include <tvm/ffi/tvm_ffi.h>
 #include <xgrammar/xgrammar.h>
@@ -220,13 +221,15 @@ class GrammarMatcherObj : public ffi::Object {
       ffi::ObjectRef compiled_grammar_ref,
       ffi::AnyView override_stop_tokens_opt,
       bool terminate_without_stop_token,
-      int64_t max_rollback_tokens
+      int64_t max_rollback_tokens,
+      std::optional<float> default_temperature
   )
       : value(
             compiled_grammar_ref.as<CompiledGrammarObj>()->value,
             OptionalIntVectorFromView(override_stop_tokens_opt),
             terminate_without_stop_token,
-            static_cast<int>(max_rollback_tokens)
+            static_cast<int>(max_rollback_tokens),
+            default_temperature
         ) {}
 
   static constexpr bool _type_mutable = true;
@@ -380,6 +383,42 @@ TVM_FFI_STATIC_INIT_BLOCK() {
             return ffi::ObjectRef(
                 ffi::make_object<GrammarObj>(Grammar::FromRegex(regex, print_converted_ebnf))
             );
+          }
+      )
+      .def_static(
+          "from_lark",
+          [](ffi::String lark_string,
+             ffi::AnyView tokenizer_info_view,
+             ffi::AnyView named_grammar_names_view,
+             ffi::AnyView named_grammar_values_view) {
+            XGRAMMAR_FFI_TRY_BEGIN();
+            std::optional<TokenizerInfo> tokenizer_info = std::nullopt;
+            if (tokenizer_info_view != nullptr) {
+              tokenizer_info =
+                  tokenizer_info_view.cast<ffi::ObjectRef>().as<TokenizerInfoObj>()->value;
+            }
+            auto named_grammar_names = named_grammar_names_view.cast<ffi::Array<ffi::Any>>();
+            auto named_grammar_values = named_grammar_values_view.cast<ffi::Array<ffi::Any>>();
+            if (named_grammar_names.size() != named_grammar_values.size()) {
+              throw XGrammarError("Named grammar names and values must have the same length");
+            }
+            std::vector<NamedGrammar> named_grammars;
+            named_grammars.reserve(static_cast<size_t>(named_grammar_names.size()));
+            for (int64_t i = 0; i < static_cast<int64_t>(named_grammar_names.size()); ++i) {
+              std::string name = named_grammar_names[i].cast<ffi::String>();
+              ffi::AnyView value = named_grammar_values[i];
+              if (const auto* grammar_obj = value.as<GrammarObj>()) {
+                named_grammars.push_back({std::move(name), grammar_obj->value});
+              } else if (value.as<ffi::String>()) {
+                named_grammars.push_back({std::move(name), std::string(value.cast<ffi::String>())});
+              } else {
+                throw XGrammarError("Named grammar values must be Grammar or Lark strings");
+              }
+            }
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(
+                Grammar::FromLark(lark_string, tokenizer_info, named_grammars)
+            ));
+            XGRAMMAR_FFI_TRY_END();
           }
       )
       .def_static(
@@ -560,6 +599,20 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           }
       )
       .def_static(
+          "batch_fill_temperature",
+          [](ffi::Array<O> matchers_ref, ffi::AnyView temperatures, ffi::AnyView indices) {
+            std::vector<GrammarMatcher> matchers;
+            matchers.reserve(matchers_ref.size());
+            for (int64_t i = 0; i < static_cast<int64_t>(matchers_ref.size()); ++i) {
+              matchers.push_back(matchers_ref[i].as<GrammarMatcherObj>()->value);
+            }
+            DLTensor* temperatures_ptr = temperatures.cast<DLTensor*>();
+            BatchGrammarMatcher::BatchFillTemperature(
+                matchers, temperatures_ptr, OptionalInt32VectorFromView(indices)
+            );
+          }
+      )
+      .def_static(
           "batch_accept_string",
           [](ffi::Array<O> matchers_ref, ffi::Array<ffi::Any> input_str_byte_union, bool debug_print
           ) {
@@ -613,9 +666,9 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       });
 
   // GrammarMatcher: init(compiled_grammar, override_stop_tokens_opt, terminate_without_stop,
-  // max_rollback_tokens)
+  // max_rollback_tokens, default_temperature)
   refl::ObjectDef<GrammarMatcherObj>()
-      .def(refl::init<O, ffi::AnyView, bool, int64_t>())
+      .def(refl::init<O, ffi::AnyView, bool, int64_t, std::optional<float>>())
       .def(
           "accept_token",
           [](GrammarMatcherObj* o, int64_t token_id, bool debug_print) {
@@ -650,17 +703,21 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              ffi::AnyView retrieve_next_sibling,
              ffi::AnyView draft_tokens,
              ffi::AnyView token_bitmask,
-             double time_threshold) {
+             double time_threshold,
+             ffi::AnyView temperatures) {
             DLTensor* retrieve_next_token_ptr = retrieve_next_token.cast<DLTensor*>();
             DLTensor* retrieve_next_sibling_ptr = retrieve_next_sibling.cast<DLTensor*>();
             DLTensor* draft_tokens_ptr = draft_tokens.cast<DLTensor*>();
             DLTensor* token_bitmask_ptr = token_bitmask.cast<DLTensor*>();
+            DLTensor* temperatures_ptr =
+                temperatures == nullptr ? nullptr : temperatures.cast<DLTensor*>();
             return o->value.TraverseDraftTree(
                 retrieve_next_token_ptr,
                 retrieve_next_sibling_ptr,
                 draft_tokens_ptr,
                 token_bitmask_ptr,
-                time_threshold
+                time_threshold,
+                temperatures_ptr
             );
           }
       )
@@ -672,6 +729,20 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           "rollback",
           [](GrammarMatcherObj* o, int64_t num_tokens) {
             o->value.Rollback(static_cast<int>(num_tokens));
+          }
+      )
+      .def(
+          "get_captures",
+          [](const GrammarMatcherObj* o, bool deduplicate) {
+            auto captures = o->value.GetCaptures(deduplicate);
+            ffi::Array<ffi::Any> result;
+            for (const auto& [name, value] : captures) {
+              ffi::Array<ffi::Any> pair;
+              pair.push_back(ffi::String(name));
+              pair.push_back(ffi::Bytes(value));
+              result.push_back(pair);
+            }
+            return result;
           }
       )
       .def(
@@ -689,6 +760,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
             return static_cast<int64_t>(o->value.GetMaxRollbackTokens());
           }
       )
+      .def("temperature", [](const GrammarMatcherObj* o) { return o->value.GetTemperature(); })
       .def(
           "stop_token_ids",
           [](const GrammarMatcherObj* o) {
@@ -828,6 +900,18 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           }
       )
       .def(
+          "xgrammar.tvm_ffi_binding.testing._is_rule_fsm_accept_string",
+          [](O grammar_ref, int64_t rule_id, ffi::String input) {
+            const auto& grammar = grammar_ref.as<GrammarObj>()->value;
+            XGRAMMAR_CHECK(rule_id >= 0 && rule_id < grammar->NumRules())
+                << "Rule id is out of range: " << rule_id;
+            const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
+            XGRAMMAR_CHECK(rule_fsm.has_value())
+                << "Rule " << rule_id << " does not have a finite-state machine";
+            return rule_fsm->GetFsm().AcceptString(input);
+          }
+      )
+      .def(
           "xgrammar.tvm_ffi_binding.testing.grammar_functor.structure_normalizer",
           [](O grammar_ref) {
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(
@@ -838,17 +922,21 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def(
           "xgrammar.tvm_ffi_binding.testing.grammar_functor.byte_string_fuser",
           [](O grammar_ref) {
-            return ffi::ObjectRef(ffi::make_object<GrammarObj>(
-                ByteStringFuser::Apply(grammar_ref.as<GrammarObj>()->value)
-            ));
+            // The pass rewrites in place, so copy first to leave the input grammar unaffected.
+            const Grammar& input = grammar_ref.as<GrammarObj>()->value;
+            Grammar grammar(std::make_shared<Grammar::Impl>(*input.operator->()));
+            ByteStringFuser::Apply(&grammar);
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(grammar));
           }
       )
       .def(
           "xgrammar.tvm_ffi_binding.testing.grammar_functor.rule_inliner",
           [](O grammar_ref) {
-            return ffi::ObjectRef(ffi::make_object<GrammarObj>(
-                RuleInliner::Apply(grammar_ref.as<GrammarObj>()->value)
-            ));
+            // The pass rewrites in place, so copy first to leave the input grammar unaffected.
+            const Grammar& input = grammar_ref.as<GrammarObj>()->value;
+            Grammar grammar(std::make_shared<Grammar::Impl>(*input.operator->()));
+            RuleInliner::Apply(&grammar);
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(grammar));
           }
       )
       .def(
@@ -873,6 +961,14 @@ TVM_FFI_STATIC_INIT_BLOCK() {
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(
                 GrammarOptimizer::Apply(grammar_ref.as<GrammarObj>()->value)
             ));
+          }
+      )
+      .def(
+          "xgrammar.tvm_ffi_binding.testing.grammar_functor.fsm_builder",
+          [](O grammar_ref) {
+            Grammar grammar = grammar_ref.as<GrammarObj>()->value;
+            GrammarFSMBuilder::Apply(&grammar);
+            return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(grammar)));
           }
       )
       .def(

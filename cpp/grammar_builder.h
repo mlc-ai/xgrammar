@@ -10,6 +10,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -25,6 +26,7 @@ namespace xgrammar {
 class GrammarBuilder {
  public:
   using Rule = Grammar::Impl::Rule;
+  using SuffixStopInfo = Grammar::Impl::SuffixStopInfo;
   using GrammarExprType = Grammar::Impl::GrammarExprType;
   using GrammarExpr = Grammar::Impl::GrammarExpr;
 
@@ -41,6 +43,13 @@ class GrammarBuilder {
 
   /*! \brief Constructor. Creates a new grammar object from an existing grammar. */
   GrammarBuilder(const Grammar& grammar);
+
+  /*!
+   * \brief Create a builder bound to an existing grammar without copying it. Unlike the copy
+   * constructor above, appended exprs and rule updates are written directly into *grammar. The
+   * grammar must outlive the builder.
+   */
+  static GrammarBuilder FromMutableGrammar(Grammar* grammar);
 
   /*!
    * \brief Get the result grammar. This function will also set the root rule to the rule with the
@@ -73,6 +82,24 @@ class GrammarBuilder {
    * \param str The string to be added.
    */
   int32_t AddByteString(const std::string& str);
+
+  /*!
+   * \brief Add a GrammarExpr for a regex. The pattern is stored as-is and compiled into an
+   * automaton by GrammarFSMBuilder.
+   * \param regex_str The regex pattern string.
+   * \param json_string Whether the regex matches the body of a JSON string literal. If true,
+   * the characters that must be escaped in a JSON string (the control characters, '"' and
+   * '\\') are excluded from every character match of the compiled automaton.
+   */
+  int32_t AddRegex(const std::string& regex_str, bool json_string = false);
+
+  /*!
+   * \brief Add a GrammarExpr for a substring expression, which matches every contiguous
+   * subsequence of the chunk list (including the empty one). The chunks are stored as-is and
+   * compiled into an automaton by GrammarFSMBuilder.
+   * \param chunks The list of byte string chunks. Chunks may be empty or repeated.
+   */
+  int32_t AddSubstring(const std::vector<std::string>& chunks);
 
   /*!
    * \brief Add a GrammarExpr for a character class.
@@ -186,11 +213,51 @@ class GrammarBuilder {
 
   void UpdateLookaheadExact(int32_t rule_id, bool is_exact = true);
 
+  /*! \brief Set the sampling temperature associated with a rule. */
+  void UpdateRuleTemperature(int32_t rule_id, std::optional<float> temperature);
+
   /*!
    * \brief Add a lookahead assertion to a rule referred by the given name. The lookahead
    * assertion should be a sequence GrammarExpr id. An id of -1 means no lookahead assertion.
    */
   void UpdateLookaheadAssertion(std::string rule_name, int32_t lookahead_assertion_id);
+
+  /*! \brief Update the token budget of the rule referred by the given rule_id. -1 means none. */
+  void UpdateMaxTokens(int32_t rule_id, int32_t max_tokens);
+
+  /*! \brief Update the token budget of the rule referred by the given name. -1 means none. */
+  void UpdateMaxTokens(std::string rule_name, int32_t max_tokens);
+
+  /*! \brief Update the character budget of the rule referred by the given rule_id. -1 means none.
+   */
+  void UpdateMaxChars(int32_t rule_id, int32_t max_chars);
+
+  /*! \brief Update the character budget of the rule referred by the given name. -1 means none. */
+  void UpdateMaxChars(std::string rule_name, int32_t max_chars);
+
+  /*!
+   * \brief Update the capture group name of the rule referred by the given rule_id. An empty
+   * string means no capture.
+   */
+  void UpdateCaptureName(int32_t rule_id, const std::string& capture_name);
+
+  /*!
+   * \brief Update the capture group name of the rule referred by the given name. An empty string
+   * means no capture.
+   */
+  void UpdateCaptureName(std::string rule_name, const std::string& capture_name);
+
+  /*! \brief Set or clear the sparse suffix/stop metadata for a rule. */
+  void UpdateSuffixStopInfo(int32_t rule_id, const SuffixStopInfo& info);
+
+  /*! \brief Set or clear sparse suffix/stop metadata on the rule referred by name. */
+  void UpdateSuffixStopInfo(std::string rule_name, const SuffixStopInfo& info);
+
+  /*! \brief Set whether the rule referred by the given rule_id is lazy (committed-shortest). */
+  void UpdateLazy(int32_t rule_id, bool is_lazy);
+
+  /*! \brief Set whether the rule referred by the given name is lazy (committed-shortest). */
+  void UpdateLazy(std::string rule_name, bool is_lazy);
 
   /*!
    * \brief Find a name for a new rule starting with the given name hint. Some integer suffix (_1,
@@ -204,10 +271,18 @@ class GrammarBuilder {
   int32_t GetRuleId(const std::string& name) const;
 
  private:
+  /*!
+   * \brief Build rule_name_to_id_ from the existing rules if it has not been built yet.
+   * Builders bound to an existing grammar (copy constructor, FromMutableGrammar) defer building
+   * the map to the first name-based operation, so id-only rewriting pays no name hashing cost.
+   */
+  void EnsureRuleNameMap() const;
+
   // Mutable pointer to the grammar object.
   std::shared_ptr<Grammar::Impl> grammar_;
-  // Map from rule name to rule id.
-  std::unordered_map<std::string, int32_t> rule_name_to_id_;
+  // Map from rule name to rule id. Built lazily; see EnsureRuleNameMap.
+  mutable std::unordered_map<std::string, int32_t> rule_name_to_id_;
+  mutable bool rule_name_map_built_ = true;
   // Cache of next suffix index per name_hint for GetNewRuleName.
   std::unordered_map<std::string, int> next_cnt_per_hint_;
 };

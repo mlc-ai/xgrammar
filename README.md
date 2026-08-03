@@ -1,6 +1,10 @@
 <div align="center" id="top">
 
-<img src="https://raw.githubusercontent.com/mlc-ai/xgrammar/main/assets/logo.svg" alt="logo" width="400" margin="10px"></img>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/_static/img/logo_dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="./assets/logo.svg">
+  <img src="./assets/logo.svg" alt="XGrammar" width="400">
+</picture>
 
 [![Documentation](https://img.shields.io/badge/docs-latest-green)](https://xgrammar.mlc.ai/docs/)
 [![License](https://img.shields.io/badge/license-apache_2-blue)](https://github.com/mlc-ai/xgrammar/blob/main/LICENSE)

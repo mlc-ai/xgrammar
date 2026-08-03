@@ -192,6 +192,11 @@ def _is_grammar_accept_string(
     return grammar_matcher.is_terminated()
 
 
+def _is_rule_fsm_accept_string(grammar: Grammar, rule_id: int, input_str: str) -> bool:
+    """Check whether a rule's already-built FSM accepts a string."""
+    return bool(_core.testing._is_rule_fsm_accept_string(grammar._handle, rule_id, input_str))
+
+
 def _get_masked_tokens_from_bitmask(
     bitmask: torch.Tensor, vocab_size: int, index: int = 0
 ) -> List[int]:
@@ -431,6 +436,13 @@ class GrammarFunctor:
         """Optimize the grammar."""
         return Grammar._create_from_handle(
             _core.testing.grammar_functor.grammar_optimizer(grammar._handle)
+        )
+
+    @staticmethod
+    def fsm_builder(grammar: Grammar) -> Grammar:
+        """Build rule FSMs without running other grammar passes."""
+        return Grammar._create_from_handle(
+            _core.testing.grammar_functor.fsm_builder(grammar._handle)
         )
 
     @staticmethod

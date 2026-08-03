@@ -2,6 +2,7 @@
 
 import sys
 import time
+import warnings
 from typing import Callable, List, Optional, Tuple
 
 import pytest
@@ -430,6 +431,70 @@ def test_apply_token_bitmask_inplace_indices_bf16(
 
     kernel(logits, bitmask, indices=indices)
     torch.testing.assert_close(logits, logits_expected)
+
+
+def _assert_no_undersized_warning(logits, bitmask, **kwargs):
+    """apply_token_bitmask_inplace must not emit the undersized-bitmask warning."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        xgr.apply_token_bitmask_inplace(logits, bitmask, **kwargs)
+    footgun = [
+        w
+        for w in caught
+        if issubclass(w.category, UserWarning) and "left unmasked" in str(w.message)
+    ]
+    assert not footgun, [str(w.message) for w in footgun]
+
+
+def test_apply_token_bitmask_inplace_warns_on_undersized_bitmask():
+    # Regression for the crash class in mlc-ai/xgrammar#611: when the bitmask covers fewer
+    # tokens than the logits width and vocab_size is not given, the auto-detected vocab size is
+    # min(logits.shape[-1], bitmask.shape[-1] * 32), so the trailing logits are left unmasked and
+    # out-of-grammar tokens there (e.g. padded/reserved vocabulary ids) can still be sampled. Warn.
+    logits = torch.ones(1, 70, dtype=torch.float32)
+    bitmask = xgr.allocate_token_bitmask(1, 40)  # ceil(40 / 32) = 2 blocks -> 64 bits < 70
+    assert bitmask.shape[-1] * 32 == 64
+    bitmask.fill_(0)  # reject every token the bitmask covers
+
+    with pytest.warns(UserWarning, match="left unmasked"):
+        xgr.apply_token_bitmask_inplace(logits, bitmask)
+
+    # Masking behavior is unchanged: only logits[..., :64] is masked; the tail stays finite.
+    assert torch.isinf(logits[0, :64]).all()
+    assert torch.isfinite(logits[0, 64:]).all()
+
+
+def test_apply_token_bitmask_inplace_warns_on_undersized_bitmask_batched():
+    # The check keys on the vocab dimension (shape[-1]), so batch size is irrelevant.
+    logits = torch.ones(4, 70, dtype=torch.float32)
+    bitmask = xgr.allocate_token_bitmask(4, 40)  # 64 bits < 70
+    bitmask.fill_(0)
+
+    with pytest.warns(UserWarning, match="left unmasked"):
+        xgr.apply_token_bitmask_inplace(logits, bitmask)
+
+    assert torch.isinf(logits[:, :64]).all()
+    assert torch.isfinite(logits[:, 64:]).all()
+
+
+@pytest.mark.parametrize("bitmask_vocab", (96, 64))  # wider than, and exactly covering, 64 logits
+def test_apply_token_bitmask_inplace_no_warn_when_bitmask_covers_logits(bitmask_vocab: int):
+    logits = torch.ones(1, 64, dtype=torch.float32)
+    bitmask = xgr.allocate_token_bitmask(1, bitmask_vocab)
+    assert bitmask.shape[-1] * 32 >= logits.shape[-1]  # boundary: no warning at exact equality
+    bitmask.fill_(0)
+    _assert_no_undersized_warning(logits, bitmask)
+    assert torch.isinf(logits).all()
+
+
+def test_apply_token_bitmask_inplace_no_warn_when_vocab_size_given():
+    # Passing vocab_size explicitly opts into masking only that prefix; do not warn.
+    logits = torch.ones(1, 70, dtype=torch.float32)
+    bitmask = xgr.allocate_token_bitmask(1, 40)  # 64 bits < 70
+    bitmask.fill_(0)
+    _assert_no_undersized_warning(logits, bitmask, vocab_size=40)
+    assert torch.isinf(logits[0, :40]).all()
+    assert torch.isfinite(logits[0, 40:]).all()
 
 
 if __name__ == "__main__":

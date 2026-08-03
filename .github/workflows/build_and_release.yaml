@@ -84,7 +84,8 @@ jobs:
     permissions:
       id-token: write
       attestations: write
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: (github.event_name == 'release' && github.event.action == 'published') || github.event_name ==
+      'workflow_dispatch'
     # or, alternatively, upload to PyPI on every tag starting with 'v' (remove on: release above to use this)
     # if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
@@ -104,6 +105,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           attestations: true
+          skip-existing: true
           verbose: true
           # repository-url: https://test.pypi.org/legacy/
           # To test: repository-url: https://test.pypi.org/legacy/

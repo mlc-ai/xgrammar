@@ -11,9 +11,14 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <optional>
+#include <string>
 #include <thread>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -27,6 +32,7 @@
 #include "support/logging.h"
 #include "support/thread_pool.h"
 #include "testing.h"
+#include "tokenizer_info_impl.h"
 
 namespace xgrammar {
 
@@ -54,6 +60,7 @@ bool TraverseDraftTreeRecursive(
     const int64_t* draft_tokens,
     GrammarMatcher& matcher,
     DLTensor* token_bitmask,
+    float* temperatures,
     double time_threshold,
     const TimePoint& start_time
 ) {
@@ -95,6 +102,9 @@ bool TraverseDraftTreeRecursive(
     if (token_accepted) {
       if (!matcher.IsTerminated()) {
         matcher.FillNextTokenBitmask(token_bitmask, current_position);
+        if (temperatures != nullptr) {
+          temperatures[current_position] = matcher.GetTemperature().value_or(-1.0f);
+        }
 
         if (retrieve_next_token[current_position] != -1) {
           bool success = TraverseDraftTreeRecursive(
@@ -105,6 +115,7 @@ bool TraverseDraftTreeRecursive(
               draft_tokens,
               matcher,
               token_bitmask,
+              temperatures,
               time_threshold,
               start_time
           );
@@ -138,6 +149,7 @@ bool TraverseDraftTreeRecursive(
         draft_tokens,
         matcher,
         token_bitmask,
+        temperatures,
         time_threshold,
         start_time
     );
@@ -451,16 +463,35 @@ class GrammarMatcher::Impl : public EarleyParser {
       std::optional<std::vector<int>> override_stop_tokens = std::nullopt,
       bool terminate_without_stop_token = false,
       // max_rollback_tokens_ is deprecated and not used.
-      int max_rollback_tokens = -1
+      int max_rollback_tokens = -1,
+      std::optional<float> default_temperature = std::nullopt
   )
-      : EarleyParser(compiled_grammar->grammar, ParserState::GetInvalidState()),
+      : EarleyParser(compiled_grammar->grammar),
         compiled_grammar_(compiled_grammar),
         tokenizer_info_(compiled_grammar->tokenizer_info),
         stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
         terminate_without_stop_token_(terminate_without_stop_token),
+        default_temperature_(default_temperature),
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
+    if (has_budget_rules_ || has_char_budget_rules_) {
+      for (int32_t rule_id = 0; rule_id < grammar_->NumRules(); ++rule_id) {
+        const auto& rule = grammar_->GetRule(rule_id);
+        if (rule.max_tokens < 0 && rule.max_chars < 0) {
+          continue;
+        }
+        const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
+        if (suffix_stop_info != nullptr && suffix_stop_info->body_rule_id >= 0) {
+          has_budget_marker_rules_ = true;
+          break;
+        }
+      }
+    }
+    XGRAMMAR_CHECK(
+        !default_temperature_.has_value() ||
+        (std::isfinite(default_temperature_.value()) && default_temperature_.value() >= 0)
+    ) << "The default_temperature must be a finite non-negative number";
   }
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
@@ -469,13 +500,32 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   bool FillNextTokenBitmask(DLTensor* next_token_bitmask, int index, bool debug_print = false);
 
+  std::optional<float> GetTemperature() const;
+
   std::string FindJumpForwardString();
 
   void Rollback(int num_tokens);
 
   bool IsTerminated() const;
 
-  void Reset() { EarleyParser::Reset(); }
+  void Reset() {
+    token_length_history.clear();
+    current_token_index_ = -1;
+    budget_enforce_pending_ = false;
+    budget_force_close_pending_ = false;
+    budget_exceeded_warned_ = false;
+    char_budget_exceeded_warned_ = false;
+    char_budget_relaxed_ = false;
+    record_char_budget_relaxation_ = false;
+    budget_body_match_cache_.clear();
+    temporary_input_start_row_ = -1;
+    temporary_input_bytes_.clear();
+    accepted_bytes_.clear();
+    row_byte_end_.assign(1, 0);
+    EarleyParser::Reset();
+  }
+
+  std::vector<std::pair<std::string, std::string>> GetCaptures(bool deduplicate) const;
 
   int GetMaxRollbackTokens() const { return -1; }
 
@@ -522,11 +572,167 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   std::string PrintBitmask(int32_t* bitmask_data_ptr, const TokenizerInfo& tokenizer_info);
 
+  /*! \brief Restores skip_expired_states_ to false when the accept call returns. */
+  class SkipExpiredGuard {
+   public:
+    explicit SkipExpiredGuard(Impl* impl, bool enable) : impl_(impl) {
+      impl_->skip_expired_states_ = enable;
+    }
+    ~SkipExpiredGuard() { impl_->skip_expired_states_ = false; }
+    SkipExpiredGuard(const SkipExpiredGuard&) = delete;
+    SkipExpiredGuard& operator=(const SkipExpiredGuard&) = delete;
+
+   private:
+    Impl* impl_;
+  };
+
+  /*!
+   * \brief RAII guard that enables capture-event recording in the Earley parser for its
+   * lifetime. Used in the definitive accept paths (AcceptToken / AcceptString) only, so that
+   * speculative advances (mask computation, jump-forward search) never record capture events.
+   */
+  class CaptureRecordingGuard {
+   public:
+    explicit CaptureRecordingGuard(Impl* impl) : impl_(impl) {
+      if (impl_->capture_tracking_) {
+        impl_->capture_recording_ = true;
+      }
+    }
+    ~CaptureRecordingGuard() { impl_->capture_recording_ = false; }
+    CaptureRecordingGuard(const CaptureRecordingGuard&) = delete;
+    CaptureRecordingGuard& operator=(const CaptureRecordingGuard&) = delete;
+
+   private:
+    Impl* impl_;
+  };
+
+  /*! \brief Fill the bitmask from the current states, optionally excluding the states whose
+   * budget deadline has passed. */
+  void FillBitmaskForStates(
+      int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
+  );
+
+  void FillBitmaskForCharBudgetBoundary(
+      const AdaptiveTokenMask& adaptive_token_mask, int32_t remaining_chars
+  );
+
+  bool AdvanceWithCharacterBudget(uint8_t byte, bool debug_print = false);
+
+  bool AdvanceAtomicTokenWithCharacterBudget(
+      int32_t token_id, int32_t token_char_count, bool debug_print = false
+  );
+
+  /*! \brief Whether byte offsets are needed for captures or budgeted suffix/stop rules. */
+  bool ShouldTrackAcceptedBytes() const {
+    return IsCaptureTrackingEnabled() || has_budget_marker_rules_;
+  }
+
+  /*! \brief Whether the bytes consumed by this expired suffix/stop occurrence form a complete
+   * match of its body, so max_tokens may end it without consuming the marker. */
+  bool CanForceCompleteWithoutMarker(const ParserState& state, bool use_char_budget);
+
+  /*! \brief Commit the current budget boundary: discard expired states and complete eligible
+   * suffix/stop occurrences without their marker. Returns whether a derivation remains viable. */
+  bool ApplyBudgetEnforcement(bool debug_print = false);
+
+  /*! \brief Enforce exhausted character budgets before consuming a new codepoint. */
+  bool ApplyCharacterBudgetEnforcement(bool debug_print = false);
+
+  /*! \brief Reapply character-budget enforcement for newly exposed parent occurrences. */
+  bool ApplyCharacterBudgetEnforcementToFixedPoint(bool debug_print = false);
+
+  /*! \brief Consume the pending budget decision and warn once when a token budget was
+   * exceeded. */
+  void FinishCharacterBudgetAccept() {
+    if (char_budget_relaxed_ && !char_budget_exceeded_warned_) {
+      char_budget_exceeded_warned_ = true;
+      XGRAMMAR_LOG(WARNING
+      ) << "The character budget (max_chars) of a rule was exceeded: the rule could not end at "
+           "the position where its budget ran out, so the budget is relaxed until the rule "
+           "can end. This warning is reported once per matcher.";
+    }
+    char_budget_relaxed_ = false;
+  }
+
+  bool FinishAccept(bool consumed_past_deadline) {
+    budget_enforce_pending_ = false;
+    budget_force_close_pending_ = false;
+    if (consumed_past_deadline && !budget_exceeded_warned_) {
+      budget_exceeded_warned_ = true;
+      XGRAMMAR_LOG(WARNING
+      ) << "The token budget (max_tokens) of a rule was exceeded: the rule could not end at "
+           "the position where its budget ran out, so the budget is relaxed until the rule "
+           "can end. This warning is reported once per matcher.";
+    }
+    FinishCharacterBudgetAccept();
+    return true;
+  }
+
+  bool BitmaskHasAnyToken(int32_t* bitmask_data_ptr) const {
+    auto bitset = DynamicBitset(
+        tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
+    );
+    return bitset.Any();
+  }
+
+  /*! \brief Record that num_rows new input positions were created, each consuming one byte of
+   * bytes in order. Used for the byte-by-byte advance paths. */
+  void AppendPerByteRows(const std::string& bytes) {
+    for (char c : bytes) {
+      accepted_bytes_.push_back(static_cast<uint8_t>(c));
+      row_byte_end_.push_back(static_cast<int64_t>(accepted_bytes_.size()));
+    }
+  }
+
+  /*! \brief Record that one new input position was created, consuming all bytes of the token.
+   * Used for the atomic token advance path. */
+  void AppendAtomicRow(const std::string& bytes) {
+    accepted_bytes_.insert(accepted_bytes_.end(), bytes.begin(), bytes.end());
+    row_byte_end_.push_back(static_cast<int64_t>(accepted_bytes_.size()));
+  }
+
   CompiledGrammar compiled_grammar_;
   TokenizerInfo tokenizer_info_;
   std::vector<int> stop_token_ids_;
   bool terminate_without_stop_token_;
+  std::optional<float> default_temperature_;
+  mutable bool has_warned_temperature_conflict_ = false;
   std::deque<int> token_length_history;
+
+  /*! \brief Set by the last mask computation when an exhausted budget could be enforced: the
+   * next accept commits the same state transition used to compute that mask. */
+  bool budget_enforce_pending_ = false;
+  /*! \brief Whether the pending decision includes a suffix/stop completion without its marker. */
+  bool budget_force_close_pending_ = false;
+  /*! \brief Whether the one-time budget-exceeded warning has been reported. */
+  bool budget_exceeded_warned_ = false;
+  /*! \brief Whether the one-time character-budget warning has been reported. */
+  bool char_budget_exceeded_warned_ = false;
+  /*! \brief Whether the current definitive accept relaxed a character budget. */
+  bool char_budget_relaxed_ = false;
+  /*! \brief Whether speculative character-budget relaxation should be recorded. */
+  bool record_char_budget_relaxation_ = false;
+  /*! \brief Whether byte history is needed to recognize a budgeted suffix/stop body boundary. */
+  bool has_budget_marker_rules_ = false;
+
+  struct BudgetBodyMatchProgress {
+    int64_t begin_byte;
+    int64_t end_byte;
+    std::unordered_set<int> states;
+    std::string temporary_input_snapshot;
+  };
+  /*! \brief Incremental body-FSM progress keyed by (rule id, occurrence start row). */
+  std::unordered_map<int64_t, BudgetBodyMatchProgress> budget_body_match_cache_;
+
+  /*! \brief The bytes accepted so far. Maintained for captures and budgeted marker rules. */
+  std::vector<uint8_t> accepted_bytes_;
+  /*! \brief row_byte_end_[i] is the number of accepted bytes after input position i. Aligned
+   * with the parser's state history whenever accepted_bytes_ is maintained. */
+  std::vector<int64_t> row_byte_end_{0};
+  /*! \brief Bytes tentatively consumed by the current token or string advance. */
+  std::string temporary_input_bytes_;
+  /*! \brief Parser row immediately before temporary_input_bytes_. */
+  int32_t temporary_input_start_row_ = -1;
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
   DynamicBitset tmp_accepted_bitset_;
@@ -606,6 +812,393 @@ bool GrammarMatcher::Impl::IsTerminated() const {
 
 bool GrammarMatcher::Impl::IsStopTokenAccepted() const { return stop_token_is_accepted_; }
 
+bool GrammarMatcher::Impl::CanForceCompleteWithoutMarker(
+    const ParserState& state, bool use_char_budget
+) {
+  bool expired = use_char_budget ? IsCharExpiredState(state) : IsExpiredState(state);
+  if (!expired || state.rule_id < 0) {
+    return false;
+  }
+  const auto& rule = grammar_->GetRule(state.rule_id);
+  if (use_char_budget ? rule.max_chars < 0 : rule.max_tokens < 0) {
+    return false;
+  }
+  const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(state.rule_id);
+  if (suffix_stop_info == nullptr || suffix_stop_info->body_rule_id < 0) {
+    return false;
+  }
+  XGRAMMAR_DCHECK(ShouldTrackAcceptedBytes());
+  int32_t start_row =
+      state.rule_start_pos == ParserState::kNoPrevInputPos ? 0 : state.rule_start_pos;
+  auto byte_position_for_row = [&](int32_t row) {
+    if (row >= 0 && row < static_cast<int32_t>(row_byte_end_.size())) {
+      return row_byte_end_[row];
+    }
+    XGRAMMAR_DCHECK(temporary_input_start_row_ >= 0);
+    XGRAMMAR_DCHECK(row >= temporary_input_start_row_);
+    XGRAMMAR_DCHECK(
+        row <= temporary_input_start_row_ + static_cast<int32_t>(temporary_input_bytes_.size())
+    );
+    return static_cast<int64_t>(accepted_bytes_.size() + row - temporary_input_start_row_);
+  };
+  int64_t begin = byte_position_for_row(start_row);
+  int64_t end = accepted_bytes_.size() + temporary_input_bytes_.size();
+
+  XGRAMMAR_DCHECK(grammar_->per_rule_fsms[suffix_stop_info->body_rule_id].has_value());
+  const auto& body_fsm = grammar_->per_rule_fsms[suffix_stop_info->body_rule_id]->GetFsm();
+  XGRAMMAR_DCHECK(body_fsm.IsLeaf()) << "A suffix/stop body helper must compile to a leaf FSM";
+
+  int64_t occurrence =
+      (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
+  auto [it, inserted] = budget_body_match_cache_.try_emplace(
+      occurrence, BudgetBodyMatchProgress{begin, begin, {body_fsm.GetStart()}, {}}
+  );
+  auto& progress = it->second;
+  if (inserted) {
+    body_fsm.GetFsm().GetEpsilonClosure(&progress.states);
+  } else if (progress.begin_byte != begin || progress.end_byte > end ||
+             (progress.end_byte > static_cast<int64_t>(accepted_bytes_.size()) &&
+              progress.temporary_input_snapshot != temporary_input_bytes_)) {
+    // This is only expected after restoring external matcher state. Rollback and reset clear the
+    // cache eagerly, but reinitialize defensively if a caller supplies an equivalent history.
+    progress = BudgetBodyMatchProgress{begin, begin, {body_fsm.GetStart()}, {}};
+    body_fsm.GetFsm().GetEpsilonClosure(&progress.states);
+  }
+
+  std::unordered_set<int> next_states;
+  for (int64_t offset = progress.end_byte; offset < end && !progress.states.empty(); ++offset) {
+    uint8_t byte =
+        offset < static_cast<int64_t>(accepted_bytes_.size())
+            ? accepted_bytes_[offset]
+            : static_cast<uint8_t>(temporary_input_bytes_[offset - accepted_bytes_.size()]);
+    body_fsm.GetFsm().Advance(
+        progress.states, byte, &next_states, FSMEdge::EdgeType::kCharRange, true
+    );
+    progress.states = next_states;
+  }
+  progress.end_byte = end;
+  progress.temporary_input_snapshot =
+      end > static_cast<int64_t>(accepted_bytes_.size()) ? temporary_input_bytes_ : std::string{};
+  return std::any_of(progress.states.begin(), progress.states.end(), [&](int state_id) {
+    return body_fsm.IsEndState(state_id);
+  });
+}
+
+bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
+  XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
+  const auto latest_row = scanable_state_history_[scanable_state_history_.size() - 1];
+  std::vector<ParserState> latest_states(latest_row.begin(), latest_row.end());
+  std::vector<ParserState> force_completed_states;
+  std::unordered_set<int64_t> force_completed_occurrences;
+
+  tmp_states_visited_in_queue_.Clear();
+  tmp_states_to_be_added_.clear();
+  tmp_completed_lazy_occurrences_.clear();
+  tmp_accept_stop_token_ = IsCompleted();
+
+  for (const auto& state : latest_states) {
+    if (!IsExpiredState(state)) {
+      EnqueueWithoutProcessing(state);
+      continue;
+    }
+    if (!CanForceCompleteWithoutMarker(state, false)) {
+      continue;
+    }
+    int64_t occurrence =
+        (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
+    if (force_completed_occurrences.insert(occurrence).second) {
+      force_completed_states.push_back(state);
+    }
+  }
+
+  for (const auto& state : force_completed_states) {
+    Complete(state, debug_print, /*marker_present=*/false);
+  }
+  while (!tmp_process_state_queue_.empty()) {
+    const auto state = std::move(tmp_process_state_queue_.front());
+    tmp_process_state_queue_.pop();
+    auto [scanable, completable] = Predict(state, debug_print);
+    if (completable) {
+      Complete(state, debug_print);
+    }
+    if (scanable) {
+      tmp_states_to_be_added_.push_back(state);
+    }
+  }
+  if (!tmp_completed_lazy_occurrences_.empty()) {
+    RemoveCommittedLazyStates();
+  }
+
+  bool any_expired = false;
+  bool any_alive = false;
+  for (const auto& state : tmp_states_to_be_added_) {
+    if (IsExpiredState(state)) {
+      any_expired = true;
+    } else {
+      any_alive = true;
+    }
+  }
+  if (any_expired && (any_alive || tmp_accept_stop_token_)) {
+    // Completing a budgeted suffix/stop rule can expose an already-expired parent alternative.
+    // Apply the same preference as the ordinary max_tokens path: once another derivation can
+    // continue or finish at this boundary, expired derivations may not consume another token.
+    tmp_states_to_be_added_.erase(
+        std::remove_if(
+            tmp_states_to_be_added_.begin(),
+            tmp_states_to_be_added_.end(),
+            [&](const ParserState& state) { return IsExpiredState(state); }
+        ),
+        tmp_states_to_be_added_.end()
+    );
+  }
+
+  bool viable = tmp_accept_stop_token_ || !tmp_states_to_be_added_.empty();
+  if (!viable) {
+    return false;
+  }
+  scanable_state_history_.PopBack(1);
+  scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  is_completed_.back() = tmp_accept_stop_token_;
+  return true;
+}
+
+bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
+  XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
+  const auto latest_row = scanable_state_history_[scanable_state_history_.size() - 1];
+  std::vector<ParserState> latest_states(latest_row.begin(), latest_row.end());
+  auto previous_completable_row = rule_id_to_completable_states_.Back();
+  std::vector<std::pair<int32_t, ParserState>> previous_completable_states(
+      previous_completable_row.data,
+      previous_completable_row.data + previous_completable_row.data_len
+  );
+  std::vector<CaptureEvent> previous_capture_events;
+  if (capture_tracking_) {
+    previous_capture_events = CopyLastCaptureRow();
+  }
+  std::vector<ParserState> force_completed_states;
+  std::unordered_set<int64_t> force_completed_occurrences;
+
+  tmp_states_visited_in_queue_.Clear();
+  tmp_states_to_be_added_.clear();
+  tmp_completed_lazy_occurrences_.clear();
+  tmp_accept_stop_token_ = IsCompleted();
+
+  for (const auto& state : latest_states) {
+    if (!IsCharExpiredState(state)) {
+      EnqueueWithoutProcessing(state);
+      continue;
+    }
+    if (!CanForceCompleteWithoutMarker(state, true)) {
+      continue;
+    }
+    int64_t occurrence =
+        (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
+    if (force_completed_occurrences.insert(occurrence).second) {
+      force_completed_states.push_back(state);
+    }
+  }
+
+  for (const auto& state : force_completed_states) {
+    Complete(state, debug_print, /*marker_present=*/false);
+  }
+  while (!tmp_process_state_queue_.empty()) {
+    const auto state = std::move(tmp_process_state_queue_.front());
+    tmp_process_state_queue_.pop();
+    auto [scanable, completable] = Predict(state, debug_print);
+    if (completable) {
+      Complete(state, debug_print);
+    }
+    if (scanable) {
+      tmp_states_to_be_added_.push_back(state);
+    }
+  }
+  if (!tmp_completed_lazy_occurrences_.empty()) {
+    RemoveCommittedLazyStates();
+  }
+
+  bool any_expired = false;
+  bool any_alive = false;
+  for (const auto& state : tmp_states_to_be_added_) {
+    if (IsCharExpiredState(state)) {
+      any_expired = true;
+    } else {
+      any_alive = true;
+    }
+  }
+  if (any_expired && (any_alive || tmp_accept_stop_token_)) {
+    tmp_states_to_be_added_.erase(
+        std::remove_if(
+            tmp_states_to_be_added_.begin(),
+            tmp_states_to_be_added_.end(),
+            [&](const ParserState& state) { return IsCharExpiredState(state); }
+        ),
+        tmp_states_to_be_added_.end()
+    );
+  }
+
+  bool viable = tmp_accept_stop_token_ || !tmp_states_to_be_added_.empty();
+  if (!viable) {
+    rule_id_to_completable_states_.PopBack(1);
+    rule_id_to_completable_states_.PushBack(previous_completable_states);
+    if (capture_tracking_) {
+      capture_event_history_.PopBack(1);
+      capture_event_history_.PushBack(previous_capture_events);
+    }
+    return false;
+  }
+  scanable_state_history_.PopBack(1);
+  scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  is_completed_.back() = tmp_accept_stop_token_;
+  return true;
+}
+
+bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcementToFixedPoint(bool debug_print) {
+  bool applied_any = false;
+  for (int32_t iteration = 0; iteration <= grammar_->NumRules(); ++iteration) {
+    bool has_expired_state = false;
+    for (const auto& state : scanable_state_history_[scanable_state_history_.size() - 1]) {
+      if (IsCharExpiredState(state)) {
+        has_expired_state = true;
+        break;
+      }
+    }
+    if (!has_expired_state) {
+      return applied_any;
+    }
+    if (!ApplyCharacterBudgetEnforcement(debug_print)) {
+      return applied_any;
+    }
+    applied_any = true;
+  }
+  return applied_any;
+}
+
+bool GrammarMatcher::Impl::AdvanceWithCharacterBudget(uint8_t byte, bool debug_print) {
+  if (!has_char_budget_rules_ || !StartsUTF8Codepoint(byte)) {
+    return Advance(byte, debug_print);
+  }
+
+  bool has_expired_state = false;
+  for (const auto& state : scanable_state_history_[scanable_state_history_.size() - 1]) {
+    if (IsCharExpiredState(state)) {
+      has_expired_state = true;
+      break;
+    }
+  }
+  if (!has_expired_state) {
+    return Advance(byte, debug_print);
+  }
+
+  std::vector<ParserState> previous_states = GetLatestScanableStates();
+  bool previous_completed = IsCompleted();
+  auto previous_completable_row = rule_id_to_completable_states_.Back();
+  std::vector<std::pair<int32_t, ParserState>> previous_completable_states(
+      previous_completable_row.data,
+      previous_completable_row.data + previous_completable_row.data_len
+  );
+  std::vector<CaptureEvent> previous_capture_events;
+  if (capture_tracking_) {
+    previous_capture_events = CopyLastCaptureRow();
+  }
+
+  bool enforced = ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
+  if (!enforced && record_char_budget_relaxation_) {
+    char_budget_relaxed_ = true;
+  }
+  bool accepted = Advance(byte, debug_print);
+  if (!accepted && enforced) {
+    scanable_state_history_.PopBack(1);
+    scanable_state_history_.PushBack(previous_states);
+    rule_id_to_completable_states_.PopBack(1);
+    rule_id_to_completable_states_.PushBack(previous_completable_states);
+    is_completed_.back() = previous_completed;
+    if (capture_tracking_) {
+      capture_event_history_.PopBack(1);
+      capture_event_history_.PushBack(previous_capture_events);
+    }
+  }
+  return accepted;
+}
+
+bool GrammarMatcher::Impl::AdvanceAtomicTokenWithCharacterBudget(
+    int32_t token_id, int32_t token_char_count, bool debug_print
+) {
+  bool has_expired_state = false;
+  bool crosses_budget = false;
+  if (has_char_budget_rules_ && token_char_count > 0) {
+    for (const auto& state : scanable_state_history_[scanable_state_history_.size() - 1]) {
+      has_expired_state = has_expired_state || IsCharExpiredState(state);
+      crosses_budget =
+          crosses_budget || (state.char_budget_deadline >= 0 &&
+                             GetCurrentCharIndex() + token_char_count > state.char_budget_deadline);
+    }
+  }
+
+  std::vector<ParserState> previous_states;
+  std::vector<std::pair<int32_t, ParserState>> previous_completable_states;
+  bool previous_completed = false;
+  std::vector<CaptureEvent> previous_capture_events;
+  bool enforced = false;
+  if (has_expired_state) {
+    previous_states = GetLatestScanableStates();
+    auto previous_completable_row = rule_id_to_completable_states_.Back();
+    previous_completable_states.assign(
+        previous_completable_row.data,
+        previous_completable_row.data + previous_completable_row.data_len
+    );
+    previous_completed = IsCompleted();
+    if (capture_tracking_) {
+      previous_capture_events = CopyLastCaptureRow();
+    }
+    enforced = ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
+    if (!enforced && record_char_budget_relaxation_) {
+      char_budget_relaxed_ = true;
+    }
+  }
+
+  bool accepted = AdvanceAtomicToken(token_id, debug_print, token_char_count);
+  if (!accepted && enforced) {
+    scanable_state_history_.PopBack(1);
+    scanable_state_history_.PushBack(previous_states);
+    rule_id_to_completable_states_.PopBack(1);
+    rule_id_to_completable_states_.PushBack(previous_completable_states);
+    is_completed_.back() = previous_completed;
+    if (capture_tracking_) {
+      capture_event_history_.PopBack(1);
+      capture_event_history_.PushBack(previous_capture_events);
+    }
+  }
+  if (accepted && crosses_budget && record_char_budget_relaxation_) {
+    char_budget_relaxed_ = true;
+  }
+  return accepted;
+}
+
+std::optional<float> GrammarMatcher::Impl::GetTemperature() const {
+  std::optional<float> syntax_temperature = std::nullopt;
+  bool has_temperature_conflict = false;
+  for (const auto& state : GetLatestScanableStates()) {
+    if (state.active_temperature_rule_id == -1) {
+      continue;
+    }
+    const auto& temperature = grammar_->GetRule(state.active_temperature_rule_id).temperature;
+    XGRAMMAR_DCHECK(temperature.has_value());
+    if (syntax_temperature.has_value() && temperature.value() != syntax_temperature.value()) {
+      has_temperature_conflict = true;
+    }
+    if (!syntax_temperature.has_value() || temperature.value() > syntax_temperature.value()) {
+      syntax_temperature = temperature;
+    }
+  }
+  if (has_temperature_conflict && !has_warned_temperature_conflict_) {
+    XGRAMMAR_LOG(WARNING) << "Multiple active grammar paths specify different temperatures. "
+                             "Using the maximum temperature "
+                          << syntax_temperature.value() << ".";
+    has_warned_temperature_conflict_ = true;
+  }
+  return syntax_temperature.has_value() ? syntax_temperature : default_temperature_;
+}
+
 // TODO(yixin): Polish verbose logging
 bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   if (IsStopTokenAccepted()) {
@@ -620,6 +1213,64 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     return false;
   }
 
+  bool is_stop_token =
+      std::find(stop_token_ids_.begin(), stop_token_ids_.end(), token_id) != stop_token_ids_.end();
+  const auto& special_token_ids = tokenizer_info_.GetSpecialTokenIds();
+  if (!is_stop_token && std::find(special_token_ids.begin(), special_token_ids.end(), token_id) !=
+                            special_token_ids.end()) {
+    XGRAMMAR_LOG(WARNING) << "GrammarMatcher cannot accept special token id " << token_id << ": "
+                          << tokenizer_info_.GetDecodedVocab()[token_id]
+                          << ". Rejecting the token.";
+    return false;
+  }
+
+  current_token_index_ = static_cast<int32_t>(token_length_history.size());
+  char_budget_relaxed_ = false;
+  record_char_budget_relaxation_ = false;
+  bool enforce_budget = budget_enforce_pending_;
+  bool force_budget_close = budget_force_close_pending_;
+  if (force_budget_close) {
+    // Validate on a copy first: a rejected token must not commit the budget-close transition.
+    Impl trial(*this);
+    trial.capture_recording_ = false;
+    bool applied = trial.ApplyBudgetEnforcement();
+    XGRAMMAR_DCHECK(applied);
+    if (!applied) {
+      return false;
+    }
+    trial.budget_enforce_pending_ = false;
+    trial.budget_force_close_pending_ = false;
+    if (!trial.AcceptToken(token_id, false)) {
+      return false;
+    }
+  }
+
+  // Capture events are only recorded on the definitive accept path.
+  CaptureRecordingGuard capture_guard(this);
+  if (force_budget_close) {
+    bool applied = ApplyBudgetEnforcement(debug_print);
+    XGRAMMAR_DCHECK(applied);
+    if (!applied) {
+      return false;
+    }
+    budget_enforce_pending_ = false;
+    budget_force_close_pending_ = false;
+  }
+  SkipExpiredGuard skip_expired_guard(this, enforce_budget && !force_budget_close);
+
+  // The token extends a derivation past its budget iff expired states are allowed to scan
+  // (no enforcement) while some exist.
+  bool consumed_past_deadline = false;
+  if (has_budget_rules_ && !enforce_budget) {
+    const auto& row = scanable_state_history_[scanable_state_history_.size() - 1];
+    for (const auto& state : row) {
+      if (IsExpiredState(state)) {
+        consumed_past_deadline = true;
+        break;
+      }
+    }
+  }
+
   if (debug_print) {
     std::string states_str;
     for (const auto& state : GetLatestScanableStates()) {
@@ -631,48 +1282,96 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
                        << states_str;
   }
   // Handle the stop token
-  if (std::find(stop_token_ids_.begin(), stop_token_ids_.end(), token_id) !=
-      stop_token_ids_.end()) {
+  if (is_stop_token) {
     bool accepted = AcceptStopToken();
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: " << accepted;
     }
-    return accepted;
-  }
-
-  const auto& special_token_ids = tokenizer_info_.GetSpecialTokenIds();
-  if (std::find(special_token_ids.begin(), special_token_ids.end(), token_id) !=
-      special_token_ids.end()) {
-    XGRAMMAR_LOG(WARNING) << "GrammarMatcher cannot accept special token id " << token_id << ": "
-                          << tokenizer_info_.GetDecodedVocab()[token_id]
-                          << ". Rejecting the token.";
-    return false;
+    return accepted ? FinishAccept(consumed_past_deadline) : false;
   }
 
   const auto& token = tokenizer_info_.GetDecodedVocab()[token_id];
+  int32_t token_char_count = 0;
+  if (has_char_budget_rules_) {
+    for (uint8_t byte : token) {
+      token_char_count += StartsUTF8Codepoint(byte);
+    }
+  }
+
+  const int32_t size_before_token = rule_id_to_completable_states_.size();
+  std::vector<ParserState> states_before_token;
+  std::vector<std::pair<int32_t, ParserState>> completable_before_token;
+  std::vector<CaptureEvent> capture_row_before_token;
+  bool completed_before_token = false;
+  if (has_char_budget_rules_) {
+    states_before_token = GetLatestScanableStates();
+    auto completable_row_before_token = rule_id_to_completable_states_.Back();
+    completable_before_token.assign(
+        completable_row_before_token.data,
+        completable_row_before_token.data + completable_row_before_token.data_len
+    );
+    capture_row_before_token = CopyLastCaptureRow();
+    completed_before_token = is_completed_.back();
+  }
+  auto restore_row_before_token = [&]() {
+    if (!has_char_budget_rules_) {
+      return;
+    }
+    scanable_state_history_.PopBack(1);
+    scanable_state_history_.PushBack(states_before_token);
+    rule_id_to_completable_states_.PopBack(1);
+    rule_id_to_completable_states_.PushBack(completable_before_token);
+    is_completed_.back() = completed_before_token;
+    if (capture_tracking_) {
+      capture_event_history_.PopBack(1);
+      capture_event_history_.PushBack(capture_row_before_token);
+    }
+  };
 
   // Phase 1: Try atomic token path (from current state, before byte path)
   std::vector<ParserState> atomic_states;
   std::vector<std::pair<int32_t, ParserState>> atomic_completable;
+  std::vector<CaptureEvent> atomic_capture_row;
   bool atomic_completed = false;
-  bool atomic_success = AdvanceAtomicToken(token_id, debug_print);
+  bool atomic_success =
+      has_char_budget_rules_
+          ? AdvanceAtomicTokenWithCharacterBudget(token_id, token_char_count, debug_print)
+          : AdvanceAtomicToken(token_id, debug_print);
   if (atomic_success) {
     atomic_states = GetLatestScanableStates();
     auto row = rule_id_to_completable_states_.Back();
     atomic_completable.assign(row.data, row.data + row.data_len);
+    atomic_capture_row = CopyLastCaptureRow();
     atomic_completed = is_completed_.back();
     PopLastStates(1);
   }
+  restore_row_before_token();
 
   // Phase 2: Try byte-by-byte path (from the same original state)
+  record_char_budget_relaxation_ = true;
+  bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
+  if (track_temporary_input) {
+    temporary_input_start_row_ = scanable_state_history_.size() - 1;
+    temporary_input_bytes_.clear();
+  }
   int pos = 0;
   bool byte_path_success = true;
   for (auto char_value : token) {
-    if (!Advance(char_value, debug_print)) {
+    bool accepted = has_char_budget_rules_
+                        ? AdvanceWithCharacterBudget(static_cast<uint8_t>(char_value), debug_print)
+                        : Advance(static_cast<uint8_t>(char_value), debug_print);
+    if (!accepted) {
       byte_path_success = false;
       break;
     }
+    if (track_temporary_input) {
+      temporary_input_bytes_.push_back(char_value);
+    }
     ++pos;
+  }
+  if (track_temporary_input) {
+    temporary_input_start_row_ = -1;
+    temporary_input_bytes_.clear();
   }
 
   // Phase 3: Combine results (no priority — merge with deduplication)
@@ -682,15 +1381,30 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
                          << "> rejected at position " << pos;
     }
     PopLastStates(pos);
+    restore_row_before_token();
+    record_char_budget_relaxation_ = false;
+    char_budget_relaxed_ = false;
     return false;
   }
 
   if (atomic_success && !byte_path_success) {
     PopLastStates(pos);
-    AdvanceAtomicToken(token_id, debug_print);
+    restore_row_before_token();
+    char_budget_relaxed_ = false;
+    bool accepted =
+        has_char_budget_rules_
+            ? AdvanceAtomicTokenWithCharacterBudget(token_id, token_char_count, debug_print)
+            : AdvanceAtomicToken(token_id, debug_print);
+    XGRAMMAR_DCHECK(accepted);
     token_length_history.push_back(1);
+    if (ShouldTrackAcceptedBytes()) {
+      AppendAtomicRow(token);
+    }
   } else if (byte_path_success && !atomic_success) {
     token_length_history.push_back(token.size());
+    if (ShouldTrackAcceptedBytes()) {
+      AppendPerByteRows(token);
+    }
   } else {
     // Both paths succeeded — merge atomic token states into byte path
     if (token.empty()) {
@@ -698,7 +1412,12 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       scanable_state_history_.PushBack(atomic_states);
       rule_id_to_completable_states_.PushBack(atomic_completable);
       is_completed_.push_back(atomic_completed);
+      PushCaptureRow(atomic_capture_row);
+      PushCharCountRow(GetCurrentCharIndex(), HasEnteredCharBudget());
       token_length_history.push_back(1);
+      if (ShouldTrackAcceptedBytes()) {
+        AppendAtomicRow(token);
+      }
     } else {
       auto byte_states = GetLatestScanableStates();
       std::vector<ParserState> merged = byte_states;
@@ -715,7 +1434,10 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       std::vector<std::pair<int32_t, ParserState>> merged_completable(
           byte_row.data, byte_row.data + byte_row.data_len
       );
+      std::vector<CaptureEvent> merged_capture_row = CopyLastCaptureRow();
       bool byte_completed = is_completed_.back();
+      int32_t final_char_index = GetCurrentCharIndex();
+      bool final_char_budget_entered = HasEnteredCharBudget();
       PopLastStates(1);
 
       for (const auto& cs : atomic_completable) {
@@ -726,17 +1448,69 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
         }
       }
 
+      for (auto event : atomic_capture_row) {
+        // In the atomic path, the after-token position was size_before_token; in the byte path
+        // it is the row being re-pushed. Remap events that started at the after-token position
+        // (empty spans) so that they stay empty in the byte-path numbering.
+        if (event.start_pos == size_before_token) {
+          event.start_pos = rule_id_to_completable_states_.size();
+        }
+        if (event.occurrence_start_pos == size_before_token) {
+          event.occurrence_start_pos = rule_id_to_completable_states_.size();
+        }
+        for (auto& target : event.stop_capture_targets) {
+          if (target.start_pos == size_before_token) {
+            target.start_pos = rule_id_to_completable_states_.size();
+          }
+        }
+        auto existing = std::find_if(
+            merged_capture_row.begin(),
+            merged_capture_row.end(),
+            [&](const CaptureEvent& e) {
+              return e.rule_id == event.rule_id && e.start_pos == event.start_pos &&
+                     e.occurrence_start_pos == event.occurrence_start_pos;
+            }
+        );
+        if (existing == merged_capture_row.end()) {
+          merged_capture_row.push_back(event);
+        } else {
+          existing->hidden_suffix_bytes =
+              std::max(existing->hidden_suffix_bytes, event.hidden_suffix_bytes);
+          existing->hidden_stop_bytes =
+              std::max(existing->hidden_stop_bytes, event.hidden_stop_bytes);
+          for (const auto& target : event.stop_capture_targets) {
+            if (std::find(
+                    existing->stop_capture_targets.begin(),
+                    existing->stop_capture_targets.end(),
+                    target
+                ) == existing->stop_capture_targets.end()) {
+              existing->stop_capture_targets.push_back(target);
+            }
+          }
+        }
+      }
+
       scanable_state_history_.PushBack(merged);
       rule_id_to_completable_states_.PushBack(merged_completable);
       is_completed_.push_back(byte_completed || atomic_completed);
+      PushCaptureRow(merged_capture_row);
+      PushCharCountRow(final_char_index, final_char_budget_entered);
       token_length_history.push_back(token.size());
+      if (ShouldTrackAcceptedBytes()) {
+        AppendPerByteRows(token);
+      }
     }
   }
 
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << EscapeString(token) << "> accepted.";
   }
-  return true;
+  if (has_char_budget_rules_) {
+    // Close exhausted occurrences at the token boundary, including after zero-byte atomic tokens.
+    ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
+  }
+  record_char_budget_relaxation_ = false;
+  return FinishAccept(consumed_past_deadline);
 }
 
 bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug_print) {
@@ -752,15 +1526,64 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
                        << PrintStates();
   }
 
+  current_token_index_ = static_cast<int32_t>(token_length_history.size());
+  char_budget_relaxed_ = false;
+  record_char_budget_relaxation_ = true;
+
+  // Capture events are only recorded on the definitive accept path.
+  CaptureRecordingGuard capture_guard(this);
+
+  std::vector<ParserState> states_before_input;
+  std::vector<std::pair<int32_t, ParserState>> completable_before_input;
+  std::vector<CaptureEvent> capture_row_before_input;
+  bool completed_before_input = false;
+  if (has_char_budget_rules_) {
+    states_before_input = GetLatestScanableStates();
+    auto completable_row_before_input = rule_id_to_completable_states_.Back();
+    completable_before_input.assign(
+        completable_row_before_input.data,
+        completable_row_before_input.data + completable_row_before_input.data_len
+    );
+    capture_row_before_input = CopyLastCaptureRow();
+    completed_before_input = is_completed_.back();
+  }
+  bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
+  if (track_temporary_input) {
+    temporary_input_start_row_ = scanable_state_history_.size() - 1;
+    temporary_input_bytes_.clear();
+  }
   int accepted_cnt = 0;
   for (auto char_value : input_str) {
-    if (!Advance(char_value, debug_print)) {
+    bool accepted = has_char_budget_rules_
+                        ? AdvanceWithCharacterBudget(static_cast<uint8_t>(char_value), debug_print)
+                        : Advance(static_cast<uint8_t>(char_value), debug_print);
+    if (!accepted) {
       if (debug_print) {
         XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str) << "\" is rejected at "
                            << "position " << accepted_cnt << ", char " << EscapeString(char_value);
       }
       PopLastStates(accepted_cnt);
+      if (has_char_budget_rules_) {
+        scanable_state_history_.PopBack(1);
+        scanable_state_history_.PushBack(states_before_input);
+        rule_id_to_completable_states_.PopBack(1);
+        rule_id_to_completable_states_.PushBack(completable_before_input);
+        is_completed_.back() = completed_before_input;
+        if (capture_tracking_) {
+          capture_event_history_.PopBack(1);
+          capture_event_history_.PushBack(capture_row_before_input);
+        }
+      }
+      if (track_temporary_input) {
+        temporary_input_start_row_ = -1;
+        temporary_input_bytes_.clear();
+      }
+      record_char_budget_relaxation_ = false;
+      char_budget_relaxed_ = false;
       return false;
+    }
+    if (track_temporary_input) {
+      temporary_input_bytes_.push_back(char_value);
     }
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "Char " << EscapeString(char_value) << " is accepted. Current state:\n"
@@ -769,6 +1592,19 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
     ++accepted_cnt;
   }
   token_length_history.push_back(input_str.size());
+  if (ShouldTrackAcceptedBytes()) {
+    AppendPerByteRows(input_str);
+  }
+  if (has_char_budget_rules_ && !input_str.empty()) {
+    // Leave the parser at the enforced boundary even when no later input is supplied.
+    ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
+  }
+  if (track_temporary_input) {
+    temporary_input_start_row_ = -1;
+    temporary_input_bytes_.clear();
+  }
+  record_char_budget_relaxation_ = false;
+  FinishCharacterBudgetAccept();
 
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "String \"" << EscapeString(input_str) << "\" is accepted.";
@@ -814,12 +1650,198 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
          "find the next token mask";
   int32_t* bitmask_data_ptr =
       CheckAndGetBitmaskPtr(*next_token_bitmask, tokenizer_info_.GetVocabSize(), index);
+  current_token_index_ = static_cast<int32_t>(token_length_history.size());
+  if (has_budget_rules_) {
+    const auto& row = scanable_state_history_[scanable_state_history_.size() - 1];
+    bool any_expired = false;
+    bool any_alive = false;
+    bool can_force_close_without_marker = false;
+    for (const auto& state : row) {
+      if (IsExpiredState(state)) {
+        any_expired = true;
+        can_force_close_without_marker =
+            can_force_close_without_marker ||
+            (has_budget_marker_rules_ && CanForceCompleteWithoutMarker(state, false));
+      } else {
+        any_alive = true;
+      }
+    }
+    if (can_force_close_without_marker) {
+      // Compute the enforcing state on a copy. In addition to dropping expired derivations,
+      // this lets a budgeted suffix/stop rule end through its body when the marker has not
+      // appeared yet. The real state is committed only after an allowed token is accepted.
+      Impl trial(*this);
+      trial.capture_recording_ = false;
+      bool applied = trial.ApplyBudgetEnforcement(debug_print);
+      if (applied) {
+        trial.FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/false, debug_print);
+      }
+      if (applied && (trial.IsCompleted() || trial.BitmaskHasAnyToken(bitmask_data_ptr))) {
+        budget_enforce_pending_ = true;
+        budget_force_close_pending_ = true;
+        return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
+      }
+    }
+    if (any_expired && (any_alive || IsCompleted())) {
+      // No marker-less completion is needed: retain the original max_tokens fast path.
+      FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/true, debug_print);
+      if (BitmaskHasAnyToken(bitmask_data_ptr) || IsCompleted()) {
+        budget_enforce_pending_ = true;
+        budget_force_close_pending_ = false;
+        return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
+      }
+    }
+    // No enforcement at this position: either no budget has expired, or the expired
+    // derivations cannot end here — relax the budget for one step and report it on the next
+    // accept.
+    budget_enforce_pending_ = false;
+    budget_force_close_pending_ = false;
+  }
+  FillBitmaskForStates(bitmask_data_ptr, index, /*skip_expired=*/false, debug_print);
+  return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
+}
+
+void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
+    const AdaptiveTokenMask& adaptive_token_mask, int32_t remaining_chars
+) {
+  const auto& token_char_counts = tokenizer_info_.ImplPtr()->GetTokenCharCounts();
+  const auto& vocab = tokenizer_info_.GetSortedDecodedVocab();
+
+  std::vector<int32_t> tokens_to_check = adaptive_token_mask.uncertain_indices;
+  switch (adaptive_token_mask.store_type) {
+    case StoreType::kAccepted:
+      for (int32_t index : adaptive_token_mask.accepted_indices) {
+        if (token_char_counts[index] <= remaining_chars) {
+          tmp_accepted_bitset_.Set(vocab[index].first, true);
+        } else {
+          tokens_to_check.push_back(index);
+        }
+      }
+      break;
+    case StoreType::kAcceptedBitset:
+      for (int32_t index = 0; index < static_cast<int32_t>(vocab.size()); ++index) {
+        int32_t token_id = vocab[index].first;
+        if (!adaptive_token_mask.accepted_bitset[token_id]) {
+          continue;
+        }
+        if (token_char_counts[index] <= remaining_chars) {
+          tmp_accepted_bitset_.Set(token_id, true);
+        } else {
+          tokens_to_check.push_back(index);
+        }
+      }
+      break;
+    case StoreType::kRejected: {
+      std::vector<int32_t> blocked = adaptive_token_mask.rejected_indices;
+      blocked.insert(
+          blocked.end(),
+          adaptive_token_mask.uncertain_indices.begin(),
+          adaptive_token_mask.uncertain_indices.end()
+      );
+      std::sort(blocked.begin(), blocked.end());
+      for (int32_t index = 0; index < static_cast<int32_t>(vocab.size()); ++index) {
+        if (token_char_counts[index] <= remaining_chars) {
+          if (!std::binary_search(blocked.begin(), blocked.end(), index)) {
+            tmp_accepted_bitset_.Set(vocab[index].first, true);
+          }
+        } else if (!std::binary_search(
+                       adaptive_token_mask.rejected_indices.begin(),
+                       adaptive_token_mask.rejected_indices.end(),
+                       index
+                   )) {
+          tokens_to_check.push_back(index);
+        }
+      }
+      break;
+    }
+  }
+
+  std::sort(tokens_to_check.begin(), tokens_to_check.end());
+  tokens_to_check.erase(
+      std::unique(tokens_to_check.begin(), tokens_to_check.end()), tokens_to_check.end()
+  );
+
+  int32_t saved_temporary_input_start_row = temporary_input_start_row_;
+  std::string saved_temporary_input_bytes = std::move(temporary_input_bytes_);
+  std::vector<ParserState> all_latest_states = GetLatestScanableStates();
+  bool all_latest_completed = IsCompleted();
+
+  PushStatesToCheck(all_latest_states, all_latest_completed);
+  int32_t initial_state_history_size = scanable_state_history_.size();
+  int32_t previous_index = -1;
+  int32_t previous_matched_size = 0;
+  temporary_input_start_row_ = initial_state_history_size - 1;
+  temporary_input_bytes_.clear();
+  std::vector<int32_t> byte_rejected_tokens;
+
+  for (int32_t index : tokens_to_check) {
+    const std::string& token = vocab[index].second;
+    int32_t common_prefix_length = 0;
+    if (previous_index >= 0) {
+      common_prefix_length = std::mismatch(
+                                 vocab[previous_index].second.begin(),
+                                 vocab[previous_index].second.end(),
+                                 token.begin(),
+                                 token.end()
+                             )
+                                 .first -
+                             vocab[previous_index].second.begin();
+      common_prefix_length = std::min(common_prefix_length, previous_matched_size);
+    }
+    PopLastStates(
+        scanable_state_history_.size() - initial_state_history_size - common_prefix_length
+    );
+    temporary_input_bytes_.resize(common_prefix_length);
+
+    bool accepted = !token.empty();
+    int32_t matched_size = common_prefix_length;
+    for (; matched_size < static_cast<int32_t>(token.size()); ++matched_size) {
+      if (!AdvanceWithCharacterBudget(static_cast<uint8_t>(token[matched_size]))) {
+        accepted = false;
+        break;
+      }
+      temporary_input_bytes_.push_back(token[matched_size]);
+    }
+    if (accepted) {
+      tmp_accepted_bitset_.Set(vocab[index].first, true);
+    } else {
+      byte_rejected_tokens.push_back(index);
+    }
+    previous_index = index;
+    previous_matched_size = matched_size;
+  }
+  PopLastStates(scanable_state_history_.size() - initial_state_history_size + 1);
+
+  for (int32_t index : byte_rejected_tokens) {
+    PushStatesToCheck(all_latest_states, all_latest_completed);
+    temporary_input_start_row_ = scanable_state_history_.size() - 1;
+    temporary_input_bytes_.clear();
+    if (AdvanceAtomicTokenWithCharacterBudget(vocab[index].first, token_char_counts[index])) {
+      tmp_accepted_bitset_.Set(vocab[index].first, true);
+      PopLastStates(1);
+    }
+    PopLastStates(1);
+  }
+
+  temporary_input_start_row_ = saved_temporary_input_start_row;
+  temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
+}
+
+void GrammarMatcher::Impl::FillBitmaskForStates(
+    int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
+) {
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
   const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
   // We need to have a copy, because scanable_state_history_ will be modified during the
   // FillNextTokenBitmask process, which can lead to undefined behavior.
-  auto latest_states = GetLatestScanableStates();
+  std::vector<ParserState> latest_states;
+  for (const auto& state : scanable_state_history_[scanable_state_history_.size() - 1]) {
+    if (skip_expired && IsExpiredState(state)) {
+      continue;
+    }
+    latest_states.push_back(state);
+  }
 
   // We check all the latest states of the earley parser, and check all the masks of the leaf
   // states. The final accepted token set is the union of the accepted token sets of all leaf
@@ -843,6 +1865,13 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
     auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
     XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+    if (state.char_budget_deadline >= 0) {
+      int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
+      if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
+        FillBitmaskForCharBudgetBoundary(adaptive_token_mask, std::max(remaining_chars, 0));
+        continue;
+      }
+    }
     latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
     if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
       tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
@@ -868,7 +1897,21 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
     tmp_rejected_indices_delta_.clear();
 
     // Examine only the current one ParserState
+    std::optional<Impl> atomic_trial_base;
+    if (has_char_budget_rules_ && !adaptive_token_mask.uncertain_indices.empty()) {
+      atomic_trial_base.emplace(*this);
+      atomic_trial_base->capture_recording_ = false;
+    }
     PushOneStateToCheck(state);
+    bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
+    int32_t saved_temporary_input_start_row = -1;
+    std::string saved_temporary_input_bytes;
+    if (track_temporary_input) {
+      saved_temporary_input_start_row = temporary_input_start_row_;
+      saved_temporary_input_bytes = std::move(temporary_input_bytes_);
+      temporary_input_start_row_ = scanable_state_history_.size() - 1;
+      temporary_input_bytes_.clear();
+    }
 
     const std::string* prev_token = nullptr;
     int prev_matched_size = 0;
@@ -893,7 +1936,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       }
 
       const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
-      bool accepted = true;
+      bool accepted = !cur_token.empty() || !has_char_budget_rules_;
 
       // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
       // We can reuse the previous matched size to avoid unnecessary matching.
@@ -908,6 +1951,9 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
           accepted = false;
         } else if (lcp_len < prev_matched_size) {
           PopLastStates(prev_matched_size - lcp_len);
+          if (track_temporary_input) {
+            temporary_input_bytes_.resize(lcp_len);
+          }
         }
         prev_matched_size = std::min(prev_matched_size, lcp_len);
       }
@@ -915,12 +1961,34 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
       // Step 2.2. Find if the current token is accepted or rejected.
       if (accepted) {
         for (int j = prev_matched_size; j < static_cast<int>(cur_token.size()); ++j) {
-          if (!Advance(cur_token[j])) {
+          bool byte_accepted = has_char_budget_rules_
+                                   ? AdvanceWithCharacterBudget(static_cast<uint8_t>(cur_token[j]))
+                                   : Advance(static_cast<uint8_t>(cur_token[j]));
+          if (!byte_accepted) {
             last_rejected_uncertain_range = subtree_range[cur_token_idx];
             accepted = false;
             break;
           }
+          if (track_temporary_input) {
+            temporary_input_bytes_.push_back(cur_token[j]);
+          }
           prev_matched_size = j + 1;
+        }
+      }
+
+      if (!accepted && has_char_budget_rules_) {
+        int32_t token_char_count = 0;
+        for (uint8_t byte : cur_token) {
+          token_char_count += StartsUTF8Codepoint(byte);
+        }
+        XGRAMMAR_DCHECK(atomic_trial_base.has_value());
+        Impl atomic_trial(atomic_trial_base.value());
+        atomic_trial.PushOneStateToCheck(state);
+        accepted = atomic_trial.AdvanceAtomicTokenWithCharacterBudget(
+            sorted_decoded_vocab[cur_token_idx].first, token_char_count
+        );
+        if (accepted) {
+          last_rejected_uncertain_range = cur_token_idx + 1;
         }
       }
 
@@ -940,6 +2008,10 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
     }
 
     PopLastStates(prev_matched_size + 1);
+    if (track_temporary_input) {
+      temporary_input_start_row_ = saved_temporary_input_start_row;
+      temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
+    }
     // Step 3. Update the accepted_indices or rejected_indices
     if (adaptive_token_mask.store_type == StoreType::kRejected) {
       // rejected_indices = Intersect(
@@ -958,13 +2030,23 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }
-  return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
 }
 
 std::string GrammarMatcher::Impl::FindJumpForwardString() {
   XGRAMMAR_CHECK(!IsStopTokenAccepted())
       << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
          "get the jump forward string";
+
+  current_token_index_ = static_cast<int32_t>(token_length_history.size());
+  if (budget_force_close_pending_) {
+    Impl trial(*this);
+    trial.capture_recording_ = false;
+    if (trial.ApplyBudgetEnforcement()) {
+      trial.budget_enforce_pending_ = false;
+      trial.budget_force_close_pending_ = false;
+      return trial.FindJumpForwardString();
+    }
+  }
 
   std::string result;
   int num_accepted_chars = 0;
@@ -983,6 +2065,9 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
     // -1 means not found yet; 0~255 means the next char
     int next_char = -1;
     for (const auto& state : states) {
+      if (budget_enforce_pending_ && IsExpiredState(state)) {
+        continue;
+      }
       XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
       const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
       const auto& current_edges = fsm.GetFsm().GetFsm().GetEdges(state.element_id);
@@ -1009,6 +2094,12 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
 
     // 2. If found, accept the char and iterate to the next position
     if (can_find_next_char) {
+      if (StartsUTF8Codepoint(static_cast<uint8_t>(next_char)) &&
+          std::any_of(states.begin(), states.end(), [&](const ParserState& state) {
+            return IsCharExpiredState(state);
+          })) {
+        break;
+      }
       result += static_cast<uint8_t>(next_char);
       Advance(next_char);
       ++num_accepted_chars;
@@ -1028,8 +2119,298 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
     int steps = token_length_history.back();
     PopLastStates(steps);
     token_length_history.pop_back();
+    if (ShouldTrackAcceptedBytes() && steps > 0) {
+      row_byte_end_.resize(row_byte_end_.size() - steps);
+      accepted_bytes_.resize(row_byte_end_.back());
+    }
     --num_tokens;
   }
+  budget_enforce_pending_ = false;
+  budget_force_close_pending_ = false;
+  char_budget_relaxed_ = false;
+  record_char_budget_relaxation_ = false;
+  temporary_input_start_row_ = -1;
+  temporary_input_bytes_.clear();
+  budget_body_match_cache_.clear();
+}
+
+std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptures(bool deduplicate
+) const {
+  std::vector<std::pair<std::string, std::string>> result;
+  if (!IsCaptureTrackingEnabled()) {
+    return result;
+  }
+  XGRAMMAR_DCHECK(capture_event_history_.size() == static_cast<int32_t>(row_byte_end_.size()))
+      << "The capture history is not aligned with the byte history: "
+      << capture_event_history_.size() << " vs " << row_byte_end_.size();
+
+  // Flatten the event history. Events are ordered by completion position, and by completion
+  // order within a position.
+  struct FlatEvent {
+    int32_t rule_id;
+    int32_t start_row;
+    int32_t occurrence_start_pos;
+    int32_t end_row;
+    int32_t hidden_suffix_bytes;
+    int32_t hidden_stop_bytes;
+    std::vector<CaptureOccurrence> stop_capture_targets;
+    bool marker_present = false;
+    int64_t marker_start_byte = -1;
+  };
+  std::vector<FlatEvent> events;
+  for (int32_t row = 0; row < capture_event_history_.size(); ++row) {
+    for (const auto& event : capture_event_history_[row]) {
+      int32_t start_row = event.start_pos == ParserState::kNoPrevInputPos ? 0 : event.start_pos;
+      XGRAMMAR_DCHECK(start_row <= row);
+      events.push_back(
+          {event.rule_id,
+           start_row,
+           event.occurrence_start_pos,
+           row,
+           event.hidden_suffix_bytes,
+           event.hidden_stop_bytes,
+           event.stop_capture_targets,
+           false,
+           -1}
+      );
+    }
+  }
+
+  // The Earley parser explores all parse hypotheses in parallel, so one occurrence of a rule
+  // (identified by its rule id and start position) may complete at several candidate end
+  // positions before the following input decides the real one. When deduplicate is true, we
+  // keep only the last (longest) completion of each occurrence.
+  std::vector<bool> keep(events.size(), true);
+  if (deduplicate) {
+    std::unordered_map<int64_t, size_t> last_index;
+    for (size_t i = 0; i < events.size(); ++i) {
+      int64_t key = (static_cast<int64_t>(events[i].rule_id) << 32) |
+                    static_cast<uint32_t>(events[i].start_row);
+      auto it = last_index.find(key);
+      if (it != last_index.end()) {
+        keep[it->second] = false;
+        it->second = i;
+      } else {
+        last_index[key] = i;
+      }
+    }
+  }
+
+  auto contains_end_state = [](const CompactFSMWithStartEnd& fsm,
+                               const std::unordered_set<int>& states) {
+    return std::any_of(states.begin(), states.end(), [&](int state) {
+      return fsm.IsEndState(state);
+    });
+  };
+
+  auto accepted_prefixes = [&](const CompactFSMWithStartEnd& fsm, int64_t begin, int64_t end) {
+    XGRAMMAR_DCHECK(fsm.IsLeaf()) << "A suffix/stop capture helper must compile to a leaf FSM";
+    std::vector<bool> result(static_cast<size_t>(end - begin + 1), false);
+    std::unordered_set<int> states{fsm.GetStart()};
+    fsm.GetFsm().GetEpsilonClosure(&states);
+    result[0] = contains_end_state(fsm, states);
+    std::unordered_set<int> next_states;
+    for (int64_t offset = 0; offset < end - begin; ++offset) {
+      fsm.GetFsm().Advance(
+          states, accepted_bytes_[begin + offset], &next_states, FSMEdge::EdgeType::kCharRange, true
+      );
+      states = next_states;
+      result[static_cast<size_t>(offset + 1)] = contains_end_state(fsm, states);
+    }
+    return result;
+  };
+
+  // Compute which suffixes of [begin, end) are accepted by marker_fsm. This is a reverse NFA
+  // traversal, so locating a delimiter remains linear in the captured byte length even when the
+  // body (for example /.*/) can end at every byte.
+  auto accepted_suffixes = [&](const CompactFSMWithStartEnd& marker_fsm, int64_t begin, int64_t end
+                           ) {
+    XGRAMMAR_DCHECK(marker_fsm.IsLeaf())
+        << "A suffix/stop marker helper must compile to a leaf FSM";
+    const auto& fsm = marker_fsm.GetFsm();
+    std::unordered_set<int> reachable;
+    marker_fsm.GetReachableStates(&reachable);
+    struct ReverseCharEdge {
+      int32_t source;
+      int32_t min;
+      int32_t max;
+    };
+    std::vector<std::vector<int32_t>> reverse_epsilon(fsm.NumStates());
+    std::vector<std::vector<ReverseCharEdge>> reverse_char(fsm.NumStates());
+    for (int32_t source : reachable) {
+      for (const auto& edge : fsm.GetEdges(source)) {
+        if (!reachable.count(edge.target)) {
+          continue;
+        }
+        if (edge.IsEpsilon()) {
+          reverse_epsilon[edge.target].push_back(source);
+        } else if (edge.IsCharRange()) {
+          reverse_char[edge.target].push_back({source, edge.min, edge.max});
+        }
+      }
+    }
+    auto add_reverse_epsilon_closure = [&](std::unordered_set<int>* states) {
+      std::vector<int32_t> queue(states->begin(), states->end());
+      for (size_t i = 0; i < queue.size(); ++i) {
+        for (int32_t predecessor : reverse_epsilon[queue[i]]) {
+          if (states->insert(predecessor).second) {
+            queue.push_back(predecessor);
+          }
+        }
+      }
+    };
+
+    std::vector<bool> result(static_cast<size_t>(end - begin + 1), false);
+    std::unordered_set<int> states(marker_fsm.GetEnds().begin(), marker_fsm.GetEnds().end());
+    add_reverse_epsilon_closure(&states);
+    result[static_cast<size_t>(end - begin)] = states.count(marker_fsm.GetStart()) != 0;
+    std::unordered_set<int> previous_states;
+    for (int64_t offset = end - begin; offset > 0; --offset) {
+      previous_states.clear();
+      int32_t byte = accepted_bytes_[begin + offset - 1];
+      for (int32_t target : states) {
+        for (const auto& edge : reverse_char[target]) {
+          if (edge.min <= byte && byte <= edge.max) {
+            previous_states.insert(edge.source);
+          }
+        }
+      }
+      add_reverse_epsilon_closure(&previous_states);
+      states = previous_states;
+      result[static_cast<size_t>(offset - 1)] = states.count(marker_fsm.GetStart()) != 0;
+    }
+    return result;
+  };
+
+  // Resolve every marker to a concrete byte span once. Fixed strings use their recorded length;
+  // regexes and named terminals use helper FSMs for both sides of the original body/marker split.
+  for (size_t i = 0; i < events.size(); ++i) {
+    if (!keep[i]) {
+      continue;
+    }
+    auto& event = events[i];
+    int32_t hidden_bytes = std::max(event.hidden_suffix_bytes, event.hidden_stop_bytes);
+    if (hidden_bytes <= 0) {
+      continue;
+    }
+    const auto& rule = grammar_->GetRule(event.rule_id);
+    const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(event.rule_id);
+    XGRAMMAR_DCHECK(suffix_stop_info != nullptr);
+    int64_t event_start = row_byte_end_[event.start_row];
+    int64_t event_end = row_byte_end_[event.end_row];
+    event.marker_present = true;
+    if (suffix_stop_info->body_rule_id == -1) {
+      event.marker_start_byte =
+          std::max(event_start, event_end - static_cast<int64_t>(hidden_bytes));
+      continue;
+    }
+
+    XGRAMMAR_DCHECK(suffix_stop_info->body_rule_id >= 0 && suffix_stop_info->marker_rule_id >= 0);
+    XGRAMMAR_DCHECK(
+        grammar_->per_rule_fsms[suffix_stop_info->body_rule_id].has_value() &&
+        grammar_->per_rule_fsms[suffix_stop_info->marker_rule_id].has_value()
+    );
+    const auto& body_fsm = grammar_->per_rule_fsms[suffix_stop_info->body_rule_id]->GetFsm();
+    const auto& marker_fsm = grammar_->per_rule_fsms[suffix_stop_info->marker_rule_id]->GetFsm();
+    std::vector<bool> body_ends = accepted_prefixes(body_fsm, event_start, event_end);
+    std::vector<bool> marker_starts = accepted_suffixes(marker_fsm, event_start, event_end);
+    bool found = false;
+    for (size_t offset = 0; offset < body_ends.size(); ++offset) {
+      if (body_ends[offset] && marker_starts[offset]) {
+        event.marker_start_byte = event_start + static_cast<int64_t>(offset);
+        found = true;
+        break;
+      }
+    }
+    XGRAMMAR_DCHECK(found) << "Could not recover the suffix/stop marker boundary for rule "
+                           << rule.name;
+    if (!found) {
+      event.marker_present = false;
+      event.marker_start_byte = -1;
+    }
+  }
+
+  // Associate each stop marker only with captured occurrences reached through its concrete
+  // Earley parent chain. Failed or unrelated branches may cover identical byte ranges, so byte
+  // overlap alone is not a valid indication that a marker belongs to a capture.
+  std::unordered_map<int64_t, std::vector<std::pair<int64_t, int64_t>>>
+      hidden_stop_spans_by_capture;
+  for (size_t i = 0; i < events.size(); ++i) {
+    if (!keep[i] || events[i].hidden_stop_bytes <= 0 || !events[i].marker_present) {
+      continue;
+    }
+    int64_t event_end = row_byte_end_[events[i].end_row];
+    int64_t hidden_start = events[i].marker_start_byte;
+    if (hidden_start < event_end) {
+      for (const auto& target : events[i].stop_capture_targets) {
+        int64_t target_key =
+            (static_cast<int64_t>(target.rule_id) << 32) | static_cast<uint32_t>(target.start_pos);
+        hidden_stop_spans_by_capture[target_key].emplace_back(hidden_start, event_end);
+      }
+    }
+  }
+  for (auto& [_, spans] : hidden_stop_spans_by_capture) {
+    std::sort(spans.begin(), spans.end());
+  }
+
+  for (size_t i = 0; i < events.size(); ++i) {
+    if (!keep[i]) {
+      continue;
+    }
+    const auto& event = events[i];
+    const auto& rule = grammar_->GetRule(event.rule_id);
+    const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(event.rule_id);
+    int64_t capture_start = row_byte_end_[event.start_row];
+    int64_t capture_end = row_byte_end_[event.end_row];
+    if (event.marker_present && suffix_stop_info != nullptr &&
+        !suffix_stop_info->stop_capture_name.empty()) {
+      std::string marker_capture;
+      if (event.marker_start_byte < capture_end) {
+        marker_capture.assign(
+            reinterpret_cast<const char*>(accepted_bytes_.data() + event.marker_start_byte),
+            static_cast<size_t>(capture_end - event.marker_start_byte)
+        );
+      }
+      result.emplace_back(suffix_stop_info->stop_capture_name, std::move(marker_capture));
+    }
+    if (rule.capture_name.empty()) {
+      continue;
+    }
+    if (event.hidden_suffix_bytes > 0 && event.marker_present) {
+      capture_end = event.marker_start_byte;
+    }
+
+    std::string capture;
+    int64_t cursor = capture_start;
+    auto append_bytes = [&](int64_t begin, int64_t end) {
+      if (begin < end) {
+        capture.append(
+            reinterpret_cast<const char*>(accepted_bytes_.data() + begin),
+            static_cast<size_t>(end - begin)
+        );
+      }
+    };
+    int64_t capture_key = (static_cast<int64_t>(event.rule_id) << 32) |
+                          static_cast<uint32_t>(event.occurrence_start_pos);
+    auto hidden_spans_it = hidden_stop_spans_by_capture.find(capture_key);
+    if (hidden_spans_it != hidden_stop_spans_by_capture.end()) {
+      for (const auto& hidden : hidden_spans_it->second) {
+        if (hidden.second <= capture_start) {
+          continue;
+        }
+        if (hidden.first >= capture_end) {
+          break;
+        }
+        int64_t hidden_begin = std::max(hidden.first, capture_start);
+        int64_t hidden_end = std::min(hidden.second, capture_end);
+        append_bytes(cursor, hidden_begin);
+        cursor = std::max(cursor, hidden_end);
+      }
+    }
+    append_bytes(cursor, capture_end);
+    result.emplace_back(rule.capture_name, std::move(capture));
+  }
+  return result;
 }
 
 void GrammarMatcher::Impl::SetTokenBitmask(
@@ -1198,10 +2579,15 @@ GrammarMatcher::GrammarMatcher(
     const CompiledGrammar& compiled_grammar,
     std::optional<std::vector<int>> override_stop_tokens,
     bool terminate_without_stop_token,
-    int max_rollback_tokens
+    int max_rollback_tokens,
+    std::optional<float> default_temperature
 )
     : pimpl_(std::make_shared<GrammarMatcher::Impl>(
-          compiled_grammar, override_stop_tokens, terminate_without_stop_token, max_rollback_tokens
+          compiled_grammar,
+          override_stop_tokens,
+          terminate_without_stop_token,
+          max_rollback_tokens,
+          default_temperature
       )) {}
 
 bool GrammarMatcher::AcceptToken(int32_t token_id, bool debug_print) {
@@ -1223,7 +2609,8 @@ bool GrammarMatcher::TraverseDraftTree(
     const DLTensor* retrieve_next_sibling,
     const DLTensor* draft_tokens,
     DLTensor* token_bitmask,
-    double time_threshold
+    double time_threshold,
+    DLTensor* temperatures
 ) {
   auto check_cpu = [](const DLTensor* tensor, const char* name) {
     XGRAMMAR_CHECK(
@@ -1249,11 +2636,20 @@ bool GrammarMatcher::TraverseDraftTree(
       token_bitmask->ndim == 2 && token_bitmask->dtype.code == kDLInt &&
       token_bitmask->dtype.bits == 32
   ) << "The token_bitmask tensor must be a 2D int32 tensor";
+  if (temperatures != nullptr) {
+    XGRAMMAR_CHECK(
+        temperatures->ndim == 1 && temperatures->dtype.code == kDLFloat &&
+        temperatures->dtype.bits == 32
+    ) << "The temperatures tensor must be a 1D float32 tensor";
+  }
 
   check_cpu(retrieve_next_token, "retrieve_next_token");
   check_cpu(retrieve_next_sibling, "retrieve_next_sibling");
   check_cpu(draft_tokens, "draft_tokens");
   check_cpu(token_bitmask, "token_bitmask");
+  if (temperatures != nullptr) {
+    check_cpu(temperatures, "temperatures");
+  }
 
   XGRAMMAR_CHECK(retrieve_next_token->shape[0] == retrieve_next_sibling->shape[0])
       << "The retrieve_next_token and retrieve_next_sibling tensors must have the same length";
@@ -1261,6 +2657,11 @@ bool GrammarMatcher::TraverseDraftTree(
       << "The retrieve_next_token and draft_tokens tensors must have the same length";
   XGRAMMAR_CHECK(retrieve_next_token->shape[0] == token_bitmask->shape[0])
       << "The token_bitmask batch size must match the number of nodes in the tree";
+  if (temperatures != nullptr) {
+    XGRAMMAR_CHECK(retrieve_next_token->shape[0] == temperatures->shape[0])
+        << "The temperatures size must match the number of nodes in the tree";
+    std::fill_n(reinterpret_cast<float*>(temperatures->data), temperatures->shape[0], -1.0f);
+  }
   XGRAMMAR_CHECK(retrieve_next_sibling->shape[0] > 0 && retrieve_next_sibling->data != nullptr)
       << "The draft tree must not be empty";
   XGRAMMAR_CHECK(reinterpret_cast<const int64_t*>(retrieve_next_sibling->data)[0] == -1)
@@ -1274,6 +2675,7 @@ bool GrammarMatcher::TraverseDraftTree(
       reinterpret_cast<const int64_t*>(draft_tokens->data),
       *this,
       token_bitmask,
+      temperatures == nullptr ? nullptr : reinterpret_cast<float*>(temperatures->data),
       time_threshold,
       details::Clock::now()
   );
@@ -1282,6 +2684,11 @@ bool GrammarMatcher::TraverseDraftTree(
 std::string GrammarMatcher::FindJumpForwardString() { return pimpl_->FindJumpForwardString(); }
 
 void GrammarMatcher::Rollback(int num_tokens) { pimpl_->Rollback(num_tokens); }
+
+std::vector<std::pair<std::string, std::string>> GrammarMatcher::GetCaptures(bool deduplicate
+) const {
+  return pimpl_->GetCaptures(deduplicate);
+}
 
 bool GrammarMatcher::IsTerminated() const { return pimpl_->IsTerminated(); }
 
@@ -1294,6 +2701,8 @@ GrammarMatcher GrammarMatcher::Fork() const {
 }
 
 int GrammarMatcher::GetMaxRollbackTokens() const { return pimpl_->GetMaxRollbackTokens(); }
+
+std::optional<float> GrammarMatcher::GetTemperature() const { return pimpl_->GetTemperature(); }
 
 const std::vector<int>& GrammarMatcher::GetStopTokenIds() const {
   return pimpl_->GetStopTokenIds();
@@ -1309,7 +2718,34 @@ void BatchGrammarMatcher::BatchFillNextTokenBitmask(
     const std::optional<std::vector<int32_t>>& indices,
     bool debug_print
 ) {
-  return pimpl_->BatchFillNextTokenBitmask(matchers, next_token_bitmask, indices, debug_print);
+  pimpl_->BatchFillNextTokenBitmask(matchers, next_token_bitmask, indices, debug_print);
+}
+
+void BatchGrammarMatcher::BatchFillTemperature(
+    const std::vector<GrammarMatcher>& matchers,
+    DLTensor* temperatures,
+    const std::optional<std::vector<int32_t>>& indices
+) {
+  XGRAMMAR_CHECK(
+      temperatures->ndim == 1 && temperatures->dtype.code == kDLFloat &&
+      temperatures->dtype.bits == 32
+  ) << "The temperatures tensor must be a 1D float32 tensor";
+  XGRAMMAR_CHECK(
+      temperatures->device.device_type == kDLCPU ||
+      temperatures->device.device_type == kDLCUDAHost ||
+      temperatures->device.device_type == kDLROCMHost
+  ) << "The temperatures tensor must be on CPU";
+  if (indices.has_value()) {
+    XGRAMMAR_CHECK(indices->size() == matchers.size())
+        << "The indices size must match the number of matchers";
+  }
+  auto* temperatures_data = reinterpret_cast<float*>(temperatures->data);
+  for (int64_t i = 0; i < static_cast<int64_t>(matchers.size()); ++i) {
+    int64_t position = indices.has_value() ? (*indices)[i] : i;
+    XGRAMMAR_CHECK(position >= 0 && position < temperatures->shape[0])
+        << "The index " << position << " is out of bounds for the temperatures tensor";
+    temperatures_data[position] = matchers[i].GetTemperature().value_or(-1.0f);
+  }
 }
 
 std::vector<uint8_t> BatchGrammarMatcher::BatchAcceptString(

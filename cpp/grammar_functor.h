@@ -9,6 +9,7 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -16,6 +17,7 @@
 #include "compiled_grammar_impl.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
+#include "support/utils.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -67,6 +69,14 @@ class GrammarFunctor {
         builder_->UpdateRuleBody(i, new_body_expr_id);
         // Handle lookahead assertion
         builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
+        builder_->UpdateMaxTokens(i, rule.max_tokens);
+        builder_->UpdateMaxChars(i, rule.max_chars);
+        builder_->UpdateCaptureName(i, rule.capture_name);
+        if (const auto* suffix_stop_info = base_grammar_->GetSuffixStopInfo(i)) {
+          builder_->UpdateSuffixStopInfo(i, *suffix_stop_info);
+        }
+        builder_->UpdateLazy(i, rule.is_lazy);
+        builder_->UpdateRuleTemperature(i, rule.temperature);
       }
       return builder_->Get(base_grammar_->GetRootRule().name);
     } else {
@@ -143,6 +153,10 @@ class GrammarFunctor {
         return VisitExcludeToken(grammar_expr);
       case GrammarExprType::kTokenTagDispatch:
         return VisitTokenTagDispatch(grammar_expr);
+      case GrammarExprType::kRegex:
+        return VisitRegex(grammar_expr);
+      case GrammarExprType::kSubstring:
+        return VisitSubstring(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
         XGRAMMAR_UNREACHABLE();
@@ -237,6 +251,12 @@ class GrammarFunctor {
     return VisitElement(grammar_expr);
   }
 
+  /*! \brief Visit a regex GrammarExpr. It is a leaf: the pattern string is carried as-is. */
+  virtual T VisitRegex(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
+
+  /*! \brief Visit a substring GrammarExpr. It is a leaf: the chunk list is carried as-is. */
+  virtual T VisitSubstring(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
+
   /*! \brief The grammar to visit or mutate. */
   Grammar base_grammar_{NullObj{}};
 
@@ -315,11 +335,14 @@ class StructureNormalizer {
 /*************************** Grammar Optimizer ***************************/
 
 /*!
- * \brief Fuse the byte string elements in the grammar.
+ * \brief Fuse adjacent byte string elements in sequences.
+ * \details Rewrites *grammar in place. Only sequences that actually contain adjacent byte strings
+ * are rewritten; if nothing needs fusing, the grammar is left untouched. The caller must own the
+ * grammar, as the input is mutated directly.
  */
 class ByteStringFuser {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
@@ -332,10 +355,13 @@ class AllowEmptyRuleAnalyzer {
 
 /*!
  * \brief Inline the rule references in the grammar.
+ * \details Rewrites *grammar in place. Only choices with an inlinable leading rule reference are
+ * rewritten; if nothing can be inlined, the grammar is left untouched. The caller must own the
+ * grammar, as the input is mutated directly.
  */
 class RuleInliner {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static void Apply(Grammar* grammar);
 };
 
 /*!
@@ -373,6 +399,16 @@ class GrammarFSMBuilder {
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
+  /*!
+   * \brief Build the automaton of a regex pattern. Returns the error message on failure.
+   * \param regex The regex pattern string.
+   * \param json_string Whether the regex matches the body of a JSON string literal. If true,
+   * the characters in JSONStringForbiddenChars() are excluded from every character match.
+   */
+  static Result<FSMWithStartEnd> Regex(const std::string& regex, bool json_string = false);
+  /*! \brief The characters that must be escaped inside a JSON string literal: the control
+   * characters 0x00-0x1F, the quote '"' and the backslash '\\'. */
+  static const std::bitset<256>& JSONStringForbiddenChars();
 };
 
 /*!

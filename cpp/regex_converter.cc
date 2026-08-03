@@ -247,7 +247,7 @@ std::string RegexConverter::HandleEscape() {
     return R"([\f\n\r\t\v\u0020\u00a0])";
   } else if (current_[1] == 'S') {
     current_ += 2;
-    return R"([^[\f\n\r\t\v\u0020\u00a0])";
+    return R"([^\f\n\r\t\v\u0020\u00a0])";
   } else if ((current_[1] >= '1' && current_[1] <= '9') || current_[1] == 'k') {
     RaiseError("Backreference is not supported yet.");
   } else if (current_[1] == 'p' || current_[1] == 'P') {

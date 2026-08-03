@@ -1,8 +1,21 @@
 # Quick Start
 
-This guide introduces how to use XGrammar with HuggingFace `transformers` in Python to generate
-structured outputs. It focuses on JSON generation -- the most important use case of structured
-generation. You should have already [installed XGrammar](installation).
+XGrammar guarantees that the LLM output follows a specified structure through
+[constrained decoding](constrained_decoding). It supports several ways to describe the structure:
+
+- **[Structural Tag](../structural_tag/structural_tag)**: describe outputs that mix reasoning,
+  free-form text, and tool calls. It supports tool calling for all common models (Llama, Qwen,
+  DeepSeek, Kimi, OpenAI Harmony, etc.) via
+  [built-in model styles](../structural_tag/tool_calling_and_reasoning).
+- **[JSON Schema](../defining_structures/json_generation)**: constrain the output to be a valid
+  JSON, or a JSON that conforms to a given schema.
+- **[EBNF](../defining_structures/ebnf_grammar)**: describe arbitrary structures with a
+  context-free grammar in the extended BNF format.
+- **[Lark](../defining_structures/lark_grammar)**: describe arbitrary structures in the compact and
+  readable Lark grammar language.
+
+This guide walks through the most common use case: generating a valid JSON with HuggingFace
+`transformers` in Python. You should have already [installed XGrammar](installation).
 
 ## Preparation
 
@@ -35,8 +48,7 @@ model_inputs = tokenizer(texts, return_tensors="pt").to(model.device)
 Construct a `GrammarCompiler` and compile the grammar.
 
 The grammar can be a built-in JSON grammar, a JSON schema string, or an EBNF string. EBNF provides
-more flexibility for customization. See
-[GBNF documentation](https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md) for
+more flexibility for customization. See [EBNF Grammar](../defining_structures/ebnf_grammar) for
 specification.
 
 ```python
@@ -68,5 +80,12 @@ When applying constrained decoding, it is recommended to **clearly describe the 
 
 ## What to Do Next
 
-- Check out [JSON Generation Guide](../tutorials/json_generation.md) and other How-To guides for the detailed usage guide of XGrammar.
-- Report any problem or ask any question: open new issues in our [GitHub repo](https://github.com/mlc-ai/xgrammar/issues).
+- To understand how constrained decoding works, see [Constrained Decoding](constrained_decoding).
+- To learn the core concepts and APIs of XGrammar, see
+  [Workflow of XGrammar](workflow_of_xgrammar).
+- To integrate XGrammar into an LLM engine, see
+  [Integration with LLM Engine](../using_xgrammar/engine_integration).
+- To constrain tool calling and reasoning outputs, see
+  [Structural Tag](../structural_tag/structural_tag).
+- Report any problem or ask any question: open new issues in our
+  [GitHub repo](https://github.com/mlc-ai/xgrammar/issues).

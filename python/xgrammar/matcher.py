@@ -88,7 +88,11 @@ def apply_token_bitmask_inplace(
         will be applied to logits[..., :vocab_size] and bitmask[..., :ceil(vocab_size / 32)].
 
         If vocab_size is not provided, the vocab size will be detected as min(logits.shape[-1],
-        bitmask.shape[-1] * 32).
+        bitmask.shape[-1] * 32). In this case, if the bitmask covers fewer tokens than
+        logits.shape[-1], the trailing logits are left unmasked and out-of-grammar tokens there
+        (e.g. padded/reserved vocabulary ids) can still be sampled, which may cause the sampled
+        token to be rejected downstream. Allocate the bitmask with the model's full (padded)
+        vocabulary size to avoid this. A warning is emitted when this mismatch is detected.
 
     Indices:
         Indices can be used to specify which logits in the batch to apply the bitmask to. It is
@@ -145,6 +149,16 @@ def apply_token_bitmask_inplace(
             "logits and bitmask should be on the same device. "
             + f"But got logits.device: {logits.device}, bitmask.device: {bitmask.device}"
         )
+
+    if vocab_size is None:
+        masked_width = bitmask.shape[-1] * 32
+        if masked_width < logits.shape[-1]:
+            warnings.warn(
+                f"The bitmask covers only {masked_width} tokens but logits have "
+                f"{logits.shape[-1]}, so logits[..., {masked_width}:] are left unmasked. "
+                "Allocate the bitmask with the full vocab size, or pass vocab_size explicitly.",
+                stacklevel=2,
+            )
 
     if backend == "auto":
         if logits.device.type == "cpu":
@@ -213,6 +227,7 @@ class GrammarMatcher(XGRObject):
         override_stop_tokens: Optional[Union[int, List[int]]] = None,
         terminate_without_stop_token: bool = False,
         max_rollback_tokens: int = -1,
+        default_temperature: Optional[float] = None,
     ) -> None:
         """Construct the grammar matcher.
 
@@ -234,6 +249,9 @@ class GrammarMatcher(XGRObject):
 
             The maximum number of rollback tokens allowed. The rollback operation is useful for
             jump-forward decoding and speculative decoding.
+
+        default_temperature : Optional[float], default: None
+            The sampling temperature used when the active grammar rule does not specify one.
         """
         if not isinstance(compiled_grammar, CompiledGrammar):
             raise ValueError("The grammar should be compiled before passing it to GrammarMatcher.")
@@ -254,6 +272,7 @@ class GrammarMatcher(XGRObject):
                 override_stop_tokens,
                 terminate_without_stop_token,
                 max_rollback_tokens,
+                None if default_temperature is None else float(default_temperature),
             )
         )
 
@@ -349,6 +368,7 @@ class GrammarMatcher(XGRObject):
         draft_tokens: torch.Tensor,
         token_bitmask: torch.Tensor,
         time_threshold: float = -1.0,
+        temperatures: Optional[torch.Tensor] = None,
     ) -> bool:
         """Traverse a draft token tree and fill the token bitmask for each node.
 
@@ -368,6 +388,10 @@ class GrammarMatcher(XGRObject):
             Maximum allowed time in seconds for the traversal. If the traversal
             exceeds this threshold, it returns False. A value <= 0 disables the timeout
             (default: -1.0).
+        temperatures : Optional[torch.Tensor], default: None
+            Optional 1D float32 CPU tensor with one element per node. It is filled with the
+            effective temperature for each visited node. ``-1`` means that no effective
+            temperature is configured, or that the node was not visited or was rejected.
 
         Returns
         -------
@@ -375,7 +399,12 @@ class GrammarMatcher(XGRObject):
             True if the traversal completed successfully, False if it timed out.
         """
         return self._handle.traverse_draft_tree(
-            retrieve_next_token, retrieve_next_sibling, draft_tokens, token_bitmask, time_threshold
+            retrieve_next_token,
+            retrieve_next_sibling,
+            draft_tokens,
+            token_bitmask,
+            time_threshold,
+            temperatures,
         )
 
     def find_jump_forward_string(self) -> str:
@@ -402,6 +431,31 @@ class GrammarMatcher(XGRObject):
             it exceed the specified maximum number of rollback tokens.
         """
         self._handle.rollback(num_tokens)
+
+    def get_captures(self, *, deduplicate: bool = True) -> List[Tuple[str, bytes]]:
+        """Get the capture groups recorded so far, ordered by completion position.
+
+        A rule gains a capture name via the Lark attribute ``rule[capture]`` or
+        ``rule[capture="name"]``. Each time a captured rule is completed while accepting tokens
+        or strings, the matched input span is recorded. Rollback also rolls back the recorded
+        captures. Mask computation (fill_next_token_bitmask) never records captures.
+
+        Parameters
+        ----------
+        deduplicate : bool, default: True
+            The parser explores parse hypotheses in parallel, so one occurrence of a captured
+            rule may complete at several candidate end positions (e.g. a ``/[0-9]+/`` body
+            completes after every digit). If True, only the last (longest) completion of each
+            occurrence is kept. Distinct occurrences — repeated matches of the same rule at
+            different positions — are always kept. If False, the raw completion events are
+            returned.
+
+        Returns
+        -------
+        captures : List[Tuple[str, bytes]]
+            A list of (capture_name, matched_bytes) pairs.
+        """
+        return [(str(pair[0]), bytes(pair[1])) for pair in self._handle.get_captures(deduplicate)]
 
     def is_terminated(self) -> bool:
         """Check if the matcher has terminated. If terminate_without_stop_token is False, the
@@ -454,6 +508,12 @@ class GrammarMatcher(XGRObject):
             The maximum number of rollback tokens.
         """
         return -1
+
+    @property
+    def temperature(self) -> Optional[float]:
+        """The effective sampling temperature for the next token."""
+        result = self._handle.temperature()
+        return None if result is None else float(result)
 
     @property
     def stop_token_ids(self) -> List[int]:
@@ -530,8 +590,37 @@ class BatchGrammarMatcher(XGRObject):
             If the bitmask is invalid (not on CPU, not int32, shape mismatch).
         """
         matcher_handles = [matcher._handle for matcher in matchers]
-
         self._handle.batch_fill_next_token_bitmask(matcher_handles, bitmask, indices, debug_print)
+
+    @staticmethod
+    def batch_fill_temperature(
+        matchers: List["GrammarMatcher"],
+        temperatures: torch.Tensor,
+        indices: Optional[List[int]] = None,
+    ) -> None:
+        """Fill the effective sampling temperature of multiple matchers into a tensor.
+
+        Parameters
+        ----------
+        matchers : List[GrammarMatcher]
+            The list of matchers to query.
+
+        temperatures : torch.Tensor
+            A pre-allocated 1D float32 CPU tensor. The entry of a matcher without an
+            effective temperature is set to ``-1``.
+
+        indices : Optional[List[int]], default: None
+            A list of indices to specify which element each matcher writes to. If None,
+            matchers[i] writes to temperatures[i].
+
+        Raises
+        ------
+        RuntimeError
+            If the temperatures tensor is invalid (not on CPU, not float32, not 1D, or too
+            small), or if the sizes of matchers and indices do not match.
+        """
+        matcher_handles = [matcher._handle for matcher in matchers]
+        _core.BatchGrammarMatcher.batch_fill_temperature(matcher_handles, temperatures, indices)
 
     @staticmethod
     def batch_accept_token(

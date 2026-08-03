@@ -11,6 +11,7 @@
 #include "support/compact_2d_array.h"
 #include "support/dynamic_bitset.h"
 #include "support/json_serializer.h"
+#include "test_utils.h"
 
 namespace xgrammar {
 
@@ -419,6 +420,22 @@ TEST(XGrammarSerializationTest, TestCompact2DArray) {
   }
 }
 
+TEST(XGrammarSerializationTest, TestCompact2DArrayRejectsUnrepresentableSize) {
+  using namespace xgrammar;
+
+  Compact2DArray<int> array;
+  XGRAMMAR_EXPECT_THROW(
+      array.ResetWithRowSizes({INT32_MAX, 1}),
+      LogFatalError,
+      "Compact2DArray data size exceeds the int32_t limit"
+  );
+  XGRAMMAR_EXPECT_THROW(
+      array.PushBack(nullptr, -1),
+      LogFatalError,
+      "Compact2DArray data size would exceed the int32_t limit"
+  );
+}
+
 TEST(XGrammarSerializationTest, TestDynamicBitset) {
   using namespace xgrammar;
 
@@ -577,7 +594,7 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
     fsm.AddEpsilonEdge(0, 2);
 
     CompactFSM compact_fsm = fsm.ToCompact();
-    CompactFSMWithStartEnd compact_fsm_with_start_end(compact_fsm, 0, {false, false, true});
+    CompactFSMWithStartEnd compact_fsm_with_start_end(compact_fsm, 0, {2});
 
     auto json_value = AutoSerializeJSONValue(compact_fsm_with_start_end);
     ASSERT_TRUE(json_value.is<picojson::array>());
@@ -595,7 +612,7 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
     // Test basic properties
     ASSERT_EQ(deserialized.GetFsm().NumStates(), compact_fsm.NumStates());
     ASSERT_EQ(deserialized.GetStart(), 0);
-    ASSERT_EQ(deserialized.GetEnds(), std::vector<bool>({false, false, true}));
+    ASSERT_EQ(deserialized.GetEnds(), std::vector<int32_t>({2}));
 
     // Test roundtrip
     auto json_value2 = AutoSerializeJSONValue(deserialized);
@@ -610,7 +627,7 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
     fsm.AddEOSEdge(2, 0);
 
     CompactFSM compact_fsm = fsm.ToCompact();
-    CompactFSMWithStartEnd compact_fsm_with_start_end(compact_fsm, 0, {false, false, true});
+    CompactFSMWithStartEnd compact_fsm_with_start_end(compact_fsm, 0, {2});
 
     auto json_value = AutoSerializeJSONValue(compact_fsm_with_start_end);
 
@@ -626,7 +643,7 @@ TEST(XGrammarSerializationTest, TestCompactFSMWithStartEnd) {
 
     ASSERT_EQ(deserialized.GetFsm().NumStates(), compact_fsm.NumStates());
     ASSERT_EQ(deserialized.GetStart(), 0);
-    ASSERT_EQ(deserialized.GetEnds(), std::vector<bool>({false, false, true}));
+    ASSERT_EQ(deserialized.GetEnds(), std::vector<int32_t>({2}));
 
     // Test roundtrip
     auto json_value2 = AutoSerializeJSONValue(deserialized);
