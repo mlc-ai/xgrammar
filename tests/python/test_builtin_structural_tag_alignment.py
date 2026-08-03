@@ -19,6 +19,13 @@ from xgrammar import Grammar
 from xgrammar.builtin_structural_tag import get_model_structural_tag
 from xgrammar.testing import _is_grammar_accept_string
 
+if sys.version_info < (3, 9):
+    # Python 3.8 cannot run most of these tests: it caps transformers at 4.46, which cannot
+    # load the separate chat_template.jinja files newer models ship; several chat templates
+    # call str.removesuffix (Python >= 3.9); and Kimi-K2's huggingface remote tokenizer code
+    # uses PEP 585 builtin generics (list[dict]), which cannot be evaluated on Python 3.8.
+    pytest.skip("chat-template alignment tests require Python >= 3.9", allow_module_level=True)
+
 TOOL_A = {
     "type": "function",
     "function": {

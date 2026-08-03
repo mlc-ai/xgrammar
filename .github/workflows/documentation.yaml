@@ -7,10 +7,16 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
-  deploy_docs:
-    name: Deploy Docs
+  build_docs:
+    name: Build Docs
     runs-on: ubuntu-latest
+    concurrency:
+      group: build-docs-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
       - uses: actions/checkout@v4
@@ -33,10 +39,34 @@ jobs:
           python -m pip install -r docs/requirements.txt
           gem install jekyll jekyll-remote-theme
 
-      - name: Deploying on GitHub Pages
+      - name: Build docs
+        run: ./scripts/support/build_site.sh
+
+      - name: Upload GitHub Pages artifact
         if: github.ref == 'refs/heads/main' && github.repository_owner == 'mlc-ai'
-        run: |
-          git remote set-url origin https://x-access-token:${{ secrets.MLC_GITHUB_TOKEN }}@github.com/$GITHUB_REPOSITORY
-          git config --global user.email "mlc-gh-actions-bot@nomail"
-          git config --global user.name "mlc-gh-actions-bot"
-          ./scripts/gh_deploy_site.sh
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/_site
+
+  deploy_docs:
+    name: Deploy Docs
+    if: github.ref == 'refs/heads/main' && github.repository_owner == 'mlc-ai'
+    needs: build_docs
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

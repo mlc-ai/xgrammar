@@ -35,7 +35,18 @@ Homepage = "https://xgrammar.mlc.ai/"
 GitHub = "https://github.com/mlc-ai/xgrammar"
 
 [project.optional-dependencies]
-test = ["huggingface-hub[cli]", "protobuf", "pytest", "sentencepiece", "tiktoken"]
+test = [
+  "huggingface-hub[cli]",
+  "protobuf",
+  "pytest",
+  # sentencepiece 0.2.2 rejects vocabularies that contain a null character (e.g.
+  # internlm2_5's tokenizer.model), and transformers v4 turns that load failure into a
+  # broken tiktoken fallback. Python >= 3.10 resolves transformers v5, which does not load
+  # vocabularies through the sentencepiece library.
+  "sentencepiece<0.2.2; python_version < '3.10'",
+  "sentencepiece; python_version >= '3.10'",
+  "tiktoken",
+]
 metal = ["mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'"]
 
 [build-system]
@@ -52,7 +63,10 @@ build.verbose = true
 # CMake configuration
 cmake.version = "CMakeLists.txt"
 cmake.args = []
-cmake.build-type = "RelWithDebInfo"
+# Use Release for wheels: debug info would multiply the binary size by >10x, and no error
+# reporting path needs it. Error messages carry file:line via __FILE__/__LINE__ macros,
+# which are preserved in any build type.
+cmake.build-type = "Release"
 
 # Logging
 logging.level = "INFO"

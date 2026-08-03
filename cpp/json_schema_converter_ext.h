@@ -17,7 +17,7 @@ namespace xgrammar {
 /*!
  * \brief Converter for XML Tool Calling format (e.g., Qwen style).
  *
- * This converter generates EBNF where:
+ * This converter generates a grammar where:
  * - The outermost object uses XML format: <parameter=name>value</parameter>
  * - Inner values use standard JSON format
  */
@@ -33,39 +33,36 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       bool any_order = false
   );
 
-  /*! \brief Convert SchemaSpec to EBNF with XML format for root object. Note that this function is
-   * not thread-safe.*/
-  std::string Convert(const SchemaSpecPtr& spec);
+  /*! \brief Convert SchemaSpec to grammar with XML format for root object. Note that this function
+   * is not thread-safe.*/
+  Grammar Convert(const SchemaSpecPtr& spec);
 
  protected:
   // Override methods for XML format
-  std::string GenerateString(const StringSpec& spec, const std::string& rule_name) override;
-  std::string GenerateObject(
+  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateObject(
       const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
   ) override;
-  std::string GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
-  std::string GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
-  std::string GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
-  std::string GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
 
   // Override format hooks
-  std::string FormatPropertyKey(const std::string& key) override;
-  std::string FormatProperty(
-      const std::string& key,
-      const std::string& value_rule,
-      const std::string& rule_name,
-      int64_t idx
+  int32_t FormatPropertyKey(const std::string& key) override;
+  int32_t FormatProperty(
+      const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
   ) override;
-  std::string FormatOtherProperty(
-      const std::string& key_pattern,
-      const std::string& value_rule,
+  int32_t FormatOtherProperty(
+      int32_t key_pattern_expr,
+      int32_t value_rule_id,
       const std::string& rule_name,
       const std::string& rule_name_suffix
   ) override;
 
   std::string GetKeyPattern() const override;
   std::string GetBasicAnyRuleName() const override;
-  std::string GetKeyPatternExcluding(
+  int32_t GetKeyPatternExcluding(
       const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
   ) override;
 
@@ -73,8 +70,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
 
   void AddBasicRules() override;
 
-  void AddCache(const std::string& key, const std::string& value) override;
-  std::optional<std::string> GetCache(const std::string& key) const override;
+  void AddCache(const std::string& key, int32_t rule_id) override;
+  std::optional<int32_t> GetCache(const std::string& key) const override;
 
  private:
   // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
@@ -91,6 +88,10 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   static const std::string kXMLObject;
   static const std::string kXMLVariableName;
 
+  std::string XMLValue(const std::string& json_value) const;
+  int32_t XMLKeySuffix();
+
+  JSONFormat json_format_;
   // Track if we're at the root object level
   int nested_object_level_ = 0;
   const XMLWrapper xml_wrapper_;

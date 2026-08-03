@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: unit-test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pre_check:
     name: Pre-check on Ubuntu-latest

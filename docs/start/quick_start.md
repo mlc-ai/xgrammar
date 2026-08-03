@@ -82,7 +82,7 @@ When applying constrained decoding, it is recommended to **clearly describe the 
 
 - To understand how constrained decoding works, see [Constrained Decoding](constrained_decoding).
 - To learn the core concepts and APIs of XGrammar, see
-  [Workflow of XGrammar](../using_xgrammar/workflow_of_xgrammar).
+  [Workflow of XGrammar](workflow_of_xgrammar).
 - To integrate XGrammar into an LLM engine, see
   [Integration with LLM Engine](../using_xgrammar/engine_integration).
 - To constrain tool calling and reasoning outputs, see

@@ -23,12 +23,14 @@ namespace xgrammar {
 /******************* Grammar::Impl *******************/
 
 std::size_t MemorySize(const Grammar::Impl& impl) {
-  /// TODO: Now, we evaluatve memory size of rule strings as sizeof(std::string),
-  /// with an assumption that the string is small.
+  /// TODO: Now, we evaluate the memory size of each rule as sizeof(Rule), which counts its
+  /// string members as sizeof(std::string), with an assumption that the strings are small.
   /// This should be improved in the future.
-  return impl.rules_.size() * sizeof(std::string) + MemorySize(impl.grammar_expr_data_) +
-         MemorySize(impl.grammar_expr_indptr_) + MemorySize(impl.complete_fsm) +
-         MemorySize(impl.per_rule_fsms) + MemorySize(impl.allow_empty_rule_ids);
+  return impl.rules_.size() * sizeof(Grammar::Impl::Rule) +
+         impl.suffix_stop_infos_.size() * sizeof(Grammar::Impl::SuffixStopInfo) +
+         MemorySize(impl.grammar_expr_data_) + MemorySize(impl.grammar_expr_indptr_) +
+         MemorySize(impl.complete_fsm) + MemorySize(impl.per_rule_fsms) +
+         MemorySize(impl.allow_empty_rule_ids);
 }
 
 /******************* Grammar *******************/
@@ -51,20 +53,13 @@ Grammar Grammar::FromJSONSchema(
     bool print_converted_ebnf,
     bool any_order
 ) {
-  auto ebnf_string = JSONSchemaToEBNF(
-      schema,
-      any_whitespace,
-      indent,
-      separators,
-      strict_mode,
-      max_whitespace_cnt,
-      JSONFormat::kJSON,
-      any_order
-  );
+  auto grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
+      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+  ));
   if (print_converted_ebnf) {
-    XGRAMMAR_LOG(INFO) << "Converted EBNF: " << ebnf_string << std::endl;
+    XGRAMMAR_LOG(INFO) << "Converted EBNF: " << grammar.ToString() << std::endl;
   }
-  return FromEBNF(ebnf_string);
+  return grammar;
 }
 
 Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) {

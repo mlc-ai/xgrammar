@@ -106,13 +106,13 @@ sign ::= "" | "+" | "-"
 
 Supported escape sequences:
 
-| Escape | Meaning |
-| --- | --- |
-| `\"` `\\` `\/` `\'` `\?` | the character itself |
-| `\n` `\r` `\t` `\b` `\f` `\a` `\v` `\0` `\e` | control characters (`\e` is ESC, `\0` is NUL) |
-| `\xHH...` | code point from hex digits (arbitrary length, e.g. `\x41`, `\x1F600`) |
-| `\uXXXX` | code point from exactly 4 hex digits |
-| `\UXXXXXXXX` | code point from exactly 8 hex digits |
+| Escape                                       | Meaning                                                               |
+| -------------------------------------------- | --------------------------------------------------------------------- |
+| `\"` `\\` `\/` `\'` `\?`                     | the character itself                                                  |
+| `\n` `\r` `\t` `\b` `\f` `\a` `\v` `\0` `\e` | control characters (`\e` is ESC, `\0` is NUL)                         |
+| `\xHH...`                                    | code point from hex digits (arbitrary length, e.g. `\x41`, `\x1F600`) |
+| `\uXXXX`                                     | code point from exactly 4 hex digits                                  |
+| `\UXXXXXXXX`                                 | code point from exactly 8 hex digits                                  |
 
 Non-ASCII characters may also be written directly: `"中文"`, `"😀"`. A literal cannot contain a
 raw newline; write `\n` instead.
@@ -148,26 +148,26 @@ Referencing an undefined rule is an error.
 
 ### Sequences, Alternatives, and Groups
 
-| Form | Example | Meaning |
-| --- | --- | --- |
-| Sequence | `"a" "b"` | Match the elements in order. |
-| Alternative | `"a" \| "b"` | Match any one branch. Each branch is a sequence. |
-| Group | `("a" \| "b") "c"` | Group a sub-expression; may carry repetition. |
-| Empty group | `( )` | Matches the empty string. |
+| Form        | Example            | Meaning                                          |
+| ----------- | ------------------ | ------------------------------------------------ |
+| Sequence    | `"a" "b"`          | Match the elements in order.                     |
+| Alternative | `"a" \| "b"`       | Match any one branch. Each branch is a sequence. |
+| Group       | `("a" \| "b") "c"` | Group a sub-expression; may carry repetition.    |
+| Empty group | `( )`              | Matches the empty string.                        |
 
 ## Repetition
 
 A repetition operator follows an element — a string literal, a character class, a rule reference,
 or a parenthesized group:
 
-| Form | Meaning |
-| --- | --- |
-| `x?` | zero or one |
-| `x*` | zero or more |
-| `x+` | one or more |
-| `x{3}` | exactly 3 |
+| Form     | Meaning           |
+| -------- | ----------------- |
+| `x?`     | zero or one       |
+| `x*`     | zero or more      |
+| `x+`     | one or more       |
+| `x{3}`   | exactly 3         |
 | `x{2,4}` | 2 to 4, inclusive |
-| `x{2,}` | 2 or more |
+| `x{2,}`  | 2 or more         |
 
 The lower bound is required: `x{,4}` is not accepted (use `x{0,4}`). `x{0}` is allowed and
 matches the empty string. Two operators cannot be applied directly to the same element (`"a"++`
@@ -178,10 +178,287 @@ root       ::= identifier ("," identifier){0,4}
 identifier ::= [a-zA-Z_] [a-zA-Z0-9_]*
 ```
 
-## TagDispatch
+## Rule Options
 
-`TagDispatch` is a macro for the common tool-calling pattern: the model produces free text until
-a trigger tag appears, then the output must follow the grammar associated with that tag, and
+A rule may carry a comma-separated option list between its name and `::=`:
+
+```text
+value[max_tokens=32, max_chars=128, capture="answer", lazy, temperature=0.7] ::= [a-z]+
+```
+
+Each option may appear at most once. Options without a value, such as `capture` and `lazy`, are
+written as bare names; the other options use `name=value`.
+
+### Token Budgets
+
+The `max_tokens` option gives each occurrence of a rule a token budget:
+
+```text
+root ::= "<think>" reasoning "</think>" answer
+reasoning[max_tokens=512] ::= [^]*
+answer ::= [0-9]+
+```
+
+Once the budget is exhausted, the token mask forces the occurrence to end if its body can end at
+the current position. If it cannot end there, the budget is relaxed until the earliest valid
+boundary, so the output remains grammar-valid. If this relaxation causes a derivation to consume a
+token past its budget, the matcher logs a warning the first time, at most once per matcher. When
+authoring a budgeted rule, prefer a body that can end at every possible budget boundary. For
+example, `[^]*` can end at any position, so its budget is exact; bodies that cannot end where the
+budget runs out remain best-effort.
+
+The budget applies independently to every occurrence. To bound a whole repeated region, put the
+option on a wrapper rule. Nested budgets use the smallest active budget. Use a positive decimal
+integer for `N`.
+
+`max_tokens` is enforced during token-mask-driven generation. `accept_string` has no token
+boundaries and does not consume the budget. Rollback, reset, forking, and speculative decoding
+preserve the budget state.
+
+### Character Budgets
+
+The `max_chars` option limits each rule occurrence by Unicode codepoints, the numeric values
+assigned to text units by the Unicode standard:
+
+```text
+root ::= "<think>" reasoning "</think>" answer
+reasoning[max_chars=2048] ::= [^]*
+answer ::= [0-9]+
+```
+
+For example, `a`, `é`, and `中` each consume one character. A decomposed character such as `e`
+followed by a combining accent consumes two. The count is independent of the number of bytes in
+UTF-8, a variable-width Unicode encoding, or model tokens, the units generated by the model. This
+also holds when one codepoint is split across multiple tokens.
+
+Enforcement follows the same earliest-valid-boundary rule as `max_tokens`. If the body cannot end
+when the character budget is exhausted, the matcher relaxes the budget until the earliest valid
+end, so the output remains grammar-valid. If this relaxation causes a derivation to consume a
+codepoint past its budget, the matcher logs a warning the first time, at most once per matcher.
+When authoring a character-budgeted rule, prefer a body that can end at every possible character
+boundary. For example, `[^]*` can end after every codepoint, so its budget is exact; bodies that
+cannot end where the budget runs out remain best-effort.
+
+The budget applies per occurrence, nested character budgets use the smallest active budget, and
+`max_chars` may be combined with `max_tokens`; whichever boundary is reached first takes effect.
+Unlike `max_tokens`, character budgets also apply to `accept_string`. Token acceptance, rollback,
+reset, forking, and speculative decoding preserve the character count. Use an integer from 0 to
+2,147,483,647. A zero budget closes the rule immediately when its body can end at the entry
+position.
+
+### Capture Groups
+
+The `capture` option records the input span matched by a rule:
+
+```text
+root ::= item ("," item)*
+item[capture] ::= [0-9]+
+```
+
+`capture` uses the rule name as the capture name. Use `capture="name"` to choose a different,
+non-empty name:
+
+```text
+item[capture="number"] ::= [0-9]+
+```
+
+Retrieve completed captures from the matcher:
+
+```python
+matcher.accept_string("1,22,333")
+matcher.get_captures()
+# [("number", b"1"), ("number", b"22"), ("number", b"333")]
+```
+
+Captures are recorded when tokens or strings are accepted. Filling a token mask does not record
+captures, and `rollback` also rolls them back. A repeated rule produces one capture for every
+occurrence, in completion order.
+
+The parser may keep several possible parses alive at once, so one occurrence can complete at
+several candidate positions. By default, `get_captures(deduplicate=True)` keeps the longest
+completion for each occurrence. This is exact when a following delimiter cannot also be matched
+by the captured body. Use `get_captures(deduplicate=False)` to retrieve every raw completion
+event.
+
+### Committed-Shortest Matching
+
+The `lazy` option makes a rule commit to its earliest possible completion:
+
+```text
+root ::= "<" name ">" rest
+name[lazy] ::= [a-z]+
+rest ::= [a-z]+
+```
+
+Here `name` consumes exactly one letter: as soon as `[a-z]+` can end, all alternatives in which
+the same occurrence continues are discarded.
+
+The body of a lazy rule must compile to a single terminal-like form made from string literals,
+character classes, `Regex` expressions, and supported repetitions or alternatives of those
+elements. Bodies that still require rule references, recursion, or repetition ranges after
+normalization are rejected during compilation.
+
+A lazy rule that can match the empty string always commits to the empty match. Each occurrence
+commits independently, and `rollback`, `reset`, and `fork` restore the commit state.
+
+### Sampling Temperature
+
+The `temperature` rule option selects the sampling temperature while a rule is active:
+
+```text
+root ::= "answer:" value
+value[temperature=0.7] ::= [a-z]+
+```
+
+`temperature` must be a finite non-negative number. An inner explicit temperature overrides an
+inherited outer temperature. At ambiguous positions, different active temperatures produce a
+warning once and `matcher.temperature` returns the maximum. If no active rule specifies a
+temperature, it returns the matcher's `default_temperature`; if neither is configured, it returns
+`None`.
+
+Use `BatchGrammarMatcher.batch_fill_temperature` to fill the temperatures of multiple matchers
+into a pre-allocated tensor. During speculative decoding, the optional `temperatures` tensor
+passed to `GrammarMatcher.traverse_draft_tree` receives the effective temperature for each tree
+node. In both tensors, `-1` means there is no effective temperature.
+
+### Generated Suffix and Stop Metadata
+
+The Lark frontend provides high-level `suffix`, `stop`, and `stop_capture` options for terminating
+a lazy rule at a marker and controlling whether that marker appears in captures. EBNF does not
+accept `suffix=...` or `stop=...` directly. Instead, `str(grammar)` lowers them to the following
+EBNF rule options so that the printed grammar can be parsed again without losing capture
+behavior:
+
+- `capture_hidden_suffix_bytes=N` marks a trailing suffix marker as hidden from the annotated
+  rule's own capture while retaining it in enclosing captures. For a fixed marker, `N` is its byte
+  length.
+- `capture_hidden_stop_bytes=N` marks a trailing stop marker as hidden from the annotated rule and
+  every enclosing capture. For a fixed marker, `N` is its byte length.
+- `capture_hidden_body_rule_id=N` and `capture_hidden_marker_rule_id=N` identify helper rules used
+  to recover the boundary of a variable-length marker. They must be specified together.
+- `stop_capture="name"` records the marker bytes under `name` before they are hidden from other
+  captures.
+
+These options affect only capture materialization. The marker bytes remain in the accepted model
+output. The numeric values are internal rule IDs and marker metadata generated by XGrammar;
+changing rule order or editing the values can invalidate their meaning. They are intended for
+`str(grammar)` / `Grammar.from_ebnf()` round trips rather than hand-authored grammars. Author
+suffix and stop behavior through the
+[Lark frontend](lark_grammar.md#the-suffix-and-stop-attributes).
+
+## Macros
+
+Macros look like function calls inside a grammar rule. For example:
+
+```text
+root ::= Regex("[0-9]{5}", json_string=false)
+```
+
+Here, `Regex` is the macro name, `"[0-9]{5}"` is a positional argument, and
+`json_string=false` is a named argument. This macro matches exactly five digits.
+
+Macros can also take rule names and tuples:
+
+```text
+root ::= TagDispatch(("<tool>", tool), loop_after_dispatch=false)
+tool ::= "get_weather"
+```
+
+In this example, `("<tool>", tool)` pairs the trigger string `"<tool>"` with the `tool` rule.
+Each macro accepts its own set of arguments; the sections below describe them individually.
+Macro calls can be used in sequences, alternatives, and groups like other grammar elements.
+
+To add a new macro, see [Extending Macros](#extending-macros).
+
+### Accepted Arguments
+
+A macro call contains comma-separated positional arguments and named arguments:
+
+```text
+MacroName(value, option=value)
+```
+
+The parser accepts only these value forms:
+
+- a double-quoted string literal, such as `"text"`;
+- a decimal integer literal, such as `128010`;
+- the boolean literal `true` or `false`;
+- a rule name, such as `tool`;
+- a tuple of values, such as `("trigger", tool)` or `(1, 2, 3)`. Tuples may be empty and may
+  have a trailing comma.
+
+The macro call itself cannot have a trailing comma. Named arguments use `name=value`; they are
+not allowed inside tuples. Character classes, grammar expressions, nested macro calls, floating
+point numbers, lists, and objects cannot be passed as values.
+
+### `Regex`
+
+`Regex` matches text described by a regular expression.
+
+```text
+root ::= "ID-" Regex("[0-9]{5}")
+```
+
+This grammar accepts `ID-12345`.
+
+**Arguments**
+
+- `pattern` is the only positional argument. It is required and must be a string.
+- `json_string` is an optional named argument. It must be a boolean and defaults to `false`.
+- `flags` is an optional named argument. It must be a string of regular-expression flags, with
+  the same meaning as the flags of a Lark regex literal: `i` makes the match ASCII
+  case-insensitive, `s` makes `.` match newlines, and `u` is accepted as a no-op (patterns
+  always use Unicode codepoint semantics). Other flags raise an error. When `flags` is given,
+  `.` follows the standard semantics and does not match `\n` unless `s` is present; without the
+  argument, the pattern is used verbatim and `.` matches every codepoint.
+- No other positional or named arguments are accepted.
+
+`pattern` uses the same regular expression syntax as
+[`xgr.Grammar.from_regex`](xgrammar.Grammar.from_regex). Backslashes must be escaped for the
+surrounding EBNF string literal, so the regular expression `\d+\.\d+` is written as
+`Regex("\\d+\\.\\d+")`.
+
+```text
+root ::= Regex("hello, world.", flags="is")
+```
+
+This grammar matches `hello, world` in any ASCII case, followed by any character including a
+newline.
+
+When `json_string=true`, the regular expression is intended to match the body of a JSON string.
+Control characters, `"` and `\` are then excluded from every character match, preventing the
+expression from consuming characters that must be escaped in JSON:
+
+```text
+string_body ::= Regex("\\S+", json_string=true)
+```
+
+### `Substring`
+
+`Substring` matches every contiguous subsequence of a fixed list of chunks, including the empty
+one.
+
+```text
+root ::= Substring("abc", "de", "fg")
+```
+
+This grammar accepts `""`, `"abc"`, `"de"`, `"abcde"`, `"defg"`, and `"abcdefg"`, but not `"ab"`
+or `"cde"`: chunks are atomic and cannot be split.
+
+**Arguments**
+
+- Every positional argument must be a string. Chunks may be empty or repeated. Zero or more
+  chunks are accepted.
+- No named arguments are accepted.
+
+The chunk list is compiled into a suffix automaton, so the number of automaton states grows
+linearly with the number of chunks. This is also the compiled form of the Lark
+`%regex {"substring_chunks": ...}` and `%regex {"substring_chars": ...}` extensions.
+
+### `TagDispatch`
+
+`TagDispatch` implements the common tool-calling pattern: the model produces free text until a
+trigger tag appears, then the output must follow the grammar associated with that tag, and
 afterwards the model returns to free text.
 
 ```text
@@ -195,7 +472,17 @@ tool_call_body ::= "{" [^}]* "}"
 code_body ::= "```" [^`]* "```"
 ```
 
-Positional arguments are `("tag_string", rule_name)` pairs. The semantics:
+**Arguments**
+
+- Each positional argument must be a `(tag, rule)` pair. `tag` must be a non-empty string, and
+  `rule` must be the name of a defined rule. Zero or more pairs are accepted.
+- `loop_after_dispatch` is an optional named argument. It must be a boolean and defaults to
+  `true`.
+- `excludes` is an optional named argument. It must be a tuple of non-empty strings and defaults
+  to `()`.
+- No other named arguments are accepted.
+
+Dispatch then works as follows:
 
 - Any text that does not contain a tag is accepted, and the match may end at any point in this
   free-text state. An incomplete tag prefix at the end of the output (for example a final
@@ -229,29 +516,46 @@ tool_call_body ::= "{" [^}]* "}"
 
 An excluded string must not be a prefix of any trigger tag.
 
-## Token-Level Elements
+### `Token`
 
-The following macros match **tokens by their IDs in the model's vocabulary** rather than text.
-They are useful when the pattern involves special tokens (such as `<|python_start|>`) that the
-tokenizer encodes as single tokens.
-
-### Token and ExcludeToken
-
-`Token(id, ...)` matches exactly one token whose ID is in the given set. `ExcludeToken(id, ...)`
-matches exactly one token whose ID is **not** in the given set. IDs must be non-negative
-integers; duplicates are merged.
+`Token` matches exactly one token whose ID is in a given set.
 
 ```text
 root ::= Token(128010) content
 content ::= [a-z]+
 ```
 
-Token-level and character-level elements can be mixed freely in one rule.
+**Arguments**
 
-### TokenTagDispatch
+- One or more positional arguments are required.
+- Every argument must be a non-negative integer token ID.
+- Named arguments are not accepted.
 
-`TokenTagDispatch` is the token-level analog of `TagDispatch`: free tokens instead of free text,
-and each trigger is a single token ID.
+This macro matches token IDs in the model's vocabulary rather
+than decoded text, making it useful for special tokens represented as single tokens. Token-level
+and character-level elements can be mixed in one rule.
+
+### `ExcludeToken`
+
+`ExcludeToken` matches exactly one token whose ID is **not** in a given set.
+
+```text
+root ::= ExcludeToken(128010, 128011)
+```
+
+**Arguments**
+
+- One or more positional arguments are required.
+- Every argument must be a non-negative integer token ID.
+- Named arguments are not accepted.
+
+Duplicate token IDs are merged. Use repetition to accept more than one unrestricted token, or use
+`TokenTagDispatch` for a dispatching loop.
+
+### `TokenTagDispatch`
+
+`TokenTagDispatch` is the token-level counterpart of `TagDispatch`: it accepts free tokens instead
+of free text, and each trigger is a single token ID.
 
 ```text
 root ::= TokenTagDispatch(
@@ -262,10 +566,53 @@ root ::= TokenTagDispatch(
 tool_call_body ::= "{" [^}]* "}"
 ```
 
+**Arguments**
+
+- Each positional argument must be an `(id, rule)` pair. `id` must be a non-negative integer token
+  ID, and `rule` must be the name of a defined rule. Zero or more pairs are accepted.
+- `loop_after_dispatch` is an optional named argument. It must be a boolean and defaults to
+  `true`.
+- `excludes` is an optional named argument. It must be a tuple of non-negative integer token IDs
+  and defaults to `()`.
+- No other named arguments are accepted.
+
+Dispatch then works as follows:
+
 - Before a trigger token appears, any token is accepted except those listed in `excludes`.
 - When a trigger token is produced, matching dispatches to the corresponding rule; after the rule
   completes, `loop_after_dispatch` behaves as in `TagDispatch`.
 - Trigger token IDs must not overlap with `excludes`.
+
+### Extending Macros
+
+XGrammar does not currently provide a public registration interface for custom macros. Adding one
+requires changing the C++ source. There are two implementation paths:
+
+1. **Expand to existing grammar elements.** Add a parser function in `cpp/grammar_parser.cc`,
+   register its name in the parser's `kMacroFunctions` dispatch table, validate its arguments, and
+   use the internal `GrammarBuilder` helper to construct existing grammar elements. This is the
+   smallest approach. Printing the resulting grammar shows the expanded form rather than the
+   original macro call.
+2. **Add a new internal grammar-element type.** Use this when the macro needs behavior that
+   existing elements cannot represent. In addition to parsing and registration:
+
+   - Add an entry and data layout to the internal `Grammar::Impl::GrammarExprType` enum in
+     `cpp/grammar_impl.h`, plus construction methods in `cpp/grammar_builder.h` and
+     `cpp/grammar_builder.cc`.
+   - Add printing support in `cpp/grammar_printer.h` and `cpp/grammar_printer.cc` so that
+     `str(grammar)` can be parsed again.
+   - Update the internal grammar traversal helper `GrammarFunctor` and every normalization or
+     analysis pass that switches on the grammar element type in `cpp/grammar_functor.h` and
+     `cpp/grammar_functor.cc`.
+   - Implement the runtime semantics. For byte- or token-matching behavior, this usually means
+     building a finite-state machine (an automaton that tracks accepted input) in
+     `GrammarFSMBuilder`; specialized behavior may also require updates to the compiler, parser,
+     or matcher.
+   - Add parser-error, printing round-trip, serialization round-trip, accepted-input, rejected-input,
+     and token-mask tests.
+
+The implementations of `Regex`, `TagDispatch`, and `TokenTagDispatch` provide examples of native
+grammar elements with different runtime behavior.
 
 ## A Complete Example
 

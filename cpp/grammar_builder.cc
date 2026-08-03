@@ -5,8 +5,10 @@
 
 #include "grammar_builder.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "support/logging.h"
@@ -18,11 +20,24 @@ namespace xgrammar {
 GrammarBuilder::GrammarBuilder() : grammar_(std::make_shared<Grammar::Impl>()) {}
 
 GrammarBuilder::GrammarBuilder(const Grammar& grammar)
-    : grammar_(std::make_shared<Grammar::Impl>(*grammar.operator->())) {
-  for (int i = 0; i < static_cast<int>(grammar->NumRules()); ++i) {
-    auto rule = grammar->GetRule(i);
-    rule_name_to_id_[rule.name] = i;
+    : grammar_(std::make_shared<Grammar::Impl>(*grammar.operator->())),
+      rule_name_map_built_(false) {}
+
+GrammarBuilder GrammarBuilder::FromMutableGrammar(Grammar* grammar) {
+  GrammarBuilder builder;
+  builder.grammar_ = grammar->pimpl_;
+  builder.rule_name_map_built_ = false;
+  return builder;
+}
+
+void GrammarBuilder::EnsureRuleNameMap() const {
+  if (rule_name_map_built_) {
+    return;
   }
+  for (int32_t i = 0; i < static_cast<int32_t>(grammar_->rules_.size()); ++i) {
+    rule_name_to_id_[grammar_->rules_[i].name] = i;
+  }
+  rule_name_map_built_ = true;
 }
 
 Grammar GrammarBuilder::Get(const std::string& root_rule_name) {
@@ -76,6 +91,19 @@ int32_t GrammarBuilder::AddRegex(const std::string& regex_str, bool json_string)
     data.push_back(static_cast<int32_t>(static_cast<uint8_t>(c)));
   }
   return AddGrammarExpr({GrammarExprType::kRegex, data.data(), static_cast<int32_t>(data.size())});
+}
+
+int32_t GrammarBuilder::AddSubstring(const std::vector<std::string>& chunks) {
+  std::vector<int32_t> data;
+  for (const std::string& chunk : chunks) {
+    data.push_back(static_cast<int32_t>(chunk.size()));
+    for (char c : chunk) {
+      data.push_back(static_cast<int32_t>(static_cast<uint8_t>(c)));
+    }
+  }
+  return AddGrammarExpr(
+      {GrammarExprType::kSubstring, data.data(), static_cast<int32_t>(data.size())}
+  );
 }
 
 int32_t GrammarBuilder::AddCharacterClass(
@@ -210,6 +238,7 @@ GrammarBuilder::GrammarExpr GrammarBuilder::GetGrammarExpr(int32_t grammar_expr_
 }
 
 int32_t GrammarBuilder::AddRule(const Rule& rule) {
+  EnsureRuleNameMap();
   int32_t id = static_cast<int32_t>(grammar_->rules_.size());
   grammar_->rules_.push_back(rule);
   XGRAMMAR_CHECK(rule_name_to_id_.count(rule.name) == 0);
@@ -261,6 +290,12 @@ void GrammarBuilder::UpdateLookaheadExact(int32_t rule_id, bool is_exact) {
   grammar_->rules_[rule_id].is_exact_lookahead = is_exact;
 }
 
+void GrammarBuilder::UpdateRuleTemperature(int32_t rule_id, std::optional<float> temperature) {
+  XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  grammar_->rules_[rule_id].temperature = temperature;
+}
+
 void GrammarBuilder::UpdateLookaheadAssertion(
     std::string rule_name, int32_t lookahead_assertion_id
 ) {
@@ -269,7 +304,95 @@ void GrammarBuilder::UpdateLookaheadAssertion(
   UpdateLookaheadAssertion(rule_id, lookahead_assertion_id);
 }
 
+void GrammarBuilder::UpdateMaxTokens(int32_t rule_id, int32_t max_tokens) {
+  XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  grammar_->rules_[rule_id].max_tokens = max_tokens;
+}
+
+void GrammarBuilder::UpdateMaxTokens(std::string rule_name, int32_t max_tokens) {
+  int32_t rule_id = GetRuleId(rule_name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
+  UpdateMaxTokens(rule_id, max_tokens);
+}
+
+void GrammarBuilder::UpdateMaxChars(int32_t rule_id, int32_t max_chars) {
+  XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  grammar_->rules_[rule_id].max_chars = max_chars;
+}
+
+void GrammarBuilder::UpdateMaxChars(std::string rule_name, int32_t max_chars) {
+  int32_t rule_id = GetRuleId(rule_name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
+  UpdateMaxChars(rule_id, max_chars);
+}
+
+void GrammarBuilder::UpdateCaptureName(int32_t rule_id, const std::string& capture_name) {
+  XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  grammar_->rules_[rule_id].capture_name = capture_name;
+}
+
+void GrammarBuilder::UpdateCaptureName(std::string rule_name, const std::string& capture_name) {
+  int32_t rule_id = GetRuleId(rule_name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
+  UpdateCaptureName(rule_id, capture_name);
+}
+
+void GrammarBuilder::UpdateSuffixStopInfo(int32_t rule_id, const SuffixStopInfo& info) {
+  XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  XGRAMMAR_CHECK(info.hidden_suffix_bytes >= 0 && info.hidden_stop_bytes >= 0)
+      << "The number of hidden suffix/stop bytes must be non-negative.";
+  int32_t num_rules = static_cast<int32_t>(grammar_->rules_.size());
+  XGRAMMAR_CHECK(
+      (info.body_rule_id == -1 && info.marker_rule_id == -1) ||
+      (info.body_rule_id >= 0 && info.body_rule_id < num_rules && info.marker_rule_id >= 0 &&
+       info.marker_rule_id < num_rules)
+  ) << "Capture-hidden helper rule ids must both be -1 or valid rule ids.";
+
+  auto it = std::lower_bound(
+      grammar_->suffix_stop_infos_.begin(),
+      grammar_->suffix_stop_infos_.end(),
+      rule_id,
+      [](const SuffixStopInfo& existing, int32_t id) { return existing.rule_id < id; }
+  );
+  if (info.IsEmpty()) {
+    if (it != grammar_->suffix_stop_infos_.end() && it->rule_id == rule_id) {
+      grammar_->suffix_stop_infos_.erase(it);
+    }
+    return;
+  }
+  SuffixStopInfo updated = info;
+  updated.rule_id = rule_id;
+  if (it != grammar_->suffix_stop_infos_.end() && it->rule_id == rule_id) {
+    *it = std::move(updated);
+  } else {
+    grammar_->suffix_stop_infos_.insert(it, std::move(updated));
+  }
+}
+
+void GrammarBuilder::UpdateSuffixStopInfo(std::string rule_name, const SuffixStopInfo& info) {
+  int32_t rule_id = GetRuleId(rule_name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
+  UpdateSuffixStopInfo(rule_id, info);
+}
+
+void GrammarBuilder::UpdateLazy(int32_t rule_id, bool is_lazy) {
+  XGRAMMAR_CHECK(rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  grammar_->rules_[rule_id].is_lazy = is_lazy;
+}
+
+void GrammarBuilder::UpdateLazy(std::string rule_name, bool is_lazy) {
+  int32_t rule_id = GetRuleId(rule_name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
+  UpdateLazy(rule_id, is_lazy);
+}
+
 std::string GrammarBuilder::GetNewRuleName(const std::string& name_hint) {
+  EnsureRuleNameMap();
   if (rule_name_to_id_.count(name_hint) == 0) {
     return name_hint;
   }
@@ -284,6 +407,7 @@ std::string GrammarBuilder::GetNewRuleName(const std::string& name_hint) {
 }
 
 int32_t GrammarBuilder::GetRuleId(const std::string& name) const {
+  EnsureRuleNameMap();
   auto it = rule_name_to_id_.find(name);
   if (it == rule_name_to_id_.end()) {
     return -1;

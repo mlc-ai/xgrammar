@@ -31,4 +31,4 @@ The [`xgr.GrammarMatcher`](xgrammar.GrammarMatcher) class, constructed from a [`
 
 ## Next Steps
 
-See [Workflow of XGrammar](../using_xgrammar/workflow_of_xgrammar.md) to learn more about the constrained decoding process.
+See [Workflow of XGrammar](workflow_of_xgrammar.md) to learn more about the constrained decoding process.

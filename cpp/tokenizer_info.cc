@@ -7,6 +7,7 @@
 
 #include <picojson.h>
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <optional>
@@ -320,7 +321,28 @@ TokenizerInfo::Impl::Impl(
     trie_subtree_nodes_range_[top_pair.second] = sorted_decoded_vocab_.size();
     prefix_stack.pop();
   }
+  BuildTokenCharData();
 }
+
+void TokenizerInfo::Impl::BuildTokenCharData() {
+  token_char_counts_.assign(sorted_decoded_vocab_.size(), 0);
+  int32_t max_chars = 0;
+  for (int32_t index = 0; index < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++index) {
+    int32_t count = 0;
+    for (uint8_t byte : sorted_decoded_vocab_[index].second) {
+      count += (byte & 0xC0) != 0x80;
+    }
+    token_char_counts_[index] = count;
+    max_chars = std::max(max_chars, count);
+  }
+  max_token_chars_ = max_chars;
+}
+
+const std::vector<int32_t>& TokenizerInfo::Impl::GetTokenCharCounts() const {
+  return token_char_counts_;
+}
+
+int32_t TokenizerInfo::Impl::GetMaxTokenChars() const { return max_token_chars_; }
 
 std::string TokenizerInfo::Impl::DumpMetadata() const {
   return DumpMetadataValue().serialize(false);
@@ -499,6 +521,7 @@ std::variant<TokenizerInfo, SerializationError> TokenizerInfo::DeserializeJSON(
   if (auto err = AutoDeserializeJSON(&tokenizer_info, json_string, true, "TokenizerInfo")) {
     return err.value();
   }
+  tokenizer_info->BuildTokenCharData();
   return tokenizer_info;
 }
 
