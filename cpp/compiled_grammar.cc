@@ -168,7 +168,12 @@ picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   auto result = picojson::object{};
   result["grammar"] = AutoSerializeJSONValue(impl.grammar);
   result["tokenizer_metadata"] = impl.tokenizer_info->DumpMetadataValue();
-  result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(impl.adaptive_token_mask_cache);
+  // In dynamic mode, serialize an empty mask cache. Deserialization detects the empty cache and
+  // restores dynamic mode, so masks are generated on first use again.
+  result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(
+      impl.token_mask_cache.dynamic ? decltype(impl.token_mask_cache.masks){}
+                                    : impl.token_mask_cache.masks
+  );
   return picojson::value(result);
 }
 
@@ -199,16 +204,21 @@ std::optional<SerializationError> DeserializeJSONValue(
   if (object.find("adaptive_token_mask_cache") == object.end()) {
     return ConstructDeserializeError("Expect a 'adaptive_token_mask_cache' field", type_name);
   }
-  AutoDeserializeJSONValue(&(impl->adaptive_token_mask_cache), object["adaptive_token_mask_cache"]);
+  AutoDeserializeJSONValue(&(impl->token_mask_cache.masks), object["adaptive_token_mask_cache"]);
+  if (impl->token_mask_cache.masks.empty()) {
+    // An empty mask cache means the grammar was compiled with dynamic compilation, so masks must
+    // be generated on first use.
+    impl->token_mask_cache.dynamic = true;
+    impl->token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset =
+        ComputeTagDispatchSecondSlicingBitset(impl->grammar, tokenizer_info);
+  }
   return std::nullopt;
 }
 
 /************** CompiledGrammar **************/
 
 std::size_t MemorySize(const CompiledGrammar::Impl& impl) {
-  std::lock_guard<std::mutex> lock(impl.adaptive_token_mask_cache_mutex);
-  return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache) +
-         MemorySize(impl.tag_dispatch_rule_id_to_second_slicing_bitset);
+  return MemorySize(impl.grammar) + MemorySize(impl.token_mask_cache);
 }
 
 std::size_t CompiledGrammar::MemorySizeBytes() const { return MemorySize(*pimpl_); }
@@ -218,12 +228,7 @@ Grammar CompiledGrammar::GetGrammar() const { return pimpl_->GetGrammar(); }
 TokenizerInfo CompiledGrammar::GetTokenizerInfo() const { return pimpl_->GetTokenizerInfo(); }
 
 /*! \brief Return the serialized JSON string of the compiled grammar. */
-std::string CompiledGrammar::SerializeJSON() const {
-  if (pimpl_->enable_dynamic_compilation) {
-    pimpl_->MaterializeAdaptiveTokenMaskCache();
-  }
-  return AutoSerializeJSON(*this, true);
-}
+std::string CompiledGrammar::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
 
 /*! \brief Deserialize a compiled grammar from a JSON string and tokenizer info. */
 std::variant<CompiledGrammar, SerializationError> CompiledGrammar::DeserializeJSON(

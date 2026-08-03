@@ -101,6 +101,50 @@ XGRAMMAR_MEMBER_TABLE(
 );
 
 /*!
+ * \brief Manages the adaptive token masks of a compiled grammar. In eager mode (dynamic ==
+ * false), all masks are precomputed at compile time. In dynamic mode, masks are generated and
+ * cached on first use.
+ */
+class TokenMaskCache {
+ public:
+  /*! \brief Whether missing token masks should be generated on first use. */
+  bool dynamic{false};
+
+  /*! \brief Mapping from the parser state to the adaptive token mask. */
+  std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache> masks;
+
+  /*! \brief Tag-dispatch data needed for on-demand token mask generation. Only filled in
+   * dynamic mode. */
+  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
+
+  /*! \brief Protects on-demand token mask lookup and insertion. */
+  mutable std::mutex mutex;
+
+  /*! \brief Return the mask for the state. In dynamic mode, generate and cache it on miss. */
+  const AdaptiveTokenMask& Get(
+      const ParserState& state,
+      bool is_root_rule,
+      const Grammar& grammar,
+      const TokenizerInfo& tokenizer_info
+  );
+
+  friend std::size_t MemorySize(const TokenMaskCache& token_mask_cache) {
+    std::lock_guard<std::mutex> lock(token_mask_cache.mutex);
+    return MemorySize(token_mask_cache.masks) +
+           MemorySize(token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset);
+  }
+};
+
+/*!
+ * \brief Compute, for each tag-dispatch rule, the bitset of tokens that are definitely accepted
+ * since the second character. Used at compile time and to restore dynamic mode on
+ * deserialization.
+ */
+std::unordered_map<int32_t, DynamicBitset> ComputeTagDispatchSecondSlicingBitset(
+    const Grammar& grammar, const TokenizerInfo& tokenizer_info
+);
+
+/*!
  * \brief All information that we need to match tokens in the tokenizer to the specified grammar.
  * It is the result of preprocessing.
  * \sa xgrammar::GrammarMatcher
@@ -116,22 +160,8 @@ class CompiledGrammar::Impl {
   /*! \brief Default constructor. */
   Impl() = default;
 
-  /*! \brief Mapping from the parser state to the adaptive token mask. */
-  std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>
-      adaptive_token_mask_cache;
-
-  /*! \brief Protects on-demand token mask lookup and insertion. */
-  mutable std::mutex adaptive_token_mask_cache_mutex;
-
-  /*! \brief Whether missing token masks should be generated on first use. */
-  bool enable_dynamic_compilation{false};
-
-  /*! \brief Tag-dispatch data retained for on-demand token mask generation. */
-  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
-
-  const AdaptiveTokenMask& GetAdaptiveTokenMask(const ParserState& state, bool is_root_rule);
-
-  void MaterializeAdaptiveTokenMaskCache();
+  /*! \brief The adaptive token masks, precomputed or generated on first use. */
+  TokenMaskCache token_mask_cache;
 
   Grammar GetGrammar() const { return grammar; }
 
@@ -147,14 +177,16 @@ class CompiledGrammar::Impl {
   friend std::size_t MemorySize(const Impl& impl);
 };
 
+XGRAMMAR_MEMBER_TABLE(TokenMaskCache, "adaptive_token_mask_cache", &TokenMaskCache::masks);
+
 XGRAMMAR_MEMBER_TABLE(
     CompiledGrammar::Impl,
     "grammar",
     &CompiledGrammar::Impl::grammar,
     "tokenizer_info",
     &CompiledGrammar::Impl::tokenizer_info,
-    "adaptive_token_mask_cache",
-    &CompiledGrammar::Impl::adaptive_token_mask_cache
+    "token_mask_cache",
+    &CompiledGrammar::Impl::token_mask_cache
 );
 
 }  // namespace xgrammar

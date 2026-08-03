@@ -138,18 +138,15 @@ class GrammarCompiler(XGRObject):
                 "to GrammarCompiler."
             )
 
-        if enable_dynamic_compilation:
-            self._init_handle(
-                _core.GrammarCompiler.create_with_dynamic_compilation(
-                    tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes
-                )
+        self._init_handle(
+            _core.GrammarCompiler(
+                tokenizer_info._handle,
+                max_threads,
+                cache_enabled,
+                cache_limit_bytes,
+                enable_dynamic_compilation,
             )
-        else:
-            self._init_handle(
-                _core.GrammarCompiler(
-                    tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes
-                )
-            )
+        )
 
     def compile_json_schema(
         self,

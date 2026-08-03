@@ -78,10 +78,13 @@ CASES = [
 ]
 
 
-def test_existing_native_constructor_remains_available():
+def test_native_constructor_takes_dynamic_compilation_flag():
     tokenizer_info = xgr.TokenizerInfo(["a"], stop_token_ids=[])
-    compiler = _core.GrammarCompiler(tokenizer_info._handle, 1, True, -1)
-    compiler.compile_builtin_json_grammar()
+    for enable_dynamic_compilation in (False, True):
+        compiler = _core.GrammarCompiler(
+            tokenizer_info._handle, 1, True, -1, enable_dynamic_compilation
+        )
+        compiler.compile_builtin_json_grammar()
 
 
 @pytest.mark.parametrize(
@@ -124,21 +127,45 @@ def test_dynamic_masks_are_cached():
     assert dynamic.memory_size_bytes == populated_size
 
 
-def test_serialization_materializes_dynamic_masks():
+def test_serialization_roundtrips_dynamic_mode():
     tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
     dynamic = _compile_ebnf(
         xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=True)
     )
+    eager = _compile_ebnf(
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=False)
+    )
     initial_size = dynamic.memory_size_bytes
 
     restored = xgr.CompiledGrammar.deserialize_json(dynamic.serialize_json(), tokenizer_info)
-    assert dynamic.memory_size_bytes > initial_size
+    # Serialization does not materialize masks, and the restored grammar is dynamic again.
+    assert dynamic.memory_size_bytes == initial_size
+    restored_initial_size = restored.memory_size_bytes
+    assert restored_initial_size < eager.memory_size_bytes
     for input_string in ["hello!", "hi?"]:
-        expected = _mask_trace(dynamic, input_string)
+        expected = _mask_trace(eager, input_string)
         actual = _mask_trace(restored, input_string)
         for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
             assert actual_apply == expected_apply
             torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+    assert restored.memory_size_bytes > restored_initial_size
+
+
+def test_serialization_roundtrips_dynamic_tag_dispatch():
+    tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
+    dynamic = _compile_structural_tag(
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=True)
+    )
+    eager = _compile_structural_tag(
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=False)
+    )
+
+    restored = xgr.CompiledGrammar.deserialize_json(dynamic.serialize_json(), tokenizer_info)
+    expected = _mask_trace(eager, "prefix<call>X")
+    actual = _mask_trace(restored, "prefix<call>X")
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+        assert actual_apply == expected_apply
+        torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
 
 
 def test_concurrent_dynamic_mask_generation():

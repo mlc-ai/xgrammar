@@ -1860,8 +1860,9 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    const AdaptiveTokenMask& adaptive_token_mask =
-        compiled_grammar_->GetAdaptiveTokenMask(state, state.rule_id == grammar_->GetRootRuleId());
+    const AdaptiveTokenMask& adaptive_token_mask = compiled_grammar_->token_mask_cache.Get(
+        state, state.rule_id == grammar_->GetRootRuleId(), grammar_, tokenizer_info_
+    );
     if (state.char_budget_deadline >= 0) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {

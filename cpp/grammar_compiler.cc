@@ -1003,19 +1003,22 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   }
 }
 
-const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(
-    const ParserState& state, bool is_root_rule
+const AdaptiveTokenMask& TokenMaskCache::Get(
+    const ParserState& state,
+    bool is_root_rule,
+    const Grammar& grammar,
+    const TokenizerInfo& tokenizer_info
 ) {
-  if (!enable_dynamic_compilation) {
-    const auto it = adaptive_token_mask_cache.find(state);
-    XGRAMMAR_CHECK(it != adaptive_token_mask_cache.end())
+  if (!dynamic) {
+    const auto it = masks.find(state);
+    XGRAMMAR_CHECK(it != masks.end())
         << "The token mask cache is incomplete while dynamic compilation is disabled: " << state;
     return it->second;
   }
 
-  std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex);
-  const auto existing = adaptive_token_mask_cache.find(state);
-  if (existing != adaptive_token_mask_cache.end()) {
+  std::lock_guard<std::mutex> lock(mutex);
+  const auto existing = masks.find(state);
+  if (existing != masks.end()) {
     return existing->second;
   }
 
@@ -1036,30 +1039,7 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(
                                no_rule_level_cache
   )
                                .GetAdaptiveTokenMask(is_root_rule);
-  return adaptive_token_mask_cache.emplace(cache_state, std::move(mask)).first->second;
-}
-
-void CompiledGrammar::Impl::MaterializeAdaptiveTokenMaskCache() {
-  if (tokenizer_info.GetVocabSize() == 0) {
-    return;
-  }
-  const int32_t root_rule_id = grammar->GetRootRuleId();
-  for (int32_t rule_id = 0; rule_id < static_cast<int32_t>(grammar->NumRules()); ++rule_id) {
-    const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
-    XGRAMMAR_DCHECK(rule_fsm.has_value());
-    ParserState state(
-        rule_id, grammar->GetRule(rule_id).body_expr_id, 0, ParserState::kNoPrevInputPos, -1, 0
-    );
-    std::unordered_set<int> reachable_states;
-    rule_fsm->GetFsm().GetReachableStates(&reachable_states);
-    for (int32_t element_id : reachable_states) {
-      if (!rule_fsm->GetFsm().IsScanableState(element_id)) {
-        continue;
-      }
-      state.element_id = element_id;
-      GetAdaptiveTokenMask(state, rule_id == root_rule_id);
-    }
-  }
+  return masks.emplace(cache_state, std::move(mask)).first->second;
 }
 
 /******************* GrammarCompilerNoCache *******************/
@@ -1103,15 +1083,6 @@ class GrammarCompilerSub {
  private:
   /*! \brief The main logic. Compile the grammar with multi-threading. */
   CompiledGrammar MultiThreadCompileGrammar(Grammar grammar);
-  /*! \brief Optimization for TagDispatch.
-   *  \param compiled_grammar_impl the compiled_grammar to be optimized.
-   *  \param tag_dispatch_rule_id_to_second_slicing_bitset Return value. Mapping from the rule_id to
-   * the definite accepted token mask.
-   */
-  void TagDispatchOptimization(
-      std::shared_ptr<CompiledGrammar::Impl> compiled_grammar_impl,
-      std::unordered_map<int32_t, DynamicBitset>* tag_dispatch_rule_id_to_second_slicing_bitset
-  );
 
   /*! \brief The vocabulary associated with this storage class. */
   const TokenizerInfo tokenizer_info_;
@@ -1129,15 +1100,15 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
   compiled_grammar_impl->grammar = GrammarOptimizer::Apply(grammar_unoptimized);
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
-  compiled_grammar_impl->enable_dynamic_compilation = enable_dynamic_compilation_;
+  compiled_grammar_impl->token_mask_cache.dynamic = enable_dynamic_compilation_;
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
-  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
-  TagDispatchOptimization(compiled_grammar_impl, &tag_dispatch_rule_id_to_second_slicing_bitset);
+  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset =
+      ComputeTagDispatchSecondSlicingBitset(compiled_grammar_impl->grammar, tokenizer_info_);
 
   if (enable_dynamic_compilation_) {
-    compiled_grammar_impl->tag_dispatch_rule_id_to_second_slicing_bitset =
+    compiled_grammar_impl->token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset =
         std::move(tag_dispatch_rule_id_to_second_slicing_bitset);
     return CompiledGrammar(compiled_grammar_impl);
   }
@@ -1173,9 +1144,9 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
     auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(is_root_rule);
     if (max_threads_ > 1) {
       std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex.value());
-      compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
+      compiled_grammar_impl->token_mask_cache.masks[state] = cur_adaptive_token_mask_cache;
     } else {
-      compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
+      compiled_grammar_impl->token_mask_cache.masks[state] = cur_adaptive_token_mask_cache;
     }
   };
 
@@ -1263,24 +1234,22 @@ CompiledGrammar GrammarCompilerSub::CompileGrammar(
   return MultiThreadCompileGrammar(Grammar::FromEBNF(ebnf_str, root_rule_name));
 }
 
-void GrammarCompilerSub::TagDispatchOptimization(
-    std::shared_ptr<CompiledGrammar::Impl> compiled_grammar_impl,
-    std::unordered_map<int32_t, DynamicBitset>* tag_dispatch_rule_id_to_second_slicing_bitset
+std::unordered_map<int32_t, DynamicBitset> ComputeTagDispatchSecondSlicingBitset(
+    const Grammar& grammar, const TokenizerInfo& tokenizer_info
 ) {
   using GrammarExprType = Grammar::Impl::GrammarExprType;
-  tag_dispatch_rule_id_to_second_slicing_bitset->clear();
+  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
 
   // Optimization for TagDispatch: Precompute the definitely accepted tokens.
-  for (int i = 0; i < compiled_grammar_impl->grammar->NumRules(); i++) {
-    const auto& rule = compiled_grammar_impl->grammar->GetRule(i);
-    const auto& rule_body = compiled_grammar_impl->grammar->GetGrammarExpr(rule.body_expr_id);
+  for (int i = 0; i < grammar->NumRules(); i++) {
+    const auto& rule = grammar->GetRule(i);
+    const auto& rule_body = grammar->GetGrammarExpr(rule.body_expr_id);
     if (rule_body.type != GrammarExprType::kTagDispatch) {
       continue;
     }
     XGRAMMAR_DCHECK(rule_body.type == GrammarExprType::kTagDispatch);
-    Grammar::Impl::TagDispatch tag_dispatch =
-        compiled_grammar_impl->GetGrammar()->GetTagDispatch(rule.body_expr_id);
-    const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+    Grammar::Impl::TagDispatch tag_dispatch = grammar->GetTagDispatch(rule.body_expr_id);
+    const auto& sorted_decoded_vocab = tokenizer_info.GetSortedDecodedVocab();
     DynamicBitset definite_accepted_tokens_since_second_char(sorted_decoded_vocab.size());
     for (int j = 0; j < static_cast<int32_t>(sorted_decoded_vocab.size()); j++) {
       bool definite_accept_since_second_char = true;
@@ -1310,9 +1279,9 @@ void GrammarCompilerSub::TagDispatchOptimization(
         definite_accepted_tokens_since_second_char.Set(j);
       }
     }
-    (*tag_dispatch_rule_id_to_second_slicing_bitset)[i] =
-        definite_accepted_tokens_since_second_char;
+    tag_dispatch_rule_id_to_second_slicing_bitset[i] = definite_accepted_tokens_since_second_char;
   }
+  return tag_dispatch_rule_id_to_second_slicing_bitset;
 }
 
 /******************* GrammarCompiler::Impl *******************/
@@ -1608,14 +1577,6 @@ int64_t GrammarCompiler::Impl::CacheLimitBytes() const {
 }
 
 /******************* GrammarCompiler *******************/
-
-GrammarCompiler::GrammarCompiler(
-    const TokenizerInfo& tokenizer_info,
-    int max_threads,
-    bool cache_enabled,
-    int64_t max_memory_bytes
-)
-    : GrammarCompiler(tokenizer_info, max_threads, cache_enabled, max_memory_bytes, false) {}
 
 GrammarCompiler::GrammarCompiler(
     const TokenizerInfo& tokenizer_info,
