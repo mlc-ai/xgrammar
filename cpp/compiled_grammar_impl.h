@@ -113,17 +113,8 @@ class TokenMaskCache {
   /*!
    * \brief Construct the cache with the mask generation mode.
    * \param dynamic Whether missing token masks should be generated on first use.
-   * \param tag_dispatch_rule_id_to_second_slicing_bitset Tag-dispatch data needed for on-demand
-   * token mask generation. Only used in dynamic mode.
    */
-  TokenMaskCache(
-      bool dynamic,
-      std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset
-  )
-      : dynamic_(dynamic),
-        tag_dispatch_rule_id_to_second_slicing_bitset_(
-            std::move(tag_dispatch_rule_id_to_second_slicing_bitset)
-        ) {}
+  explicit TokenMaskCache(bool dynamic) : dynamic_(dynamic) {}
 
   /*! \brief Whether missing token masks should be generated on first use. */
   bool IsDynamic() const { return dynamic_; }
@@ -141,14 +132,18 @@ class TokenMaskCache {
   );
 
  private:
+  /*! \brief Return the tag-dispatch bitset for a rule, computing and caching it on first use. */
+  const DynamicBitset* GetTagDispatchSecondSlicingBitset(
+      int32_t rule_id, const Grammar& grammar, const TokenizerInfo& tokenizer_info
+  );
+
   /*! \brief Whether missing token masks should be generated on first use. */
   bool dynamic_{false};
 
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache> masks_;
 
-  /*! \brief Tag-dispatch data needed for on-demand token mask generation. Only filled in
-   * dynamic mode. */
+  /*! \brief Tag-dispatch data computed on first use in dynamic mode. */
   std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset_;
 
   /*! \brief Protects on-demand token mask lookup and insertion. */
@@ -170,11 +165,15 @@ class TokenMaskCache {
 };
 
 /*!
- * \brief Compute, for each tag-dispatch rule, the bitset of tokens that are definitely accepted
- * since the second character. Used at compile time and to restore dynamic mode on
- * deserialization.
+ * \brief Compute the bitset of tokens that are definitely accepted since the second character
+ * for a tag-dispatch rule.
  */
-std::unordered_map<int32_t, DynamicBitset> ComputeTagDispatchSecondSlicingBitset(
+DynamicBitset ComputeTagDispatchSecondSlicingBitset(
+    const Grammar& grammar, const TokenizerInfo& tokenizer_info, int32_t rule_id
+);
+
+/*! \brief Compute the second-slicing bitsets for all tag-dispatch rules. */
+std::unordered_map<int32_t, DynamicBitset> ComputeTagDispatchSecondSlicingBitsets(
     const Grammar& grammar, const TokenizerInfo& tokenizer_info
 );
 
@@ -195,13 +194,7 @@ class CompiledGrammar::Impl {
   Impl() = default;
 
   /*! \brief Construct with the token mask generation mode. \sa TokenMaskCache */
-  Impl(
-      bool enable_dynamic_compilation,
-      std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset
-  )
-      : token_mask_cache(
-            enable_dynamic_compilation, std::move(tag_dispatch_rule_id_to_second_slicing_bitset)
-        ) {}
+  explicit Impl(bool enable_dynamic_compilation) : token_mask_cache(enable_dynamic_compilation) {}
 
   /*! \brief The adaptive token masks, precomputed or generated on first use. */
   TokenMaskCache token_mask_cache;

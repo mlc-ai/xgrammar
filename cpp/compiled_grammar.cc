@@ -212,8 +212,6 @@ std::optional<SerializationError> DeserializeJSONValue(
   }
   if (dynamic_it != object.end() && dynamic_it->second.get<bool>()) {
     impl->token_mask_cache.dynamic_ = true;
-    impl->token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset_ =
-        ComputeTagDispatchSecondSlicingBitset(impl->grammar, tokenizer_info);
   }
   return std::nullopt;
 }

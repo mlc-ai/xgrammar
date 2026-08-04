@@ -168,12 +168,19 @@ def test_serialization_roundtrips_dynamic_tag_dispatch():
         torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
 
 
-def test_concurrent_dynamic_mask_generation():
+@pytest.mark.parametrize(
+    "compile_grammar,input_string",
+    [
+        (_compile_json_schema, '{"name":"Ada","scores":[1,2]}'),
+        (_compile_structural_tag, "prefix<call>X"),
+    ],
+    ids=["json-schema", "structural-tag"],
+)
+def test_concurrent_dynamic_mask_generation(compile_grammar, input_string):
     tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
-    dynamic = _compile_json_schema(
+    dynamic = compile_grammar(
         xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=True)
     )
-    input_string = '{"name":"Ada","scores":[1,2]}'
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         traces = list(executor.map(lambda _: _mask_trace(dynamic, input_string), range(32)))
