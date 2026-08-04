@@ -6,16 +6,23 @@ import torch.nn as nn
 from tokenizers import Regex, Tokenizer, decoders
 from tokenizers.models import WordLevel
 from tokenizers.pre_tokenizers import Split
-from transformers import (
-    AutoConfig,
-    AutoModelForCausalLM,
-    PretrainedConfig,
-    PreTrainedModel,
-    PreTrainedTokenizerFast,
-    pipeline,
-)
-from transformers.generation import GenerationMixin
-from transformers.modeling_outputs import CausalLMOutputWithPast
+
+try:
+    from transformers import (
+        AutoConfig,
+        AutoModelForCausalLM,
+        PretrainedConfig,
+        PreTrainedModel,
+        PreTrainedTokenizerFast,
+        pipeline,
+    )
+    from transformers.generation import GenerationMixin
+    from transformers.modeling_outputs import CausalLMOutputWithPast
+except ImportError as err:
+    # transformers hides its torch-dependent API when the installed torch is
+    # unusable (e.g. macOS x86_64 is stuck on torch 2.2.2 while transformers v5
+    # needs >= 2.4). Skip instead of breaking collection for the whole suite.
+    pytest.skip(f"transformers cannot use torch here: {err}", allow_module_level=True)
 
 import xgrammar as xgr
 
