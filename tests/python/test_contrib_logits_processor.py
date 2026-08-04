@@ -89,8 +89,14 @@ def test_constrain_aab_to_ab():
     compiled_grammar = xgr.GrammarCompiler(tokenizer_info).compile_regex("(ab){3}")
     xgr_processor = xgr.contrib.hf.LogitsProcessor(compiled_grammar)
 
+    # Pin to CPU: GitHub Actions macOS runners advertise MPS but cannot actually
+    # back allocations on it, and the model is tiny anyway.
     pipe = pipeline(
-        "text-generation", model=model, tokenizer=tokenizer, logits_processor=[xgr_processor]
+        "text-generation",
+        model=model,
+        tokenizer=tokenizer,
+        logits_processor=[xgr_processor],
+        device="cpu",
     )
     results = pipe(["ba", "ab"], max_new_tokens=8, do_sample=False, batch_size=2)
     assert results[0][0]["generated_text"] == "baababab"
@@ -103,6 +109,7 @@ def test_constrain_aab_to_ab():
         model=model,
         tokenizer=tokenizer,
         logits_processor=[xgr_processor_stateless],
+        device="cpu",
     )
     results = pipe(["ba", "ab"], max_new_tokens=8, do_sample=False, batch_size=2, num_beams=4)
     assert results[0][0]["generated_text"] == "baababab"
