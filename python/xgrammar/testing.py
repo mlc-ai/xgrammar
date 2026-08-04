@@ -61,7 +61,8 @@ def _json_schema_to_ebnf(
     json_format : str, default: "json"
         The root format of the generated grammar. One of "json", "qwen_xml", "minimax_xml",
         "deepseek_xml", "glm_xml", "cohere_xml". Formats other than "json" generate an
-        XML-style root object for tool calling, while the inner values remain JSON-style.
+        XML-style root object for tool calling; "cohere_xml" uses recursive
+        <cofl:value name="..." type="...">...</cofl:value> values.
 
     Returns
     -------

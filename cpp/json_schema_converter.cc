@@ -4107,8 +4107,7 @@ std::string JSONSchemaToEBNF(
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
     case JSONFormat::kDeepSeekXML:
-    case JSONFormat::kGlmXML:
-    case JSONFormat::kCohereXML: {
+    case JSONFormat::kGlmXML: {
       XMLToolCallingConverter converter(
           indent,
           separators,
@@ -4116,6 +4115,17 @@ std::string JSONSchemaToEBNF(
           max_whitespace_cnt,
           ref_resolver,
           json_format,
+          any_order
+      );
+      return converter.Convert(spec);
+    }
+    case JSONFormat::kCohereXML: {
+      CohereXMLToolCallingConverter converter(
+          indent,
+          separators,
+          any_whitespace,
+          max_whitespace_cnt,
+          ref_resolver,
           any_order
       );
       return converter.Convert(spec);

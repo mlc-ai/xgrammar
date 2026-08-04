@@ -464,14 +464,20 @@ def test_json_schema_style_glm_xml_format(instance: str, is_accepted: bool):
 
 
 cohere_xml_instance_is_accepted = [
-    # Cohere XML: <cofl:tool_param name=key>value</cofl:tool_param>
+    # Cohere XML: <cofl:value name="key" type="...">value</cofl:value>
     (
-        "<cofl:tool_param name=name>Bob</cofl:tool_param>"
-        "<cofl:tool_param name=age>100</cofl:tool_param>",
+        '<cofl:value name="name" type="raw">Bob</cofl:value>'
+        '<cofl:value name="age" type="json">100</cofl:value>',
         True,
     ),
     # Missing the required age parameter.
-    ("<cofl:tool_param name=name>Bob</cofl:tool_param>", False),
+    ('<cofl:value name="name" type="raw">Bob</cofl:value>', False),
+    # Unquoted attributes are not accepted.
+    (
+        "<cofl:value name=name type=raw>Bob</cofl:value>"
+        "<cofl:value name=age type=json>100</cofl:value>",
+        False,
+    ),
     # Qwen XML: <parameter=key>value</parameter>
     ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", False),
 ]
@@ -479,7 +485,7 @@ cohere_xml_instance_is_accepted = [
 
 @pytest.mark.parametrize("instance, is_accepted", cohere_xml_instance_is_accepted)
 def test_json_schema_style_cohere_xml_format(instance: str, is_accepted: bool):
-    """Test JSONSchemaFormat with style='cohere_xml' (<cofl:tool_param name=k>v</cofl:tool_param>)."""
+    """Test JSONSchemaFormat with style='cohere_xml' (<cofl:value name="k" type="...">v</cofl:value>)."""
     stag_format = {
         "type": "json_schema",
         "json_schema": {
@@ -492,10 +498,57 @@ def test_json_schema_style_cohere_xml_format(instance: str, is_accepted: bool):
     structural_tag = {"type": "structural_tag", "format": stag_format}
     stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
     grammar_str = str(stag_grammar)
-    assert "<cofl:tool_param name=" in grammar_str
-    assert "</cofl:tool_param>" in grammar_str
+    assert "<cofl:value" in grammar_str
+    assert ' name=\\"' in grammar_str
+    assert ' type=\\"' in grammar_str
+    assert "</cofl:value>" in grammar_str
 
     check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+def test_json_schema_style_cohere_xml_nested_values():
+    """Test nested dict and list values through JSONSchemaFormat(style='cohere_xml')."""
+    stag_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "properties": {
+                        "mode": {"type": "string"},
+                        "enabled": {"type": "boolean"},
+                    },
+                    "required": ["mode", "enabled"],
+                },
+                "items": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 2,
+                    "maxItems": 2,
+                },
+            },
+            "required": ["config", "items"],
+        },
+        "style": "cohere_xml",
+    }
+    accepted = (
+        '<cofl:value name="config" type="dict">'
+        '<cofl:value name="mode" type="raw">fast</cofl:value>'
+        '<cofl:value name="enabled" type="json">true</cofl:value>'
+        "</cofl:value>"
+        '<cofl:value name="items" type="list">'
+        '<cofl:value type="raw">first</cofl:value>'
+        '<cofl:value type="raw">second</cofl:value>'
+        "</cofl:value>"
+    )
+    named_list_item = accepted.replace(
+        '<cofl:value type="raw">first</cofl:value>',
+        '<cofl:value name="0" type="raw">first</cofl:value>',
+    )
+
+    check_stag_with_instance(stag_format, accepted, True)
+    check_stag_with_instance(stag_format, named_list_item, False)
 
 
 ebnf_grammar_stag_grammar = [
@@ -2910,7 +2963,7 @@ basic_structural_tags_instance_is_accepted = [
             json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
             style="cohere_xml",
         ),
-        "<cofl:tool_param name=name>value</cofl:tool_param>",
+        '<cofl:value name="name" type="raw">value</cofl:value>',
         True,
     ),
     (
@@ -2918,7 +2971,7 @@ basic_structural_tags_instance_is_accepted = [
             json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
             style="cohere_xml",
         ),
-        "<cofl:tool_param name=name>value</cofl:tool_param_extra>",
+        '<cofl:value name="name" type="raw">value</cofl:value_extra>',
         False,
     ),
     # AnyTextFormat

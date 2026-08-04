@@ -76,7 +76,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   void AddCache(const std::string& key, const std::string& value) override;
   std::optional<std::string> GetCache(const std::string& key) const override;
 
- private:
+ protected:
   // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
   struct XMLWrapper {
     std::string key_wrapper_prefix;
@@ -94,6 +94,70 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   // Track if we're at the root object level
   int nested_object_level_ = 0;
   const XMLWrapper xml_wrapper_;
+};
+
+/*!
+ * \brief Converter for Cohere XML Tool Calling format.
+ *
+ * This converter generates recursive Cohere value tags:
+ * <cofl:value name="key" type="raw|json|dict|list">value</cofl:value>.
+ * Object properties use named value tags. Array items use unnamed value tags.
+ */
+class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
+ public:
+  CohereXMLToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false
+  );
+
+ protected:
+  std::string GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  std::string GenerateObject(
+      const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
+  ) override;
+  std::string GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
+  std::string GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
+
+  std::string FormatProperty(
+      const std::string& key,
+      const std::string& value_rule,
+      const std::string& rule_name,
+      int64_t idx
+  ) override;
+  std::string FormatOtherProperty(
+      const std::string& key_pattern,
+      const std::string& value_rule,
+      const std::string& rule_name,
+      const std::string& rule_name_suffix
+  ) override;
+
+  std::string GetKeyPattern() const override;
+  std::string GetKeyPatternExcluding(
+      const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+  ) override;
+  std::string NextSeparator(bool is_end = false) override;
+
+  void AddCache(const std::string& key, const std::string& value) override;
+  std::optional<std::string> GetCache(const std::string& key) const override;
+
+ private:
+  std::string FormatCohereParam(
+      const std::optional<std::string>& name,
+      const std::string& key_pattern,
+      const SchemaSpecPtr& schema,
+      const std::string& value_rule
+  );
+  std::string FormatCohereValue(const std::string& value_rule) const;
+  std::string GetCohereTypePattern(const SchemaSpecPtr& schema) const;
+  bool InCohereValueContext() const;
+
+  std::vector<const ObjectSpec*> object_stack_;
+  std::vector<SchemaSpecPtr> additional_property_stack_;
+  int cohere_array_level_ = 0;
 };
 
 }  // namespace xgrammar

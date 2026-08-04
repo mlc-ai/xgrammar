@@ -610,21 +610,78 @@ def test_cohere_required_accepts_multicall_shape():
     )
 
     valid_output = (
-        "<cofl:tool_calls>\n"
-        "<cofl:tool_call id=0 name=online_search>\n"
-        "<cofl:tool_param name=query>"
+        "<cofl:tool_calls>"
+        "<cofl:tool_call id=0 name=online_search>"
+        '<cofl:value name="query" type="raw">'
         "Why did the 1940s see an influx of new names in the music of Sudan?"
-        "</cofl:tool_param>\n"
-        "</cofl:tool_call>\n"
-        "<cofl:tool_call id=1 name=get_weather>\n"
-        "<cofl:tool_param name=location>London, UK</cofl:tool_param>\n"
-        "</cofl:tool_call>\n"
+        "</cofl:value>"
+        "</cofl:tool_call>"
+        "<cofl:tool_call id=1 name=get_weather>"
+        '<cofl:value name="location" type="raw">London, UK</cofl:value>'
+        "</cofl:tool_call>"
         "</cofl:tool_calls>"
     )
     wrong_tool_output = valid_output.replace("name=get_weather", "name=get_time", 1)
 
     check_stag_with_instance(structural_tag, valid_output, True)
     check_stag_with_instance(structural_tag, wrong_tool_output, False)
+
+
+def test_cohere_required_accepts_nested_params():
+    """Cohere built-in tool calls accept nested dict and list parameter values."""
+
+    tools = [
+        {
+            "function": {
+                "name": "configure",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "config": {
+                            "type": "object",
+                            "properties": {
+                                "mode": {"type": "string"},
+                                "enabled": {"type": "boolean"},
+                            },
+                            "required": ["mode", "enabled"],
+                        },
+                        "items": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "minItems": 2,
+                            "maxItems": 2,
+                        },
+                    },
+                    "required": ["config", "items"],
+                },
+            }
+        }
+    ]
+    structural_tag = get_model_structural_tag(
+        "cohere", tools=tools, tool_choice="required", reasoning=False
+    )
+
+    valid_output = (
+        "<cofl:tool_calls>"
+        "<cofl:tool_call id=0 name=configure>"
+        '<cofl:value name="config" type="dict">'
+        '<cofl:value name="mode" type="raw">fast</cofl:value>'
+        '<cofl:value name="enabled" type="json">true</cofl:value>'
+        "</cofl:value>"
+        '<cofl:value name="items" type="list">'
+        '<cofl:value type="raw">first</cofl:value>'
+        '<cofl:value type="raw">second</cofl:value>'
+        "</cofl:value>"
+        "</cofl:tool_call>"
+        "</cofl:tool_calls>"
+    )
+    named_list_item_output = valid_output.replace(
+        '<cofl:value type="raw">first</cofl:value>',
+        '<cofl:value name="0" type="raw">first</cofl:value>',
+    )
+
+    check_stag_with_instance(structural_tag, valid_output, True)
+    check_stag_with_instance(structural_tag, named_list_item_output, False)
 
 
 def test_cohere_reasoning_prefix_uses_end_thinking_token():
@@ -635,10 +692,10 @@ def test_cohere_reasoning_prefix_uses_end_thinking_token():
     )
     output = (
         "I should search first.<|END_THINKING|>"
-        "<cofl:tool_calls>\n"
-        "<cofl:tool_call id=0 name=search>\n"
-        "<cofl:tool_param name=q>v</cofl:tool_param>\n"
-        "</cofl:tool_call>\n"
+        "<cofl:tool_calls>"
+        "<cofl:tool_call id=0 name=search>"
+        '<cofl:value name="q" type="raw">v</cofl:value>'
+        "</cofl:tool_call>"
         "</cofl:tool_calls>"
     )
 
@@ -894,19 +951,19 @@ def test_exclude_special_tokens_passed_to_specific_function():
         ),
         (
             "cohere",
-            "<cofl:tool_calls>\n"
-            "<cofl:tool_call id=0 name=t1>\n"
-            '<cofl:tool_param name=q>{"type": "string"}</cofl:tool_param>\n'
-            "</cofl:tool_call>\n"
+            "<cofl:tool_calls>"
+            "<cofl:tool_call id=0 name=t1>"
+            '<cofl:value name="q" type="json">123</cofl:value>'
+            "</cofl:tool_call>"
             "</cofl:tool_calls>",
             True,
         ),
         (
             "cohere",
-            "<cofl:tool_calls>\n"
-            "<cofl:tool_call id=0 name=t2>\n"
-            '<cofl:tool_param name=q>{"type": "string"}</cofl:tool_param>\n'
-            "</cofl:tool_call>\n"
+            "<cofl:tool_calls>"
+            "<cofl:tool_call id=0 name=t2>"
+            '<cofl:value name="q" type="json">123</cofl:value>'
+            "</cofl:tool_call>"
             "</cofl:tool_calls>",
             False,
         ),
@@ -1249,10 +1306,10 @@ _tool_choice_instance_cases = [
             {"tools": _tools_cohere_pair, "tool_choice": "required"},
             [
                 "",
-                "<cofl:tool_calls>\n"
-                "<cofl:tool_call id=0 name=search>\n"
-                "<cofl:tool_param name=q>v</cofl:tool_param>\n"
-                "</cofl:tool_call>\n"
+                "<cofl:tool_calls>"
+                "<cofl:tool_call id=0 name=search>"
+                '<cofl:value name="q" type="raw">v</cofl:value>'
+                "</cofl:tool_call>"
                 "</cofl:tool_calls>",
             ],
             False,
@@ -1265,15 +1322,15 @@ _tool_choice_instance_cases = [
         (
             {"tools": _tools_cohere_pair, "tool_choice": "forced", "forced_function_name": "search"},
             [
-                "<cofl:tool_calls>\n"
-                "<cofl:tool_call id=0 name=search>\n"
-                "<cofl:tool_param name=q>v</cofl:tool_param>\n"
-                "</cofl:tool_call>\n"
+                "<cofl:tool_calls>"
+                "<cofl:tool_call id=0 name=search>"
+                '<cofl:value name="q" type="raw">v</cofl:value>'
+                "</cofl:tool_call>"
                 "</cofl:tool_calls>",
-                "<cofl:tool_calls>\n"
-                "<cofl:tool_call id=0 name=alt>\n"
-                "<cofl:tool_param name=q>v</cofl:tool_param>\n"
-                "</cofl:tool_call>\n"
+                "<cofl:tool_calls>"
+                "<cofl:tool_call id=0 name=alt>"
+                '<cofl:value name="q" type="raw">v</cofl:value>'
+                "</cofl:tool_call>"
                 "</cofl:tool_calls>",
             ],
             False,

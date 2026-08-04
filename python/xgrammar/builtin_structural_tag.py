@@ -2105,8 +2105,8 @@ def get_cohere_structural_tag(
     TOOL_CALL_BEGIN_SUFFIX = ">"
     TOOL_CALL_END = "</cofl:tool_call>"
     TOOL_CALLS_PREFIX = ""
-    TOOL_CALLS_BEGIN = "<cofl:tool_calls>\n"
-    TOOL_CALLS_END = "\n</cofl:tool_calls>"
+    TOOL_CALLS_BEGIN = "<cofl:tool_calls>"
+    TOOL_CALLS_END = "</cofl:tool_calls>"
     TOOL_CALLS_TRIGGER = "<cofl:tool_calls>"
     THINK_TAG_END = "<|END_THINKING|>"
     THINK_EXCLUDE_TOKENS = ["<|START_THINKING|>", "<|END_THINKING|>"]
@@ -2144,7 +2144,7 @@ def get_cohere_structural_tag(
                 begin=TOOL_CALLS_BEGIN,
                 content=TagsWithSeparatorFormat(
                     tags=tags,
-                    separator="\n",
+                    separator="",
                     at_least_one=True,
                 ),
                 end=TOOL_CALLS_END,
@@ -2178,7 +2178,7 @@ def get_cohere_structural_tag(
                 ConstStringFormat(value=TOOL_CALLS_PREFIX + TOOL_CALLS_BEGIN),
                 TagsWithSeparatorFormat(
                     tags=tags,
-                    separator="\n",
+                    separator="",
                     at_least_one=True,
                 ),
                 ConstStringFormat(value=TOOL_CALLS_END),

@@ -164,7 +164,7 @@ Matches content that conforms to a JSON Schema.
 - `"minimax_xml"`: MiniMax-style XML parameters, such as `<parameter name="name">value</parameter>`
 - `"deepseek_xml"`: DeepSeek-v3.2 XML parameter format
 - `"glm_xml"`: GLM-style XML parameter format, such as `<arg_key>name</arg_key><arg_value>value</arg_value>`
-- `"cohere_xml"`: Cohere-style XML parameters, such as `<cofl:tool_param name=name>value</cofl:tool_param>`
+- `"cohere_xml"`: Cohere-style XML values, such as `<cofl:value name="name" type="raw">value</cofl:value>`
 
 `any_order` relaxes object property ordering (see [below](#property-ordering-with-any-order)). It
 works with every `style`.

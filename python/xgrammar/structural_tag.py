@@ -38,7 +38,7 @@ class JSONSchemaFormat(BaseModel):
     <parameter=key>value</parameter>), \"minimax_xml\" (MiniMax XML: <parameter name=\"key\">value</parameter>),
     \"deepseek_xml\" (DeepSeek XML(DeepSeek-v3.2): <{dsml_token}parameter name=\"key\" string=\"true|false\">value</{dsml_token}parameter>),
     \"glm_xml\" (GLM XML: <arg_key>key</arg_key><arg_value>value</arg_value>),
-    \"cohere_xml\" (Cohere XML: <cofl:tool_param name=key>value</cofl:tool_param>)."""
+    \"cohere_xml\" (Cohere XML: <cofl:value name=\"key\" type=\"raw|json|dict|list\">value</cofl:value>)."""
     any_order: bool = False
     """Whether object properties may appear in any order.
 
