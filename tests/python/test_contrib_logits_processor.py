@@ -9,9 +9,9 @@ from tokenizers.pre_tokenizers import Split
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
-    PreTrainedConfig,
+    PretrainedConfig,
     PreTrainedModel,
-    TokenizersBackend,
+    PreTrainedTokenizerFast,
     pipeline,
 )
 from transformers.generation import GenerationMixin
@@ -21,7 +21,7 @@ import xgrammar as xgr
 
 
 # Set up a dummy model that generates the sequence aab
-class ABTokenizer(TokenizersBackend):
+class ABTokenizer(PreTrainedTokenizerFast):
     def __init__(self):
         vocab = {"<unk>": 0, "<eos>": 1, "a": 2, "b": 3}
         tokenizer_object = Tokenizer(WordLevel(vocab=vocab, unk_token="<unk>"))
@@ -35,7 +35,7 @@ class ABTokenizer(TokenizersBackend):
         )
 
 
-class AABConfig(PreTrainedConfig):
+class AABConfig(PretrainedConfig):
     model_type = "aab"
 
     def __init__(self, vocab_size=4, **kwargs):
