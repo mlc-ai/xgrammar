@@ -1009,19 +1009,23 @@ const AdaptiveTokenMask& TokenMaskCache::Get(
     const Grammar& grammar,
     const TokenizerInfo& tokenizer_info
 ) {
-  if (!dynamic) {
-    const auto it = masks.find(state);
-    XGRAMMAR_CHECK(it != masks.end())
+  if (!dynamic_) {
+    const auto it = masks_.find(state);
+    XGRAMMAR_CHECK(it != masks_.end())
         << "The token mask cache is incomplete while dynamic compilation is disabled: " << state;
     return it->second;
   }
 
-  std::lock_guard<std::mutex> lock(mutex);
-  const auto existing = masks.find(state);
-  if (existing != masks.end()) {
-    return existing->second;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto existing = masks_.find(state);
+    if (existing != masks_.end()) {
+      return existing->second;
+    }
   }
 
+  // Generate the mask outside the lock so a miss does not block other lookups. Two threads may
+  // generate the same mask concurrently; emplace keeps the first inserted one.
   const ParserState cache_state(
       state.rule_id,
       state.sequence_id,
@@ -1034,12 +1038,14 @@ const AdaptiveTokenMask& TokenMaskCache::Get(
   AdaptiveTokenMask mask = GrammarMatcherForTokenMaskCache(
                                grammar,
                                cache_state,
-                               tag_dispatch_rule_id_to_second_slicing_bitset,
+                               tag_dispatch_rule_id_to_second_slicing_bitset_,
                                tokenizer_info,
                                no_rule_level_cache
   )
                                .GetAdaptiveTokenMask(is_root_rule);
-  return masks.emplace(cache_state, std::move(mask)).first->second;
+
+  std::lock_guard<std::mutex> lock(mutex_);
+  return masks_.emplace(cache_state, std::move(mask)).first->second;
 }
 
 /******************* GrammarCompilerNoCache *******************/
@@ -1097,19 +1103,22 @@ class GrammarCompilerSub {
 };
 
 CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
-  auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
-  compiled_grammar_impl->grammar = GrammarOptimizer::Apply(grammar_unoptimized);
-  compiled_grammar_impl->tokenizer_info = tokenizer_info_;
-  compiled_grammar_impl->token_mask_cache.dynamic = enable_dynamic_compilation_;
-  if (tokenizer_info_.GetVocabSize() == 0) {
-    return CompiledGrammar(compiled_grammar_impl);
+  Grammar grammar = GrammarOptimizer::Apply(grammar_unoptimized);
+  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
+  if (tokenizer_info_.GetVocabSize() > 0) {
+    tag_dispatch_rule_id_to_second_slicing_bitset =
+        ComputeTagDispatchSecondSlicingBitset(grammar, tokenizer_info_);
   }
-  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset =
-      ComputeTagDispatchSecondSlicingBitset(compiled_grammar_impl->grammar, tokenizer_info_);
-
-  if (enable_dynamic_compilation_) {
-    compiled_grammar_impl->token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset =
-        std::move(tag_dispatch_rule_id_to_second_slicing_bitset);
+  // In dynamic mode, the cache keeps the tag-dispatch data for on-demand mask generation; in
+  // eager mode, it is only used during the mask generation below.
+  auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>(
+      enable_dynamic_compilation_,
+      enable_dynamic_compilation_ ? std::move(tag_dispatch_rule_id_to_second_slicing_bitset)
+                                  : std::unordered_map<int32_t, DynamicBitset>{}
+  );
+  compiled_grammar_impl->grammar = std::move(grammar);
+  compiled_grammar_impl->tokenizer_info = tokenizer_info_;
+  if (tokenizer_info_.GetVocabSize() == 0 || enable_dynamic_compilation_) {
     return CompiledGrammar(compiled_grammar_impl);
   }
 
@@ -1144,9 +1153,13 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
     auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(is_root_rule);
     if (max_threads_ > 1) {
       std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex.value());
-      compiled_grammar_impl->token_mask_cache.masks[state] = cur_adaptive_token_mask_cache;
+      compiled_grammar_impl->token_mask_cache.Insert(
+          state, std::move(cur_adaptive_token_mask_cache)
+      );
     } else {
-      compiled_grammar_impl->token_mask_cache.masks[state] = cur_adaptive_token_mask_cache;
+      compiled_grammar_impl->token_mask_cache.Insert(
+          state, std::move(cur_adaptive_token_mask_cache)
+      );
     }
   };
 

@@ -168,11 +168,12 @@ picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   auto result = picojson::object{};
   result["grammar"] = AutoSerializeJSONValue(impl.grammar);
   result["tokenizer_metadata"] = impl.tokenizer_info->DumpMetadataValue();
-  // In dynamic mode, serialize an empty mask cache. Deserialization detects the empty cache and
-  // restores dynamic mode, so masks are generated on first use again.
+  // In dynamic mode, serialize an empty mask cache; masks are generated on first use again
+  // after deserialization.
+  result["dynamic"] = picojson::value(impl.token_mask_cache.dynamic_);
   result["adaptive_token_mask_cache"] = AutoSerializeJSONValue(
-      impl.token_mask_cache.dynamic ? decltype(impl.token_mask_cache.masks){}
-                                    : impl.token_mask_cache.masks
+      impl.token_mask_cache.dynamic_ ? decltype(impl.token_mask_cache.masks_){}
+                                     : impl.token_mask_cache.masks_
   );
   return picojson::value(result);
 }
@@ -204,12 +205,14 @@ std::optional<SerializationError> DeserializeJSONValue(
   if (object.find("adaptive_token_mask_cache") == object.end()) {
     return ConstructDeserializeError("Expect a 'adaptive_token_mask_cache' field", type_name);
   }
-  AutoDeserializeJSONValue(&(impl->token_mask_cache.masks), object["adaptive_token_mask_cache"]);
-  if (impl->token_mask_cache.masks.empty()) {
-    // An empty mask cache means the grammar was compiled with dynamic compilation, so masks must
-    // be generated on first use.
-    impl->token_mask_cache.dynamic = true;
-    impl->token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset =
+  AutoDeserializeJSONValue(&(impl->token_mask_cache.masks_), object["adaptive_token_mask_cache"]);
+  const auto dynamic_it = object.find("dynamic");
+  if (dynamic_it != object.end() && !dynamic_it->second.is<bool>()) {
+    return ConstructDeserializeError("Expect a boolean 'dynamic' field", type_name);
+  }
+  if (dynamic_it != object.end() && dynamic_it->second.get<bool>()) {
+    impl->token_mask_cache.dynamic_ = true;
+    impl->token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset_ =
         ComputeTagDispatchSecondSlicingBitset(impl->grammar, tokenizer_info);
   }
   return std::nullopt;

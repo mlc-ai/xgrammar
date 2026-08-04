@@ -101,24 +101,36 @@ XGRAMMAR_MEMBER_TABLE(
 );
 
 /*!
- * \brief Manages the adaptive token masks of a compiled grammar. In eager mode (dynamic ==
- * false), all masks are precomputed at compile time. In dynamic mode, masks are generated and
- * cached on first use.
+ * \brief Manages the adaptive token masks of a compiled grammar. In eager mode (the default),
+ * all masks are precomputed at compile time. In dynamic mode, masks are generated and cached on
+ * first use.
  */
 class TokenMaskCache {
  public:
+  /*! \brief Construct an eager cache. Only for deserialization. */
+  TokenMaskCache() = default;
+
+  /*!
+   * \brief Construct the cache with the mask generation mode.
+   * \param dynamic Whether missing token masks should be generated on first use.
+   * \param tag_dispatch_rule_id_to_second_slicing_bitset Tag-dispatch data needed for on-demand
+   * token mask generation. Only used in dynamic mode.
+   */
+  TokenMaskCache(
+      bool dynamic,
+      std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset
+  )
+      : dynamic_(dynamic),
+        tag_dispatch_rule_id_to_second_slicing_bitset_(
+            std::move(tag_dispatch_rule_id_to_second_slicing_bitset)
+        ) {}
+
   /*! \brief Whether missing token masks should be generated on first use. */
-  bool dynamic{false};
+  bool IsDynamic() const { return dynamic_; }
 
-  /*! \brief Mapping from the parser state to the adaptive token mask. */
-  std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache> masks;
-
-  /*! \brief Tag-dispatch data needed for on-demand token mask generation. Only filled in
-   * dynamic mode. */
-  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
-
-  /*! \brief Protects on-demand token mask lookup and insertion. */
-  mutable std::mutex mutex;
+  /*! \brief Insert a precomputed mask during eager compilation. Not thread-safe; the compiler
+   * synchronizes concurrent insertions itself. */
+  void Insert(const ParserState& state, AdaptiveTokenMask mask) { masks_[state] = std::move(mask); }
 
   /*! \brief Return the mask for the state. In dynamic mode, generate and cache it on miss. */
   const AdaptiveTokenMask& Get(
@@ -128,10 +140,32 @@ class TokenMaskCache {
       const TokenizerInfo& tokenizer_info
   );
 
+ private:
+  /*! \brief Whether missing token masks should be generated on first use. */
+  bool dynamic_{false};
+
+  /*! \brief Mapping from the parser state to the adaptive token mask. */
+  std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache> masks_;
+
+  /*! \brief Tag-dispatch data needed for on-demand token mask generation. Only filled in
+   * dynamic mode. */
+  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset_;
+
+  /*! \brief Protects on-demand token mask lookup and insertion. */
+  mutable std::mutex mutex_;
+
+  friend struct member_trait<TokenMaskCache>;
+  friend picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl);
+  friend std::optional<SerializationError> DeserializeJSONValue(
+      CompiledGrammar::Impl* impl,
+      const picojson::value& json_value,
+      const TokenizerInfo& tokenizer_info
+  );
+
   friend std::size_t MemorySize(const TokenMaskCache& token_mask_cache) {
-    std::lock_guard<std::mutex> lock(token_mask_cache.mutex);
-    return MemorySize(token_mask_cache.masks) +
-           MemorySize(token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset);
+    std::lock_guard<std::mutex> lock(token_mask_cache.mutex_);
+    return MemorySize(token_mask_cache.masks_) +
+           MemorySize(token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset_);
   }
 };
 
@@ -157,8 +191,17 @@ class CompiledGrammar::Impl {
   /*! \brief The tokenizer information. */
   TokenizerInfo tokenizer_info{NullObj{}};
 
-  /*! \brief Default constructor. */
+  /*! \brief Default constructor. Only for deserialization. */
   Impl() = default;
+
+  /*! \brief Construct with the token mask generation mode. \sa TokenMaskCache */
+  Impl(
+      bool enable_dynamic_compilation,
+      std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset
+  )
+      : token_mask_cache(
+            enable_dynamic_compilation, std::move(tag_dispatch_rule_id_to_second_slicing_bitset)
+        ) {}
 
   /*! \brief The adaptive token masks, precomputed or generated on first use. */
   TokenMaskCache token_mask_cache;
@@ -177,7 +220,7 @@ class CompiledGrammar::Impl {
   friend std::size_t MemorySize(const Impl& impl);
 };
 
-XGRAMMAR_MEMBER_TABLE(TokenMaskCache, "adaptive_token_mask_cache", &TokenMaskCache::masks);
+XGRAMMAR_MEMBER_TABLE(TokenMaskCache, "adaptive_token_mask_cache", &TokenMaskCache::masks_);
 
 XGRAMMAR_MEMBER_TABLE(
     CompiledGrammar::Impl,
