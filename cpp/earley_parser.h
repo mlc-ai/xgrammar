@@ -6,7 +6,9 @@
 
 #ifndef XGRAMMAR_EARLEY_PARSER_H_
 #define XGRAMMAR_EARLEY_PARSER_H_
+#include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <ostream>
 #include <queue>
@@ -47,17 +49,23 @@ struct ParserState {
       const int32_t& sequence_id,
       const int32_t& element_id,
       const int32_t& rule_start_pos,
-      const int32_t& sub_element_id,
+      const int32_t& budget_deadline = -1,
+      const int32_t& sub_element_id = 0,
       const int32_t& repeat_count = 0,
-      const int32_t& partial_codepoint = 0
+      const int32_t& partial_codepoint = 0,
+      const int32_t& active_temperature_rule_id = -1,
+      const int32_t& char_budget_deadline = -1
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
         element_id(element_id),
         rule_start_pos(rule_start_pos),
+        budget_deadline(budget_deadline),
         sub_element_id(sub_element_id),
         repeat_count(repeat_count),
-        partial_codepoint(partial_codepoint) {}
+        partial_codepoint(partial_codepoint),
+        active_temperature_rule_id(active_temperature_rule_id),
+        char_budget_deadline(char_budget_deadline) {}
 
   /*!
    * \brief A rule_start_pos value of kNoPrevInputPos means this ParserState is the root of the
@@ -80,6 +88,11 @@ struct ParserState {
   /*! \brief The position of the state, i.e. from which position, the rule starts. */
   int32_t rule_start_pos = -1;
 
+  /*! \brief The last token index this state's derivation may consume, from the token budget
+   * (Rule::max_tokens) of the rule it is inside; -1 means unlimited. Set when a budgeted rule
+   * is predicted and inherited by the states inside it. */
+  int32_t budget_deadline = -1;
+
   /*! \brief The id of the sub element in the current element of the sequence. */
   int32_t sub_element_id = 0;
 
@@ -88,6 +101,13 @@ struct ParserState {
 
   /*! \brief Partial codepoint accumulated during UTF-8 decoding for positive character classes. */
   int32_t partial_codepoint = 0;
+
+  /*! \brief The innermost active rule that specifies a sampling temperature. */
+  int32_t active_temperature_rule_id = -1;
+
+  /*! \brief The number of Unicode codepoints this derivation may consume before its active
+   * character budget expires; -1 means unlimited. Stored as an absolute input position. */
+  int32_t char_budget_deadline = -1;
 
   /*!
    * \brief Lexicographic order over all fields. It is only used to sort the states for
@@ -98,9 +118,16 @@ struct ParserState {
     if (sequence_id != other.sequence_id) return sequence_id < other.sequence_id;
     if (element_id != other.element_id) return element_id < other.element_id;
     if (rule_start_pos != other.rule_start_pos) return rule_start_pos < other.rule_start_pos;
+    if (budget_deadline != other.budget_deadline) return budget_deadline < other.budget_deadline;
     if (sub_element_id != other.sub_element_id) return sub_element_id < other.sub_element_id;
     if (repeat_count != other.repeat_count) return repeat_count < other.repeat_count;
-    return partial_codepoint < other.partial_codepoint;
+    if (partial_codepoint != other.partial_codepoint) {
+      return partial_codepoint < other.partial_codepoint;
+    }
+    if (active_temperature_rule_id != other.active_temperature_rule_id) {
+      return active_temperature_rule_id < other.active_temperature_rule_id;
+    }
+    return char_budget_deadline < other.char_budget_deadline;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
@@ -120,6 +147,15 @@ struct ParserState {
     if (partial_codepoint != 0) {
       result += ", partial_codepoint=" + std::to_string(partial_codepoint);
     }
+    if (budget_deadline != -1) {
+      result += ", budget_deadline=" + std::to_string(budget_deadline);
+    }
+    if (active_temperature_rule_id != -1) {
+      result += ", active_temperature_rule_id=" + std::to_string(active_temperature_rule_id);
+    }
+    if (char_budget_deadline != -1) {
+      result += ", char_budget_deadline=" + std::to_string(char_budget_deadline);
+    }
     result += ")";
     return result;
   }
@@ -131,9 +167,12 @@ XGRAMMAR_MEMBER_ARRAY(
     &ParserState::sequence_id,
     &ParserState::element_id,
     &ParserState::rule_start_pos,
+    &ParserState::budget_deadline,
     &ParserState::sub_element_id,
     &ParserState::repeat_count,
-    &ParserState::partial_codepoint
+    &ParserState::partial_codepoint,
+    &ParserState::active_temperature_rule_id,
+    &ParserState::char_budget_deadline
 );
 
 /*!
@@ -170,7 +209,10 @@ class StateEqualForParsing {
     return lhs.rule_id == rhs.rule_id && lhs.sequence_id == rhs.sequence_id &&
            lhs.element_id == rhs.element_id && lhs.rule_start_pos == rhs.rule_start_pos &&
            lhs.sub_element_id == rhs.sub_element_id && lhs.repeat_count == rhs.repeat_count &&
-           lhs.partial_codepoint == rhs.partial_codepoint;
+           lhs.partial_codepoint == rhs.partial_codepoint &&
+           lhs.budget_deadline == rhs.budget_deadline &&
+           lhs.active_temperature_rule_id == rhs.active_temperature_rule_id &&
+           lhs.char_budget_deadline == rhs.char_budget_deadline;
   }
 };
 
@@ -188,7 +230,10 @@ class StateHashForParsing {
         state.rule_start_pos,
         state.sub_element_id,
         state.repeat_count,
-        state.partial_codepoint
+        state.partial_codepoint,
+        state.budget_deadline,
+        state.active_temperature_rule_id,
+        state.char_budget_deadline
     );
   }
 };
@@ -224,6 +269,42 @@ class RepeatDetector {
 
   /*! \brief Reset the detector. */
   void Clear();
+};
+
+/*! \brief A concrete occurrence of a captured rule in an Earley parent chain. */
+struct CaptureOccurrence {
+  /*! \brief The id of the captured rule. */
+  int32_t rule_id;
+  /*! \brief The position where the rule occurrence started. */
+  int32_t start_pos;
+
+  bool operator==(const CaptureOccurrence& other) const {
+    return rule_id == other.rule_id && start_pos == other.start_pos;
+  }
+};
+
+/*!
+ * \brief A completion event of a captured rule, recorded when the rule is completed during
+ * parsing. The matched span is [start_pos, r) in input positions, where r is the position (i.e.
+ * the history row) at which the event is recorded.
+ */
+struct CaptureEvent {
+  /*! \brief The id of the completed rule. */
+  int32_t rule_id;
+  /*! \brief The position where the rule started matching. kNoPrevInputPos means position 0 (the
+   * rule acts as the root). */
+  int32_t start_pos;
+  /*! \brief The unadjusted start position of this rule occurrence. This differs from start_pos
+   * for the zero-width event inserted after a dynamic-dispatch marker. */
+  int32_t occurrence_start_pos;
+  /*! \brief Number of trailing bytes hidden only from this rule's own capture for this
+   * completion. */
+  int32_t hidden_suffix_bytes = 0;
+  /*! \brief Number of trailing bytes hidden from every containing capture for this completion. */
+  int32_t hidden_stop_bytes = 0;
+  /*! \brief The captured rule occurrences whose concrete Earley parent chains contain this stop
+   * completion. Includes this rule's occurrence when the rule itself is captured. */
+  std::vector<CaptureOccurrence> stop_capture_targets;
 };
 
 class EarleyParser {
@@ -278,6 +359,164 @@ class EarleyParser {
   /*! \brief Check if the stop token is accepted. */
   bool stop_token_is_accepted_ = false;
 
+  enum FsmStateFlag : uint8_t {
+    kFsmStateInitialized = 1 << 0,
+    kFsmStateScanable = 1 << 1,
+    kFsmStateNonTerminal = 1 << 2,
+    kFsmStateEnd = 1 << 3,
+    kFsmStateHasEdges = 1 << 4,
+  };
+
+  /*! \brief Lazily-computed FSM state properties, indexed by rule id and state id. */
+  std::vector<std::vector<uint8_t>> fsm_state_flags_cache_;
+
+  /*! \brief Whether each rule can match the empty string. */
+  std::vector<uint8_t> rule_is_nullable_;
+
+  /*! \brief Compute and cache properties for a state in a per-rule FSM. */
+  uint8_t InitializeFsmStateFlags(int32_t rule_id, int32_t state_id);
+
+  /*! \brief Return cached properties for a state in a per-rule FSM. */
+  uint8_t GetFsmStateFlags(int32_t rule_id, int32_t state_id) {
+    XGRAMMAR_DCHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(fsm_state_flags_cache_.size()));
+    auto& flags_cache = fsm_state_flags_cache_[rule_id];
+    if (!flags_cache.empty()) {
+      XGRAMMAR_DCHECK(state_id >= 0 && state_id < static_cast<int32_t>(flags_cache.size()));
+      if (flags_cache[state_id] != 0) {
+        return flags_cache[state_id];
+      }
+    }
+    return InitializeFsmStateFlags(rule_id, state_id);
+  }
+
+  bool IsRuleNullable(int32_t rule_id) const { return rule_is_nullable_[rule_id] != 0; }
+
+  /*! \brief The index of the LLM token currently being accepted, set by the matcher; -1
+   * before any token. budget_deadline values are compared against it. */
+  int32_t current_token_index_ = -1;
+
+  /*! \brief Whether states past their budget deadline are skipped when scanning. Enabled by
+   * the matcher for accepts that follow an enforcing mask computation. */
+  bool skip_expired_states_ = false;
+
+  /*! \brief Whether any rule of the grammar has a token budget. */
+  bool has_budget_rules_ = false;
+
+  /*! \brief The number of Unicode codepoints accepted at every parser history row. */
+  std::vector<int32_t> char_count_history_;
+
+  /*! \brief Whether any rule of the grammar has a character budget. */
+  bool has_char_budget_rules_ = false;
+
+  /*! \brief Whether a character-budgeted occurrence was entered since the initial parser row. */
+  std::vector<bool> char_budget_entry_history_;
+
+  /*! \brief Entry-history value for the row currently being expanded. */
+  bool tmp_char_budget_entered_ = false;
+
+  /*! \brief Whether the state's derivation may not consume the next token. */
+  bool IsExpiredState(const ParserState& state) const {
+    return state.budget_deadline >= 0 && current_token_index_ > state.budget_deadline;
+  }
+
+  /*! \brief The deadline for a newly predicted occurrence of the rule: its own budget counted
+   * from the current token, capped by the parent's deadline for nested budgets. */
+  int32_t DeadlineForRule(int32_t rule_id, int32_t parent_deadline) const {
+    int32_t own = grammar_->GetRule(rule_id).max_tokens;
+    if (own < 0) {
+      return parent_deadline;
+    }
+    int32_t deadline = current_token_index_ + own;
+    return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
+  }
+
+  /*! \brief The character deadline for a newly predicted rule occurrence. */
+  int32_t CharDeadlineForRule(int32_t rule_id, int32_t parent_deadline) const {
+    int32_t own = grammar_->GetRule(rule_id).max_chars;
+    if (own < 0) {
+      return parent_deadline;
+    }
+    int32_t current_char_index = GetCurrentCharIndex();
+    int32_t deadline = own > std::numeric_limits<int32_t>::max() - current_char_index
+                           ? std::numeric_limits<int32_t>::max()
+                           : current_char_index + own;
+    return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
+  }
+
+  /*! \brief Whether the state's derivation may not consume another Unicode codepoint. */
+  bool IsCharExpiredState(const ParserState& state) const {
+    return state.char_budget_deadline >= 0 && GetCurrentCharIndex() >= state.char_budget_deadline;
+  }
+
+  static bool StartsUTF8Codepoint(uint8_t byte) { return (byte & 0xC0) != 0x80; }
+
+  /*! \brief Whether any rule of the grammar has a capture or stop_capture name. Fixed at
+   * construction. When false, the capture machinery is fully disabled and has no overhead. */
+  bool capture_tracking_ = false;
+
+  /*! \brief Whether the grammar contains suffix/stop spans that may affect captures. */
+  bool has_hidden_capture_rules_ = false;
+
+  /*!
+   * \brief Whether capture events are currently recorded in Complete(). Only enabled during
+   * definitive advances (accepting a token or string), not during speculative exploration
+   * (mask computation, jump-forward search, lookahead checks), so that speculative completions
+   * never produce capture events.
+   */
+  bool capture_recording_ = false;
+
+  /*!
+   * \brief The history of capture events. capture_event_history_[i] stores the events recorded
+   * when input position i was created. Kept aligned with scanable_state_history_ row-by-row
+   * whenever capture_tracking_ is true, so PopLastStates rolls back events automatically.
+   */
+  Compact2DArray<CaptureEvent> capture_event_history_;
+
+  /*! \brief Returns true if the rule exists and has a capture name. */
+  bool RuleHasCapture(int32_t rule_id) const {
+    return capture_tracking_ && rule_id >= 0 && !grammar_->GetRule(rule_id).capture_name.empty();
+  }
+
+  /*! \brief Returns true if completing this rule can hide bytes from a capture. */
+  bool RuleHasHiddenBytes(int32_t rule_id) const {
+    if (!capture_tracking_ || !has_hidden_capture_rules_ || rule_id < 0) {
+      return false;
+    }
+    const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
+    return suffix_stop_info != nullptr &&
+           (suffix_stop_info->hidden_suffix_bytes > 0 || suffix_stop_info->hidden_stop_bytes > 0);
+  }
+
+  /*! \brief Returns true if completing this rule must produce a capture-history event. */
+  bool RuleNeedsCaptureEvent(int32_t rule_id) const {
+    return RuleHasCapture(rule_id) || RuleHasHiddenBytes(rule_id);
+  }
+
+  /*! \brief Record a capture or hidden-span event for a completed rule in the current row. */
+  void RecordCaptureEvent(const ParserState& state, bool marker_present);
+
+  /*!
+   * \brief Whether this completion of a suffix/stop rule actually consumed the trailing marker.
+   * A non-looping TagDispatch can also complete before its trigger is encountered, which is what
+   * lets a free-text tail end normally. Only the terminal post-dispatch state has no outgoing
+   * edges; completions in the trigger-scanning states did not consume a suffix/stop marker.
+   */
+  bool CompletionConsumedMarker(const ParserState& state) const;
+
+  /*! \brief Collect the captured rule occurrences whose concrete Earley parent chains contain
+   * the given stop completion. Includes the completed rule's own occurrence when captured. */
+  std::vector<CaptureOccurrence> CollectStopCaptureTargets(const ParserState& state) const;
+
+  /*!
+   * \brief The lazy rule occurrences (rule_id, rule_start_pos) completed while building the
+   * current row. Committed-shortest matching: their remaining states are removed when the row is
+   * finalized, so the occurrence cannot be extended further.
+   */
+  std::vector<std::pair<int32_t, int32_t>> tmp_completed_lazy_occurrences_;
+
+  /*! \brief Remove the states of the lazy occurrences completed in the current row. */
+  void RemoveCommittedLazyStates();
+
   /*!
    * \brief Check if the state has been added into the queue.
    * \param state The state to check.
@@ -301,7 +540,7 @@ class EarleyParser {
    * of the grammar is used to check if the grammar is completed,
    * so it should be added into the next states.
    */
-  void Complete(const ParserState& state, bool debug_print = false);
+  void Complete(const ParserState& state, bool debug_print = false, bool marker_present = true);
 
   /*!
    * \brief The prediction operation of the Earley parser.
@@ -315,6 +554,9 @@ class EarleyParser {
 
   /*! \brief The initial state expanded from the root rule of the grammar. */
   ParserState RootInitialState() const;
+
+  /*! \brief Resolve the active temperature rule when entering a rule. */
+  int32_t ResolveActiveTemperatureRule(int32_t rule_id, int32_t inherited_rule_id) const;
 
   /*!
    * \brief Expand the rule, used for RuleRef and kTagDispatch.
@@ -394,7 +636,7 @@ class EarleyParser {
    * \param debug_print Whether to print debug info.
    * \return True if any state advanced, false otherwise.
    */
-  bool AdvanceAtomicToken(int32_t token_id, bool debug_print = false);
+  bool AdvanceAtomicToken(int32_t token_id, bool debug_print = false, int32_t token_char_count = 0);
 
   /*!
    * \brief Enqueue the state into the queue.
@@ -483,10 +725,61 @@ class EarleyParser {
    * \param state The state to be pushed.
    */
   void PushOneStateToCheck(const ParserState& state) {
+    PushStatesToCheck(std::vector<ParserState>{state}, is_completed_.back());
+  }
+
+  /*! \brief Push a temporary parser row for token-mask checking. */
+  void PushStatesToCheck(const std::vector<ParserState>& states, bool completed) {
     rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
-    is_completed_.push_back(is_completed_.back());
-    scanable_state_history_.PushBack(&state, 1);
-    return;
+    is_completed_.push_back(completed);
+    scanable_state_history_.PushBack(states);
+    if (capture_tracking_) {
+      capture_event_history_.PushBack(std::vector<CaptureEvent>());
+    }
+    if (has_char_budget_rules_) {
+      char_count_history_.push_back(GetCurrentCharIndex());
+      char_budget_entry_history_.push_back(char_budget_entry_history_.back());
+    }
+  }
+
+  /*! \brief Push a character-count row for a parser row created by the matcher. */
+  void PushCharCountRow(int32_t char_count, bool char_budget_entered) {
+    if (!has_char_budget_rules_) {
+      return;
+    }
+    char_count_history_.push_back(char_count);
+    char_budget_entry_history_.push_back(char_budget_entered);
+  }
+
+  int32_t GetCurrentCharIndex() const {
+    return char_count_history_.empty() ? 0 : char_count_history_.back();
+  }
+
+  bool HasEnteredCharBudget() const {
+    return has_char_budget_rules_ && char_budget_entry_history_.back();
+  }
+
+  /*! \brief Whether the grammar has any captured rule. */
+  bool IsCaptureTrackingEnabled() const { return capture_tracking_; }
+
+  /*! \brief Copy the capture events of the latest input position. */
+  std::vector<CaptureEvent> CopyLastCaptureRow() const {
+    if (!capture_tracking_) {
+      return {};
+    }
+    auto row = capture_event_history_[capture_event_history_.size() - 1];
+    return std::vector<CaptureEvent>(row.begin(), row.end());
+  }
+
+  /*!
+   * \brief Push a new row of capture events. Used when a new input position is created outside
+   * of Advance / AdvanceAtomicToken (e.g. when merging parallel advance results), to keep the
+   * capture history aligned with the state history.
+   */
+  void PushCaptureRow(const std::vector<CaptureEvent>& events) {
+    if (capture_tracking_) {
+      capture_event_history_.PushBack(events);
+    }
   }
 
   std::string PrintStates() const {

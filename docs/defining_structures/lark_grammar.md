@@ -138,12 +138,26 @@ regex converter (the same engine as [`xgr.Grammar.from_regex`](xgrammar.Grammar.
 supports character classes, alternation, groups, repetition (`*`, `+`, `?`, `{m,n}`), and the
 usual escapes. A `/` inside the pattern is written `\/`.
 
-`.` matches one Unicode character. By default it does not match newline; adding the `s` flag
-(`/pattern/s`) makes `.` match newline as well. `s` is currently the only supported regex flag.
+`.` matches one Unicode character. By default it does not match newline. Regular expressions
+support the following trailing flags, in any order:
+
+- `i`: make the match ASCII case-insensitive. ASCII letters in literals and character classes
+  match both cases; non-ASCII characters match literally.
+- `s`: make `.` match newline as well.
+- `u`: explicitly select Unicode semantics. This is a no-op because XGrammar regular expressions
+  already use Unicode codepoints.
+
+The `i` flag is supported in ordinary rules, terminals, and `lazy` rules, but not on a regular
+expression used with a `suffix` or `stop` attribute. The `l`, `m`, and `x` flags are not supported.
+
+Word boundaries (`\b`, `\B`), Unicode property escapes (`\p{…}`), backreferences, and lookaround
+assertions are not supported. Large bounded repetitions such as `{0,10000}` are compiled through
+the grammar-level repetition mechanism and do not expand the automaton.
 
 ```text
 start: /a.b/      // accepts "acb", "a😀b"; rejects "a\nb"
 line: /a.b/s      // also accepts "a\nb"
+word: /Σk+/i      // accepts "Σk", "ΣKK"; only ASCII letters fold, "Σ" matches literally
 ```
 
 ### Sequences, Alternatives, and Groups
@@ -240,47 +254,62 @@ The `%ignore` expression may be a terminal name, a string, a regex, or a combina
 first lexeme of the output. Multiple `%grammar_options` declarations are merged; unknown option
 names are rejected.
 
-## Inline JSON Schema
+### `%json`
 
 `%json { ... }` embeds a JSON Schema and behaves like a rule reference: the element matches any
 JSON value conforming to the schema, converted through XGrammar's JSON Schema converter.
 
-```python
-grammar = xgr.Grammar.from_lark(
-    r"""
-    start: "<tool_call>" arguments "</tool_call>"
-    arguments: %json {
-      "type": "object",
-      "properties": {"city": {"type": "string"}},
-      "required": ["city"],
-      "additionalProperties": false
-    }
-    """
-)
+```text
+start: "<tool_call>" arguments "</tool_call>"
+arguments: %json {
+  "type": "object",
+  "properties": {"city": {"type": "string"}},
+  "required": ["city"],
+  "additionalProperties": false
+}
 ```
 
 `%json` may appear inside sequences, alternatives, and repetition. Whitespace outside the JSON
 value is controlled by the surrounding Lark grammar; whitespace inside the value follows the JSON
 Schema converter's normal behavior. `%json` cannot be used inside terminals.
 
-## Nested Grammars
+### Substring
+
+The substring extension matches any contiguous sequence of a fixed list of chunks, including the
+empty sequence. For compatibility with llguidance, it is written with the `%regex { ... }`
+directive, although it is not a regular expression:
+
+```text
+start: %regex {"substring_chunks": ["abc", "de", "fg"]}
+```
+
+This example accepts `""`, `"abc"`, `"de"`, `"abcde"`, `"defg"`, and `"abcdefg"`, but not
+`"ab"` or `"cde"`.
+
+`substring_chars` splits a string into Unicode codepoints before applying the same operation:
+
+```text
+start: %regex {"substring_chars": "abc"}
+```
+
+It therefore accepts every codepoint-aligned substring such as `"a"`, `"bc"`, and `"abc"`.
+`substring_chunks` and `substring_chars` are supported in rules and terminal definitions.
+`substring_words`, which requires Unicode word-class segmentation, is not yet supported.
+
+### `%lark`
 
 `%lark { ... }` embeds a complete Lark grammar as one element. The nested grammar has its own
 independent namespace: it must define its own `start` rule, and it may declare its own imports,
 `%ignore`, and `%grammar_options` without affecting the outer grammar. Rule names may be reused
 across the boundary.
 
-```python
-grammar = xgr.Grammar.from_lark(
-    r"""
-    start: "[" %lark {
-      %import common.WS
-      %ignore WS
-      start: item ":" %json {"type": "integer"}
-      item: "x" | "(" item ")"
-    } "]"
-    """
-)
+```text
+start: "[" %lark {
+  %import common.WS
+  %ignore WS
+  start: item ":" %json {"type": "integer"}
+  item: "x" | "(" item ")"
+} "]"
 ```
 
 Multiple `%lark` blocks may appear in the same rule. Nested grammars may use every feature of the
@@ -348,6 +377,69 @@ grammar = xgr.Grammar.from_lark(
   Each named grammar is compiled once and shared.
 - `@name` references may only appear in rules, not in terminals.
 
+## Rule Options
+
+Rule options are written as a comma-separated list between a rule name and its colon:
+
+```text
+reasoning[max_tokens=512, capture="reasoning"]: TEXT
+name[lazy]: /[a-z]+/
+field[suffix="!", stop_capture="marker"]: /[a-z]*/
+value[temperature=0.7]: /[a-z]+/
+```
+
+They are supported on lowercase rules only; uppercase terminals cannot carry options. The
+available options are:
+
+- `lazy`: commit the rule to its
+  [earliest possible completion](#general-lazy-rules-committed-shortest-matching).
+- `suffix=marker`: end lazily at a marker and exclude the marker from this rule's own capture.
+- `stop=marker`: end lazily at a marker and exclude the marker from this rule and all enclosing
+  captures.
+- `stop_capture="name"`: capture a `suffix` or `stop` marker separately. See
+  [The `suffix` and `stop` Attributes](#the-suffix-and-stop-attributes).
+- `max_tokens=N`: give every occurrence a [token budget](#token-budgets).
+- `max_chars=N`: give every occurrence a [character budget](#character-budgets).
+- `capture` or `capture="name"`: record the rule's matched span as a
+  [capture group](#capture-groups).
+- `temperature=N`: select the [sampling temperature](#sampling-temperature) while the rule is
+  active.
+
+`suffix` and `stop` cannot be used together, and `stop_capture` requires one of them. Other
+supported combinations and their boundary behavior are described below.
+
+### Sampling Temperature
+
+The `temperature` rule attribute selects the sampling temperature while a terminal-like rule or
+named subgrammar is active:
+
+```python
+grammar = xgr.Grammar.from_lark(
+    """
+    start: "answer:" value
+    value[temperature=0.7]: /[a-z]+/
+    """
+)
+compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+matcher = xgr.GrammarMatcher(compiled, default_temperature=0.2)
+```
+
+`temperature` must be a finite non-negative number. It is supported on rules that can be compiled
+as terminals and on rules whose body is a `%json`, `%lark`, or `@name` subgrammar. An inner
+explicit temperature overrides an inherited outer temperature. When ambiguous parse paths have
+different active temperatures, `matcher.temperature` emits a warning once and returns the maximum.
+If no active rule has a temperature, it returns `default_temperature`; if neither is configured,
+it returns `None`.
+
+`temperature` can be combined with `capture` and `max_chars`. Combining it with `max_tokens`,
+`lazy`, `suffix`, or `stop` is not supported.
+
+`BatchGrammarMatcher.batch_fill_temperature` fills a pre-allocated one-dimensional CPU `float32`
+tensor with one temperature per matcher; the entry of a matcher without an effective temperature
+is set to `-1`. For speculative decoding, pass a one-dimensional CPU `float32` tensor through the
+`temperatures` argument of `GrammarMatcher.traverse_draft_tree`. The tensor receives one value per
+tree node; `-1` marks a node with no configured temperature or a node that was not visited.
+
 ## Dynamic Tool-Call Dispatch
 
 A common pattern for tool calling lets the model produce free text until a trigger string (such
@@ -399,6 +491,7 @@ head[lazy]: TEXT "<tool>"          // any text, then a fixed trigger string
 head[lazy]: TEXT <|tool_token|>    // any text, then a special token (requires tokenizer_info)
 head[lazy]: /(\n|.)*<tool>/        // the same trigger written as a regex suffix
 head[suffix="<tool>"]: TEXT        // the same trigger written as a suffix attribute
+head[stop="<tool>"]: TEXT          // mask-equivalent; differs only for captures
 tool: TEXT <|tool_token|> ...      // token trigger written inline, without a head rule
 ```
 
@@ -444,6 +537,220 @@ TEXT: /(\n|.)*/
 ```
 
 This matches arbitrary text and completes as soon as the trigger appears; nothing may follow the
-trigger. Text that never produces the trigger is also accepted. The regex-suffix and
-`suffix="..."` head forms are only accepted inside the full dispatch pattern, and general lazy
-rules over other bodies (for example `value[lazy]: /[a-z]+/`) are rejected.
+trigger. Text that never produces the trigger is also accepted. The `suffix="..."` and
+`stop="..."` forms can also be used this way and retain this efficient TagDispatch lowering.
+The regex-suffix form is only accepted inside the full dispatch pattern.
+
+### General Lazy Rules (Committed-Shortest Matching)
+
+Any other rule may also carry `[lazy]`, which gives it **committed-shortest** matching: at the
+first position where the rule's body can end, it must end — the derivations in which this
+occurrence keeps consuming input are discarded.
+
+```text
+start: "<" name ">" rest
+name[lazy]: /[a-z]+/     // stops at the first position where it can end
+rest: /[a-z]+/
+```
+
+Notes:
+
+- The body must compile to a single terminal-like automaton: sequences and alternations of
+  strings and character classes, and the `+`/`*` quantifiers over single-character elements
+  (character classes, single-character strings, and alternations of these — directly or through
+  terminal references like `TEXT*`). Bodies that need rule references (recursion, `?` in the
+  middle of a sequence, quantifiers over multi-character strings, and repetition ranges like
+  `{2,5}`) are rejected at compile time.
+- A lazy rule that can match the empty string always matches the empty string (for example
+  `foo[lazy]: /.*/`).
+- Lazy rules are compiled as lexemes: `%ignore` is not woven inside their bodies, and like
+  terminals they take the ignored-token skip after them.
+- Each occurrence of the rule commits independently, and the commit is exact for validation
+  (`accept_string`) as well as mask generation. `rollback`/`fork`/`reset` restore the state
+  across a commit exactly.
+- The same attribute is available in the EBNF frontend: `name[lazy] ::= ...`, and it round-trips
+  through `Grammar.__str__()` / `Grammar.from_ebnf()`.
+
+### The `suffix` and `stop` Attributes
+
+`suffix` and `stop` both match the rule body lazily through the first occurrence of a marker. Like
+llguidance, the marker may be a string literal, a regular expression, or an uppercase terminal
+name:
+
+```text
+field[suffix="<end>"]: /[a-z]*/
+field[suffix=/<\/?end>/]: /[a-z]*/
+field[suffix=END]: /[a-z]*/
+END: "</end>" | "<end>"
+```
+
+At the mask and validation levels, these forms are equivalent to appending the marker to a lazy
+rule. A general body must itself be a terminal expression; strings, regexes (including bounded
+repetition), and uppercase terminal composition are compiled together into one automaton. The
+marker is required during ordinary validation, and committed-shortest matching prevents the body
+from continuing through an earlier match. `%ignore` remains lexeme-scoped. For an any-text body
+with a fixed, case-sensitive string marker, XGrammar retains the TagDispatch fast path: the rule
+completes at the marker when one appears, while text that ends without a marker is also accepted.
+
+The distinction between the two attributes is capture scope:
+
+```text
+start[capture="outer"]: field "z"
+field[capture="inner", suffix="!"]: /[a-z]*/
+# "xy!z" -> inner=b"xy", outer=b"xy!z"
+
+start[capture="outer"]: field "z"
+field[capture="inner", stop="!"]: /[a-z]*/
+# "xy!z" -> inner=b"xy", outer=b"xyz"
+
+start[capture="outer"]: field "z"
+field[capture="inner", suffix=/!!+/, stop_capture="marker"]: /[a-z]*/
+# "xy!!z" -> marker=b"!!", inner=b"xy", outer=b"xy!!z"
+```
+
+- `suffix` excludes the marker from the annotated rule's own capture, but enclosing captures
+  retain it.
+- `stop` excludes the marker from the annotated rule and every enclosing capture. This only
+  changes capture materialization: the accepted marker bytes are not removed from the model
+  context and the matcher performs no token rollback.
+- A `stop` rule does not need its own `capture` attribute for the marker to be hidden from an
+  enclosing capture. Multiple markers inside one enclosing capture are all removed.
+- `stop_capture="name"` captures exactly the bytes matched by either `stop` or `suffix`, before
+  the marker is hidden from other captures. It works even when the annotated rule has no
+  `capture` attribute. Its name follows the same restrictions as `capture`.
+- `suffix` and `stop` cannot be specified on the same rule, and `stop_capture` requires one of
+  them.
+- String flags and regex flags follow the same support as ordinary Lark terminals. In particular,
+  ASCII case-insensitive string markers such as `suffix="END"i` and dot-all regex markers such as
+  `stop=/BEGIN.*END/s` are supported.
+- An empty string literal marker is not accepted; in particular, the llguidance EOS shorthand
+  `stop=""` is not supported. A regex or named terminal marker may still be nullable.
+- Adding an explicit `lazy` attribute is allowed but redundant.
+- `max_tokens` and `max_chars` may annotate the same rule as `lazy`, `suffix`, or `stop`. The first
+  boundary wins: a marker that completes first keeps the normal committed-shortest and capture
+  behavior; if a length budget expires first and the body can end there, the rule completes
+  without a marker (and therefore produces no `stop_capture`). If the body cannot end, for example
+  in the middle of a multi-token marker, the budget is relaxed until a valid boundary is reached.
+
+## Token Budgets
+
+A rule can be given a token budget with the `max_tokens` attribute:
+
+```text
+start: <think> reasoning </think> answer
+reasoning[max_tokens=512]: TEXT
+answer: /[0-9]+/
+TEXT: /(\n|.)*/
+```
+
+Each occurrence of the rule may then consume at most `max_tokens` LLM tokens. Once the budget
+is exhausted, the token mask only allows leaving the rule, which bounds the length of free-text
+segments such as reasoning blocks while the rest of the output stays grammar-constrained.
+
+The budget is enforced by the matcher at generation time. The body compiles normally and
+every predicted occurrence of the rule carries a deadline: the index of the last token its
+derivation may consume. Once the deadline passes, each mask forces the rule to end if ending
+is possible at the current position; otherwise the budget is relaxed for one step and
+enforcement is retried, so the rule ends at the earliest possible position and the output
+always stays grammar-valid. When authoring a budgeted rule, prefer a body that can end at every
+possible budget boundary. For example, the arbitrary-text form above can end at any position, so
+its budget is exact; bodies that cannot end where the budget runs out remain best-effort.
+
+`max_tokens` composes with committed-shortest matching. With `lazy`, whichever of the lazy
+completion and the token deadline is reached first closes the occurrence. With `suffix` or
+`stop`, a deadline may close through the already matched body without fabricating marker bytes;
+normal suffix/stop capture scope applies only when the marker was actually consumed.
+
+The budget applies **per occurrence**: in `(r ",")* r` every element gets its own budget, and
+to bound a whole loop the budget goes on a wrapper rule (`list[max_tokens=N]: item+`). Nested
+budgets combine by taking the minimum. Rules inside a budgeted rule may also be used outside of
+it — the budget follows the derivation, not the rule.
+
+The first time a budget is exceeded (a token is consumed by a derivation past its budget), a
+warning is logged, once per matcher. The budget state lives in the parser state, so
+`rollback()` restores it exactly and speculative decoding keeps working. `accept_string`
+advances without token boundaries and is not counted (budgets constrain mask-driven
+generation, not validation/prefill).
+
+`max_tokens` must be between 1 and 1,000,000, inclusive. It can be combined with `lazy`, `suffix`,
+and `stop`, but cannot be used on terminals or on rules consumed by the dynamic dispatch pattern.
+
+## Character Budgets
+
+A rule can be limited by Unicode codepoints, the numeric values assigned to text units by the
+Unicode standard, with `max_chars`:
+
+```text
+start: <think> reasoning </think> answer
+reasoning[max_chars=2048]: TEXT
+answer: /[0-9]+/
+TEXT: /(\n|.)*/
+```
+
+For example, `a`, `é`, and `中` each consume one character. A decomposed character such as `e`
+followed by a combining accent consumes two. The count does not depend on byte length in UTF-8, a
+variable-width Unicode encoding, or on model token boundaries, the units generated by the model.
+This also holds when one codepoint is split across multiple tokens.
+
+Once the budget is exhausted, the matcher forces the occurrence to end if its body can end at the
+current character boundary. Otherwise, the budget is relaxed until the earliest valid end, so the
+output remains grammar-valid. When authoring a character-budgeted rule, prefer a body that can end
+at every possible character boundary. For example, the arbitrary-text form above can end after
+every codepoint, so its budget is exact; bodies that cannot end where the budget runs out remain
+best-effort.
+
+The first time a character budget is exceeded (a codepoint is consumed by a derivation past its
+budget), a warning is logged, once per matcher. The budget applies per occurrence and nested
+budgets take the minimum. `max_chars` can be combined with `temperature`. It can also be combined
+with `max_tokens`, `lazy`, `suffix`, and `stop`; the first applicable length or marker boundary
+wins. It applies to `accept_string`, unlike `max_tokens`. Rollback, reset, forking, and speculative
+decoding restore the character count exactly.
+
+`max_chars` must be between 0 and 2,147,483,647, inclusive. A zero budget closes the rule
+immediately when its body can end at the entry position. It cannot be used on terminals. On a
+dynamic dispatch start rule or a rule consumed by dynamic dispatch, it is ignored and a warning
+is logged.
+
+## Capture Groups
+
+A rule can be marked with the `capture` attribute so that the matcher records the input span the
+rule matched:
+
+```text
+start: tool* tail
+tail: TEXT
+
+tool_head[lazy]: TEXT "<tool_call>"
+tool: tool_head arg "</tool_call>"
+arg[capture]: /[0-9]+/
+
+TEXT: /(\n|.)*/
+```
+
+`rule[capture]` uses the rule name as the capture name; `rule[capture="name"]` sets an explicit
+name. Capture names may contain letters, digits, `_`, `-` and `.`. The recorded captures are
+retrieved from the matcher:
+
+```python
+matcher = xgr.GrammarMatcher(compiled)
+matcher.accept_string('x<tool_call>42</tool_call>y<tool_call>7</tool_call>')
+matcher.get_captures()  # [("arg", b"42"), ("arg", b"7")]
+```
+
+Each completion of a captured rule records one capture, so a rule matched repeatedly (for
+example inside a loop or a dispatch pattern) yields one entry per match, in completion order.
+Captures are recorded when tokens or strings are accepted; `fill_next_token_bitmask` never
+records anything, and `rollback` also rolls back the recorded captures.
+
+Since the parser explores parse hypotheses in parallel, one occurrence of a captured rule may
+complete at several candidate end positions (a `/[0-9]+/` body completes after every digit). By
+default `get_captures` keeps only the longest completion of each occurrence, which is exact
+whenever the captured rule's end is determined by a following delimiter that its body cannot
+match (closing tags, quotes, brackets). If the following context can also be matched by the
+rule body itself, the reported span may extend past the span of the finally accepted parse;
+`get_captures(deduplicate=False)` returns the raw completion events instead.
+
+Captures are supported on rules only (not terminals), and not on rules consumed by the dynamic
+dispatch pattern (the head, tool and tail rules themselves); rules referenced from a tool's
+body, like `arg` above, work as expected. See the `suffix` and `stop` section for their marker
+exclusion rules.

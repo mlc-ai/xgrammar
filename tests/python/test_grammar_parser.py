@@ -4,7 +4,11 @@ from typing import Optional
 import pytest
 
 import xgrammar as xgr
-from xgrammar.testing import GrammarFunctor, _ebnf_to_grammar_no_normalization
+from xgrammar.testing import (
+    GrammarFunctor,
+    _ebnf_to_grammar_no_normalization,
+    _get_allow_empty_rule_ids,
+)
 
 
 def test_basic_string_literal():
@@ -544,6 +548,16 @@ rule1 ::= (("a" [a-z]*) | ("b"))
 rule2 ::= (("b") | ("c" [b-c]))
 """,
     ),
+    (
+        r"""root ::= rule1 (rule2 "y")
+rule1 ::= "a" | "b"
+rule2 ::= "c" | "d"
+""",
+        r"""root ::= (("a" (("c" "y") | ("d" "y"))) | ("b" (("c" "y") | ("d" "y"))))
+rule1 ::= (("a") | ("b"))
+rule2 ::= (("c") | ("d"))
+""",
+    ),
 ]
 
 
@@ -553,6 +567,171 @@ def test_rule_inliner(before: str, expected: str):
     grammar = GrammarFunctor.rule_inliner(grammar)
     after = str(grammar)
     assert after == expected
+
+
+before__expected__test_rule_inliner_no_rewrite = [
+    # A rule with an empty-string choice is not inlined.
+    (
+        r"""root ::= rule1 "x"
+rule1 ::= "a" | ""
+""",
+        r"""root ::= ((rule1 "x"))
+rule1 ::= ("" | ("a"))
+""",
+    ),
+    # A rule whose body contains a rule reference is not inlined.
+    (
+        r"""root ::= rule1 "x"
+rule1 ::= "a" rule2 | "b"
+rule2 ::= "c"
+""",
+        r"""root ::= ((rule1 "x"))
+rule1 ::= (("a" rule2) | ("b"))
+rule2 ::= (("c"))
+""",
+    ),
+    # Only a rule reference at the start of a sequence triggers inlining.
+    (
+        r"""root ::= "x" rule1
+rule1 ::= "a" | "b"
+""",
+        r"""root ::= (("x" rule1))
+rule1 ::= (("a") | ("b"))
+""",
+    ),
+]
+
+
+@pytest.mark.parametrize("before, expected", before__expected__test_rule_inliner_no_rewrite)
+def test_rule_inliner_no_rewrite(before: str, expected: str):
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.structure_normalizer(grammar)
+    grammar = GrammarFunctor.rule_inliner(grammar)
+    after = str(grammar)
+    assert after == expected
+
+
+def test_rule_inliner_preserves_lookahead_assertion():
+    """When the inliner rewrites a rule body, the rule's lookahead assertion must be kept."""
+    before = r"""root ::= rule2
+rule2 ::= rule1 "x" (= "q" "r")
+rule1 ::= "a" | "b"
+"""
+    expected = r"""root ::= ((rule2))
+rule2 ::= (("a" "x") | ("b" "x")) (=(("q" "r")))
+rule1 ::= (("a") | ("b"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.rule_inliner(grammar)
+    assert str(grammar) == expected
+
+
+before__expected__test_byte_string_fuser = [
+    # A whole run of adjacent byte strings is fused into one.
+    (
+        r"""root ::= "a" "b" "c"
+""",
+        r"""root ::= (("abc"))
+""",
+    ),
+    # Runs are split by non-byte-string elements; fusing also applies inside choices.
+    (
+        r"""root ::= "a" "b" [0-9] "c" "d" rule1
+rule1 ::= "x" "y" | [a-z]
+""",
+        r"""root ::= (("ab" [0-9] "cd" rule1))
+rule1 ::= (("xy") | ([a-z]))
+""",
+    ),
+    # Nothing to fuse: the grammar stays unchanged.
+    (
+        r"""root ::= "a" [0-9] "b" | rule1
+rule1 ::= [x]
+""",
+        r"""root ::= (("a" [0-9] "b") | (rule1))
+rule1 ::= (([x]))
+""",
+    ),
+]
+
+
+@pytest.mark.parametrize("before, expected", before__expected__test_byte_string_fuser)
+def test_byte_string_fuser(before: str, expected: str):
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
+    assert str(grammar) == expected
+
+
+def test_byte_string_fuser_lookahead_assertion():
+    """Byte strings inside lookahead assertions are fused as well."""
+    before = r"""root ::= "x" rule1
+rule1 ::= "a" "b" (= "c" "d")
+"""
+    expected = r"""root ::= (("x" rule1))
+rule1 ::= (("ab")) (=(("cd")))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.byte_string_fuser(grammar)
+    assert str(grammar) == expected
+
+
+def test_byte_string_fuser_removes_empty_byte_strings():
+    structural_tag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "triggered_tags",
+            "triggers": ["<t>"],
+            "tags": [
+                {
+                    "type": "tag",
+                    "begin": "<t>",
+                    "content": {"type": "const_string", "value": ""},
+                    "end": "",
+                }
+            ],
+        },
+    }
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    fused = GrammarFunctor.byte_string_fuser(grammar)
+    assert "triggered_tags_group ::= ((const_string))\n" in str(fused)
+
+    compiled = xgr.GrammarCompiler(xgr.TokenizerInfo([])).compile_grammar(grammar)
+    assert _get_allow_empty_rule_ids(compiled) == [0, 1, 2, 3]
+
+
+def test_optimizer_passes_do_not_mutate_input():
+    """The passes rewrite a copy: the caller's grammar object must stay unchanged."""
+    fuser_before = r"""root ::= "a" "b" rule1
+rule1 ::= "c" | "d"
+"""
+    grammar = _ebnf_to_grammar_no_normalization(fuser_before)
+    before_str = str(grammar)
+    fused = GrammarFunctor.byte_string_fuser(grammar)
+    assert str(grammar) == before_str
+    assert str(fused) != before_str
+
+    inliner_before = r"""root ::= rule1 "x"
+rule1 ::= "a" | "b"
+"""
+    grammar = _ebnf_to_grammar_no_normalization(inliner_before)
+    before_str = str(grammar)
+    inlined = GrammarFunctor.rule_inliner(grammar)
+    assert str(grammar) == before_str
+    assert str(inlined) != before_str
+
+    optimizer_before = r"""root ::= rule1 "x" | "y"
+rule1 ::= "a" | "b"
+"""
+    grammar = xgr.Grammar.from_ebnf(optimizer_before)
+    before_str = str(grammar)
+    optimized = GrammarFunctor.grammar_optimizer(grammar)
+    assert str(grammar) == before_str
+    assert str(optimized) == 'root ::= (("a" "x") | ("b" "x") | ("y"))\n'
+
+    # Compiling must not mutate the caller's grammar either.
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
+    compiler.compile_grammar(grammar)
+    assert str(grammar) == before_str
 
 
 before__expected__test_dead_code_eliminator = [

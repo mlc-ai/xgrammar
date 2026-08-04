@@ -953,7 +953,7 @@ Result<std::vector<std::variant<int32_t, std::string>>, ISTError> ParseIntOrStri
             field_name + " elements must be non-negative integers or strings"
         );
       }
-      result.push_back(id);
+      result.emplace_back(std::in_place_type<int32_t>, id);
     } else if (v.is<std::string>()) {
       auto s = v.get<std::string>();
       if (s.empty()) {
@@ -1855,17 +1855,16 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
   // The whitespace cap comes from the JSONSchemaFormat node (per-tag).
-  std::string ebnf = JSONSchemaToEBNF(
+  auto sub_grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
       format.json_schema,
       /*any_whitespace=*/true,
       /*indent=*/std::nullopt,
       /*separators=*/std::nullopt,
       /*strict_mode=*/true,
       /*max_whitespace_cnt=*/format.max_whitespace_cnt,
-      /*json_format=*/*json_format,
-      format.any_order
-  );
-  auto sub_grammar = Grammar::FromEBNF(ebnf);
+      /*any_order=*/format.any_order,
+      /*json_format=*/*json_format
+  ));
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }
