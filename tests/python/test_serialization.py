@@ -270,6 +270,7 @@ def test_serialize_compiled_grammar():
             "add_prefix_space": True,
             "stop_token_ids": [0, 1],
         },
+        "dynamic": False,
         "__VERSION__": "v16",
     }
 
