@@ -192,7 +192,7 @@ def test_concurrent_dynamic_mask_generation(compile_grammar, input_string):
             torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
 
 
-def test_limited_compiler_cache_does_not_retain_growing_grammar():
+def test_limited_compiler_cache_records_dynamic_grammar_size_on_insertion():
     tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
     cache_limit = 64 * 1024
     compiler = xgr.GrammarCompiler(
@@ -203,7 +203,8 @@ def test_limited_compiler_cache_does_not_retain_growing_grammar():
         enable_dynamic_compilation=True,
     )
     dynamic = _compile_builtin_json(compiler)
-    assert compiler.get_cache_size_bytes() == 0
+    insertion_size = compiler.get_cache_size_bytes()
+    assert 0 < insertion_size <= cache_limit
 
     barrier = threading.Barrier(9)
 
@@ -222,5 +223,6 @@ def test_limited_compiler_cache_does_not_retain_growing_grammar():
             future.result()
         observed_sizes = size_future.result()
 
-    assert all(0 <= size <= cache_limit for size in observed_sizes)
-    assert 0 <= compiler.get_cache_size_bytes() <= cache_limit
+    assert all(size == insertion_size for size in observed_sizes)
+    assert compiler.get_cache_size_bytes() == insertion_size
+    assert _compile_builtin_json(compiler).memory_size_bytes == dynamic.memory_size_bytes
