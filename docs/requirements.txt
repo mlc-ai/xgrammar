@@ -16,6 +16,7 @@ pillow
 pydantic
 sentencepiece
 setuptools==81.0.0
+setuptools-scm>=8
 sphinx>=8.2
 sphinx-autobuild
 sphinx-copybutton
@@ -25,7 +26,6 @@ sphinx-toolbox
 sphinxcontrib-mermaid
 sphinxcontrib_httpdomain
 tiktoken
-tomli
 torch
 transformers>=4.38.0
 urllib3>=2.5.0

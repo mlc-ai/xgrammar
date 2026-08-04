@@ -17,6 +17,7 @@ build/
 .npm
 # Distribution / packaging
 .Python
+python/xgrammar/_version.py
 env/
 build/
 build-*/

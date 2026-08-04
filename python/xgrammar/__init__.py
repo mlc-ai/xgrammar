@@ -1,4 +1,11 @@
 from . import exception, load_binding, structural_tag, testing
+
+try:
+    from ._version import __version__
+except ImportError:
+    # A clean source checkout has no generated version file until it is built.
+    __version__ = "0.0.0+unknown"
+
 from .builtin_structural_tag import (
     get_builtin_structural_tag,
     get_model_structural_tag,
@@ -63,4 +70,5 @@ __all__ = [
     "normalize_tool_choice",
     "register_model_structural_tag",
     "get_builtin_structural_tag",
+    "__version__",
 ]

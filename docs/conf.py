@@ -3,7 +3,7 @@ import os
 import sys
 from datetime import datetime
 
-import tomli
+from setuptools_scm import get_version
 
 # -- General configuration ------------------------------------------------
 
@@ -11,10 +11,13 @@ os.environ["XGRAMMAR_BUILD_DOCS"] = "1"
 sys.path.insert(0, os.path.abspath("../python"))
 sys.path.insert(0, os.path.abspath("../"))
 
-# Load version from pyproject.toml
-with open("../pyproject.toml", "rb") as f:
-    pyproject_data = tomli.load(f)
-__version__ = pyproject_data["project"]["version"]
+__version__ = get_version(
+    root="..",
+    relative_to=__file__,
+    fallback_version="0.2.5",
+    version_scheme="only-version",
+    local_scheme="node-and-date",
+)
 
 project = "XGrammar"
 author = "XGrammar Contributors"
