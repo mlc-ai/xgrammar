@@ -541,7 +541,7 @@ def test_json_schema_style_kimi_k3_xml_empty_object():
         "style": "kimi_k3_xml",
     }
     check_stag_with_instance(stag_format, "", True)
-    check_stag_with_instance(stag_format, "\n", True)
+    check_stag_with_instance(stag_format, "\n", False)
 
 
 def test_json_schema_style_kimi_k3_xml_object_argument_uses_json():
