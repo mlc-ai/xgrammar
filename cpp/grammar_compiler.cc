@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -69,6 +70,14 @@ class RuleLevelCache {
       const int32_t edge_cnt,
       AdaptiveTokenMask&& token_mask
   );
+
+  std::optional<DynamicBitset> GetTagDispatchSlicingBitset(const std::vector<std::string>& patterns
+  );
+
+  bool AddTagDispatchSlicingBitset(
+      const std::vector<std::string>& patterns, const DynamicBitset& bitset
+  );
+
   RuleLevelCache(size_t max_cache_memory_size = kUnlimitedSize);
 
   void ClearCache();
@@ -88,6 +97,8 @@ class RuleLevelCache::Impl {
       int32_t /*The number of states*/,
       int32_t /* The number of edges*/>;
   using NodeType = std::pair<NodeKey, AdaptiveTokenMask>;
+  using TagDispatchKey = std::vector<std::string>;
+  using TagDispatchNodeType = std::pair<TagDispatchKey, DynamicBitset>;
 
   explicit Impl(size_t max_cache_memory_size) : max_cache_memory_size_(max_cache_memory_size) {}
 
@@ -114,6 +125,10 @@ class RuleLevelCache::Impl {
       AdaptiveTokenMask&& token_mask
   );
 
+  std::optional<DynamicBitset> GetTagDispatchSlicingBitset(const TagDispatchKey& patterns);
+
+  bool AddTagDispatchSlicingBitset(const TagDispatchKey& patterns, const DynamicBitset& bitset);
+
   void ClearCache();
 
   friend size_t MemorySize(const Impl* impl) {
@@ -122,6 +137,8 @@ class RuleLevelCache::Impl {
       std::lock_guard<std::mutex> lock(shard.mutex);
       total += shard.current_cache_memory_size;
     }
+    std::lock_guard<std::mutex> lock(impl->tag_dispatch_cache_.mutex);
+    total += impl->tag_dispatch_cache_.current_cache_memory_size;
     return total;
   }
 
@@ -134,6 +151,7 @@ class RuleLevelCache::Impl {
    * them (large grammars issue millions of cache operations).
    */
   static constexpr size_t kNumShards = 16;
+  static constexpr size_t kNumCachePartitions = kNumShards + 1;
 
   struct Shard {
     mutable std::mutex mutex;
@@ -143,6 +161,13 @@ class RuleLevelCache::Impl {
     std::unordered_map<NodeKey, int> cache;
   };
 
+  struct TagDispatchCache {
+    mutable std::mutex mutex;
+    int64_t current_cache_memory_size = 0;
+    List<TagDispatchNodeType> cache_list;
+    std::map<TagDispatchKey, int> cache;
+  };
+
   Shard& GetShard(const NodeKey& key) {
     return shards_[HashCombine(std::get<0>(key), std::get<1>(key)) % kNumShards];
   }
@@ -150,11 +175,12 @@ class RuleLevelCache::Impl {
   /*! \brief The memory budget of one shard. Eviction is performed per shard. */
   size_t ShardMaxSize() const {
     return max_cache_memory_size_ == kUnlimitedSize ? kUnlimitedSize
-                                                    : max_cache_memory_size_ / kNumShards;
+                                                    : max_cache_memory_size_ / kNumCachePartitions;
   }
 
   const size_t max_cache_memory_size_;
   std::array<Shard, kNumShards> shards_;
+  TagDispatchCache tag_dispatch_cache_;
 };
 
 std::optional<AdaptiveTokenMask> RuleLevelCache::GetCache(
@@ -184,6 +210,18 @@ bool RuleLevelCache::AddCache(
     AdaptiveTokenMask&& token_mask
 ) {
   return pimpl_->AddCache(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt, std::move(token_mask));
+}
+
+std::optional<DynamicBitset> RuleLevelCache::GetTagDispatchSlicingBitset(
+    const std::vector<std::string>& patterns
+) {
+  return pimpl_->GetTagDispatchSlicingBitset(patterns);
+}
+
+bool RuleLevelCache::AddTagDispatchSlicingBitset(
+    const std::vector<std::string>& patterns, const DynamicBitset& bitset
+) {
+  return pimpl_->AddTagDispatchSlicingBitset(patterns, bitset);
 }
 
 void RuleLevelCache::ClearCache() { pimpl_->ClearCache(); }
@@ -265,6 +303,55 @@ bool RuleLevelCache::Impl::AddCache(
   return true;
 }
 
+std::optional<DynamicBitset> RuleLevelCache::Impl::GetTagDispatchSlicingBitset(
+    const TagDispatchKey& patterns
+) {
+  std::lock_guard<std::mutex> lock(tag_dispatch_cache_.mutex);
+  auto it = tag_dispatch_cache_.cache.find(patterns);
+  if (it == tag_dispatch_cache_.cache.end()) {
+    return std::nullopt;
+  }
+  tag_dispatch_cache_.cache_list.MoveBack(it->second);
+  return List<TagDispatchNodeType>::iterator(it->second, tag_dispatch_cache_.cache_list)->second;
+}
+
+bool RuleLevelCache::Impl::AddTagDispatchSlicingBitset(
+    const TagDispatchKey& patterns, const DynamicBitset& bitset
+) {
+  const size_t max_size = ShardMaxSize();
+  // The patterns are stored in both cache_list and cache.
+  const size_t new_item_size = 2 * MemorySize(patterns) + MemorySize(bitset);
+  std::lock_guard<std::mutex> lock(tag_dispatch_cache_.mutex);
+  if (max_size != kUnlimitedSize && new_item_size > max_size) {
+    return false;
+  }
+  auto existing = tag_dispatch_cache_.cache.find(patterns);
+  if (existing != tag_dispatch_cache_.cache.end()) {
+    tag_dispatch_cache_.cache_list.MoveBack(existing->second);
+    return false;
+  }
+
+  if (max_size != kUnlimitedSize) {
+    while (tag_dispatch_cache_.current_cache_memory_size >
+           static_cast<int64_t>(max_size - new_item_size)) {
+      auto oldest_it = tag_dispatch_cache_.cache_list.begin();
+      if (oldest_it == tag_dispatch_cache_.cache_list.end()) {
+        break;
+      }
+      tag_dispatch_cache_.current_cache_memory_size -=
+          2 * MemorySize(oldest_it->first) + MemorySize(oldest_it->second);
+      tag_dispatch_cache_.cache.erase(oldest_it->first);
+      tag_dispatch_cache_.cache_list.Erase(oldest_it);
+    }
+  }
+
+  auto new_it = tag_dispatch_cache_.cache_list.PushBack(TagDispatchNodeType(patterns, bitset));
+  tag_dispatch_cache_.current_cache_memory_size +=
+      2 * MemorySize(new_it->first) + MemorySize(new_it->second);
+  tag_dispatch_cache_.cache[new_it->first] = new_it.Index();
+  return true;
+}
+
 RuleLevelCache::RuleLevelCache(size_t max_cache_memory_size)
     : pimpl_(std::make_shared<Impl>(max_cache_memory_size)) {}
 
@@ -275,6 +362,10 @@ void RuleLevelCache::Impl::ClearCache() {
     shard.cache.clear();
     shard.current_cache_memory_size = 0;
   }
+  std::lock_guard<std::mutex> lock(tag_dispatch_cache_.mutex);
+  tag_dispatch_cache_.cache_list.Clear();
+  tag_dispatch_cache_.cache.clear();
+  tag_dispatch_cache_.current_cache_memory_size = 0;
 }
 
 size_t MemorySize(const RuleLevelCache& manager) { return MemorySize(manager.ImplPtr()); }
@@ -1299,18 +1390,33 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask() {
   }
 }
 
+static DynamicBitset ComputeTagDispatchSecondSlicingBitset(
+    const Grammar& grammar,
+    const TokenizerInfo& tokenizer_info,
+    int32_t rule_id,
+    RuleLevelCache* rule_level_cache
+);
+
+static std::unordered_map<int32_t, DynamicBitset> ComputeTagDispatchSecondSlicingBitsets(
+    const Grammar& grammar, const TokenizerInfo& tokenizer_info, RuleLevelCache* rule_level_cache
+);
+
 const DynamicBitset* TokenMaskCache::GetTagDispatchSecondSlicingBitset(
     int32_t rule_id, const Grammar& grammar, const TokenizerInfo& tokenizer_info
 ) {
+  std::shared_ptr<RuleLevelCache> rule_level_cache;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     const auto existing = tag_dispatch_rule_id_to_second_slicing_bitset_.find(rule_id);
     if (existing != tag_dispatch_rule_id_to_second_slicing_bitset_.end()) {
       return &existing->second;
     }
+    rule_level_cache = rule_level_cache_;
   }
 
-  DynamicBitset bitset = ComputeTagDispatchSecondSlicingBitset(grammar, tokenizer_info, rule_id);
+  DynamicBitset bitset = ComputeTagDispatchSecondSlicingBitset(
+      grammar, tokenizer_info, rule_id, rule_level_cache.get()
+  );
 
   std::lock_guard<std::mutex> lock(mutex_);
   return &tag_dispatch_rule_id_to_second_slicing_bitset_.try_emplace(rule_id, std::move(bitset))
@@ -1457,8 +1563,11 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
     return CompiledGrammar(compiled_grammar_impl);
   }
 
-  auto tag_dispatch_rule_id_to_second_slicing_bitset =
-      ComputeTagDispatchSecondSlicingBitsets(compiled_grammar_impl->grammar, tokenizer_info_);
+  auto tag_dispatch_rule_id_to_second_slicing_bitset = ComputeTagDispatchSecondSlicingBitsets(
+      compiled_grammar_impl->grammar,
+      tokenizer_info_,
+      rule_level_cache_.has_value() ? &rule_level_cache_.value() : nullptr
+  );
 
   // Step 3. Compute the adaptive token mask cache
   // The token mask cache is computed for these positions in the grammar:
@@ -1589,50 +1698,56 @@ CompiledGrammar GrammarCompilerSub::CompileGrammar(
   return MultiThreadCompileGrammar(Grammar::FromEBNF(ebnf_str, root_rule_name));
 }
 
-DynamicBitset ComputeTagDispatchSecondSlicingBitset(
-    const Grammar& grammar, const TokenizerInfo& tokenizer_info, int32_t rule_id
+static DynamicBitset ComputeTagDispatchSecondSlicingBitset(
+    const Grammar& grammar,
+    const TokenizerInfo& tokenizer_info,
+    int32_t rule_id,
+    RuleLevelCache* rule_level_cache
 ) {
   using GrammarExprType = Grammar::Impl::GrammarExprType;
   const auto& rule = grammar->GetRule(rule_id);
   const auto& rule_body = grammar->GetGrammarExpr(rule.body_expr_id);
   XGRAMMAR_DCHECK(rule_body.type == GrammarExprType::kTagDispatch);
   Grammar::Impl::TagDispatch tag_dispatch = grammar->GetTagDispatch(rule.body_expr_id);
-  const auto& sorted_decoded_vocab = tokenizer_info.GetSortedDecodedVocab();
-  DynamicBitset definite_accepted_tokens_since_second_char(sorted_decoded_vocab.size());
-  for (int token_index = 0; token_index < static_cast<int32_t>(sorted_decoded_vocab.size());
-       ++token_index) {
-    bool definite_accept_since_second_char = true;
-    const auto& token = sorted_decoded_vocab[token_index].second;
-    if (token.empty()) {
-      definite_accepted_tokens_since_second_char.Set(token_index);
-      continue;
-    }
+  std::vector<std::string> patterns;
+  patterns.reserve(tag_dispatch.tag_rule_pairs.size() + tag_dispatch.excludes.size());
+  for (const auto& tag_rule_pair : tag_dispatch.tag_rule_pairs) {
+    patterns.push_back(tag_rule_pair.first);
+  }
+  patterns.insert(patterns.end(), tag_dispatch.excludes.begin(), tag_dispatch.excludes.end());
+  std::sort(patterns.begin(), patterns.end());
+  patterns.erase(std::unique(patterns.begin(), patterns.end()), patterns.end());
 
-    // Check if the token contains any string trigger or exclude string after first char.
-    for (const auto& tag_rule_pair : tag_dispatch.tag_rule_pairs) {
-      if (token.find(tag_rule_pair.first, 1) != std::string::npos) {
-        definite_accept_since_second_char = false;
-        break;
-      }
-    }
-    if (definite_accept_since_second_char) {
-      for (const auto& exclude : tag_dispatch.excludes) {
-        if (token.find(exclude, 1) != std::string::npos) {
-          definite_accept_since_second_char = false;
-          break;
-        }
-      }
-    }
-
-    if (definite_accept_since_second_char) {
-      definite_accepted_tokens_since_second_char.Set(token_index);
+  if (rule_level_cache != nullptr) {
+    auto cached = rule_level_cache->GetTagDispatchSlicingBitset(patterns);
+    if (cached.has_value()) {
+      return std::move(cached.value());
     }
   }
-  return definite_accepted_tokens_since_second_char;
+
+  const auto& sorted_decoded_vocab = tokenizer_info.GetSortedDecodedVocab();
+  DynamicBitset computed(sorted_decoded_vocab.size());
+  for (int32_t token_index = 0; token_index < static_cast<int32_t>(sorted_decoded_vocab.size());
+       ++token_index) {
+    const auto& token = sorted_decoded_vocab[token_index].second;
+    const bool definitely_accepted =
+        token.empty() ||
+        std::none_of(patterns.begin(), patterns.end(), [&](const std::string& pattern) {
+          return token.find(pattern, 1) != std::string::npos;
+        });
+    if (definitely_accepted) {
+      computed.Set(token_index);
+    }
+  }
+
+  if (rule_level_cache != nullptr) {
+    rule_level_cache->AddTagDispatchSlicingBitset(patterns, computed);
+  }
+  return computed;
 }
 
-std::unordered_map<int32_t, DynamicBitset> ComputeTagDispatchSecondSlicingBitsets(
-    const Grammar& grammar, const TokenizerInfo& tokenizer_info
+static std::unordered_map<int32_t, DynamicBitset> ComputeTagDispatchSecondSlicingBitsets(
+    const Grammar& grammar, const TokenizerInfo& tokenizer_info, RuleLevelCache* rule_level_cache
 ) {
   using GrammarExprType = Grammar::Impl::GrammarExprType;
   std::unordered_map<int32_t, DynamicBitset> result;
@@ -1640,7 +1755,8 @@ std::unordered_map<int32_t, DynamicBitset> ComputeTagDispatchSecondSlicingBitset
     const auto& rule = grammar->GetRule(rule_id);
     if (grammar->GetGrammarExpr(rule.body_expr_id).type == GrammarExprType::kTagDispatch) {
       result.emplace(
-          rule_id, ComputeTagDispatchSecondSlicingBitset(grammar, tokenizer_info, rule_id)
+          rule_id,
+          ComputeTagDispatchSecondSlicingBitset(grammar, tokenizer_info, rule_id, rule_level_cache)
       );
     }
   }

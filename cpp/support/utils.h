@@ -107,7 +107,7 @@ struct hash<std::tuple<Args...>> {
 template <typename T>
 struct hash<std::vector<T>> {
   size_t operator()(const std::vector<T>& vec) const {
-    uint32_t seed = 0;
+    uint64_t seed = 0;
     for (const auto& item : vec) {
       xgrammar::HashCombineBinary(seed, std::hash<T>{}(item));
     }

@@ -1,3 +1,4 @@
+import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -173,6 +174,54 @@ def test_serialization_roundtrips_dynamic_tag_dispatch():
     for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
         assert actual_apply == expected_apply
         torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+def test_dynamic_tag_dispatch_slicing_uses_rule_level_cache():
+    tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
+    cache_limit = 64 * 1024
+    compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=True,
+        cache_limit_bytes=cache_limit,
+        enable_dynamic_compilation=True,
+    )
+
+    def dispatch(value, trigger="<call>"):
+        return {
+            "type": "structural_tag",
+            "format": {
+                "type": "dispatch",
+                "rules": [[trigger, {"type": "const_string", "value": value}]],
+                "loop": False,
+                "excludes": [],
+            },
+        }
+
+    def compile_dispatch(value, trigger="<call>"):
+        return compiler.compile_structural_tag(dispatch(value, trigger))
+
+    first = compile_dispatch("X")
+    size_before_first_use = compiler.get_cache_size_bytes()
+    _mask_trace(first, "prefix<call>X")
+    size_after_first_use = compiler.get_cache_size_bytes()
+    assert size_before_first_use < size_after_first_use <= cache_limit
+
+    second = compiler.compile_structural_tag(json.dumps(dispatch("X"), indent=2))
+    size_before_second_use = compiler.get_cache_size_bytes()
+    _mask_trace(second, "prefix<call>X")
+    assert compiler.get_cache_size_bytes() == size_before_second_use
+
+    distinct_patterns = [compile_dispatch("X", trigger=f"<call{index}>") for index in range(32)]
+    for compiled_grammar in distinct_patterns:
+        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        matcher.fill_next_token_bitmask(bitmask)
+    size_after_distinct_patterns = compiler.get_cache_size_bytes()
+    assert 0 < size_after_distinct_patterns <= cache_limit
+
+    compiler.clear_cache()
+    assert compiler.get_cache_size_bytes() == 0
 
 
 @pytest.mark.parametrize(
