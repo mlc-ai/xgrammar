@@ -273,6 +273,27 @@ def test_max_chars_rollback_reset_and_fork() -> None:
     assert 0 in _allowed_token_ids(matcher, tokenizer_info)
 
 
+def test_max_chars_shared_subrule_keeps_parent_contexts_separate() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "X", "Y"])
+    compiled = _compile(
+        """
+        start: tight "X" | loose "Y"
+        tight[max_chars=1]: sub
+        loose: sub
+        sub: /[ab]+/
+        """,
+        tokenizer_info,
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_token(0)
+    assert 1 in _allowed_token_ids(matcher, tokenizer_info)
+    assert matcher.accept_token(1)
+    assert _allowed_token_ids(matcher, tokenizer_info) == [0, 1, 3]
+    assert not matcher.accept_token(2)
+    assert matcher.accept_token(3) and matcher.is_terminated()
+
+
 def test_max_chars_atomic_token_is_best_effort() -> None:
     tokenizer_info = xgr.TokenizerInfo(["<|wide|>", "!"])
     compiled = _compile('start: value "!"\nvalue[max_chars=1]: <|wide|>', tokenizer_info)
