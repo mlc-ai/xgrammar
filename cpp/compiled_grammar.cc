@@ -207,6 +207,8 @@ std::optional<SerializationError> DeserializeJSONValue(
   if (impl->earley_parser_features.fsm_state_flags.size() !=
           static_cast<std::size_t>(impl->grammar->complete_fsm.NumStates()) ||
       impl->earley_parser_features.rule_is_nullable.size() !=
+          static_cast<std::size_t>(impl->grammar->NumRules()) ||
+      impl->earley_parser_features.rule_is_context_independent.size() !=
           static_cast<std::size_t>(impl->grammar->NumRules())) {
     return ConstructDeserializeError(
         "Earley parser feature dimensions do not match the grammar", type_name

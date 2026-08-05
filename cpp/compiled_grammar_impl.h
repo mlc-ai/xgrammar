@@ -36,6 +36,8 @@ XGRAMMAR_MEMBER_TABLE(
     &EarleyParserFeatures::fsm_state_flags,
     "rule_is_nullable",
     &EarleyParserFeatures::rule_is_nullable,
+    "rule_is_context_independent",
+    &EarleyParserFeatures::rule_is_context_independent,
     "has_budget_rules",
     &EarleyParserFeatures::has_budget_rules,
     "has_char_budget_rules",
@@ -137,11 +139,8 @@ class TokenMaskCache {
   explicit TokenMaskCache(bool dynamic) : dynamic_(dynamic) {}
 
   /*! \brief Configure cross-grammar rule mask sharing for dynamic generation. */
-  void SetRuleLevelCache(
-      std::shared_ptr<RuleLevelCache> rule_level_cache, std::vector<uint8_t> rule_level_cacheable
-  ) {
+  void SetRuleLevelCache(std::shared_ptr<RuleLevelCache> rule_level_cache) {
     rule_level_cache_ = std::move(rule_level_cache);
-    rule_level_cacheable_ = std::move(rule_level_cacheable);
   }
 
   /*! \brief Whether missing token masks should be generated on first use. */
@@ -172,9 +171,6 @@ class TokenMaskCache {
   /*! \brief Rule masks shared by grammars compiled with the same compiler. */
   std::shared_ptr<RuleLevelCache> rule_level_cache_;
 
-  /*! \brief Whether each rule is independent of runtime parser context. */
-  std::vector<uint8_t> rule_level_cacheable_;
-
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache> masks_;
 
@@ -195,8 +191,7 @@ class TokenMaskCache {
   friend std::size_t MemorySize(const TokenMaskCache& token_mask_cache) {
     std::lock_guard<std::mutex> lock(token_mask_cache.mutex_);
     return MemorySize(token_mask_cache.masks_) +
-           MemorySize(token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset_) +
-           MemorySize(token_mask_cache.rule_level_cacheable_);
+           MemorySize(token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset_);
   }
 };
 

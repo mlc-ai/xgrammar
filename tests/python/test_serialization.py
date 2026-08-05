@@ -267,6 +267,7 @@ def test_serialize_compiled_grammar():
         "earley_parser_features": {
             "fsm_state_flags": [19, 19, 27, 21, 19, 9, 19, 21, 9],
             "rule_is_nullable": [1, 0],
+            "rule_is_context_independent": [1, 1],
             "has_budget_rules": False,
             "has_char_budget_rules": False,
             "capture_tracking": False,

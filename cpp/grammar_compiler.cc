@@ -372,52 +372,6 @@ size_t MemorySize(const RuleLevelCache& manager) { return MemorySize(manager.Imp
 
 /************** AdaptiveTokenMaskCache Generator **************/
 
-std::vector<uint8_t> GetRuleLevelCacheableRules(const Grammar& grammar) {
-  const int32_t num_rules = grammar->NumRules();
-  std::vector<uint8_t> context_dependent(num_rules, 0);
-  std::vector<std::vector<int32_t>> referenced_rules(num_rules);
-  for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
-    const auto& rule = grammar->GetRule(rule_id);
-    context_dependent[rule_id] = rule.max_tokens >= 0 || rule.max_chars >= 0 || rule.is_lazy ||
-                                 rule.temperature.has_value() ||
-                                 grammar->GetSuffixStopInfo(rule_id) != nullptr;
-    const auto& fsm = grammar->per_rule_fsms[rule_id]->GetFsm();
-    std::unordered_set<int32_t> reachable_states;
-    fsm.GetReachableStates(&reachable_states);
-    for (int32_t state_id : reachable_states) {
-      for (const auto& edge : fsm.GetFsm().GetEdges(state_id)) {
-        if (edge.IsRuleRef()) {
-          referenced_rules[rule_id].push_back(edge.GetRefRuleId());
-        } else if (edge.IsRepeatRef()) {
-          referenced_rules[rule_id].push_back(
-              grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId()
-          );
-        }
-      }
-    }
-  }
-
-  bool changed = true;
-  while (changed) {
-    changed = false;
-    for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
-      if (!context_dependent[rule_id]) {
-        continue;
-      }
-      for (int32_t referenced_rule_id : referenced_rules[rule_id]) {
-        if (!context_dependent[referenced_rule_id]) {
-          context_dependent[referenced_rule_id] = 1;
-          changed = true;
-        }
-      }
-    }
-  }
-  for (uint8_t& value : context_dependent) {
-    value = !value;
-  }
-  return context_dependent;
-}
-
 /*! \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcherForTokenMaskCache : public EarleyParser {
  public:
@@ -1464,9 +1418,7 @@ const AdaptiveTokenMask& TokenMaskCache::Get(
       state.sub_element_id
   );
   std::optional<RuleLevelCache> retained_rule_level_cache;
-  if (rule_level_cache_ != nullptr && state.rule_id >= 0 &&
-      state.rule_id < static_cast<int32_t>(rule_level_cacheable_.size()) &&
-      rule_level_cacheable_[state.rule_id]) {
+  if (rule_level_cache_ != nullptr && features.IsRuleContextIndependent(state.rule_id)) {
     retained_rule_level_cache = *rule_level_cache_;
   }
   AdaptiveTokenMask mask = GrammarMatcherForTokenMaskCache(
@@ -1556,8 +1508,7 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   if (enable_dynamic_compilation_) {
     if (rule_level_cache_.has_value()) {
       compiled_grammar_impl->token_mask_cache.SetRuleLevelCache(
-          std::make_shared<RuleLevelCache>(rule_level_cache_.value()),
-          GetRuleLevelCacheableRules(compiled_grammar_impl->grammar)
+          std::make_shared<RuleLevelCache>(rule_level_cache_.value())
       );
     }
     return CompiledGrammar(compiled_grammar_impl);

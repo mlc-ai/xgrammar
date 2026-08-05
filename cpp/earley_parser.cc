@@ -482,7 +482,8 @@ void EarleyParser::RemoveCommittedLazyStates() {
 
 EarleyParserFeatures::EarleyParserFeatures(const Grammar& grammar)
     : fsm_state_flags(grammar->complete_fsm.NumStates(), kFsmStateInitialized),
-      rule_is_nullable(grammar->NumRules(), 0) {
+      rule_is_nullable(grammar->NumRules(), 0),
+      rule_is_context_independent(grammar->NumRules(), 1) {
   XGRAMMAR_CHECK(grammar->optimized)
       << "Cannot build Earley parser features for an unoptimized grammar";
 
@@ -502,6 +503,7 @@ EarleyParserFeatures::EarleyParserFeatures(const Grammar& grammar)
     }
   }
 
+  std::vector<std::vector<int32_t>> referenced_rules(grammar->NumRules());
   for (int32_t rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
     const auto& rule = grammar->GetRule(rule_id);
     const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
@@ -510,6 +512,9 @@ EarleyParserFeatures::EarleyParserFeatures(const Grammar& grammar)
       fsm_state_flags[end_state] |= kFsmStateEnd;
     }
     const auto* suffix_stop_info = grammar->GetSuffixStopInfo(rule_id);
+    rule_is_context_independent[rule_id] =
+        !(rule.max_tokens >= 0 || rule.max_chars >= 0 || rule.is_lazy ||
+          rule.temperature.has_value() || suffix_stop_info != nullptr);
     has_budget_rules = has_budget_rules || rule.max_tokens >= 0;
     has_char_budget_rules = has_char_budget_rules || rule.max_chars >= 0;
     capture_tracking =
@@ -519,6 +524,37 @@ EarleyParserFeatures::EarleyParserFeatures(const Grammar& grammar)
         has_hidden_capture_rules ||
         (suffix_stop_info != nullptr &&
          (suffix_stop_info->hidden_suffix_bytes > 0 || suffix_stop_info->hidden_stop_bytes > 0));
+
+    const auto& fsm = rule_fsm->GetFsm();
+    std::unordered_set<int32_t> reachable_states;
+    fsm.GetReachableStates(&reachable_states);
+    for (int32_t state_id : reachable_states) {
+      for (const auto& edge : fsm.GetFsm().GetEdges(state_id)) {
+        if (edge.IsRuleRef()) {
+          referenced_rules[rule_id].push_back(edge.GetRefRuleId());
+        } else if (edge.IsRepeatRef()) {
+          referenced_rules[rule_id].push_back(
+              grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId()
+          );
+        }
+      }
+    }
+  }
+
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    for (int32_t rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
+      if (rule_is_context_independent[rule_id]) {
+        continue;
+      }
+      for (int32_t referenced_rule_id : referenced_rules[rule_id]) {
+        if (rule_is_context_independent[referenced_rule_id]) {
+          rule_is_context_independent[referenced_rule_id] = 0;
+          changed = true;
+        }
+      }
+    }
   }
   for (int32_t rule_id : grammar->allow_empty_rule_ids) {
     rule_is_nullable[rule_id] = true;
