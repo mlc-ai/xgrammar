@@ -543,6 +543,34 @@ def test_json_schema_style_kimi_k3_xml_empty_object():
     check_stag_with_instance(stag_format, "\n", True)
 
 
+def test_json_schema_style_kimi_k3_xml_object_argument_uses_json():
+    """An object-valued argument uses a JSON body rather than nested XTML arguments."""
+    stag_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "type": "object",
+            "properties": {"value": {"type": "object"}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        "style": "kimi_k3_xml",
+    }
+    argument_prefix = '<|open|>argument key="value" type="object"<|sep|>'
+    argument_suffix = "<|close|>argument<|sep|>"
+
+    check_stag_with_instance(stag_format, argument_prefix + "{}" + argument_suffix, True)
+    check_stag_with_instance(stag_format, argument_prefix + '{"nested":1}' + argument_suffix, True)
+    check_stag_with_instance(stag_format, argument_prefix + argument_suffix, False)
+    check_stag_with_instance(
+        stag_format,
+        argument_prefix
+        + '<|open|>argument key="nested" type="number"<|sep|>'
+        + "1<|close|>argument<|sep|>"
+        + argument_suffix,
+        False,
+    )
+
+
 @pytest.mark.parametrize("type_attr", ["string", "number", "integer", "boolean", "object", "array"])
 def test_json_schema_style_kimi_k3_xml_free_form_keys_allow_any_type(type_attr: str):
     """style='kimi_k3_xml' keeps every type attribute for keys with no declared schema.

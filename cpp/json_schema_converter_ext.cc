@@ -15,6 +15,9 @@
 
 namespace xgrammar {
 
+constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
+constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
+
 // Static constants
 const std::string XMLToolCallingConverter::kXMLString = "xml_string";
 const std::string XMLToolCallingConverter::kXMLAny = "xml_any";
@@ -81,17 +84,16 @@ int32_t XMLToolCallingConverter::XMLKeySuffix(const std::optional<std::string>& 
     // A declared property carries exactly the type its value grammar is rendered with, so the
     // parser decodes the value back to the schema's type. Free-form keys have no single schema
     // type, so they keep the full set.
-    int32_t type_expr =
-        pinned_type.has_value() ? ByteString(*pinned_type)
-                                : Choice(
-                                      {ByteString("string"),
-                                       ByteString("number"),
-                                       ByteString("integer"),
-                                       ByteString("boolean"),
-                                       ByteString("object"),
-                                       ByteString("array"),
-                                       ByteString("null")}
-                                  );
+    int32_t type_expr = pinned_type.has_value() ? ByteString(*pinned_type)
+                                                : Choice(
+                                                      {ByteString("string"),
+                                                       ByteString("number"),
+                                                       ByteString("integer"),
+                                                       ByteString("boolean"),
+                                                       ByteString("object"),
+                                                       ByteString("array"),
+                                                       ByteString("null")}
+                                                  );
     return Sequence({ByteString("\" type=\""), type_expr, ByteString("\"<|sep|>")});
   }
   return ByteString(xml_wrapper_.key_wrapper_suffix);
@@ -164,8 +166,6 @@ void XMLToolCallingConverter::AddBasicRules() {
   JSONSchemaConverter::AddBasicRules({kXMLString, kXMLAny, kXMLObject, kXMLVariableName});
 
   auto any_spec = SchemaSpec::Make(AnySpec{}, "{}", kBasicAny);
-  constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
-  constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
 
   // The outer part, xml format, is at level 1.
   nested_object_level_ = 1;
@@ -410,6 +410,13 @@ void XMLToolCallingConverter::AddCache(const std::string& key, int32_t rule_id) 
 std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
+  }
+  // At level 0, {"type":"object"} is the root tool-arguments object and uses XML parameter
+  // tags. At level 1 it is the value of one such parameter and must use the inner JSON object
+  // rule, including braces. Without this distinction, the outer XML object cache is reused for
+  // the value before GenerateObject() can advance nested_object_level_.
+  if (nested_object_level_ == 1 && key == kObjectCacheKey) {
+    return rule_cache_manager_.GetCache(key, true);
   }
   return rule_cache_manager_.GetCache(key, nested_object_level_ > 1);
 }
