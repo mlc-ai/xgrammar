@@ -538,6 +538,15 @@ class GrammarMatcher::Impl : public EarleyParser {
  private:
   using StoreType = AdaptiveTokenMask::StoreType;
 
+  struct RepeatedCharacterClassState {
+    int32_t character_class_expression_id;
+    // -1 means the upper bound cannot affect the current token.
+    int32_t character_limit;
+  };
+
+  std::optional<RepeatedCharacterClassState> FindRepeatedCharacterClass(const ParserState& state
+  ) const;
+
   /*!
    * \brief If is_uncertain_saved is true, find the next token in uncertain_indices. Otherwise,
    * find the next token that is set to true in uncertain_tokens_bitset.
@@ -741,6 +750,55 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
 };
+
+std::optional<GrammarMatcher::Impl::RepeatedCharacterClassState>
+GrammarMatcher::Impl::FindRepeatedCharacterClass(const ParserState& state) const {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  if (!compiled_grammar_->token_mask_cache.IsDynamic() || state.rule_id < 0 ||
+      state.sub_element_id != 0 || !features_->IsRuleContextIndependent(state.rule_id) ||
+      state.partial_codepoint != 0 || state.rule_start_pos < 0 ||
+      state.rule_start_pos >= static_cast<int32_t>(rule_id_to_completable_states_.size()) ||
+      state.element_id != grammar_->per_rule_fsms[state.rule_id]->GetFsm().GetStart()) {
+    return std::nullopt;
+  }
+
+  const auto& body = grammar_->GetGrammarExpr(grammar_->GetRule(state.rule_id).body_expr_id);
+  if (body.type != GrammarExprType::kChoices || body.size() != 1) {
+    return std::nullopt;
+  }
+  const auto& sequence = grammar_->GetGrammarExpr(body[0]);
+  if (sequence.type != GrammarExprType::kSequence || sequence.size() != 1 ||
+      grammar_->GetGrammarExpr(sequence[0]).type != GrammarExprType::kCharacterClass) {
+    return std::nullopt;
+  }
+
+  const int32_t max_token_characters = tokenizer_info_.ImplPtr()->GetMaxTokenChars();
+  for (const auto& [completed_rule_id, parent] :
+       rule_id_to_completable_states_[state.rule_start_pos]) {
+    if (completed_rule_id != state.rule_id || parent.rule_id < 0) {
+      continue;
+    }
+    for (const auto& edge : grammar_->complete_fsm.GetEdges(parent.element_id)) {
+      if (!edge.IsRepeatRef()) {
+        continue;
+      }
+      const auto repeat = grammar_->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+      if (repeat.RuleId() != state.rule_id) {
+        continue;
+      }
+      const int32_t remaining =
+          repeat.Upper() == -1 ? max_token_characters : repeat.Upper() - parent.repeat_count;
+      if (remaining > 0) {
+        const bool upper_bound_is_stable =
+            repeat.Upper() == -1 || remaining >= max_token_characters;
+        return RepeatedCharacterClassState{
+            sequence[0], upper_bound_is_stable ? -1 : std::min(remaining, max_token_characters)
+        };
+      }
+    }
+  }
+  return std::nullopt;
+}
 
 class BatchGrammarMatcher::Impl {
  public:
@@ -1840,13 +1898,24 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    const AdaptiveTokenMask& adaptive_token_mask = compiled_grammar_->token_mask_cache.Get(
-        state,
-        state.rule_id == grammar_->GetRootRuleId(),
-        grammar_,
-        tokenizer_info_,
-        compiled_grammar_->earley_parser_features
-    );
+    const auto repeated_character_class = FindRepeatedCharacterClass(state);
+    const RepeatedCharacterClassTokenMask* repeated_character_class_token_mask =
+        repeated_character_class.has_value()
+            ? &compiled_grammar_->GetRepeatedCharacterClassTokenMask(
+                  repeated_character_class->character_class_expression_id,
+                  repeated_character_class->character_limit
+              )
+            : nullptr;
+    const AdaptiveTokenMask& adaptive_token_mask =
+        repeated_character_class_token_mask != nullptr
+            ? repeated_character_class_token_mask->adaptive_token_mask
+            : compiled_grammar_->token_mask_cache.Get(
+                  state,
+                  state.rule_id == grammar_->GetRootRuleId(),
+                  grammar_,
+                  tokenizer_info_,
+                  compiled_grammar_->earley_parser_features
+              );
     if (state.char_budget_deadline >= 0) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
@@ -1861,6 +1930,9 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       for (auto idx : adaptive_token_mask.accepted_indices) {
         tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
       }
+    }
+    if (repeated_character_class_token_mask != nullptr) {
+      tmp_accepted_bitset_ |= repeated_character_class_token_mask->accepted_prefix_tokens;
     }
   }
 

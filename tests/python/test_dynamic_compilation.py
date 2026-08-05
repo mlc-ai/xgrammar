@@ -77,12 +77,17 @@ def _compile_structural_tag(compiler: xgr.GrammarCompiler) -> xgr.CompiledGramma
     )
 
 
+def _compile_repeated_character_class(compiler: xgr.GrammarCompiler) -> xgr.CompiledGrammar:
+    return compiler.compile_grammar("root ::= [a-z]{1,}")
+
+
 CASES = [
     (_compile_ebnf, "hello!"),
     (_compile_json_schema, '{"name":"Ada","scores":[1,2]}'),
     (_compile_regex, "Ada42"),
     (_compile_builtin_json, '{"name":"Ada"}'),
     (_compile_structural_tag, "prefix<call>X"),
+    (_compile_repeated_character_class, "hello"),
 ]
 
 
@@ -98,7 +103,14 @@ def test_native_constructor_takes_dynamic_compilation_flag():
 @pytest.mark.parametrize(
     "compile_grammar,input_string",
     CASES,
-    ids=["ebnf", "json-schema", "regex", "builtin-json", "structural-tag"],
+    ids=[
+        "ebnf",
+        "json-schema",
+        "regex",
+        "builtin-json",
+        "structural-tag",
+        "repeated-character-class",
+    ],
 )
 def test_dynamic_compilation_matches_eager_masks(compile_grammar, input_string):
     tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
@@ -229,8 +241,9 @@ def test_dynamic_tag_dispatch_slicing_uses_rule_level_cache():
     [
         (_compile_json_schema, '{"name":"Ada","scores":[1,2]}'),
         (_compile_structural_tag, "prefix<call>X"),
+        (_compile_repeated_character_class, "hello"),
     ],
-    ids=["json-schema", "structural-tag"],
+    ids=["json-schema", "structural-tag", "repeated-character-class"],
 )
 def test_concurrent_dynamic_mask_generation(compile_grammar, input_string):
     tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
@@ -696,3 +709,99 @@ def test_rule_mask_sharing_distinguishes_repeat_bounds():
 
     assert not torch.equal(first_mask, expected_mask)
     torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize(
+    "grammar",
+    [r"root ::= [^\u0000]{1,}", r"root ::= [\u0000-\U0010FFFF]{1,}", r"root ::= [a-ca-b]{1,}"],
+    ids=["negative", "positive", "overlapping-ranges"],
+)
+def test_repeated_character_class_masks_follow_fsm_semantics(grammar):
+    vocabulary = [b"\xc0\x80", b"\xc0", b"\xed\xa0\x80", b"\xf5\x80\x80\x80", "a", "\x00"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    eager = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=False
+    ).compile_grammar(grammar)
+    dynamic = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+
+    def initial_mask(compiled_grammar):
+        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        xgr.reset_token_bitmask(bitmask)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        return bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)
+
+    torch.testing.assert_close(initial_mask(dynamic), initial_mask(eager), rtol=0, atol=0)
+    for token_id in range(tokenizer_info.vocab_size):
+        eager_matcher = xgr.GrammarMatcher(eager, terminate_without_stop_token=True)
+        dynamic_matcher = xgr.GrammarMatcher(dynamic, terminate_without_stop_token=True)
+        assert dynamic_matcher.accept_token(token_id) == eager_matcher.accept_token(token_id)
+
+
+@pytest.mark.parametrize("operation", ["rollback", "reset", "fork"])
+def test_repeated_character_class_masks_do_not_leak_across_state_changes(operation):
+    tokenizer_info = xgr.TokenizerInfo(["p", "q", "a", "x", "y"], stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar('root ::= "p" repeated "x" | "q" repeated "y"\nrepeated ::= [a]{1,}')
+
+    def next_token_ids(matcher):
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        xgr.reset_token_bitmask(bitmask)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        return set(
+            bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0].nonzero().flatten().tolist()
+        )
+
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(2)
+    assert next_token_ids(matcher) == {2, 3}
+
+    if operation == "rollback":
+        matcher.rollback(2)
+    elif operation == "reset":
+        matcher.reset()
+    else:
+        matcher = matcher.fork()
+        matcher.rollback(2)
+
+    assert matcher.accept_token(1)
+    assert matcher.accept_token(2)
+    assert next_token_ids(matcher) == {2, 4}
+
+
+def test_repeated_character_class_masks_are_shared_by_compiled_grammar():
+    tokenizer_info = xgr.TokenizerInfo(["a", "ab", "b", "x"], stop_token_ids=[])
+    compiled = _compile_repeated_character_class(
+        xgr.GrammarCompiler(tokenizer_info, max_threads=1, enable_dynamic_compilation=True)
+    )
+
+    initial_size = compiled.memory_size_bytes
+    _mask_trace(compiled, "a")
+    populated_size = compiled.memory_size_bytes
+    assert populated_size > initial_size
+    _mask_trace(compiled, "b")
+    assert compiled.memory_size_bytes == populated_size
+
+
+def test_serialization_rebuilds_repeated_character_class_masks():
+    tokenizer_info = xgr.TokenizerInfo(["a", "ab", "b", "x"], stop_token_ids=[])
+    grammar = "root ::= [a-z]{1,3}"
+    dynamic = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+    eager = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=False
+    ).compile_grammar(grammar)
+    restored = xgr.CompiledGrammar.deserialize_json(dynamic.serialize_json(), tokenizer_info)
+
+    expected = _mask_trace(eager, "ab")
+    actual = _mask_trace(restored, "ab")
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+        assert actual_apply == expected_apply
+        expected_tokens = bitmask_to_bool_mask(expected_mask, tokenizer_info.vocab_size)
+        actual_tokens = bitmask_to_bool_mask(actual_mask, tokenizer_info.vocab_size)
+        torch.testing.assert_close(actual_tokens, expected_tokens, rtol=0, atol=0)

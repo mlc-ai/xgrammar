@@ -18,6 +18,7 @@
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -371,6 +372,175 @@ void RuleLevelCache::Impl::ClearCache() {
 size_t MemorySize(const RuleLevelCache& manager) { return MemorySize(manager.ImplPtr()); }
 
 /************** AdaptiveTokenMaskCache Generator **************/
+
+class CharacterClassTokenSummaryCache {
+ public:
+  using SummaryList = std::vector<CharacterClassTokenSummary>;
+
+  std::shared_ptr<const SummaryList> GetOrCreate(
+      const Grammar::Impl::GrammarExpr& character_class,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_vocabulary
+  ) {
+    std::vector<int32_t> key(character_class.begin(), character_class.end());
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      const auto existing = cache_.find(key);
+      if (existing != cache_.end()) {
+        return existing->second;
+      }
+    }
+
+    auto computed =
+        std::make_shared<const SummaryList>(BuildSummaries(character_class, sorted_vocabulary));
+    std::lock_guard<std::mutex> lock(mutex_);
+    return cache_.emplace(std::move(key), std::move(computed)).first->second;
+  }
+
+  void Clear() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    cache_.clear();
+  }
+
+ private:
+  static SummaryList BuildSummaries(
+      const Grammar::Impl::GrammarExpr& character_class,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_vocabulary
+  ) {
+    XGRAMMAR_DCHECK(character_class.type == Grammar::Impl::GrammarExprType::kCharacterClass);
+    auto character_class_fsm = GrammarFSMBuilder::CharacterClass(character_class);
+    if (character_class_fsm.IsDFA()) {
+      return BuildDeterministicSummaries(character_class_fsm, sorted_vocabulary);
+    }
+    return BuildNondeterministicSummaries(character_class_fsm, sorted_vocabulary);
+  }
+
+  static SummaryList BuildDeterministicSummaries(
+      const FSMWithStartEnd& character_class_fsm,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_vocabulary
+  ) {
+    const auto& finite_state_machine = character_class_fsm.GetFsm();
+    const int32_t initial_state = character_class_fsm.GetStart();
+
+    SummaryList summaries;
+    summaries.reserve(sorted_vocabulary.size());
+    for (int32_t sorted_vocabulary_index = 0;
+         sorted_vocabulary_index < static_cast<int32_t>(sorted_vocabulary.size());
+         ++sorted_vocabulary_index) {
+      int32_t current_state = initial_state;
+      int32_t completed_characters = 0;
+      bool consumed_whole_token = true;
+      bool has_incomplete_character = false;
+      for (uint8_t byte : sorted_vocabulary[sorted_vocabulary_index].second) {
+        const int32_t next_state = finite_state_machine.GetNextState(current_state, byte);
+        if (next_state == FSM::kNoNextState) {
+          consumed_whole_token = false;
+          has_incomplete_character = false;
+          break;
+        }
+        if (character_class_fsm.IsEndState(next_state)) {
+          ++completed_characters;
+          current_state = initial_state;
+          has_incomplete_character = false;
+        } else {
+          current_state = next_state;
+          has_incomplete_character = true;
+        }
+      }
+      AppendSummary(
+          &summaries,
+          sorted_vocabulary_index,
+          completed_characters,
+          consumed_whole_token,
+          has_incomplete_character
+      );
+    }
+    return summaries;
+  }
+
+  static SummaryList BuildNondeterministicSummaries(
+      const FSMWithStartEnd& character_class_fsm,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_vocabulary
+  ) {
+    const auto& finite_state_machine = character_class_fsm.GetFsm();
+    std::unordered_set<int> initial_states{character_class_fsm.GetStart()};
+    finite_state_machine.GetEpsilonClosure(&initial_states);
+
+    SummaryList summaries;
+    summaries.reserve(sorted_vocabulary.size());
+    std::unordered_set<int> current_states;
+    std::unordered_set<int> next_states;
+    for (int32_t sorted_vocabulary_index = 0;
+         sorted_vocabulary_index < static_cast<int32_t>(sorted_vocabulary.size());
+         ++sorted_vocabulary_index) {
+      current_states = initial_states;
+      int32_t completed_characters = 0;
+      bool consumed_whole_token = true;
+      bool has_incomplete_character = false;
+      for (uint8_t byte : sorted_vocabulary[sorted_vocabulary_index].second) {
+        finite_state_machine.Advance(
+            current_states, byte, &next_states, FSMEdge::EdgeType::kCharRange, true
+        );
+        if (next_states.empty()) {
+          consumed_whole_token = false;
+          has_incomplete_character = false;
+          break;
+        }
+        const bool completed_character =
+            std::any_of(next_states.begin(), next_states.end(), [&](int32_t state) {
+              return character_class_fsm.IsEndState(state);
+            });
+        if (completed_character) {
+          ++completed_characters;
+          current_states = initial_states;
+          has_incomplete_character = false;
+        } else {
+          current_states.swap(next_states);
+          has_incomplete_character = true;
+        }
+      }
+
+      AppendSummary(
+          &summaries,
+          sorted_vocabulary_index,
+          completed_characters,
+          consumed_whole_token,
+          has_incomplete_character
+      );
+    }
+    return summaries;
+  }
+
+  static void AppendSummary(
+      SummaryList* summaries,
+      int32_t sorted_vocabulary_index,
+      int32_t completed_characters,
+      bool consumed_whole_token,
+      bool has_incomplete_character
+  ) {
+    if (consumed_whole_token || completed_characters > 0) {
+      summaries->push_back(CharacterClassTokenSummary{
+          sorted_vocabulary_index,
+          completed_characters +
+              static_cast<int32_t>(consumed_whole_token && has_incomplete_character),
+          consumed_whole_token,
+          completed_characters > 0
+      });
+    }
+  }
+
+  struct KeyHash {
+    size_t operator()(const std::vector<int32_t>& key) const {
+      uint64_t result = 0;
+      for (int32_t value : key) {
+        HashCombineBinary(result, static_cast<uint64_t>(value));
+      }
+      return result;
+    }
+  };
+
+  std::mutex mutex_;
+  std::unordered_map<std::vector<int32_t>, std::shared_ptr<const SummaryList>, KeyHash> cache_;
+};
 
 /*! \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcherForTokenMaskCache : public EarleyParser {
@@ -1436,6 +1606,59 @@ const AdaptiveTokenMask& TokenMaskCache::Get(
   return masks_.emplace(cache_state, std::move(mask)).first->second;
 }
 
+const RepeatedCharacterClassTokenMask& CompiledGrammar::Impl::GetRepeatedCharacterClassTokenMask(
+    int32_t character_class_expression_id, int32_t character_limit
+) {
+  std::lock_guard<std::mutex> lock(repeated_character_class_cache_mutex);
+  const uint64_t cache_key = (static_cast<uint64_t>(character_class_expression_id) << 32) |
+                             static_cast<uint32_t>(character_limit + 1);
+  const auto existing_mask = repeated_character_class_token_masks.find(cache_key);
+  if (existing_mask != repeated_character_class_token_masks.end()) {
+    return existing_mask->second;
+  }
+
+  if (character_class_token_summary_cache == nullptr) {
+    character_class_token_summary_cache = std::make_shared<CharacterClassTokenSummaryCache>();
+  }
+  const auto& sorted_vocabulary = tokenizer_info.GetSortedDecodedVocab();
+  const auto summaries = character_class_token_summary_cache->GetOrCreate(
+      grammar->GetGrammarExpr(character_class_expression_id), sorted_vocabulary
+  );
+  std::vector<int32_t> accepted_indices;
+  std::vector<int32_t> uncertain_indices;
+  DynamicBitset accepted_prefix_tokens(tokenizer_info.GetVocabSize());
+  for (const auto& summary : *summaries) {
+    if (character_limit < 0) {
+      if (summary.consumed_whole_token) {
+        accepted_indices.push_back(summary.sorted_vocab_index);
+      } else if (summary.has_completed_character_prefix) {
+        uncertain_indices.push_back(summary.sorted_vocab_index);
+      }
+      continue;
+    }
+    if (!summary.consumed_whole_token || summary.locally_consumed_characters > character_limit) {
+      uncertain_indices.push_back(summary.sorted_vocab_index);
+    } else {
+      accepted_prefix_tokens.Set(sorted_vocabulary[summary.sorted_vocab_index].first);
+    }
+  }
+
+  return repeated_character_class_token_masks
+      .emplace(
+          cache_key,
+          RepeatedCharacterClassTokenMask{
+              AdaptiveTokenMask(
+                  tokenizer_info.GetVocabSize(),
+                  sorted_vocabulary,
+                  accepted_indices,
+                  uncertain_indices
+              ),
+              std::move(accepted_prefix_tokens)
+          }
+      )
+      .first->second;
+}
+
 /******************* GrammarCompilerNoCache *******************/
 
 /*!
@@ -1474,6 +1697,8 @@ class GrammarCompilerSub {
 
   CompiledGrammar CompileGrammar(const std::string& ebnf_str, std::string root_rule_name);
 
+  void ClearCharacterClassTokenSummaryCache() { character_class_token_summary_cache_->Clear(); }
+
  private:
   /*! \brief The main logic. Compile the grammar with multi-threading. */
   CompiledGrammar MultiThreadCompileGrammar(Grammar grammar);
@@ -1485,6 +1710,9 @@ class GrammarCompilerSub {
 
   /*! \brief The manager of the rule level cache.*/
   std::optional<RuleLevelCache> rule_level_cache_;
+
+  std::shared_ptr<CharacterClassTokenSummaryCache> character_class_token_summary_cache_ =
+      std::make_shared<CharacterClassTokenSummaryCache>();
 
   /*! \brief Whether token masks are generated on first use. */
   const bool enable_dynamic_compilation_;
@@ -1506,6 +1734,8 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
     GrammarFSMHasher().Apply(&compiled_grammar_impl->grammar);
   }
   if (enable_dynamic_compilation_) {
+    compiled_grammar_impl->character_class_token_summary_cache =
+        character_class_token_summary_cache_;
     if (rule_level_cache_.has_value()) {
       compiled_grammar_impl->token_mask_cache.SetRuleLevelCache(
           std::make_shared<RuleLevelCache>(rule_level_cache_.value())
@@ -1988,6 +2218,7 @@ CompiledGrammar GrammarCompiler::Impl::CompileGrammar(
 
 void GrammarCompiler::Impl::ClearCache() {
   grammar_level_cache_.Clear();
+  no_cache_compiler_.ClearCharacterClassTokenSummaryCache();
   if (rule_level_cache_.has_value()) {
     rule_level_cache_->ClearCache();
   }

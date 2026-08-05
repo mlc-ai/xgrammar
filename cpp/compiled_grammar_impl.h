@@ -27,6 +27,7 @@
 namespace xgrammar {
 
 class RuleLevelCache;
+class CharacterClassTokenSummaryCache;
 
 /******************* CompiledGrammar Datastructures *******************/
 
@@ -121,6 +122,22 @@ XGRAMMAR_MEMBER_TABLE(
     "uncertain_indices",
     &AdaptiveTokenMask::uncertain_indices
 );
+
+struct CharacterClassTokenSummary {
+  int32_t sorted_vocab_index;
+  int32_t locally_consumed_characters;
+  bool consumed_whole_token;
+  bool has_completed_character_prefix;
+};
+
+struct RepeatedCharacterClassTokenMask {
+  AdaptiveTokenMask adaptive_token_mask;
+  DynamicBitset accepted_prefix_tokens;
+
+  friend std::size_t MemorySize(const RepeatedCharacterClassTokenMask& mask) {
+    return MemorySize(mask.adaptive_token_mask) + MemorySize(mask.accepted_prefix_tokens);
+  }
+};
 
 /*!
  * \brief Manages the adaptive token masks of a compiled grammar. In eager mode (the default),
@@ -219,6 +236,20 @@ class CompiledGrammar::Impl {
 
   /*! \brief Grammar-wide flags and nullable rules shared by Earley parsers. */
   EarleyParserFeatures earley_parser_features;
+
+  /*! \brief Character-class token summaries shared by grammars from the same compiler. */
+  std::shared_ptr<CharacterClassTokenSummaryCache> character_class_token_summary_cache;
+
+  /*! \brief Repeated character-class masks shared by matchers using this compiled grammar. */
+  std::unordered_map<uint64_t, RepeatedCharacterClassTokenMask>
+      repeated_character_class_token_masks;
+
+  /*! \brief Protects repeated character-class summary and mask generation. */
+  mutable std::mutex repeated_character_class_cache_mutex;
+
+  const RepeatedCharacterClassTokenMask& GetRepeatedCharacterClassTokenMask(
+      int32_t character_class_expression_id, int32_t character_limit
+  );
 
   Grammar GetGrammar() const { return grammar; }
 
