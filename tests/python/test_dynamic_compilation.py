@@ -476,3 +476,77 @@ def test_shared_parser_features_preserve_budget_and_capture_behavior():
             matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
             assert matcher.accept_string(value) and matcher.is_terminated()
             assert matcher.get_captures() == expected_captures
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True], ids=["eager", "dynamic"])
+@pytest.mark.parametrize("edge_name", ["Token", "ExcludeToken"])
+def test_rule_mask_sharing_distinguishes_token_edge_payloads(enable_dynamic_compilation, edge_name):
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c"], stop_token_ids=[])
+    cached_compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=True,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    )
+    uncached_compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    )
+
+    def initial_mask(compiled_grammar):
+        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        xgr.reset_token_bitmask(bitmask)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        return bitmask
+
+    first_mask = initial_mask(cached_compiler.compile_grammar(f"root ::= {edge_name}(0)"))
+    actual_mask = initial_mask(cached_compiler.compile_grammar(f"root ::= {edge_name}(1)"))
+    expected_mask = initial_mask(uncached_compiler.compile_grammar(f"root ::= {edge_name}(1)"))
+
+    assert not torch.equal(first_mask, expected_mask)
+    torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True], ids=["eager", "dynamic"])
+def test_rule_mask_sharing_distinguishes_lookahead_expression_boundaries(
+    enable_dynamic_compilation,
+):
+    vocabulary = ["p", "qac", "qa\x01\x01aabb", "q"] + [f"invalid-{index}" for index in range(28)]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    cached_compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=True,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    )
+    uncached_compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    )
+
+    byte_string_suffix = r'"a\u0001\u0001aabb"'
+    character_class_suffix = '"a" [^ab]'
+
+    def grammar(suffix):
+        return f'root ::= "p" target {suffix}\ntarget ::= [q] (= {suffix})'
+
+    def mask_after_prefix(compiler, grammar_source):
+        compiled_grammar = compiler.compile_grammar(grammar_source)
+        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        assert matcher.accept_token(0)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        xgr.reset_token_bitmask(bitmask)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        return bitmask
+
+    first_mask = mask_after_prefix(cached_compiler, grammar(byte_string_suffix))
+    actual_mask = mask_after_prefix(cached_compiler, grammar(character_class_suffix))
+    expected_mask = mask_after_prefix(uncached_compiler, grammar(character_class_suffix))
+
+    assert not torch.equal(first_mask, expected_mask)
+    torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
