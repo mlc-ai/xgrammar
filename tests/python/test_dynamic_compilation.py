@@ -23,6 +23,12 @@ def _mask_trace(compiled_grammar: xgr.CompiledGrammar, input_string: str):
     return trace
 
 
+def _next_token_mask(matcher: xgr.GrammarMatcher, vocabulary_size: int) -> torch.Tensor:
+    bitmask = xgr.allocate_token_bitmask(1, vocabulary_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    return bitmask_to_bool_mask(bitmask, vocabulary_size)
+
+
 def _compile_ebnf(compiler: xgr.GrammarCompiler) -> xgr.CompiledGrammar:
     return compiler.compile_grammar(
         """
@@ -356,3 +362,61 @@ def test_shared_parser_features_preserve_budget_and_capture_behavior():
             matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
             assert matcher.accept_string(value) and matcher.is_terminated()
             assert matcher.get_captures() == expected_captures
+
+
+def test_reusable_parser_worklists_survive_reset_fork_failure_and_rollback():
+    vocabulary = ["a", "b", "c", "d", "ab", "bc", "abc", "cd", "x", b"\xff"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled_grammar = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar('root ::= [a-c]{0,8} "d"')
+    token_identifiers = {token: vocabulary.index(token) for token in ["a", "b", "c", "d", "x"]}
+
+    def fresh_mask(prefix):
+        fresh_matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        assert all(fresh_matcher.accept_token(token_identifier) for token_identifier in prefix)
+        return _next_token_mask(fresh_matcher, tokenizer_info.vocab_size)
+
+    matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+    for _ in range(32):
+        matcher.reset()
+        prefix = []
+        for token in ["a", "b"]:
+            expected_mask = fresh_mask(prefix)
+            torch.testing.assert_close(
+                _next_token_mask(matcher, tokenizer_info.vocab_size), expected_mask, rtol=0, atol=0
+            )
+            torch.testing.assert_close(
+                _next_token_mask(matcher, tokenizer_info.vocab_size), expected_mask, rtol=0, atol=0
+            )
+            assert matcher.accept_token(token_identifiers[token])
+            prefix.append(token_identifiers[token])
+
+        forked_matcher = matcher.fork()
+        torch.testing.assert_close(
+            _next_token_mask(forked_matcher, tokenizer_info.vocab_size),
+            fresh_mask(prefix),
+            rtol=0,
+            atol=0,
+        )
+        assert forked_matcher.accept_token(token_identifiers["c"])
+        assert forked_matcher.accept_token(token_identifiers["d"])
+        assert forked_matcher.is_terminated()
+
+        mask_before_failure = _next_token_mask(matcher, tokenizer_info.vocab_size)
+        assert not matcher.accept_token(token_identifiers["x"])
+        torch.testing.assert_close(
+            _next_token_mask(matcher, tokenizer_info.vocab_size),
+            mask_before_failure,
+            rtol=0,
+            atol=0,
+        )
+
+        matcher.rollback(1)
+        prefix.pop()
+        torch.testing.assert_close(
+            _next_token_mask(matcher, tokenizer_info.vocab_size), fresh_mask(prefix), rtol=0, atol=0
+        )
+        assert matcher.accept_token(token_identifiers["c"])
+        assert matcher.accept_token(token_identifiers["d"])
+        assert matcher.is_terminated()
