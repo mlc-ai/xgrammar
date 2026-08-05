@@ -6,12 +6,16 @@
 #include <xgrammar/compiler.h>
 
 #include <algorithm>
+#include <array>
 #include <bitset>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -22,6 +26,7 @@
 #include "fsm.h"
 #include "grammar_functor.h"
 #include "grammar_impl.h"
+#include "support/container.h"
 #include "support/dynamic_bitset.h"
 #include "support/int_set.h"
 #include "support/logging.h"
@@ -34,7 +39,293 @@
 
 namespace xgrammar {
 
+/******************* RuleLevelCache *******************/
+
+/*!
+ * \brief Store token masks shared by structurally equivalent rules across grammars.
+ * \details The cache uses least-recently-used eviction.
+ */
+class RuleLevelCache {
+ public:
+  static const size_t kUnlimitedSize = static_cast<size_t>(-1);
+
+  std::optional<AdaptiveTokenMask> GetCache(
+      const uint64_t& fsm_hash,
+      int32_t fsm_new_node_id,
+      const int32_t& state_cnt,
+      const int32_t edge_cnt
+  );
+  bool AddCache(
+      const uint64_t& fsm_hash,
+      int32_t fsm_new_node_id,
+      const int32_t& state_cnt,
+      const int32_t edge_cnt,
+      const AdaptiveTokenMask& token_mask
+  );
+  bool AddCache(
+      const uint64_t& fsm_hash,
+      int32_t fsm_new_node_id,
+      const int32_t& state_cnt,
+      const int32_t edge_cnt,
+      AdaptiveTokenMask&& token_mask
+  );
+  RuleLevelCache(size_t max_cache_memory_size = kUnlimitedSize);
+
+  void ClearCache();
+
+  size_t GetMaxSize() const;
+
+  friend size_t MemorySize(const RuleLevelCache& manager);
+
+  XGRAMMAR_DEFINE_PIMPL_METHODS(RuleLevelCache);
+};
+
+class RuleLevelCache::Impl {
+ public:
+  using NodeKey = std::tuple<
+      uint64_t /*The hash value of the FSM*/,
+      int32_t /* The normalized node id*/,
+      int32_t /*The number of states*/,
+      int32_t /* The number of edges*/>;
+  using NodeType = std::pair<NodeKey, AdaptiveTokenMask>;
+
+  explicit Impl(size_t max_cache_memory_size) : max_cache_memory_size_(max_cache_memory_size) {}
+
+  std::optional<AdaptiveTokenMask> GetCache(
+      const uint64_t& fsm_hash,
+      int32_t fsm_new_node_id,
+      const int32_t& state_cnt,
+      const int32_t edge_cnt
+  );
+
+  bool AddCache(
+      const uint64_t& fsm_hash,
+      int32_t fsm_new_node_id,
+      const int32_t& state_cnt,
+      const int32_t edge_cnt,
+      const AdaptiveTokenMask& token_mask
+  );
+
+  bool AddCache(
+      const uint64_t& fsm_hash,
+      int32_t fsm_new_node_id,
+      const int32_t& state_cnt,
+      const int32_t edge_cnt,
+      AdaptiveTokenMask&& token_mask
+  );
+
+  void ClearCache();
+
+  friend size_t MemorySize(const Impl* impl) {
+    int64_t total = 0;
+    for (const auto& shard : impl->shards_) {
+      std::lock_guard<std::mutex> lock(shard.mutex);
+      total += shard.current_cache_memory_size;
+    }
+    return total;
+  }
+
+  size_t GetMaxSize() const { return max_cache_memory_size_; }
+
+ private:
+  /*!
+   * \brief The cache is sharded to reduce lock contention: the token mask cache generation
+   * queries and inserts from all compilation threads, and a single global mutex would serialize
+   * them (large grammars issue millions of cache operations).
+   */
+  static constexpr size_t kNumShards = 16;
+
+  struct Shard {
+    mutable std::mutex mutex;
+    int64_t current_cache_memory_size = 0;
+    // The cache map: (fsm_hash, node_id, ...) -> index in cache_list
+    List<NodeType> cache_list;
+    std::unordered_map<NodeKey, int> cache;
+  };
+
+  Shard& GetShard(const NodeKey& key) {
+    return shards_[HashCombine(std::get<0>(key), std::get<1>(key)) % kNumShards];
+  }
+
+  /*! \brief The memory budget of one shard. Eviction is performed per shard. */
+  size_t ShardMaxSize() const {
+    return max_cache_memory_size_ == kUnlimitedSize ? kUnlimitedSize
+                                                    : max_cache_memory_size_ / kNumShards;
+  }
+
+  const size_t max_cache_memory_size_;
+  std::array<Shard, kNumShards> shards_;
+};
+
+std::optional<AdaptiveTokenMask> RuleLevelCache::GetCache(
+    const uint64_t& fsm_hash,
+    int32_t fsm_new_node_id,
+    const int32_t& state_cnt,
+    const int32_t edge_cnt
+) {
+  return pimpl_->GetCache(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt);
+}
+
+bool RuleLevelCache::AddCache(
+    const uint64_t& fsm_hash,
+    int32_t fsm_new_node_id,
+    const int32_t& state_cnt,
+    const int32_t edge_cnt,
+    const AdaptiveTokenMask& token_mask
+) {
+  return pimpl_->AddCache(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt, token_mask);
+}
+
+bool RuleLevelCache::AddCache(
+    const uint64_t& fsm_hash,
+    int32_t fsm_new_node_id,
+    const int32_t& state_cnt,
+    const int32_t edge_cnt,
+    AdaptiveTokenMask&& token_mask
+) {
+  return pimpl_->AddCache(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt, std::move(token_mask));
+}
+
+void RuleLevelCache::ClearCache() { pimpl_->ClearCache(); }
+
+size_t RuleLevelCache::GetMaxSize() const { return pimpl_->GetMaxSize(); }
+
+std::optional<AdaptiveTokenMask> RuleLevelCache::Impl::GetCache(
+    const uint64_t& fsm_hash,
+    int32_t fsm_new_node_id,
+    const int32_t& state_cnt,
+    const int32_t edge_cnt
+) {
+  // Find in the cache.
+  NodeKey key = std::make_tuple(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt);
+  Shard& shard = GetShard(key);
+  std::lock_guard<std::mutex> lock(shard.mutex);
+  auto it = shard.cache.find(key);
+  if (it == shard.cache.end()) {
+    return std::nullopt;
+  }
+
+  // Move the node to the back of the list.
+  shard.cache_list.MoveBack(it->second);
+  return List<NodeType>::iterator(it->second, shard.cache_list)->second;
+}
+
+bool RuleLevelCache::Impl::AddCache(
+    const uint64_t& fsm_hash,
+    int32_t fsm_new_node_id,
+    const int32_t& state_cnt,
+    const int32_t edge_cnt,
+    const AdaptiveTokenMask& token_mask
+) {
+  return AddCache(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt, AdaptiveTokenMask(token_mask));
+}
+
+bool RuleLevelCache::Impl::AddCache(
+    const uint64_t& fsm_hash,
+    int32_t fsm_new_node_id,
+    const int32_t& state_cnt,
+    const int32_t edge_cnt,
+    AdaptiveTokenMask&& token_mask
+) {
+  // Check if we can add to the cache.
+  NodeKey key = std::make_tuple(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt);
+  Shard& shard = GetShard(key);
+  const size_t shard_max_size = ShardMaxSize();
+  std::lock_guard<std::mutex> lock(shard.mutex);
+  if (shard_max_size != kUnlimitedSize && MemorySize(token_mask) > shard_max_size) {
+    // The token mask is too large to be cached.
+    return false;
+  }
+  if (shard.cache.find(key) != shard.cache.end()) {
+    // Already exists.
+    return false;
+  }
+
+  // Evict old entries if needed.
+  if (shard_max_size != kUnlimitedSize) {
+    size_t new_item_size = MemorySize(token_mask);
+    while ((shard.current_cache_memory_size) > static_cast<int64_t>(shard_max_size - new_item_size)
+    ) {
+      auto oldest_it = shard.cache_list.begin();
+      if (oldest_it == shard.cache_list.end()) {
+        // This should not happen if the size of the new item is smaller than
+        // the shard budget, but this is a safeguard.
+        break;
+      }
+      shard.current_cache_memory_size -= MemorySize(oldest_it->second);
+      shard.cache.erase(oldest_it->first);
+      shard.cache_list.Erase(oldest_it);
+    }
+  }
+
+  // Add to the cache.
+  auto new_it = shard.cache_list.PushBack(NodeType(key, std::move(token_mask)));
+  shard.current_cache_memory_size += MemorySize(new_it->second);
+  shard.cache[key] = new_it.Index();
+  return true;
+}
+
+RuleLevelCache::RuleLevelCache(size_t max_cache_memory_size)
+    : pimpl_(std::make_shared<Impl>(max_cache_memory_size)) {}
+
+void RuleLevelCache::Impl::ClearCache() {
+  for (auto& shard : shards_) {
+    std::lock_guard<std::mutex> lock(shard.mutex);
+    shard.cache_list.Clear();
+    shard.cache.clear();
+    shard.current_cache_memory_size = 0;
+  }
+}
+
+size_t MemorySize(const RuleLevelCache& manager) { return MemorySize(manager.ImplPtr()); }
+
 /************** AdaptiveTokenMaskCache Generator **************/
+
+std::vector<uint8_t> GetRuleLevelCacheableRules(const Grammar& grammar) {
+  const int32_t num_rules = grammar->NumRules();
+  std::vector<uint8_t> context_dependent(num_rules, 0);
+  std::vector<std::vector<int32_t>> referenced_rules(num_rules);
+  for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
+    const auto& rule = grammar->GetRule(rule_id);
+    context_dependent[rule_id] = rule.max_tokens >= 0 || rule.max_chars >= 0 || rule.is_lazy ||
+                                 rule.temperature.has_value() ||
+                                 grammar->GetSuffixStopInfo(rule_id) != nullptr;
+    const auto& fsm = grammar->per_rule_fsms[rule_id]->GetFsm();
+    std::unordered_set<int32_t> reachable_states;
+    fsm.GetReachableStates(&reachable_states);
+    for (int32_t state_id : reachable_states) {
+      for (const auto& edge : fsm.GetFsm().GetEdges(state_id)) {
+        if (edge.IsRuleRef()) {
+          referenced_rules[rule_id].push_back(edge.GetRefRuleId());
+        } else if (edge.IsRepeatRef()) {
+          referenced_rules[rule_id].push_back(
+              grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId()
+          );
+        }
+      }
+    }
+  }
+
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
+      if (!context_dependent[rule_id]) {
+        continue;
+      }
+      for (int32_t referenced_rule_id : referenced_rules[rule_id]) {
+        if (!context_dependent[referenced_rule_id]) {
+          context_dependent[referenced_rule_id] = 1;
+          changed = true;
+        }
+      }
+    }
+  }
+  for (uint8_t& value : context_dependent) {
+    value = !value;
+  }
+  return context_dependent;
+}
 
 /*! \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcherForTokenMaskCache : public EarleyParser {
@@ -1063,13 +1354,18 @@ const AdaptiveTokenMask& TokenMaskCache::Get(
       -1,
       state.sub_element_id
   );
-  std::optional<RuleLevelCache> no_rule_level_cache;
+  std::optional<RuleLevelCache> retained_rule_level_cache;
+  if (rule_level_cache_ != nullptr && state.rule_id >= 0 &&
+      state.rule_id < static_cast<int32_t>(rule_level_cacheable_.size()) &&
+      rule_level_cacheable_[state.rule_id]) {
+    retained_rule_level_cache = *rule_level_cache_;
+  }
   AdaptiveTokenMask mask = GrammarMatcherForTokenMaskCache(
                                grammar,
                                cache_state,
                                tag_dispatch_second_slicing_bitset,
                                tokenizer_info,
-                               no_rule_level_cache,
+                               retained_rule_level_cache,
                                is_root_rule
   )
                                .GetAdaptiveTokenMask();
@@ -1137,17 +1433,27 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>(enable_dynamic_compilation_);
   compiled_grammar_impl->grammar = std::move(grammar);
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
-  if (tokenizer_info_.GetVocabSize() == 0 || enable_dynamic_compilation_) {
+  if (tokenizer_info_.GetVocabSize() == 0) {
+    return CompiledGrammar(compiled_grammar_impl);
+  }
+
+  // Rule hashes are needed by both eager and on-demand cross-grammar mask reuse.
+  if (rule_level_cache_.has_value()) {
+    GrammarFSMHasher().Apply(&compiled_grammar_impl->grammar);
+  }
+  if (enable_dynamic_compilation_) {
+    if (rule_level_cache_.has_value()) {
+      compiled_grammar_impl->token_mask_cache.SetRuleLevelCache(
+          std::make_shared<RuleLevelCache>(rule_level_cache_.value()),
+          GetRuleLevelCacheableRules(compiled_grammar_impl->grammar)
+      );
+    }
     return CompiledGrammar(compiled_grammar_impl);
   }
 
   auto tag_dispatch_rule_id_to_second_slicing_bitset =
       ComputeTagDispatchSecondSlicingBitsets(compiled_grammar_impl->grammar, tokenizer_info_);
 
-  // If the compiler is cache-enabled, then we hash the grammars for crossing-grammar caching.
-  if (rule_level_cache_.has_value()) {
-    GrammarFSMHasher().Apply(&compiled_grammar_impl->grammar);
-  }
   // Step 3. Compute the adaptive token mask cache
   // The token mask cache is computed for these positions in the grammar:
   // 1. All character class or character class star (with last_utf8_bytes=0, 1, 2, 3)

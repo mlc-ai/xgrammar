@@ -223,6 +223,60 @@ def test_limited_compiler_cache_records_dynamic_grammar_size_on_insertion():
             future.result()
         observed_sizes = size_future.result()
 
-    assert all(size == insertion_size for size in observed_sizes)
-    assert compiler.get_cache_size_bytes() == insertion_size
+    assert all(insertion_size <= size <= cache_limit for size in observed_sizes)
+    assert insertion_size <= compiler.get_cache_size_bytes() <= cache_limit
     assert _compile_builtin_json(compiler).memory_size_bytes == dynamic.memory_size_bytes
+
+
+def test_rule_mask_sharing_does_not_cross_context_dependent_rules():
+    tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
+    dynamic_compiler = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    )
+    eager_compiler = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=False
+    )
+
+    unbounded = dynamic_compiler.compile_grammar('root ::= "a" shared "z"\nshared ::= [x]+')
+    _mask_trace(unbounded, "axxz")
+
+    bounded_grammar = 'root ::= "a" shared "z"\nshared[max_tokens=1] ::= [x]+'
+    dynamic_bounded = dynamic_compiler.compile_grammar(bounded_grammar)
+    eager_bounded = eager_compiler.compile_grammar(bounded_grammar)
+    expected = _mask_trace(eager_bounded, "axz")
+    actual = _mask_trace(dynamic_bounded, "axz")
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+        assert actual_apply == expected_apply
+        torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True], ids=["eager", "dynamic"])
+@pytest.mark.parametrize("edge_name", ["Token", "ExcludeToken"])
+def test_rule_mask_sharing_distinguishes_token_edge_payloads(enable_dynamic_compilation, edge_name):
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c"], stop_token_ids=[])
+    cached_compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=True,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    )
+    uncached_compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    )
+
+    def initial_mask(compiled_grammar):
+        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        xgr.reset_token_bitmask(bitmask)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        return bitmask
+
+    first_mask = initial_mask(cached_compiler.compile_grammar(f"root ::= {edge_name}(0)"))
+    actual_mask = initial_mask(cached_compiler.compile_grammar(f"root ::= {edge_name}(1)"))
+    expected_mask = initial_mask(uncached_compiler.compile_grammar(f"root ::= {edge_name}(1)"))
+
+    assert not torch.equal(first_mask, expected_mask)
+    torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)

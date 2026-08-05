@@ -7,25 +7,20 @@
 
 #include <xgrammar/xgrammar.h>
 
-#include <array>
 #include <bitset>
 #include <cstdint>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <queue>
 #include <set>
 #include <stack>
 #include <string>
-#include <tuple>
 #include <vector>
 
-#include "compiled_grammar_impl.h"
 #include "fsm.h"
 #include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
-#include "support/container.h"
 #include "support/encoding.h"
 #include "support/logging.h"
 #include "xgrammar/grammar.h"
@@ -3351,6 +3346,16 @@ class GrammarFSMHasherImpl {
   uint64_t HashFsm(int fsm_index);
 
   /*!
+   * \brief Add a non-rule edge to an FSM hash using its semantic payload.
+   */
+  uint64_t HashNonRuleEdge(
+      uint64_t hash_result,
+      int32_t current_new_state_id,
+      const FSMEdge& edge,
+      int32_t target_new_state_id
+  ) const;
+
+  /*!
    * \brief Find a simple cycle in the reference graph, And hash the
    * fsms in the simple cycle.
    */
@@ -3572,6 +3577,32 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
   }
 }
 
+uint64_t GrammarFSMHasherImpl::HashNonRuleEdge(
+    uint64_t hash_result,
+    int32_t current_new_state_id,
+    const FSMEdge& edge,
+    int32_t target_new_state_id
+) const {
+  hash_result = HashCombine(hash_result, current_new_state_id, static_cast<int32_t>(edge.min));
+  if (edge.IsToken()) {
+    const auto token_edge = grammar_->ImplPtr()->complete_fsm.GetTokenEdgeInfo(edge.GetAuxIndex());
+    hash_result = HashCombine(hash_result, token_edge.Count());
+    for (int32_t index = 0; index < token_edge.Count(); ++index) {
+      hash_result = HashCombine(hash_result, token_edge.TokenIds()[index]);
+    }
+  } else if (edge.IsExcludeToken()) {
+    const auto exclude_token_edge =
+        grammar_->ImplPtr()->complete_fsm.GetExcludeTokenEdgeInfo(edge.GetAuxIndex());
+    hash_result = HashCombine(hash_result, exclude_token_edge.Count());
+    for (int32_t index = 0; index < exclude_token_edge.Count(); ++index) {
+      hash_result = HashCombine(hash_result, exclude_token_edge.TokenIds()[index]);
+    }
+  } else {
+    hash_result = HashCombine(hash_result, static_cast<int32_t>(edge.max));
+  }
+  return HashCombine(hash_result, target_new_state_id);
+}
+
 std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index) {
   uint64_t hash_result = 0;
   XGRAMMAR_DCHECK(fsm_index >= 0 && fsm_index < (*grammar_)->NumRules())
@@ -3668,13 +3699,7 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
       if (edge.IsRuleRef() || edge.IsRepeatRef()) {
         continue;
       }
-      hash_result = HashCombine(
-          hash_result,
-          current_new_state_id,
-          static_cast<int32_t>(edge.min),
-          static_cast<int32_t>(edge.max),
-          target_new_id
-      );
+      hash_result = HashNonRuleEdge(hash_result, current_new_state_id, edge, target_new_id);
     }
   }
   std::vector<std::pair<int32_t, int32_t>> new_id_mapping;
@@ -3695,7 +3720,7 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
   std::map<int32_t, int32_t> original_state_id_to_new_id;
   original_state_id_to_new_id[fsm.GetStart()] = 0;
   std::queue<int32_t> bfs_queue;
-  std::set<std::pair<int32_t, int32_t>> hash_and_target;
+  std::set<std::pair<uint64_t, int32_t>> hash_and_target;
   bfs_queue.push(fsm.GetStart());
 
   // Perform a bfs to hash all the edges.
@@ -3746,7 +3771,7 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
           XGRAMMAR_CHECK(grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value());
           uint64_t base_hash = grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value();
           uint64_t repeat_hash = HashCombine(base_hash, info.Lower(), info.Upper());
-          hash_and_target.insert({static_cast<int32_t>(repeat_hash), edge.target});
+          hash_and_target.insert({repeat_hash, edge.target});
         }
       }
     }
@@ -3773,13 +3798,7 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
       if (edge.IsRuleRef() || edge.IsRepeatRef()) {
         continue;
       }
-      hash_result = HashCombine(
-          hash_result,
-          current_new_state_id,
-          static_cast<int32_t>(edge.min),
-          static_cast<int32_t>(edge.max),
-          target_new_id
-      );
+      hash_result = HashNonRuleEdge(hash_result, current_new_state_id, edge, target_new_id);
     }
   }
   std::vector<std::pair<int32_t, int32_t>> new_id_mapping;
@@ -3859,204 +3878,6 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
   }
   return hash_result;
 }
-
-class RuleLevelCache::Impl {
- public:
-  using NodeKey = std::tuple<
-      uint64_t /*The hash value of the FSM*/,
-      int32_t /* The normalized node id*/,
-      int32_t /*The number of states*/,
-      int32_t /* The number of edges*/>;
-  using NodeType = std::pair<NodeKey, AdaptiveTokenMask>;
-
-  explicit Impl(size_t max_cache_memory_size) : max_cache_memory_size_(max_cache_memory_size) {}
-
-  std::optional<AdaptiveTokenMask> GetCache(
-      const uint64_t& fsm_hash,
-      int32_t fsm_new_node_id,
-      const int32_t& state_cnt,
-      const int32_t edge_cnt
-  );
-
-  bool AddCache(
-      const uint64_t& fsm_hash,
-      int32_t fsm_new_node_id,
-      const int32_t& state_cnt,
-      const int32_t edge_cnt,
-      const AdaptiveTokenMask& token_mask
-  );
-
-  bool AddCache(
-      const uint64_t& fsm_hash,
-      int32_t fsm_new_node_id,
-      const int32_t& state_cnt,
-      const int32_t edge_cnt,
-      AdaptiveTokenMask&& token_mask
-  );
-
-  void ClearCache();
-
-  friend size_t MemorySize(const Impl* impl) {
-    int64_t total = 0;
-    for (const auto& shard : impl->shards_) {
-      total += shard.current_cache_memory_size;
-    }
-    return total;
-  }
-
-  size_t GetMaxSize() const { return max_cache_memory_size_; }
-
- private:
-  /*!
-   * \brief The cache is sharded to reduce lock contention: the token mask cache generation
-   * queries and inserts from all compilation threads, and a single global mutex would serialize
-   * them (large grammars issue millions of cache operations).
-   */
-  static constexpr size_t kNumShards = 16;
-
-  struct Shard {
-    std::mutex mutex;
-    int64_t current_cache_memory_size = 0;
-    // The cache map: (fsm_hash, node_id, ...) -> index in cache_list
-    List<NodeType> cache_list;
-    std::unordered_map<NodeKey, int> cache;
-  };
-
-  Shard& GetShard(const NodeKey& key) {
-    return shards_[HashCombine(std::get<0>(key), std::get<1>(key)) % kNumShards];
-  }
-
-  /*! \brief The memory budget of one shard. Eviction is performed per shard. */
-  size_t ShardMaxSize() const {
-    return max_cache_memory_size_ == kUnlimitedSize ? kUnlimitedSize
-                                                    : max_cache_memory_size_ / kNumShards;
-  }
-
-  const size_t max_cache_memory_size_;
-  std::array<Shard, kNumShards> shards_;
-};
-
-std::optional<AdaptiveTokenMask> RuleLevelCache::GetCache(
-    const uint64_t& fsm_hash,
-    int32_t fsm_new_node_id,
-    const int32_t& state_cnt,
-    const int32_t edge_cnt
-) {
-  return pimpl_->GetCache(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt);
-}
-
-bool RuleLevelCache::AddCache(
-    const uint64_t& fsm_hash,
-    int32_t fsm_new_node_id,
-    const int32_t& state_cnt,
-    const int32_t edge_cnt,
-    const AdaptiveTokenMask& token_mask
-) {
-  return pimpl_->AddCache(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt, token_mask);
-}
-
-bool RuleLevelCache::AddCache(
-    const uint64_t& fsm_hash,
-    int32_t fsm_new_node_id,
-    const int32_t& state_cnt,
-    const int32_t edge_cnt,
-    AdaptiveTokenMask&& token_mask
-) {
-  return pimpl_->AddCache(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt, std::move(token_mask));
-}
-
-void RuleLevelCache::ClearCache() { pimpl_->ClearCache(); }
-
-size_t RuleLevelCache::GetMaxSize() const { return pimpl_->GetMaxSize(); }
-
-std::optional<AdaptiveTokenMask> RuleLevelCache::Impl::GetCache(
-    const uint64_t& fsm_hash,
-    int32_t fsm_new_node_id,
-    const int32_t& state_cnt,
-    const int32_t edge_cnt
-) {
-  // Find in the cache.
-  NodeKey key = std::make_tuple(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt);
-  Shard& shard = GetShard(key);
-  std::lock_guard<std::mutex> lock(shard.mutex);
-  auto it = shard.cache.find(key);
-  if (it == shard.cache.end()) {
-    return std::nullopt;
-  }
-
-  // Move the node to the back of the list.
-  shard.cache_list.MoveBack(it->second);
-  return List<NodeType>::iterator(it->second, shard.cache_list)->second;
-}
-
-bool RuleLevelCache::Impl::AddCache(
-    const uint64_t& fsm_hash,
-    int32_t fsm_new_node_id,
-    const int32_t& state_cnt,
-    const int32_t edge_cnt,
-    const AdaptiveTokenMask& token_mask
-) {
-  return AddCache(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt, AdaptiveTokenMask(token_mask));
-}
-
-bool RuleLevelCache::Impl::AddCache(
-    const uint64_t& fsm_hash,
-    int32_t fsm_new_node_id,
-    const int32_t& state_cnt,
-    const int32_t edge_cnt,
-    AdaptiveTokenMask&& token_mask
-) {
-  // Check if we can add to the cache.
-  NodeKey key = std::make_tuple(fsm_hash, fsm_new_node_id, state_cnt, edge_cnt);
-  Shard& shard = GetShard(key);
-  const size_t shard_max_size = ShardMaxSize();
-  std::lock_guard<std::mutex> lock(shard.mutex);
-  if (shard_max_size != kUnlimitedSize && MemorySize(token_mask) > shard_max_size) {
-    // The token mask is too large to be cached.
-    return false;
-  }
-  if (shard.cache.find(key) != shard.cache.end()) {
-    // Already exists.
-    return false;
-  }
-
-  // Evict old entries if needed.
-  if (shard_max_size != kUnlimitedSize) {
-    size_t new_item_size = MemorySize(token_mask);
-    while ((shard.current_cache_memory_size) > static_cast<int64_t>(shard_max_size - new_item_size)
-    ) {
-      auto oldest_it = shard.cache_list.begin();
-      if (oldest_it == shard.cache_list.end()) {
-        // This should not happen if the size of the new item is smaller than
-        // the shard budget, but this is a safeguard.
-        break;
-      }
-      shard.current_cache_memory_size -= MemorySize(oldest_it->second);
-      shard.cache.erase(oldest_it->first);
-      shard.cache_list.Erase(oldest_it);
-    }
-  }
-
-  // Add to the cache.
-  auto new_it = shard.cache_list.PushBack(NodeType(key, std::move(token_mask)));
-  shard.current_cache_memory_size += MemorySize(new_it->second);
-  shard.cache[key] = new_it.Index();
-  return true;
-}
-
-RuleLevelCache::RuleLevelCache(size_t max_cache_memory_size)
-    : pimpl_(std::make_shared<Impl>(max_cache_memory_size)) {}
-
-void RuleLevelCache::Impl::ClearCache() {
-  for (auto& shard : shards_) {
-    std::lock_guard<std::mutex> lock(shard.mutex);
-    shard.cache_list.Clear();
-    shard.cache.clear();
-    shard.current_cache_memory_size = 0;
-  }
-}
-
-size_t MemorySize(const RuleLevelCache& manager) { return MemorySize(manager.ImplPtr()); }
 
 /*************************** Forward grammar constructors to their impl ***************************/
 
