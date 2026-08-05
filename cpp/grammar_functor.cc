@@ -3821,9 +3821,10 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
   const auto& sequence_expr = grammar->GetGrammarExpr(sequence_id);
   XGRAMMAR_DCHECK(sequence_expr.type == GrammarExprType::kSequence)
       << "GrammarExpr is not a sequence";
+  hash_result = HashCombine(hash_result, sequence_expr.size());
   for (const auto& expr_id : sequence_expr) {
     const auto& expr = grammar->GetGrammarExpr(expr_id);
-    hash_result = HashCombine(hash_result, static_cast<int32_t>(expr.type));
+    hash_result = HashCombine(hash_result, static_cast<int32_t>(expr.type), expr.size());
     switch (expr.type) {
       case (GrammarExprType::kByteString):
       case (GrammarExprType::kCharacterClass):
