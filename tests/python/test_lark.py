@@ -1653,6 +1653,7 @@ def test_lark_budget_reset_and_fork() -> None:
     matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
     for token_id in [5, 0, 0]:
         assert matcher.accept_token(token_id)
+    assert _allowed_token_ids(matcher, MAX_TOKENS_TOKENIZER) == [3]
     forked = matcher.fork()
     assert _allowed_token_ids(forked, MAX_TOKENS_TOKENIZER) == [3]
     matcher.reset()

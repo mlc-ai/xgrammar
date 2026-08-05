@@ -264,6 +264,8 @@ def test_max_chars_rollback_reset_and_fork() -> None:
 
     assert matcher.accept_token(1)
     assert _allowed_token_ids(matcher, tokenizer_info) == [2]
+    enforced_fork = matcher.fork()
+    assert _allowed_token_ids(enforced_fork, tokenizer_info) == [2]
     matcher.rollback(1)
     assert 0 in _allowed_token_ids(matcher, tokenizer_info)
 
