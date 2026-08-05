@@ -201,19 +201,6 @@ class TokenMaskCache {
 };
 
 /*!
- * \brief Compute the bitset of tokens that are definitely accepted since the second character
- * for a tag-dispatch rule.
- */
-DynamicBitset ComputeTagDispatchSecondSlicingBitset(
-    const Grammar& grammar, const TokenizerInfo& tokenizer_info, int32_t rule_id
-);
-
-/*! \brief Compute the second-slicing bitsets for all tag-dispatch rules. */
-std::unordered_map<int32_t, DynamicBitset> ComputeTagDispatchSecondSlicingBitsets(
-    const Grammar& grammar, const TokenizerInfo& tokenizer_info
-);
-
-/*!
  * \brief All information that we need to match tokens in the tokenizer to the specified grammar.
  * It is the result of preprocessing.
  * \sa xgrammar::GrammarMatcher
