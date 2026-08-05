@@ -6,6 +6,7 @@ import torch
 
 import xgrammar as xgr
 from xgrammar.base import _core
+from xgrammar.testing import bitmask_to_bool_mask
 
 VOCABULARY = [chr(value) for value in range(32, 127)] + ["Ada", "hello", "42", "<call>"]
 
@@ -322,3 +323,36 @@ def test_rule_mask_sharing_distinguishes_lookahead_expression_boundaries(
 
     assert not torch.equal(first_mask, expected_mask)
     torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+def test_shared_parser_features_preserve_budget_and_capture_behavior():
+    tokenizer_info = xgr.TokenizerInfo(["ab ", "cd", " ", "</t>", "1", "<t>", "x"])
+    grammar = xgr.Grammar.from_lark(
+        'start: r "<t>"\nr[max_tokens=3, capture]: TEXT\nTEXT: /(\\n|.)*/',
+        tokenizer_info=tokenizer_info,
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    for _ in range(4):
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert all(matcher.accept_token(token_id) for token_id in [0, 1, 2])
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        assert bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size).nonzero().tolist() == [
+            [0, 5]
+        ]
+        assert matcher.accept_token(5)
+        assert matcher.is_terminated()
+        assert matcher.get_captures() == [("r", b"ab cd ")]
+
+    grammar = xgr.Grammar.from_lark(
+        'start[capture="outer"]: r "z"\n' 'r[max_chars=2, capture="inner", suffix="!"]: /[a-z]*/'
+    )
+    compiled = xgr.GrammarCompiler(xgr.TokenizerInfo([])).compile_grammar(grammar)
+    for _ in range(4):
+        for value, expected_captures in [
+            ("a!z", [("inner", b"a"), ("outer", b"a!z")]),
+            ("abz", [("inner", b"ab"), ("outer", b"abz")]),
+        ]:
+            matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+            assert matcher.accept_string(value) and matcher.is_terminated()
+            assert matcher.get_captures() == expected_captures

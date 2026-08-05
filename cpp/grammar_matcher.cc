@@ -466,7 +466,9 @@ class GrammarMatcher::Impl : public EarleyParser {
       int max_rollback_tokens = -1,
       std::optional<float> default_temperature = std::nullopt
   )
-      : EarleyParser(compiled_grammar->grammar),
+      : EarleyParser(
+            compiled_grammar->grammar, std::nullopt, &compiled_grammar->earley_parser_features
+        ),
         compiled_grammar_(compiled_grammar),
         tokenizer_info_(compiled_grammar->tokenizer_info),
         stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
@@ -475,7 +477,7 @@ class GrammarMatcher::Impl : public EarleyParser {
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
-    if (has_budget_rules_ || has_char_budget_rules_) {
+    if (features_->has_budget_rules || features_->has_char_budget_rules) {
       for (int32_t rule_id = 0; rule_id < grammar_->NumRules(); ++rule_id) {
         const auto& rule = grammar_->GetRule(rule_id);
         if (rule.max_tokens < 0 && rule.max_chars < 0) {
@@ -594,7 +596,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   class CaptureRecordingGuard {
    public:
     explicit CaptureRecordingGuard(Impl* impl) : impl_(impl) {
-      if (impl_->capture_tracking_) {
+      if (impl_->features_->capture_tracking) {
         impl_->capture_recording_ = true;
       }
     }
@@ -624,7 +626,7 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   /*! \brief Whether byte offsets are needed for captures or budgeted suffix/stop rules. */
   bool ShouldTrackAcceptedBytes() const {
-    return IsCaptureTrackingEnabled() || has_budget_marker_rules_;
+    return features_->capture_tracking || has_budget_marker_rules_;
   }
 
   /*! \brief Whether the bytes consumed by this expired suffix/stop occurrence form a complete
@@ -971,7 +973,7 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
       previous_completable_row.data + previous_completable_row.data_len
   );
   std::vector<CaptureEvent> previous_capture_events;
-  if (capture_tracking_) {
+  if (features_->capture_tracking) {
     previous_capture_events = CopyLastCaptureRow();
   }
   std::vector<ParserState> force_completed_states;
@@ -1038,7 +1040,7 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
   if (!viable) {
     rule_id_to_completable_states_.PopBack(1);
     rule_id_to_completable_states_.PushBack(previous_completable_states);
-    if (capture_tracking_) {
+    if (features_->capture_tracking) {
       capture_event_history_.PopBack(1);
       capture_event_history_.PushBack(previous_capture_events);
     }
@@ -1072,7 +1074,7 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcementToFixedPoint(bool debu
 }
 
 bool GrammarMatcher::Impl::AdvanceWithCharacterBudget(uint8_t byte, bool debug_print) {
-  if (!has_char_budget_rules_ || !StartsUTF8Codepoint(byte)) {
+  if (!features_->has_char_budget_rules || !StartsUTF8Codepoint(byte)) {
     return Advance(byte, debug_print);
   }
 
@@ -1095,7 +1097,7 @@ bool GrammarMatcher::Impl::AdvanceWithCharacterBudget(uint8_t byte, bool debug_p
       previous_completable_row.data + previous_completable_row.data_len
   );
   std::vector<CaptureEvent> previous_capture_events;
-  if (capture_tracking_) {
+  if (features_->capture_tracking) {
     previous_capture_events = CopyLastCaptureRow();
   }
 
@@ -1110,7 +1112,7 @@ bool GrammarMatcher::Impl::AdvanceWithCharacterBudget(uint8_t byte, bool debug_p
     rule_id_to_completable_states_.PopBack(1);
     rule_id_to_completable_states_.PushBack(previous_completable_states);
     is_completed_.back() = previous_completed;
-    if (capture_tracking_) {
+    if (features_->capture_tracking) {
       capture_event_history_.PopBack(1);
       capture_event_history_.PushBack(previous_capture_events);
     }
@@ -1123,7 +1125,7 @@ bool GrammarMatcher::Impl::AdvanceAtomicTokenWithCharacterBudget(
 ) {
   bool has_expired_state = false;
   bool crosses_budget = false;
-  if (has_char_budget_rules_ && token_char_count > 0) {
+  if (features_->has_char_budget_rules && token_char_count > 0) {
     for (const auto& state : scanable_state_history_[scanable_state_history_.size() - 1]) {
       has_expired_state = has_expired_state || IsCharExpiredState(state);
       crosses_budget =
@@ -1145,7 +1147,7 @@ bool GrammarMatcher::Impl::AdvanceAtomicTokenWithCharacterBudget(
         previous_completable_row.data + previous_completable_row.data_len
     );
     previous_completed = IsCompleted();
-    if (capture_tracking_) {
+    if (features_->capture_tracking) {
       previous_capture_events = CopyLastCaptureRow();
     }
     enforced = ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
@@ -1161,7 +1163,7 @@ bool GrammarMatcher::Impl::AdvanceAtomicTokenWithCharacterBudget(
     rule_id_to_completable_states_.PopBack(1);
     rule_id_to_completable_states_.PushBack(previous_completable_states);
     is_completed_.back() = previous_completed;
-    if (capture_tracking_) {
+    if (features_->capture_tracking) {
       capture_event_history_.PopBack(1);
       capture_event_history_.PushBack(previous_capture_events);
     }
@@ -1259,7 +1261,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   // The token extends a derivation past its budget iff expired states are allowed to scan
   // (no enforcement) while some exist.
   bool consumed_past_deadline = false;
-  if (has_budget_rules_ && !enforce_budget) {
+  if (features_->has_budget_rules && !enforce_budget) {
     const auto& row = scanable_state_history_[scanable_state_history_.size() - 1];
     for (const auto& state : row) {
       if (IsExpiredState(state)) {
@@ -1290,7 +1292,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
 
   const auto& token = tokenizer_info_.GetDecodedVocab()[token_id];
   int32_t token_char_count = 0;
-  if (has_char_budget_rules_) {
+  if (features_->has_char_budget_rules) {
     for (uint8_t byte : token) {
       token_char_count += StartsUTF8Codepoint(byte);
     }
@@ -1301,7 +1303,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   std::vector<std::pair<int32_t, ParserState>> completable_before_token;
   std::vector<CaptureEvent> capture_row_before_token;
   bool completed_before_token = false;
-  if (has_char_budget_rules_) {
+  if (features_->has_char_budget_rules) {
     states_before_token = GetLatestScanableStates();
     auto completable_row_before_token = rule_id_to_completable_states_.Back();
     completable_before_token.assign(
@@ -1312,7 +1314,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     completed_before_token = is_completed_.back();
   }
   auto restore_row_before_token = [&]() {
-    if (!has_char_budget_rules_) {
+    if (!features_->has_char_budget_rules) {
       return;
     }
     scanable_state_history_.PopBack(1);
@@ -1320,7 +1322,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     rule_id_to_completable_states_.PopBack(1);
     rule_id_to_completable_states_.PushBack(completable_before_token);
     is_completed_.back() = completed_before_token;
-    if (capture_tracking_) {
+    if (features_->capture_tracking) {
       capture_event_history_.PopBack(1);
       capture_event_history_.PushBack(capture_row_before_token);
     }
@@ -1332,7 +1334,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   std::vector<CaptureEvent> atomic_capture_row;
   bool atomic_completed = false;
   bool atomic_success =
-      has_char_budget_rules_
+      features_->has_char_budget_rules
           ? AdvanceAtomicTokenWithCharacterBudget(token_id, token_char_count, debug_print)
           : AdvanceAtomicToken(token_id, debug_print);
   if (atomic_success) {
@@ -1347,7 +1349,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
 
   // Phase 2: Try byte-by-byte path (from the same original state)
   record_char_budget_relaxation_ = true;
-  bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
+  bool track_temporary_input = features_->has_char_budget_rules && has_budget_marker_rules_;
   if (track_temporary_input) {
     temporary_input_start_row_ = scanable_state_history_.size() - 1;
     temporary_input_bytes_.clear();
@@ -1355,7 +1357,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   int pos = 0;
   bool byte_path_success = true;
   for (auto char_value : token) {
-    bool accepted = has_char_budget_rules_
+    bool accepted = features_->has_char_budget_rules
                         ? AdvanceWithCharacterBudget(static_cast<uint8_t>(char_value), debug_print)
                         : Advance(static_cast<uint8_t>(char_value), debug_print);
     if (!accepted) {
@@ -1390,7 +1392,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     restore_row_before_token();
     char_budget_relaxed_ = false;
     bool accepted =
-        has_char_budget_rules_
+        features_->has_char_budget_rules
             ? AdvanceAtomicTokenWithCharacterBudget(token_id, token_char_count, debug_print)
             : AdvanceAtomicToken(token_id, debug_print);
     XGRAMMAR_DCHECK(accepted);
@@ -1503,7 +1505,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << EscapeString(token) << "> accepted.";
   }
-  if (has_char_budget_rules_) {
+  if (features_->has_char_budget_rules) {
     // Close exhausted occurrences at the token boundary, including after zero-byte atomic tokens.
     ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
   }
@@ -1535,7 +1537,7 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
   std::vector<std::pair<int32_t, ParserState>> completable_before_input;
   std::vector<CaptureEvent> capture_row_before_input;
   bool completed_before_input = false;
-  if (has_char_budget_rules_) {
+  if (features_->has_char_budget_rules) {
     states_before_input = GetLatestScanableStates();
     auto completable_row_before_input = rule_id_to_completable_states_.Back();
     completable_before_input.assign(
@@ -1545,14 +1547,14 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
     capture_row_before_input = CopyLastCaptureRow();
     completed_before_input = is_completed_.back();
   }
-  bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
+  bool track_temporary_input = features_->has_char_budget_rules && has_budget_marker_rules_;
   if (track_temporary_input) {
     temporary_input_start_row_ = scanable_state_history_.size() - 1;
     temporary_input_bytes_.clear();
   }
   int accepted_cnt = 0;
   for (auto char_value : input_str) {
-    bool accepted = has_char_budget_rules_
+    bool accepted = features_->has_char_budget_rules
                         ? AdvanceWithCharacterBudget(static_cast<uint8_t>(char_value), debug_print)
                         : Advance(static_cast<uint8_t>(char_value), debug_print);
     if (!accepted) {
@@ -1561,13 +1563,13 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
                            << "position " << accepted_cnt << ", char " << EscapeString(char_value);
       }
       PopLastStates(accepted_cnt);
-      if (has_char_budget_rules_) {
+      if (features_->has_char_budget_rules) {
         scanable_state_history_.PopBack(1);
         scanable_state_history_.PushBack(states_before_input);
         rule_id_to_completable_states_.PopBack(1);
         rule_id_to_completable_states_.PushBack(completable_before_input);
         is_completed_.back() = completed_before_input;
-        if (capture_tracking_) {
+        if (features_->capture_tracking) {
           capture_event_history_.PopBack(1);
           capture_event_history_.PushBack(capture_row_before_input);
         }
@@ -1593,7 +1595,7 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
   if (ShouldTrackAcceptedBytes()) {
     AppendPerByteRows(input_str);
   }
-  if (has_char_budget_rules_ && !input_str.empty()) {
+  if (features_->has_char_budget_rules && !input_str.empty()) {
     // Leave the parser at the enforced boundary even when no later input is supplied.
     ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
   }
@@ -1649,7 +1651,7 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   int32_t* bitmask_data_ptr =
       CheckAndGetBitmaskPtr(*next_token_bitmask, tokenizer_info_.GetVocabSize(), index);
   current_token_index_ = static_cast<int32_t>(token_length_history.size());
-  if (has_budget_rules_) {
+  if (features_->has_budget_rules) {
     const auto& row = scanable_state_history_[scanable_state_history_.size() - 1];
     bool any_expired = false;
     bool any_alive = false;
@@ -1859,7 +1861,11 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
   for (const auto& state : latest_states) {
     const AdaptiveTokenMask& adaptive_token_mask = compiled_grammar_->token_mask_cache.Get(
-        state, state.rule_id == grammar_->GetRootRuleId(), grammar_, tokenizer_info_
+        state,
+        state.rule_id == grammar_->GetRootRuleId(),
+        grammar_,
+        tokenizer_info_,
+        compiled_grammar_->earley_parser_features
     );
     if (state.char_budget_deadline >= 0) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
@@ -1894,12 +1900,12 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
     // Examine only the current one ParserState
     std::optional<Impl> atomic_trial_base;
-    if (has_char_budget_rules_ && !adaptive_token_mask.uncertain_indices.empty()) {
+    if (features_->has_char_budget_rules && !adaptive_token_mask.uncertain_indices.empty()) {
       atomic_trial_base.emplace(*this);
       atomic_trial_base->capture_recording_ = false;
     }
     PushOneStateToCheck(state);
-    bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
+    bool track_temporary_input = features_->has_char_budget_rules && has_budget_marker_rules_;
     int32_t saved_temporary_input_start_row = -1;
     std::string saved_temporary_input_bytes;
     if (track_temporary_input) {
@@ -1932,7 +1938,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       }
 
       const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
-      bool accepted = !cur_token.empty() || !has_char_budget_rules_;
+      bool accepted = !cur_token.empty() || !features_->has_char_budget_rules;
 
       // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
       // We can reuse the previous matched size to avoid unnecessary matching.
@@ -1957,7 +1963,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       // Step 2.2. Find if the current token is accepted or rejected.
       if (accepted) {
         for (int j = prev_matched_size; j < static_cast<int>(cur_token.size()); ++j) {
-          bool byte_accepted = has_char_budget_rules_
+          bool byte_accepted = features_->has_char_budget_rules
                                    ? AdvanceWithCharacterBudget(static_cast<uint8_t>(cur_token[j]))
                                    : Advance(static_cast<uint8_t>(cur_token[j]));
           if (!byte_accepted) {
@@ -1972,7 +1978,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         }
       }
 
-      if (!accepted && has_char_budget_rules_) {
+      if (!accepted && features_->has_char_budget_rules) {
         int32_t token_char_count = 0;
         for (uint8_t byte : cur_token) {
           token_char_count += StartsUTF8Codepoint(byte);
@@ -2133,7 +2139,7 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
 std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptures(bool deduplicate
 ) const {
   std::vector<std::pair<std::string, std::string>> result;
-  if (!IsCaptureTrackingEnabled()) {
+  if (!features_->capture_tracking) {
     return result;
   }
   XGRAMMAR_DCHECK(capture_event_history_.size() == static_cast<int32_t>(row_byte_end_.size()))
