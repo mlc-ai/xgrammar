@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -28,6 +29,22 @@ namespace xgrammar {
 class RuleLevelCache;
 
 /******************* CompiledGrammar Datastructures *******************/
+
+XGRAMMAR_MEMBER_TABLE(
+    EarleyParserFeatures,
+    "fsm_state_flags",
+    &EarleyParserFeatures::fsm_state_flags,
+    "rule_is_nullable",
+    &EarleyParserFeatures::rule_is_nullable,
+    "has_budget_rules",
+    &EarleyParserFeatures::has_budget_rules,
+    "has_char_budget_rules",
+    &EarleyParserFeatures::has_char_budget_rules,
+    "capture_tracking",
+    &EarleyParserFeatures::capture_tracking,
+    "has_hidden_capture_rules",
+    &EarleyParserFeatures::has_hidden_capture_rules
+);
 
 /*!
  * \brief Preprocessed information, for a given specific ParserState, divides the token set
@@ -139,7 +156,8 @@ class TokenMaskCache {
       const ParserState& state,
       bool is_root_rule,
       const Grammar& grammar,
-      const TokenizerInfo& tokenizer_info
+      const TokenizerInfo& tokenizer_info,
+      const EarleyParserFeatures& features
   );
 
  private:
@@ -216,6 +234,9 @@ class CompiledGrammar::Impl {
 
   /*! \brief The adaptive token masks, precomputed or generated on first use. */
   TokenMaskCache token_mask_cache;
+
+  /*! \brief Grammar-wide flags and nullable rules shared by Earley parsers. */
+  EarleyParserFeatures earley_parser_features;
 
   Grammar GetGrammar() const { return grammar; }
 
