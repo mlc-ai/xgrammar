@@ -192,7 +192,9 @@ std::optional<SerializationError> DeserializeJSONValue(
   if (object.find("grammar") == object.end()) {
     return ConstructDeserializeError("Expect a 'grammar' field", type_name);
   }
-  AutoDeserializeJSONValue(&(impl->grammar), object["grammar"], type_name);
+  if (auto error = AutoDeserializeJSONValue(&(impl->grammar), object["grammar"], type_name)) {
+    return error;
+  }
   const auto features_it = object.find("earley_parser_features");
   if (features_it == object.end()) {
     return ConstructDeserializeError("Expect an 'earley_parser_features' field", type_name);
