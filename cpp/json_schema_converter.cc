@@ -4185,14 +4185,9 @@ std::string JSONSchemaToEBNF(
     }
     case JSONFormat::kCohereXML: {
       CohereXMLToolCallingConverter converter(
-          indent,
-          separators,
-          any_whitespace,
-          max_whitespace_cnt,
-          ref_resolver,
-          any_order
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
-      return converter.Convert(spec);
+      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
     }
     default:
       XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);

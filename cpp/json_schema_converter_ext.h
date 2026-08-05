@@ -7,6 +7,7 @@
 #ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 #define XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 
+#include <map>
 #include <unordered_map>
 #include <utility>
 
@@ -116,44 +117,49 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   );
 
  protected:
-  std::string GenerateString(const StringSpec& spec, const std::string& rule_name) override;
-  std::string GenerateObject(
+  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateObject(
       const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
   ) override;
-  std::string GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
-  std::string GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
 
-  std::string FormatProperty(
-      const std::string& key,
-      const std::string& value_rule,
-      const std::string& rule_name,
-      int64_t idx
+  int32_t FormatProperty(
+      const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
   ) override;
-  std::string FormatOtherProperty(
-      const std::string& key_pattern,
-      const std::string& value_rule,
+  int32_t FormatOtherProperty(
+      int32_t key_pattern_expr,
+      int32_t value_rule_id,
       const std::string& rule_name,
       const std::string& rule_name_suffix
   ) override;
 
   std::string GetKeyPattern() const override;
-  std::string GetKeyPatternExcluding(
+  int32_t GetKeyPatternExcluding(
       const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
   ) override;
   std::string NextSeparator(bool is_end = false) override;
 
-  void AddCache(const std::string& key, const std::string& value) override;
-  std::optional<std::string> GetCache(const std::string& key) const override;
+  void AddCache(const std::string& key, int32_t rule_id) override;
+  std::optional<int32_t> GetCache(const std::string& key) const override;
 
  private:
-  std::string FormatCohereParam(
+  struct XMLIdentifierTrieNode {
+    bool is_terminal = false;
+    std::map<char, XMLIdentifierTrieNode> children;
+  };
+
+  int32_t FormatCohereParam(
       const std::optional<std::string>& name,
-      const std::string& key_pattern,
+      const std::optional<int32_t>& key_pattern_expr,
       const SchemaSpecPtr& schema,
-      const std::string& value_rule
+      int32_t value_rule_id
   );
-  std::string FormatCohereValue(const std::string& value_rule) const;
-  std::string GetCohereTypePattern(const SchemaSpecPtr& schema) const;
+  int32_t FormatCohereValue(int32_t value_rule_id);
+  int32_t GetCohereTypePattern(const SchemaSpecPtr& schema);
+  int32_t BuildXMLIdentifierExcludingBody(
+      const XMLIdentifierTrieNode& node, const std::string& rule_name, int depth
+  );
   bool InCohereValueContext() const;
 
   std::vector<const ObjectSpec*> object_stack_;
