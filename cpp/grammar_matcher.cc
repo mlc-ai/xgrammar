@@ -1431,7 +1431,8 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
   const auto latest_row = scanable_state_history_[scanable_state_history_.size() - 1];
   std::vector<ParserState> latest_states(latest_row.begin(), latest_row.end());
   std::vector<ParserState> force_completed_states;
-  std::unordered_set<int64_t> force_completed_occurrences;
+  std::unordered_set<ParserState, StateHashForCompletionContext, StateEqualForCompletionContext>
+      force_completed_occurrences;
 
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
@@ -1446,9 +1447,7 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
     if (!CanForceCompleteWithoutMarker(state, false)) {
       continue;
     }
-    int64_t occurrence =
-        (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
-    if (force_completed_occurrences.insert(occurrence).second) {
+    if (force_completed_occurrences.insert(state).second) {
       force_completed_states.push_back(state);
     }
   }
@@ -1518,7 +1517,8 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
     previous_capture_events = CopyLastCaptureRow();
   }
   std::vector<ParserState> force_completed_states;
-  std::unordered_set<int64_t> force_completed_occurrences;
+  std::unordered_set<ParserState, StateHashForCompletionContext, StateEqualForCompletionContext>
+      force_completed_occurrences;
 
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
@@ -1533,9 +1533,7 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
     if (!CanForceCompleteWithoutMarker(state, true)) {
       continue;
     }
-    int64_t occurrence =
-        (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
-    if (force_completed_occurrences.insert(occurrence).second) {
+    if (force_completed_occurrences.insert(state).second) {
       force_completed_states.push_back(state);
     }
   }
