@@ -438,7 +438,7 @@ class RepetitionRangeExpander {
  */
 class GrammarOptimizer {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static Grammar Apply(const Grammar& grammar, bool expand_repetition_ranges = true);
 };
 
 /*!
