@@ -2514,8 +2514,7 @@ int32_t JSONSchemaConverter::GetAnyOrderRuleForProperties(
     const auto& property = properties[index];
     int32_t value_rule_id =
         CreateRule(property.schema, rule_name + "_prop_" + std::to_string(index));
-    items.push_back(
-        FormatProperty(property.name, value_rule_id, rule_name, index, property.schema)
+    items.push_back(FormatProperty(property.name, value_rule_id, rule_name, index, property.schema)
     );
   }
   if (additional != nullptr) {
