@@ -409,31 +409,16 @@ fsm_structure_cases = [
         'root ::= "a" item{2,5} "b"\nitem ::= [0-9]',
         _fsm_snapshot(
             r"""
-            Rule 0: root, FSM: CompactFSM(num_states=16, start=2, end=[3], edges=[
-            0: [Rule(4)->1]
-            1: ['b'->3]
-            2: ['a'->0]
-            3: []
+            Rule 0: root, FSM: CompactFSM(num_states=7, start=1, end=[4], edges=[
+            0: ['b'->4]
+            1: ['a'->2]
+            2: [Eps->3]
+            3: [Repeat(rule=1, min=2, max=5)->0]
+            4: []
             ])
-            Rule 1: root_1, FSM: CompactFSM(num_states=16, start=4, end=[4, 6], edges=[
-            4: [[0-9]->5]
-            5: [Rule(2)->6]
+            Rule 1: item, FSM: CompactFSM(num_states=7, start=5, end=[6], edges=[
+            5: [[0-9]->6]
             6: []
-            ])
-            Rule 2: root_2, FSM: CompactFSM(num_states=16, start=7, end=[7, 9], edges=[
-            7: [[0-9]->8]
-            8: [Rule(3)->9]
-            9: []
-            ])
-            Rule 3: root_3, FSM: CompactFSM(num_states=16, start=10, end=[10, 11], edges=[
-            10: [[0-9]->11]
-            11: []
-            ])
-            Rule 4: root_4, FSM: CompactFSM(num_states=16, start=14, end=[15], edges=[
-            12: [[0-9]->13]
-            13: [Rule(1)->15]
-            14: [[0-9]->12]
-            15: []
             ])
             """
         ),
@@ -443,27 +428,15 @@ fsm_structure_cases = [
         'root ::= item{3,}\nitem ::= "ab" [xy]',
         _fsm_snapshot(
             r"""
-            Rule 0: root, FSM: CompactFSM(num_states=14, start=0, end=[1], edges=[
-            0: [Rule(3)->1]
+            Rule 0: root, FSM: CompactFSM(num_states=6, start=0, end=[1], edges=[
+            0: [Repeat(rule=1, min=3, max=-1)->1]
             1: []
             ])
-            Rule 1: item, FSM: CompactFSM(num_states=14, start=3, end=[5], edges=[
+            Rule 1: item, FSM: CompactFSM(num_states=6, start=3, end=[5], edges=[
             2: ['x'->5, 'y'->5]
             3: ['a'->4]
             4: ['b'->2]
             5: []
-            ])
-            Rule 2: root_1, FSM: CompactFSM(num_states=14, start=6, end=[6, 8], edges=[
-            6: [Rule(1)->7]
-            7: [Rule(2)->8]
-            8: []
-            ])
-            Rule 3: root_2, FSM: CompactFSM(num_states=14, start=12, end=[13], edges=[
-            9: [Rule(1)->10]
-            10: [Rule(1)->11]
-            11: [Rule(2)->13]
-            12: [Rule(1)->9]
-            13: []
             ])
             """
         ),
@@ -622,13 +595,13 @@ fsm_structure_cases = [
         'root ::= a b c\na ::= "x" [0-9]*\nb ::= a "y" | [^xyz]\nc ::= b{1,3} "end"',
         _fsm_snapshot(
             r"""
-            Rule 0: root, FSM: CompactFSM(num_states=23, start=2, end=[3], edges=[
+            Rule 0: root, FSM: CompactFSM(num_states=15, start=2, end=[3], edges=[
             0: [Rule(1)->1, [0-9]->0]
             1: [Rule(2)->3]
             2: ['x'->0]
             3: []
             ])
-            Rule 1: b, FSM: CompactFSM(num_states=23, start=7, end=[5], edges=[
+            Rule 1: b, FSM: CompactFSM(num_states=15, start=7, end=[5], edges=[
             4: [[\x80-\xbf]->6]
             5: []
             6: [[\x80-\xbf]->5]
@@ -636,26 +609,12 @@ fsm_structure_cases = [
             8: [[0-9]->8, 'y'->5]
             9: [[\x80-\xbf]->4]
             ])
-            Rule 2: c, FSM: CompactFSM(num_states=23, start=11, end=[14], edges=[
+            Rule 2: c, FSM: CompactFSM(num_states=15, start=11, end=[14], edges=[
             10: ['e'->12]
-            11: [Rule(5)->10]
+            11: [Repeat(rule=1, min=1, max=3)->10]
             12: ['n'->13]
             13: ['d'->14]
             14: []
-            ])
-            Rule 3: c_1, FSM: CompactFSM(num_states=23, start=15, end=[15, 17], edges=[
-            15: [Rule(1)->16]
-            16: [Rule(4)->17]
-            17: []
-            ])
-            Rule 4: c_2, FSM: CompactFSM(num_states=23, start=18, end=[18, 19], edges=[
-            18: [Rule(1)->19]
-            19: []
-            ])
-            Rule 5: c_3, FSM: CompactFSM(num_states=23, start=21, end=[22], edges=[
-            20: [Rule(3)->22]
-            21: [Rule(1)->20]
-            22: []
             ])
             """
         ),

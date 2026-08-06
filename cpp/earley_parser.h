@@ -350,6 +350,7 @@ struct EarleyParserFeatures {
     kFsmStateNonTerminal = 1 << 2,
     kFsmStateEnd = 1 << 3,
     kFsmStateHasEdges = 1 << 4,
+    kFsmStateRepeatSource = 1 << 5,
   };
 
   std::vector<uint8_t> fsm_state_flags;

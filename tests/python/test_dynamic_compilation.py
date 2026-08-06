@@ -642,19 +642,45 @@ def test_preserved_repetition_ranges_survive_serialization():
     dynamic = xgr.GrammarCompiler(
         tokenizer_info, max_threads=1, enable_dynamic_compilation=True
     ).compile_grammar(grammar)
-    restored = xgr.CompiledGrammar.deserialize_json(dynamic.serialize_json(), tokenizer_info)
+    for compiled in [eager, dynamic]:
+        restored = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), tokenizer_info)
+        for value in ["aax", "aaay"]:
+            expected = _mask_trace(eager, value)
+            actual = _mask_trace(restored, value)
+            for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(
+                expected, actual
+            ):
+                assert actual_apply == expected_apply
+                torch.testing.assert_close(
+                    bitmask_to_bool_mask(actual_mask, tokenizer_info.vocab_size),
+                    bitmask_to_bool_mask(expected_mask, tokenizer_info.vocab_size),
+                    rtol=0,
+                    atol=0,
+                )
 
-    for value in ["aax", "aaay"]:
-        expected = _mask_trace(eager, value)
-        actual = _mask_trace(restored, value)
-        for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
-            assert actual_apply == expected_apply
-            torch.testing.assert_close(
-                bitmask_to_bool_mask(actual_mask, tokenizer_info.vocab_size),
-                bitmask_to_bool_mask(expected_mask, tokenizer_info.vocab_size),
-                rtol=0,
-                atol=0,
-            )
+
+@pytest.mark.parametrize("max_threads", [1, 4])
+def test_eager_repetition_phase_masks_match_token_acceptance(max_threads):
+    vocabulary = ["a", "aa", "aaaa", "az", "aaz", "aaaaaz", "z", "x"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=max_threads, enable_dynamic_compilation=False
+    ).compile_grammar('root ::= unit{100,110} "z"\nunit ::= "a"')
+
+    for repeat_count in [0, 94, 95, 99, 100, 104, 105, 108, 109]:
+        prefix = "a" * repeat_count
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert matcher.accept_string(prefix)
+        actual = _next_token_mask(matcher, tokenizer_info.vocab_size)
+
+        expected = []
+        for token_id in range(tokenizer_info.vocab_size):
+            trial_matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+            assert trial_matcher.accept_string(prefix)
+            expected.append(trial_matcher.accept_token(token_id))
+        torch.testing.assert_close(
+            actual, torch.tensor(expected, dtype=torch.bool).reshape(1, -1), rtol=0, atol=0
+        )
 
 
 def test_preserved_repetition_ranges_survive_rollback():

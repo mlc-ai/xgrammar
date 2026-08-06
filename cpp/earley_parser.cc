@@ -507,6 +507,10 @@ EarleyParserFeatures::EarleyParserFeatures(const Grammar& grammar)
       } else if (edge.IsRuleRef() || edge.IsEpsilon() || edge.IsRepeatRef()) {
         flags |= kFsmStateNonTerminal;
       }
+      if (edge.IsRepeatRef()) {
+        XGRAMMAR_DCHECK(edges.size() == 1);
+        flags |= kFsmStateRepeatSource;
+      }
     }
   }
 

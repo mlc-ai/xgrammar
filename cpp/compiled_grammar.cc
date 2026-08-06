@@ -176,6 +176,10 @@ picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
       impl.token_mask_cache.dynamic_ ? decltype(impl.token_mask_cache.masks_){}
                                      : impl.token_mask_cache.masks_
   );
+  result["repeat_token_mask_cache"] = AutoSerializeJSONValue(
+      impl.token_mask_cache.dynamic_ ? decltype(impl.token_mask_cache.repeat_masks_){}
+                                     : impl.token_mask_cache.repeat_masks_
+  );
   return picojson::value(result);
 }
 
@@ -227,7 +231,19 @@ std::optional<SerializationError> DeserializeJSONValue(
   if (object.find("adaptive_token_mask_cache") == object.end()) {
     return ConstructDeserializeError("Expect a 'adaptive_token_mask_cache' field", type_name);
   }
-  AutoDeserializeJSONValue(&(impl->token_mask_cache.masks_), object["adaptive_token_mask_cache"]);
+  if (auto error = AutoDeserializeJSONValue(
+          &(impl->token_mask_cache.masks_), object["adaptive_token_mask_cache"], type_name
+      )) {
+    return error;
+  }
+  if (object.find("repeat_token_mask_cache") == object.end()) {
+    return ConstructDeserializeError("Expect a 'repeat_token_mask_cache' field", type_name);
+  }
+  if (auto error = AutoDeserializeJSONValue(
+          &(impl->token_mask_cache.repeat_masks_), object["repeat_token_mask_cache"], type_name
+      )) {
+    return error;
+  }
   const auto dynamic_it = object.find("dynamic");
   if (dynamic_it != object.end() && !dynamic_it->second.is<bool>()) {
     return ConstructDeserializeError("Expect a boolean 'dynamic' field", type_name);

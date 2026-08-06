@@ -538,23 +538,7 @@ class GrammarMatcher::Impl : public EarleyParser {
  private:
   using StoreType = AdaptiveTokenMask::StoreType;
 
-  struct RepeatMaskCacheKey {
-    ParserState state;
-    int32_t parent_node_id;
-    int32_t lower_bound_distance;
-    int32_t upper_bound_distance;
-
-    bool operator==(const RepeatMaskCacheKey& other) const {
-      return StateEqualForCache()(state, other.state) && parent_node_id == other.parent_node_id &&
-             lower_bound_distance == other.lower_bound_distance &&
-             upper_bound_distance == other.upper_bound_distance;
-    }
-  };
-
   std::optional<ParserState> FindRepeatParent(const ParserState& state) const;
-
-  RepeatMaskCacheKey GetRepeatMaskCacheKey(const ParserState& state, const ParserState& parent)
-      const;
 
   /*!
    * \brief If is_uncertain_saved is true, find the next token in uncertain_indices. Otherwise,
@@ -759,7 +743,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
   struct RepeatMaskCacheEntry {
-    RepeatMaskCacheKey key;
+    RepeatTokenMaskKey key;
     bool parser_completed;
     DynamicBitset mask;
   };
@@ -767,8 +751,8 @@ class GrammarMatcher::Impl : public EarleyParser {
 };
 
 std::optional<ParserState> GrammarMatcher::Impl::FindRepeatParent(const ParserState& state) const {
-  if (!compiled_grammar_->token_mask_cache.IsDynamic() || state.rule_id < 0 ||
-      !features_->IsRuleContextIndependent(state.rule_id) || state.rule_start_pos < 0 ||
+  if (state.rule_id < 0 || !features_->IsRuleContextIndependent(state.rule_id) ||
+      state.rule_start_pos < 0 ||
       state.rule_start_pos >= static_cast<int32_t>(rule_id_to_completable_states_.size())) {
     return std::nullopt;
   }
@@ -782,10 +766,12 @@ std::optional<ParserState> GrammarMatcher::Impl::FindRepeatParent(const ParserSt
     if (parent.rule_id < 0) {
       return std::nullopt;
     }
-    const auto& edges = grammar_->complete_fsm.GetEdges(parent.element_id);
-    if (edges.size() != 1 || !edges[0].IsRepeatRef()) {
+    if (!(features_->fsm_state_flags[parent.element_id] &
+          EarleyParserFeatures::kFsmStateRepeatSource)) {
       return std::nullopt;
     }
+    const auto& edges = grammar_->complete_fsm.GetEdges(parent.element_id);
+    XGRAMMAR_DCHECK(edges.size() == 1 && edges[0].IsRepeatRef());
     const auto repeat_info = grammar_->complete_fsm.GetRepeatEdgeInfo(edges[0].GetAuxIndex());
     if (repeat_info.RuleId() != state.rule_id) {
       return std::nullopt;
@@ -796,25 +782,6 @@ std::optional<ParserState> GrammarMatcher::Impl::FindRepeatParent(const ParserSt
     repeat_parent = parent;
   }
   return repeat_parent;
-}
-
-GrammarMatcher::Impl::RepeatMaskCacheKey GrammarMatcher::Impl::GetRepeatMaskCacheKey(
-    const ParserState& state, const ParserState& parent
-) const {
-  const auto& parent_edges = grammar_->complete_fsm.GetEdges(parent.element_id);
-  const auto repeat_info = grammar_->complete_fsm.GetRepeatEdgeInfo(parent_edges[0].GetAuxIndex());
-  const int32_t far_distance = tokenizer_info_.ImplPtr()->GetMaxTokenBytes() + 1;
-  const auto normalize_distance = [far_distance](int64_t distance) {
-    return static_cast<int32_t>(std::min<int64_t>(std::max<int64_t>(distance, 0), far_distance));
-  };
-  return RepeatMaskCacheKey{
-      state,
-      parent.element_id,
-      normalize_distance(static_cast<int64_t>(repeat_info.Lower()) - parent.repeat_count),
-      repeat_info.Upper() == -1
-          ? -1
-          : normalize_distance(static_cast<int64_t>(repeat_info.Upper()) - parent.repeat_count)
-  };
 }
 
 class BatchGrammarMatcher::Impl {
@@ -1913,11 +1880,13 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   }
 
   std::optional<ParserState> single_repeat_parent;
-  std::optional<RepeatMaskCacheKey> repeat_mask_key;
+  std::optional<RepeatTokenMaskKey> repeat_mask_key;
   if (latest_states.size() == 1) {
     single_repeat_parent = FindRepeatParent(latest_states[0]);
     if (single_repeat_parent.has_value()) {
-      repeat_mask_key = GetRepeatMaskCacheKey(latest_states[0], *single_repeat_parent);
+      repeat_mask_key = compiled_grammar_->token_mask_cache.GetRepeatTokenMaskKey(
+          latest_states[0], *single_repeat_parent, grammar_, tokenizer_info_
+      );
       if (repeat_mask_cache_.has_value() && repeat_mask_cache_->key == *repeat_mask_key &&
           repeat_mask_cache_->parser_completed == IsCompleted()) {
         DynamicBitset output(

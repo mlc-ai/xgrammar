@@ -14,6 +14,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -122,6 +123,48 @@ XGRAMMAR_MEMBER_TABLE(
     &AdaptiveTokenMask::uncertain_indices
 );
 
+struct RepeatTokenMaskKey {
+  ParserState state;
+  int32_t parent_node_id;
+  int32_t lower_bound_distance;
+  int32_t upper_bound_distance;
+
+  bool operator==(const RepeatTokenMaskKey& other) const {
+    return StateEqualForCache()(state, other.state) && parent_node_id == other.parent_node_id &&
+           lower_bound_distance == other.lower_bound_distance &&
+           upper_bound_distance == other.upper_bound_distance;
+  }
+
+  bool operator<(const RepeatTokenMaskKey& other) const {
+    return std::tie(state, parent_node_id, lower_bound_distance, upper_bound_distance) <
+           std::tie(
+               other.state,
+               other.parent_node_id,
+               other.lower_bound_distance,
+               other.upper_bound_distance
+           );
+  }
+};
+
+struct RepeatTokenMaskKeyHash {
+  size_t operator()(const RepeatTokenMaskKey& key) const {
+    return HashCombine(
+        StateHashForCache()(key.state),
+        key.parent_node_id,
+        key.lower_bound_distance,
+        key.upper_bound_distance
+    );
+  }
+};
+
+XGRAMMAR_MEMBER_ARRAY(
+    RepeatTokenMaskKey,
+    &RepeatTokenMaskKey::state,
+    &RepeatTokenMaskKey::parent_node_id,
+    &RepeatTokenMaskKey::lower_bound_distance,
+    &RepeatTokenMaskKey::upper_bound_distance
+);
+
 /*!
  * \brief Manages the adaptive token masks of a compiled grammar. In eager mode (the default),
  * all masks are precomputed at compile time. In dynamic mode, masks are generated and cached on
@@ -143,9 +186,6 @@ class TokenMaskCache {
     rule_level_cache_ = std::move(rule_level_cache);
   }
 
-  /*! \brief Whether missing token masks should be generated on first use. */
-  bool IsDynamic() const { return dynamic_; }
-
   /*! \brief Insert a precomputed mask during eager compilation. Not thread-safe; the compiler
    * synchronizes concurrent insertions itself. */
   void Insert(const ParserState& state, AdaptiveTokenMask mask) { masks_[state] = std::move(mask); }
@@ -160,31 +200,27 @@ class TokenMaskCache {
       const ParserState* repeat_parent_state = nullptr
   );
 
+  /*! \brief Generate and store one repeat-context mask during eager compilation. */
+  void PrecomputeRepeat(
+      const ParserState& state,
+      const ParserState& repeat_parent_state,
+      const Grammar& grammar,
+      const TokenizerInfo& tokenizer_info,
+      const EarleyParserFeatures& features
+  );
+
+  /*! \brief Release summaries that are only needed while repeat masks are generated. */
+  void ClearRepeatTokenSummaries();
+
+  /*! \brief Build the cache key shared by compiled masks and the matcher fast path. */
+  RepeatTokenMaskKey GetRepeatTokenMaskKey(
+      const ParserState& state,
+      const ParserState& repeat_parent_state,
+      const Grammar& grammar,
+      const TokenizerInfo& tokenizer_info
+  ) const;
+
  private:
-  struct RepeatTokenMaskKey {
-    ParserState state;
-    int32_t parent_node_id;
-    int32_t lower_bound_distance;
-    int32_t upper_bound_distance;
-
-    bool operator==(const RepeatTokenMaskKey& other) const {
-      return StateEqualForCache()(state, other.state) && parent_node_id == other.parent_node_id &&
-             lower_bound_distance == other.lower_bound_distance &&
-             upper_bound_distance == other.upper_bound_distance;
-    }
-  };
-
-  struct RepeatTokenMaskKeyHash {
-    size_t operator()(const RepeatTokenMaskKey& key) const {
-      return HashCombine(
-          StateHashForCache()(key.state),
-          key.parent_node_id,
-          key.lower_bound_distance,
-          key.upper_bound_distance
-      );
-    }
-  };
-
   struct RepeatTokenSummary {
     int32_t sorted_vocabulary_index;
     int32_t locally_consumed_repetitions;
@@ -201,6 +237,15 @@ class TokenMaskCache {
 
   std::shared_ptr<const std::vector<RepeatTokenSummary>> GetSimpleRepeatTokenSummaries(
       const ParserState& state, const Grammar& grammar, const TokenizerInfo& tokenizer_info
+  );
+
+  AdaptiveTokenMask GenerateRepeatTokenMask(
+      const ParserState& state,
+      const ParserState& repeat_parent_state,
+      const RepeatTokenMaskKey& repeat_key,
+      const Grammar& grammar,
+      const TokenizerInfo& tokenizer_info,
+      const EarleyParserFeatures& features
   );
 
   /*! \brief Return the tag-dispatch bitset for a rule, computing and caching it on first use. */
