@@ -189,6 +189,20 @@ class Compact2DArray {
    */
   int32_t PushBack(const std::vector<DataType>& new_data);
 
+  /*! \brief Append an empty row. */
+  int32_t PushBackEmpty() {
+    const int32_t end = indptr_.back();
+    indptr_.push_back(end);
+    return static_cast<int32_t>(indptr_.size()) - 2;
+  }
+
+  /*!
+   * \brief Insert a row by copying elements referenced by stable pointers.
+   * \param new_data Pointers to the elements to be inserted.
+   * \return The index of the newly inserted row.
+   */
+  int32_t PushBackIndirect(const std::vector<const DataType*>& new_data);
+
   /*!
    * \brief Insert a new row of data into the Compact2DArray from a Row struct.
    * \param row The Row struct containing the data to be inserted.
@@ -225,8 +239,10 @@ class Compact2DArray {
    * \param cnt The number of rows to be popped.
    */
   void PopBack(const int32_t& cnt) {
-    indptr_.erase(indptr_.end() - cnt, indptr_.end());
-    data_.erase(data_.begin() + indptr_.back(), data_.end());
+    const size_t new_indptr_size = indptr_.size() - cnt;
+    const size_t new_data_size = indptr_[new_indptr_size - 1];
+    indptr_.resize(new_indptr_size);
+    data_.resize(new_data_size);
     return;
   }
 
@@ -345,6 +361,21 @@ template <typename DataType>
 inline int32_t Compact2DArray<DataType>::PushBack(const std::vector<DataType>& new_data) {
   CheckCanAppendData(new_data.size());
   data_.insert(data_.end(), new_data.begin(), new_data.end());
+  indptr_.push_back(static_cast<int32_t>(data_.size()));
+  return static_cast<int32_t>(indptr_.size()) - 2;
+}
+
+template <typename DataType>
+inline int32_t Compact2DArray<DataType>::PushBackIndirect(
+    const std::vector<const DataType*>& new_data
+) {
+  data_.reserve(data_.size() + new_data.size());
+  for (const DataType* element : new_data) {
+    data_.push_back(*element);
+  }
+  XGRAMMAR_DCHECK(data_.size() <= static_cast<size_t>(INT32_MAX))
+      << "Compact2DArray data_ size (" << data_.size()
+      << ") exceeds int32_t limit, likely due to unbounded grammar pattern causing state explosion";
   indptr_.push_back(static_cast<int32_t>(data_.size()));
   return static_cast<int32_t>(indptr_.size()) - 2;
 }

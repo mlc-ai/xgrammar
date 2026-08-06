@@ -39,6 +39,15 @@ class TokenizerInfo::Impl {
   const std::vector<int32_t>& GetTokenIdToSortedVocabIndex() const {
     return token_id_to_sorted_vocab_index_;
   }
+  const std::vector<int32_t>& GetMixedWhitespaceSuffixSortedIndices() const {
+    return mixed_whitespace_suffix_sorted_indices_;
+  }
+  const std::vector<int32_t>& GetMixedWhitespaceSuffixOffsets() const {
+    return mixed_whitespace_suffix_offsets_;
+  }
+  const std::vector<int32_t>& GetMixedWhitespaceSuffixLcpWithPrevious() const {
+    return mixed_whitespace_suffix_lcp_with_previous_;
+  }
   const std::vector<int32_t>& GetTokenCharCounts() const;
   int32_t GetMaxTokenChars() const;
   void BuildTokenCharData();
@@ -82,6 +91,12 @@ class TokenizerInfo::Impl {
   std::vector<int32_t> special_token_ids_;
   /*! \brief Reverse mapping: token_id -> index in sorted_decoded_vocab_. -1 if not present. */
   std::vector<int32_t> token_id_to_sorted_vocab_index_;
+  /*! \brief Mixed whitespace/text tokens sorted by the suffix after maximal leading whitespace. */
+  std::vector<int32_t> mixed_whitespace_suffix_sorted_indices_;
+  /*! \brief Maximal leading-whitespace length for each entry in the suffix-sorted table. */
+  std::vector<int32_t> mixed_whitespace_suffix_offsets_;
+  /*! \brief Adjacent longest-common-prefix lengths in the suffix-sorted table. */
+  std::vector<int32_t> mixed_whitespace_suffix_lcp_with_previous_;
   /*! \brief Unicode codepoint counts for the sorted decoded vocabulary. */
   int32_t max_token_chars_ = 0;
   std::vector<int32_t> token_char_counts_;

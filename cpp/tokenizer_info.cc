@@ -13,7 +13,7 @@
 #include <optional>
 #include <stack>
 #include <string>
-#include <unordered_map>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -321,6 +321,67 @@ TokenizerInfo::Impl::Impl(
     trie_subtree_nodes_range_[top_pair.second] = sorted_decoded_vocab_.size();
     prefix_stack.pop();
   }
+  // Tokens that cross from a whitespace loop into its parent continuation are a dominant runtime
+  // cost. Store their arbitrary suffixes once per tokenizer, ordered so all matchers can traverse
+  // the shared suffix trie without sorting or copying token strings.
+  std::vector<std::pair<int32_t, int32_t>> mixed_whitespace_suffixes;
+  mixed_whitespace_suffixes.reserve(sorted_decoded_vocab_.size() / 2);
+  for (int32_t sorted_vocab_index = 0;
+       sorted_vocab_index < static_cast<int32_t>(sorted_decoded_vocab_.size());
+       ++sorted_vocab_index) {
+    const auto& token = sorted_decoded_vocab_[sorted_vocab_index].second;
+    int32_t suffix_offset = 0;
+    while (suffix_offset < static_cast<int32_t>(token.size())) {
+      const uint8_t byte = token[suffix_offset];
+      if (byte != 0x09 && byte != 0x0A && byte != 0x0B && byte != 0x0C && byte != 0x0D &&
+          byte != 0x20) {
+        break;
+      }
+      ++suffix_offset;
+    }
+    if (suffix_offset > 0 && suffix_offset < static_cast<int32_t>(token.size())) {
+      mixed_whitespace_suffixes.emplace_back(sorted_vocab_index, suffix_offset);
+    }
+  }
+  std::sort(
+      mixed_whitespace_suffixes.begin(),
+      mixed_whitespace_suffixes.end(),
+      [&](const auto& lhs, const auto& rhs) {
+        const auto& lhs_token = sorted_decoded_vocab_[lhs.first].second;
+        const auto& rhs_token = sorted_decoded_vocab_[rhs.first].second;
+        const std::string_view lhs_suffix(
+            lhs_token.data() + lhs.second, lhs_token.size() - lhs.second
+        );
+        const std::string_view rhs_suffix(
+            rhs_token.data() + rhs.second, rhs_token.size() - rhs.second
+        );
+        if (lhs_suffix != rhs_suffix) {
+          return lhs_suffix < rhs_suffix;
+        }
+        return lhs.first < rhs.first;
+      }
+  );
+  mixed_whitespace_suffix_sorted_indices_.reserve(mixed_whitespace_suffixes.size());
+  mixed_whitespace_suffix_offsets_.reserve(mixed_whitespace_suffixes.size());
+  mixed_whitespace_suffix_lcp_with_previous_.reserve(mixed_whitespace_suffixes.size());
+  std::string_view previous_suffix;
+  for (size_t entry_index = 0; entry_index < mixed_whitespace_suffixes.size(); ++entry_index) {
+    const auto [sorted_vocab_index, suffix_offset] = mixed_whitespace_suffixes[entry_index];
+    const auto& token = sorted_decoded_vocab_[sorted_vocab_index].second;
+    const std::string_view suffix(token.data() + suffix_offset, token.size() - suffix_offset);
+    int32_t lcp_length = 0;
+    if (entry_index != 0) {
+      const int32_t limit = std::min<int32_t>(suffix.size(), previous_suffix.size());
+      while (lcp_length < limit && suffix[lcp_length] == previous_suffix[lcp_length]) {
+        ++lcp_length;
+      }
+    }
+    mixed_whitespace_suffix_sorted_indices_.push_back(sorted_vocab_index);
+    mixed_whitespace_suffix_offsets_.push_back(suffix_offset);
+    mixed_whitespace_suffix_lcp_with_previous_.push_back(lcp_length);
+    previous_suffix = suffix;
+  }
+
   BuildTokenCharData();
 }
 

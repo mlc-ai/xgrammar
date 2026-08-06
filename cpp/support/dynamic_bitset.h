@@ -163,6 +163,44 @@ class DynamicBitset {
     return *this;
   }
 
+  /*!
+   * \brief Replace this bitset with the set difference lhs \ rhs and return its population count.
+   */
+  int AssignDifference(const DynamicBitset& lhs, const DynamicBitset& rhs) {
+    XGRAMMAR_DCHECK(
+        size_ == lhs.size_ && size_ == rhs.size_ && buffer_size_ == lhs.buffer_size_ &&
+        buffer_size_ == rhs.buffer_size_
+    );
+    int count = 0;
+    for (int i = 0; i < buffer_size_; ++i) {
+      data_[i] = lhs.data_[i] & ~rhs.data_[i];
+      count += PopCount(data_[i]);
+    }
+    return count;
+  }
+
+  /*! \brief Return whether this bitset and another bitset have any common set bit. */
+  bool Intersects(const DynamicBitset& other) const {
+    XGRAMMAR_DCHECK(size_ == other.size_ && buffer_size_ == other.buffer_size_);
+    for (int i = 0; i < buffer_size_; ++i) {
+      if ((data_[i] & other.data_[i]) != 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /*! \brief Return whether every set bit in this bitset is also set in another bitset. */
+  bool IsSubsetOf(const DynamicBitset& other) const {
+    XGRAMMAR_DCHECK(size_ == other.size_ && buffer_size_ == other.buffer_size_);
+    for (int i = 0; i < buffer_size_; ++i) {
+      if ((data_[i] & ~other.data_[i]) != 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   int FindFirstOne() const { return DoFindOneFrom(0); }
 
   int FindNextOne(int pos) const {
