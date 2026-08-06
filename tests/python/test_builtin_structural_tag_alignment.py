@@ -103,7 +103,17 @@ MODEL_CONFIGS = [
     ("glm_4_7", "zai-org/GLM-4.7-Flash", False, {"enable_thinking": False}),
     ("deepseek_v4", "ENCODER:dsv4", True, {"thinking_mode": "thinking"}),
     ("deepseek_v4", "ENCODER:dsv4", False, {"thinking_mode": "chat"}),
+    ("cohere", "CohereLabs/command-a-plus-05-2026-bf16", True, {"reasoning": True}),
+    ("cohere", "CohereLabs/command-a-plus-05-2026-bf16", False, {"reasoning": False}),
 ]
+
+# Models whose HF repo does not (yet) ship the chat template matching the
+# structural tag format. The cofl XML tool call format targeted by the
+# "cohere" structural tag is defined in Cohere's official templating repo
+# (cohere-ai/melody, cmd5.jinja), vendored beside this file.
+CHAT_TEMPLATE_OVERRIDES = {
+    "CohereLabs/command-a-plus-05-2026-bf16": "chat_template_cohere_cmd5.jinja"
+}
 
 # DeepSeek V3.2 encoder rejects empty reasoning + no tool calls.
 SKIP_EMPTY_REASONING = {"ENCODER:dsv32", "MiniMaxAI/MiniMax-M2.5"}
@@ -140,6 +150,7 @@ EOS_SUFFIXES = {
     "glm_4_7": [],
     "deepseek_v3_2": ["<｜end▁of▁sentence｜>"],
     "deepseek_v4": ["<｜end▁of▁sentence｜>"],
+    "cohere": ["<|END_OF_TURN_TOKEN|>"],
 }
 
 
@@ -147,7 +158,12 @@ EOS_SUFFIXES = {
 def load_tokenizer(model_id):
     from transformers import AutoTokenizer
 
-    return AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+    override = CHAT_TEMPLATE_OVERRIDES.get(model_id)
+    if override:
+        with open(os.path.join(os.path.dirname(__file__), override), encoding="utf-8") as f:
+            tokenizer.chat_template = f.read()
+    return tokenizer
 
 
 def make_tools(num_tools):

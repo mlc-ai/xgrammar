@@ -4102,6 +4102,17 @@ Grammar JSONSchemaToGrammar(
       );
       return converter.Convert(spec);
     }
+    case JSONFormat::kCohereXML: {
+      CohereXMLToolCallingConverter converter(
+          indent,
+          std::move(separators),
+          any_whitespace,
+          max_whitespace_cnt,
+          std::move(ref_resolver),
+          any_order
+      );
+      return converter.Convert(spec);
+    }
     default:
       XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);
   }
