@@ -706,11 +706,13 @@ class EarleyParser {
    * \param initial_state The state to start parsing from. If not provided, parsing starts
    * from the root rule of the grammar.
    * \param features Shared parser features. If not provided, they are built from the grammar.
+   * \param initial_parent_state Optional parent used when generating a context-aware token mask.
    */
   explicit EarleyParser(
       const Grammar& grammar,
       std::optional<ParserState> initial_state = std::nullopt,
-      const EarleyParserFeatures* features = nullptr
+      const EarleyParserFeatures* features = nullptr,
+      std::optional<ParserState> initial_parent_state = std::nullopt
   );
 
   /*!
@@ -739,8 +741,11 @@ class EarleyParser {
   /*!
    * \brief Push the initial state into the Earley parser.
    * \param state The initial state to be pushed.
+   * \param initial_parent_state Optional parent of the initial state.
    */
-  void PushStateAndExpand(const ParserState& state);
+  void PushStateAndExpand(
+      const ParserState& state, std::optional<ParserState> initial_parent_state = std::nullopt
+  );
 
   /*!
    * \brief Reset the parser.

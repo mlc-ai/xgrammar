@@ -27,7 +27,6 @@
 namespace xgrammar {
 
 class RuleLevelCache;
-class CharacterClassTokenSummaryCache;
 
 /******************* CompiledGrammar Datastructures *******************/
 
@@ -123,22 +122,6 @@ XGRAMMAR_MEMBER_TABLE(
     &AdaptiveTokenMask::uncertain_indices
 );
 
-struct CharacterClassTokenSummary {
-  int32_t sorted_vocab_index;
-  int32_t locally_consumed_characters;
-  bool consumed_whole_token;
-  bool has_completed_character_prefix;
-};
-
-struct RepeatedCharacterClassTokenMask {
-  AdaptiveTokenMask adaptive_token_mask;
-  DynamicBitset accepted_prefix_tokens;
-
-  friend std::size_t MemorySize(const RepeatedCharacterClassTokenMask& mask) {
-    return MemorySize(mask.adaptive_token_mask) + MemorySize(mask.accepted_prefix_tokens);
-  }
-};
-
 /*!
  * \brief Manages the adaptive token masks of a compiled grammar. In eager mode (the default),
  * all masks are precomputed at compile time. In dynamic mode, masks are generated and cached on
@@ -173,10 +156,53 @@ class TokenMaskCache {
       bool is_root_rule,
       const Grammar& grammar,
       const TokenizerInfo& tokenizer_info,
-      const EarleyParserFeatures& features
+      const EarleyParserFeatures& features,
+      const ParserState* repeat_parent_state = nullptr
   );
 
  private:
+  struct RepeatTokenMaskKey {
+    ParserState state;
+    int32_t parent_node_id;
+    int32_t lower_bound_distance;
+    int32_t upper_bound_distance;
+
+    bool operator==(const RepeatTokenMaskKey& other) const {
+      return StateEqualForCache()(state, other.state) && parent_node_id == other.parent_node_id &&
+             lower_bound_distance == other.lower_bound_distance &&
+             upper_bound_distance == other.upper_bound_distance;
+    }
+  };
+
+  struct RepeatTokenMaskKeyHash {
+    size_t operator()(const RepeatTokenMaskKey& key) const {
+      return HashCombine(
+          StateHashForCache()(key.state),
+          key.parent_node_id,
+          key.lower_bound_distance,
+          key.upper_bound_distance
+      );
+    }
+  };
+
+  struct RepeatTokenSummary {
+    int32_t sorted_vocabulary_index;
+    int32_t locally_consumed_repetitions;
+    bool consumed_whole_token;
+    bool has_completed_repetition_prefix;
+  };
+
+  std::optional<AdaptiveTokenMask> TryGetSimpleRepeatTokenMask(
+      const ParserState& state,
+      int32_t upper_bound_distance,
+      const Grammar& grammar,
+      const TokenizerInfo& tokenizer_info
+  );
+
+  std::shared_ptr<const std::vector<RepeatTokenSummary>> GetSimpleRepeatTokenSummaries(
+      const ParserState& state, const Grammar& grammar, const TokenizerInfo& tokenizer_info
+  );
+
   /*! \brief Return the tag-dispatch bitset for a rule, computing and caching it on first use. */
   const DynamicBitset* GetTagDispatchSecondSlicingBitset(
       int32_t rule_id, const Grammar& grammar, const TokenizerInfo& tokenizer_info
@@ -190,6 +216,17 @@ class TokenMaskCache {
 
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache> masks_;
+
+  /*! \brief Context-aware masks for states entered through a repeat edge. */
+  std::unordered_map<RepeatTokenMaskKey, AdaptiveTokenMask, RepeatTokenMaskKeyHash> repeat_masks_;
+
+  /*! \brief Token summaries for repeated rules that only contain deterministic byte transitions. */
+  std::unordered_map<
+      ParserState,
+      std::shared_ptr<const std::vector<RepeatTokenSummary>>,
+      StateHashForCache,
+      StateEqualForCache>
+      repeat_token_summaries_;
 
   /*! \brief Tag-dispatch data computed on first use in dynamic mode. */
   std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset_;
@@ -207,8 +244,16 @@ class TokenMaskCache {
 
   friend std::size_t MemorySize(const TokenMaskCache& token_mask_cache) {
     std::lock_guard<std::mutex> lock(token_mask_cache.mutex_);
-    return MemorySize(token_mask_cache.masks_) +
-           MemorySize(token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset_);
+    std::size_t result =
+        MemorySize(token_mask_cache.masks_) + MemorySize(token_mask_cache.repeat_masks_) +
+        MemorySize(token_mask_cache.tag_dispatch_rule_id_to_second_slicing_bitset_);
+    for (const auto& [state, summaries] : token_mask_cache.repeat_token_summaries_) {
+      result += sizeof(state) + sizeof(summaries);
+      if (summaries != nullptr) {
+        result += MemorySize(*summaries);
+      }
+    }
+    return result;
   }
 };
 
@@ -236,20 +281,6 @@ class CompiledGrammar::Impl {
 
   /*! \brief Grammar-wide flags and nullable rules shared by Earley parsers. */
   EarleyParserFeatures earley_parser_features;
-
-  /*! \brief Character-class token summaries shared by grammars from the same compiler. */
-  std::shared_ptr<CharacterClassTokenSummaryCache> character_class_token_summary_cache;
-
-  /*! \brief Repeated character-class masks shared by matchers using this compiled grammar. */
-  std::unordered_map<uint64_t, RepeatedCharacterClassTokenMask>
-      repeated_character_class_token_masks;
-
-  /*! \brief Protects repeated character-class summary and mask generation. */
-  mutable std::mutex repeated_character_class_cache_mutex;
-
-  const RepeatedCharacterClassTokenMask& GetRepeatedCharacterClassTokenMask(
-      int32_t character_class_expression_id, int32_t character_limit
-  );
 
   Grammar GetGrammar() const { return grammar; }
 

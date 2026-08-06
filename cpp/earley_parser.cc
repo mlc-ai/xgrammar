@@ -230,10 +230,13 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
         });
       }
       // If the repeat count is less than the max repeat count, we can continue to
-      // visit the repeat state for another round.
-      if ((max_repeat_count == -1 &&
-           (!completed_without_input || new_state.repeat_count < min_repeat_count)) ||
-          (max_repeat_count != -1 && new_state.repeat_count < max_repeat_count)) {
+      // visit the repeat state for another round. Once the lower bound is met, another
+      // zero-input repetition cannot enable a new string and only changes the count. Finite
+      // repetitions retain those derivations when their captures are observable.
+      const bool preserve_empty_capture = max_repeat_count != -1 && features_->capture_tracking;
+      if ((!completed_without_input || new_state.repeat_count < min_repeat_count ||
+           preserve_empty_capture) &&
+          (max_repeat_count == -1 || new_state.repeat_count < max_repeat_count)) {
         Enqueue(new_state);
       }
       continue;
@@ -268,8 +271,12 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             parent_state.char_budget_deadline
         });
       }
-      if ((info.Upper() == -1 && (!completed_without_input || new_count < info.Lower())) ||
-          (info.Upper() != -1 && new_count < info.Upper())) {
+      // Once the lower bound is met, another zero-input repetition cannot enable a new string and
+      // only changes the count. Finite repetitions retain those derivations when their captures
+      // are observable.
+      const bool preserve_empty_capture = info.Upper() != -1 && features_->capture_tracking;
+      if ((!completed_without_input || new_count < info.Lower() || preserve_empty_capture) &&
+          (info.Upper() == -1 || new_count < info.Upper())) {
         Enqueue(ParserState{
             parent_state.rule_id,
             parent_state.sequence_id,
@@ -564,7 +571,8 @@ EarleyParserFeatures::EarleyParserFeatures(const Grammar& grammar)
 EarleyParser::EarleyParser(
     const Grammar& grammar,
     std::optional<ParserState> initial_state,
-    const EarleyParserFeatures* features
+    const EarleyParserFeatures* features,
+    std::optional<ParserState> initial_parent_state
 )
     : grammar_(grammar), features_(features) {
   if (!grammar->optimized) {
@@ -575,7 +583,9 @@ EarleyParser::EarleyParser(
     owned_features_ = EarleyParserFeatures(grammar);
     features_ = &owned_features_;
   }
-  PushStateAndExpand(initial_state.has_value() ? *initial_state : RootInitialState());
+  PushStateAndExpand(
+      initial_state.has_value() ? *initial_state : RootInitialState(), initial_parent_state
+  );
 }
 
 ParserState EarleyParser::RootInitialState() const {
@@ -595,11 +605,17 @@ ParserState EarleyParser::RootInitialState() const {
   );
 }
 
-void EarleyParser::PushStateAndExpand(const ParserState& state) {
+void EarleyParser::PushStateAndExpand(
+    const ParserState& state, std::optional<ParserState> initial_parent_state
+) {
   ClearTemporaryContainers();
   tmp_accept_stop_token_ = false;
   Enqueue(state);
-  rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+  std::vector<std::pair<int32_t, ParserState>> initial_parent_states;
+  if (initial_parent_state.has_value()) {
+    initial_parent_states.emplace_back(state.rule_id, *initial_parent_state);
+  }
+  rule_id_to_completable_states_.PushBack(std::move(initial_parent_states));
   if (features_->capture_tracking) {
     capture_event_history_.PushBack(std::vector<CaptureEvent>());
   }

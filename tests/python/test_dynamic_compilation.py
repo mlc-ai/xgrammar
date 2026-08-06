@@ -740,6 +740,74 @@ def test_repeated_character_class_masks_follow_fsm_semantics(grammar):
         assert dynamic_matcher.accept_token(token_id) == eager_matcher.accept_token(token_id)
 
 
+@pytest.mark.parametrize(
+    ("grammar", "accepted_input"),
+    [
+        ('root ::= unit{1,5} "z"\nunit ::= "ab"', "ababz"),
+        ('root ::= unit{1,5} "z"\nunit ::= "ab" | "c"', "abcabz"),
+        ('root ::= unit{1,5} "z"\nunit ::= "" | "ab"', "ababz"),
+        ('root ::= unit{1,5} "z"\nunit ::= "é"', "ééz"),
+        ('root ::= unit{1,} | "(" root ")"\nunit ::= "a"', "(a)"),
+    ],
+    ids=["byte-string", "choice", "nullable", "multibyte", "recursive-root"],
+)
+def test_repeated_subrule_masks_match_eager(grammar, accepted_input):
+    vocabulary = [
+        "a",
+        "b",
+        "c",
+        "z",
+        "ab",
+        "abab",
+        "ababz",
+        "abcabz",
+        "é",
+        "éé",
+        "ééz",
+        "x",
+        "(",
+        ")",
+        "a)",
+        "(a)",
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    eager = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=False
+    ).compile_grammar(grammar)
+    dynamic = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+
+    expected = _mask_trace(eager, accepted_input)
+    actual = _mask_trace(dynamic, accepted_input)
+    assert dynamic.memory_size_bytes > 0
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+        assert actual_apply == expected_apply
+        expected_tokens = bitmask_to_bool_mask(expected_mask, tokenizer_info.vocab_size)
+        actual_tokens = bitmask_to_bool_mask(actual_mask, tokenizer_info.vocab_size)
+        torch.testing.assert_close(actual_tokens, expected_tokens, rtol=0, atol=0)
+
+    for token_id in range(tokenizer_info.vocab_size):
+        eager_matcher = xgr.GrammarMatcher(eager, terminate_without_stop_token=True)
+        dynamic_matcher = xgr.GrammarMatcher(dynamic, terminate_without_stop_token=True)
+        assert dynamic_matcher.accept_token(token_id) == eager_matcher.accept_token(token_id)
+
+
+def test_large_finite_nullable_repeat_skips_redundant_empty_matches():
+    tokenizer_info = xgr.TokenizerInfo(["z", "ab", "ababz", "x"], stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar('root ::= unit{0,1000000} "z"\nunit ::= "" | "ab"')
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert _next_token_mask(matcher, tokenizer_info.vocab_size)[0].tolist() == [
+        True,
+        True,
+        True,
+        False,
+    ]
+
+
 @pytest.mark.parametrize("operation", ["rollback", "reset", "fork"])
 def test_repeated_character_class_masks_do_not_leak_across_state_changes(operation):
     tokenizer_info = xgr.TokenizerInfo(["p", "q", "a", "x", "y"], stop_token_ids=[])

@@ -524,7 +524,6 @@ class GrammarMatcher::Impl : public EarleyParser {
     temporary_input_bytes_.clear();
     accepted_bytes_.clear();
     row_byte_end_.assign(1, 0);
-    repeat_mask_cache_.clear();
     EarleyParser::Reset();
   }
 
@@ -539,20 +538,23 @@ class GrammarMatcher::Impl : public EarleyParser {
  private:
   using StoreType = AdaptiveTokenMask::StoreType;
 
-  struct RepeatedCharacterClassState {
-    int32_t character_class_expression_id;
-    // -1 means the upper bound cannot affect the current token.
-    int32_t character_limit;
-    ParserState parent;
-    int32_t lower;
+  struct RepeatMaskCacheKey {
+    ParserState state;
+    int32_t parent_node_id;
+    int32_t lower_bound_distance;
+    int32_t upper_bound_distance;
+
+    bool operator==(const RepeatMaskCacheKey& other) const {
+      return StateEqualForCache()(state, other.state) && parent_node_id == other.parent_node_id &&
+             lower_bound_distance == other.lower_bound_distance &&
+             upper_bound_distance == other.upper_bound_distance;
+    }
   };
 
-  std::optional<RepeatedCharacterClassState> FindRepeatedCharacterClass(const ParserState& state
-  ) const;
+  std::optional<ParserState> FindRepeatParent(const ParserState& state) const;
 
-  std::optional<std::vector<int32_t>> GetStableRepeatedCharacterClassMaskKey(
-      const std::vector<ParserState>& states
-  ) const;
+  RepeatMaskCacheKey GetRepeatMaskCacheKey(const ParserState& state, const ParserState& parent)
+      const;
 
   /*!
    * \brief If is_uncertain_saved is true, find the next token in uncertain_indices. Otherwise,
@@ -757,115 +759,62 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
   struct RepeatMaskCacheEntry {
-    std::vector<int32_t> key;
+    RepeatMaskCacheKey key;
+    bool parser_completed;
     DynamicBitset mask;
   };
-  std::vector<RepeatMaskCacheEntry> repeat_mask_cache_;
+  std::optional<RepeatMaskCacheEntry> repeat_mask_cache_;
 };
 
-std::optional<GrammarMatcher::Impl::RepeatedCharacterClassState>
-GrammarMatcher::Impl::FindRepeatedCharacterClass(const ParserState& state) const {
-  using GrammarExprType = Grammar::Impl::GrammarExprType;
+std::optional<ParserState> GrammarMatcher::Impl::FindRepeatParent(const ParserState& state) const {
   if (!compiled_grammar_->token_mask_cache.IsDynamic() || state.rule_id < 0 ||
-      state.sub_element_id != 0 || !features_->IsRuleContextIndependent(state.rule_id) ||
-      state.partial_codepoint != 0 || state.rule_start_pos < 0 ||
-      state.rule_start_pos >= static_cast<int32_t>(rule_id_to_completable_states_.size()) ||
-      state.element_id != grammar_->per_rule_fsms[state.rule_id]->GetFsm().GetStart()) {
+      !features_->IsRuleContextIndependent(state.rule_id) || state.rule_start_pos < 0 ||
+      state.rule_start_pos >= static_cast<int32_t>(rule_id_to_completable_states_.size())) {
     return std::nullopt;
   }
 
-  const auto& body = grammar_->GetGrammarExpr(grammar_->GetRule(state.rule_id).body_expr_id);
-  if (body.type != GrammarExprType::kChoices || body.size() != 1) {
-    return std::nullopt;
-  }
-  const auto& sequence = grammar_->GetGrammarExpr(body[0]);
-  if (sequence.type != GrammarExprType::kSequence || sequence.size() != 1 ||
-      grammar_->GetGrammarExpr(sequence[0]).type != GrammarExprType::kCharacterClass) {
-    return std::nullopt;
-  }
-
-  const int32_t max_token_characters = tokenizer_info_.ImplPtr()->GetMaxTokenChars();
+  std::optional<ParserState> repeat_parent;
   for (const auto& [completed_rule_id, parent] :
        rule_id_to_completable_states_[state.rule_start_pos]) {
-    if (completed_rule_id != state.rule_id || parent.rule_id < 0) {
+    if (completed_rule_id != state.rule_id || !IsCompletionCompatibleWithParent(state, parent)) {
       continue;
+    }
+    if (parent.rule_id < 0) {
+      return std::nullopt;
     }
     const auto& edges = grammar_->complete_fsm.GetEdges(parent.element_id);
     if (edges.size() != 1 || !edges[0].IsRepeatRef()) {
-      continue;
-    }
-    const auto repeat = grammar_->complete_fsm.GetRepeatEdgeInfo(edges[0].GetAuxIndex());
-    if (repeat.RuleId() != state.rule_id) {
-      continue;
-    }
-    const int32_t remaining =
-        repeat.Upper() == -1 ? max_token_characters : repeat.Upper() - parent.repeat_count;
-    if (remaining > 0) {
-      const bool upper_bound_is_stable = repeat.Upper() == -1 || remaining >= max_token_characters;
-      return RepeatedCharacterClassState{
-          sequence[0],
-          upper_bound_is_stable ? -1 : std::min(remaining, max_token_characters),
-          parent,
-          repeat.Lower()
-      };
-    }
-  }
-  return std::nullopt;
-}
-
-std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetStableRepeatedCharacterClassMaskKey(
-    const std::vector<ParserState>& states
-) const {
-  if (!compiled_grammar_->token_mask_cache.IsDynamic()) {
-    return std::nullopt;
-  }
-  std::vector<int32_t> key;
-  key.reserve(states.size() * 12 + 2);
-  key.push_back(static_cast<int32_t>(states.size()));
-  key.push_back(IsCompleted());
-  bool found_repeat = false;
-  for (const auto& state : states) {
-    if (!features_->IsRuleContextIndependent(state.rule_id)) {
       return std::nullopt;
     }
-    const auto repeated_character_class = FindRepeatedCharacterClass(state);
-    if (repeated_character_class.has_value() && repeated_character_class->character_limit == -1 &&
-        repeated_character_class->parent.repeat_count >= repeated_character_class->lower) {
-      const auto& parent = repeated_character_class->parent;
-      found_repeat = true;
-      key.insert(
-          key.end(),
-          {1,
-           state.rule_id,
-           state.sequence_id,
-           state.element_id,
-           state.sub_element_id,
-           state.partial_codepoint,
-           parent.rule_id,
-           parent.sequence_id,
-           parent.element_id,
-           parent.rule_start_pos,
-           parent.sub_element_id,
-           parent.partial_codepoint}
-      );
-    } else {
-      key.insert(
-          key.end(),
-          {0,
-           state.rule_id,
-           state.sequence_id,
-           state.element_id,
-           state.rule_start_pos,
-           state.budget_deadline,
-           state.sub_element_id,
-           state.repeat_count,
-           state.partial_codepoint,
-           state.active_temperature_rule_id,
-           state.char_budget_deadline}
-      );
+    const auto repeat_info = grammar_->complete_fsm.GetRepeatEdgeInfo(edges[0].GetAuxIndex());
+    if (repeat_info.RuleId() != state.rule_id) {
+      return std::nullopt;
     }
+    if (repeat_parent.has_value() && !StateEqualForParsing()(*repeat_parent, parent)) {
+      return std::nullopt;
+    }
+    repeat_parent = parent;
   }
-  return found_repeat ? std::optional<std::vector<int32_t>>(std::move(key)) : std::nullopt;
+  return repeat_parent;
+}
+
+GrammarMatcher::Impl::RepeatMaskCacheKey GrammarMatcher::Impl::GetRepeatMaskCacheKey(
+    const ParserState& state, const ParserState& parent
+) const {
+  const auto& parent_edges = grammar_->complete_fsm.GetEdges(parent.element_id);
+  const auto repeat_info = grammar_->complete_fsm.GetRepeatEdgeInfo(parent_edges[0].GetAuxIndex());
+  const int32_t far_distance = tokenizer_info_.ImplPtr()->GetMaxTokenBytes() + 1;
+  const auto normalize_distance = [far_distance](int64_t distance) {
+    return static_cast<int32_t>(std::min<int64_t>(std::max<int64_t>(distance, 0), far_distance));
+  };
+  return RepeatMaskCacheKey{
+      state,
+      parent.element_id,
+      normalize_distance(static_cast<int64_t>(repeat_info.Lower()) - parent.repeat_count),
+      repeat_info.Upper() == -1
+          ? -1
+          : normalize_distance(static_cast<int64_t>(repeat_info.Upper()) - parent.repeat_count)
+  };
 }
 
 class BatchGrammarMatcher::Impl {
@@ -1948,22 +1897,6 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     latest_states.push_back(state);
   }
 
-  const auto repeat_mask_key = GetStableRepeatedCharacterClassMaskKey(latest_states);
-  if (repeat_mask_key.has_value()) {
-    const auto cached = std::find_if(
-        repeat_mask_cache_.begin(),
-        repeat_mask_cache_.end(),
-        [&](const RepeatMaskCacheEntry& entry) { return entry.key == *repeat_mask_key; }
-    );
-    if (cached != repeat_mask_cache_.end()) {
-      DynamicBitset output(
-          tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
-      );
-      output = cached->mask;
-      return;
-    }
-  }
-
   // We check all the latest states of the earley parser, and check all the masks of the leaf
   // states. The final accepted token set is the union of the accepted token sets of all leaf
   // states. The final rejected token set is the intersection of the rejected token sets of all leaf
@@ -1979,27 +1912,40 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                        << ", num of states=" << latest_states.size();
   }
 
+  std::optional<ParserState> single_repeat_parent;
+  std::optional<RepeatMaskCacheKey> repeat_mask_key;
+  if (latest_states.size() == 1) {
+    single_repeat_parent = FindRepeatParent(latest_states[0]);
+    if (single_repeat_parent.has_value()) {
+      repeat_mask_key = GetRepeatMaskCacheKey(latest_states[0], *single_repeat_parent);
+      if (repeat_mask_cache_.has_value() && repeat_mask_cache_->key == *repeat_mask_key &&
+          repeat_mask_cache_->parser_completed == IsCompleted()) {
+        DynamicBitset output(
+            tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
+        );
+        output = repeat_mask_cache_->mask;
+        if (debug_print) {
+          XGRAMMAR_LOG(INFO) << "Filled bitmask: "
+                             << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
+        }
+        return;
+      }
+    }
+  }
+
   std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    const auto repeated_character_class = FindRepeatedCharacterClass(state);
-    const RepeatedCharacterClassTokenMask* repeated_character_class_token_mask =
-        repeated_character_class.has_value()
-            ? &compiled_grammar_->GetRepeatedCharacterClassTokenMask(
-                  repeated_character_class->character_class_expression_id,
-                  repeated_character_class->character_limit
-              )
-            : nullptr;
-    const AdaptiveTokenMask& adaptive_token_mask =
-        repeated_character_class_token_mask != nullptr
-            ? repeated_character_class_token_mask->adaptive_token_mask
-            : compiled_grammar_->token_mask_cache.Get(
-                  state,
-                  state.rule_id == grammar_->GetRootRuleId(),
-                  grammar_,
-                  tokenizer_info_,
-                  compiled_grammar_->earley_parser_features
-              );
+    const auto repeat_parent =
+        latest_states.size() == 1 ? single_repeat_parent : FindRepeatParent(state);
+    const AdaptiveTokenMask& adaptive_token_mask = compiled_grammar_->token_mask_cache.Get(
+        state,
+        repeat_parent.has_value() ? false : state.rule_id == grammar_->GetRootRuleId(),
+        grammar_,
+        tokenizer_info_,
+        compiled_grammar_->earley_parser_features,
+        repeat_parent.has_value() ? &*repeat_parent : nullptr
+    );
     if (state.char_budget_deadline >= 0) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
@@ -2007,7 +1953,6 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         continue;
       }
     }
-    latest_states_with_masks.emplace_back(state, &adaptive_token_mask);
     if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
       tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
     } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
@@ -2015,9 +1960,28 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
       }
     }
-    if (repeated_character_class_token_mask != nullptr) {
-      tmp_accepted_bitset_ |= repeated_character_class_token_mask->accepted_prefix_tokens;
+    if (latest_states.size() == 1 && adaptive_token_mask.uncertain_indices.empty()) {
+      if (adaptive_token_mask.store_type == StoreType::kRejected) {
+        IntsetIntersection(&tmp_rejected_indices_, adaptive_token_mask.rejected_indices);
+      }
+      SetTokenBitmask(
+          bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, IsCompleted(), false
+      );
+      if (repeat_mask_key.has_value()) {
+        DynamicBitset output(
+            tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
+        );
+        DynamicBitset owned_mask(tokenizer_info_.GetVocabSize());
+        owned_mask = output;
+        repeat_mask_cache_ =
+            RepeatMaskCacheEntry{*repeat_mask_key, IsCompleted(), std::move(owned_mask)};
+      }
+      if (debug_print) {
+        XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
+      }
+      return;
     }
+    latest_states_with_masks.emplace_back(state, &adaptive_token_mask);
   }
 
   for (const auto& [state, adaptive_token_mask_ptr] : latest_states_with_masks) {
@@ -2025,6 +1989,12 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
     // rejected list.
+    if (adaptive_token_mask.uncertain_indices.empty()) {
+      if (adaptive_token_mask.store_type == StoreType::kRejected) {
+        IntsetIntersection(&tmp_rejected_indices_, adaptive_token_mask.rejected_indices);
+      }
+      continue;
+    }
 
     // Step 2. Update the accepted tokens in accepted_indices_delta, or the rejected tokens in
     // rejected_indices_delta.
@@ -2165,15 +2135,6 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   SetTokenBitmask(
       bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end, false
   );
-  constexpr size_t kMaxRepeatMaskCacheEntries = 32;
-  if (repeat_mask_key.has_value() && repeat_mask_cache_.size() < kMaxRepeatMaskCacheEntries) {
-    DynamicBitset output(
-        tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
-    );
-    DynamicBitset owned_mask(tokenizer_info_.GetVocabSize());
-    owned_mask = output;
-    repeat_mask_cache_.push_back(RepeatMaskCacheEntry{*repeat_mask_key, std::move(owned_mask)});
-  }
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }
@@ -2279,7 +2240,6 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
   temporary_input_start_row_ = -1;
   temporary_input_bytes_.clear();
   budget_body_match_cache_.clear();
-  repeat_mask_cache_.clear();
 }
 
 std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptures(bool deduplicate
