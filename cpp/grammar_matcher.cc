@@ -790,26 +790,24 @@ GrammarMatcher::Impl::FindRepeatedCharacterClass(const ParserState& state) const
     if (completed_rule_id != state.rule_id || parent.rule_id < 0) {
       continue;
     }
-    for (const auto& edge : grammar_->complete_fsm.GetEdges(parent.element_id)) {
-      if (!edge.IsRepeatRef()) {
-        continue;
-      }
-      const auto repeat = grammar_->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
-      if (repeat.RuleId() != state.rule_id) {
-        continue;
-      }
-      const int32_t remaining =
-          repeat.Upper() == -1 ? max_token_characters : repeat.Upper() - parent.repeat_count;
-      if (remaining > 0) {
-        const bool upper_bound_is_stable =
-            repeat.Upper() == -1 || remaining >= max_token_characters;
-        return RepeatedCharacterClassState{
-            sequence[0],
-            upper_bound_is_stable ? -1 : std::min(remaining, max_token_characters),
-            parent,
-            repeat.Lower()
-        };
-      }
+    const auto& edges = grammar_->complete_fsm.GetEdges(parent.element_id);
+    if (edges.size() != 1 || !edges[0].IsRepeatRef()) {
+      continue;
+    }
+    const auto repeat = grammar_->complete_fsm.GetRepeatEdgeInfo(edges[0].GetAuxIndex());
+    if (repeat.RuleId() != state.rule_id) {
+      continue;
+    }
+    const int32_t remaining =
+        repeat.Upper() == -1 ? max_token_characters : repeat.Upper() - parent.repeat_count;
+    if (remaining > 0) {
+      const bool upper_bound_is_stable = repeat.Upper() == -1 || remaining >= max_token_characters;
+      return RepeatedCharacterClassState{
+          sequence[0],
+          upper_bound_is_stable ? -1 : std::min(remaining, max_token_characters),
+          parent,
+          repeat.Lower()
+      };
     }
   }
   return std::nullopt;
