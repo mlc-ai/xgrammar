@@ -420,6 +420,24 @@ class CharacterClassTokenSummaryCache {
   ) {
     const auto& finite_state_machine = character_class_fsm.GetFsm();
     const int32_t initial_state = character_class_fsm.GetStart();
+    std::vector<std::array<int32_t, 256>> transitions(finite_state_machine.NumStates());
+    for (auto& transition : transitions) {
+      transition.fill(FSM::kNoNextState);
+    }
+    for (int32_t state = 0; state < finite_state_machine.NumStates(); ++state) {
+      for (const auto& edge : finite_state_machine.GetEdges(state)) {
+        if (!edge.IsCharRange()) {
+          continue;
+        }
+        for (int32_t byte = std::max(edge.min, 0); byte <= std::min(edge.max, 255); ++byte) {
+          transitions[state][byte] = edge.target;
+        }
+      }
+    }
+    std::vector<uint8_t> is_end_state(finite_state_machine.NumStates(), 0);
+    for (int32_t state : character_class_fsm.GetEnds()) {
+      is_end_state[state] = 1;
+    }
 
     SummaryList summaries;
     summaries.reserve(sorted_vocabulary.size());
@@ -431,13 +449,13 @@ class CharacterClassTokenSummaryCache {
       bool consumed_whole_token = true;
       bool has_incomplete_character = false;
       for (uint8_t byte : sorted_vocabulary[sorted_vocabulary_index].second) {
-        const int32_t next_state = finite_state_machine.GetNextState(current_state, byte);
+        const int32_t next_state = transitions[current_state][byte];
         if (next_state == FSM::kNoNextState) {
           consumed_whole_token = false;
           has_incomplete_character = false;
           break;
         }
-        if (character_class_fsm.IsEndState(next_state)) {
+        if (is_end_state[next_state]) {
           ++completed_characters;
           current_state = initial_state;
           has_incomplete_character = false;
