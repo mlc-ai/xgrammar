@@ -228,6 +228,19 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
 
   std::vector<FSMEdge>& GetEdges(int state) { return edges_[state]; }
 
+  void ValidateRepeatEdgeInvariant() const {
+    for (int32_t state = 0; state < static_cast<int32_t>(edges_.size()); ++state) {
+      const auto& edges = edges_[state];
+      if (edges.size() <= 1) {
+        continue;
+      }
+      XGRAMMAR_CHECK(std::none_of(
+          edges.begin(), edges.end(), [](const FSMEdge& edge) { return edge.IsRepeatRef(); }
+      )) << "A state with a kRepeatRef edge must have exactly one outgoing edge, but state "
+         << state << " has " << edges.size() << ".";
+    }
+  }
+
   void Advance(
       const std::unordered_set<int>& from,
       int value,
@@ -243,6 +256,16 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
 
   void AddEdge(int from, int to, int32_t min, int32_t max) {
     XGRAMMAR_DCHECK(from < static_cast<int>(edges_.size()));
+    if constexpr (kInternalChecksEnabled) {
+      const auto& outgoing_edges = edges_[from];
+      if (min == FSMEdge::EdgeType::kRepeatRef) {
+        XGRAMMAR_DCHECK(outgoing_edges.empty())
+            << "A state with a kRepeatRef edge must have no other outgoing edges.";
+      } else {
+        XGRAMMAR_DCHECK(outgoing_edges.empty() || !outgoing_edges.front().IsRepeatRef())
+            << "A state with a kRepeatRef edge must have no other outgoing edges.";
+      }
+    }
     edges_[from].push_back({min, max, to});
   }
 
@@ -255,8 +278,6 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
   void AddEOSEdge(int from, int to) { AddEdge(from, to, FSMEdge::EdgeType::kEOS, 0); }
 
   void AddRepeatEdge(int from, int to, int32_t rule_id, int32_t lower, int32_t upper) {
-    XGRAMMAR_DCHECK(edges_[from].empty())
-        << "A state with a kRepeatRef edge must have no other outgoing edges.";
     XGRAMMAR_DCHECK(edge_aux_data_.size() <= INT32_MAX);
     int32_t aux_index = static_cast<int32_t>(edge_aux_data_.size());
     edge_aux_data_.reserve(edge_aux_data_.size() + 3);
@@ -275,7 +296,7 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
     for (int32_t id : token_ids) {
       edge_aux_data_.push_back(id);
     }
-    edges_[from].push_back(FSMEdge(FSMEdge::EdgeType::kToken, aux_index, to));
+    AddEdge(from, to, FSMEdge::EdgeType::kToken, aux_index);
   }
 
   void AddExcludeTokenEdge(int from, int to, const std::vector<int32_t>& token_ids) {
@@ -287,7 +308,7 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
     for (int32_t id : token_ids) {
       edge_aux_data_.push_back(id);
     }
-    edges_[from].push_back(FSMEdge(FSMEdge::EdgeType::kExcludeToken, aux_index, to));
+    AddEdge(from, to, FSMEdge::EdgeType::kExcludeToken, aux_index);
   }
 
   void AddFSM(const FSM& fsm, std::vector<int>* state_mapping);
@@ -464,10 +485,18 @@ CompactFSM FSM::Impl::ToCompact() {
 FSM::FSM(int num_states) : pimpl_(std::make_shared<Impl>(num_states)) {}
 
 FSM::FSM(const std::vector<std::vector<FSMEdge>>& edges, std::vector<int32_t> edge_aux_data)
-    : pimpl_(std::make_shared<Impl>(edges, std::move(edge_aux_data))) {}
+    : pimpl_(std::make_shared<Impl>(edges, std::move(edge_aux_data))) {
+  if constexpr (kInternalChecksEnabled) {
+    pimpl_->ValidateRepeatEdgeInvariant();
+  }
+}
 
 FSM::FSM(std::vector<std::vector<FSMEdge>>&& edges, std::vector<int32_t> edge_aux_data)
-    : pimpl_(std::make_shared<Impl>(std::move(edges), std::move(edge_aux_data))) {}
+    : pimpl_(std::make_shared<Impl>(std::move(edges), std::move(edge_aux_data))) {
+  if constexpr (kInternalChecksEnabled) {
+    pimpl_->ValidateRepeatEdgeInvariant();
+  }
+}
 
 int FSM::NumStates() const { return pimpl_->NumStates(); }
 
@@ -520,6 +549,8 @@ std::string FSM::EdgesToString(std::optional<std::vector<int>> states) const {
 }
 
 const std::vector<FSMEdge>& FSM::GetEdges(int state) const { return pimpl_->GetEdges(state); }
+
+void FSM::ValidateRepeatEdgeInvariant() const { pimpl_->ValidateRepeatEdgeInvariant(); }
 
 std::vector<std::vector<FSMEdge>>& FSM::GetEdges() { return pimpl_->GetEdges(); }
 
@@ -1241,6 +1272,9 @@ bool FSMWithStartEnd::IsDFA() {
 }
 
 FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
+  if constexpr (kInternalChecksEnabled) {
+    fsm_->ValidateRepeatEdgeInvariant();
+  }
   if (is_dfa_) {
     return *this;
   }
@@ -1253,11 +1287,13 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   std::vector<std::pair<int32_t, int32_t>> epsilon_edges;
 
   std::vector<bool> has_exclude_token(NumStates(), false);
+  std::vector<bool> has_repeat_edge(NumStates(), false);
   for (int i = 0; i < NumStates(); i++) {
     for (const auto& edge : fsm_->GetEdges(i)) {
       if (edge.IsExcludeToken()) {
         has_exclude_token[i] = true;
-        break;
+      } else if (edge.IsRepeatRef()) {
+        has_repeat_edge[i] = true;
       }
     }
   }
@@ -1272,6 +1308,7 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
         // paths reaching b would be wrongly accepted. (If b is accepting, a effectively
         // accepts already via the epsilon edge, so merging is safe.)
         if (edges.size() == 1 && !has_exclude_token[i] && !has_exclude_token[edge.target] &&
+            !has_repeat_edge[i] && !has_repeat_edge[edge.target] &&
             (!IsEndState(i) || IsEndState(edge.target))) {
           union_find_set.Add(i);
           union_find_set.Add(edge.target);
@@ -1304,7 +1341,7 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
     const int& from = equiv_node[from_raw];
     const int& to = equiv_node[to_raw];
     if (in_degree[to] == 1 && equiv_node[GetStart()] != to && !has_exclude_token[from_raw] &&
-        !has_exclude_token[to_raw]) {
+        !has_exclude_token[to_raw] && !has_repeat_edge[from_raw] && !has_repeat_edge[to_raw]) {
       union_find_set.Add(from);
       union_find_set.Add(to);
       union_find_set.Union(from, to);
@@ -1331,10 +1368,17 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
       cnt++;
     }
   }
-  return RebuildWithMapping(new_to_old, cnt);
+  auto result = RebuildWithMapping(new_to_old, cnt);
+  if constexpr (kInternalChecksEnabled) {
+    result.GetFsm().ValidateRepeatEdgeInvariant();
+  }
+  return result;
 }
 
 FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states) const {
+  if constexpr (kInternalChecksEnabled) {
+    fsm_->ValidateRepeatEdgeInvariant();
+  }
   if (max_result_num_states < NumStates()) {
     return *this;
   }
@@ -1381,6 +1425,8 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
   std::vector<int> single_incoming_source;
   // The only successor state when outgoing_distinct_count[state] == 1.
   std::vector<int> single_outgoing_target;
+  // Whether a state has a repeat edge. Repeat states must remain isolated.
+  std::vector<bool> has_repeat_edge;
   // Terminal end states collected for leaf-state merging.
   std::vector<int32_t> no_successor_end_states;
   // Terminal non-end states collected for leaf-state merging.
@@ -1393,11 +1439,15 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
     // First pass: count row sizes for the incoming/outgoing CSR arrays.
     incoming_row_sizes.assign(n, 0);
     outgoing_row_sizes.assign(n, 0);
+    has_repeat_edge.assign(n, false);
     for (int source = 0; source < n; ++source) {
       const auto& edges = result.GetFsm().GetEdges(source);
       outgoing_row_sizes[source] = static_cast<int32_t>(edges.size());
       for (const auto& edge : edges) {
         ++incoming_row_sizes[edge.target];
+        if (edge.IsRepeatRef()) {
+          has_repeat_edge[source] = true;
+        }
       }
     }
 
@@ -1454,7 +1504,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
     // Case 1: Like ab | ac | ad, then they can be merged into a(b | c | d).
     bool is_equiv_successor = false;
     for (int i = 0; i < n; i++) {
-      if (incoming_distinct_count[i] != 1 || union_find_set.Count(i)) {
+      if (incoming_distinct_count[i] != 1 || union_find_set.Count(i) || has_repeat_edge[i]) {
         continue;
       }
       int previous_state = single_incoming_source[i];
@@ -1469,7 +1519,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
         }
         auto edges_to_sibling = siblings.Slice(group_begin, group_end);
         group_begin = group_end;
-        if (sibling <= i || incoming_distinct_count[sibling] != 1 ||
+        if (sibling <= i || incoming_distinct_count[sibling] != 1 || has_repeat_edge[sibling] ||
             result.IsEndState(sibling) != result.IsEndState(i)) {
           continue;
         }
@@ -1510,7 +1560,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
         }
         continue;  // Skip states with no successors.
       }
-      if (outgoing_count != 1 || union_find_set.Count(i)) {
+      if (outgoing_count != 1 || union_find_set.Count(i) || has_repeat_edge[i]) {
         continue;  // Skip states with multiple successors.
       }
       int next_state = single_outgoing_target[i];
@@ -1524,7 +1574,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
         }
         // Avoid chaining a Case 2 merge onto a state already merged earlier in this iteration
         // (typically by Case 1), which can over-merge via transitive closure.
-        if (sibling <= i || union_find_set.Count(sibling) ||
+        if (sibling <= i || union_find_set.Count(sibling) || has_repeat_edge[sibling] ||
             outgoing_distinct_count[sibling] != 1 ||
             result.IsEndState(i) != result.IsEndState(sibling)) {
           continue;
@@ -1593,6 +1643,9 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
       result = result.RebuildWithMapping(old_to_new, cnt);
       result.GetFsm()->SortEdges();
     }
+  }
+  if constexpr (kInternalChecksEnabled) {
+    result.GetFsm().ValidateRepeatEdgeInvariant();
   }
   return result;
 }

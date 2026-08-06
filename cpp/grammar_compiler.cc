@@ -1539,7 +1539,7 @@ class GrammarCompilerSub {
 };
 
 CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
-  Grammar grammar = GrammarOptimizer::Apply(grammar_unoptimized);
+  Grammar grammar = GrammarOptimizer::Apply(grammar_unoptimized, !enable_dynamic_compilation_);
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>(enable_dynamic_compilation_);
   compiled_grammar_impl->grammar = std::move(grammar);
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;

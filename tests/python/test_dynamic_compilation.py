@@ -469,3 +469,230 @@ def test_reusable_parser_worklists_survive_reset_fork_failure_and_rollback():
         assert matcher.accept_token(token_identifiers["c"])
         assert matcher.accept_token(token_identifiers["d"])
         assert matcher.is_terminated()
+
+
+@pytest.mark.parametrize(
+    "repeat_range,value",
+    [
+        ("{0}", ""),
+        ("{1}", "a"),
+        ("{0,1}", ""),
+        ("{1,3}", "ab"),
+        ("{63,65}", "a" * 64),
+        ("{127,129}", "a" * 128),
+        ("{255,257}", "a" * 256),
+        ("{2,}", "abc"),
+    ],
+)
+def test_preserved_repetition_ranges_match_eager_masks(repeat_range: str, value: str):
+    vocabulary = [">", "<", "a", "aa", "ab", "abc", "b", "ba", "c", b"\xc3", b"\xff"]
+    grammar = f'root ::= ">" [a-z]{repeat_range} "<"'
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    eager = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=False
+    ).compile_grammar(grammar)
+    dynamic = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+    expected = _mask_trace(eager, ">" + value + "<")
+    actual = _mask_trace(dynamic, ">" + value + "<")
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+        assert actual_apply == expected_apply
+        expected_tokens = bitmask_to_bool_mask(expected_mask, tokenizer_info.vocab_size)
+        actual_tokens = bitmask_to_bool_mask(actual_mask, tokenizer_info.vocab_size)
+        torch.testing.assert_close(actual_tokens, expected_tokens, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True], ids=["eager", "dynamic"])
+@pytest.mark.parametrize(
+    "repeat_range,accepted_values,rejected_values",
+    [
+        ("{0}", [""], ["a"]),
+        ("{0,2}", ["", "aa"], ["aaa"]),
+        ("{1,3}", ["a", "aaa"], ["", "aaaa"]),
+        ("{2,}", ["aa", "aaaa"], ["", "a"]),
+    ],
+)
+def test_preserved_repetition_ranges_enforce_bounds(
+    enable_dynamic_compilation, repeat_range, accepted_values, rejected_values
+):
+    tokenizer_info = xgr.TokenizerInfo([], stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=enable_dynamic_compilation
+    ).compile_grammar(f'root ::= unit{repeat_range}\nunit ::= "a"')
+
+    for value in accepted_values:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert matcher.accept_string(value)
+        assert matcher.is_terminated()
+    for value in rejected_values:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert not (matcher.accept_string(value) and matcher.is_terminated())
+
+
+@pytest.mark.parametrize(
+    "grammar,accepted_values,rejected_values",
+    [
+        ('root ::= unit{1} "x" | unit{1} "y"\nunit ::= "a"', ["ax", "ay"], []),
+        ('root ::= unit{1} "x" | unit{2} "y"\nunit ::= "a"', ["ax", "aay"], ["aax", "ay"]),
+    ],
+    ids=["same-bounds", "different-bounds"],
+)
+def test_preserved_repetition_ranges_keep_shared_repeat_edges(
+    grammar, accepted_values, rejected_values
+):
+    tokenizer_info = xgr.TokenizerInfo(["a", "x", "y"], stop_token_ids=[])
+    eager = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=False
+    ).compile_grammar(grammar)
+    dynamic = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+
+    for value in accepted_values:
+        expected = _mask_trace(eager, value)
+        actual = _mask_trace(dynamic, value)
+        for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+            assert actual_apply == expected_apply
+            expected_tokens = bitmask_to_bool_mask(expected_mask, tokenizer_info.vocab_size)
+            actual_tokens = bitmask_to_bool_mask(actual_mask, tokenizer_info.vocab_size)
+            torch.testing.assert_close(actual_tokens, expected_tokens, rtol=0, atol=0)
+
+    for value in rejected_values:
+        for compiled_grammar in [eager, dynamic]:
+            matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+            assert not (matcher.accept_string(value) and matcher.is_terminated())
+
+
+@pytest.mark.parametrize(
+    "grammar,accepted_values,rejected_values",
+    [
+        ('root ::= unit{2} "x" | "y"\nunit ::= "a"', ["aax", "y"], ["ay", "ax", "aay"]),
+        (
+            'root ::= a{1,2} | b{2,3}\na ::= "a"\nb ::= "b"',
+            ["a", "aa", "bb", "bbb"],
+            ["b", "ab", "ba", "aaa", "bbbb"],
+        ),
+        (
+            'root ::= pair{2,3} "x"\npair ::= unit{1,2}\nunit ::= "a"',
+            ["aax", "aaax", "aaaax", "aaaaax", "aaaaaax"],
+            ["x", "ax", "aaaaaaax"],
+        ),
+        (
+            'root ::= unit{2,3} "x"\nunit ::= "" | "a"',
+            ["x", "ax", "aax", "aaax"],
+            ["a", "aaaax", "xx"],
+        ),
+        ('root ::= unit{2,} "x"\nunit ::= "" | "a"', ["x", "ax", "aax", "aaaaax"], ["a", "xx"]),
+    ],
+    ids=[
+        "repeat-and-literal",
+        "different-repeated-rules",
+        "nested-repeats",
+        "bounded-nullable-repeat",
+        "unbounded-nullable-repeat",
+    ],
+)
+def test_preserved_repetition_ranges_keep_repeat_branches_isolated(
+    grammar, accepted_values, rejected_values
+):
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "x", "y"], stop_token_ids=[])
+    eager = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=False
+    ).compile_grammar(grammar)
+    dynamic = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+
+    for value in accepted_values:
+        expected = _mask_trace(eager, value)
+        actual = _mask_trace(dynamic, value)
+        for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+            assert actual_apply == expected_apply
+            expected_tokens = bitmask_to_bool_mask(expected_mask, tokenizer_info.vocab_size)
+            actual_tokens = bitmask_to_bool_mask(actual_mask, tokenizer_info.vocab_size)
+            torch.testing.assert_close(actual_tokens, expected_tokens, rtol=0, atol=0)
+
+    for value in rejected_values:
+        eager_matcher = xgr.GrammarMatcher(eager, terminate_without_stop_token=True)
+        dynamic_matcher = xgr.GrammarMatcher(dynamic, terminate_without_stop_token=True)
+        assert not (eager_matcher.accept_string(value) and eager_matcher.is_terminated())
+        assert not (dynamic_matcher.accept_string(value) and dynamic_matcher.is_terminated())
+
+
+def test_preserved_repetition_ranges_survive_serialization():
+    grammar = 'root ::= unit{2} "x" | unit{3} "y"\nunit ::= "a"'
+    tokenizer_info = xgr.TokenizerInfo(["a", "x", "y"], stop_token_ids=[])
+    eager = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=False
+    ).compile_grammar(grammar)
+    dynamic = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+    restored = xgr.CompiledGrammar.deserialize_json(dynamic.serialize_json(), tokenizer_info)
+
+    for value in ["aax", "aaay"]:
+        expected = _mask_trace(eager, value)
+        actual = _mask_trace(restored, value)
+        for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+            assert actual_apply == expected_apply
+            torch.testing.assert_close(
+                bitmask_to_bool_mask(actual_mask, tokenizer_info.vocab_size),
+                bitmask_to_bool_mask(expected_mask, tokenizer_info.vocab_size),
+                rtol=0,
+                atol=0,
+            )
+
+
+def test_preserved_repetition_ranges_survive_rollback():
+    tokenizer_info = xgr.TokenizerInfo(["a", "x"], stop_token_ids=[])
+    compiled_grammar = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar('root ::= unit{1,3} "x"\nunit ::= "a"')
+
+    def mask_after_one_a(matcher):
+        assert matcher.accept_token(0)
+        return _next_token_mask(matcher, tokenizer_info.vocab_size)
+
+    matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+    expected = mask_after_one_a(
+        xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+    )
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(0)
+    matcher.rollback(1)
+    torch.testing.assert_close(
+        _next_token_mask(matcher, tokenizer_info.vocab_size), expected, rtol=0, atol=0
+    )
+
+
+def test_rule_mask_sharing_distinguishes_repeat_bounds():
+    tokenizer_info = xgr.TokenizerInfo(["p", "a", "x", "z"], stop_token_ids=[])
+    cached_compiler = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=True, enable_dynamic_compilation=True
+    )
+    uncached_compiler = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=True
+    )
+
+    def grammar(repeat_count):
+        return (
+            f'root ::= "p" recursive "z"\n'
+            f'recursive ::= unit{{{repeat_count}}} recursive | "x"\n'
+            'unit ::= "a"'
+        )
+
+    def mask_after_prefix(compiler, grammar_source):
+        matcher = xgr.GrammarMatcher(
+            compiler.compile_grammar(grammar_source), terminate_without_stop_token=True
+        )
+        assert matcher.accept_token(0)
+        assert matcher.accept_token(1)
+        return _next_token_mask(matcher, tokenizer_info.vocab_size)
+
+    first_mask = mask_after_prefix(cached_compiler, grammar(1))
+    actual_mask = mask_after_prefix(cached_compiler, grammar(2))
+    expected_mask = mask_after_prefix(uncached_compiler, grammar(2))
+
+    assert not torch.equal(first_mask, expected_mask)
+    torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
