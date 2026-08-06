@@ -456,6 +456,11 @@ class JSONSchemaConverter {
   static const std::string kBasicEscape;
   static const std::string kBasicStringSub;
 
+  // Whether `format` maps to a built-in regex during string generation. Exposed
+  // for schema parsing so ParseString can reject combinations that GenerateString
+  // cannot represent (built-in format/pattern + non-default minLength/maxLength).
+  static bool IsBuiltinFormat(const std::string& format);
+
  protected:
   GenerateCacheManager rule_cache_manager_;
 

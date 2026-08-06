@@ -2407,6 +2407,46 @@ def test_min_max_length():
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
 
 
+def test_pattern_with_length_bounds_is_rejected():
+    # pattern + non-default length bounds: GenerateString would silently drop the
+    # bounds, so the schema must be rejected loudly at parse time instead.
+    schema = {"type": "string", "pattern": "^a+$", "maxLength": 2}
+    with pytest.raises(Exception) as e:
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+    assert "minLength/maxLength" in str(e.value)
+    assert "pattern" in str(e.value)
+
+    schema = {"type": "string", "pattern": "^a+$", "minLength": 2}
+    with pytest.raises(Exception) as e:
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+    assert "minLength/maxLength" in str(e.value)
+
+
+def test_builtin_format_with_length_bounds_is_rejected():
+    schema = {"type": "string", "format": "email", "maxLength": 20}
+    with pytest.raises(Exception) as e:
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+    assert "minLength/maxLength" in str(e.value)
+    assert "format" in str(e.value)
+
+
+def test_pattern_format_and_length_bounds_alone_still_supported():
+    # pattern without bounds keeps compiling.
+    xgr.Grammar.from_json_schema(json.dumps({"type": "string", "pattern": "^a+$"}))
+    # Built-in format without bounds keeps compiling.
+    xgr.Grammar.from_json_schema(json.dumps({"type": "string", "format": "email"}))
+    # min/max without pattern/format keeps compiling.
+    xgr.Grammar.from_json_schema(
+        json.dumps({"type": "string", "minLength": 1, "maxLength": 10})
+    )
+    # Unknown format is ignored (falls through to the length branch), so bounds still apply.
+    xgr.Grammar.from_json_schema(
+        json.dumps(
+            {"type": "string", "format": "custom-unknown-format", "maxLength": 5}
+        )
+    )
+
+
 def test_type_array():
     schema = {
         "type": ["integer", "string"],

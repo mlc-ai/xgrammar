@@ -1136,6 +1136,22 @@ Result<StringSpec, SchemaError> SchemaParser::ParseString(const picojson::object
             std::to_string(spec.max_length)
     );
   }
+  // GenerateString chooses exactly one branch for string constraints: a built-in
+  // format or a pattern (compiled as a regex) takes priority, and length bounds
+  // are silently dropped. Composing the two constraints (regex + length counting)
+  // is not supported by the grammar engine yet, so fail loudly at parse time
+  // instead of accepting a schema whose length bounds would never be enforced.
+  const bool has_builtin_format =
+      spec.format.has_value() && JSONSchemaConverter::IsBuiltinFormat(*spec.format);
+  if ((spec.pattern.has_value() || has_builtin_format) &&
+      (spec.min_length != 0 || spec.max_length != -1)) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "combining pattern/format with minLength/maxLength is not supported yet; "
+        "the length bounds would be silently ignored. Remove the pattern/format "
+        "constraint or the length bounds, or use minLength/maxLength alone"
+    );
+  }
   return ResultOk(std::move(spec));
 }
 
@@ -3117,6 +3133,10 @@ int32_t JSONSchemaConverter::GenerateTypeArray(
 }
 
 // ==================== Static Helper Methods ====================
+
+bool JSONSchemaConverter::IsBuiltinFormat(const std::string& format) {
+  return JSONFormatToRegexPattern(format).has_value();
+}
 
 std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(const std::string& format
 ) {

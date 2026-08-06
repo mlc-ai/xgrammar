@@ -8,6 +8,7 @@
 #include <tvm/ffi/any.h>
 #include <tvm/ffi/error.h>
 #include <tvm/ffi/extra/stl.h>
+#include <tvm/ffi/optional.h>
 #include <tvm/ffi/string.h>
 #include <tvm/ffi/tvm_ffi.h>
 #include <xgrammar/xgrammar.h>
@@ -222,14 +223,15 @@ class GrammarMatcherObj : public ffi::Object {
       ffi::AnyView override_stop_tokens_opt,
       bool terminate_without_stop_token,
       int64_t max_rollback_tokens,
-      std::optional<float> default_temperature
+      ffi::Optional<float> default_temperature
   )
       : value(
             compiled_grammar_ref.as<CompiledGrammarObj>()->value,
             OptionalIntVectorFromView(override_stop_tokens_opt),
             terminate_without_stop_token,
             static_cast<int>(max_rollback_tokens),
-            default_temperature
+            default_temperature.has_value() ? std::optional<float>(*default_temperature)
+                                            : std::nullopt
         ) {}
 
   static constexpr bool _type_mutable = true;
@@ -668,7 +670,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
   // GrammarMatcher: init(compiled_grammar, override_stop_tokens_opt, terminate_without_stop,
   // max_rollback_tokens, default_temperature)
   refl::ObjectDef<GrammarMatcherObj>()
-      .def(refl::init<O, ffi::AnyView, bool, int64_t, std::optional<float>>())
+      .def(refl::init<O, ffi::AnyView, bool, int64_t, ffi::Optional<float>>())
       .def(
           "accept_token",
           [](GrammarMatcherObj* o, int64_t token_id, bool debug_print) {
@@ -760,7 +762,10 @@ TVM_FFI_STATIC_INIT_BLOCK() {
             return static_cast<int64_t>(o->value.GetMaxRollbackTokens());
           }
       )
-      .def("temperature", [](const GrammarMatcherObj* o) { return o->value.GetTemperature(); })
+      .def(
+          "temperature",
+          [](const GrammarMatcherObj* o) { return ffi::Optional<float>(o->value.GetTemperature()); }
+      )
       .def(
           "stop_token_ids",
           [](const GrammarMatcherObj* o) {
