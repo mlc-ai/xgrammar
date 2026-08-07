@@ -185,6 +185,23 @@ def test_structural_tag_compiler():
     assert str(compiled_grammar.grammar) == expected_grammar_test_structural_tag_after_optimization
 
 
+def test_structural_tag_overlapping_branch_prefixes():
+    tags = [
+        xgr.StructuralTagItem(
+            begin="<call>a", schema={"type": "string", "const": "one"}, end="</call>"
+        ),
+        xgr.StructuralTagItem(
+            begin="<call>ab", schema={"type": "string", "const": "two"}, end="</call>"
+        ),
+    ]
+    grammar = xgr.Grammar.from_structural_tag(tags, ["<call>"])
+
+    assert _is_grammar_accept_string(grammar, '<call>a"one"</call>')
+    assert _is_grammar_accept_string(grammar, '<call>ab"two"</call>')
+    assert not _is_grammar_accept_string(grammar, '<call>a"two"</call>')
+    assert not _is_grammar_accept_string(grammar, '<call>ab"one"</call>')
+
+
 @pytest.mark.hf_token_required
 def test_structural_tag_mask_gen():
     # Define schemas for the test
