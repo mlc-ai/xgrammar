@@ -976,6 +976,23 @@ def test_restricted_string():
     )
 
 
+def test_repeated_string_patterns_preserve_each_property():
+    schema = {
+        "type": "object",
+        "properties": {
+            "first": {"type": "string", "pattern": "^[a-f]+$"},
+            "second": {"type": "string", "pattern": "^[a-f]+$"},
+        },
+        "required": ["first", "second"],
+        "additionalProperties": False,
+    }
+
+    check_schema_with_instance(schema, {"first": "ab", "second": "fa"}, any_whitespace=False)
+    check_schema_with_instance(
+        schema, {"first": "ab", "second": "z"}, is_accepted=False, any_whitespace=False
+    )
+
+
 def test_complex_restrictions():
     class RestrictedModel(BaseModel):
         restricted_string: str = Field(..., pattern=r"[^\"]*")
