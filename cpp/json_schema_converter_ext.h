@@ -64,7 +64,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       int32_t key_pattern_expr,
       int32_t value_rule_id,
       const std::string& rule_name,
-      const std::string& rule_name_suffix
+      const std::string& rule_name_suffix,
+      const SchemaSpecPtr& schema
   ) override;
 
   std::string GetKeyPattern() const override;

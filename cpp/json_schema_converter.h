@@ -337,12 +337,17 @@ class JSONSchemaConverter {
       const SchemaSpecPtr& schema
   );
 
-  /*! \brief Format an "other" property (additional/unevaluated). Override for different formats. */
+  /*!
+   * \brief Format an "other" property (additional/unevaluated). Override for different formats.
+   * \param schema The schema selected for the property's value, or nullptr when the dynamic key
+   * has no single schema. Formats that encode the value's type next to the key need it.
+   */
   virtual int32_t FormatOtherProperty(
       int32_t key_pattern_expr,
       int32_t value_rule_id,
       const std::string& rule_name,
-      const std::string& rule_name_suffix
+      const std::string& rule_name_suffix,
+      const SchemaSpecPtr& schema
   );
 
   /*! \brief Get the basic string rule name. Override for different formats. */

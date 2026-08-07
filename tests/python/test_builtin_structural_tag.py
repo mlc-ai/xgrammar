@@ -852,6 +852,88 @@ def test_kimi_k3_argument_type_attribute_is_pinned_to_the_schema_type():
     check_stag_with_instance(structural_tag, instance("null", "null", "number"), False)
 
 
+def test_kimi_k3_full_tool_call_with_nested_arguments_and_any_order():
+    """The full call keeps only outer arguments in XTML and nested values in JSON."""
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "options": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer"},
+                    "filters": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["limit", "filters"],
+                "additionalProperties": False,
+            },
+            "records": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"id": {"type": "integer"}, "active": {"type": "boolean"}},
+                    "required": ["id", "active"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["query", "options", "records"],
+        "additionalProperties": False,
+    }
+    tools = make_tools(["process"], schema)
+
+    def argument(key: str, type_attr: str, value: str) -> str:
+        return (
+            f'<|open|>argument key="{key}" type="{type_attr}"<|sep|>'
+            f"{value}<|close|>argument<|sep|>"
+        )
+
+    # Reverse both the outer arguments and the properties inside JSON objects. This mirrors an
+    # application supplying dictionaries in an order other than the schema declaration order.
+    arguments = (
+        argument("records", "array", '[{"active": true, "id": 1}]')
+        + argument("options", "object", '{"filters": ["a", "b"], "limit": 2}')
+        + argument("query", "string", "北京")
+    )
+
+    def full_call(args: str) -> str:
+        return (
+            "<|close|>response<|sep|>"
+            "<|open|>tools<|sep|>"
+            '<|open|>call tool="process" index="1"<|sep|>'
+            f"{args}<|close|>call<|sep|>"
+            "<|close|>tools<|sep|>"
+            "<|close|>message<|sep|>"
+        )
+
+    any_order_tag = get_model_structural_tag(
+        "kimi_k3", tools=tools, reasoning=False, any_order=True
+    )
+    ordered_tag = get_model_structural_tag("kimi_k3", tools=tools, reasoning=False)
+    assert _collect_json_schema_nodes(any_order_tag)[0].style == "kimi_k3_xml"
+    check_stag_with_instance(any_order_tag, full_call(arguments), True)
+    check_stag_with_instance(ordered_tag, full_call(arguments), False)
+
+    check_stag_with_instance(
+        any_order_tag,
+        full_call(arguments.replace('{"active": true, "id": 1}', '{"active": true}')),
+        False,
+    )
+    check_stag_with_instance(
+        any_order_tag,
+        full_call(arguments.replace('key="options" type="object"', 'key="options" type="array"')),
+        False,
+    )
+    # Even in the complete tools/call wrapper, nested fields must not become argument tags.
+    nested_xtml = argument("limit", "number", "2") + argument("filters", "array", '["a"]')
+    check_stag_with_instance(
+        any_order_tag,
+        full_call(arguments.replace('{"filters": ["a", "b"], "limit": 2}', nested_xtml)),
+        False,
+    )
+
+
 def test_kimi_k3_free_form_arguments_keep_every_type_attribute():
     """Unconstrained arguments have no schema type, so every type attribute stays legal."""
 
@@ -872,7 +954,10 @@ def test_kimi_k3_free_form_arguments_keep_every_type_attribute():
     check_stag_with_instance(structural_tag, instance("string", "text"), True)
     check_stag_with_instance(structural_tag, instance("number", "42"), True)
     check_stag_with_instance(structural_tag, instance("integer", "42"), True)
+    check_stag_with_instance(structural_tag, instance("boolean", "true"), True)
     check_stag_with_instance(structural_tag, instance("object", '{"a":1}'), True)
+    check_stag_with_instance(structural_tag, instance("array", "[1]"), True)
+    check_stag_with_instance(structural_tag, instance("null", "null"), True)
     check_stag_with_instance(structural_tag, instance("bogus", "x"), False)
 
 

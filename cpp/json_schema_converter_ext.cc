@@ -365,11 +365,14 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
     int32_t key_pattern_expr,
     int32_t value_rule_id,
     const std::string& rule_name,
-    const std::string& rule_name_suffix
+    const std::string& rule_name_suffix,
+    const SchemaSpecPtr& schema
 ) {
   if (nested_object_level_ <= 1) {
     std::vector<int32_t> elements = {
-        ByteString(xml_wrapper_.key_wrapper_prefix), key_pattern_expr, XMLKeySuffix()
+        ByteString(xml_wrapper_.key_wrapper_prefix),
+        key_pattern_expr,
+        XMLKeySuffix(json_format_ == JSONFormat::kKimiK3XML ? KimiK3TypeAttr(schema) : std::nullopt)
     };
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
       elements.push_back(WhitespaceExpression());
@@ -386,7 +389,7 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
     return Sequence(elements);
   }
   return JSONSchemaConverter::FormatOtherProperty(
-      key_pattern_expr, value_rule_id, rule_name, rule_name_suffix
+      key_pattern_expr, value_rule_id, rule_name, rule_name_suffix, schema
   );
 }
 
