@@ -1,3 +1,4 @@
+import json
 import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -457,6 +458,458 @@ def test_json_schema_style_glm_xml_format(instance: str, is_accepted: bool):
     assert "<arg_value>" in grammar_str
 
     check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+# JSONSchemaFormat with style="kimi_k3_xml"
+# (<|open|>argument key="key" type="type"<|sep|>value<|close|>argument<|sep|>)
+#
+# The type attribute is pinned to each declared property's schema type, because the Kimi-K3
+# tool-call parser reads it as a decoding switch: type="string" keeps the value as raw text,
+# any other type JSON-decodes it. A mismatched attribute would therefore change the decoded
+# argument's type.
+kimi_k3_xml_instance_is_accepted = [
+    (
+        '<|open|>argument key="name" type="string"<|sep|>Bob<|close|>argument<|sep|>'
+        '<|open|>argument key="age" type="number"<|sep|>100<|close|>argument<|sep|>',
+        True,
+    ),
+    # Whitespace between argument tags is tolerated.
+    (
+        '<|open|>argument key="name" type="string"<|sep|>Bob<|close|>argument<|sep|>\n'
+        '<|open|>argument key="age" type="number"<|sep|>\t100\n<|close|>argument<|sep|>',
+        True,
+    ),
+    # Raw string values may span lines and contain markup-ish text.
+    (
+        '<|open|>argument key="name" type="string"<|sep|><!DOCTYPE html>\n'
+        "<h1>Hello</h1><|close|>argument<|sep|>"
+        '<|open|>argument key="age" type="number"<|sep|>100<|close|>argument<|sep|>',
+        True,
+    ),
+    # An integer property renders as type="number"; the renderer never emits "integer".
+    (
+        '<|open|>argument key="name" type="string"<|sep|>Bob<|close|>argument<|sep|>'
+        '<|open|>argument key="age" type="integer"<|sep|>100<|close|>argument<|sep|>',
+        False,
+    ),
+    # A string property may not claim a non-string type: the parser would JSON-decode the
+    # body and return a number instead of a string.
+    (
+        '<|open|>argument key="name" type="number"<|sep|>123<|close|>argument<|sep|>'
+        '<|open|>argument key="age" type="number"<|sep|>100<|close|>argument<|sep|>',
+        False,
+    ),
+    # Nor may the integer property claim to be a string.
+    (
+        '<|open|>argument key="name" type="string"<|sep|>Bob<|close|>argument<|sep|>'
+        '<|open|>argument key="age" type="string"<|sep|>100<|close|>argument<|sep|>',
+        False,
+    ),
+    # Missing required property.
+    ('<|open|>argument key="name" type="string"<|sep|>Bob<|close|>argument<|sep|>', False),
+    # Other XML parameter styles are rejected.
+    ('<parameter name="name">Bob</parameter><parameter name="age">100</parameter>', False),
+]
+
+
+@pytest.mark.parametrize("instance, is_accepted", kimi_k3_xml_instance_is_accepted)
+def test_json_schema_style_kimi_k3_xml_format(instance: str, is_accepted: bool):
+    """Test JSONSchemaFormat with style='kimi_k3_xml'."""
+    stag_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+            "required": ["name", "age"],
+        },
+        "style": "kimi_k3_xml",
+    }
+    structural_tag = {"type": "structural_tag", "format": stag_format}
+    stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    grammar_str = str(stag_grammar)
+    assert '<|open|>argument key=\\"' in grammar_str
+    assert "<|close|>argument<|sep|>" in grammar_str
+
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+def test_json_schema_style_kimi_k3_xml_empty_object():
+    """style='kimi_k3_xml' with no properties accepts an empty argument list."""
+    stag_format = {
+        "type": "json_schema",
+        "json_schema": {"type": "object", "properties": {}},
+        "style": "kimi_k3_xml",
+    }
+    check_stag_with_instance(stag_format, "", True)
+    check_stag_with_instance(stag_format, "\n", True)
+
+
+def test_json_schema_style_kimi_k3_xml_object_argument_uses_json():
+    """An object-valued argument uses a JSON body rather than nested XTML arguments."""
+    stag_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "type": "object",
+            "properties": {"value": {"type": "object"}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        "style": "kimi_k3_xml",
+    }
+    argument_prefix = '<|open|>argument key="value" type="object"<|sep|>'
+    argument_suffix = "<|close|>argument<|sep|>"
+
+    check_stag_with_instance(stag_format, argument_prefix + "{}" + argument_suffix, True)
+    check_stag_with_instance(stag_format, argument_prefix + '{"nested":1}' + argument_suffix, True)
+    check_stag_with_instance(stag_format, argument_prefix + argument_suffix, False)
+    check_stag_with_instance(
+        stag_format,
+        argument_prefix
+        + '<|open|>argument key="nested" type="number"<|sep|>'
+        + "1<|close|>argument<|sep|>"
+        + argument_suffix,
+        False,
+    )
+
+
+@pytest.mark.parametrize(
+    "type_attr, value",
+    [
+        ("string", "x"),
+        ("number", "1.5"),
+        ("integer", "1"),
+        ("boolean", "true"),
+        ("object", '{"k": 1}'),
+        ("array", "[1]"),
+        ("null", "null"),
+    ],
+)
+def test_json_schema_style_kimi_k3_xml_free_form_keys_allow_any_type(type_attr: str, value: str):
+    """style='kimi_k3_xml' keeps every type attribute for keys with no declared schema.
+
+    Only declared properties pin the attribute to their schema type. A free-form key (here
+    from an unconstrained schema) may hold any value, so every type name stays legal.
+    """
+    stag_format = {"type": "json_schema", "json_schema": True, "style": "kimi_k3_xml"}
+    check_stag_with_instance(
+        stag_format,
+        f'<|open|>argument key="k" type="{type_attr}"<|sep|>{value}<|close|>argument<|sep|>',
+        True,
+    )
+
+
+def test_json_schema_style_kimi_k3_xml_escapes_key_attribute():
+    r"""style='kimi_k3_xml' escapes & and " in the key attribute like the K3 renderer.
+
+    The parser matches attribute values as [^"]* and then reverses `&quot;` / `&amp;`, so a
+    raw quote in a key would truncate the attribute, and a key that literally contains
+    `&amp;` would be decoded back into `&`.
+    """
+    stag_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "type": "object",
+            "properties": {'we"ird&key': {"type": "string"}},
+            "required": ['we"ird&key'],
+        },
+        "style": "kimi_k3_xml",
+    }
+    check_stag_with_instance(
+        stag_format,
+        '<|open|>argument key="we&quot;ird&amp;key" type="string"<|sep|>v<|close|>argument<|sep|>',
+        True,
+    )
+    check_stag_with_instance(
+        stag_format,
+        '<|open|>argument key="we"ird&key" type="string"<|sep|>v<|close|>argument<|sep|>',
+        False,
+    )
+
+
+def _kimi_k3_argument(key: str, type_attr: str, value: str) -> str:
+    return (
+        f'<|open|>argument key="{key}" type="{type_attr}"<|sep|>' f"{value}<|close|>argument<|sep|>"
+    )
+
+
+def _kimi_k3_schema_grammar(schema: Dict[str, Any], *, any_order: bool = False) -> xgr.Grammar:
+    structural_tag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "json_schema",
+            "json_schema": schema,
+            "style": "kimi_k3_xml",
+            "any_order": any_order,
+        },
+    }
+    return xgr.Grammar.from_structural_tag(structural_tag)
+
+
+def test_json_schema_style_kimi_k3_xml_all_value_types_and_nested_json():
+    """K3 uses one XTML tag per outer argument and JSON inside arrays/objects."""
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "text": {"type": "string", "minLength": 2},
+            "integer": {"type": "integer", "minimum": 1},
+            "number": {"type": "number"},
+            "flag": {"type": "boolean"},
+            "empty": {"type": "null"},
+            "labels": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2},
+            "config": {
+                "type": "object",
+                "properties": {
+                    "mode": {"enum": ["fast", "safe"]},
+                    "retries": {"type": "integer"},
+                    "nested": {
+                        "type": "object",
+                        "properties": {"enabled": {"type": "boolean"}},
+                        "required": ["enabled"],
+                        "additionalProperties": False,
+                    },
+                },
+                "required": ["mode", "nested"],
+                "additionalProperties": False,
+            },
+            "note": {"type": "string"},
+        },
+        "required": ["text", "integer", "number", "flag", "empty", "labels", "config"],
+        "additionalProperties": False,
+    }
+    labels = json.dumps(["北京", "SF"], ensure_ascii=False)
+    config = json.dumps(
+        {"mode": "fast", "retries": 3, "nested": {"enabled": True}}, ensure_ascii=False
+    )
+    instance = (
+        _kimi_k3_argument("text", "string", "ok")
+        + _kimi_k3_argument("integer", "number", "2")
+        + _kimi_k3_argument("number", "number", "1.5")
+        + _kimi_k3_argument("flag", "boolean", "true")
+        + _kimi_k3_argument("empty", "null", "null")
+        + _kimi_k3_argument("labels", "array", labels)
+        + _kimi_k3_argument("config", "object", config)
+    )
+    grammar = _kimi_k3_schema_grammar(schema)
+
+    assert _is_grammar_accept_string(grammar, instance)
+    # The optional outer `note` and optional nested `retries` may both be omitted.
+    config_without_optional = json.dumps(
+        {"mode": "fast", "nested": {"enabled": True}}, ensure_ascii=False
+    )
+    assert _is_grammar_accept_string(grammar, instance.replace(config, config_without_optional))
+
+    # Every concrete outer schema type is tied to the type name emitted by _xtml_type.
+    for key, expected_type, wrong_type in (
+        ("text", "string", "number"),
+        ("integer", "number", "string"),
+        ("number", "number", "integer"),
+        ("flag", "boolean", "string"),
+        ("empty", "null", "string"),
+        ("labels", "array", "object"),
+        ("config", "object", "array"),
+    ):
+        assert not _is_grammar_accept_string(
+            grammar,
+            instance.replace(
+                f'key="{key}" type="{expected_type}"', f'key="{key}" type="{wrong_type}"'
+            ),
+        )
+
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace("<|sep|>ok<|close|>", "<|sep|>x<|close|>")
+    )
+    assert not _is_grammar_accept_string(
+        grammar,
+        instance.replace(
+            'key="integer" type="number"<|sep|>2', 'key="integer" type="number"<|sep|>0'
+        ),
+    )
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace(labels, json.dumps(["北京"], ensure_ascii=False))
+    )
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace(labels, json.dumps(["北京", "SF", "NY"], ensure_ascii=False))
+    )
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace(labels, json.dumps(["北京", 1], ensure_ascii=False))
+    )
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace(config, config.replace('"fast"', '"slow"'))
+    )
+    assert not _is_grammar_accept_string(
+        grammar,
+        instance.replace(config, json.dumps({"mode": "fast", "nested": {}}, ensure_ascii=False)),
+    )
+    assert not _is_grammar_accept_string(
+        grammar,
+        instance.replace(
+            config,
+            json.dumps(
+                {"mode": "fast", "nested": {"enabled": True, "extra": 1}}, ensure_ascii=False
+            ),
+        ),
+    )
+    # A nested object is JSON, not another sequence of K3 argument tags.
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace(config, _kimi_k3_argument("mode", "string", "fast"))
+    )
+    assert not _is_grammar_accept_string(
+        grammar, instance + _kimi_k3_argument("extra", "string", "x")
+    )
+
+
+def test_json_schema_style_kimi_k3_xml_nested_refs_and_arrays_of_objects():
+    entry_schema = {
+        "type": "object",
+        "properties": {"id": {"type": "integer"}, "label": {"type": "string"}},
+        "required": ["id", "label"],
+        "additionalProperties": False,
+    }
+    schema = {
+        "$defs": {"entry": entry_schema},
+        "type": "object",
+        "properties": {
+            "entry": {"$ref": "#/$defs/entry"},
+            "entries": {"type": "array", "items": {"$ref": "#/$defs/entry"}},
+        },
+        "required": ["entry", "entries"],
+        "additionalProperties": False,
+    }
+    entry = json.dumps({"id": 1, "label": "主"}, ensure_ascii=False)
+    entries = json.dumps([{"id": 2, "label": "备"}], ensure_ascii=False)
+    instance = _kimi_k3_argument("entry", "object", entry) + _kimi_k3_argument(
+        "entries", "array", entries
+    )
+    grammar = _kimi_k3_schema_grammar(schema)
+
+    assert _is_grammar_accept_string(grammar, instance)
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace(entry, json.dumps({"id": 1}, ensure_ascii=False))
+    )
+    assert not _is_grammar_accept_string(
+        grammar,
+        instance.replace(entries, json.dumps([{"id": "2", "label": "备"}], ensure_ascii=False)),
+    )
+
+
+def test_json_schema_style_kimi_k3_xml_pattern_properties_pin_each_value_type():
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+        "patternProperties": {
+            "^metric_[a-z]+$": {"type": "number"},
+            "^flag_[a-z]+$": {"type": "boolean"},
+        },
+        "additionalProperties": False,
+    }
+    instance = (
+        _kimi_k3_argument("name", "string", "worker")
+        + _kimi_k3_argument("metric_cpu", "number", "0.5")
+        + _kimi_k3_argument("flag_hot", "boolean", "true")
+    )
+    grammar = _kimi_k3_schema_grammar(schema)
+
+    assert _is_grammar_accept_string(grammar, instance)
+    assert not _is_grammar_accept_string(
+        grammar,
+        instance.replace('key="metric_cpu" type="number"', 'key="metric_cpu" type="string"'),
+    )
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace('key="flag_hot" type="boolean"', 'key="flag_hot" type="string"')
+    )
+    assert not _is_grammar_accept_string(grammar, instance.replace("metric_cpu", "other"))
+
+
+def test_json_schema_style_kimi_k3_xml_nested_pattern_properties_stay_json():
+    schema = {
+        "type": "object",
+        "properties": {
+            "payload": {
+                "type": "object",
+                "patternProperties": {"^x_[a-z]+$": {"type": "integer"}},
+                "additionalProperties": False,
+            }
+        },
+        "required": ["payload"],
+        "additionalProperties": False,
+    }
+    prefix = '<|open|>argument key="payload" type="object"<|sep|>'
+    suffix = "<|close|>argument<|sep|>"
+    grammar = _kimi_k3_schema_grammar(schema)
+
+    assert _is_grammar_accept_string(grammar, prefix + '{"x_count": 2}' + suffix)
+    assert not _is_grammar_accept_string(grammar, prefix + '{"x_count": "2"}' + suffix)
+    assert not _is_grammar_accept_string(grammar, prefix + '{"bad": 2}' + suffix)
+    assert not _is_grammar_accept_string(
+        grammar, prefix + _kimi_k3_argument("x_count", "number", "2") + suffix
+    )
+
+
+def test_json_schema_style_kimi_k3_xml_any_order_applies_outer_and_nested_objects():
+    schema = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "settings": {
+                "type": "object",
+                "properties": {"first": {"type": "integer"}, "second": {"type": "boolean"}},
+                "required": ["first", "second"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["name", "settings"],
+        "additionalProperties": False,
+    }
+    ordered = _kimi_k3_argument("name", "string", "n") + _kimi_k3_argument(
+        "settings", "object", '{"first": 1, "second": true}'
+    )
+    reordered = _kimi_k3_argument(
+        "settings", "object", '{"second": true, "first": 1}'
+    ) + _kimi_k3_argument("name", "string", "n")
+
+    ordered_grammar = _kimi_k3_schema_grammar(schema)
+    any_order_grammar = _kimi_k3_schema_grammar(schema, any_order=True)
+    assert _is_grammar_accept_string(ordered_grammar, ordered)
+    assert not _is_grammar_accept_string(ordered_grammar, reordered)
+    assert _is_grammar_accept_string(any_order_grammar, ordered)
+    assert _is_grammar_accept_string(any_order_grammar, reordered)
+
+
+def test_json_schema_style_kimi_k3_xml_const_enum_and_nullable_values():
+    schema = {
+        "type": "object",
+        "properties": {
+            "mode": {"enum": ["fast", "safe"]},
+            "version": {"const": 3},
+            "target": {"type": ["string", "null"]},
+        },
+        "required": ["mode", "version", "target"],
+        "additionalProperties": False,
+    }
+
+    def instance(target_type: str, target_value: str) -> str:
+        return (
+            _kimi_k3_argument("mode", "string", "fast")
+            + _kimi_k3_argument("version", "number", "3")
+            + _kimi_k3_argument("target", target_type, target_value)
+        )
+
+    grammar = _kimi_k3_schema_grammar(schema)
+    string_target = instance("string", "primary")
+    assert _is_grammar_accept_string(grammar, string_target)
+    assert _is_grammar_accept_string(grammar, instance("null", "null"))
+    assert not _is_grammar_accept_string(grammar, string_target.replace("fast", "slow"))
+    assert not _is_grammar_accept_string(
+        grammar, string_target.replace("<|sep|>3<|close|>", "<|sep|>4<|close|>")
+    )
+    assert not _is_grammar_accept_string(
+        grammar, string_target.replace('key="mode" type="string"', 'key="mode" type="number"')
+    )
+    assert not _is_grammar_accept_string(
+        grammar, string_target.replace('key="version" type="number"', 'key="version" type="string"')
+    )
 
 
 ebnf_grammar_stag_grammar = [
@@ -2587,7 +3040,7 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "style": "not_string"}}',
-        'style must be "json", "qwen_xml", "minimax_xml", "deepseek_xml", or "glm_xml"',
+        'style must be "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml", or "kimi_k3_xml"',
     ),
     # RepeatFormat Errors - illegal min/max
     (

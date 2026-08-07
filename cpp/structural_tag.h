@@ -83,7 +83,8 @@ struct ConstStringFormat {
 struct JSONSchemaFormat {
   static constexpr const char* type = "json_schema";
   std::string json_schema;
-  std::string style = "json";  // "json","qwen_xml","minimax_xml","deepseek_xml","glm_xml"
+  // "json","qwen_xml","minimax_xml","deepseek_xml","glm_xml","kimi_k3_xml"
+  std::string style = "json";
   // Whether to allow object properties to appear in any order. See
   // Grammar::FromJSONSchema / JSONSchemaToEBNF for the semantics.
   bool any_order = false;

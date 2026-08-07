@@ -1376,6 +1376,97 @@ def test_glm_unconstrained_string_whitespace_has_bounded_parser_states():
     assert matcher.is_terminated()
 
 
+_XML_DYNAMIC_PROPERTY_CASES = (
+    (
+        "qwen_xml",
+        "<parameter=name>n</parameter>",
+        "<parameter=x_key>3</parameter>",
+        "<parameter=x_key>v</parameter>",
+    ),
+    (
+        "minimax_xml",
+        '<parameter name="name">n</parameter>',
+        '<parameter name="x_key">3</parameter>',
+        '<parameter name="x_key">v</parameter>',
+    ),
+    (
+        "deepseek_xml",
+        '<｜DSML｜parameter name="name" string="true">n</｜DSML｜parameter>',
+        '<｜DSML｜parameter name="x_key" string="false">3</｜DSML｜parameter>',
+        '<｜DSML｜parameter name="x_key" string="true">v</｜DSML｜parameter>',
+    ),
+    (
+        "glm_xml",
+        "<arg_key>name</arg_key><arg_value>n</arg_value>",
+        "<arg_key>x_key</arg_key><arg_value>3</arg_value>",
+        "<arg_key>x_key</arg_key><arg_value>v</arg_value>",
+    ),
+    (
+        "kimi_k3_xml",
+        '<|open|>argument key="name" type="string"<|sep|>n<|close|>argument<|sep|>',
+        '<|open|>argument key="x_key" type="number"<|sep|>3<|close|>argument<|sep|>',
+        '<|open|>argument key="x_key" type="string"<|sep|>v<|close|>argument<|sep|>',
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    "json_format, declared_property, pattern_property, _property_name", _XML_DYNAMIC_PROPERTY_CASES
+)
+def test_xml_pattern_properties_use_property_format_hook(
+    json_format: str, declared_property: str, pattern_property: str, _property_name: str
+):
+    pattern_schema = {
+        "type": "object",
+        "patternProperties": {"^x_[a-z]+$": {"type": "integer"}},
+        "additionalProperties": False,
+    }
+    combined_schema = {
+        **pattern_schema,
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+    }
+
+    for schema, instance in (
+        (pattern_schema, pattern_property),
+        (combined_schema, declared_property + pattern_property),
+    ):
+        grammar = _json_schema_to_ebnf(
+            schema, json_format=json_format, any_whitespace=False, separators=(",", ":")
+        )
+        assert _is_grammar_accept_string(grammar, instance)
+        assert not _is_grammar_accept_string(grammar, instance.replace("x_key", "bad"))
+        if json_format == "kimi_k3_xml":
+            assert not _is_grammar_accept_string(
+                grammar, instance.replace('type="number"', 'type="string"')
+            )
+
+
+@pytest.mark.parametrize(
+    "json_format, declared_property, _pattern_property, property_name", _XML_DYNAMIC_PROPERTY_CASES
+)
+def test_xml_property_names_use_property_format_hook(
+    json_format: str, declared_property: str, _pattern_property: str, property_name: str
+):
+    property_names_schema = {"type": "object", "propertyNames": {"pattern": "^[a-z_]+$"}}
+    combined_schema = {
+        **property_names_schema,
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+        "additionalProperties": True,
+    }
+
+    for schema, instance in (
+        (property_names_schema, property_name),
+        (combined_schema, declared_property + property_name),
+    ):
+        grammar = _json_schema_to_ebnf(
+            schema, json_format=json_format, any_whitespace=False, separators=(",", ":")
+        )
+        assert _is_grammar_accept_string(grammar, instance)
+        assert not _is_grammar_accept_string(grammar, instance.replace("x_key", "Bad"))
+
+
 def test_nested_true_schema():
     schema = {"type": "object", "properties": {"name": True}, "required": ["name"]}
     ebnf_grammar = _json_schema_to_ebnf(schema, json_format="qwen_xml")
