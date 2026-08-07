@@ -834,6 +834,62 @@ def test_large_finite_nullable_repeat_skips_redundant_empty_matches():
     ]
 
 
+@pytest.mark.parametrize(
+    ("grammar", "accepted_input"),
+    [
+        ('root ::= "L" wrapper "x"\nwrapper ::= unit{1,4} "z"\nunit ::= "ab"', "Lababzx"),
+        (
+            'root ::= "L" wrapper "x" | "R" wrapper "y"\nwrapper ::= unit{1,4} "z"\nunit ::= "ab"',
+            "Rababzy",
+        ),
+        ('root ::= unit{1,4} "z"\nunit ::= "ab"', "ababz"),
+        ('root ::= "L" wrapper "x"\nwrapper ::= unit{0,4} "z"\nunit ::= "" | "ab"', "Labzx"),
+    ],
+    ids=["exact-lookahead", "branching-lookahead", "root-parent", "nullable-unit"],
+)
+def test_repeat_parent_lookahead_masks_stay_exact(grammar, accepted_input):
+    # Repeat masks apply the parent rule's lookahead assertion to tokens crossing the parent's
+    # completion point. Verify every mask bit against real per-token acceptance so a wrong
+    # lookahead-based rejection or acceptance cannot slip through.
+    vocabulary = [
+        "a",
+        "b",
+        "z",
+        "x",
+        "y",
+        "ab",
+        "abab",
+        "abz",
+        "abzx",
+        "abzxx",
+        "abzy",
+        "zx",
+        "zz",
+        "L",
+        "R",
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    for enable_dynamic_compilation in (False, True):
+        compiled = xgr.GrammarCompiler(
+            tokenizer_info, max_threads=1, enable_dynamic_compilation=enable_dynamic_compilation
+        ).compile_grammar(grammar)
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        for consumed_length, char in enumerate(accepted_input):
+            xgr.reset_token_bitmask(bitmask)
+            assert matcher.fill_next_token_bitmask(bitmask)
+            allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+            for token_id in range(tokenizer_info.vocab_size):
+                probe = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+                if consumed_length > 0:
+                    assert probe.accept_string(accepted_input[:consumed_length])
+                assert allowed[token_id].item() == probe.accept_token(token_id), (
+                    f"token {vocabulary[token_id]!r} after "
+                    f"{accepted_input[:consumed_length]!r} (dynamic={enable_dynamic_compilation})"
+                )
+            assert matcher.accept_string(char)
+
+
 @pytest.mark.parametrize("operation", ["rollback", "reset", "fork"])
 def test_repeated_character_class_masks_do_not_leak_across_state_changes(operation):
     tokenizer_info = xgr.TokenizerInfo(["p", "q", "a", "x", "y"], stop_token_ids=[])
