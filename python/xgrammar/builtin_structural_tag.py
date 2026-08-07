@@ -2119,9 +2119,7 @@ def get_cohere_structural_tag(
                 elements=[
                     RegexFormat(pattern=r"\d+"),
                     ConstStringFormat(
-                        value=(
-                            TOOL_CALL_NAME_PREFIX + function.name + TOOL_CALL_BEGIN_SUFFIX
-                        )
+                        value=(TOOL_CALL_NAME_PREFIX + function.name + TOOL_CALL_BEGIN_SUFFIX)
                     ),
                     JSONSchemaFormat(
                         json_schema=_get_function_parameters(function),
@@ -2142,11 +2140,7 @@ def get_cohere_structural_tag(
         if len(tags) > 0:
             tool_calls = TagFormat(
                 begin=TOOL_CALLS_BEGIN,
-                content=TagsWithSeparatorFormat(
-                    tags=tags,
-                    separator="",
-                    at_least_one=True,
-                ),
+                content=TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True),
                 end=TOOL_CALLS_END,
             )
             suffix_tag = TriggeredTagsFormat(
@@ -2176,11 +2170,7 @@ def get_cohere_structural_tag(
         suffix_tag = SequenceFormat(
             elements=[
                 ConstStringFormat(value=TOOL_CALLS_PREFIX + TOOL_CALLS_BEGIN),
-                TagsWithSeparatorFormat(
-                    tags=tags,
-                    separator="",
-                    at_least_one=True,
-                ),
+                TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True),
                 ConstStringFormat(value=TOOL_CALLS_END),
             ]
         )

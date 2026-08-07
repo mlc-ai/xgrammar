@@ -810,9 +810,7 @@ _EXCLUDE_TOKEN_MODELS = [
     "glm_4_7",
     "cohere",
 ]
-_EXPECTED_EXCLUDE_TOKENS = {
-    "cohere": ["<|START_THINKING|>", "<|END_THINKING|>"],
-}
+_EXPECTED_EXCLUDE_TOKENS = {"cohere": ["<|START_THINKING|>", "<|END_THINKING|>"]}
 
 
 @pytest.mark.parametrize("model", _EXCLUDE_TOKEN_MODELS)
@@ -1320,7 +1318,11 @@ _tool_choice_instance_cases = [
     pytest.param(
         "cohere",
         (
-            {"tools": _tools_cohere_pair, "tool_choice": "forced", "forced_function_name": "search"},
+            {
+                "tools": _tools_cohere_pair,
+                "tool_choice": "forced",
+                "forced_function_name": "search",
+            },
             [
                 "<cofl:tool_calls>"
                 "<cofl:tool_call id=0 name=search>"

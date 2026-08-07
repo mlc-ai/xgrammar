@@ -1432,26 +1432,15 @@ def test_cohere_nested_dict_and_list_values():
         "properties": {
             "config": {
                 "type": "object",
-                "properties": {
-                    "mode": {"type": "string"},
-                    "enabled": {"type": "boolean"},
-                },
+                "properties": {"mode": {"type": "string"}, "enabled": {"type": "boolean"}},
                 "required": ["mode", "enabled"],
             },
-            "items": {
-                "type": "array",
-                "items": {"type": "string"},
-                "minItems": 2,
-                "maxItems": 2,
-            },
+            "items": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2},
             "records": {
                 "type": "array",
                 "items": {
                     "type": "object",
-                    "properties": {
-                        "id": {"type": "integer"},
-                        "label": {"type": "string"},
-                    },
+                    "properties": {"id": {"type": "integer"}, "label": {"type": "string"}},
                     "required": ["id", "label"],
                 },
                 "minItems": 1,
@@ -1512,10 +1501,7 @@ def test_cohere_additional_properties_support_nested_schema():
         "required": ["foo"],
         "additionalProperties": {
             "type": "object",
-            "properties": {
-                "id": {"type": "integer"},
-                "label": {"type": "string"},
-            },
+            "properties": {"id": {"type": "integer"}, "label": {"type": "string"}},
             "required": ["id", "label"],
         },
     }

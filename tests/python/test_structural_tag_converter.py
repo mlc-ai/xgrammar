@@ -511,10 +511,7 @@ def test_json_schema_style_cohere_xml_nested_values():
             "properties": {
                 "config": {
                     "type": "object",
-                    "properties": {
-                        "mode": {"type": "string"},
-                        "enabled": {"type": "boolean"},
-                    },
+                    "properties": {"mode": {"type": "string"}, "enabled": {"type": "boolean"}},
                     "required": ["mode", "enabled"],
                 },
                 "items": {
