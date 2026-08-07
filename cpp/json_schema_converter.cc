@@ -2194,6 +2194,16 @@ int32_t JSONSchemaConverter::GenerateFromSpec(
 int32_t JSONSchemaConverter::RegexExpression(
     const std::string& regex, bool json_string, bool force_cfg_expansion
 ) {
+  std::string cache_key;
+  cache_key.reserve(regex.size() + 2);
+  cache_key.push_back(static_cast<char>(json_string));
+  cache_key.push_back(static_cast<char>(force_cfg_expansion));
+  cache_key.append(regex);
+  const auto cached = regex_expr_ids_.find(cache_key);
+  if (cached != regex_expr_ids_.end()) {
+    return cached->second;
+  }
+
   bool can_use_fsm = !force_cfg_expansion;
   if (json_string) {
     can_use_fsm =
@@ -2212,14 +2222,18 @@ int32_t JSONSchemaConverter::RegexExpression(
             return fsm.IsEndState(state);
           });
       if (!language_is_empty) {
-        return builder_.AddRegex(regex, json_string);
+        const int32_t result = builder_.AddRegex(regex, json_string);
+        regex_expr_ids_.emplace(std::move(cache_key), result);
+        return result;
       }
     }
   }
 
   // Keep regex conversion independent. Only the uncommon fallback path converts its existing
   // EBNF result to a subgrammar; the JSON Schema rule graph itself is still built directly.
-  return AddSubGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
+  const int32_t result = AddSubGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
+  regex_expr_ids_.emplace(std::move(cache_key), result);
+  return result;
 }
 
 // ==================== Generate Methods ====================
