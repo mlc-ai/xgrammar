@@ -742,12 +742,6 @@ class GrammarMatcher::Impl : public EarleyParser {
   DynamicBitset tmp_accepted_bitset_;
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
-  struct RepeatMaskCacheEntry {
-    RepeatTokenMaskKey key;
-    bool parser_completed;
-    DynamicBitset mask;
-  };
-  std::optional<RepeatMaskCacheEntry> repeat_mask_cache_;
 };
 
 std::optional<ParserState> GrammarMatcher::Impl::FindRepeatParent(const ParserState& state) const {
@@ -1880,26 +1874,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   }
 
   std::optional<ParserState> single_repeat_parent;
-  std::optional<RepeatTokenMaskKey> repeat_mask_key;
   if (latest_states.size() == 1) {
     single_repeat_parent = FindRepeatParent(latest_states[0]);
-    if (single_repeat_parent.has_value()) {
-      repeat_mask_key = compiled_grammar_->token_mask_cache.GetRepeatTokenMaskKey(
-          latest_states[0], *single_repeat_parent, grammar_, tokenizer_info_
-      );
-      if (repeat_mask_cache_.has_value() && repeat_mask_cache_->key == *repeat_mask_key &&
-          repeat_mask_cache_->parser_completed == IsCompleted()) {
-        DynamicBitset output(
-            tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
-        );
-        output = repeat_mask_cache_->mask;
-        if (debug_print) {
-          XGRAMMAR_LOG(INFO) << "Filled bitmask: "
-                             << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
-        }
-        return;
-      }
-    }
   }
 
   std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> latest_states_with_masks;
@@ -1936,15 +1912,6 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       SetTokenBitmask(
           bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, IsCompleted(), false
       );
-      if (repeat_mask_key.has_value()) {
-        DynamicBitset output(
-            tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
-        );
-        DynamicBitset owned_mask(tokenizer_info_.GetVocabSize());
-        owned_mask = output;
-        repeat_mask_cache_ =
-            RepeatMaskCacheEntry{*repeat_mask_key, IsCompleted(), std::move(owned_mask)};
-      }
       if (debug_print) {
         XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
       }
