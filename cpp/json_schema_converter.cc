@@ -4038,6 +4038,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"minimax_xml", JSONFormat::kMiniMaxXML},
       {"deepseek_xml", JSONFormat::kDeepSeekXML},
       {"glm_xml", JSONFormat::kGlmXML},
+      {"cohere_xml", JSONFormat::kCohereXML},
   };
   auto it = kNameToFormat.find(format);
   if (it == kNameToFormat.end()) {
@@ -4097,6 +4098,17 @@ Grammar JSONSchemaToGrammar(
           max_whitespace_cnt,
           std::move(ref_resolver),
           json_format,
+          any_order
+      );
+      return converter.Convert(spec);
+    }
+    case JSONFormat::kCohereXML: {
+      CohereXMLToolCallingConverter converter(
+          indent,
+          std::move(separators),
+          any_whitespace,
+          max_whitespace_cnt,
+          std::move(ref_resolver),
           any_order
       );
       return converter.Convert(spec);
@@ -4179,6 +4191,12 @@ std::string JSONSchemaToEBNF(
           ref_resolver,
           json_format,
           any_order
+      );
+      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
+    }
+    case JSONFormat::kCohereXML: {
+      CohereXMLToolCallingConverter converter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
       return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
     }

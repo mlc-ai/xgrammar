@@ -57,6 +57,11 @@ def _check_glm_grammar(schema: dict, instance: str, accepted: bool):
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 
+def _check_cohere_grammar(schema: dict, instance: str, accepted: bool):
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="cohere_xml")
+    check_grammar_with_instance(ebnf_grammar, instance, accepted)
+
+
 test_string_schema_input_str_accepted = (
     ("<parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>", True),
     ("<parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>", True),
@@ -1374,6 +1379,156 @@ def test_glm_unconstrained_string_whitespace_has_bounded_parser_states():
     assert states_after <= states_before + 1
     assert matcher.accept_string("</arg_value>")
     assert matcher.is_terminated()
+
+
+# ---------- Cohere XML tool calling (json_format="cohere_xml") ----------
+# Format: <cofl:value name="$PARAMETER_NAME" type="raw|json|dict|list">$PARAMETER_VALUE</cofl:value>
+
+
+cohere_reject_wrong_parameter_format_input_str_accepted = (
+    # Cohere XML: <cofl:value name="key" type="...">value</cofl:value>
+    (
+        '<cofl:value name="name" type="raw">Bob</cofl:value>'
+        '<cofl:value name="age" type="json">100</cofl:value>',
+        True,
+    ),
+    # Missing the required age parameter.
+    ('<cofl:value name="name" type="raw">Bob</cofl:value>', False),
+    # Unquoted attributes are not accepted.
+    (
+        "<cofl:value name=name type=raw>Bob</cofl:value>"
+        "<cofl:value name=age type=json>100</cofl:value>",
+        False,
+    ),
+    # Qwen XML: <parameter=key>value</parameter>
+    ("<parameter=name>Bob</parameter><parameter=age>100</parameter>", False),
+)
+
+
+@pytest.mark.parametrize(
+    "input_str, accepted", cohere_reject_wrong_parameter_format_input_str_accepted
+)
+def test_cohere_reject_wrong_parameter_format(input_str: str, accepted: bool):
+    """Cohere grammar must use cofl:value wrappers and reject other XML styles."""
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
+        "required": ["name", "age"],
+    }
+    ebnf_grammar = _json_schema_to_ebnf(schema, json_format="cohere_xml")
+    grammar_str = str(ebnf_grammar)
+    assert "<cofl:value" in grammar_str
+    assert ' name=\\"' in grammar_str
+    assert ' type=\\"' in grammar_str
+    assert "</cofl:value>" in grammar_str
+
+    _check_cohere_grammar(schema, input_str, accepted)
+
+
+def test_cohere_nested_dict_and_list_values():
+    """Cohere XML recursively formats dicts and lists with unnamed list items."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "config": {
+                "type": "object",
+                "properties": {"mode": {"type": "string"}, "enabled": {"type": "boolean"}},
+                "required": ["mode", "enabled"],
+            },
+            "items": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2},
+            "records": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"id": {"type": "integer"}, "label": {"type": "string"}},
+                    "required": ["id", "label"],
+                },
+                "minItems": 1,
+                "maxItems": 1,
+            },
+        },
+        "required": ["config", "items", "records"],
+    }
+    accepted = (
+        '<cofl:value name="config" type="dict">'
+        '<cofl:value name="mode" type="raw">fast</cofl:value>'
+        '<cofl:value name="enabled" type="json">true</cofl:value>'
+        "</cofl:value>"
+        '<cofl:value name="items" type="list">'
+        '<cofl:value type="raw">first</cofl:value>'
+        '<cofl:value type="raw">second</cofl:value>'
+        "</cofl:value>"
+        '<cofl:value name="records" type="list">'
+        '<cofl:value type="dict">'
+        '<cofl:value name="id" type="json">1</cofl:value>'
+        '<cofl:value name="label" type="raw">one</cofl:value>'
+        "</cofl:value>"
+        "</cofl:value>"
+    )
+    named_list_item = accepted.replace(
+        '<cofl:value type="raw">first</cofl:value>',
+        '<cofl:value name="0" type="raw">first</cofl:value>',
+    )
+
+    _check_cohere_grammar(schema, accepted, True)
+    _check_cohere_grammar(schema, named_list_item, False)
+
+
+def test_cohere_additional_properties_do_not_match_declared_keys():
+    """Additional Cohere properties cannot reuse names declared in properties."""
+    schema = {
+        "type": "object",
+        "properties": {"foo": {"type": "integer"}},
+        "required": ["foo"],
+        "additionalProperties": {"type": "string"},
+    }
+
+    _check_cohere_grammar(schema, '<cofl:value name="foo" type="json">1</cofl:value>', True)
+    _check_cohere_grammar(
+        schema,
+        '<cofl:value name="foo" type="json">1</cofl:value>'
+        '<cofl:value name="bar" type="raw">extra</cofl:value>',
+        True,
+    )
+    _check_cohere_grammar(schema, '<cofl:value name="foo" type="raw">wrong</cofl:value>', False)
+
+
+def test_cohere_additional_properties_support_nested_schema():
+    """Additional Cohere properties can use complex nested schemas."""
+    schema = {
+        "type": "object",
+        "properties": {"foo": {"type": "integer"}},
+        "required": ["foo"],
+        "additionalProperties": {
+            "type": "object",
+            "properties": {"id": {"type": "integer"}, "label": {"type": "string"}},
+            "required": ["id", "label"],
+        },
+    }
+
+    accepted = (
+        '<cofl:value name="foo" type="json">1</cofl:value>'
+        '<cofl:value name="bar" type="dict">'
+        '<cofl:value name="id" type="json">2</cofl:value>'
+        '<cofl:value name="label" type="raw">extra</cofl:value>'
+        "</cofl:value>"
+    )
+    missing_nested_required = (
+        '<cofl:value name="foo" type="json">1</cofl:value>'
+        '<cofl:value name="bar" type="dict">'
+        '<cofl:value name="id" type="json">2</cofl:value>'
+        "</cofl:value>"
+    )
+    declared_key_with_additional_schema = (
+        '<cofl:value name="foo" type="dict">'
+        '<cofl:value name="id" type="json">2</cofl:value>'
+        '<cofl:value name="label" type="raw">extra</cofl:value>'
+        "</cofl:value>"
+    )
+
+    _check_cohere_grammar(schema, accepted, True)
+    _check_cohere_grammar(schema, missing_nested_required, False)
+    _check_cohere_grammar(schema, declared_key_with_additional_schema, False)
 
 
 def test_nested_true_schema():
