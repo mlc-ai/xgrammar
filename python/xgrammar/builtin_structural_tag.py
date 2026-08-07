@@ -2100,9 +2100,9 @@ def get_cohere_structural_tag(
 
     - Cohere Command models using XML tool calls.
     """
-    TOOL_CALL_BEGIN_PREFIX = "<cofl:tool_call id="
-    TOOL_CALL_NAME_PREFIX = " name="
-    TOOL_CALL_BEGIN_SUFFIX = ">"
+    TOOL_CALL_BEGIN_PREFIX = '<cofl:tool_call id="'
+    TOOL_CALL_NAME_PREFIX = '" name="'
+    TOOL_CALL_BEGIN_SUFFIX = '">'
     TOOL_CALL_END = "</cofl:tool_call>"
     TOOL_CALLS_PREFIX = ""
     TOOL_CALLS_BEGIN = "<cofl:tool_calls>"

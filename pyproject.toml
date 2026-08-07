@@ -36,6 +36,8 @@ GitHub = "https://github.com/mlc-ai/xgrammar"
 
 [project.optional-dependencies]
 test = [
+  # Melody's CMD5 renderer is the source of truth for Cohere tool-call alignment.
+  "cohere_melody==0.13.0; python_version >= '3.10'",
   "huggingface-hub[cli]",
   "protobuf",
   "pytest",
