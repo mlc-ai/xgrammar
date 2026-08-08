@@ -1711,6 +1711,29 @@ def test_lark_budget_shared_subrule() -> None:
     assert matcher.is_completed()
 
 
+def test_lark_budget_shared_subrule_keeps_parent_contexts_separate() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["p", "a", "b", "X", "Y"])
+    compiled = _compile_lark(
+        """
+        start: tight "X" | loose "Y"
+        tight[max_tokens=2]: shared
+        loose: shared
+        shared: "p" sub
+        sub: /[ab]+/
+        """,
+        tokenizer_info,
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(1)
+    assert 2 in _allowed_token_ids(matcher, tokenizer_info)
+    assert matcher.accept_token(2)
+    assert _allowed_token_ids(matcher, tokenizer_info) == [1, 2, 4]
+    assert not matcher.accept_token(3)
+    assert matcher.accept_token(4) and matcher.is_terminated()
+
+
 def test_lark_budget_round_trip_and_cache() -> None:
     grammar = xgr.Grammar.from_lark(BUDGET_GRAMMAR, tokenizer_info=MAX_TOKENS_TOKENIZER)
     ebnf = str(grammar)
