@@ -190,6 +190,13 @@ class Compact2DArray {
   int32_t PushBack(const std::vector<DataType>& new_data);
 
   /*!
+   * \brief Insert a row by copying elements referenced by stable pointers.
+   * \param new_data Pointers to the elements to be inserted.
+   * \return The index of the newly inserted row.
+   */
+  int32_t PushBackIndirect(const std::vector<const DataType*>& new_data);
+
+  /*!
    * \brief Insert a new row of data into the Compact2DArray from a Row struct.
    * \param row The Row struct containing the data to be inserted.
    * \return The index of the newly inserted row.
@@ -345,6 +352,18 @@ template <typename DataType>
 inline int32_t Compact2DArray<DataType>::PushBack(const std::vector<DataType>& new_data) {
   CheckCanAppendData(new_data.size());
   data_.insert(data_.end(), new_data.begin(), new_data.end());
+  indptr_.push_back(static_cast<int32_t>(data_.size()));
+  return static_cast<int32_t>(indptr_.size()) - 2;
+}
+
+template <typename DataType>
+inline int32_t Compact2DArray<DataType>::PushBackIndirect(
+    const std::vector<const DataType*>& new_data
+) {
+  CheckCanAppendData(new_data.size());
+  for (const DataType* element : new_data) {
+    data_.push_back(*element);
+  }
   indptr_.push_back(static_cast<int32_t>(data_.size()));
   return static_cast<int32_t>(indptr_.size()) - 2;
 }
