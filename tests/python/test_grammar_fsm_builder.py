@@ -181,6 +181,31 @@ def test_recursive_rule_ref_in_sequence():
     assert not _matcher_accepts(matcher, "())")
 
 
+def test_large_byte_prefix_rule_ref_suffix_choices():
+    prefixes = ["a" * length for length in range(1, 65)]
+    alternatives = []
+    for index, prefix in enumerate(prefixes):
+        suffix = "!" if index % 2 == 0 else "?"
+        alternatives.append(f'"{prefix}" body "{suffix}"')
+    grammar = "root ::= " + " | ".join(alternatives) + "\nbody ::= [0-9]"
+    matcher = _make_string_matcher(grammar)
+
+    for index, prefix in enumerate(prefixes):
+        suffix = "!" if index % 2 == 0 else "?"
+        assert _matcher_accepts(matcher, prefix + "7" + suffix)
+        assert not _matcher_accepts(matcher, prefix + "7" + ("?" if suffix == "!" else "!"))
+        assert not _matcher_accepts(matcher, prefix + suffix)
+
+
+def test_nested_byte_prefix_rule_ref_suffix_choices_merge_outer_fsm():
+    grammar = _ebnf_to_grammar_no_normalization(
+        'root ::= ("a" body "x" | "ab" body "x") ("cd" | "ed")\nbody ::= [0-9]'
+    )
+    grammar = GrammarFunctor.fsm_builder(grammar)
+
+    assert "Rule 0: root, FSM: CompactFSM(num_states=9" in _print_grammar_fsms(grammar)
+
+
 # --- Empty sequence ---
 
 

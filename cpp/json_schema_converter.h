@@ -476,6 +476,7 @@ class JSONSchemaConverter {
   std::optional<int32_t> empty_expr_id_;
   std::unordered_map<std::string, int32_t> byte_string_expr_ids_;
   std::unordered_map<int32_t, int32_t> rule_ref_expr_ids_;
+  std::unordered_map<std::string, int32_t> regex_expr_ids_;
   std::optional<int32_t> whitespace_expr_id_;
 
   // Helper for integer/number range regex generation

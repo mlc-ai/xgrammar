@@ -1,8 +1,10 @@
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pytest
+import torch
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
@@ -89,6 +91,78 @@ def check_stag_with_instance(
     assert accepted == is_accepted
     if PROFILER_ON:
         profiler.profile_stag(structural_tag_format, instance)
+
+
+def test_tag_dispatch_slicing_cache_isolated_and_concurrent():
+    vocabulary = [chr(value) for value in range(32, 127)] + [
+        "<alpha>",
+        "x<alpha>",
+        "<guard>",
+        "x<guard>",
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+
+    def compile_dispatch(compiler, trigger, exclude, value):
+        return compiler.compile_structural_tag(
+            {
+                "type": "structural_tag",
+                "format": {
+                    "type": "dispatch",
+                    "rules": [[trigger, {"type": "const_string", "value": value}]],
+                    "loop": False,
+                    "excludes": [exclude],
+                },
+            }
+        )
+
+    def mask_trace(compiled_grammar, input_string):
+        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        trace = []
+        for char in input_string:
+            xgr.reset_token_bitmask(bitmask)
+            trace.append((matcher.fill_next_token_bitmask(bitmask), bitmask.clone()))
+            assert matcher.accept_string(char)
+        assert matcher.is_terminated()
+        return trace
+
+    specs = [
+        (
+            ("<alpha>", "<guard>", f"X{index}")
+            if index % 2 == 0
+            else ("<guard>", "<alpha>", f"X{index}")
+        )
+        for index in range(16)
+    ]
+    shared_compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=True)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        shared_results = list(
+            executor.map(lambda spec: compile_dispatch(shared_compiler, *spec), specs)
+        )
+
+    fresh_results = {
+        spec: compile_dispatch(
+            xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=False), *spec
+        )
+        for spec in specs
+    }
+    for spec, shared_result in zip(specs, shared_results):
+        input_string = "prefix" + spec[0] + spec[2]
+        expected = mask_trace(fresh_results[spec], input_string)
+        actual = mask_trace(shared_result, input_string)
+        for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+            assert actual_apply == expected_apply
+            torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+    shared_compiler.clear_cache()
+    for spec, fresh_result in fresh_results.items():
+        rebuilt = compile_dispatch(shared_compiler, *spec)
+        input_string = "prefix" + spec[0] + spec[2]
+        expected = mask_trace(fresh_result, input_string)
+        actual = mask_trace(rebuilt, input_string)
+        for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+            assert actual_apply == expected_apply
+            torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
 
 
 const_string_stag_grammar = [
@@ -4194,6 +4268,22 @@ def test_structural_tag_per_tag_whitespace_independent():
     assert _is_grammar_accept_string(g, a(2) + b(5))
     # The first tag rejects 5 consecutive whitespaces even though the second one allows them.
     assert not _is_grammar_accept_string(g, a(5) + b(5))
+
+
+def test_structural_tag_identical_json_schema_formats_reuse_safely():
+    content = JSONSchemaFormat(json_schema=_WS_SCHEMA, style="json")
+    stag = StructuralTag(
+        format=SequenceFormat(
+            elements=[
+                TagFormat(begin="<a>", content=content, end="</a>"),
+                TagFormat(begin="<b>", content=content, end="</b>"),
+            ]
+        )
+    )
+    grammar = xgr.Grammar.from_structural_tag(stag)
+
+    assert _is_grammar_accept_string(grammar, '<a>{"a": 1}</a><b>{"a": 2}</b>')
+    assert not _is_grammar_accept_string(grammar, '<a>{"a": 1}</a><b>{"a": "x"}</b>')
 
 
 def test_structural_tag_max_whitespace_cnt_compile_cache():
