@@ -11,7 +11,6 @@
 #include <limits>
 #include <optional>
 #include <ostream>
-#include <queue>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -248,6 +247,11 @@ class RepeatDetector {
   std::unordered_set<ParserState, StateHashForParsing, StateEqualForParsing> visited_set_;
 
   int size_ = 0;
+  bool using_set_ = false;
+
+  const ParserState* InsertInSet(const ParserState& state);
+
+  void ClearSet();
 
  public:
   RepeatDetector(const int transition_threshold = 50)
@@ -255,20 +259,51 @@ class RepeatDetector {
     visited_vector_.resize(transition_threshold_);
   }
 
-  /*!
-   * \brief Check if the element is visited.
-   * \return True if visited, false otherwise.
-   */
-  bool IsVisited(const ParserState& state) const;
+  /*! \brief Copy the detector configuration without copying temporary visited states. */
+  RepeatDetector(const RepeatDetector& other)
+      : transition_threshold_(other.transition_threshold_) {}
 
-  /*!
-   * \brief Add the state into the visited states.
-   * \param state The state to be added.
-   */
-  void Insert(const ParserState& state);
+  /*! \brief Insert a state only if absent and return its stable address, or nullptr. */
+  const ParserState* InsertIfAbsent(const ParserState& state) {
+    if (!using_set_ && size_ < transition_threshold_) {
+      if (visited_vector_.empty()) {
+        visited_vector_.resize(transition_threshold_);
+      }
+      for (int i = 0; i < size_; ++i) {
+        if (StateEqualForParsing()(state, visited_vector_[i])) {
+          return nullptr;
+        }
+      }
+      visited_vector_[size_] = state;
+      return &visited_vector_[size_++];
+    }
+    return InsertInSet(state);
+  }
 
   /*! \brief Reset the detector. */
-  void Clear();
+  void Clear() {
+    if (using_set_) {
+      ClearSet();
+    }
+    size_ = 0;
+    using_set_ = false;
+  }
+};
+
+struct StateEqualForCompletionContext {
+  bool operator()(const ParserState& left, const ParserState& right) const {
+    return left.rule_id == right.rule_id && left.rule_start_pos == right.rule_start_pos &&
+           left.budget_deadline == right.budget_deadline &&
+           left.char_budget_deadline == right.char_budget_deadline;
+  }
+};
+
+struct StateHashForCompletionContext {
+  size_t operator()(const ParserState& state) const {
+    return HashCombine(
+        state.rule_id, state.rule_start_pos, state.budget_deadline, state.char_budget_deadline
+    );
+  }
 };
 
 /*! \brief A concrete occurrence of a captured rule in an Earley parent chain. */
@@ -305,6 +340,31 @@ struct CaptureEvent {
   /*! \brief The captured rule occurrences whose concrete Earley parent chains contain this stop
    * completion. Includes this rule's occurrence when the rule itself is captured. */
   std::vector<CaptureOccurrence> stop_capture_targets;
+};
+
+/*! \brief Immutable grammar-wide features shared by short-lived Earley parsers. */
+struct EarleyParserFeatures {
+  enum FsmStateFlag : uint8_t {
+    kFsmStateInitialized = 1 << 0,
+    kFsmStateScanable = 1 << 1,
+    kFsmStateNonTerminal = 1 << 2,
+    kFsmStateEnd = 1 << 3,
+    kFsmStateHasEdges = 1 << 4,
+  };
+
+  std::vector<uint8_t> fsm_state_flags;
+  std::vector<uint8_t> rule_is_nullable;
+  bool has_budget_rules = false;
+  bool has_char_budget_rules = false;
+  bool capture_tracking = false;
+  bool has_hidden_capture_rules = false;
+
+  EarleyParserFeatures() = default;
+  explicit EarleyParserFeatures(const Grammar& grammar);
+
+  friend std::size_t MemorySize(const EarleyParserFeatures& features) {
+    return MemorySize(features.fsm_state_flags) + MemorySize(features.rule_is_nullable);
+  }
 };
 
 class EarleyParser {
@@ -348,48 +408,25 @@ class EarleyParser {
    * \brief A temporary vector only used in Advance, used to add states in the
    * scanable_state_history.
    */
-  std::vector<ParserState> tmp_states_to_be_added_;
+  std::vector<const ParserState*> tmp_states_to_be_added_;
 
-  /*! \brief It's the processing queue of the earley parser. */
-  std::queue<ParserState> tmp_process_state_queue_;
+  /*! \brief Stable pointers to visited states awaiting prediction/completion. */
+  std::vector<const ParserState*> tmp_pending_states_;
 
   /*! \brief The class is used to check if a state has been added into the queue. */
   RepeatDetector tmp_states_visited_in_queue_;
 
+  /*! \brief Clear temporary containers after their state pointers have been consumed. */
+  void ClearTemporaryContainers();
+
   /*! \brief Check if the stop token is accepted. */
   bool stop_token_is_accepted_ = false;
 
-  enum FsmStateFlag : uint8_t {
-    kFsmStateInitialized = 1 << 0,
-    kFsmStateScanable = 1 << 1,
-    kFsmStateNonTerminal = 1 << 2,
-    kFsmStateEnd = 1 << 3,
-    kFsmStateHasEdges = 1 << 4,
-  };
+  /*! \brief Parser features built only when the caller does not provide them. */
+  EarleyParserFeatures owned_features_;
 
-  /*! \brief Lazily-computed FSM state properties, indexed by rule id and state id. */
-  std::vector<std::vector<uint8_t>> fsm_state_flags_cache_;
-
-  /*! \brief Whether each rule can match the empty string. */
-  std::vector<uint8_t> rule_is_nullable_;
-
-  /*! \brief Compute and cache properties for a state in a per-rule FSM. */
-  uint8_t InitializeFsmStateFlags(int32_t rule_id, int32_t state_id);
-
-  /*! \brief Return cached properties for a state in a per-rule FSM. */
-  uint8_t GetFsmStateFlags(int32_t rule_id, int32_t state_id) {
-    XGRAMMAR_DCHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(fsm_state_flags_cache_.size()));
-    auto& flags_cache = fsm_state_flags_cache_[rule_id];
-    if (!flags_cache.empty()) {
-      XGRAMMAR_DCHECK(state_id >= 0 && state_id < static_cast<int32_t>(flags_cache.size()));
-      if (flags_cache[state_id] != 0) {
-        return flags_cache[state_id];
-      }
-    }
-    return InitializeFsmStateFlags(rule_id, state_id);
-  }
-
-  bool IsRuleNullable(int32_t rule_id) const { return rule_is_nullable_[rule_id] != 0; }
+  /*! \brief Grammar-wide features used by this parser. */
+  const EarleyParserFeatures* features_;
 
   /*! \brief The index of the LLM token currently being accepted, set by the matcher; -1
    * before any token. budget_deadline values are compared against it. */
@@ -399,14 +436,8 @@ class EarleyParser {
    * the matcher for accepts that follow an enforcing mask computation. */
   bool skip_expired_states_ = false;
 
-  /*! \brief Whether any rule of the grammar has a token budget. */
-  bool has_budget_rules_ = false;
-
   /*! \brief The number of Unicode codepoints accepted at every parser history row. */
   std::vector<int32_t> char_count_history_;
-
-  /*! \brief Whether any rule of the grammar has a character budget. */
-  bool has_char_budget_rules_ = false;
 
   /*! \brief Whether a character-budgeted occurrence was entered since the initial parser row. */
   std::vector<bool> char_budget_entry_history_;
@@ -443,19 +474,24 @@ class EarleyParser {
     return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
   }
 
+  /*! \brief Whether completion under equal or tighter deadlines can advance the parent. */
+  static bool IsCompletionCompatibleWithParent(
+      const ParserState& completed_state, const ParserState& parent_state
+  ) {
+    return (parent_state.budget_deadline < 0 ||
+            (completed_state.budget_deadline >= 0 &&
+             completed_state.budget_deadline <= parent_state.budget_deadline)) &&
+           (parent_state.char_budget_deadline < 0 ||
+            (completed_state.char_budget_deadline >= 0 &&
+             completed_state.char_budget_deadline <= parent_state.char_budget_deadline));
+  }
+
   /*! \brief Whether the state's derivation may not consume another Unicode codepoint. */
   bool IsCharExpiredState(const ParserState& state) const {
     return state.char_budget_deadline >= 0 && GetCurrentCharIndex() >= state.char_budget_deadline;
   }
 
   static bool StartsUTF8Codepoint(uint8_t byte) { return (byte & 0xC0) != 0x80; }
-
-  /*! \brief Whether any rule of the grammar has a capture or stop_capture name. Fixed at
-   * construction. When false, the capture machinery is fully disabled and has no overhead. */
-  bool capture_tracking_ = false;
-
-  /*! \brief Whether the grammar contains suffix/stop spans that may affect captures. */
-  bool has_hidden_capture_rules_ = false;
 
   /*!
    * \brief Whether capture events are currently recorded in Complete(). Only enabled during
@@ -468,18 +504,19 @@ class EarleyParser {
   /*!
    * \brief The history of capture events. capture_event_history_[i] stores the events recorded
    * when input position i was created. Kept aligned with scanable_state_history_ row-by-row
-   * whenever capture_tracking_ is true, so PopLastStates rolls back events automatically.
+   * whenever capture tracking is enabled, so PopLastStates rolls back events automatically.
    */
   Compact2DArray<CaptureEvent> capture_event_history_;
 
   /*! \brief Returns true if the rule exists and has a capture name. */
   bool RuleHasCapture(int32_t rule_id) const {
-    return capture_tracking_ && rule_id >= 0 && !grammar_->GetRule(rule_id).capture_name.empty();
+    return features_->capture_tracking && rule_id >= 0 &&
+           !grammar_->GetRule(rule_id).capture_name.empty();
   }
 
   /*! \brief Returns true if completing this rule can hide bytes from a capture. */
   bool RuleHasHiddenBytes(int32_t rule_id) const {
-    if (!capture_tracking_ || !has_hidden_capture_rules_ || rule_id < 0) {
+    if (!features_->capture_tracking || !features_->has_hidden_capture_rules || rule_id < 0) {
       return false;
     }
     const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
@@ -518,15 +555,6 @@ class EarleyParser {
   void RemoveCommittedLazyStates();
 
   /*!
-   * \brief Check if the state has been added into the queue.
-   * \param state The state to check.
-   * \return True if in the vector, false otherwise.
-   */
-  bool IsStateVisitedInQueue(const ParserState& state) const {
-    return tmp_states_visited_in_queue_.IsVisited(state);
-  }
-
-  /*!
    * \brief The scanning operation of the Earley parser. Put the new states in the queue.
    */
   void Scan(const ParserState& state, const uint8_t ch);
@@ -551,6 +579,9 @@ class EarleyParser {
    * \return Second: If the state is completable, then return true, otherwise return false.
    */
   std::pair<bool, bool> Predict(const ParserState& state, bool debug_print = false);
+
+  /*! \brief Expand pending states through prediction and completion. */
+  void ExpandPendingStates(bool debug_print = false);
 
   /*! \brief The initial state expanded from the root rule of the grammar. */
   ParserState RootInitialState() const;
@@ -644,9 +675,8 @@ class EarleyParser {
    * \details The state is enqueued if it is not visited in the queue.
    */
   void Enqueue(const ParserState& state) {
-    if (!IsStateVisitedInQueue(state)) {
-      tmp_process_state_queue_.push(state);
-      tmp_states_visited_in_queue_.Insert(state);
+    if (const ParserState* inserted = tmp_states_visited_in_queue_.InsertIfAbsent(state)) {
+      tmp_pending_states_.push_back(inserted);
     }
   }
 
@@ -655,9 +685,8 @@ class EarleyParser {
    * \param state The state to be enqueued.
    */
   void EnqueueWithoutProcessing(const ParserState& state) {
-    if (!IsStateVisitedInQueue(state)) {
-      tmp_states_visited_in_queue_.Insert(state);
-      tmp_states_to_be_added_.push_back(state);
+    if (const ParserState* inserted = tmp_states_visited_in_queue_.InsertIfAbsent(state)) {
+      tmp_states_to_be_added_.push_back(inserted);
     }
   }
 
@@ -667,9 +696,12 @@ class EarleyParser {
    * \param grammar The grammar to be parsed. It must be optimized.
    * \param initial_state The state to start parsing from. If not provided, parsing starts
    * from the root rule of the grammar.
+   * \param features Shared parser features. If not provided, they are built from the grammar.
    */
   explicit EarleyParser(
-      const Grammar& grammar, std::optional<ParserState> initial_state = std::nullopt
+      const Grammar& grammar,
+      std::optional<ParserState> initial_state = std::nullopt,
+      const EarleyParserFeatures* features = nullptr
   );
 
   /*!
@@ -733,10 +765,10 @@ class EarleyParser {
     rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
     is_completed_.push_back(completed);
     scanable_state_history_.PushBack(states);
-    if (capture_tracking_) {
+    if (features_->capture_tracking) {
       capture_event_history_.PushBack(std::vector<CaptureEvent>());
     }
-    if (has_char_budget_rules_) {
+    if (features_->has_char_budget_rules) {
       char_count_history_.push_back(GetCurrentCharIndex());
       char_budget_entry_history_.push_back(char_budget_entry_history_.back());
     }
@@ -744,7 +776,7 @@ class EarleyParser {
 
   /*! \brief Push a character-count row for a parser row created by the matcher. */
   void PushCharCountRow(int32_t char_count, bool char_budget_entered) {
-    if (!has_char_budget_rules_) {
+    if (!features_->has_char_budget_rules) {
       return;
     }
     char_count_history_.push_back(char_count);
@@ -756,15 +788,12 @@ class EarleyParser {
   }
 
   bool HasEnteredCharBudget() const {
-    return has_char_budget_rules_ && char_budget_entry_history_.back();
+    return features_->has_char_budget_rules && char_budget_entry_history_.back();
   }
-
-  /*! \brief Whether the grammar has any captured rule. */
-  bool IsCaptureTrackingEnabled() const { return capture_tracking_; }
 
   /*! \brief Copy the capture events of the latest input position. */
   std::vector<CaptureEvent> CopyLastCaptureRow() const {
-    if (!capture_tracking_) {
+    if (!features_->capture_tracking) {
       return {};
     }
     auto row = capture_event_history_[capture_event_history_.size() - 1];
@@ -777,7 +806,7 @@ class EarleyParser {
    * capture history aligned with the state history.
    */
   void PushCaptureRow(const std::vector<CaptureEvent>& events) {
-    if (capture_tracking_) {
+    if (features_->capture_tracking) {
       capture_event_history_.PushBack(events);
     }
   }
