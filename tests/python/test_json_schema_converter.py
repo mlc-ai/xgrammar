@@ -2419,6 +2419,29 @@ def test_min_max_length():
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
 
 
+@pytest.mark.parametrize(
+    "instance",
+    [r'"\""', r'"\\"', r'"\/"', r'"\b"', r'"\f"', r'"\n"', r'"\r"', r'"\t"', r'"\u0061"'],
+)
+def test_min_max_length_accepts_json_escapes(instance: str):
+    schema = {"type": "string", "minLength": 1, "maxLength": 1}
+
+    check_schema_with_instance(schema, instance)
+
+
+def test_min_max_length_counts_json_escape_as_one_character():
+    instance = r'"a\nb"'
+
+    check_schema_with_instance({"type": "string", "minLength": 3}, instance)
+    check_schema_with_instance({"type": "string", "maxLength": 2}, instance, is_accepted=False)
+
+
+def test_min_max_length_rejects_unescaped_control_characters():
+    schema = {"type": "string", "minLength": 1, "maxLength": 3}
+
+    check_schema_with_instance(schema, '"a\tb"', is_accepted=False)
+
+
 def test_type_array():
     schema = {
         "type": ["integer", "string"],
