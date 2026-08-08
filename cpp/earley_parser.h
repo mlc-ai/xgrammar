@@ -271,6 +271,22 @@ class RepeatDetector {
   void Clear();
 };
 
+struct StateEqualForCompletionContext {
+  bool operator()(const ParserState& left, const ParserState& right) const {
+    return left.rule_id == right.rule_id && left.rule_start_pos == right.rule_start_pos &&
+           left.budget_deadline == right.budget_deadline &&
+           left.char_budget_deadline == right.char_budget_deadline;
+  }
+};
+
+struct StateHashForCompletionContext {
+  size_t operator()(const ParserState& state) const {
+    return HashCombine(
+        state.rule_id, state.rule_start_pos, state.budget_deadline, state.char_budget_deadline
+    );
+  }
+};
+
 /*! \brief A concrete occurrence of a captured rule in an Earley parent chain. */
 struct CaptureOccurrence {
   /*! \brief The id of the captured rule. */
@@ -441,6 +457,18 @@ class EarleyParser {
                            ? std::numeric_limits<int32_t>::max()
                            : current_char_index + own;
     return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
+  }
+
+  /*! \brief Whether completion under equal or tighter deadlines can advance the parent. */
+  static bool IsCompletionCompatibleWithParent(
+      const ParserState& completed_state, const ParserState& parent_state
+  ) {
+    return (parent_state.budget_deadline < 0 ||
+            (completed_state.budget_deadline >= 0 &&
+             completed_state.budget_deadline <= parent_state.budget_deadline)) &&
+           (parent_state.char_budget_deadline < 0 ||
+            (completed_state.char_budget_deadline >= 0 &&
+             completed_state.char_budget_deadline <= parent_state.char_budget_deadline));
   }
 
   /*! \brief Whether the state's derivation may not consume another Unicode codepoint. */

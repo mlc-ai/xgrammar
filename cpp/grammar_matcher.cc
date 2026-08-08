@@ -889,7 +889,8 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
   const auto latest_row = scanable_state_history_[scanable_state_history_.size() - 1];
   std::vector<ParserState> latest_states(latest_row.begin(), latest_row.end());
   std::vector<ParserState> force_completed_states;
-  std::unordered_set<int64_t> force_completed_occurrences;
+  std::unordered_set<ParserState, StateHashForCompletionContext, StateEqualForCompletionContext>
+      force_completed_occurrences;
 
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
@@ -904,9 +905,7 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
     if (!CanForceCompleteWithoutMarker(state, false)) {
       continue;
     }
-    int64_t occurrence =
-        (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
-    if (force_completed_occurrences.insert(occurrence).second) {
+    if (force_completed_occurrences.insert(state).second) {
       force_completed_states.push_back(state);
     }
   }
@@ -976,7 +975,8 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
     previous_capture_events = CopyLastCaptureRow();
   }
   std::vector<ParserState> force_completed_states;
-  std::unordered_set<int64_t> force_completed_occurrences;
+  std::unordered_set<ParserState, StateHashForCompletionContext, StateEqualForCompletionContext>
+      force_completed_occurrences;
 
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
@@ -991,9 +991,7 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
     if (!CanForceCompleteWithoutMarker(state, true)) {
       continue;
     }
-    int64_t occurrence =
-        (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
-    if (force_completed_occurrences.insert(occurrence).second) {
+    if (force_completed_occurrences.insert(state).second) {
       force_completed_states.push_back(state);
     }
   }
@@ -1832,7 +1830,6 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 ) {
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
-  const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
   // We need to have a copy, because scanable_state_history_ will be modified during the
   // FillNextTokenBitmask process, which can lead to undefined behavior.
   std::vector<ParserState> latest_states;
@@ -1858,13 +1855,12 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                        << ", num of states=" << latest_states.size();
   }
 
-  std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
-      latest_states_with_masks;
+  std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
-    XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+    const AdaptiveTokenMask& adaptive_token_mask = compiled_grammar_->token_mask_cache.Get(
+        state, state.rule_id == grammar_->GetRootRuleId(), grammar_, tokenizer_info_
+    );
     if (state.char_budget_deadline >= 0) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
@@ -1872,7 +1868,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         continue;
       }
     }
-    latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
+    latest_states_with_masks.emplace_back(state, &adaptive_token_mask);
     if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
       tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
     } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
@@ -1882,8 +1878,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     }
   }
 
-  for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+  for (const auto& [state, adaptive_token_mask_ptr] : latest_states_with_masks) {
+    const auto& adaptive_token_mask = *adaptive_token_mask_ptr;
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
     // rejected list.

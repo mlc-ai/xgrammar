@@ -41,28 +41,30 @@ std::vector<CaptureOccurrence> EarleyParser::CollectStopCaptureTargets(const Par
   // materialization time cannot distinguish an actual captured ancestor from an unrelated
   // Earley branch that happens to cover the same input.
   std::vector<CaptureOccurrence> targets;
-  std::vector<CaptureOccurrence> pending{{state.rule_id, state.rule_start_pos}};
-  std::unordered_set<int64_t> visited;
+  std::vector<ParserState> pending{state};
+  std::unordered_set<ParserState, StateHashForCompletionContext, StateEqualForCompletionContext>
+      visited;
   while (!pending.empty()) {
-    CaptureOccurrence occurrence = pending.back();
+    ParserState completion = pending.back();
     pending.pop_back();
-    int64_t occurrence_key = (static_cast<int64_t>(occurrence.rule_id) << 32) |
-                             static_cast<uint32_t>(occurrence.start_pos);
-    if (!visited.insert(occurrence_key).second) {
+    if (!visited.insert(completion).second) {
       continue;
     }
-    if (RuleHasCapture(occurrence.rule_id)) {
+    CaptureOccurrence occurrence{completion.rule_id, completion.rule_start_pos};
+    if (RuleHasCapture(completion.rule_id) &&
+        std::find(targets.begin(), targets.end(), occurrence) == targets.end()) {
       targets.push_back(occurrence);
     }
-    if (occurrence.start_pos == ParserState::kNoPrevInputPos) {
+    if (completion.rule_start_pos == ParserState::kNoPrevInputPos) {
       continue;
     }
-    const auto& parent_states = rule_id_to_completable_states_[occurrence.start_pos];
+    const auto& parent_states = rule_id_to_completable_states_[completion.rule_start_pos];
     for (const auto& [ref_rule_id, parent_state] : parent_states) {
-      if (ref_rule_id != occurrence.rule_id || parent_state.rule_id < 0) {
+      if (ref_rule_id != completion.rule_id || parent_state.rule_id < 0 ||
+          !IsCompletionCompatibleWithParent(completion, parent_state)) {
         continue;
       }
-      pending.push_back({parent_state.rule_id, parent_state.rule_start_pos});
+      pending.push_back(parent_state);
     }
   }
   return targets;
@@ -150,7 +152,7 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
   // Check all the possible parent states.
   const auto& parent_states_map = rule_id_to_completable_states_[state.rule_start_pos];
   for (const auto& [ref_id, parent_state] : parent_states_map) {
-    if (ref_id != state.rule_id) {
+    if (ref_id != state.rule_id || !IsCompletionCompatibleWithParent(state, parent_state)) {
       continue;
     }
     XGRAMMAR_DCHECK(
@@ -633,7 +635,10 @@ void EarleyParser::ExpandNextRuleRefElement(
       const auto& parent_states_map = rule_id_to_completable_states_[state.rule_start_pos];
       std::vector<std::pair<int32_t, ParserState>> to_added_states;
       for (const auto& parent_state_iter : parent_states_map) {
-        if (parent_state_iter.first != state.rule_id) continue;
+        if (parent_state_iter.first != state.rule_id ||
+            !IsCompletionCompatibleWithParent(state, parent_state_iter.second)) {
+          continue;
+        }
         const auto& parent_state = parent_state_iter.second;
         if (!in_vec(parent_state)) {
           to_added_states.push_back({ref_rule_id, parent_state});
@@ -770,7 +775,10 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
         const auto& parent_states_map = rule_id_to_completable_states_[state.rule_start_pos];
         std::vector<std::pair<int32_t, ParserState>> to_added_states;
         for (const auto& parent_state_iter : parent_states_map) {
-          if (parent_state_iter.first != state.rule_id) continue;
+          if (parent_state_iter.first != state.rule_id ||
+              !IsCompletionCompatibleWithParent(state, parent_state_iter.second)) {
+            continue;
+          }
           const auto& parent_state = parent_state_iter.second;
           if (!in_vec(parent_state)) {
             to_added_states.push_back({ref_rule_id, parent_state});

@@ -4196,6 +4196,22 @@ def test_structural_tag_per_tag_whitespace_independent():
     assert not _is_grammar_accept_string(g, a(5) + b(5))
 
 
+def test_structural_tag_identical_json_schema_formats_reuse_safely():
+    content = JSONSchemaFormat(json_schema=_WS_SCHEMA, style="json")
+    stag = StructuralTag(
+        format=SequenceFormat(
+            elements=[
+                TagFormat(begin="<a>", content=content, end="</a>"),
+                TagFormat(begin="<b>", content=content, end="</b>"),
+            ]
+        )
+    )
+    grammar = xgr.Grammar.from_structural_tag(stag)
+
+    assert _is_grammar_accept_string(grammar, '<a>{"a": 1}</a><b>{"a": 2}</b>')
+    assert not _is_grammar_accept_string(grammar, '<a>{"a": 1}</a><b>{"a": "x"}</b>')
+
+
 def test_structural_tag_max_whitespace_cnt_compile_cache():
     # The per-tag setting is part of the serialized tag JSON (the cache key), so no collision.
     compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=True)
