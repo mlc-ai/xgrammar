@@ -108,7 +108,8 @@ Terminals are matched as one indivisible unit:
   other terminals, but it cannot reference rules and cannot be recursive.
 - Content skipped by `%ignore` is never inserted inside a terminal. In the first example above,
   with `%ignore WS`, spaces may appear around an `INT` but not between its digits.
-- `%json`, `%lark`, special tokens, and `@name` references cannot appear inside terminals.
+- `%json`, `%structural_tag`, `%lark`, special tokens, and `@name` references cannot appear inside
+  terminals.
 
 For compatibility with grammars written for parse-tree-producing parsers, XGrammar accepts and
 ignores the rule prefixes `?` and `!` (as in `?value: ...`) and alternative aliases
@@ -381,6 +382,48 @@ arguments: %json {
 value is controlled by the surrounding Lark grammar; whitespace inside the value follows the JSON
 Schema converter's normal behavior. `%json` cannot be used inside terminals.
 
+### `%structural_tag`
+
+`%structural_tag { ... }` embeds a complete
+[Structural Tag](../structural_tag/structural_tag.md) object as one rule element. The JSON object
+has the same shape and semantics accepted by `Grammar.from_structural_tag`: its optional top-level
+`type` field must be `"structural_tag"`, and its required `format` field may use any Structural
+Tag format.
+
+```text
+start: "prefix" embedded "suffix"
+embedded: %structural_tag {
+  "type": "structural_tag",
+  "format": {
+    "type": "tag",
+    "begin": "<answer>",
+    "content": {"type": "regex", "pattern": "[0-9]+"},
+    "end": "</answer>"
+  }
+}
+```
+
+The directive is an expression and may appear in sequences, alternatives, groups, optional
+elements, repetition, nested `%lark` blocks, named Lark sources, and parameterized-rule branches.
+It cannot appear in an uppercase terminal or a `%ignore` expression. Token-based formats and
+string token references use the `tokenizer_info` passed to `Grammar.from_lark`.
+
+The embedded Structural Tag has its own rule namespace. Surrounding `%ignore` content may occur at
+the element boundary but not inside the embedded grammar. Likewise, an outer
+`allow_invalid_utf8` option does not change the Unicode semantics of a Structural Tag `regex`
+format; a Structural Tag `grammar` format may explicitly use an EBNF
+`Regex(..., byte_mode=true)` expression when byte semantics are intended.
+
+Rules whose body is a `%structural_tag` may use `capture`, `max_tokens`, `max_chars`, and
+`temperature`. These options apply to the whole embedded match and do not rewrite its internal
+formats or metadata. `lazy`, `suffix`, and `stop` are intentionally unsupported because Structural
+Tags may contain recursion and string- or token-level dispatch. `stop_capture` therefore remains
+available only on other rules that also specify `suffix` or `stop`.
+
+The JSON is parsed during Lark lexing, so the directive stops at the end of exactly one JSON value
+and another expression may follow it immediately. Whitespace and object-key order do not affect
+the result. Repeated equivalent payloads in one Lark document reuse one imported subgrammar.
+
 ### Substring
 
 The substring extension matches any contiguous sequence of a fixed list of chunks, including the
@@ -533,11 +576,11 @@ matcher = xgr.GrammarMatcher(compiled, default_temperature=0.2)
 ```
 
 `temperature` must be a finite non-negative number. It is supported on rules that can be compiled
-as terminals and on rules whose body is a `%json`, `%lark`, or `@name` subgrammar. An inner
-explicit temperature overrides an inherited outer temperature. When ambiguous parse paths have
-different active temperatures, `matcher.temperature` emits a warning once and returns the maximum.
-If no active rule has a temperature, it returns `default_temperature`; if neither is configured,
-it returns `None`.
+as terminals and on rules whose body is a `%json`, `%structural_tag`, `%lark`, or `@name`
+subgrammar. An inner explicit temperature overrides an inherited outer temperature. When
+ambiguous parse paths have different active temperatures, `matcher.temperature` emits a warning
+once and returns the maximum. If no active rule has a temperature, it returns
+`default_temperature`; if neither is configured, it returns `None`.
 
 `temperature` can be combined with `capture` and `max_chars`. Combining it with `max_tokens`,
 `lazy`, `suffix`, or `stop` is not supported.

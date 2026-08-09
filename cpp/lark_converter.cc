@@ -31,6 +31,7 @@
 #include "grammar_functor.h"
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/utils.h"
 
 namespace xgrammar {
 namespace {
@@ -75,6 +76,7 @@ enum class TokenType {
   kSpecialToken,
   kGrammarRef,
   kJson,
+  kStructuralTag,
   kRegexExt,
   kGrammarOptions,
   kImport,
@@ -453,6 +455,9 @@ class LarkLexer {
     if (directive == "%json") {
       return LexJSONValue(TokenType::kJson, location, directive);
     }
+    if (directive == "%structural_tag") {
+      return LexJSONValue(TokenType::kStructuralTag, location, directive);
+    }
     if (directive == "%regex") {
       return LexJSONValue(TokenType::kRegexExt, location, directive);
     }
@@ -638,6 +643,7 @@ struct Node {
     kRange,
     kName,
     kJson,
+    kStructuralTag,
     kRegexExt,
     kNestedLark,
     kSpecialToken,
@@ -1426,6 +1432,13 @@ class LarkParser {
       result.text = token.text;
       return result;
     }
+    if (Match(TokenType::kStructuralTag)) {
+      Node result;
+      result.kind = Node::Kind::kStructuralTag;
+      result.location = token.location;
+      result.text = token.text;
+      return result;
+    }
     if (Match(TokenType::kRegexExt)) {
       Node result;
       result.kind = Node::Kind::kRegexExt;
@@ -1926,6 +1939,7 @@ class ParametricExpander {
       case Node::Kind::kRegex:
       case Node::Kind::kRange:
       case Node::Kind::kJson:
+      case Node::Kind::kStructuralTag:
       case Node::Kind::kRegexExt:
       case Node::Kind::kSpecialToken:
       case Node::Kind::kGrammarRef:
@@ -2037,6 +2051,20 @@ class LarkCompiler {
       }
       int32_t body_expr_id;
       if (definition.temperature.has_value()) {
+        if (definition.max_tokens.has_value()) {
+          RaiseLarkError(
+              source_,
+              definition.max_tokens_location,
+              "max_tokens cannot be combined with temperature"
+          );
+        }
+        if (HasLazySemantics(definition)) {
+          RaiseLarkError(
+              source_,
+              definition.location,
+              "temperature cannot be combined with lazy, suffix, or stop"
+          );
+        }
         body_expr_id = CompileTemperatureRule(definition);
         if (definition.max_chars.has_value()) {
           builder_.UpdateMaxChars(rule_ids_.at(definition.name), definition.max_chars.value());
@@ -2123,8 +2151,8 @@ class LarkCompiler {
 
   int32_t CompileTemperatureRule(const Definition& definition) {
     const Node* body = UnwrapSingle(&definition.body);
-    if (body->kind == Node::Kind::kJson || body->kind == Node::Kind::kNestedLark ||
-        body->kind == Node::Kind::kGrammarRef) {
+    if (body->kind == Node::Kind::kJson || body->kind == Node::Kind::kStructuralTag ||
+        body->kind == Node::Kind::kNestedLark || body->kind == Node::Kind::kGrammarRef) {
       return CompileNode(*body, definition.name, false, false);
     }
     try {
@@ -2527,6 +2555,10 @@ class LarkCompiler {
         RaiseLarkError(source_, node.location, "special tokens cannot be used in terminals");
       case Node::Kind::kJson:
         RaiseLarkError(source_, node.location, "%json cannot be used in terminals");
+      case Node::Kind::kStructuralTag:
+        RaiseLarkError(
+            source_, node.location, "%structural_tag cannot be used with lazy, suffix, or stop"
+        );
       case Node::Kind::kNestedLark:
         RaiseLarkError(source_, node.location, "nested %lark cannot be used in terminals");
       case Node::Kind::kRegexExt:
@@ -2802,6 +2834,34 @@ class LarkCompiler {
               "failed to compile inline JSON schema: " + std::string(error.what())
           );
         }
+      }
+      case Node::Kind::kStructuralTag: {
+        if (terminal_mode) {
+          RaiseLarkError(source_, node.location, "%structural_tag cannot be used in terminals");
+        }
+        auto root_it = structural_tag_roots_.find(node.text);
+        if (root_it == structural_tag_roots_.end()) {
+          std::optional<int32_t> root;
+          std::string error_message;
+          try {
+            auto converted = Grammar::FromStructuralTag(node.text, tokenizer_info_);
+            if (std::holds_alternative<StructuralTagError>(converted)) {
+              error_message = GetMessageFromVariantError(std::get<StructuralTagError>(converted));
+            } else {
+              root = SubGrammarAdder::Apply(&builder_, std::get<Grammar>(converted));
+            }
+          } catch (const std::exception& error) {
+            error_message = error.what();
+          }
+          if (!root.has_value()) {
+            RaiseLarkError(
+                source_, node.location, "failed to compile inline structural tag: " + error_message
+            );
+          }
+          root_it = structural_tag_roots_.emplace(node.text, root.value()).first;
+        }
+        int32_t result = builder_.AddRuleRef(root_it->second);
+        return append_skip ? AppendSkip(result) : result;
       }
       case Node::Kind::kNestedLark: {
         if (terminal_mode) {
@@ -3102,6 +3162,14 @@ class LarkCompiler {
   }
 
   int32_t CompileLazyRule(const Definition& definition) {
+    const Node* unwrapped_body = UnwrapSingle(&definition.body);
+    if (unwrapped_body->kind == Node::Kind::kStructuralTag) {
+      RaiseLarkError(
+          source_,
+          unwrapped_body->location,
+          "%structural_tag cannot be used with lazy, suffix, or stop"
+      );
+    }
     int32_t rule_id = rule_ids_.at(definition.name);
     const Node* marker = definition.suffix.has_value()
                              ? &definition.suffix.value()
@@ -3383,6 +3451,7 @@ class LarkCompiler {
   std::unordered_map<std::string, Definition*> definition_by_name_;
   std::unordered_map<std::string, int32_t> rule_ids_;
   std::unordered_map<std::string, int32_t> named_grammar_roots_;
+  std::unordered_map<std::string, int32_t> structural_tag_roots_;
   int32_t skip_rule_id_ = -1;
   int32_t never_rule_id_ = -1;
   bool allow_initial_skip_ = false;

@@ -102,6 +102,48 @@ def _assert_lark_error(
 
 
 @pytest.mark.parametrize(
+    "attributes, message, location, caret",
+    [
+        pytest.param(
+            "temperature=0.7, max_tokens=2",
+            "max_tokens cannot be combined with temperature",
+            "line 2, column 24",
+            "                       ^",
+            id="temperature-max-tokens",
+        ),
+        pytest.param(
+            "lazy, temperature=0.7",
+            "temperature cannot be combined with lazy, suffix, or stop",
+            "line 2, column 1",
+            "^",
+            id="temperature-lazy",
+        ),
+        pytest.param(
+            'suffix="!", temperature=0.7',
+            "temperature cannot be combined with lazy, suffix, or stop",
+            "line 2, column 1",
+            "^",
+            id="temperature-suffix",
+        ),
+        pytest.param(
+            'stop="!", temperature=0.7',
+            "temperature cannot be combined with lazy, suffix, or stop",
+            "line 2, column 1",
+            "^",
+            id="temperature-stop",
+        ),
+    ],
+)
+def test_lark_incompatible_rule_limits_have_precise_diagnostics(
+    attributes: str, message: str, location: str, caret: str
+) -> None:
+    rule_line = f'value[{attributes}]: "x"'
+    error = _assert_lark_error(f"start: value\n{rule_line}", message)
+    assert location in error
+    assert f"\n{rule_line}\n{caret}" in error
+
+
+@pytest.mark.parametrize(
     "grammar, accepted, rejected",
     [
         pytest.param(

@@ -38,6 +38,35 @@ TEST(LarkConverterTest, InlineAndNestedGrammar) {
   EXPECT_NE(printed.find("yes"), std::string::npos);
 }
 
+TEST(LarkConverterTest, InlineStructuralTagAndErrors) {
+  auto grammar = Grammar::FromLark(R"(
+    start: "prefix" %structural_tag {
+      "type": "structural_tag",
+      "format": {
+        "type": "tag",
+        "begin": "<answer>",
+        "content": {"type": "regex", "pattern": "[0-9]+"},
+        "end": "</answer>"
+      }
+    } "suffix"
+  )");
+  std::string printed = grammar.ToString();
+  EXPECT_NE(printed.find("prefix"), std::string::npos);
+  EXPECT_NE(printed.find("<answer>"), std::string::npos);
+  EXPECT_NE(printed.find("[0-9]"), std::string::npos);
+
+  XGRAMMAR_EXPECT_THROW(
+      Grammar::FromLark("start: %structural_tag {}"),
+      XGrammarError,
+      "line 1, column 8.*failed to compile inline structural tag.*format field"
+  );
+  XGRAMMAR_EXPECT_THROW(
+      Grammar::FromLark("start: %structural_tag {"),
+      XGrammarError,
+      "line 1, column 8.*failed to parse JSON value after %structural_tag"
+  );
+}
+
 TEST(LarkConverterTest, NamedGrammars) {
   auto word = Grammar::FromRegex("[a-z]+");
   auto number = Grammar::FromLark(R"(start: /[0-9]+/)");
