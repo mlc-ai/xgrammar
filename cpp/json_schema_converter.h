@@ -61,6 +61,18 @@ struct StringSpec {
   std::string ToString() const;
 };
 
+/*!
+ * \brief Recognize spec.pattern as an anchored single-element shape `^ E Q? $` and intersect
+ * its repetition range with the schema's [minLength, maxLength].
+ *
+ * On success, writes E's regex slice and the merged bounds into *element_regex / [*lo, *hi]
+ * (*hi == -1 = unbounded) and returns true; returns false for any other shape. Single source
+ * of truth for the merge math, shared by the unsatisfiable check in SchemaParser::ParseString
+ * and the grammar generation in GenerateString (which rely on computing the same [lo, hi]).
+ * Requires spec.pattern.has_value().
+ */
+bool TryMergePatternLength(const StringSpec& spec, std::string* element_regex, int* lo, int* hi);
+
 struct BooleanSpec {
   std::string ToString() const;
 };
