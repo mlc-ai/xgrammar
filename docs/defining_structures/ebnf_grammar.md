@@ -405,10 +405,13 @@ This grammar accepts `ID-12345`.
 
 - `pattern` is the only positional argument. It is required and must be a string.
 - `json_string` is an optional named argument. It must be a boolean and defaults to `false`.
+- `byte_mode` is an optional named argument. It must be a boolean and defaults to `false`.
+  It cannot be enabled together with `json_string`.
 - `flags` is an optional named argument. It must be a string of regular-expression flags, with
   the same meaning as the flags of a Lark regex literal: `i` makes the match ASCII
   case-insensitive, `s` makes `.` match newlines, and `u` is accepted as a no-op (patterns
-  always use Unicode codepoint semantics). Other flags raise an error. When `flags` is given,
+  use Unicode codepoint semantics unless `byte_mode` is enabled). Other flags raise an error. When
+  `flags` is given,
   `.` follows the standard semantics and does not match `\n` unless `s` is present; without the
   argument, the pattern is used verbatim and `.` matches every codepoint.
 - No other positional or named arguments are accepted.
@@ -432,6 +435,19 @@ expression from consuming characters that must be escaped in JSON:
 ```text
 string_body ::= Regex("\\S+", json_string=true)
 ```
+
+With `byte_mode=true`, the pattern is matched over raw byte values from 0 through 255. `\xHH`
+denotes one byte, `.` consumes one byte, and a negated character class is complemented within the
+256-byte universe. This permits languages containing standalone bytes that are not valid UTF-8:
+
+```text
+raw_bytes ::= Regex("[\\x80-\\xFF]+", byte_mode=true)
+```
+
+The `i`, `s`, and `u` flags remain accepted in byte mode. ASCII case folding is used for `i`, `s`
+controls whether dot accepts newline, and `u` is a compatibility no-op. Unicode escapes and
+properties, non-ASCII literals inside character classes, word boundaries, lookarounds, and
+backreferences are rejected in byte mode.
 
 ### `Substring`
 

@@ -1,5 +1,5 @@
 import json
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 
 import pytest
 
@@ -62,6 +62,31 @@ def _assert_token_language(
         assert _matches_token_sequence(compiled, token_ids), token_ids
     for token_ids in rejected:
         assert not _matches_token_sequence(compiled, token_ids), token_ids
+
+
+def _assert_byte_language(
+    grammar: Union[str, xgr.Grammar], accepted: Sequence[bytes], rejected: Sequence[bytes]
+) -> None:
+    vocabulary = list(dict.fromkeys(value for value in [*accepted, *rejected] if value))
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, vocab_size=len(vocabulary), stop_token_ids=[])
+    grammar_obj = (
+        xgr.Grammar.from_lark(grammar, tokenizer_info=tokenizer_info)
+        if isinstance(grammar, str)
+        else grammar
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar_obj)
+    token_ids = {value: token_id for token_id, value in enumerate(vocabulary)}
+
+    def matches(value: bytes) -> bool:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        if value and not matcher.accept_token(token_ids[value]):
+            return False
+        return matcher.is_terminated()
+
+    for value in accepted:
+        assert matches(value), value
+    for value in rejected:
+        assert not matches(value), value
 
 
 def _assert_lark_error(
@@ -979,6 +1004,291 @@ def test_lark_parametric_validation_errors(grammar: str, message: str) -> None:
     _assert_lark_error(grammar, message)
 
 
+def test_lark_allow_invalid_utf8_dot_flags_and_unicode_default() -> None:
+    option = '%grammar_options {"allow_invalid_utf8": true}\n'
+    _assert_byte_language(
+        option + "start: /./",
+        accepted=[b"a", b"\x80", b"\xc2"],
+        rejected=[b"", b"\n", b"\xc2\xa2", "é".encode()],
+    )
+    _assert_byte_language(
+        option + "start: /a./isu",
+        accepted=[b"A\n", b"a\x80"],
+        rejected=[b"a", b"a\xc2\xa2", b"b\n"],
+    )
+    _assert_byte_language(
+        "start: /./",
+        accepted=[b"a", b"\xc2\xa2", "é".encode()],
+        rejected=[b"", b"\n", b"\x80", b"\xc2"],
+    )
+
+
+def test_lark_allow_invalid_utf8_byte_classes_escapes_and_literals() -> None:
+    option = '%grammar_options {"allow_invalid_utf8": true}\n'
+    _assert_byte_language(
+        option + r"start: /[\x80-\xFF]+/",
+        accepted=[b"\x80", b"\xff", b"\xc2\xa2", "é".encode()],
+        rejected=[b"", b"a", b"\x7f"],
+    )
+    _assert_byte_language(
+        option + r"start: /[^\x00-\x7F]/",
+        accepted=[b"\x80", b"\xff"],
+        rejected=[b"", b"a", b"\xc2\xa2"],
+    )
+    _assert_byte_language(
+        option + r"start: /\x80\xFFé/",
+        accepted=[b"\x80\xff\xc3\xa9"],
+        rejected=[b"\x80\xff", b"\xc2\x80\xff\xc3\xa9"],
+    )
+    _assert_byte_language(
+        option + r"start: /[^\x00-\xFF]/", accepted=[], rejected=[b"", b"a", b"\x80", b"\xff"]
+    )
+
+
+@pytest.mark.parametrize(
+    "pattern, accepted, rejected",
+    [
+        (r"\d", [b"0"], [b"a", b"\x80"]),
+        (r"\D", [b"a", b"\x80"], [b"0", b"ab"]),
+        (r"\w", [b"a", b"A", b"0", b"_"], [b" ", b"\x80"]),
+        (r"\W", [b" ", b"!", b"\x80"], [b"a", b"_", b"ab"]),
+        (r"\s", [b" ", b"\t", b"\n", b"\r", b"\x0b", b"\x0c"], [b"a", b"\x80"]),
+        (r"\S", [b"a", b"!", b"\x80"], [b" ", b"\t", b"\n"]),
+    ],
+)
+def test_lark_allow_invalid_utf8_ascii_shorthand_classes(
+    pattern: str, accepted: Sequence[bytes], rejected: Sequence[bytes]
+) -> None:
+    grammar = f'%grammar_options {{"allow_invalid_utf8": true}}\nstart: /{pattern}/'
+    _assert_byte_language(grammar, accepted, rejected)
+
+
+def test_lark_allow_invalid_utf8_empty_groups_and_large_repeat_subrules() -> None:
+    option = '%grammar_options {"allow_invalid_utf8": true}\n'
+    # Regression: discarding () would make '*' bind to the preceding 'a', turning this into a*.
+    _assert_byte_language(option + "start: /a()*/", accepted=[b"a"], rejected=[b"", b"aa"])
+    _assert_byte_language(
+        option + "start: /(?:){2,50000}a/iu", accepted=[b"a", b"A"], rejected=[b"", b"aa"]
+    )
+    _assert_byte_language(
+        option + "start: /(ab){2,50000}c/iu",
+        accepted=[b"abABc", b"aB" * 150 + b"C"],
+        rejected=[b"abc", b"c", b"ab" * 150],
+    )
+
+
+def test_lark_allow_invalid_utf8_options_ignore_and_nested_scope() -> None:
+    grammar = r"""
+        %grammar_options {"allow_invalid_utf8": false}
+        %grammar_options {"allow_invalid_utf8": true}
+        %grammar_options {"allow_invalid_utf8": false}
+        %ignore /[\x80-\xFF]+/
+        start: "a" /\x00/ /[^a]/ "z"
+    """
+    _assert_byte_language(
+        grammar,
+        accepted=[b"a\x00!z", b"a\x80\x00!\xffz"],
+        rejected=[b"a\x00az", b"\x80a\x00!z", b"a\x00!"],
+    )
+
+    outer_byte_mode = r"""
+        %grammar_options {"allow_invalid_utf8": true}
+        start: "A" %lark {
+          start: /./
+        } "B"
+    """
+    _assert_byte_language(
+        outer_byte_mode, accepted=[b"AaB", b"A\xc2\xa2B"], rejected=[b"A\x80B", b"A\xc2B"]
+    )
+
+    nested_byte_mode = r"""
+        start: "A" %lark {
+          %grammar_options {"allow_invalid_utf8": true}
+          start: /./
+        } "B"
+    """
+    _assert_byte_language(
+        nested_byte_mode, accepted=[b"AaB", b"A\x80B", b"A\xc2B"], rejected=[b"A\xc2\xa2B"]
+    )
+
+    byte_regex_suffix = r"""
+        %grammar_options {"allow_invalid_utf8": true}
+        start: head
+        head[suffix=/\x80/]: /./s
+    """
+    _assert_byte_language(
+        byte_regex_suffix,
+        accepted=[b"a\x80", b"\xff\x80"],
+        rejected=[b"", b"\x80", b"aa\x80", b"a\xc2\x80"],
+    )
+    _assert_lark_error(
+        '%grammar_options {"allow_invalid_utf8": true}\nstart: "a".."é"',
+        "non-ASCII character ranges are not available",
+    )
+
+
+def test_lark_allow_invalid_utf8_round_trips_with_structured_regex() -> None:
+    source = r"""
+        %grammar_options {"allow_invalid_utf8": true}
+        start: RAW | SUB
+        RAW: /\x80(?:[^\x00-\x7F]|\x00){1,2}/
+        SUB: %regex {"substring_chunks":["ab","cd"]}
+    """
+    grammar = xgr.Grammar.from_lark(source)
+    restored_ebnf = xgr.Grammar.from_ebnf(str(grammar))
+    restored_json = xgr.Grammar.deserialize_json(grammar.serialize_json())
+    accepted = [b"", b"ab", b"cd", b"abcd", b"\x80\x80", b"\x80\xff\x00"]
+    rejected = [b"a", b"ad", b"\x80", b"\x80a", b"\x80\x00a"]
+    assert "byte_mode=true" in str(grammar)
+    assert "Substring(" in str(grammar)
+    for candidate in [grammar, restored_ebnf, restored_json]:
+        _assert_byte_language(candidate, accepted, rejected)
+
+
+@pytest.mark.parametrize(
+    "pattern, message",
+    [
+        (r"\p{L}", "Unicode character classes are not available"),
+        (r"\P{Letter}", "Unicode character classes are not available"),
+        (r"[é]", "non-ASCII characters are not available in byte character classes"),
+        (r"a^b", "start anchor is only allowed at the beginning"),
+        (r"a$b", "end anchor is only allowed at the end"),
+        (r"\bword\b", "word-boundary assertions are not supported"),
+        (r"(?=a)", "lookaround assertions are not supported"),
+        (r"\1", "backreferences are not supported"),
+        (r"\x{80}", "Unicode character escapes are not available"),
+        (r"\xG0", "must contain exactly two hexadecimal digits"),
+        (r"[a-\d]", "range endpoint must be a single byte"),
+        (r"a{2,1}", "lower bound 2 is larger than the upper bound 1"),
+        (r"\q", "unrecognized byte escape"),
+    ],
+)
+def test_lark_allow_invalid_utf8_regex_diagnostics(pattern: str, message: str) -> None:
+    _assert_lark_error(
+        f'%grammar_options {{"allow_invalid_utf8": true}}\nstart: /{pattern}/', message
+    )
+
+
+def test_lark_byte_mode_parametric_branches_and_serialization() -> None:
+    source = r"""
+        %grammar_options {"allow_invalid_utf8": true}
+        start: state::0
+        state::_: /\x80/ state::set_bit(0) %if bit_clear(0)
+               | /\xFF/ %if bit_set(0)
+               | /\p{L}/ %if bit_set(1)
+    """
+    grammar = xgr.Grammar.from_lark(source)
+    serialized = grammar.serialize_json()
+    assert json.loads(serialized)["__VERSION__"] == xgr.get_serialization_version()
+    assert "byte_mode=true" in str(grammar)
+
+    for candidate in [
+        grammar,
+        xgr.Grammar.from_ebnf(str(grammar)),
+        xgr.Grammar.deserialize_json(serialized),
+    ]:
+        _assert_byte_language(
+            candidate, accepted=[b"\x80\xff"], rejected=[b"", b"\x80", b"\xff", b"\xc2\x80\xff"]
+        )
+
+    # Byte-regex semantics are applied only after parameter expansion. The invalid byte-dialect
+    # property escape is harmless while its branch is dead, but is diagnosed when state 2 keeps it.
+    _assert_lark_error(source.replace("state::0", "state::2", 1), "Unicode character classes")
+
+
+def test_lark_byte_mode_parametric_exactly_4096_instances() -> None:
+    source = r"""
+        %grammar_options {"allow_invalid_utf8": true}
+        start: counter::0
+        counter::_: /\x80/ counter::incr([0:12]) %if lt([0:12], 4095)
+                 | /\xFF/ %if eq([0:12], 4095)
+    """
+    grammar = xgr.Grammar.from_lark(source)
+    assert str(grammar).count("byte_mode=true") == 4096
+    _assert_byte_language(
+        grammar,
+        accepted=[b"\x80" * 4095 + b"\xff"],
+        rejected=[b"\x80" * 4094 + b"\xff", b"\x80" * 4095 + b"a"],
+    )
+
+
+def test_lark_byte_mode_parametric_nested_options_are_isolated() -> None:
+    outer_byte = r"""
+        %grammar_options {"allow_invalid_utf8": true}
+        start: outer::0
+        outer::_: /\x80/ %lark {
+            start: inner::0
+            inner::_: /./ %if eq(_, 0)
+        } %if eq(_, 0)
+    """
+    _assert_byte_language(
+        outer_byte, accepted=[b"\x80a", b"\x80\xc3\xa9"], rejected=[b"\x80\x80", b"\x80\xc3"]
+    )
+
+    inner_byte = r"""
+        start: /./ %lark {
+            %grammar_options {"allow_invalid_utf8": true}
+            start: inner::0
+            inner::_: /\x80/ %if eq(_, 0)
+        }
+    """
+    _assert_byte_language(
+        inner_byte, accepted=[b"a\x80", b"\xc3\xa9\x80"], rejected=[b"\x80\x80", b"\xc3\x80"]
+    )
+
+
+def test_lark_byte_mode_validate_tokens_stop_override_and_state_isolation() -> None:
+    vocabulary = [b"\x80", b"\xc3", b"\xa9", b"x", b"y", b"\xff", b"<old>", b"", b"z"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[6])
+    grammar = xgr.Grammar.from_lark(
+        r"""
+        %grammar_options {"allow_invalid_utf8": true}
+        start[capture="raw"]: item::0 tail
+        item::_: /\x80/ %if eq(_, 0)
+              | /\xC3\xA9/ %if eq(_, 0)
+        tail: %regex {"substring_chars":"xy"}
+        """,
+        tokenizer_info=tokenizer_info,
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, override_stop_tokens=[5])
+    initial_state = matcher._debug_print_internal_state()
+
+    assert matcher.validate_tokens([0, 3, 4, 5, 8]) == 4
+    assert matcher.validate_tokens([1, 2, 4, 5]) == 4
+    assert matcher.validate_tokens([1, 5]) == 1
+    assert matcher.validate_tokens([2]) == 0
+    assert matcher.validate_tokens([0, 4, 3]) == 2
+    assert matcher.validate_tokens([5]) == 0
+    assert matcher.validate_tokens([6]) == 0
+    assert matcher.validate_tokens([7]) == 0
+    assert matcher.validate_tokens([-1]) == 0
+    assert matcher.validate_tokens([len(vocabulary)]) == 0
+    assert matcher.validate_tokens([1 << 40]) == 0
+    assert matcher._debug_print_internal_state() == initial_state
+    assert matcher.get_captures() == []
+
+    assert matcher.accept_token(1)
+    partial_state = matcher._debug_print_internal_state()
+    assert matcher.validate_tokens([2, 5]) == 2
+    assert matcher.validate_tokens([0, 5]) == 0
+    assert matcher._debug_print_internal_state() == partial_state
+    matcher.rollback(1)
+    assert matcher._debug_print_internal_state() == initial_state
+
+    for token_id in [0, 3, 4]:
+        assert matcher.accept_token(token_id)
+    assert matcher.is_completed() and not matcher.is_terminated()
+    assert matcher.get_captures() == [("raw", b"\x80xy")]
+    completed_state = matcher._debug_print_internal_state()
+    assert matcher.validate_tokens([5, 8]) == 1
+    assert matcher._debug_print_internal_state() == completed_state
+    assert matcher.accept_token(5) and matcher.is_terminated()
+    matcher.rollback(1)
+    assert matcher.is_completed() and not matcher.is_terminated()
+    assert matcher.get_captures() == [("raw", b"\x80xy")]
+
+
 @pytest.mark.parametrize(
     "schema, accepted, rejected",
     [
@@ -1841,9 +2151,9 @@ def test_lark_large_choice_grammar() -> None:
             id="no-forcing-option",
         ),
         pytest.param(
-            '%grammar_options {"allow_invalid_utf8": true}\nstart: "a"',
-            "%grammar_options option 'allow_invalid_utf8' is not supported",
-            id="invalid-utf8-option",
+            '%grammar_options {"allow_invalid_utf8": 1}\nstart: "a"',
+            "allow_invalid_utf8 must be a boolean",
+            id="invalid-utf8-option-type",
         ),
         pytest.param(
             '%grammar_options {"unknown": false}\nstart: "a"',

@@ -1211,8 +1211,10 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
       if (grammar_expr.type == GrammarExprType::kRegex) {
         // Nullability is checked syntactically on the parsed regex, so no FSM is built here.
         // Parse errors are reported by GrammarFSMBuilder later.
-        auto matches_empty_result =
-            RegexFSMBuilder::MatchesEmpty(base_grammar_->GetRegexString(grammar_expr));
+        auto matches_empty_result = RegexFSMBuilder::MatchesEmpty(
+            base_grammar_->GetRegexString(grammar_expr),
+            base_grammar_->GetRegexIsByteMode(grammar_expr)
+        );
         if (matches_empty_result.IsOk() && std::move(matches_empty_result).Unwrap()) {
           empty_rule_id_set->insert(i);
         }
@@ -1335,8 +1337,9 @@ class GrammarFSMBuilderImpl {
       const auto& rule = (*grammar)->GetRule(i);
       const auto& body_expr = (*grammar)->GetGrammarExpr(rule.body_expr_id);
       XGRAMMAR_DCHECK(body_expr.type == Grammar::Impl::GrammarExprType::kRegex);
-      auto matches_empty_result =
-          RegexFSMBuilder::MatchesEmpty((*grammar)->GetRegexString(body_expr));
+      auto matches_empty_result = RegexFSMBuilder::MatchesEmpty(
+          (*grammar)->GetRegexString(body_expr), (*grammar)->GetRegexIsByteMode(body_expr)
+      );
       if (matches_empty_result.IsOk() && std::move(matches_empty_result).Unwrap()) {
         (*grammar)->allow_empty_rule_ids.push_back(i);
       }
@@ -1381,7 +1384,9 @@ class GrammarFSMBuilderImpl {
   static std::optional<FSMWithStartEnd> Sequence(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> Choices(const GrammarExpr& expr, const Grammar& grammar);
   static std::optional<FSMWithStartEnd> TagDispatch(const Grammar::Impl::TagDispatch& tag_dispatch);
-  static Result<FSMWithStartEnd> Regex(const std::string& regex, bool json_string = false);
+  static Result<FSMWithStartEnd> Regex(
+      const std::string& regex, bool json_string = false, bool byte_mode = false
+  );
   /* Building tool functions.*/
   static std::optional<FSMWithStartEnd> BuildTagDispatchFSM(
       const std::vector<std::pair<std::string, int>>& string_trigger_rules,
@@ -1424,7 +1429,11 @@ class GrammarFSMBuilderImpl {
       const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
   );
   void BuildRegex(
-      const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
+      const std::string& regex,
+      bool json_string,
+      bool byte_mode,
+      int start_state,
+      std::vector<int32_t>* end_states
   );
   void BuildSubstring(
       const std::vector<std::string>& chunks, int start_state, std::vector<int32_t>* end_states
@@ -1690,6 +1699,7 @@ void GrammarFSMBuilderImpl::BuildExpression(
       return BuildRegex(
           grammar->GetRegexString(expr),
           grammar->GetRegexIsJSONString(expr),
+          grammar->GetRegexIsByteMode(expr),
           start_state,
           end_states
       );
@@ -1978,24 +1988,31 @@ void GrammarFSMBuilderImpl::AppendCachedFSM(
 }
 
 void GrammarFSMBuilderImpl::BuildRegex(
-    const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
+    const std::string& regex,
+    bool json_string,
+    bool byte_mode,
+    int start_state,
+    std::vector<int32_t>* end_states
 ) {
   const std::string rule_hint = rule_name_ != nullptr ? *rule_name_ : "";
   std::string cache_key;
   if (regex_fsm_cache_ != nullptr) {
-    cache_key = MakeRegexFSMCacheKey(regex, json_string);
+    cache_key = MakeRegexFSMCacheKey(regex, json_string, byte_mode);
     const auto cached = regex_fsm_cache_->find(cache_key);
     if (cached != regex_fsm_cache_->end()) {
       AppendCachedFSM(cached->second, start_state, end_states);
       return;
     }
   }
-  auto build_result =
-      json_string
-          ? RegexFSMBuilder::BuildWithForbiddenChars(
-                regex, GrammarFSMBuilder::JSONStringForbiddenChars(), grammar_builder_, rule_hint
-            )
-          : RegexFSMBuilder::Build(regex, grammar_builder_, rule_hint);
+  auto build_result = json_string
+                          ? RegexFSMBuilder::BuildWithForbiddenChars(
+                                regex,
+                                GrammarFSMBuilder::JSONStringForbiddenChars(),
+                                grammar_builder_,
+                                rule_hint,
+                                byte_mode
+                            )
+                          : RegexFSMBuilder::Build(regex, grammar_builder_, rule_hint, byte_mode);
   if (build_result.IsErr()) {
     auto error = std::move(build_result).UnwrapErr();
     if (rule_name_ != nullptr) {
@@ -2129,11 +2146,16 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::TagDispatch(
   );
 }
 
-Result<FSMWithStartEnd> GrammarFSMBuilderImpl::Regex(const std::string& regex, bool json_string) {
+Result<FSMWithStartEnd> GrammarFSMBuilderImpl::Regex(
+    const std::string& regex, bool json_string, bool byte_mode
+) {
+  if (json_string && byte_mode) {
+    return ResultErr("json_string and byte_mode cannot be enabled together");
+  }
   auto build_result = json_string ? RegexFSMBuilder::BuildWithForbiddenChars(
                                         regex, GrammarFSMBuilder::JSONStringForbiddenChars()
                                     )
-                                  : RegexFSMBuilder::Build(regex);
+                                  : RegexFSMBuilder::Build(regex, nullptr, "", byte_mode);
   if (build_result.IsErr()) {
     return build_result;
   }
@@ -3981,8 +4003,10 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilder::Choices(
   return GrammarFSMBuilderImpl::Choices(expr, grammar);
 }
 
-Result<FSMWithStartEnd> GrammarFSMBuilder::Regex(const std::string& regex, bool json_string) {
-  return GrammarFSMBuilderImpl::Regex(regex, json_string);
+Result<FSMWithStartEnd> GrammarFSMBuilder::Regex(
+    const std::string& regex, bool json_string, bool byte_mode
+) {
+  return GrammarFSMBuilderImpl::Regex(regex, json_string, byte_mode);
 }
 
 const std::bitset<256>& GrammarFSMBuilder::JSONStringForbiddenChars() {

@@ -90,8 +90,9 @@ class GrammarBuilder {
    * \param json_string Whether the regex matches the body of a JSON string literal. If true,
    * the characters that must be escaped in a JSON string (the control characters, '"' and
    * '\\') are excluded from every character match of the compiled automaton.
+   * \param byte_mode Whether the regex matches raw bytes (0-255) instead of Unicode codepoints.
    */
-  int32_t AddRegex(const std::string& regex_str, bool json_string = false);
+  int32_t AddRegex(const std::string& regex_str, bool json_string = false, bool byte_mode = false);
 
   /*!
    * \brief Add a GrammarExpr for a substring expression, which matches every contiguous

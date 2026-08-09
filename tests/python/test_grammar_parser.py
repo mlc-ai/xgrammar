@@ -33,6 +33,66 @@ def test_empty_string():
     assert after == expected
 
 
+def _regex_matches_bytes(grammar: xgr.Grammar, value: bytes) -> bool:
+    tokenizer_info = xgr.TokenizerInfo([value] if value else [], stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    return (not value or matcher.accept_token(0)) and matcher.is_terminated()
+
+
+def test_regex_byte_mode_round_trip_and_matching():
+    grammar = xgr.Grammar.from_ebnf(r'root ::= Regex("\\x80[^\\x00-\\x7F]", byte_mode=true)')
+    assert "byte_mode=true" in str(grammar)
+    restored_ebnf = xgr.Grammar.from_ebnf(str(grammar))
+    restored_json = xgr.Grammar.deserialize_json(grammar.serialize_json())
+
+    for candidate in [grammar, restored_ebnf, restored_json]:
+        assert _regex_matches_bytes(candidate, b"\x80\xff")
+        assert not _regex_matches_bytes(candidate, b"\x80a")
+        assert not _regex_matches_bytes(candidate, b"\xc2\x80")
+
+
+def test_regex_byte_mode_differs_from_default_and_preserves_flags():
+    byte_grammar = xgr.Grammar.from_ebnf(
+        r'root ::= Regex("[^\\x00-\\x7F]a.", flags="isu", byte_mode=true)'
+    )
+    unicode_grammar = xgr.Grammar.from_ebnf(r'root ::= Regex("[^\\x00-\\x7F]")')
+
+    assert _regex_matches_bytes(byte_grammar, b"\x80A\n")
+    assert not _regex_matches_bytes(byte_grammar, b"\xc2\x80A\n")
+    assert _regex_matches_bytes(unicode_grammar, b"\xc2\x80")
+    assert not _regex_matches_bytes(unicode_grammar, b"\x80")
+
+
+@pytest.mark.parametrize("byte_first", [True, False])
+def test_regex_byte_and_unicode_fsm_cache_entries_are_isolated(byte_first: bool):
+    byte_rule = 'byte ::= Regex(".", flags="s", byte_mode=true)'
+    unicode_rule = 'unicode ::= Regex(".", flags="s")'
+    definitions = [byte_rule, unicode_rule] if byte_first else [unicode_rule, byte_rule]
+    grammar = xgr.Grammar.from_ebnf('root ::= ("B" byte | "U" unicode)\n' + "\n".join(definitions))
+
+    for value in [b"B\x80", b"Ba", b"Ua", b"U\xc3\xa9"]:
+        assert _regex_matches_bytes(grammar, value), value
+    for value in [b"B\xc3\xa9", b"U\x80", b"U\xc3"]:
+        assert not _regex_matches_bytes(grammar, value), value
+
+
+@pytest.mark.parametrize(
+    "grammar, message",
+    [
+        ('root ::= Regex("a", byte_mode=1)', "byte_mode must be a boolean"),
+        (
+            'root ::= Regex("a", json_string=true, byte_mode=true)',
+            "Regex does not support json_string together with byte_mode",
+        ),
+        ('root ::= Regex("a", encoding=true)', "does not support the named argument"),
+    ],
+)
+def test_regex_byte_mode_errors(grammar: str, message: str):
+    with pytest.raises(RuntimeError, match=message):
+        xgr.Grammar.from_ebnf(grammar)
+
+
 def test_character_class():
     """Test character class expressions."""
     before = """root ::= [a-z]

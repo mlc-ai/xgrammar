@@ -188,9 +188,37 @@ std::string GrammarPrinter::PrintChoices(const GrammarExpr& grammar_expr) {
 }
 
 std::string GrammarPrinter::PrintRegex(const GrammarExpr& grammar_expr) {
-  std::string result = "Regex(" + PrintString(grammar_->GetRegexString(grammar_expr));
+  std::string pattern = grammar_->GetRegexString(grammar_expr);
+  std::string printed_pattern;
+  if (!grammar_->GetRegexIsByteMode(grammar_expr)) {
+    printed_pattern = PrintString(pattern);
+  } else {
+    // Preserve invalid raw bytes across EBNF round-trips. A doubled backslash is consumed by the
+    // EBNF string lexer, leaving a byte-regex \xHH escape in the restored pattern.
+    static constexpr char kHex[] = "0123456789ABCDEF";
+    std::string escaped;
+    size_t offset = 0;
+    while (offset < pattern.size()) {
+      auto [codepoint, length] = ParseNextUTF8(pattern.c_str() + offset);
+      if (codepoint == CharHandlingError::kInvalidUTF8 || offset + length > pattern.size()) {
+        uint8_t byte = static_cast<uint8_t>(pattern[offset]);
+        escaped += "\\\\x";
+        escaped.push_back(kHex[byte >> 4]);
+        escaped.push_back(kHex[byte & 0x0F]);
+        ++offset;
+        continue;
+      }
+      escaped += EscapeString(codepoint);
+      offset += static_cast<size_t>(length);
+    }
+    printed_pattern = "\"" + escaped + "\"";
+  }
+  std::string result = "Regex(" + printed_pattern;
   if (grammar_->GetRegexIsJSONString(grammar_expr)) {
     result += ", json_string=true";
+  }
+  if (grammar_->GetRegexIsByteMode(grammar_expr)) {
+    result += ", byte_mode=true";
   }
   return result + ")";
 }

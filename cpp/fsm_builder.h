@@ -57,11 +57,20 @@ class RegexFSMBuilder {
    * body holding the repeated sub-pattern) added through this builder, instead of being
    * physically unrolled.
    * \param rule_hint Name hint for rules created through `builder`.
+   * \param byte_mode Whether the regex matches raw bytes (0-255) instead of Unicode codepoints.
    * \return The FSM with start and end states.
    */
   static Result<FSMWithStartEnd> Build(
-      const std::string& regex, GrammarBuilder* builder = nullptr, const std::string& rule_hint = ""
+      const std::string& regex,
+      GrammarBuilder* builder = nullptr,
+      const std::string& rule_hint = "",
+      bool byte_mode = false
   );
+
+  /*! \brief Convenience overload for building directly in byte mode without a grammar builder. */
+  static Result<FSMWithStartEnd> Build(const std::string& regex, bool byte_mode) {
+    return Build(regex, nullptr, "", byte_mode);
+  }
 
   /*!
    * \brief Converts a regex string to a FSM, then removes the forbidden characters from every
@@ -77,14 +86,15 @@ class RegexFSMBuilder {
       const std::string& regex,
       const std::bitset<256>& forbidden_chars,
       GrammarBuilder* builder = nullptr,
-      const std::string& rule_hint = ""
+      const std::string& rule_hint = "",
+      bool byte_mode = false
   );
 
   /*!
    * \brief Check whether the regex matches the empty string. Only parses the regex; no FSM is
    * built, so this is cheap even for regexes with huge bounded repetitions.
    */
-  static Result<bool> MatchesEmpty(const std::string& regex);
+  static Result<bool> MatchesEmpty(const std::string& regex, bool byte_mode = false);
 };
 
 /*!

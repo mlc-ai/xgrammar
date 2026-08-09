@@ -341,8 +341,26 @@ The `%ignore` expression may be a terminal name, a string, a regex, or a combina
 ```
 
 `allow_initial_skip` (boolean, default `false`) allows `%ignore` content to appear before the
-first lexeme of the output. Multiple `%grammar_options` declarations are merged; unknown option
-names are rejected.
+first lexeme of the output.
+
+`allow_invalid_utf8` (boolean, default `false`) changes regular expressions in this grammar from
+Unicode codepoints to individual bytes. It permits standalone bytes such as `0x80`; string
+literals continue to match their exact UTF-8 encoded bytes:
+
+```text
+%grammar_options {"allow_invalid_utf8": true}
+start: /[\x80-\xFF]+/ | "é"
+```
+
+In byte mode, `.` consumes exactly one byte and still excludes newline unless the `s` flag is
+present. The `i`, `s`, and `u` flags remain available; case folding is ASCII-only. `\d`, `\w`, and
+`\s` use their ASCII definitions, and uppercase forms complement within all 256 bytes. Unicode
+escapes and properties, non-ASCII characters inside classes, word boundaries, lookarounds, and
+backreferences are rejected.
+
+The option applies only to the grammar that declares it. Nested `%lark` blocks and named grammars
+use their own options. Multiple declarations merge monotonically, so a later `false` does not
+disable an earlier `true`; unknown option names are rejected.
 
 ### `%json`
 

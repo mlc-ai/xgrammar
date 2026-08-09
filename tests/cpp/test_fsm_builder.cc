@@ -6,10 +6,12 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <variant>
 #include <vector>
 
 #include "fsm.h"
 #include "fsm_builder.h"
+#include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "xgrammar/grammar.h"
 
@@ -466,6 +468,91 @@ TEST(XGrammarFSMBuilderTest, TestRegexRepeatZero) {
   // A lower bound larger than the upper bound is an error in every regex dialect.
   EXPECT_TRUE(RegexFSMBuilder::Build("a{3,1}").IsErr());
   EXPECT_TRUE(RegexFSMBuilder::Build("a{1,0}").IsErr());
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexByteMode) {
+  auto fsm_wse = RegexFSMBuilder::Build("[^\\x00-\\x7F]+", /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\x80"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\xff\x80"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+
+  // Dot and complements use a one-byte universe, while the default remains codepoint-oriented.
+  fsm_wse = GrammarFSMBuilder::Regex(".", /*json_string=*/false, /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\x80"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\n"));
+  EXPECT_FALSE(fsm_wse.AcceptString("é"));
+  fsm_wse = GrammarFSMBuilder::Regex(".").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("é"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\x80"));
+
+  // Byte escapes are raw, UTF-8 literals retain their encoded byte sequence, and ASCII case
+  // folding remains available.
+  fsm_wse = RegexFSMBuilder::Build("(?i)\\x80\\xFFéA", /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(
+      fsm_wse.AcceptString("\x80\xff\xc3\xa9"
+                           "a")
+  );
+  EXPECT_TRUE(
+      fsm_wse.AcceptString("\x80\xff\xc3\xa9"
+                           "A")
+  );
+  EXPECT_FALSE(
+      fsm_wse.AcceptString("\xc2\x80\xff\xc3\xa9"
+                           "a")
+  );
+
+  fsm_wse = RegexFSMBuilder::Build("[^\\x00-\\xFF]", /*byte_mode=*/true).Unwrap();
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\xff"));
+
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{L}", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\x{80}", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("[é]", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("a^b", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("a$b", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\bword\\b", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("(?=a)", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\1", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\q", true).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("[a-\\d]", true).IsErr());
+  EXPECT_TRUE(GrammarFSMBuilder::Regex("a", /*json_string=*/true, /*byte_mode=*/true).IsErr());
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexEmptyGroupQuantifiersDoNotRetarget) {
+  // A discarded empty group would make the following '*' accidentally bind to the preceding 'a'.
+  auto fsm_wse = RegexFSMBuilder::Build("a()*", /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString("aa"));
+
+  fsm_wse = RegexFSMBuilder::Build("a()+", /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("aa"));
+  fsm_wse = RegexFSMBuilder::Build("a(){0,500}", /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("aa"));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRawByteRegexSerializationRoundTrip) {
+  std::string raw_pattern;
+  raw_pattern.push_back(static_cast<char>(0x80));
+  raw_pattern.push_back('\0');
+  raw_pattern.push_back(static_cast<char>(0xFF));
+
+  GrammarBuilder builder;
+  int32_t regex = builder.AddRegex(raw_pattern, /*json_string=*/false, /*byte_mode=*/true);
+  int32_t root = builder.AddRule("root", regex);
+  Grammar grammar = builder.Get(root);
+  std::string printed = grammar.ToString();
+  EXPECT_NE(printed.find("Regex(\"\\\\x80\\0\\\\xFF\", byte_mode=true)"), std::string::npos);
+
+  Grammar restored_ebnf = Grammar::FromEBNF(printed);
+  EXPECT_EQ(restored_ebnf.ToString(), printed);
+  auto restored_json = Grammar::DeserializeJSON(grammar.SerializeJSON());
+  ASSERT_TRUE(std::holds_alternative<Grammar>(restored_json));
+  EXPECT_EQ(std::get<Grammar>(restored_json).ToString(), printed);
 }
 
 TEST(XGrammarFSMBuilderTest, TestRegexCaseInsensitiveFlag) {

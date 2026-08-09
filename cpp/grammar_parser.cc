@@ -1280,18 +1280,26 @@ int32_t EBNFParser::ParseRegexMacro() {
     ReportParseError("Regex pattern must be a string literal", delta_element);
   }
 
-  bool json_string = false;
   for (const auto& [name, _] : args.named_arguments) {
-    if (name != "json_string" && name != "flags") {
+    if (name != "json_string" && name != "byte_mode" && name != "flags") {
       ReportParseError("Regex does not support the named argument " + name, delta_element);
     }
   }
-  if (auto it = args.named_arguments.find("json_string"); it != args.named_arguments.end()) {
+  auto get_boolean_argument = [&](const std::string& name) {
+    auto it = args.named_arguments.find(name);
+    if (it == args.named_arguments.end()) {
+      return false;
+    }
     auto bool_node = std::get_if<MacroIR::BooleanNode>(it->second.get());
     if (bool_node == nullptr) {
-      ReportParseError("json_string must be a boolean", delta_element);
+      ReportParseError(name + " must be a boolean", delta_element);
     }
-    json_string = bool_node->value;
+    return bool_node->value;
+  };
+  bool json_string = get_boolean_argument("json_string");
+  bool byte_mode = get_boolean_argument("byte_mode");
+  if (json_string && byte_mode) {
+    ReportParseError("Regex does not support json_string together with byte_mode", delta_element);
   }
   std::string pattern = pattern_node->value;
   if (auto it = args.named_arguments.find("flags"); it != args.named_arguments.end()) {
@@ -1322,7 +1330,7 @@ int32_t EBNFParser::ParseRegexMacro() {
       pattern = "(?i)" + pattern;
     }
   }
-  return builder_.AddRegex(pattern, json_string);
+  return builder_.AddRegex(pattern, json_string, byte_mode);
 }
 
 int32_t EBNFParser::ParseSubstringMacro() {

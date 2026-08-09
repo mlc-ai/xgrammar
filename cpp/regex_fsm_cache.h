@@ -15,10 +15,13 @@ namespace xgrammar {
 
 using RegexFSMCache = std::unordered_map<std::string, FSMWithStartEnd>;
 
-inline std::string MakeRegexFSMCacheKey(const std::string& regex, bool json_string) {
+inline std::string MakeRegexFSMCacheKey(
+    const std::string& regex, bool json_string, bool byte_mode = false
+) {
   std::string result;
-  result.reserve(regex.size() + 1);
+  result.reserve(regex.size() + 2);
   result.push_back(static_cast<char>(json_string));
+  result.push_back(static_cast<char>(byte_mode));
   result.append(regex);
   return result;
 }

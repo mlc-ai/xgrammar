@@ -2168,9 +2168,14 @@ class LarkCompiler {
             RaiseLarkError(source_, location, "allow_initial_skip must be a boolean");
           }
           allow_initial_skip_ = allow_initial_skip_ || option.get<bool>();
-        } else if (key == "no_forcing" || key == "allow_invalid_utf8") {
+        } else if (key == "allow_invalid_utf8") {
           if (!option.is<bool>()) {
-            RaiseLarkError(source_, location, key + " must be a boolean");
+            RaiseLarkError(source_, location, "allow_invalid_utf8 must be a boolean");
+          }
+          allow_invalid_utf8_ = allow_invalid_utf8_ || option.get<bool>();
+        } else if (key == "no_forcing") {
+          if (!option.is<bool>()) {
+            RaiseLarkError(source_, location, "no_forcing must be a boolean");
           }
           if (option.get<bool>()) {
             RaiseLarkError(
@@ -2333,6 +2338,24 @@ class LarkCompiler {
 
   std::string PrepareRegexPattern(const Node& node) const {
     return RewriteRegexDots(node.text, ParseRegexFlags(node).dot_all);
+  }
+
+  int32_t CompileTerminalPattern(const std::string& pattern, const Location& location) {
+    if (!allow_invalid_utf8_) {
+      return builder_.AddRegex(pattern);
+    }
+    // Validate the byte dialect while the Lark source location is still available. MatchesEmpty
+    // parses without physically unrolling large bounded repetitions.
+    auto validation = RegexFSMBuilder::MatchesEmpty(pattern, /*byte_mode=*/true);
+    if (validation.IsErr()) {
+      RaiseLarkError(
+          source_,
+          location,
+          "failed to compile regular expression: " +
+              std::string(std::move(validation).UnwrapErr().what())
+      );
+    }
+    return builder_.AddRegex(pattern, /*json_string=*/false, /*byte_mode=*/true);
   }
 
   static std::string EscapeRegexLiteral(const std::string& value) {
@@ -2711,12 +2734,29 @@ class LarkCompiler {
         if (begin[0] > end[0]) {
           RaiseLarkError(source_, node.location, "character range start must not exceed end");
         }
+        if (allow_invalid_utf8_ && (begin[0] > 0x7F || end[0] > 0x7F)) {
+          RaiseLarkError(
+              source_,
+              node.location,
+              "non-ASCII character ranges are not available when allow_invalid_utf8 is enabled"
+          );
+        }
         int32_t result = builder_.AddCharacterClass({{begin[0], end[0]}});
         return terminal_mode || !append_skip ? result : AppendSkip(result);
       }
       case Node::Kind::kRegex: {
         RegexFlags flags = ParseRegexFlags(node);
         std::string pattern = RewriteRegexDots(node.text, flags.dot_all);
+        if (allow_invalid_utf8_) {
+          if (flags.case_insensitive) {
+            pattern = "(?i)" + pattern;
+          }
+          int32_t regex_rule_id = builder_.AddRuleWithHint(
+              rule_hint + "_regex", CompileTerminalPattern(pattern, node.location)
+          );
+          int32_t result = builder_.AddRuleRef(regex_rule_id);
+          return terminal_mode || !append_skip ? result : AppendSkip(result);
+        }
         if (flags.case_insensitive) {
           // The FSM regex engine handles the (?i) prefix with ASCII case folding. Validate the
           // pattern eagerly so that errors carry the source location.
@@ -3093,10 +3133,11 @@ class LarkCompiler {
                               definition.max_chars.has_value())) {
       body_pattern = TerminalNodeToRegex(definition.body);
       marker_pattern = TerminalNodeToRegex(*marker);
-      int32_t body_helper_expr = builder_.AddRegex(body_pattern.value());
+      int32_t body_helper_expr =
+          CompileTerminalPattern(body_pattern.value(), definition.body.location);
       int32_t body_helper_rule =
           builder_.AddRuleWithHint(definition.name + "_stop_body", body_helper_expr);
-      int32_t marker_helper_expr = builder_.AddRegex(marker_pattern.value());
+      int32_t marker_helper_expr = CompileTerminalPattern(marker_pattern.value(), marker->location);
       int32_t marker_helper_rule =
           builder_.AddRuleWithHint(definition.name + "_stop_marker", marker_helper_expr);
       suffix_stop_info.body_rule_id = body_helper_rule;
@@ -3115,8 +3156,9 @@ class LarkCompiler {
           body_pattern = TerminalNodeToRegex(definition.body);
           marker_pattern = TerminalNodeToRegex(*marker);
         }
-        return builder_.AddRegex(
-            "(?:" + body_pattern.value() + ")(?:" + marker_pattern.value() + ")"
+        return CompileTerminalPattern(
+            "(?:" + body_pattern.value() + ")(?:" + marker_pattern.value() + ")",
+            definition.body.location
         );
       }
       return CompileNode(definition.body, definition.name, true);
@@ -3344,6 +3386,7 @@ class LarkCompiler {
   int32_t skip_rule_id_ = -1;
   int32_t never_rule_id_ = -1;
   bool allow_initial_skip_ = false;
+  bool allow_invalid_utf8_ = false;
   std::unordered_set<std::string> dynamic_unused_rules_;
 };
 

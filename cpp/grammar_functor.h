@@ -405,8 +405,11 @@ class GrammarFSMBuilder {
    * \param regex The regex pattern string.
    * \param json_string Whether the regex matches the body of a JSON string literal. If true,
    * the characters in JSONStringForbiddenChars() are excluded from every character match.
+   * \param byte_mode Whether the regex matches raw bytes instead of Unicode codepoints.
    */
-  static Result<FSMWithStartEnd> Regex(const std::string& regex, bool json_string = false);
+  static Result<FSMWithStartEnd> Regex(
+      const std::string& regex, bool json_string = false, bool byte_mode = false
+  );
   /*! \brief The characters that must be escaped inside a JSON string literal: the control
    * characters 0x00-0x1F, the quote '"' and the backslash '\\'. */
   static const std::bitset<256>& JSONStringForbiddenChars();
