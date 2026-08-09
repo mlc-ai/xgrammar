@@ -12,6 +12,8 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <deque>
+#include <iomanip>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -317,6 +319,18 @@ class LarkLexer {
     if (source_[position_] == '+' || source_[position_] == '-') {
       Advance();
     }
+    if (PeekChar(0) == '0' && (PeekChar(1) == 'x' || PeekChar(1) == 'X')) {
+      Advance();
+      Advance();
+      size_t digits_start = position_;
+      while (std::isxdigit(static_cast<unsigned char>(PeekChar(0)))) {
+        Advance();
+      }
+      if (position_ == digits_start) {
+        RaiseLarkError(source_, location, "expected hexadecimal digits after '0x'");
+      }
+      return {TokenType::kNumber, source_.substr(start, position_ - start), "", location};
+    }
     while (std::isdigit(static_cast<unsigned char>(PeekChar(0)))) {
       Advance();
     }
@@ -488,6 +502,132 @@ class LarkLexer {
 
 struct Document;
 
+struct ParamRef {
+  uint8_t start = 0;
+  uint8_t end = 64;
+
+  uint64_t Mask() const {
+    int width = static_cast<int>(end) - static_cast<int>(start);
+    if (width == 64) {
+      return std::numeric_limits<uint64_t>::max();
+    }
+    return ((uint64_t{1} << width) - 1) << start;
+  }
+
+  uint64_t Evaluate(uint64_t value) const { return (value & Mask()) >> start; }
+};
+
+struct ParamExpr {
+  enum class Kind { kConst, kSelf, kIncr, kDecr, kBitAnd, kBitOr };
+
+  Kind kind = Kind::kConst;
+  uint64_t value = 0;
+  ParamRef reference;
+  Location location;
+
+  bool NeedsCurrentValue() const { return kind != Kind::kConst; }
+
+  uint64_t Evaluate(std::optional<uint64_t> current, const std::string& source) const {
+    if (kind == Kind::kConst) {
+      return value;
+    }
+    if (!current.has_value()) {
+      RaiseLarkError(source, location, "parameter expression requires a parametric caller");
+    }
+    uint64_t result = current.value();
+    switch (kind) {
+      case Kind::kConst:
+        return value;
+      case Kind::kSelf:
+        return result;
+      case Kind::kIncr:
+        return (result & reference.Mask()) == reference.Mask()
+                   ? result
+                   : result + (uint64_t{1} << reference.start);
+      case Kind::kDecr:
+        return (result & reference.Mask()) == 0 ? result
+                                                : result - (uint64_t{1} << reference.start);
+      case Kind::kBitAnd:
+        return result & value;
+      case Kind::kBitOr:
+        return result | value;
+    }
+    return result;
+  }
+};
+
+struct ParamCond {
+  enum class Kind {
+    kTrue,
+    kNE,
+    kEQ,
+    kLE,
+    kLT,
+    kGE,
+    kGT,
+    kBitCountNE,
+    kBitCountEQ,
+    kBitCountLE,
+    kBitCountLT,
+    kBitCountGE,
+    kBitCountGT,
+    kAnd,
+    kOr,
+    kNot,
+  };
+
+  Kind kind = Kind::kTrue;
+  ParamRef reference;
+  uint64_t value = 0;
+  std::vector<ParamCond> children;
+  Location location;
+
+  bool IsAlwaysTrue() const { return kind == Kind::kTrue; }
+
+  bool Evaluate(uint64_t current) const {
+    uint64_t selected = reference.Evaluate(current);
+    uint64_t bit_count = 0;
+    for (uint64_t remaining = selected; remaining != 0; remaining &= remaining - 1) {
+      ++bit_count;
+    }
+    switch (kind) {
+      case Kind::kTrue:
+        return true;
+      case Kind::kNE:
+        return selected != value;
+      case Kind::kEQ:
+        return selected == value;
+      case Kind::kLE:
+        return selected <= value;
+      case Kind::kLT:
+        return selected < value;
+      case Kind::kGE:
+        return selected >= value;
+      case Kind::kGT:
+        return selected > value;
+      case Kind::kBitCountNE:
+        return bit_count != value;
+      case Kind::kBitCountEQ:
+        return bit_count == value;
+      case Kind::kBitCountLE:
+        return bit_count <= value;
+      case Kind::kBitCountLT:
+        return bit_count < value;
+      case Kind::kBitCountGE:
+        return bit_count >= value;
+      case Kind::kBitCountGT:
+        return bit_count > value;
+      case Kind::kAnd:
+        return children[0].Evaluate(current) && children[1].Evaluate(current);
+      case Kind::kOr:
+        return children[0].Evaluate(current) || children[1].Evaluate(current);
+      case Kind::kNot:
+        return !children[0].Evaluate(current);
+    }
+    return false;
+  }
+};
+
 struct Node {
   enum class Kind {
     kSequence,
@@ -503,6 +643,7 @@ struct Node {
     kSpecialToken,
     kGrammarRef,
     kNot,
+    kNever,
   };
 
   Kind kind = Kind::kSequence;
@@ -514,11 +655,14 @@ struct Node {
   int32_t max_repeat = 0;
   std::vector<Node> children;
   std::shared_ptr<Document> nested;
+  std::optional<ParamExpr> parameter;
+  std::optional<ParamCond> condition;
 };
 
 struct Definition {
   std::string name;
   bool is_terminal = false;
+  bool is_parametric = false;
   bool lazy = false;
   std::optional<Node> suffix;
   std::optional<float> temperature;
@@ -727,6 +871,16 @@ class LarkParser {
     result.is_terminal = IsTerminalName(name_token.text);
     result.location = name_token.location;
 
+    if (Match(TokenType::kDoubleColon)) {
+      Token parameter = Consume(TokenType::kName, "expected '_' after '::' in rule definition");
+      if (parameter.text != "_") {
+        RaiseLarkError(source_, parameter.location, "expected '_' after '::' in rule definition");
+      }
+      if (result.is_terminal) {
+        RaiseLarkError(source_, name_token.location, "terminals cannot be parametric");
+      }
+      result.is_parametric = true;
+    }
     if (Peek().type == TokenType::kLBracket) {
       if (result.is_terminal) {
         RaiseLarkError(source_, Peek().location, "attributes are only supported on rules");
@@ -735,9 +889,6 @@ class LarkParser {
     }
     if (Peek().type == TokenType::kDot) {
       RaiseLarkError(source_, Peek().location, "rule and terminal priorities are not supported");
-    }
-    if (Peek().type == TokenType::kDoubleColon) {
-      RaiseLarkError(source_, Peek().location, "parametric grammar is not supported");
     }
     if (Peek().type == TokenType::kLBrace) {
       RaiseLarkError(source_, Peek().location, "Lark templates are not supported");
@@ -938,13 +1089,13 @@ class LarkParser {
     if (Peek().type == TokenType::kAnd) {
       RaiseLarkError(source_, Peek().location, "terminal intersection '&' is not supported");
     }
-    if (Peek().type == TokenType::kIf) {
-      RaiseLarkError(source_, Peek().location, "parametric %if conditions are not supported");
-    }
     Node result;
     result.kind = Node::Kind::kSequence;
     result.location = location;
     result.children = std::move(elements);
+    if (Match(TokenType::kIf)) {
+      result.condition = ParseParamCondition();
+    }
     return result;
   }
 
@@ -966,6 +1117,192 @@ class LarkParser {
     } catch (const std::exception&) {
       RaiseLarkError(source_, token.location, "invalid repetition count");
     }
+  }
+
+  uint64_t ParseParamValue() {
+    Token token = Consume(TokenType::kNumber, "expected parameter value");
+    if (token.text.empty() || token.text[0] == '+' || token.text[0] == '-') {
+      RaiseLarkError(
+          source_,
+          token.location,
+          "parameter values must be unsigned decimal or hexadecimal integers"
+      );
+    }
+    int base = token.text.size() > 2 && token.text[0] == '0' &&
+                       (token.text[1] == 'x' || token.text[1] == 'X')
+                   ? 16
+                   : 10;
+    try {
+      size_t parsed = 0;
+      uint64_t value = std::stoull(token.text, &parsed, base);
+      if (parsed != token.text.size()) {
+        RaiseLarkError(source_, token.location, "invalid 64-bit parameter value");
+      }
+      return value;
+    } catch (const std::exception&) {
+      RaiseLarkError(source_, token.location, "invalid 64-bit parameter value");
+    }
+  }
+
+  uint8_t ParseBitIndex(bool allow_end) {
+    Location location = Peek().location;
+    uint64_t value = ParseParamValue();
+    uint64_t maximum = allow_end ? 64 : 63;
+    if (value > maximum) {
+      RaiseLarkError(
+          source_,
+          location,
+          "bit index " + std::to_string(value) +
+              " is too large; must be <= " + std::to_string(maximum)
+      );
+    }
+    return static_cast<uint8_t>(value);
+  }
+
+  ParamRef ParseParamReference() {
+    if (Peek().type == TokenType::kName && Peek().text == "_") {
+      ++position_;
+      return {0, 64};
+    }
+    if (!Match(TokenType::kLBracket)) {
+      RaiseLarkError(source_, Peek().location, "expected '_' or '[start_bit:stop_bit]'");
+    }
+    Location location = Peek().location;
+    uint8_t start = ParseBitIndex(false);
+    Consume(TokenType::kColon, "expected ':' in bit range");
+    uint8_t end = ParseBitIndex(true);
+    Consume(TokenType::kRBracket, "expected ']' after bit range");
+    if (end <= start) {
+      RaiseLarkError(
+          source_,
+          location,
+          "end bit index " + std::to_string(end) + " must be > start bit index " +
+              std::to_string(start)
+      );
+    }
+    return {start, end};
+  }
+
+  ParamExpr ParseParamExpression() {
+    Location location = Peek().location;
+    if (Peek().type == TokenType::kNumber) {
+      ParamExpr result;
+      result.kind = ParamExpr::Kind::kConst;
+      result.value = ParseParamValue();
+      result.location = location;
+      return result;
+    }
+    Token function = Consume(TokenType::kName, "expected parameter expression");
+    ParamExpr result;
+    result.location = location;
+    if (function.text == "_") {
+      result.kind = ParamExpr::Kind::kSelf;
+      return result;
+    }
+
+    static const std::unordered_set<std::string> kKnownFunctions = {
+        "incr", "decr", "bit_and", "bit_or", "set_bit", "clear_bit"
+    };
+    if (!kKnownFunctions.count(function.text)) {
+      RaiseLarkError(
+          source_, function.location, "unknown parameter expression '" + function.text + "'"
+      );
+    }
+    Consume(TokenType::kLParen, "expected '(' after parameter function");
+    if (function.text == "incr" || function.text == "decr") {
+      result.kind = function.text == "incr" ? ParamExpr::Kind::kIncr : ParamExpr::Kind::kDecr;
+      result.reference = ParseParamReference();
+    } else if (function.text == "bit_and" || function.text == "bit_or") {
+      result.kind = function.text == "bit_and" ? ParamExpr::Kind::kBitAnd : ParamExpr::Kind::kBitOr;
+      result.value = ParseParamValue();
+    } else if (function.text == "set_bit" || function.text == "clear_bit") {
+      uint8_t bit = ParseBitIndex(false);
+      result.kind = function.text == "set_bit" ? ParamExpr::Kind::kBitOr : ParamExpr::Kind::kBitAnd;
+      result.value = uint64_t{1} << bit;
+      if (function.text == "clear_bit") {
+        result.value = ~result.value;
+      }
+    }
+    Consume(TokenType::kRParen, "expected ')' after parameter expression");
+    return result;
+  }
+
+  ParamCond ParseParamCondition() {
+    Token function = Consume(TokenType::kName, "expected condition after %if");
+    ParamCond result;
+    result.location = function.location;
+    if (function.text == "true") {
+      result.kind = ParamCond::Kind::kTrue;
+      if (Match(TokenType::kLParen)) {
+        Consume(TokenType::kRParen, "expected ')' after true(");
+      }
+      return result;
+    }
+
+    static const std::unordered_set<std::string> kKnownFunctions = {
+        "ne",           "eq",           "le",           "lt",           "ge",
+        "gt",           "bit_count_ne", "bit_count_eq", "bit_count_le", "bit_count_lt",
+        "bit_count_ge", "bit_count_gt", "and",          "or",           "not",
+        "bit_clear",    "bit_set",      "is_zeros",     "is_ones",
+    };
+    if (!kKnownFunctions.count(function.text)) {
+      RaiseLarkError(source_, function.location, "unknown condition '" + function.text + "'");
+    }
+    Consume(TokenType::kLParen, "expected '(' after condition function");
+    auto parse_comparison = [&](ParamCond::Kind kind) {
+      result.kind = kind;
+      result.reference = ParseParamReference();
+      Consume(TokenType::kComma, "expected ',' in condition");
+      result.value = ParseParamValue();
+    };
+    if (function.text == "ne") {
+      parse_comparison(ParamCond::Kind::kNE);
+    } else if (function.text == "eq") {
+      parse_comparison(ParamCond::Kind::kEQ);
+    } else if (function.text == "le") {
+      parse_comparison(ParamCond::Kind::kLE);
+    } else if (function.text == "lt") {
+      parse_comparison(ParamCond::Kind::kLT);
+    } else if (function.text == "ge") {
+      parse_comparison(ParamCond::Kind::kGE);
+    } else if (function.text == "gt") {
+      parse_comparison(ParamCond::Kind::kGT);
+    } else if (function.text == "bit_count_ne" || function.text == "bit_count_eq" ||
+               function.text == "bit_count_le" || function.text == "bit_count_lt" ||
+               function.text == "bit_count_ge" || function.text == "bit_count_gt") {
+      static const std::unordered_map<std::string, ParamCond::Kind> kinds = {
+          {"bit_count_ne", ParamCond::Kind::kBitCountNE},
+          {"bit_count_eq", ParamCond::Kind::kBitCountEQ},
+          {"bit_count_le", ParamCond::Kind::kBitCountLE},
+          {"bit_count_lt", ParamCond::Kind::kBitCountLT},
+          {"bit_count_ge", ParamCond::Kind::kBitCountGE},
+          {"bit_count_gt", ParamCond::Kind::kBitCountGT},
+      };
+      result.kind = kinds.at(function.text);
+      result.reference = ParseParamReference();
+      Consume(TokenType::kComma, "expected ',' in condition");
+      result.value = ParseParamValue();
+    } else if (function.text == "and" || function.text == "or") {
+      result.kind = function.text == "and" ? ParamCond::Kind::kAnd : ParamCond::Kind::kOr;
+      result.children.push_back(ParseParamCondition());
+      Consume(TokenType::kComma, "expected ',' in condition");
+      result.children.push_back(ParseParamCondition());
+    } else if (function.text == "not") {
+      result.kind = ParamCond::Kind::kNot;
+      result.children.push_back(ParseParamCondition());
+    } else if (function.text == "bit_clear" || function.text == "bit_set") {
+      uint8_t bit = ParseBitIndex(false);
+      result.kind = ParamCond::Kind::kEQ;
+      result.reference = {bit, static_cast<uint8_t>(bit + 1)};
+      result.value = function.text == "bit_set" ? 1 : 0;
+    } else if (function.text == "is_zeros" || function.text == "is_ones") {
+      result.kind = ParamCond::Kind::kEQ;
+      result.reference = ParseParamReference();
+      result.value =
+          function.text == "is_ones" ? result.reference.Mask() >> result.reference.start : 0;
+    }
+    Consume(TokenType::kRParen, "expected ')' after condition");
+    return result;
   }
 
   Node ParseExpr() {
@@ -1073,8 +1410,8 @@ class LarkParser {
       result.kind = Node::Kind::kName;
       result.location = token.location;
       result.text = NormalizeRuleName(token.text);
-      if (Peek().type == TokenType::kDoubleColon) {
-        RaiseLarkError(source_, Peek().location, "parametric grammar is not supported");
+      if (Match(TokenType::kDoubleColon)) {
+        result.parameter = ParseParamExpression();
       }
       if (Peek().type == TokenType::kLBrace && Peek(1).type != TokenType::kComma &&
           Peek(1).type != TokenType::kNumber) {
@@ -1295,6 +1632,344 @@ struct NamedGrammarRegistry {
   std::vector<std::string> active;
 };
 
+class ParametricExpander {
+ public:
+  ParametricExpander(const std::string& source, Document* document)
+      : source_(source), document_(document) {}
+
+  void Expand() {
+    IndexOriginalDefinitions();
+    ValidateDefinitions();
+
+    bool has_parametric_definition = std::any_of(
+        document_->definitions.begin(),
+        document_->definitions.end(),
+        [](const Definition& definition) { return definition.is_parametric; }
+    );
+    if (!has_parametric_definition) {
+      ValidateNoOrphanParameterSyntax();
+      return;
+    }
+
+    std::vector<Definition> expanded;
+    expanded.reserve(document_->definitions.size());
+    for (const Definition& definition : document_->definitions) {
+      if (definition.is_parametric) {
+        continue;
+      }
+      Definition copy = definition;
+      copy.body = RewriteNode(copy.body, std::nullopt, false);
+      expanded.push_back(std::move(copy));
+    }
+    for (Node& ignore : document_->ignores) {
+      ignore = RewriteNode(ignore, std::nullopt, true);
+    }
+
+    while (!pending_.empty()) {
+      PendingInstance instance = std::move(pending_.front());
+      pending_.pop_front();
+      const Definition& base = *definitions_.at(instance.base_name);
+      ValidateParametricDefinition(base);
+      Definition generated = base;
+      generated.name = instance.generated_name;
+      generated.is_parametric = false;
+      generated.body = RewriteNode(base.body, instance.value, false);
+      expanded.push_back(std::move(generated));
+    }
+    document_->definitions = std::move(expanded);
+  }
+
+ private:
+  static constexpr size_t kMaxInstances = 4096;
+
+  struct PendingInstance {
+    std::string base_name;
+    uint64_t value;
+    std::string generated_name;
+  };
+
+  static Node NeverNode(const Location& location) {
+    Node result;
+    result.kind = Node::Kind::kNever;
+    result.location = location;
+    return result;
+  }
+
+  static bool NeedsCurrentParameter(const Node& node) {
+    if (node.parameter.has_value() && node.parameter->NeedsCurrentValue()) {
+      return true;
+    }
+    if (node.condition.has_value() && !node.condition->IsAlwaysTrue()) {
+      return true;
+    }
+    return std::any_of(node.children.begin(), node.children.end(), NeedsCurrentParameter);
+  }
+
+  void IndexOriginalDefinitions() {
+    for (const Definition& definition : document_->definitions) {
+      if (!definitions_.emplace(definition.name, &definition).second) {
+        RaiseLarkError(
+            source_, definition.location, "duplicate rule or terminal '" + definition.name + "'"
+        );
+      }
+      used_names_.insert(definition.name);
+    }
+  }
+
+  void ValidateDefinitions() const {
+    for (const Definition& definition : document_->definitions) {
+      if (definition.is_terminal) {
+        ValidateTerminalNode(definition.body);
+        continue;
+      }
+      if (definition.name == "start" && definition.is_parametric) {
+        RaiseLarkError(source_, definition.location, "start rule cannot be parametric");
+      }
+      if (definition.is_parametric) {
+        if (definition.lazy || definition.suffix.has_value() || definition.stop.has_value()) {
+          RaiseLarkError(
+              source_,
+              definition.location,
+              "stop-like behavior is not supported for parametric rules"
+          );
+        }
+        if (definition.temperature.has_value()) {
+          RaiseLarkError(
+              source_, definition.location, "temperature is not supported for parametric rules"
+          );
+        }
+        if (definition.max_tokens.has_value()) {
+          RaiseLarkError(
+              source_, definition.location, "max_tokens is not supported for parametric rules"
+          );
+        }
+        if (!NeedsCurrentParameter(definition.body)) {
+          RaiseLarkError(
+              source_,
+              definition.location,
+              "parametric rule '" + definition.name + "' does not depend on its parameter"
+          );
+        }
+      } else if (NeedsCurrentParameter(definition.body)) {
+        RaiseLarkError(
+            source_,
+            definition.location,
+            "non-parametric rule '" + definition.name +
+                "' contains an expression that requires a caller parameter"
+        );
+      }
+    }
+    for (const Node& ignore : document_->ignores) {
+      ValidateTerminalNode(ignore);
+    }
+  }
+
+  void ValidateTerminalNode(const Node& node) const {
+    if (node.parameter.has_value()) {
+      RaiseLarkError(
+          source_,
+          node.parameter->location,
+          "parameterized rule references cannot be used in terminals"
+      );
+    }
+    if (node.condition.has_value()) {
+      RaiseLarkError(source_, node.condition->location, "%if cannot be used in terminals");
+    }
+    for (const Node& child : node.children) {
+      ValidateTerminalNode(child);
+    }
+  }
+
+  void ValidateNoOrphanParameterSyntax() const {
+    for (const Definition& definition : document_->definitions) {
+      ValidateReferencesWithoutExpansion(definition.body);
+    }
+    for (const Node& ignore : document_->ignores) {
+      ValidateReferencesWithoutExpansion(ignore);
+    }
+  }
+
+  void ValidateReferencesWithoutExpansion(const Node& node) const {
+    if (node.parameter.has_value()) {
+      auto target = definitions_.find(node.text);
+      if (target == definitions_.end()) {
+        RaiseLarkError(source_, node.location, "unknown name '" + node.text + "'");
+      }
+      RaiseLarkError(source_, node.location, "rule '" + node.text + "' is not parametric");
+    }
+    if (node.condition.has_value() && !node.condition->IsAlwaysTrue()) {
+      RaiseLarkError(source_, node.condition->location, "%if condition requires a parametric rule");
+    }
+    for (const Node& child : node.children) {
+      ValidateReferencesWithoutExpansion(child);
+    }
+  }
+
+  void ValidateParametricDefinition(const Definition& definition) {
+    if (!validated_parametric_definitions_.insert(definition.name).second) {
+      return;
+    }
+    ValidateParametricNode(definition.body);
+  }
+
+  void ValidateParametricNode(const Node& node) {
+    if (node.kind == Node::Kind::kName) {
+      auto target = definitions_.find(node.text);
+      if (target == definitions_.end()) {
+        RaiseLarkError(source_, node.location, "unknown name '" + node.text + "'");
+      }
+      if (node.parameter.has_value()) {
+        if (!target->second->is_parametric) {
+          RaiseLarkError(source_, node.location, "rule '" + node.text + "' is not parametric");
+        }
+        ValidateParametricDefinition(*target->second);
+      } else if (target->second->is_parametric) {
+        RaiseLarkError(
+            source_, node.location, "parametric rule '" + node.text + "' requires a parameter"
+        );
+      }
+    }
+    for (const Node& child : node.children) {
+      ValidateParametricNode(child);
+    }
+  }
+
+  Node RewriteNode(const Node& node, std::optional<uint64_t> current, bool terminal_context) {
+    if (node.condition.has_value()) {
+      if (terminal_context) {
+        RaiseLarkError(source_, node.condition->location, "%if cannot be used in terminals");
+      }
+      if (!node.condition->IsAlwaysTrue() && !current.has_value()) {
+        RaiseLarkError(
+            source_, node.condition->location, "%if condition requires a parametric rule"
+        );
+      }
+      if (current.has_value() && !node.condition->Evaluate(current.value())) {
+        return NeverNode(node.location);
+      }
+    }
+
+    Node result = node;
+    result.condition.reset();
+    switch (node.kind) {
+      case Node::Kind::kName: {
+        auto target = definitions_.find(node.text);
+        if (node.parameter.has_value()) {
+          if (terminal_context) {
+            RaiseLarkError(
+                source_,
+                node.parameter->location,
+                "parameterized rule references cannot be used in terminals"
+            );
+          }
+          if (target == definitions_.end()) {
+            RaiseLarkError(source_, node.location, "unknown name '" + node.text + "'");
+          }
+          if (!target->second->is_parametric) {
+            RaiseLarkError(source_, node.location, "rule '" + node.text + "' is not parametric");
+          }
+          uint64_t value = node.parameter->Evaluate(current, source_);
+          result.text = Schedule(node.text, value, node.location);
+          result.parameter.reset();
+        } else if (target != definitions_.end() && target->second->is_parametric) {
+          RaiseLarkError(
+              source_, node.location, "parametric rule '" + node.text + "' requires a parameter"
+          );
+        }
+        return result;
+      }
+      case Node::Kind::kChoice: {
+        result.children.clear();
+        for (const Node& child : node.children) {
+          Node rewritten = RewriteNode(child, current, terminal_context);
+          if (rewritten.kind != Node::Kind::kNever) {
+            result.children.push_back(std::move(rewritten));
+          }
+        }
+        if (result.children.empty()) {
+          return NeverNode(node.location);
+        }
+        if (result.children.size() == 1) {
+          return std::move(result.children[0]);
+        }
+        return result;
+      }
+      case Node::Kind::kSequence: {
+        result.children.clear();
+        for (const Node& child : node.children) {
+          Node rewritten = RewriteNode(child, current, terminal_context);
+          if (rewritten.kind == Node::Kind::kNever) {
+            return NeverNode(node.location);
+          }
+          result.children.push_back(std::move(rewritten));
+        }
+        return result;
+      }
+      case Node::Kind::kRepeat: {
+        Node rewritten = RewriteNode(node.children[0], current, terminal_context);
+        if (rewritten.kind == Node::Kind::kNever) {
+          if (node.min_repeat == 0) {
+            result.kind = Node::Kind::kSequence;
+            result.children.clear();
+            return result;
+          }
+          return NeverNode(node.location);
+        }
+        result.children = {std::move(rewritten)};
+        return result;
+      }
+      case Node::Kind::kNot:
+        result.children = {RewriteNode(node.children[0], current, terminal_context)};
+        return result;
+      case Node::Kind::kNestedLark:
+      case Node::Kind::kString:
+      case Node::Kind::kRegex:
+      case Node::Kind::kRange:
+      case Node::Kind::kJson:
+      case Node::Kind::kRegexExt:
+      case Node::Kind::kSpecialToken:
+      case Node::Kind::kGrammarRef:
+      case Node::Kind::kNever:
+        return result;
+    }
+    return result;
+  }
+
+  std::string Schedule(const std::string& base_name, uint64_t value, const Location& location) {
+    std::string key = base_name + '\0' + std::to_string(value);
+    auto existing = instances_.find(key);
+    if (existing != instances_.end()) {
+      return existing->second;
+    }
+    if (instances_.size() >= kMaxInstances) {
+      RaiseLarkError(
+          source_,
+          location,
+          "parametric grammar exceeds the limit of " + std::to_string(kMaxInstances) +
+              " reachable rule instances"
+      );
+    }
+
+    std::ostringstream name;
+    name << base_name << "__param_" << std::hex << std::setw(16) << std::setfill('0') << value;
+    std::string generated_name = name.str();
+    while (!used_names_.insert(generated_name).second) {
+      generated_name += "_";
+    }
+    instances_[key] = generated_name;
+    pending_.push_back({base_name, value, generated_name});
+    return generated_name;
+  }
+
+  const std::string& source_;
+  Document* document_;
+  std::unordered_map<std::string, const Definition*> definitions_;
+  std::unordered_set<std::string> used_names_;
+  std::unordered_set<std::string> validated_parametric_definitions_;
+  std::unordered_map<std::string, std::string> instances_;
+  std::deque<PendingInstance> pending_;
+};
+
 class LarkCompiler {
  public:
   LarkCompiler(
@@ -1311,6 +1986,7 @@ class LarkCompiler {
   Grammar Compile() {
     ExpandImports();
     ParseOptions();
+    ParametricExpander(source_, &document_).Expand();
     IndexDefinitions();
     ValidateTerminalCycles();
 
@@ -1840,6 +2516,8 @@ class LarkCompiler {
         RaiseLarkError(
             source_, node.location, "regular-expression complement '~' is not supported"
         );
+      case Node::Kind::kNever:
+        RaiseLarkError(source_, node.location, "empty language cannot be used in terminals");
     }
     RaiseLarkError(source_, node.location, "unsupported terminal node");
   }
@@ -2133,6 +2811,13 @@ class LarkCompiler {
         RaiseLarkError(
             source_, node.location, "regular-expression complement '~' is not supported"
         );
+      case Node::Kind::kNever: {
+        if (never_rule_id_ == -1) {
+          never_rule_id_ = builder_.AddEmptyRuleWithHint("lark_never");
+          builder_.UpdateRuleBody(never_rule_id_, builder_.AddRuleRef(never_rule_id_));
+        }
+        return builder_.AddRuleRef(never_rule_id_);
+      }
     }
     RaiseLarkError(source_, node.location, "unsupported grammar node");
   }
@@ -2657,6 +3342,7 @@ class LarkCompiler {
   std::unordered_map<std::string, int32_t> rule_ids_;
   std::unordered_map<std::string, int32_t> named_grammar_roots_;
   int32_t skip_rule_id_ = -1;
+  int32_t never_rule_id_ = -1;
   bool allow_initial_skip_ = false;
   std::unordered_set<std::string> dynamic_unused_rules_;
 };

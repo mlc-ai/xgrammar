@@ -189,6 +189,96 @@ Repetition operators follow an element (a literal, a name, or a group):
 Zero counts such as `x{0}` are allowed and match the empty string. Ranges with the upper bound
 below the lower bound are rejected.
 
+## Parametric Rules
+
+A rule can carry one unsigned 64-bit parameter. Declare it with `::_`, pass an initial value from
+an ordinary rule, and use `%if` to enable alternatives based on the current value:
+
+```text
+start: permutation::0
+
+permutation::_: "" %if is_ones([0:3])
+               | "a" permutation::set_bit(0) %if bit_clear(0)
+               | "b" permutation::set_bit(1) %if bit_clear(1)
+               | "c" permutation::set_bit(2) %if bit_clear(2)
+```
+
+This grammar accepts every permutation of `a`, `b`, and `c` exactly once. Parameters are compile-time
+state: `Grammar.from_lark` expands only reachable `(rule, value)` pairs into ordinary grammar rules.
+The resulting `Grammar` uses the existing matcher, optimizer, EBNF printer, and JSON serialization
+without a parameter-aware runtime.
+
+Parameter values may be decimal or hexadecimal (`15`, `0xf`, or
+`0xffffffffffffffff`). `_` means the current value. Bit slices use `[start:end]`, where `start` is
+inclusive, `end` is exclusive, and valid indices cover the complete range `[0:64]`.
+
+### Parameter Expressions
+
+An expression after `rule::` computes the parameter passed to that rule:
+
+| Expression | Result for current value `p` |
+| --- | --- |
+| `value` | The decimal or hexadecimal constant `value` |
+| `_` | `p` |
+| `set_bit(k)` | `p` with bit `k` set |
+| `clear_bit(k)` | `p` with bit `k` cleared |
+| `bit_or(value)` | `p \| value` |
+| `bit_and(value)` | `p & value` |
+| `incr([start:end])` | Increment the selected field, saturating when all its bits are set |
+| `decr([start:end])` | Decrement the selected field, saturating when all its bits are clear |
+
+For example, this rule accepts exactly five `item` occurrences:
+
+```text
+start: list::0
+list::_: "item" list::incr([0:3]) %if lt([0:3], 5)
+      | "" %if eq([0:3], 5)
+```
+
+### Conditions
+
+`%if condition` applies to one alternative. A false condition removes that alternative for the
+current rule instance.
+
+| Condition | Meaning |
+| --- | --- |
+| `true` or `true()` | Always true |
+| `bit_clear(k)`, `bit_set(k)` | Bit `k` is clear or set |
+| `is_zeros(slice)`, `is_ones(slice)` | Every bit in the slice is clear or set |
+| `eq(slice, value)`, `ne(slice, value)` | Unsigned equality or inequality |
+| `lt(slice, value)`, `le(slice, value)` | Unsigned less-than or less-than-or-equal |
+| `gt(slice, value)`, `ge(slice, value)` | Unsigned greater-than or greater-than-or-equal |
+| `bit_count_eq(slice, k)`, `bit_count_ne(slice, k)` | Set-bit count equality or inequality |
+| `bit_count_lt(slice, k)`, `bit_count_le(slice, k)` | Set-bit count comparison |
+| `bit_count_gt(slice, k)`, `bit_count_ge(slice, k)` | Set-bit count comparison |
+| `and(left, right)`, `or(left, right)`, `not(condition)` | Boolean composition |
+
+The comparison value `k` in a set-bit-count condition is an unsigned 64-bit integer. Values above
+the selected slice width are valid and follow ordinary mathematical comparison rules. For example,
+`bit_count_lt(_, 65)` is always true, while `bit_count_eq(_, 65)` is always false.
+
+Use `_` wherever a condition expects a slice to select all 64 bits:
+
+```text
+start: pick::0
+pick::_: "" %if bit_count_ge(_, 1)
+      | "a" pick::set_bit(0) %if and(bit_clear(0), bit_count_lt(_, 3))
+      | "b" pick::set_bit(1) %if and(bit_clear(1), bit_count_lt(_, 3))
+      | "c" pick::set_bit(2) %if and(bit_clear(2), bit_count_lt(_, 3))
+```
+
+Parameterized calls are only valid for parametric rules, and a parametric rule must use its current
+parameter. Terminals cannot contain parameterized calls or `%if`. Stop-like behavior,
+`temperature`, and `max_tokens` are not supported on parametric rules. The `capture` and
+`max_chars` attributes are supported and apply to every invocation of the parametric rule.
+
+Compilation is limited to 4096 reachable rule instances per Lark document. Here, "reachable" means
+reachable from any ordinary (non-parametric) rule in that document, not only from `start`. This
+preserves validation of ordinary helper rules even when `start` does not reference them. Grammars
+whose state transitions exceed that limit are rejected with a located error instead of consuming
+unbounded time or memory. Each nested `%lark` document has its own parameter namespace and instance
+limit.
+
 ## Directives
 
 ### `%import common`

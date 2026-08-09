@@ -507,6 +507,478 @@ def test_lark_default_disallows_initial_skip_but_allows_trailing_skip() -> None:
     _assert_language(grammar, ["ab", "a b", "ab  "], [" ab", "a\nb"])
 
 
+def test_lark_parametric_permutations() -> None:
+    grammar = """
+        start: perm::0x0
+        perm::_: "" %if is_ones([0:3])
+              | "a" perm::set_bit(0) %if bit_clear(0)
+              | "b" perm::set_bit(1) %if bit_clear(1)
+              | "c" perm::set_bit(2) %if bit_clear(2)
+    """
+    _assert_language(
+        grammar, ["abc", "acb", "bac", "bca", "cab", "cba"], ["", "a", "ab", "aabc", "abcc", "abcd"]
+    )
+
+
+def test_lark_parametric_saturating_counters_and_bit_operations() -> None:
+    grammar = """
+        start: counter::0 "|" bits::0
+        counter::_: "b" counter::incr([0:3]) %if lt([0:3], 5)
+                 | "" %if eq([0:3], 5)
+        bits::_: "x" bits::bit_or(0x3) %if is_zeros([0:2])
+              | "y" bits::clear_bit(0) %if eq([0:2], 3)
+              | "" %if eq(_, 2)
+    """
+    _assert_language(grammar, ["bbbbb|xy"], ["|xy", "bbbb|xy", "bbbbb|x", "bbbbb|xyy"])
+
+
+def test_lark_parametric_conditions_and_round_trips() -> None:
+    grammar = r"""
+        start: state::0
+        state::_: "a" state::set_bit(0) %if and(bit_clear(0), bit_count_lt(_, 2))
+               | "b" state::set_bit(1) %if and(bit_clear(1), bit_count_lt(_, 2))
+               | "!" state::bit_and(0x2) %if and(bit_set(0), or(is_zeros([1:2]), bit_set(1)))
+               | "" %if not(ne(_, 2))
+    """
+    grammar_obj = xgr.Grammar.from_lark(grammar)
+    restored_ebnf = xgr.Grammar.from_ebnf(str(grammar_obj))
+    restored_json = xgr.Grammar.deserialize_json(grammar_obj.serialize_json())
+    accepted = ["b", "ab!", "ba!", "a!b"]
+    rejected = ["", "a", "aa", "bb", "ab", "b!", "ab!!"]
+    for candidate in [grammar_obj, restored_ebnf, restored_json]:
+        _assert_grammar_language(candidate, accepted, rejected)
+
+
+def test_lark_parametric_is_local_to_nested_grammar() -> None:
+    grammar = """
+        start: "A" %lark {
+          start: choose::0
+          choose::_: "x" choose::set_bit(0) %if bit_clear(0)
+                  | "y" %if bit_set(0)
+        } "B"
+    """
+    _assert_language(grammar, ["AxyB"], ["AyB", "AxB", "AxxyB"])
+
+
+def test_lark_parametric_decrement_self_reference_and_high_bit() -> None:
+    grammar = """
+        start: countdown::3 "|" high::0
+        countdown::_: "d" countdown::decr([0:2]) %if gt([0:2], 0)
+                    | bridge::_ %if eq([0:2], 0)
+        bridge::_: "z" %if eq(_, 0)
+        high::_: "h" high::set_bit(63) %if bit_clear(63)
+              | "" %if bit_set(63)
+    """
+    _assert_language(grammar, ["dddz|h"], ["ddz|h", "ddddz|h", "dddz|", "dddz|hh"])
+
+
+def test_lark_parametric_increment_and_decrement_saturate() -> None:
+    grammar = """
+        start: high::3 low::0
+        high::_: "H" high_done::incr([0:2])
+        high_done::_: "+" %if eq(_, 3)
+        low::_: "L" low_done::decr([0:2])
+        low_done::_: "-" %if eq(_, 0)
+    """
+    _assert_language(grammar, ["H+L-"], ["H+L", "HL-", "H+L--"])
+
+
+def test_lark_parametric_nested_empty_rule_chain() -> None:
+    grammar = """
+        start: perm::0 "X"
+        perm::_: empty_a::_ empty_b::_ %if is_zeros([10:12])
+              | "a" perm::set_bit(0) %if bit_clear(0)
+              | "b" perm::set_bit(1) %if bit_clear(1)
+              | "c" perm::set_bit(2) %if bit_clear(2)
+        empty_a::_: "" %if is_ones([0:1])
+        empty_b::_: empty_c::_ %if is_ones([1:2])
+        empty_c::_: "" %if is_ones([2:3])
+    """
+    _assert_language(
+        grammar, ["abcX", "acbX", "bacX", "bcaX", "cabX", "cbaX"], ["X", "abX", "abc", "aabcX"]
+    )
+
+
+def test_lark_parametric_unconditional_recursion() -> None:
+    grammar = """
+        start: seen::0
+        seen::_: "" %if is_ones([0:3])
+              | "a" seen::set_bit(0)
+              | "b" seen::set_bit(1)
+              | "c" seen::set_bit(2)
+    """
+    _assert_language(grammar, ["abc", "caba", "aaabbbc"], ["", "a", "ab", "aaaa", "abcaax"])
+
+
+def test_lark_parametric_independent_bit_slice_counters() -> None:
+    grammar = """
+        start: counts::0
+        counts::_: "a" counts::incr([0:2]) %if lt([0:2], 2)
+                | "b" counts::incr([2:4]) %if lt([2:4], 2)
+                | "c" counts::incr([4:7]) %if lt([4:7], 3)
+                | "" %if and(eq([0:2], 2), and(eq([2:4], 2), eq([4:7], 3)))
+    """
+    _assert_language(
+        grammar, ["aabbccc", "cabcbac", "ccbabac"], ["", "aabbcc", "aaabbbccc", "aabbcccc"]
+    )
+
+
+def test_lark_parametric_long_counter() -> None:
+    count = 900
+    grammar = f"""
+        start: count_up::0 "X"
+        count_up::_: "a" count_up::incr([0:10]) %if lt([0:10], {count})
+                  | count_down::_ %if eq([0:10], {count})
+        count_down::_: "b" count_down::decr([0:10]) %if gt([0:10], 0)
+                    | "" %if eq([0:10], 0)
+    """
+    accepted = "a" * count + "b" * count + "X"
+    _assert_language(
+        grammar,
+        [accepted],
+        ["a" * (count - 1) + "b" * count + "X", "a" * count + "b" * (count - 1) + "X"],
+    )
+
+
+def test_lark_parametric_conditions_inside_groups_and_repetitions() -> None:
+    grammar = """
+        start: choice::0 "|" choice::1
+        choice::_: ("a" %if bit_clear(0) | "b" %if bit_set(0)) ("x" %if bit_set(0))?
+    """
+    _assert_language(grammar, ["a|b", "a|bx"], ["b|b", "ax|b", "a|a", "a|bxx"])
+
+
+def test_lark_parametric_capture_and_max_chars_attributes() -> None:
+    capture_grammar = """
+        start: item::0
+        item::_[capture="item"]: "a" item::set_bit(0) %if bit_clear(0)
+                                | "b" %if bit_set(0)
+    """
+    compiled = _compile_lark(capture_grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string("ab")
+    assert matcher.is_terminated()
+    assert matcher.get_captures() == [("item", b"b"), ("item", b"ab")]
+
+    budget_grammar = """
+        start: item::0
+        item::_[max_chars=2]: "a" item::incr(_) %if lt(_, 3)
+                            | ""
+    """
+    _assert_language(budget_grammar, ["", "a", "aa"], ["aaa", "aaaa"])
+
+
+def test_lark_parametric_false_only_state_is_empty_language() -> None:
+    grammar = """
+        start: dead::0 | "ok"
+        dead::_: "bad" %if bit_set(0)
+    """
+    grammar_obj = xgr.Grammar.from_lark(grammar)
+    candidates = [
+        grammar_obj,
+        xgr.Grammar.from_ebnf(str(grammar_obj)),
+        xgr.Grammar.deserialize_json(grammar_obj.serialize_json()),
+    ]
+    for candidate in candidates:
+        _assert_grammar_language(candidate, ["ok"], ["", "bad", "badok", "😀"])
+
+
+def test_lark_parametric_unsigned_comparisons() -> None:
+    grammar = """
+        start: checks::5
+        checks::_: "eq" %if eq([0:3], 5)
+                | "ne" %if ne([0:3], 4)
+                | "lt" %if lt([0:3], 6)
+                | "le" %if le([0:3], 5)
+                | "gt" %if gt([0:3], 4)
+                | "ge" %if ge([0:3], 5)
+                | "always" %if true()
+                | "bare" %if true
+                | "eq_false" %if eq([0:3], 4)
+                | "ne_false" %if ne([0:3], 5)
+                | "lt_false" %if lt([0:3], 5)
+                | "le_false" %if le([0:3], 4)
+                | "gt_false" %if gt([0:3], 5)
+                | "ge_false" %if ge([0:3], 6)
+    """
+    _assert_language(
+        grammar,
+        ["eq", "ne", "lt", "le", "gt", "ge", "always", "bare"],
+        ["eq_false", "ne_false", "lt_false", "le_false", "gt_false", "ge_false"],
+    )
+
+
+def test_lark_parametric_bit_count_comparisons_and_u64_literal() -> None:
+    grammar = """
+        start: counts::0xb full::0xffffffffffffffff
+        counts::_: "E" %if bit_count_eq([0:4], 3)
+                | "N" %if bit_count_ne([0:4], 2)
+                | "L" %if bit_count_lt([0:4], 4)
+                | "l" %if bit_count_le([0:4], 3)
+                | "G" %if bit_count_gt([0:4], 2)
+                | "g" %if bit_count_ge([0:4], 3)
+                | "x" %if bit_count_eq([0:4], 2)
+                | "y" %if bit_count_ne([0:4], 3)
+        full::_: "F" %if is_ones(_)
+    """
+    _assert_language(grammar, ["EF", "NF", "LF", "lF", "GF", "gF"], ["xF", "yF", "F"])
+
+
+@pytest.mark.parametrize("reference", ["_", "[0:64]"])
+@pytest.mark.parametrize(
+    "state, count", [("0", 0), ("0x7fffffffffffffff", 63), ("0xffffffffffffffff", 64)]
+)
+def test_lark_parametric_bit_count_full_width_boundaries(
+    reference: str, state: str, count: int
+) -> None:
+    comparisons = {
+        "eq": lambda left, right: left == right,
+        "ne": lambda left, right: left != right,
+        "lt": lambda left, right: left < right,
+        "le": lambda left, right: left <= right,
+        "gt": lambda left, right: left > right,
+        "ge": lambda left, right: left >= right,
+    }
+    alternatives = []
+    accepted = []
+    rejected = []
+    for operation, compare in comparisons.items():
+        for boundary in (0, 63, 64):
+            literal = f"{operation}_{boundary}"
+            alternatives.append(f'"{literal}" %if bit_count_{operation}({reference}, {boundary})')
+            (accepted if compare(count, boundary) else rejected).append(literal)
+    grammar = f"start: checks::{state}\nchecks::_: " + "\n        | ".join(alternatives)
+    _assert_language(grammar, accepted, rejected)
+
+
+def test_lark_parametric_bit_count_high_bit_slices_and_large_thresholds() -> None:
+    grammar = """
+        start: high::0x8000000000000000 "|" low::0x7fffffffffffffff
+        high::_: "H" %if and(bit_count_eq([63:64], 1), bit_count_eq([0:63], 0))
+        low::_: "L" %if and(bit_count_eq([63:64], 0), bit_count_eq([0:63], 63))
+    """
+    _assert_language(grammar, ["H|L"], ["L|H", "H|H", "L|L", ""])
+
+    large_threshold = "18446744073709551615"
+    grammar = f"""
+        start: checks::0xffffffffffffffff
+        checks::_: "lt" %if bit_count_lt(_, {large_threshold})
+                | "eq" %if bit_count_eq(_, 65)
+                | "ne" %if bit_count_ne(_, 65)
+                | "ge" %if bit_count_ge(_, 65)
+    """
+    _assert_language(grammar, ["lt", "ne"], ["eq", "ge"])
+
+
+def test_lark_parametric_full_width_arithmetic_saturates_without_overflow() -> None:
+    grammar = """
+        start: top::0xffffffffffffffff "|" bottom::0
+        top::_: "T" top_done::incr(_)
+        top_done::_: "!" %if eq(_, 0xffffffffffffffff)
+        bottom::_: "B" bottom_done::decr(_)
+        bottom_done::_: "!" %if eq(_, 0)
+    """
+    _assert_language(grammar, ["T!|B!"], ["T|B!", "T!|B", "T!!|B!"])
+
+
+def test_lark_parametric_exactly_4096_instances_succeeds() -> None:
+    grammar = """
+        start: counter::0
+        counter::_: "x" counter::incr([0:12]) %if lt([0:12], 4095)
+                 | "" %if eq([0:12], 4095)
+    """
+    xgr.Grammar.from_lark(grammar)
+
+
+def test_lark_parametric_nested_documents_have_independent_instance_limits() -> None:
+    grammar = """
+        start: outer::0
+        outer::_: "o" outer::incr([0:12]) %if lt([0:12], 4095)
+                | %lark {
+                    start: inner::0
+                    inner::_: "i" inner::incr([0:12]) %if lt([0:12], 4095)
+                            | "" %if eq([0:12], 4095)
+                  } %if eq([0:12], 4095)
+    """
+    xgr.Grammar.from_lark(grammar)
+
+
+def test_lark_parametric_combines_regex_flags_and_structured_substring() -> None:
+    grammar = r"""
+        start: item::0
+        item::_: /a.b/isu item::set_bit(0) %if bit_clear(0)
+              | %regex {"substring_chars":"xy"} %if bit_set(0)
+    """
+    _assert_language(
+        grammar, ["A\nB", "A\nBx", "A\nBxy", "a0by"], ["", "A\nBxx", "A\nByx", "a0bz", "aB"]
+    )
+
+
+def test_lark_parametric_generated_names_do_not_collide() -> None:
+    grammar = """
+        start: pick::0
+        pick::_: "x" pick::set_bit(0) %if bit_clear(0)
+               | "" %if bit_set(0)
+        pick__param_0000000000000000: "reserved"
+    """
+    _assert_language(grammar, ["x"], ["", "reserved", "xx"])
+
+
+@pytest.mark.parametrize(
+    "grammar, message",
+    [
+        pytest.param(
+            'start: foo::0\nfoo: "a"',
+            "rule 'foo' is not parametric",
+            id="argument-to-ordinary-rule",
+        ),
+        pytest.param(
+            'start: foo\nfoo::_: "a" %if true',
+            "does not depend on its parameter",
+            id="unused-parameter",
+        ),
+        pytest.param(
+            'start: foo\nfoo: bar\nbar::_: "a" %if bit_set(0)',
+            "requires a parameter",
+            id="missing-argument",
+        ),
+        pytest.param(
+            "start: foo\nfoo: bar::_\nbar::_: bar::_",
+            "requires a caller parameter",
+            id="caller-has-no-parameter",
+        ),
+        pytest.param(
+            'BAR: "b" %if true\nstart: BAR',
+            "%if cannot be used in terminals",
+            id="condition-in-terminal",
+        ),
+        pytest.param(
+            'BAR: foo::0\nstart: BAR\nfoo::_: "x" %if eq(_, 0)',
+            "parameterized rule references cannot be used in terminals",
+            id="argument-in-terminal",
+        ),
+        pytest.param(
+            'start: foo::0\nfoo::_: "a" %if eq([3:3], 0)',
+            "must be > start bit index",
+            id="empty-bit-range",
+        ),
+        pytest.param(
+            'start: foo::0\nfoo::_: "a" %if eq([64:64], 0)',
+            "must be <= 63",
+            id="bit-range-start-too-large",
+        ),
+        pytest.param(
+            'start: foo::0\nfoo::_: "a" %if eq([0:65], 0)',
+            "must be <= 64",
+            id="bit-range-end-too-large",
+        ),
+        pytest.param(
+            'start: foo::0\nfoo::_: "a" %if eq(0, 0)',
+            "expected '_' or '[start_bit:stop_bit]'",
+            id="bit-range-brackets-required",
+        ),
+        pytest.param(
+            'start: foo::0\nfoo::_: "a" %if unknown(_, 0)',
+            "unknown condition 'unknown'",
+            id="unknown-condition",
+        ),
+        pytest.param(
+            "start: foo::unknown(0)\nfoo::_: foo::_",
+            "unknown parameter expression 'unknown'",
+            id="unknown-expression",
+        ),
+        pytest.param(
+            "start: foo::set_bit(64)\nfoo::_: foo::_", "must be <= 63", id="bit-index-too-large"
+        ),
+        pytest.param(
+            "start: foo::18446744073709551616\nfoo::_: foo::_",
+            "invalid 64-bit parameter value",
+            id="parameter-overflow",
+        ),
+        pytest.param(
+            "start: foo::-1\nfoo::_: foo::_",
+            "parameter values must be unsigned",
+            id="negative-parameter",
+        ),
+        pytest.param(
+            "start: foo::0x\nfoo::_: foo::_",
+            "expected hexadecimal digits after '0x'",
+            id="missing-hexadecimal-digits",
+        ),
+        pytest.param(
+            'start: foo::0\nfoo::_: "ok" %if bit_count_eq(_, 18446744073709551616)',
+            "invalid 64-bit parameter value",
+            id="bit-count-threshold-overflow",
+        ),
+        pytest.param(
+            'start: foo::0\nfoo::_: "ok" %if bit_count_eq(_, -1)',
+            "parameter values must be unsigned",
+            id="negative-bit-count-threshold",
+        ),
+        pytest.param(
+            'start: state::0\nstate::_: "ok" %if bit_clear(0) | missing %if bit_set(0)',
+            "unknown name 'missing'",
+            id="unknown-name-in-false-branch",
+        ),
+        pytest.param(
+            'start: state::0\nstate::_: "ok" %if bit_clear(0) | plain::_ %if bit_set(0)\nplain: "x"',
+            "rule 'plain' is not parametric",
+            id="argument-to-ordinary-rule-in-false-branch",
+        ),
+        pytest.param(
+            'start: state::0\nstate::_: "ok" %if bit_clear(0) | other %if bit_set(0)\n'
+            'other::_: "x" %if bit_set(0)',
+            "parametric rule 'other' requires a parameter",
+            id="missing-argument-in-false-branch",
+        ),
+        pytest.param(
+            'start: state::0\nstate::_: "ok" %if bit_clear(0) | other::_ %if bit_set(0)\n'
+            "other::_: missing %if bit_set(0)",
+            "unknown name 'missing'",
+            id="invalid-rule-reachable-only-through-false-branch",
+        ),
+        pytest.param(
+            "start::_: start::_", "start rule cannot be parametric", id="parametric-start"
+        ),
+        pytest.param(
+            'start: foo::0\nfoo::_[stop="x"]: foo::_',
+            "stop-like behavior is not supported",
+            id="parametric-stop",
+        ),
+        pytest.param(
+            "start: foo::0\nfoo::_[temperature=1]: foo::_",
+            "temperature is not supported",
+            id="parametric-temperature",
+        ),
+        pytest.param(
+            "start: foo::0\nfoo::_[max_tokens=1]: foo::_",
+            "max_tokens is not supported",
+            id="parametric-max-tokens",
+        ),
+        pytest.param(
+            'start: counter::0\ncounter::_: "x" counter::incr(_)',
+            "exceeds the limit of 4096 reachable rule instances",
+            id="reachable-instance-limit",
+        ),
+        pytest.param(
+            'start: "ok"\nunused: counter::0\n'
+            'counter::_: "x" counter::incr([0:13]) %if lt([0:13], 4096)\n'
+            '          | "" %if eq([0:13], 4096)',
+            "exceeds the limit of 4096 reachable rule instances",
+            id="unused-ordinary-rule-instance-limit",
+        ),
+        pytest.param(
+            'start: "ok"\nunused: state::0\n'
+            'state::_: "ok" %if bit_clear(0) | missing %if bit_set(0)',
+            "unknown name 'missing'",
+            id="unused-ordinary-rule-false-branch-validation",
+        ),
+    ],
+)
+def test_lark_parametric_validation_errors(grammar: str, message: str) -> None:
+    _assert_lark_error(grammar, message)
+
+
 @pytest.mark.parametrize(
     "schema, accepted, rejected",
     [
@@ -1165,17 +1637,9 @@ def test_lark_large_choice_grammar() -> None:
         pytest.param(
             'start: foo{x}\nfoo: "a"', "Lark templates are not supported", id="template-reference"
         ),
-        pytest.param(
-            'start::0: "a"', "parametric grammar is not supported", id="parametric-definition"
-        ),
-        pytest.param(
-            "start: foo::0", "parametric grammar is not supported", id="parametric-reference"
-        ),
-        pytest.param(
-            'start: "a" %if enabled',
-            "parametric %if conditions are not supported",
-            id="parametric-if",
-        ),
+        pytest.param('start::0: "a"', "expected '_' after '::'", id="parametric-definition"),
+        pytest.param("start: foo::0", "unknown name 'foo'", id="parametric-reference"),
+        pytest.param('start: "a" %if enabled', "unknown condition 'enabled'", id="parametric-if"),
         pytest.param(
             'start: A & B\nA: "a"\nB: "b"', "intersection '&' is not supported", id="intersection"
         ),
