@@ -176,6 +176,202 @@ def test_token_operations():
     assert result == expected
 
 
+def test_validate_tokens_returns_longest_accepted_prefix_without_mutation():
+    vocab = ["<s>", "</s>", "a", "b", "c", "ab", "x"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= captured\ncaptured[capture="value"] ::= "abc"', tokenizer_info
+    )
+
+    assert matcher.validate_tokens([]) == 0
+    assert matcher.validate_tokens([2, 3, 4]) == 3
+    assert matcher.validate_tokens([2, 3, 6, 4]) == 2
+    assert matcher.validate_tokens([5, 4, 1, 2]) == 3
+    assert matcher.validate_tokens([2, 1 << 40]) == 1
+
+    # Validation runs on an isolated state: it neither commits tokens nor records captures.
+    assert matcher.get_captures() == []
+    assert not matcher.is_completed()
+    assert not matcher.is_terminated()
+
+    assert matcher.accept_token(5)
+    assert matcher.validate_tokens([4, 1, 2]) == 2
+    assert matcher.validate_tokens([6]) == 0
+
+    # The already accepted prefix is unchanged after both successful and rejected validation.
+    assert not matcher.is_completed()
+    assert matcher.accept_token(4)
+    assert matcher.is_completed()
+    assert matcher.get_captures() == [("value", b"abc")]
+
+
+def test_validate_tokens_enforces_token_budgets(capfd: pytest.CaptureFixture[str]):
+    vocab = ["<s>", "</s>", "a", "b", "!", "ab"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= value "!"\nvalue[max_tokens=1] ::= [a-z]+', tokenizer_info
+    )
+
+    assert matcher.validate_tokens([2, 3, 4]) == 1
+    assert matcher.validate_tokens([5, 4, 1]) == 3
+
+    # Both validation paths leave the one-token budget unused on the original matcher.
+    assert matcher.accept_token(2)
+    assert matcher.validate_tokens([4, 1]) == 2
+
+    # A speculative relaxation neither emits nor consumes the original matcher's one-time warning.
+    relaxed = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= value "!"\nvalue[max_tokens=1] ::= "ab"', tokenizer_info
+    )
+    capfd.readouterr()
+    assert relaxed.validate_tokens([2, 3, 4, 1]) == 4
+    captured = capfd.readouterr()
+    assert "token budget (max_tokens)" not in captured.out + captured.err
+    assert relaxed.accept_token(2)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    relaxed.fill_next_token_bitmask(bitmask)
+    assert relaxed.accept_token(3)
+    captured = capfd.readouterr()
+    assert "token budget (max_tokens)" in captured.out + captured.err
+
+
+def test_validate_tokens_handles_control_tokens_id_boundaries_and_termination():
+    vocab = ["a", "b", "", "<old-stop>", "<new-stop>"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[3])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= ("a" | "b")*', tokenizer_info, override_stop_tokens=[4]
+    )
+    initial_state = matcher._debug_print_internal_state()
+
+    # The active override is accepted from a completed-but-continuable state and terminates the
+    # trial. The tokenizer's replaced stop token and an empty decoded special token stay rejected.
+    assert matcher.validate_tokens([0, 1, 4, 0]) == 3
+    assert matcher.validate_tokens([4, 0]) == 1
+    assert matcher.validate_tokens([3]) == 0
+    assert matcher.validate_tokens([2]) == 0
+
+    # Invalid ids end the prefix without reaching indexing or integer-narrowing undefined behavior.
+    assert matcher.validate_tokens([-1]) == 0
+    assert matcher.validate_tokens([len(vocab)]) == 0
+    assert matcher.validate_tokens([1 << 40]) == 0
+    assert matcher.validate_tokens([0, -1, 1]) == 1
+    assert matcher.validate_tokens([0, len(vocab), 1]) == 1
+    assert matcher.validate_tokens([0, 1 << 40, 1]) == 1
+
+    # Repeated calls leave completion, termination, parser state, and rollback history untouched.
+    assert matcher.validate_tokens([0, 1, 4]) == 3
+    assert matcher.validate_tokens([0, 1, 4]) == 3
+    assert matcher._debug_print_internal_state() == initial_state
+    assert matcher.is_completed()
+    assert not matcher.is_terminated()
+    assert matcher.accept_token(4)
+    assert matcher.is_terminated()
+    assert matcher.validate_tokens([0, 1]) == 0
+    matcher.rollback(1)
+    assert not matcher.is_terminated()
+    assert matcher.validate_tokens([4]) == 1
+
+    # An empty decoded special token is valid when it is explicitly made the active stop token.
+    empty_stop_matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= ("a" | "b")*', tokenizer_info, override_stop_tokens=[2]
+    )
+    assert empty_stop_matcher.validate_tokens([2, 0]) == 1
+    assert not empty_stop_matcher.is_terminated()
+
+    terminate_on_completion = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= "a" "b"', tokenizer_info, terminate_without_stop_token=True
+    )
+    assert terminate_on_completion.validate_tokens([0, 1, 0]) == 2
+    assert not terminate_on_completion.is_completed()
+    assert not terminate_on_completion.is_terminated()
+    assert terminate_on_completion.accept_token(0)
+    assert terminate_on_completion.accept_token(1)
+    assert terminate_on_completion.is_terminated()
+    assert terminate_on_completion.validate_tokens([4]) == 0
+
+
+def test_validate_tokens_preserves_capture_rollback_and_fork_state():
+    vocab = ["a", "b", "x", "<eos>"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[3])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= item item\nitem[capture="item"] ::= [ab]', tokenizer_info
+    )
+    assert matcher.accept_token(0)
+    assert matcher.get_captures() == [("item", b"a")]
+    state_before_validation = matcher._debug_print_internal_state()
+    forked = matcher.fork()
+
+    for candidate, expected in (([1, 3, 0], 2), ([2, 1], 0), ([], 0)):
+        assert matcher.validate_tokens(candidate) == expected
+        assert forked.validate_tokens(candidate) == expected
+    assert matcher._debug_print_internal_state() == state_before_validation
+    assert forked._debug_print_internal_state() == state_before_validation
+    assert matcher.get_captures() == [("item", b"a")]
+    assert forked.get_captures() == [("item", b"a")]
+
+    # Validation did not append rollback history: rolling back once returns to the initial state.
+    matcher.rollback(1)
+    assert matcher.get_captures() == []
+    assert matcher.validate_tokens([1, 0, 3]) == 3
+
+    # The fork remains independent at the old prefix and can commit the previously validated path.
+    assert forked.accept_token(1)
+    assert forked.is_completed()
+    assert forked.get_captures() == [("item", b"a"), ("item", b"b")]
+    assert matcher.get_captures() == []
+
+
+@pytest.mark.parametrize(
+    "marker_attribute, expected_outer_capture", [("suffix", b"x|!a>"), ("stop", b"x!a>")]
+)
+def test_validate_tokens_combines_runtime_rule_attributes(
+    marker_attribute: str, expected_outer_capture: bytes
+):
+    vocab = ["x", "xx", "|", "!", "a", "b", "ab", ">", "bad"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = xgr.Grammar.from_lark(
+        f'start[capture="outer"]: reasoning "!" value ">"\n'
+        f'reasoning[max_tokens=2, max_chars=2, capture="reasoning", '
+        f'{marker_attribute}="|"]: TEXT\n'
+        'value[lazy, capture="value"]: /[ab]+/\n'
+        "TEXT: /(\\n|.)*/",
+        tokenizer_info=tokenizer_info,
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    initial_state = matcher._debug_print_internal_state()
+
+    # Exercise an explicit suffix/stop marker, a max_chars-forced close, and a lazy-rule rejection.
+    assert matcher.validate_tokens([0, 2, 3, 4, 7]) == 5
+    assert matcher.validate_tokens([1, 3, 4, 7]) == 4
+    assert matcher.validate_tokens([1, 3, 4, 5, 7]) == 3
+    assert matcher.get_captures() == []
+    assert matcher._debug_print_internal_state() == initial_state
+
+    for token_id in [0, 2, 3, 4, 7]:
+        assert matcher.accept_token(token_id)
+    assert matcher.is_terminated()
+    assert matcher.get_captures() == [
+        ("reasoning", b"x"),
+        ("value", b"a"),
+        ("outer", expected_outer_capture),
+    ]
+
+
+def test_validate_tokens_long_sequence_is_repeatable_and_stateless():
+    tokenizer_info = xgr.TokenizerInfo(["a", "!", "x"])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= [a]* "!"', tokenizer_info, terminate_without_stop_token=True
+    )
+    candidate = [0] * 4096 + [1, 2]
+
+    assert matcher.validate_tokens(candidate) == 4097
+    assert matcher.validate_tokens(candidate) == 4097
+    assert not matcher.is_completed()
+    assert not matcher.is_terminated()
+    assert matcher.accept_token(0)
+
+
 def test_rollback():
     vocab = [
         # fmt: off

@@ -306,6 +306,30 @@ class GrammarMatcher(XGRObject):
         """
         return self._handle.accept_token(token_id, debug_print)
 
+    def validate_tokens(self, token_ids: List[int]) -> int:
+        """Return the length of the longest token prefix accepted from the current state.
+
+        Each token is checked against the same next-token mask and acceptance path used by decoding.
+        Validation stops before an invalid id, an inactive stop or non-stop special token, a token
+        masked out by the grammar, or a token rejected during acceptance. If a token terminates the
+        matcher, that token is included in the returned count and validation stops. The accepted
+        prefix does not need to complete the grammar.
+
+        This method does not change parser state, captures, accepted-token history, or budget-warning
+        state, so it can be called repeatedly without rollback.
+
+        Parameters
+        ----------
+        token_ids : List[int]
+            The token ids to validate in order.
+
+        Returns
+        -------
+        accepted_count : int
+            The number of consecutive tokens accepted.
+        """
+        return int(self._handle.validate_tokens(token_ids))
+
     def accept_string(self, input_str: Union[str, bytes], *, debug_print: bool = False) -> bool:
         """Accept a string and update the state of the matcher. The whole string is considered
         as one step in rollback. It is used to complement the functionality of accept_token, and

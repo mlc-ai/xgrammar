@@ -129,6 +129,14 @@ then roll back the rejected suffix with
 with independent states, duplicate the matcher with
 [`xgr.GrammarMatcher.fork`](xgrammar.GrammarMatcher.fork).
 
+For a linear candidate sequence,
+[`xgr.GrammarMatcher.validate_tokens`](xgrammar.GrammarMatcher.validate_tokens) returns the number
+of consecutive tokens that can be accepted from the current state. It performs validation on an
+isolated matcher state, so no rollback is needed and captures, budgets, and accepted-token history
+remain unchanged. Each candidate is checked against the ordinary next-token mask and acceptance
+path; invalid IDs, inactive stop or non-stop special tokens, grammar rejections, and termination end
+the validated prefix. The terminating token itself is included in the returned count.
+
 **Jump-forward decoding.**
 [`xgr.GrammarMatcher.find_jump_forward_string`](xgrammar.GrammarMatcher.find_jump_forward_string)
 returns the longest string that certainly follows the current state under the grammar. The
