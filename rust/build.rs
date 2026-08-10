@@ -61,7 +61,17 @@ fn build_macos_link_stubs() {
     // by the static shim and resolved from the real runtime at execution time.
     for library_name in ["libtvm_ffi.dylib", "libtvm_ffi_testing.dylib"] {
         let output_path = out_dir.join(library_name);
-        let install_name = format!("@rpath/{library_name}");
+        // The stub must NOT claim the real library's install name: dyld
+        // matches dependent load commands against already-loaded images by
+        // install name, and newer ld64 versions do not drop the (unused)
+        // dead-strippable stub, so a stub named `@rpath/libtvm_ffi.dylib`
+        // shadows the real runtime for every dylib dlopen'ed later —
+        // `libxgrammar_bindings.dylib` then fails with "Symbol not found".
+        // Give the stub a distinct identity; the bindings resolve the real
+        // library through the image the static shim already dlopen'ed (and
+        // through their own rpath).
+        let stub_leaf = format!("xgrammar-link-stub-{library_name}");
+        let install_name = format!("@rpath/{stub_leaf}");
         let status = compiler
             .to_command()
             .arg("-dynamiclib")
@@ -73,6 +83,12 @@ fn build_macos_link_stubs() {
             .status()
             .unwrap_or_else(|err| panic!("failed to build {library_name}: {err}"));
         assert!(status.success(), "failed to build {library_name}: {status}");
+        // When the linker does keep the stub, dyld resolves its @rpath
+        // reference by the install-name leaf, so the file must also exist
+        // under that name (the `libtvm_ffi.dylib` spelling above is what
+        // `-ltvm_ffi` finds at link time).
+        std::fs::copy(&output_path, out_dir.join(&stub_leaf))
+            .unwrap_or_else(|err| panic!("failed to copy {library_name} stub: {err}"));
     }
 
     println!("cargo:rustc-link-search=native={}", out_dir.display());
