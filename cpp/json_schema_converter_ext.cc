@@ -15,6 +15,9 @@
 
 namespace xgrammar {
 
+constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
+constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
+
 // Static constants
 const std::string XMLToolCallingConverter::kXMLString = "xml_string";
 const std::string XMLToolCallingConverter::kXMLAny = "xml_any";
@@ -31,6 +34,12 @@ const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
           // TODO(Linzhang): We do not validate the string's value, and we accept both.
           "</｜DSML｜parameter>"}},
         {JSONFormat::kGlmXML, {"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"}},
+        {JSONFormat::kKimiK3XML,
+         {"<|open|>argument key=\"",
+          "",
+          "",
+          // The key suffix (type attribute and <|sep|>) is generated in XMLKeySuffix.
+          "<|close|>argument<|sep|>"}},
 };
 
 XMLToolCallingConverter::XMLToolCallingConverter(
@@ -63,7 +72,7 @@ std::string XMLToolCallingConverter::XMLValue(const std::string& json_value) con
   return json_value;
 }
 
-int32_t XMLToolCallingConverter::XMLKeySuffix() {
+int32_t XMLToolCallingConverter::XMLKeySuffix(const std::optional<std::string>& pinned_type) {
   if (json_format_ == JSONFormat::kDeepSeekXML) {
     return Sequence(
         {ByteString("\" string=\""),
@@ -71,7 +80,82 @@ int32_t XMLToolCallingConverter::XMLKeySuffix() {
          ByteString("\">")}
     );
   }
+  if (json_format_ == JSONFormat::kKimiK3XML) {
+    // A declared property carries exactly the type its value grammar is rendered with, so the
+    // parser decodes the value back to the schema's type. Free-form keys have no single schema
+    // type, so they keep the full set.
+    int32_t type_expr = pinned_type.has_value() ? ByteString(*pinned_type)
+                                                : Choice(
+                                                      {ByteString("string"),
+                                                       ByteString("number"),
+                                                       ByteString("integer"),
+                                                       ByteString("boolean"),
+                                                       ByteString("object"),
+                                                       ByteString("array"),
+                                                       ByteString("null")}
+                                                  );
+    return Sequence({ByteString("\" type=\""), type_expr, ByteString("\"<|sep|>")});
+  }
   return ByteString(xml_wrapper_.key_wrapper_suffix);
+}
+
+std::optional<std::string> XMLToolCallingConverter::KimiK3TypeAttr(const SchemaSpecPtr& spec) {
+  if (spec == nullptr) {
+    return std::nullopt;
+  }
+  // The type name a single JSON value is rendered with, following the model's _xtml_type.
+  auto type_of_json_value = [](const std::string& json_value) -> std::optional<std::string> {
+    picojson::value value;
+    if (!picojson::parse(value, json_value).empty()) {
+      return std::nullopt;
+    }
+    if (value.is<std::string>()) return "string";
+    if (value.is<bool>()) return "boolean";
+    if (value.is<double>()) return "number";
+    if (value.is<picojson::null>()) return "null";
+    if (value.is<picojson::object>()) return "object";
+    if (value.is<picojson::array>()) return "array";
+    return std::nullopt;
+  };
+
+  return std::visit(
+      [&](auto&& arg) -> std::optional<std::string> {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, StringSpec>) {
+          return "string";
+        } else if constexpr (std::is_same_v<T, IntegerSpec> || std::is_same_v<T, NumberSpec>) {
+          // _xtml_type renders every int and float as "number"; it never emits "integer".
+          return "number";
+        } else if constexpr (std::is_same_v<T, BooleanSpec>) {
+          return "boolean";
+        } else if constexpr (std::is_same_v<T, NullSpec>) {
+          return "null";
+        } else if constexpr (std::is_same_v<T, ArraySpec>) {
+          return "array";
+        } else if constexpr (std::is_same_v<T, ObjectSpec>) {
+          return "object";
+        } else if constexpr (std::is_same_v<T, ConstSpec>) {
+          return type_of_json_value(arg.json_value);
+        } else if constexpr (std::is_same_v<T, EnumSpec>) {
+          // Only pin the attribute when every alternative renders with the same type.
+          std::optional<std::string> common;
+          for (const auto& json_value : arg.json_values) {
+            auto type_name = type_of_json_value(json_value);
+            if (!type_name.has_value()) return std::nullopt;
+            if (!common.has_value()) {
+              common = type_name;
+            } else if (*common != *type_name) {
+              return std::nullopt;
+            }
+          }
+          return common;
+        } else {
+          // Any, $ref and the combinators may render as more than one type; keep them open.
+          return std::nullopt;
+        }
+      },
+      spec->spec
+  );
 }
 
 void XMLToolCallingConverter::AddBasicRules() {
@@ -82,8 +166,6 @@ void XMLToolCallingConverter::AddBasicRules() {
   JSONSchemaConverter::AddBasicRules({kXMLString, kXMLAny, kXMLObject, kXMLVariableName});
 
   auto any_spec = SchemaSpec::Make(AnySpec{}, "{}", kBasicAny);
-  constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
-  constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
 
   // The outer part, xml format, is at level 1.
   nested_object_level_ = 1;
@@ -214,18 +296,52 @@ int32_t XMLToolCallingConverter::GenerateEnum(const EnumSpec& spec, const std::s
   return JSONSchemaConverter::GenerateEnum(spec, rule_name);
 }
 
-int32_t XMLToolCallingConverter::FormatPropertyKey(const std::string& key) {
-  if (nested_object_level_ <= 1) {
-    return Sequence({ByteString(xml_wrapper_.key_wrapper_prefix + key), XMLKeySuffix()});
+std::string XMLToolCallingConverter::EscapeAttrValue(const std::string& value) const {
+  if (json_format_ != JSONFormat::kKimiK3XML) {
+    return value;
   }
-  return JSONSchemaConverter::FormatPropertyKey(key);
+  // Kimi-K3's renderer escapes attribute values with & -> &amp; and " -> &quot;.
+  std::string escaped;
+  escaped.reserve(value.size());
+  for (char c : value) {
+    if (c == '&') {
+      escaped += "&amp;";
+    } else if (c == '"') {
+      escaped += "&quot;";
+    } else {
+      escaped += c;
+    }
+  }
+  return escaped;
+}
+
+int32_t XMLToolCallingConverter::FormatPropertyKey(
+    const std::string& key, const SchemaSpecPtr& schema
+) {
+  if (nested_object_level_ <= 1) {
+    // Only kimi_k3_xml encodes the value's type next to the key; the other formats would
+    // discard the result, so don't walk the schema for them.
+    std::optional<std::string> pinned_type;
+    if (json_format_ == JSONFormat::kKimiK3XML) {
+      pinned_type = KimiK3TypeAttr(schema);
+    }
+    return Sequence(
+        {ByteString(xml_wrapper_.key_wrapper_prefix + EscapeAttrValue(key)),
+         XMLKeySuffix(pinned_type)}
+    );
+  }
+  return JSONSchemaConverter::FormatPropertyKey(key, schema);
 }
 
 int32_t XMLToolCallingConverter::FormatProperty(
-    const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
+    const std::string& key,
+    int32_t value_rule_id,
+    const std::string& rule_name,
+    int64_t idx,
+    const SchemaSpecPtr& schema
 ) {
   if (nested_object_level_ <= 1) {
-    std::vector<int32_t> elements = {FormatPropertyKey(key)};
+    std::vector<int32_t> elements = {FormatPropertyKey(key, schema)};
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
       elements.push_back(WhitespaceExpression());
       elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
@@ -242,18 +358,21 @@ int32_t XMLToolCallingConverter::FormatProperty(
     elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
     return Sequence(elements);
   }
-  return JSONSchemaConverter::FormatProperty(key, value_rule_id, rule_name, idx);
+  return JSONSchemaConverter::FormatProperty(key, value_rule_id, rule_name, idx, schema);
 }
 
 int32_t XMLToolCallingConverter::FormatOtherProperty(
     int32_t key_pattern_expr,
     int32_t value_rule_id,
     const std::string& rule_name,
-    const std::string& rule_name_suffix
+    const std::string& rule_name_suffix,
+    const SchemaSpecPtr& schema
 ) {
   if (nested_object_level_ <= 1) {
     std::vector<int32_t> elements = {
-        ByteString(xml_wrapper_.key_wrapper_prefix), key_pattern_expr, XMLKeySuffix()
+        ByteString(xml_wrapper_.key_wrapper_prefix),
+        key_pattern_expr,
+        XMLKeySuffix(json_format_ == JSONFormat::kKimiK3XML ? KimiK3TypeAttr(schema) : std::nullopt)
     };
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
       elements.push_back(WhitespaceExpression());
@@ -270,7 +389,7 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
     return Sequence(elements);
   }
   return JSONSchemaConverter::FormatOtherProperty(
-      key_pattern_expr, value_rule_id, rule_name, rule_name_suffix
+      key_pattern_expr, value_rule_id, rule_name, rule_name_suffix, schema
   );
 }
 
@@ -294,6 +413,13 @@ void XMLToolCallingConverter::AddCache(const std::string& key, int32_t rule_id) 
 std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
+  }
+  // At level 0, {"type":"object"} is the root tool-arguments object and uses XML parameter
+  // tags. At level 1 it is the value of one such parameter and must use the inner JSON object
+  // rule, including braces. Without this distinction, the outer XML object cache is reused for
+  // the value before GenerateObject() can advance nested_object_level_.
+  if (nested_object_level_ == 1 && key == kObjectCacheKey) {
+    return rule_cache_manager_.GetCache(key, true);
   }
   return rule_cache_manager_.GetCache(key, nested_object_level_ > 1);
 }

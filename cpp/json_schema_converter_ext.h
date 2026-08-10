@@ -7,8 +7,11 @@
 #ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 #define XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 
+#include <optional>
+#include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "json_schema_converter.h"
 
@@ -49,15 +52,20 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
 
   // Override format hooks
-  int32_t FormatPropertyKey(const std::string& key) override;
+  int32_t FormatPropertyKey(const std::string& key, const SchemaSpecPtr& schema) override;
   int32_t FormatProperty(
-      const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
+      const std::string& key,
+      int32_t value_rule_id,
+      const std::string& rule_name,
+      int64_t idx,
+      const SchemaSpecPtr& schema
   ) override;
   int32_t FormatOtherProperty(
       int32_t key_pattern_expr,
       int32_t value_rule_id,
       const std::string& rule_name,
-      const std::string& rule_name_suffix
+      const std::string& rule_name_suffix,
+      const SchemaSpecPtr& schema
   ) override;
 
   std::string GetKeyPattern() const override;
@@ -89,7 +97,28 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   static const std::string kXMLVariableName;
 
   std::string XMLValue(const std::string& json_value) const;
-  int32_t XMLKeySuffix();
+  std::string EscapeAttrValue(const std::string& value) const;
+
+  /*!
+   * \brief Return the Kimi-K3 `type` attribute a value of \p spec is rendered with, or
+   * std::nullopt if the schema does not pin down a single type (\p spec may be nullptr, which
+   * is how free-form keys end up unconstrained).
+   *
+   * The Kimi-K3 tool-call parser reads the attribute as a decoding switch: type="string"
+   * keeps the value as raw text, anything else JSON-decodes it. So the attribute must agree
+   * with the value grammar, otherwise the decoded argument changes type (e.g. a string
+   * property tagged type="number" with body 123 decodes to the integer 123). Mirrors the
+   * model's renderer (_xtml_type), which maps both ints and floats to "number".
+   */
+  static std::optional<std::string> KimiK3TypeAttr(const SchemaSpecPtr& spec);
+
+  /*!
+   * \brief Build the expression between the property key and its value.
+   * \param pinned_type For kimi_k3_xml, the single type attribute this property must carry.
+   * std::nullopt keeps every type allowed, which is what free-form keys
+   * (additionalProperties / patternProperties) need.
+   */
+  int32_t XMLKeySuffix(const std::optional<std::string>& pinned_type = std::nullopt);
 
   JSONFormat json_format_;
   // Track if we're at the root object level

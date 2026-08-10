@@ -81,6 +81,8 @@ MODEL_CONFIGS = [
     ("llama", "meta-llama/Llama-3.1-8B-Instruct", False, {}),
     ("kimi", "moonshotai/Kimi-K2-Thinking", True, {"thinking": True}),
     ("kimi", "moonshotai/Kimi-K2-Instruct", False, {}),
+    ("kimi_k3", "moonshotai/Kimi-K3", True, {"thinking": True}),
+    ("kimi_k3", "moonshotai/Kimi-K3", False, {"thinking": False}),
     ("deepseek_r1", "deepseek-ai/DeepSeek-R1", True, {}),
     ("deepseek_v3_1", "deepseek-ai/DeepSeek-V3.1", True, {"thinking": True}),
     ("deepseek_v3_1", "deepseek-ai/DeepSeek-V3.1", False, {"thinking": False}),
@@ -105,8 +107,9 @@ MODEL_CONFIGS = [
     ("deepseek_v4", "ENCODER:dsv4", False, {"thinking_mode": "chat"}),
 ]
 
-# DeepSeek V3.2 encoder rejects empty reasoning + no tool calls.
-SKIP_EMPTY_REASONING = {"ENCODER:dsv32", "MiniMaxAI/MiniMax-M2.5"}
+# Models whose renderer cannot produce a turn with an empty reasoning block: the DeepSeek
+# V3.2 encoder rejects it, the other templates drop the block entirely.
+SKIP_EMPTY_REASONING = {"ENCODER:dsv32", "MiniMaxAI/MiniMax-M2.5", "moonshotai/Kimi-K3"}
 
 # Models where tool call format in template doesn't match structural tag.
 SKIP_TOOLS = set()
@@ -130,6 +133,7 @@ STRIP_THINK_MODELS = {
 EOS_SUFFIXES = {
     "llama": ["<|eot_id|>"],
     "kimi": ["<|im_end|>"],
+    "kimi_k3": ["<|end_of_msg|>"],
     "deepseek_r1": ["<｜end▁of▁sentence｜>"],
     "deepseek_v3_1": ["<｜end▁of▁sentence｜>"],
     "qwen_3": ["<|im_end|>"],
