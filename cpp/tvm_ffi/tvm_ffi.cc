@@ -258,6 +258,8 @@ class BatchGrammarMatcherObj : public ffi::Object {
 // Custom constructors are handled via lambda wrappers below; TVM-FFI uses refl::init<Args...>()
 // and we need to bridge FFI types to xgrammar types in those lambdas.
 
+static void RegisterGlobalFunctionAliases();
+
 TVM_FFI_STATIC_INIT_BLOCK() {
   using O = ffi::ObjectRef;
 
@@ -1018,6 +1020,58 @@ TVM_FFI_STATIC_INIT_BLOCK() {
             XGRAMMAR_FFI_TRY_END();
           }
       );
+
+  // Must run last in this block: the method tables above must be populated first.
+  // A separate TVM_FFI_STATIC_INIT_BLOCK would not guarantee that — the blocks expand
+  // to __attribute__((constructor)) functions, whose relative order is unspecified
+  // across LTO partitions.
+  RegisterGlobalFunctionAliases();
+}
+
+// ----- Registration: global-function aliases for the reflected type methods -----
+// Python reaches the API through reflected type methods (the ObjectDef registrations
+// above). Clients without reflection support (e.g. the Rust binding under rust/) can
+// only reach the global function table, so mirror every reflected method as a global
+// function named "<type_key>.<method_name>", and each constructor as
+// "<type_key>.__ffi_init__".
+
+static void RegisterGlobalFunctionAliases() {
+  constexpr const char* alias_type_keys[] = {
+      "xgrammar.tvm_ffi_binding.TokenizerInfo",
+      "xgrammar.tvm_ffi_binding.Grammar",
+      "xgrammar.tvm_ffi_binding.CompiledGrammar",
+      "xgrammar.tvm_ffi_binding.GrammarCompiler",
+      "xgrammar.tvm_ffi_binding.GrammarMatcher",
+      "xgrammar.tvm_ffi_binding.BatchGrammarMatcher",
+  };
+  constexpr const char init_attr[] = "__ffi_init__";
+  TVMFFIByteArray init_attr_arr{init_attr, sizeof(init_attr) - 1};
+  const TVMFFITypeAttrColumn* init_col = TVMFFIGetTypeAttrColumn(&init_attr_arr);
+  for (const char* type_key : alias_type_keys) {
+    TVMFFIByteArray key_arr{type_key, std::char_traits<char>::length(type_key)};
+    int32_t type_index = -1;
+    if (TVMFFITypeKeyToIndex(&key_arr, &type_index) != 0) {
+      TVM_FFI_THROW(RuntimeError) << "Type key not registered: " << type_key;
+    }
+    const TVMFFITypeInfo* info = TVMFFIGetTypeInfo(type_index);
+    auto set_global_alias = [&](const std::string& method_name, TVMFFIObject* func) {
+      std::string alias = std::string(type_key) + "." + method_name;
+      TVMFFIByteArray alias_arr{alias.data(), alias.size()};
+      TVMFFIFunctionSetGlobal(&alias_arr, func, /*allow_override=*/1);
+    };
+    for (int32_t i = 0; i < info->num_methods; ++i) {
+      const TVMFFIMethodInfo& method = info->methods[i];
+      if (method.method.type_index != ffi::TypeIndex::kTVMFFIFunction) continue;
+      set_global_alias(std::string(method.name.data, method.name.size), method.method.v_obj);
+    }
+    if (init_col != nullptr && type_index >= init_col->begin_index &&
+        type_index < init_col->begin_index + init_col->size) {
+      const TVMFFIAny& init_fn = init_col->data[type_index - init_col->begin_index];
+      if (init_fn.type_index == ffi::TypeIndex::kTVMFFIFunction) {
+        set_global_alias(init_attr, init_fn.v_obj);
+      }
+    }
+  }
 }
 
 }  // namespace xgrammar

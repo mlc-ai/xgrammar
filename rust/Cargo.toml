@@ -1,0 +1,23 @@
+[package]
+name = "xgrammar"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Rust bindings for XGrammar: efficient, flexible and portable structured generation"
+license = "Apache-2.0"
+repository = "https://github.com/mlc-ai/xgrammar"
+publish = false
+
+[dependencies]
+# Must stay in lockstep with the `apache-tvm-ffi` Python package that
+# `libxgrammar_bindings` is built against: the Rust crate links the same
+# `libtvm_ffi` shared library (located via `tvm-ffi-config --libdir`), and a
+# version skew would put two incompatible ABIs in one process. The rev below
+# is the `v0.1.12` tag of apache/tvm-ffi.
+tvm-ffi = { git = "https://github.com/apache/tvm-ffi.git", rev = "3050b0a7bd48e04f853027c5fa1f5ab7bc20b856" }
+serde = { version = "1.0", features = ["derive"] }
+# preserve_order keeps JSON-schema property order identical to Python's
+# pydantic serialization, so wire output is byte-for-byte comparable.
+serde_json = { version = "1.0", features = ["preserve_order"] }
+
+[dev-dependencies]
