@@ -60,7 +60,11 @@ The library is located automatically, in this order:
 1. registrations already present in the process — nothing to do when the host
    application (e.g. an embedded Python interpreter) already loaded xgrammar;
 2. the path in the `XGRAMMAR_BINDINGS_LIB` environment variable;
-3. the platform's `xgrammar_bindings` library name via the system loader search
+3. the repository checkout the crate was built from (development builds);
+4. the `xgrammar` Python package discovered at build time — a
+   `pip install xgrammar` is enough for binaries to start without any loading
+   code;
+5. the platform's `xgrammar_bindings` library name via the system loader search
    path.
 
 When the library lives somewhere unusual, point the environment variable at it

@@ -68,8 +68,9 @@ pub fn load_library(path: impl AsRef<str>) -> Result<()> {
 /// 1. registrations already present in the process (e.g. the host application
 ///    or an embedded Python interpreter already loaded the library);
 /// 2. the path in `$XGRAMMAR_BINDINGS_LIB`;
-/// 3. the platform's `xgrammar_bindings` library name via the system loader
-///    search path.
+/// 3. the default candidates: the repository checkout the crate was built
+///    from, the `xgrammar` Python package discovered at build time, and the
+///    platform library name via the system loader search path.
 pub(crate) fn ensure_loaded() -> Result<()> {
     if LOADED.load(Ordering::Acquire) {
         return Ok(());
@@ -85,7 +86,7 @@ pub(crate) fn ensure_loaded() -> Result<()> {
     let attempt = if let Ok(path) = std::env::var(LIB_ENV) {
         try_load(&path)
     } else {
-        try_load(LIB_BASENAME)
+        try_load_default_candidates()
     };
     match attempt {
         Ok(()) => {
@@ -99,6 +100,37 @@ pub(crate) fn ensure_loaded() -> Result<()> {
              xgrammar::load_library() before any other API."
         ))),
     }
+}
+
+/// Default load candidates, tried in order (missing ones are skipped):
+/// 1. the repository checkout this crate was built from (development builds);
+/// 2. the `xgrammar` Python package discovered at build time (pip installs);
+/// 3. the platform library name via the system loader search path.
+fn try_load_default_candidates() -> Result<()> {
+    let dev_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../python/xgrammar")
+        .join(BINDINGS_LIBRARY_FILENAME);
+    let python_package_dir = env!("XGRAMMAR_PYTHON_PACKAGE_DIR");
+
+    let mut candidates = vec![dev_path.to_string_lossy().into_owned()];
+    if !python_package_dir.is_empty() {
+        candidates.push(
+            std::path::Path::new(python_package_dir)
+                .join(BINDINGS_LIBRARY_FILENAME)
+                .to_string_lossy()
+                .into_owned(),
+        );
+    }
+    candidates.push(LIB_BASENAME.to_string());
+
+    let mut last_err = None;
+    for candidate in &candidates {
+        match try_load(candidate) {
+            Ok(()) => return Ok(()),
+            Err(err) => last_err = Some(err),
+        }
+    }
+    Err(last_err.expect("at least one candidate is always tried"))
 }
 
 /// dlopen `path`, keep it alive forever, and verify the alias layer is there.

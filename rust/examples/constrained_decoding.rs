@@ -23,15 +23,9 @@ fn sample(logits: &[f32]) -> i64 {
 }
 
 fn main() -> xgrammar::Result<()> {
-    // Only needed because this example loads a freshly built, uninstalled
-    // library from the repository checkout. Applications normally need no
-    // loading code at all: the library is found automatically when the
-    // process already has xgrammar loaded, via $XGRAMMAR_BINDINGS_LIB, or on
-    // the system loader path.
-    let bindings_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../python/xgrammar")
-        .join(xgrammar::BINDINGS_LIBRARY_FILENAME);
-    let _ = xgrammar::load_library(bindings_path.to_string_lossy());
+    // No loading code needed: the bindings library is found automatically
+    // (repository build, pip-installed xgrammar package, or the system
+    // loader path — see `xgrammar::load_library` for the unusual cases).
 
     // A byte-level toy vocabulary: token 0 is EOS, the rest are ASCII bytes.
     let mut vocab: Vec<Vec<u8>> = vec![b"</s>".to_vec()];

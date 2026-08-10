@@ -46,8 +46,36 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=dl");
         println!("cargo:rustc-link-lib=dylib=pthread");
     }
+    emit_python_package_dir();
     println!("cargo:rerun-if-changed=src/tvm_ffi_loader.c");
     println!("cargo:rerun-if-changed=src/tvm_ffi_link_stub.c");
+}
+
+/// Locate an installed `xgrammar` Python package (a build-time snapshot). The
+/// bindings library it bundles becomes one of the runtime load candidates, so
+/// a `pip install xgrammar` is enough for consumer binaries to start without
+/// any loading code.
+fn emit_python_package_dir() {
+    let package_dir = ["python3", "python"].iter().find_map(|python| {
+        let output = Command::new(python)
+            .args([
+                "-c",
+                "import xgrammar, os, sys; \
+                 sys.stdout.write(os.path.dirname(os.path.abspath(xgrammar.__file__)))",
+            ])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let dir = String::from_utf8(output.stdout).ok()?;
+        let dir = dir.trim();
+        (!dir.is_empty()).then(|| dir.to_string())
+    });
+    println!(
+        "cargo:rustc-env=XGRAMMAR_PYTHON_PACKAGE_DIR={}",
+        package_dir.unwrap_or_default()
+    );
 }
 
 fn build_macos_link_stubs() {
