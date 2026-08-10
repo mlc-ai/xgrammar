@@ -168,7 +168,8 @@ not mirrored:
 
 ## Development
 
-Tests live in `rust/tests/` and run against the locally built bindings:
+Tests live in `tests/rust/` (next to the Python and C++ suites) and run
+against the locally built bindings:
 
 ```bash
 cmake --build build --target xgrammar_bindings   # once

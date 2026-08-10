@@ -25,3 +25,37 @@ cc = "1.0"
 
 [dev-dependencies]
 static_assertions = "1.1"
+
+# Integration tests live in tests/rust/ at the repository root, next to the
+# Python and C++ test suites, so they need explicit target declarations.
+[[test]]
+name = "batch"
+path = "../tests/rust/batch.rs"
+
+[[test]]
+name = "compiler"
+path = "../tests/rust/compiler.rs"
+
+[[test]]
+name = "config"
+path = "../tests/rust/config.rs"
+
+[[test]]
+name = "grammar"
+path = "../tests/rust/grammar.rs"
+
+[[test]]
+name = "matcher"
+path = "../tests/rust/matcher.rs"
+
+[[test]]
+name = "structural_tag"
+path = "../tests/rust/structural_tag.rs"
+
+[[test]]
+name = "testing_utils"
+path = "../tests/rust/testing_utils.rs"
+
+[[test]]
+name = "tokenizer_info"
+path = "../tests/rust/tokenizer_info.rs"
