@@ -12,13 +12,6 @@ use xgrammar::{
     TokenizerInfoOptions, VocabType,
 };
 
-#[cfg(target_os = "macos")]
-const LIB_BASENAME: &str = "libxgrammar_bindings.dylib";
-#[cfg(target_os = "windows")]
-const LIB_BASENAME: &str = "xgrammar_bindings.dll";
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-const LIB_BASENAME: &str = "libxgrammar_bindings.so";
-
 /// Greedy "sampler": picks the allowed token the mock model likes most.
 fn sample(logits: &[f32]) -> i64 {
     logits
@@ -30,11 +23,14 @@ fn sample(logits: &[f32]) -> i64 {
 }
 
 fn main() -> xgrammar::Result<()> {
-    // In this repository checkout the freshly built library is next to the
-    // Python package; outside of it, set XGRAMMAR_BINDINGS_LIB instead.
+    // Only needed because this example loads a freshly built, uninstalled
+    // library from the repository checkout. Applications normally need no
+    // loading code at all: the library is found automatically when the
+    // process already has xgrammar loaded, via $XGRAMMAR_BINDINGS_LIB, or on
+    // the system loader path.
     let bindings_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../python/xgrammar")
-        .join(LIB_BASENAME);
+        .join(xgrammar::BINDINGS_LIBRARY_FILENAME);
     let _ = xgrammar::load_library(bindings_path.to_string_lossy());
 
     // A byte-level toy vocabulary: token 0 is EOS, the rest are ASCII bytes.

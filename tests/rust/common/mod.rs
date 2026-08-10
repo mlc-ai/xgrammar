@@ -3,14 +3,7 @@
 
 use std::sync::Once;
 
-use xgrammar::{TokenizerInfo, TokenizerInfoOptions, VocabType};
-
-#[cfg(target_os = "macos")]
-const LIB_BASENAME: &str = "libxgrammar_bindings.dylib";
-#[cfg(target_os = "windows")]
-const LIB_BASENAME: &str = "xgrammar_bindings.dll";
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
-const LIB_BASENAME: &str = "libxgrammar_bindings.so";
+use xgrammar::{TokenizerInfo, TokenizerInfoOptions, VocabType, BINDINGS_LIBRARY_FILENAME};
 
 /// Load the freshly built bindings library from the repository checkout.
 pub fn init() {
@@ -18,11 +11,11 @@ pub fn init() {
     ONCE.call_once(|| {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../python/xgrammar")
-            .join(LIB_BASENAME);
+            .join(BINDINGS_LIBRARY_FILENAME);
         xgrammar::load_library(path.to_str().expect("bindings library path is not UTF-8"))
             .unwrap_or_else(|err| {
                 panic!(
-                    "cannot load {LIB_BASENAME}; build it first \
+                    "cannot load {BINDINGS_LIBRARY_FILENAME}; build it first \
                      (cmake --build <build-dir> --target xgrammar_bindings): {err}"
                 )
             });

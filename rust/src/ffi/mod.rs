@@ -21,12 +21,25 @@ const CANARY: &str = "xgrammar.tvm_ffi_binding.Grammar.from_ebnf";
 /// Environment variable pointing at `libxgrammar_bindings`.
 const LIB_ENV: &str = "XGRAMMAR_BINDINGS_LIB";
 
+/// The platform-specific file name of the bindings library
+/// (`libxgrammar_bindings.so` / `.dylib` / `xgrammar_bindings.dll`).
+///
+/// Useful with [`load_library`] when loading the library from a known
+/// directory, e.g. a build tree.
 #[cfg(target_os = "macos")]
-const LIB_BASENAME: &str = "libxgrammar_bindings.dylib";
+pub const BINDINGS_LIBRARY_FILENAME: &str = "libxgrammar_bindings.dylib";
+/// The platform-specific file name of the bindings library.
 #[cfg(target_os = "windows")]
-const LIB_BASENAME: &str = "xgrammar_bindings.dll";
+pub const BINDINGS_LIBRARY_FILENAME: &str = "xgrammar_bindings.dll";
+/// The platform-specific file name of the bindings library
+/// (`libxgrammar_bindings.so` / `.dylib` / `xgrammar_bindings.dll`).
+///
+/// Useful with [`load_library`] when loading the library from a known
+/// directory, e.g. a build tree.
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-const LIB_BASENAME: &str = "libxgrammar_bindings.so";
+pub const BINDINGS_LIBRARY_FILENAME: &str = "libxgrammar_bindings.so";
+
+const LIB_BASENAME: &str = BINDINGS_LIBRARY_FILENAME;
 
 static LOADED: AtomicBool = AtomicBool::new(false);
 static LOAD_LOCK: Mutex<()> = Mutex::new(());

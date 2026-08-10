@@ -56,7 +56,7 @@ pub use config::{
     set_max_recursion_depth, MaxRecursionDepthGuard,
 };
 pub use error::{Error, Result};
-pub use ffi::load_library;
+pub use ffi::{load_library, BINDINGS_LIBRARY_FILENAME};
 pub use grammar::{Grammar, JsonSchemaOptions, NamedGrammar};
 pub use matcher::{BatchGrammarMatcher, GrammarMatcher, MatcherOptions, MaxThreads};
 pub use structural_tag::{Format, StructuralTag, StructuralTagItem, TagFormat};
