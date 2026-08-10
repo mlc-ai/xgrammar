@@ -32,7 +32,8 @@ cargo run --example constrained_decoding
 
 `tvm-ffi-config` must be on `PATH` (activate the environment where
 `apache-tvm-ffi` is installed). The integration tests load
-`../python/xgrammar/libxgrammar_bindings.so`, i.e. the library built in step 2.
+the platform's `libxgrammar_bindings` file from `../python/xgrammar`, i.e. the
+library built in step 2.
 
 ## How it works
 
@@ -54,6 +55,12 @@ cargo run --example constrained_decoding
   `ffi_call!` macro in `src/ffi/mod.rs`), avoiding the typed path's arity
   limit and its missing `Array<T>` argument support. Function handles are
   cached per call site in thread-locals (`tvm_ffi::Function` is not `Sync`).
+- **Consumer-safe runtime loading.** A small static C shim loads the
+  `libtvm_ffi` selected by `tvm-ffi-config`. Unlike an rpath link argument,
+  the shim is bundled through the rlib into downstream executables, so path
+  and git consumers can start without setting a platform loader path. Set
+  `TVM_FFI_LIBRARY_PATH` to a full library path if the installation moves
+  after the Rust binary is built.
 - **Zero-copy tensors.** Token bitmasks and the draft-tree/temperature
   buffers are passed as borrowed `DLTensor` views over Rust slices
   (`DlArg` in `src/ffi/mod.rs`), matching the DLPack contract of the C++

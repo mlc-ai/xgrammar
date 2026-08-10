@@ -4,6 +4,9 @@ use xgrammar::{
     CompiledGrammar, Grammar, GrammarCompiler, GrammarCompilerOptions, JsonSchemaOptions,
 };
 
+static_assertions::assert_impl_all!(GrammarCompiler: Send);
+static_assertions::assert_not_impl_any!(GrammarCompiler: Sync);
+
 #[test]
 fn compile_and_inspect() {
     let ti = common::tiny_tokenizer_info();

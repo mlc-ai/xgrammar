@@ -29,16 +29,20 @@ Building requires:
    ```
 
    `tvm-ffi-config` must be on `PATH` when running cargo (activating the
-   virtual environment is enough).
+   virtual environment is enough). Cargo records this installation in a small
+   runtime-loader shim that is propagated into downstream binaries. If the
+   installation moves after building a binary, set `TVM_FFI_LIBRARY_PATH` to
+   the full path of the new `libtvm_ffi` file.
 
-2. **The bindings library** `libxgrammar_bindings.so`. Either take it from an
-   installed `xgrammar` Python wheel (it is inside the `xgrammar` package
-   directory), or build it from source:
+2. **The bindings library** (`libxgrammar_bindings.so` on Linux,
+   `libxgrammar_bindings.dylib` on macOS, or `xgrammar_bindings.dll` on
+   Windows). Either take it from an installed `xgrammar` Python wheel (it is
+   inside the `xgrammar` package directory), or build it from source:
 
    ```bash
    cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -G Ninja
    cmake --build build --target xgrammar_bindings
-   # produces python/xgrammar/libxgrammar_bindings.so
+   # produces the platform library under python/xgrammar/
    ```
 
 ```{note}
@@ -56,13 +60,14 @@ The library is located automatically, in this order:
 1. registrations already present in the process — nothing to do when the host
    application (e.g. an embedded Python interpreter) already loaded xgrammar;
 2. the path in the `XGRAMMAR_BINDINGS_LIB` environment variable;
-3. `libxgrammar_bindings.so` via the system loader search path.
+3. the platform's `xgrammar_bindings` library name via the system loader search
+   path.
 
 When the library lives somewhere unusual, point the environment variable at it
 or call `xgrammar::load_library` before any other API:
 
 ```rust
-xgrammar::load_library("/path/to/libxgrammar_bindings.so")?;
+xgrammar::load_library("/path/to/the/xgrammar_bindings/library")?;
 ```
 
 ## Quick start
@@ -140,8 +145,9 @@ Conventions on the Rust side:
   `accept_string` inputs are raw bytes, since tokens need not be valid UTF-8.
 - **Thread safety follows the C++ semantics**: `Grammar`, `CompiledGrammar`
   and `TokenizerInfo` are immutable and `Send + Sync` (clones share the
-  handle); `GrammarCompiler` is internally synchronized (`&self` methods);
-  `GrammarMatcher` is a mutable state machine, `Send` but not `Sync`.
+  handle); `GrammarCompiler` is `Send` but not `Sync` while native cache reads
+  remain unsynchronized; `GrammarMatcher` is a mutable state machine, `Send`
+  but not `Sync`.
 
 ## Differences from the Python package
 

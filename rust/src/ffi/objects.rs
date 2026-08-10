@@ -187,10 +187,9 @@ def_xgrammar_object!(
 );
 
 // The wrapped C++ objects are either immutable after construction
-// (TokenizerInfo, Grammar, CompiledGrammar) or internally synchronized
-// (GrammarCompiler); their handles can be shared across threads. The mutable
-// matcher types stay `Send`-only: the public wrappers around them add a
-// `!Sync` marker.
+// (TokenizerInfo, Grammar, CompiledGrammar), so their handles can be shared
+// across threads. GrammarCompiler and the mutable matcher types stay
+// `Send`-only: their public wrappers add a `!Sync` marker.
 unsafe impl Send for RawTokenizerInfo {}
 unsafe impl Sync for RawTokenizerInfo {}
 unsafe impl Send for RawGrammar {}
@@ -198,6 +197,5 @@ unsafe impl Sync for RawGrammar {}
 unsafe impl Send for RawCompiledGrammar {}
 unsafe impl Sync for RawCompiledGrammar {}
 unsafe impl Send for RawGrammarCompiler {}
-unsafe impl Sync for RawGrammarCompiler {}
 unsafe impl Send for RawGrammarMatcher {}
 unsafe impl Send for RawBatchGrammarMatcher {}

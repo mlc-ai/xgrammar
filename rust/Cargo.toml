@@ -20,4 +20,8 @@ serde = { version = "1.0", features = ["derive"] }
 # pydantic serialization, so wire output is byte-for-byte comparable.
 serde_json = { version = "1.0", features = ["preserve_order"] }
 
+[build-dependencies]
+cc = "1.0"
+
 [dev-dependencies]
+static_assertions = "1.1"

@@ -1,5 +1,6 @@
 //! Grammar compilation: [`GrammarCompiler`] and [`CompiledGrammar`].
 
+use std::marker::PhantomData;
 use tvm_ffi::String as FfiString;
 
 use crate::error::Result;
@@ -102,11 +103,12 @@ impl Default for GrammarCompilerOptions {
 /// Compiles grammars against one tokenizer vocabulary, with an internal
 /// cache.
 ///
-/// The compiler is internally synchronized: it can be shared across threads
-/// (`&self` methods) and compiles in parallel with up to `max_threads`
-/// threads.
+/// A compiler can be moved between threads (`Send`) but not shared between
+/// them (`!Sync`), because all native cache reads are not yet synchronized.
+/// Each compilation can still use up to `max_threads` internal worker threads.
 pub struct GrammarCompiler {
     raw: RawGrammarCompiler,
+    _not_sync: PhantomData<std::cell::Cell<()>>,
 }
 
 impl GrammarCompiler {
@@ -131,7 +133,10 @@ impl GrammarCompiler {
             options.cache_enabled,
             cache_limit,
         )?;
-        Ok(Self { raw: ret(any)? })
+        Ok(Self {
+            raw: ret(any)?,
+            _not_sync: PhantomData,
+        })
     }
 
     /// Compile a [`Grammar`].

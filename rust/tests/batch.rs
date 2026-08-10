@@ -55,6 +55,19 @@ fn batch_fill_with_indices() {
 }
 
 #[test]
+fn batch_fill_rejects_same_word_count_with_wrong_vocab_size() {
+    let (_compiled, mut matchers) = two_matchers();
+    let mut batch = BatchGrammarMatcher::new(MaxThreads::Count(2)).unwrap();
+    let mut bitmask = TokenBitmask::with_batch(2, 97);
+
+    let err = batch
+        .batch_fill_next_token_bitmask(&mut matchers, &mut bitmask, None)
+        .unwrap_err();
+    assert!(err.to_string().contains("97"));
+    assert!(err.to_string().contains("101"));
+}
+
+#[test]
 fn batch_accept_token_and_rollback() {
     let (_compiled, mut matchers) = two_matchers();
 

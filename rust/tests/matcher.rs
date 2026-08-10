@@ -54,6 +54,21 @@ fn constrained_decoding_loop() {
 }
 
 #[test]
+fn fill_rejects_same_word_count_with_wrong_vocab_size() {
+    let compiled = compile("root ::= \"ab\"");
+    let mut matcher = GrammarMatcher::new(&compiled).unwrap();
+
+    // The matcher vocabulary has 101 tokens. A 97-token mask also occupies
+    // four i32 words, so the native shape check alone cannot distinguish it.
+    let mut bitmask = TokenBitmask::new(97);
+    let err = matcher
+        .fill_next_token_bitmask(&mut bitmask, 0)
+        .unwrap_err();
+    assert!(err.to_string().contains("97"));
+    assert!(err.to_string().contains("101"));
+}
+
+#[test]
 fn rejects_tokens_outside_grammar() {
     let compiled = compile("root ::= \"ab\"");
     let mut matcher = GrammarMatcher::new(&compiled).unwrap();
@@ -202,4 +217,17 @@ fn traverse_draft_tree() {
         .unwrap();
     assert!(ok);
     assert_eq!(bitmask.masked_tokens(1).len(), vocab_size);
+}
+
+#[test]
+fn traverse_draft_tree_rejects_wrong_vocab_size() {
+    let compiled = compile("root ::= \"ab\"");
+    let mut matcher = GrammarMatcher::new(&compiled).unwrap();
+    let mut bitmask = TokenBitmask::with_batch(1, 97);
+
+    let err = matcher
+        .traverse_draft_tree(&[-1], &[-1], &[0], &mut bitmask, -1.0, None)
+        .unwrap_err();
+    assert!(err.to_string().contains("97"));
+    assert!(err.to_string().contains("101"));
 }

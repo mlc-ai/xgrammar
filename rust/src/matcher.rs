@@ -33,15 +33,28 @@ pub struct MatcherOptions {
 /// [`GrammarMatcher::fork`] to branch the state (e.g. for beam search).
 pub struct GrammarMatcher {
     pub(crate) raw: RawGrammarMatcher,
+    vocab_size: usize,
     _not_sync: PhantomData<std::cell::Cell<()>>,
 }
 
 impl GrammarMatcher {
-    fn from_raw(raw: RawGrammarMatcher) -> Self {
+    fn from_raw(raw: RawGrammarMatcher, vocab_size: usize) -> Self {
         Self {
             raw,
+            vocab_size,
             _not_sync: PhantomData,
         }
+    }
+
+    fn check_bitmask_vocab_size(&self, bitmask: &TokenBitmask) -> Result<()> {
+        if bitmask.vocab_size() != self.vocab_size {
+            return Err(Error::XGrammar(format!(
+                "token bitmask vocabulary size ({}) does not match matcher vocabulary size ({})",
+                bitmask.vocab_size(),
+                self.vocab_size
+            )));
+        }
+        Ok(())
     }
 
     /// Create a matcher with default options.
@@ -54,6 +67,7 @@ impl GrammarMatcher {
         compiled_grammar: &CompiledGrammar,
         options: &MatcherOptions,
     ) -> Result<Self> {
+        let vocab_size = compiled_grammar.tokenizer_info()?.vocab_size()?;
         let override_stop = options
             .override_stop_tokens
             .as_ref()
@@ -66,7 +80,7 @@ impl GrammarMatcher {
             -1i64, // max_rollback_tokens: unlimited (deprecated parameter)
             opt_any(options.default_temperature),
         )?;
-        Ok(Self::from_raw(ret(any)?))
+        Ok(Self::from_raw(ret(any)?, vocab_size))
     }
 
     /// Accept one token and update the matcher state. Returns `false` (and
@@ -131,6 +145,7 @@ impl GrammarMatcher {
         index: usize,
         debug_print: bool,
     ) -> Result<bool> {
+        self.check_bitmask_vocab_size(bitmask)?;
         let dl = bitmask.dl_arg();
         let any = ffi_call!(
             "xgrammar.tvm_ffi_binding.GrammarMatcher.fill_next_token_bitmask",
@@ -160,6 +175,7 @@ impl GrammarMatcher {
         time_threshold: f64,
         temperatures: Option<&mut [f32]>,
     ) -> Result<bool> {
+        self.check_bitmask_vocab_size(bitmask)?;
         let next_token = DlArg::int64_readonly(retrieve_next_token);
         let next_sibling = DlArg::int64_readonly(retrieve_next_sibling);
         let tokens = DlArg::int64_readonly(draft_tokens);
@@ -245,7 +261,7 @@ impl GrammarMatcher {
     /// Fork the matcher, duplicating its current state.
     pub fn fork(&self) -> Result<Self> {
         let any = ffi_call!("xgrammar.tvm_ffi_binding.GrammarMatcher.fork", self.raw)?;
-        Ok(Self::from_raw(ret(any)?))
+        Ok(Self::from_raw(ret(any)?, self.vocab_size))
     }
 
     /// Whether the matcher has terminated (grammar completed and, unless
@@ -374,6 +390,15 @@ impl BatchGrammarMatcher {
         indices: Option<&[i64]>,
         debug_print: bool,
     ) -> Result<()> {
+        for (batch_id, matcher) in matchers.iter().enumerate() {
+            if matcher.vocab_size != bitmask.vocab_size() {
+                return Err(Error::XGrammar(format!(
+                    "token bitmask vocabulary size ({}) does not match matcher {batch_id} vocabulary size ({})",
+                    bitmask.vocab_size(),
+                    matcher.vocab_size
+                )));
+            }
+        }
         let matcher_array = matcher_array(matchers);
         let dl = bitmask.dl_arg();
         let indices_arr = indices.map(|ids| Array::<i64>::new(ids.to_vec()));

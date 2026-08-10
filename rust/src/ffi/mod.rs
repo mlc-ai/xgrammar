@@ -55,7 +55,8 @@ pub fn load_library(path: impl AsRef<str>) -> Result<()> {
 /// 1. registrations already present in the process (e.g. the host application
 ///    or an embedded Python interpreter already loaded the library);
 /// 2. the path in `$XGRAMMAR_BINDINGS_LIB`;
-/// 3. `libxgrammar_bindings.so` via the system loader search path.
+/// 3. the platform's `xgrammar_bindings` library name via the system loader
+///    search path.
 pub(crate) fn ensure_loaded() -> Result<()> {
     if LOADED.load(Ordering::Acquire) {
         return Ok(());
