@@ -68,12 +68,14 @@ library built in step 2.
 - **Pure-Rust ports.** The structural tag models (pydantic in Python) are
   serde types with a byte-for-byte identical JSON wire format
   (`src/structural_tag.rs`); the CPU bitmask helpers (torch in Python) are
-  native Rust (`src/bitmask.rs`).
+  native Rust (`src/bitmask.rs`). Hugging Face fast tokenizers are loaded by
+  the official Rust `tokenizers` crate and converted directly with
+  `TokenizerInfo::from_huggingface`.
 
 ## Version pinning
 
 `Cargo.toml` pins tvm-ffi to the git revision of the released version that
-`libxgrammar_bindings` links against (currently `v0.1.12`). Keep the pin, the
+`libxgrammar_bindings` links against (currently `v0.1.13-post3`). Keep the pin, the
 `apache-tvm-ffi` package version, and the bindings build in lockstep: all
 three share one `libtvm_ffi` ABI, and mixing revisions puts two incompatible
 ABIs (or two crate instantiations with split registries) into one process.

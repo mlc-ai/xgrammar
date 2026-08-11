@@ -8,17 +8,30 @@ license = "Apache-2.0"
 repository = "https://github.com/mlc-ai/xgrammar"
 publish = false
 
+[features]
+default = []
+# Test-only Hub download support for the gated real-tokenizer parity suite.
+hf-token-tests = ["dep:hf-hub"]
+
 [dependencies]
 # Must stay in lockstep with the `apache-tvm-ffi` Python package that
 # `libxgrammar_bindings` is built against: the Rust crate links the same
 # `libtvm_ffi` shared library (located via `tvm-ffi-config --libdir`), and a
 # version skew would put two incompatible ABIs in one process. The rev below
-# is the `v0.1.12` tag of apache/tvm-ffi.
-tvm-ffi = { git = "https://github.com/apache/tvm-ffi.git", rev = "3050b0a7bd48e04f853027c5fa1f5ab7bc20b856" }
+# is the `v0.1.13-post3` tag of apache/tvm-ffi (== pip 0.1.13.post3).
+tvm-ffi = { git = "https://github.com/apache/tvm-ffi.git", rev = "f59eae05349dd77d5de07a1883fe88fabe6bab65" }
 serde = { version = "1.0", features = ["derive"] }
 # preserve_order keeps JSON-schema property order identical to Python's
 # pydantic serialization, so wire output is byte-for-byte comparable.
 serde_json = { version = "1.0", features = ["preserve_order"] }
+# Hugging Face's native Rust tokenizer implementation. Keep upstream's regex
+# backend while omitting the progress bar, optional training acceleration, and
+# deprecated HTTP download feature; callers can fetch tokenizer.json with
+# `hf-hub`.
+tokenizers = { version = "0.23.1", default-features = false, features = ["onig"] }
+# Keep the test downloader on the hf-hub line used by tokenizers 0.23. It is
+# excluded from normal builds unless `hf-token-tests` is explicitly enabled.
+hf-hub = { version = "0.4.3", default-features = false, features = ["ureq"], optional = true }
 
 [build-dependencies]
 cc = "1.0"
@@ -43,6 +56,11 @@ path = "../tests/rust/config.rs"
 [[test]]
 name = "grammar"
 path = "../tests/rust/grammar.rs"
+
+[[test]]
+name = "huggingface"
+path = "../tests/rust/huggingface.rs"
+required-features = ["hf-token-tests"]
 
 [[test]]
 name = "matcher"
