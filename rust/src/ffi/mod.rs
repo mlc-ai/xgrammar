@@ -292,8 +292,8 @@ impl DlArg {
 
 /// Build a heterogeneous `ffi::Array` from AnyViews.
 ///
-/// At tvm-ffi v0.1.12 `Array<Any>` is not constructible from Rust (`Any` does
-/// not implement `AnyCompatible`), so mixed-type arrays go through the
+/// At the pinned tvm-ffi, `Array<Any>` is not constructible from Rust (`Any`
+/// does not implement `AnyCompatible`), so mixed-type arrays go through the
 /// registered `ffi.Array` constructor instead.
 pub(crate) fn mixed_array(views: &[tvm_ffi::AnyView]) -> Result<Any> {
     thread_local! {

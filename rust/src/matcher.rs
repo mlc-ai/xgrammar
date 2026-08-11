@@ -525,8 +525,8 @@ fn matcher_array(matchers: &mut [GrammarMatcher]) -> Array<tvm_ffi::object::Obje
 
 // ---- raw array walking for `get_captures` ----
 // The nested Array<Array<[String, Bytes]>> return cannot be expressed as a
-// typed `Array<T>` at tvm-ffi v0.1.12 (`Any` is not `AnyCompatible`), so the
-// elements are read through `ArrayObj`'s public layout, exactly like
+// typed `Array<T>` at the pinned tvm-ffi (`Any` is not `AnyCompatible`), so
+// the elements are read through `ArrayObj`'s public layout, exactly like
 // tvm-ffi's own `collections::array` iterator does.
 
 /// Borrow the elements of an `ffi.Array` held by `any`.

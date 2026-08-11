@@ -51,10 +51,10 @@ library built in step 2.
   in existing Python wheels.
 - **Opaque handles.** Each C++ object type (`Grammar`, `CompiledGrammar`,
   `GrammarCompiler`, `TokenizerInfo`, `GrammarMatcher`,
-  `BatchGrammarMatcher`) is wrapped as a single strong reference bound by its
-  type key (`src/ffi/objects.rs`). The Rust side never mirrors C++ field
-  layouts and never allocates these objects; instances only come from FFI
-  factory calls.
+  `BatchGrammarMatcher`) is held as a plain `ObjectRef` strong reference
+  (pointer-identity and `Debug` helpers in `src/ffi/handle.rs`). The Rust
+  side never mirrors C++ field layouts and never allocates these objects;
+  instances only come from FFI factory calls.
 - **Packed calls only.** All calls go through `call_packed` (see the
   `ffi_call!` macro in `src/ffi/mod.rs`), avoiding the typed path's arity
   limit and its missing `Array<T>` argument support. Function handles are

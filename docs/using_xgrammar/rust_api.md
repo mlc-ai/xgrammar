@@ -11,8 +11,8 @@ fully interchangeable between the two languages.
 
 ## Installation
 
-The crate is not yet published on crates.io (its tvm-ffi dependency is not
-published either), so use it as a git or path dependency:
+The crate is not yet published on crates.io (it pins its tvm-ffi dependency
+to a git revision), so use it as a git or path dependency:
 
 ```toml
 [dependencies]
@@ -37,7 +37,9 @@ Building requires:
 
 2. **The bindings library** (`libxgrammar_bindings.so` on Linux,
    `libxgrammar_bindings.dylib` on macOS, or `xgrammar_bindings.dll` on
-   Windows). Either take it from an installed `xgrammar` Python wheel (it is
+   Windows). The crate resolves the bindings' API through tvm-ffi's
+   reflection tables at runtime, so the library needs no Rust-specific
+   support: either take it from an installed `xgrammar` Python wheel (it is
    inside the `xgrammar` package directory), or build it from source:
 
    ```bash
@@ -47,11 +49,11 @@ Building requires:
    ```
 
 ```{note}
-The Rust crate pins the tvm-ffi revision it was developed against (see
-`rust/Cargo.toml`). The pinned revision must match the version of the
-`apache-tvm-ffi` package used to build `libxgrammar_bindings`, because both
-sides link the same `libtvm_ffi` shared library and its ABI is still
-evolving.
+The Rust crate pins tvm-ffi to the git tag of a released version (currently
+`v0.1.13-post3`, i.e. pip's `0.1.13.post3`; see `rust/Cargo.toml`). Keep the
+pin, the installed `apache-tvm-ffi` package and the bindings build in
+lockstep: all three share one `libtvm_ffi` shared library, and its ABI is
+still evolving.
 ```
 
 ## Loading the bindings library
@@ -69,7 +71,8 @@ The library is located automatically, in this order:
    path.
 
 When the library lives somewhere unusual, point the environment variable at it
-or call `xgrammar::load_library` before any other API:
+or call `xgrammar::load_library` before any other API (the platform-specific
+file name is exported as `xgrammar::BINDINGS_LIBRARY_FILENAME`):
 
 ```rust
 xgrammar::load_library("/path/to/the/xgrammar_bindings/library")?;
