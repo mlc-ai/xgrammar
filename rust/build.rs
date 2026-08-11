@@ -2,6 +2,12 @@ use std::env;
 use std::process::Command;
 
 fn main() {
+    // Every lookup below shells out to tools on PATH (tvm-ffi-config, python
+    // with xgrammar). Editor tooling often runs cargo with a different
+    // environment and would cache an empty result; rerunning on PATH changes
+    // lets the next real build self-heal.
+    println!("cargo:rerun-if-env-changed=PATH");
+
     // tvm-ffi-sys links libtvm_ffi dynamically but leaves runtime lookup to
     // the consumer. Bake an rpath to the tvm-ffi installation so binaries
     // built in this environment (tests, examples, downstream builds on the
