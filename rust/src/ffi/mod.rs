@@ -6,6 +6,7 @@
 //! types directly.
 
 pub(crate) mod handle;
+pub(crate) mod reflection;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -14,9 +15,14 @@ use tvm_ffi::{Any, Function, Module};
 
 use crate::error::{Error, Result};
 
-/// A global function that exists iff the xgrammar bindings library (with its
-/// global-function alias layer) has been registered in this process.
-const CANARY: &str = "xgrammar.tvm_ffi_binding.Grammar.from_ebnf";
+/// A type key that is registered iff the xgrammar bindings library has been
+/// loaded into this process.
+const CANARY_TYPE_KEY: &str = "xgrammar.tvm_ffi_binding.Grammar";
+
+/// Whether the xgrammar registrations are present in this process.
+fn bindings_present() -> bool {
+    reflection::type_key_registered(CANARY_TYPE_KEY)
+}
 
 /// Environment variable pointing at `libxgrammar_bindings`.
 const LIB_ENV: &str = "XGRAMMAR_BINDINGS_LIB";
@@ -79,7 +85,7 @@ pub(crate) fn ensure_loaded() -> Result<()> {
     if LOADED.load(Ordering::Acquire) {
         return Ok(());
     }
-    if Function::get_global(CANARY).is_ok() {
+    if bindings_present() {
         LOADED.store(true, Ordering::Release);
         return Ok(());
     }
@@ -133,7 +139,8 @@ fn try_load_default_candidates() -> Result<()> {
     Err(last_err.expect("at least one candidate is always tried"))
 }
 
-/// dlopen `path`, keep it alive forever, and verify the alias layer is there.
+/// dlopen `path`, keep it alive forever, and verify the registrations are
+/// there.
 fn try_load(path: &str) -> Result<()> {
     let module =
         Module::load_from_file(path).map_err(|e| Error::Library(e.message().to_string()))?;
@@ -141,19 +148,22 @@ fn try_load(path: &str) -> Result<()> {
     // dangling registrations behind; the bindings must stay for the lifetime
     // of the process.
     std::mem::forget(module);
-    if Function::get_global(CANARY).is_err() {
+    if !bindings_present() {
         return Err(Error::Library(format!(
-            "{path} was loaded but does not register the xgrammar global-function aliases; \
-             it was probably built from an xgrammar version without Rust support"
+            "{path} was loaded but does not register the xgrammar types; it does not look \
+             like an xgrammar bindings library"
         )));
     }
     Ok(())
 }
 
-/// Fetch (and per-thread cache) a global function by name.
+/// Resolve an FFI function by name and cache it per thread.
 ///
-/// `Function` is not `Sync`, so the cache is thread-local; lookups after the
-/// first are a `OnceCell` read.
+/// Names are the global-function names when they exist (the `testing.*`,
+/// `kernels.*` and `config.*` functions, plus tvm-ffi's own `ffi.*` helpers);
+/// everything else is a `"<type_key>.<method_name>"` reflected type method,
+/// resolved through [`reflection`]. `Function` is not `Sync`, so the cache is
+/// thread-local; lookups after the first are a `OnceCell` read.
 pub(crate) fn cached_global(
     cell: &'static std::thread::LocalKey<std::cell::OnceCell<Function>>,
     name: &str,
@@ -163,7 +173,12 @@ pub(crate) fn cached_global(
         if let Some(f) = c.get() {
             return Ok(f.clone());
         }
-        let f = Function::get_global(name).map_err(Error::from_ffi)?;
+        let f = match Function::get_global(name) {
+            Ok(f) => f,
+            Err(global_err) => {
+                reflection::reflected_method(name).map_err(|_| Error::from_ffi(global_err))?
+            }
+        };
         let _ = c.set(f.clone());
         Ok(f)
     })

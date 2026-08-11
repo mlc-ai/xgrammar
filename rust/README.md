@@ -37,14 +37,18 @@ library built in step 2.
 
 ## How it works
 
-- **Global-function aliases.** The C++ bindings register their API as
-  reflected *type methods*, which tvm-ffi's Rust crate cannot reach (it has no
-  reflection support). `cpp/tvm_ffi/tvm_ffi.cc` therefore mirrors every
-  reflected method into the global function table as
-  `"<type_key>.<method_name>"` (constructors as `"<type_key>.__ffi_init__"`)
-  in `RegisterGlobalFunctionAliases` — a generic loop over the reflection
-  tables, so new methods get aliases automatically. The Rust side then only
-  needs `Function::get_global`.
+- **Reflection bridge.** The C++ bindings register their API as reflected
+  *type methods*, which tvm-ffi's Rust crate cannot reach (it has no
+  reflection support). `src/ffi/reflection.rs` therefore resolves
+  `"<type_key>.<method_name>"` names directly against the C ABI reflection
+  tables (`TVMFFIGetTypeInfo(index)->methods[]`; constructors via the
+  `__ffi_init__` type-attribute column), obtaining the same `Function`
+  objects the Python bindings dispatch to. True global functions (the
+  `testing.*`/`kernels.*`/`config.*` set) still go through
+  `Function::get_global`; the resolver tries the global table first and
+  falls back to reflection. No C++-side support is needed, so the crate
+  works against any xgrammar bindings library, including the ones shipped
+  in existing Python wheels.
 - **Opaque handles.** Each C++ object type (`Grammar`, `CompiledGrammar`,
   `GrammarCompiler`, `TokenizerInfo`, `GrammarMatcher`,
   `BatchGrammarMatcher`) is wrapped as a single strong reference bound by its
