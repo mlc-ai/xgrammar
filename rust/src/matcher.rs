@@ -9,7 +9,7 @@ use tvm_ffi::{Any, AnyCompatible, Array, Bytes as FfiBytes, String as FfiString}
 use crate::bitmask::TokenBitmask;
 use crate::compiler::CompiledGrammar;
 use crate::error::{Error, Result};
-use crate::ffi::{ffi_call, handle, mixed_array, opt_any, ret, ret_opt, DlArg};
+use crate::ffi::{ffi_call, handle, opt_any, ret, DlArg};
 
 /// Options for [`GrammarMatcher::with_options`], mirroring the Python
 /// constructor's keyword arguments.
@@ -304,7 +304,7 @@ impl GrammarMatcher {
             "xgrammar.tvm_ffi_binding.GrammarMatcher.temperature",
             self.raw,
         )?;
-        ret_opt(any)
+        ret(any)
     }
 
     /// The stop token ids the matcher uses.
@@ -481,13 +481,8 @@ impl BatchGrammarMatcher {
         debug_print: bool,
     ) -> Result<Vec<bool>> {
         let matcher_arr = matcher_array(matchers);
-        let input_anys: Vec<Any> = inputs
-            .iter()
-            .map(|s| Any::from(FfiBytes::from(s.as_ref())))
-            .collect();
-        let input_views: Vec<tvm_ffi::AnyView> =
-            input_anys.iter().map(tvm_ffi::AnyView::from).collect();
-        let strings = mixed_array(&input_views)?;
+        let strings =
+            Array::<FfiBytes>::new(inputs.iter().map(|s| FfiBytes::from(s.as_ref())).collect());
         let any = ffi_call!(
             "xgrammar.tvm_ffi_binding.BatchGrammarMatcher.batch_accept_string",
             matcher_arr,

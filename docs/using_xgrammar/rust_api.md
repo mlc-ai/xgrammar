@@ -29,10 +29,11 @@ Building requires:
    ```
 
    `tvm-ffi-config` must be on `PATH` when running cargo (activating the
-   virtual environment is enough). Cargo records this installation in a small
-   runtime-loader shim that is propagated into downstream binaries. If the
-   installation moves after building a binary, set `TVM_FFI_LIBRARY_PATH` to
-   the full path of the new `libtvm_ffi` file.
+   virtual environment is enough). The build bakes an rpath to this
+   installation, so binaries built on the same machine start without loader
+   configuration. If the installation moves after building a binary, point
+   the platform loader path (e.g. `LD_LIBRARY_PATH`) at the directory
+   containing `libtvm_ffi`.
 
 2. **The bindings library** (`libxgrammar_bindings.so` on Linux,
    `libxgrammar_bindings.dylib` on macOS, or `xgrammar_bindings.dll` on

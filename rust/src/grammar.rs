@@ -155,7 +155,7 @@ impl Grammar {
         let value_anys: Vec<tvm_ffi::Any> = named_grammars
             .iter()
             .map(|(_, value)| match value {
-                NamedGrammar::Grammar(g) => handle::object_arg(&g.raw),
+                NamedGrammar::Grammar(g) => tvm_ffi::Any::from(g.raw.clone()),
                 NamedGrammar::Lark(src) => tvm_ffi::Any::from(FfiString::from(src)),
             })
             .collect();

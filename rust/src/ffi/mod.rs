@@ -207,20 +207,6 @@ pub(crate) fn opt_any<T: tvm_ffi::AnyCompatible>(value: Option<T>) -> Any {
     }
 }
 
-/// Convert a returned `Any` into `Option<T>`: FFI `None` becomes `None`.
-pub(crate) fn ret_opt<T: tvm_ffi::AnyCompatible>(any: Any) -> Result<Option<T>> {
-    if any.try_as::<()>().is_some() {
-        return Ok(None);
-    }
-    match any.try_as::<T>() {
-        Some(v) => Ok(Some(v)),
-        None => Err(Error::XGrammar(format!(
-            "unexpected FFI return type (expected {} or None)",
-            T::type_str()
-        ))),
-    }
-}
-
 /// A borrowed DLTensor argument. Keeps the `DLTensor` struct and its shape
 /// alive for as long as the argument is in scope; the tensor data itself is
 /// borrowed from the caller.

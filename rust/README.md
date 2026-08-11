@@ -55,12 +55,12 @@ library built in step 2.
   `ffi_call!` macro in `src/ffi/mod.rs`), avoiding the typed path's arity
   limit and its missing `Array<T>` argument support. Function handles are
   cached per call site in thread-locals (`tvm_ffi::Function` is not `Sync`).
-- **Consumer-safe runtime loading.** A small static C shim loads the
-  `libtvm_ffi` selected by `tvm-ffi-config`. Unlike an rpath link argument,
-  the shim is bundled through the rlib into downstream executables, so path
-  and git consumers can start without setting a platform loader path. Set
-  `TVM_FFI_LIBRARY_PATH` to a full library path if the installation moves
-  after the Rust binary is built.
+- **Runtime library lookup via rpath.** The build bakes an rpath to the
+  `tvm-ffi-config --libdir` directory, so binaries built in this environment
+  (tests, examples, builds on the same machine) start without loader
+  configuration. Relocated deployments point the platform loader path (e.g.
+  `LD_LIBRARY_PATH`) at the `libtvm_ffi` directory instead — the same
+  requirement tvm-ffi documents for its Rust support.
 - **Zero-copy tensors.** Token bitmasks and the draft-tree/temperature
   buffers are passed as borrowed `DLTensor` views over Rust slices
   (`DlArg` in `src/ffi/mod.rs`), matching the DLPack contract of the C++
