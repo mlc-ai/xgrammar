@@ -81,19 +81,22 @@ info, then drive generation with a matcher and a token bitmask.
 
 ```rust
 use xgrammar::{
-    GrammarCompiler, GrammarMatcher, JsonSchemaOptions, TokenBitmask, TokenizerInfo,
-    TokenizerInfoOptions, VocabType,
+    tokenizers::Tokenizer, GrammarCompiler, GrammarMatcher, HuggingFaceTokenizerOptions,
+    JsonSchemaOptions, TokenBitmask, TokenizerInfo,
 };
 
 fn main() -> xgrammar::Result<()> {
-    // Tokenizer metadata: from the encoded vocabulary (raw bytes, in
-    // token-id order) plus the vocabulary encoding type. There is no
-    // from_huggingface here; export the vocabulary from your tokenizer, or
-    // reuse a metadata JSON via TokenizerInfo::from_vocab_and_metadata.
-    let tokenizer_info = TokenizerInfo::new(
-        encoded_vocab,
-        VocabType::ByteLevel,
-        &TokenizerInfoOptions { stop_token_ids: Some(vec![eos_id]), ..Default::default() },
+    // Load the same tokenizer.json used by a Hugging Face fast tokenizer.
+    // Downloading from the Hub is intentionally left to `hf-hub`; loading and
+    // conversion itself are offline.
+    let tokenizer = Tokenizer::from_file("tokenizer.json")?;
+    let tokenizer_info = TokenizerInfo::from_huggingface(
+        &tokenizer,
+        &HuggingFaceTokenizerOptions {
+            // Use the model config's lm_head dimension and EOS id here.
+            vocab_size: Some(model_vocab_size),
+            stop_token_ids: Some(vec![eos_id]),
+        },
     )?;
 
     let compiler = GrammarCompiler::new(&tokenizer_info)?;
@@ -125,7 +128,7 @@ The mapping from the Python API is mechanical:
 | Python | Rust |
 |---|---|
 | `Grammar.from_ebnf / from_json_schema / from_regex / from_lark / from_structural_tag / builtin_json_grammar / union / concat` | `Grammar::from_ebnf / from_json_schema / from_regex / from_lark / from_structural_tag / builtin_json_grammar / union / concat` |
-| `TokenizerInfo(...)`, `from_vocab_and_metadata` | `TokenizerInfo::new`, `from_vocab_and_metadata` |
+| `TokenizerInfo(...)`, `from_huggingface`, `from_vocab_and_metadata` | `TokenizerInfo::new`, `from_huggingface`, `from_vocab_and_metadata` |
 | `GrammarCompiler(...)`, `compile_*` | `GrammarCompiler::new / with_options`, `compile_*` |
 | `CompiledGrammar` properties | `CompiledGrammar` methods |
 | `GrammarMatcher` methods | `GrammarMatcher` methods (`&mut self`; `fork()` instead of copying) |
@@ -155,15 +158,14 @@ Conventions on the Rust side:
 
 ## Differences from the Python package
 
-Functionality that exists only in the Python layer (not in the C++ engine) is
-not mirrored:
+The remaining Python-only functionality is not mirrored:
 
-- `TokenizerInfo.from_huggingface`: the vocabulary detection logic inspects
-  Python tokenizer objects. Use `TokenizerInfo::new` with an exported
-  vocabulary, or `from_vocab_and_metadata` with a metadata JSON (which can be
-  produced once in Python via `dump_metadata`, or with
-  `TokenizerInfo::detect_metadata_from_hf` from a HuggingFace
-  `tokenizer.json` backend string).
+- `TokenizerInfo::from_huggingface` accepts the native Rust
+  `tokenizers::Tokenizer`, corresponding to a Hugging Face fast tokenizer. It
+  cannot accept Python-only slow SentencePiece/tiktoken wrapper objects. Also,
+  `tokenizer.json` does not contain the model's lm_head size or identify its
+  EOS semantics, so pass `vocab_size` and `stop_token_ids` from the model
+  config when they matter.
 - GPU `apply_token_bitmask_inplace` kernels (CUDA/Triton/Metal): apply the
   bitmask with your inference engine's kernel; the bitmask layout is
   identical.
@@ -178,6 +180,16 @@ against the locally built bindings:
 ```bash
 cmake --build build --target xgrammar_bindings   # once
 cd rust && cargo test
+```
+
+The real-tokenizer parity test uses the same gated Llama 2 and Llama 3
+tokenizers and rejected-token counts as Python's `hf_token_required` suite. It
+is ignored by the default offline run; provide `HF_TOKEN` (or populate the
+standard Hugging Face cache) and run it explicitly:
+
+```bash
+cd rust
+cargo test --features hf-token-tests --test huggingface -- --ignored --nocapture
 ```
 
 The test suite covers the full API surface and cross-checks the structural tag

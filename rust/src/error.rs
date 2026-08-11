@@ -27,6 +27,8 @@ pub enum Error {
     Library(String),
     /// Serialization of a structural tag failed before reaching the FFI.
     Json(serde_json::Error),
+    /// Loading, serializing, or running a Hugging Face tokenizer failed.
+    HuggingFaceTokenizer(tokenizers::Error),
     /// Any other error raised across the FFI boundary (e.g. `RuntimeError`).
     Ffi(tvm_ffi::Error),
 }
@@ -60,6 +62,7 @@ impl fmt::Display for Error {
             Error::XGrammar(m) => write!(f, "{m}"),
             Error::Library(m) => write!(f, "{m}"),
             Error::Json(e) => write!(f, "structural tag serialization failed: {e}"),
+            Error::HuggingFaceTokenizer(e) => write!(f, "Hugging Face tokenizer error: {e}"),
             Error::Ffi(e) => write!(f, "{}: {}", e.kind().as_str(), e.message()),
         }
     }
@@ -69,6 +72,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Json(e) => Some(e),
+            Error::HuggingFaceTokenizer(e) => Some(e.as_ref()),
             Error::Ffi(e) => Some(e),
             _ => None,
         }
@@ -78,6 +82,12 @@ impl std::error::Error for Error {
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
         Error::Json(err)
+    }
+}
+
+impl From<tokenizers::Error> for Error {
+    fn from(err: tokenizers::Error) -> Self {
+        Error::HuggingFaceTokenizer(err)
     }
 }
 

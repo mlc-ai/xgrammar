@@ -58,3 +58,52 @@ pub fn tiny_tokenizer_info() -> TokenizerInfo {
     )
     .expect("tokenizer info")
 }
+
+/// A fully offline Hugging Face `tokenizer.json` fixture. Loading it through
+/// the official `tokenizers` crate exercises the same representation used by
+/// downloaded fast tokenizers without making the test suite depend on the
+/// network or the Hub cache.
+pub fn huggingface_word_level_tokenizer() -> xgrammar::tokenizers::Tokenizer {
+    let tokenizer_json = serde_json::json!({
+        "version": "1.0",
+        "truncation": null,
+        "padding": null,
+        "added_tokens": [
+            {
+                "id": 8,
+                "content": "<extra>",
+                "single_word": false,
+                "lstrip": false,
+                "rstrip": false,
+                "normalized": false,
+                "special": true
+            }
+        ],
+        "normalizer": null,
+        "pre_tokenizer": null,
+        "post_processor": null,
+        "decoder": {
+            "type": "WordPiece",
+            "prefix": "##",
+            "cleanup": true
+        },
+        "model": {
+            "type": "WordLevel",
+            "vocab": {
+                "</s>": 0,
+                "[UNK]": 1,
+                "a": 2,
+                "b": 3,
+                "c": 4,
+                "ab": 5,
+                "ac": 6,
+                "x": 7
+            },
+            "unk_token": "[UNK]"
+        }
+    });
+    xgrammar::tokenizers::Tokenizer::from_bytes(
+        serde_json::to_vec(&tokenizer_json).expect("serialize tokenizer fixture"),
+    )
+    .expect("load tokenizer fixture")
+}

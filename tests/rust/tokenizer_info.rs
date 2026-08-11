@@ -1,6 +1,6 @@
 mod common;
 
-use xgrammar::{TokenizerInfo, TokenizerInfoOptions, VocabType};
+use xgrammar::{HuggingFaceTokenizerOptions, TokenizerInfo, TokenizerInfoOptions, VocabType};
 
 #[test]
 fn properties() {
@@ -84,4 +84,46 @@ fn byte_fallback_vocab_type() {
     assert_eq!(ti.vocab_type().unwrap(), VocabType::ByteFallback);
     // Byte-fallback decoding turns <0x41> into the byte 0x41.
     assert_eq!(ti.decoded_vocab().unwrap()[0], b"A".to_vec());
+}
+
+#[test]
+fn from_huggingface_tokenizer_json() {
+    common::init();
+    let tokenizer = common::huggingface_word_level_tokenizer();
+    let ti = TokenizerInfo::from_huggingface(
+        &tokenizer,
+        &HuggingFaceTokenizerOptions {
+            // Exercise a model head padded beyond tokenizer.get_vocab().
+            vocab_size: Some(11),
+            stop_token_ids: Some(vec![0]),
+        },
+    )
+    .unwrap();
+
+    assert_eq!(ti.vocab_type().unwrap(), VocabType::Raw);
+    assert_eq!(ti.vocab_size().unwrap(), 11);
+    assert_eq!(ti.stop_token_ids().unwrap(), vec![0]);
+    let vocab = ti.decoded_vocab().unwrap();
+    assert_eq!(vocab[2], b"a");
+    assert_eq!(vocab[5], b"ab");
+    assert_eq!(vocab[6], b"ac");
+    // Added tokens come from get_vocab(true), even if they are not in the
+    // model vocabulary serialized inside tokenizer.json.
+    assert_eq!(vocab[8], b"<extra>");
+    assert!(vocab[9].is_empty());
+    assert!(vocab[10].is_empty());
+}
+
+#[test]
+fn from_huggingface_rejects_explicitly_empty_stop_tokens() {
+    let tokenizer = common::huggingface_word_level_tokenizer();
+    let err = TokenizerInfo::from_huggingface(
+        &tokenizer,
+        &HuggingFaceTokenizerOptions {
+            stop_token_ids: Some(vec![]),
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("cannot be empty"));
 }

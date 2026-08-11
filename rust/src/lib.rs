@@ -60,4 +60,10 @@ pub use ffi::{load_library, BINDINGS_LIBRARY_FILENAME};
 pub use grammar::{Grammar, JsonSchemaOptions, NamedGrammar};
 pub use matcher::{BatchGrammarMatcher, GrammarMatcher, MatcherOptions, MaxThreads};
 pub use structural_tag::{Format, StructuralTag, StructuralTagItem, TagFormat};
-pub use tokenizer_info::{TokenizerInfo, TokenizerInfoOptions, VocabType};
+pub use tokenizer_info::{
+    HuggingFaceTokenizerOptions, TokenizerInfo, TokenizerInfoOptions, VocabType,
+};
+/// Hugging Face's native Rust tokenizer crate, re-exported so applications can
+/// construct the exact [`tokenizers::Tokenizer`] accepted by
+/// [`TokenizerInfo::from_huggingface`].
+pub use tokenizers;

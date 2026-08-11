@@ -1,5 +1,8 @@
 //! Tokenizer metadata needed to compile grammars against a model vocabulary.
 
+use std::collections::{HashMap, HashSet};
+
+use serde::Deserialize;
 use tvm_ffi::{Array, Bytes as FfiBytes, String as FfiString};
 
 use crate::error::{Error, Result};
@@ -53,16 +56,33 @@ pub struct TokenizerInfoOptions {
     pub add_prefix_space: bool,
 }
 
+/// Optional parameters for [`TokenizerInfo::from_huggingface`].
+#[derive(Debug, Clone, Default)]
+pub struct HuggingFaceTokenizerOptions {
+    /// The size of the model's vocabulary (the output dimension of its
+    /// language-model head). `None` derives the size from the tokenizer.
+    ///
+    /// Set this when the model pads its vocabulary, or when tokenizer-only
+    /// added tokens are absent from the model head.
+    pub vocab_size: Option<usize>,
+    /// Token ids that stop generation. A raw [`tokenizers::Tokenizer`] does
+    /// not expose which special token is the model's EOS token, so callers
+    /// should normally pass it explicitly. `None` uses xgrammar's token-name
+    /// heuristic.
+    pub stop_token_ids: Option<Vec<i64>>,
+}
+
+#[derive(Deserialize)]
+struct HuggingFaceMetadata {
+    vocab_type: i64,
+    add_prefix_space: bool,
+}
+
 /// The tokenizer information xgrammar needs: the decoded vocabulary and
 /// metadata such as the vocabulary encoding and the stop token ids.
 ///
 /// This class is immutable: instances can be cloned cheaply (shared handle)
 /// and shared across threads.
-///
-/// Unlike Python's `TokenizerInfo.from_huggingface`, the Rust bindings do not
-/// inspect tokenizer objects; construct instances from an encoded vocabulary
-/// with [`TokenizerInfo::new`], or from a vocabulary plus a metadata string
-/// with [`TokenizerInfo::from_vocab_and_metadata`].
 #[derive(Clone)]
 pub struct TokenizerInfo {
     pub(crate) raw: RawTokenizerInfo,
@@ -103,6 +123,88 @@ impl TokenizerInfo {
             options.add_prefix_space,
         )?;
         Ok(Self::from_raw(ret(any)?))
+    }
+
+    /// Construct directly from a Hugging Face fast tokenizer.
+    ///
+    /// The vocabulary (including added tokens) is placed in token-id order,
+    /// while the vocabulary encoding and prefix-space behavior are detected
+    /// from the serialized `tokenizer.json` pipeline. As in the Python API,
+    /// the vocabulary itself is used to correct stale or incomplete decoder
+    /// metadata for byte-fallback and byte-level tokenizers.
+    ///
+    /// This accepts Hugging Face's native Rust [`tokenizers::Tokenizer`],
+    /// which can be loaded with [`tokenizers::Tokenizer::from_file`] or
+    /// [`tokenizers::Tokenizer::from_bytes`]. It corresponds to Python fast
+    /// tokenizers; Python-only slow SentencePiece and tiktoken wrapper objects
+    /// are outside this API.
+    pub fn from_huggingface(
+        tokenizer: &tokenizers::Tokenizer,
+        options: &HuggingFaceTokenizerOptions,
+    ) -> Result<Self> {
+        if options.stop_token_ids.as_ref().is_some_and(Vec::is_empty) {
+            return Err(Error::XGrammar(
+                "stop_token_ids cannot be empty when constructing from a Hugging Face tokenizer"
+                    .to_string(),
+            ));
+        }
+
+        let vocab = tokenizer.get_vocab(true);
+        let max_id = vocab.values().copied().max().ok_or_else(|| {
+            Error::XGrammar("the Hugging Face tokenizer has an empty vocabulary".to_string())
+        })?;
+        let indexed_vocab_size = (max_id as usize).checked_add(1).ok_or_else(|| {
+            Error::XGrammar("the Hugging Face tokenizer vocabulary is too large".to_string())
+        })?;
+        let tokenizer_vocab_size = vocab.len().max(indexed_vocab_size);
+        let vocab_size = options.vocab_size.unwrap_or(tokenizer_vocab_size);
+        if vocab_size == 0 {
+            return Err(Error::XGrammar(
+                "Hugging Face model vocab_size must be positive".to_string(),
+            ));
+        }
+
+        // Preserve token ids, including holes. Limiting the vector to the
+        // model vocabulary also mirrors Python for tokenizers whose added
+        // tokens are not represented by the model's language-model head.
+        let mut encoded_vocab = vec![Vec::new(); vocab_size];
+        for (token, &token_id) in &vocab {
+            if let Some(slot) = encoded_vocab.get_mut(token_id as usize) {
+                *slot = token.as_bytes().to_vec();
+            }
+        }
+
+        let backend = tokenizer.to_string(false)?;
+        let metadata_json = Self::detect_metadata_from_hf(&backend)?;
+        let metadata: HuggingFaceMetadata =
+            serde_json::from_str(&metadata_json).map_err(|err| {
+                Error::XGrammar(format!(
+                    "invalid metadata detected from Hugging Face tokenizer: {err}"
+                ))
+            })?;
+        let mut vocab_type = VocabType::from_ffi(metadata.vocab_type)?;
+        let mut add_prefix_space = metadata.add_prefix_space;
+
+        // A few Transformers conversions serialize incomplete decoder
+        // metadata. The byte alphabet in the vocabulary is stronger evidence
+        // of how those token strings must be decoded.
+        if let Some(vocab_type_from_vocab) = detect_vocab_type_from_vocab(&vocab) {
+            if vocab_type_from_vocab != vocab_type {
+                vocab_type = vocab_type_from_vocab;
+                add_prefix_space =
+                    detect_add_prefix_space_by_encoding(tokenizer, vocab_type_from_vocab);
+            }
+        }
+
+        Self::new(
+            encoded_vocab,
+            vocab_type,
+            &TokenizerInfoOptions {
+                vocab_size: Some(vocab_size),
+                stop_token_ids: options.stop_token_ids.clone(),
+                add_prefix_space,
+            },
+        )
     }
 
     /// Construct from an encoded vocabulary and a metadata JSON string, the
@@ -244,3 +346,108 @@ impl PartialEq for TokenizerInfo {
     }
 }
 impl Eq for TokenizerInfo {}
+
+fn detect_vocab_type_from_vocab(vocab: &HashMap<String, u32>) -> Option<VocabType> {
+    let num_byte_pieces = (0..=u8::MAX)
+        .filter(|byte| vocab.contains_key(&format!("<0x{byte:02X}>")))
+        .count();
+    if num_byte_pieces >= 128 {
+        return Some(VocabType::ByteFallback);
+    }
+
+    let charset = byte_level_charset();
+    let num_single_chars = charset
+        .iter()
+        .filter(|character| vocab.contains_key(&character.to_string()))
+        .count();
+    if num_single_chars < 128 {
+        return None;
+    }
+
+    let num_charset_tokens = vocab
+        .keys()
+        .filter(|token| token.chars().all(|character| charset.contains(&character)))
+        .count();
+    if num_charset_tokens.saturating_mul(100) >= vocab.len().saturating_mul(99) {
+        Some(VocabType::ByteLevel)
+    } else {
+        None
+    }
+}
+
+fn byte_level_charset() -> HashSet<char> {
+    let mut kept_bytes = [false; 256];
+    let mut charset = HashSet::with_capacity(256);
+
+    for byte in b'!'..=b'~' {
+        kept_bytes[byte as usize] = true;
+        charset.insert(char::from(byte));
+    }
+    for byte in 0xA1u32..=0xAC {
+        kept_bytes[byte as usize] = true;
+        charset.insert(char::from_u32(byte).expect("Latin-1 byte is a Unicode scalar"));
+    }
+    for byte in 0xAEu32..=0xFF {
+        kept_bytes[byte as usize] = true;
+        charset.insert(char::from_u32(byte).expect("Latin-1 byte is a Unicode scalar"));
+    }
+
+    let mut shifted = 0;
+    for byte in 0..=u8::MAX {
+        if !kept_bytes[byte as usize] {
+            charset.insert(
+                char::from_u32(256 + shifted)
+                    .expect("the GPT-2 byte alphabet contains valid Unicode scalars"),
+            );
+            shifted += 1;
+        }
+    }
+    charset
+}
+
+fn detect_add_prefix_space_by_encoding(
+    tokenizer: &tokenizers::Tokenizer,
+    vocab_type: VocabType,
+) -> bool {
+    let Ok(encoding) = tokenizer.encode("a", false) else {
+        return false;
+    };
+    let Some(first_token) = encoding.get_tokens().first() else {
+        return false;
+    };
+    let prefix = match vocab_type {
+        VocabType::ByteFallback => '▁',
+        VocabType::ByteLevel => 'Ġ',
+        VocabType::Raw => return false,
+    };
+    first_token.starts_with(prefix)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_byte_fallback_from_vocabulary() {
+        let vocab = (0..128u32)
+            .map(|byte| (format!("<0x{byte:02X}>"), byte))
+            .collect();
+        assert_eq!(
+            detect_vocab_type_from_vocab(&vocab),
+            Some(VocabType::ByteFallback)
+        );
+    }
+
+    #[test]
+    fn detects_byte_level_from_vocabulary() {
+        let vocab = byte_level_charset()
+            .into_iter()
+            .enumerate()
+            .map(|(token_id, character)| (character.to_string(), token_id as u32))
+            .collect();
+        assert_eq!(
+            detect_vocab_type_from_vocab(&vocab),
+            Some(VocabType::ByteLevel)
+        );
+    }
+}
