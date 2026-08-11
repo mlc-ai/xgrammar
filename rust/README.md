@@ -55,9 +55,10 @@ library built in step 2.
   limit and its missing `Array<T>` argument support. Function handles are
   cached per call site in thread-locals (`tvm_ffi::Function` is not `Sync`).
 - **Runtime library lookup via rpath.** The build bakes an rpath to the
-  `tvm-ffi-config --libdir` directory, so binaries built in this environment
-  (tests, examples, builds on the same machine) start without loader
-  configuration. Relocated deployments point the platform loader path (e.g.
+  `tvm-ffi-config --libdir` directory into this crate's own tests and
+  examples, so they start without loader configuration. Cargo does not
+  propagate link args across packages, so downstream binaries (and
+  relocated deployments) point the platform loader path (e.g.
   `LD_LIBRARY_PATH`) at the `libtvm_ffi` directory instead — the same
   requirement tvm-ffi documents for its Rust support.
 - **Zero-copy tensors.** Token bitmasks and the draft-tree/temperature

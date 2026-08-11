@@ -9,11 +9,11 @@ fn main() {
     println!("cargo:rerun-if-env-changed=PATH");
 
     // tvm-ffi-sys links libtvm_ffi dynamically but leaves runtime lookup to
-    // the consumer. Bake an rpath to the tvm-ffi installation so binaries
-    // built in this environment (tests, examples, downstream builds on the
-    // same machine) start without loader configuration. Relocated deployments
-    // point the platform loader path (e.g. LD_LIBRARY_PATH) at the
-    // `tvm-ffi-config --libdir` directory instead.
+    // the consumer. Bake an rpath to the tvm-ffi installation so this
+    // crate's own tests and examples start without loader configuration.
+    // Cargo does not propagate link args to dependent packages, so
+    // downstream binaries point the platform loader path (e.g.
+    // LD_LIBRARY_PATH) at the `tvm-ffi-config --libdir` directory instead.
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     if let Some(lib_dir) = tvm_ffi_libdir() {
         // Re-emit the link directives tvm-ffi-sys is responsible for: its
