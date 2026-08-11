@@ -25,7 +25,7 @@ Building requires:
    tool and the `libtvm_ffi` shared library the crate links against:
 
    ```bash
-   pip install apache-tvm-ffi
+   pip install apache-tvm-ffi==0.1.13.post3   # the version pinned in rust/Cargo.toml
    ```
 
    `tvm-ffi-config` must be on `PATH` when running cargo (activating the

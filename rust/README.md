@@ -1,8 +1,3 @@
-<!--- Licensed to the Apache Software Foundation (ASF) under one -->
-<!--- or more contributor license agreements.  See the NOTICE file -->
-<!--- distributed with this work for additional information -->
-<!--- regarding copyright ownership. -->
-
 # XGrammar Rust Bindings
 
 Rust bindings for XGrammar with the same functionality as the Python package,
@@ -18,7 +13,7 @@ installation and usage; run `cargo doc --open` for the API reference.
 
 ```bash
 # 1. one-time: the tvm-ffi toolchain used for linking
-pip install apache-tvm-ffi        # provides tvm-ffi-config + libtvm_ffi
+pip install apache-tvm-ffi==0.1.13.post3   # the version pinned in Cargo.toml
 
 # 2. build the bindings library (from the repository root)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -G Ninja
