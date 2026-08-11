@@ -5,7 +5,7 @@
 //! Everything in here is `pub(crate)`; the public API never exposes tvm-ffi
 //! types directly.
 
-pub(crate) mod objects;
+pub(crate) mod handle;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;

@@ -4,8 +4,9 @@ use std::marker::PhantomData;
 use tvm_ffi::String as FfiString;
 
 use crate::error::Result;
-use crate::ffi::objects::{RawCompiledGrammar, RawGrammarCompiler};
-use crate::ffi::{ffi_call, opt_any, ret};
+use tvm_ffi::object::ObjectRef;
+
+use crate::ffi::{ffi_call, handle, opt_any, ret};
 use crate::grammar::{Grammar, JsonSchemaOptions};
 use crate::tokenizer_info::TokenizerInfo;
 
@@ -17,11 +18,11 @@ use crate::tokenizer_info::TokenizerInfo;
 /// deserializing with [`CompiledGrammar::deserialize_json`].
 #[derive(Clone)]
 pub struct CompiledGrammar {
-    pub(crate) raw: RawCompiledGrammar,
+    pub(crate) raw: ObjectRef,
 }
 
 impl CompiledGrammar {
-    pub(crate) fn from_raw(raw: RawCompiledGrammar) -> Self {
+    pub(crate) fn from_raw(raw: ObjectRef) -> Self {
         Self { raw }
     }
 
@@ -72,9 +73,14 @@ impl CompiledGrammar {
     }
 }
 
+// SAFETY: the underlying C++ object is immutable after construction, and the
+// handle is a reference-counted pointer with atomic counts.
+unsafe impl Send for CompiledGrammar {}
+unsafe impl Sync for CompiledGrammar {}
+
 impl std::fmt::Debug for CompiledGrammar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CompiledGrammar({:?})", self.raw)
+        write!(f, "CompiledGrammar({:p})", handle::handle_ptr(&self.raw))
     }
 }
 
@@ -107,7 +113,7 @@ impl Default for GrammarCompilerOptions {
 /// them (`!Sync`), because all native cache reads are not yet synchronized.
 /// Each compilation can still use up to `max_threads` internal worker threads.
 pub struct GrammarCompiler {
-    raw: RawGrammarCompiler,
+    raw: ObjectRef,
     _not_sync: PhantomData<std::cell::Cell<()>>,
 }
 
@@ -265,8 +271,12 @@ impl GrammarCompiler {
     }
 }
 
+// SAFETY: moving the compiler between threads is safe; `_not_sync` keeps
+// concurrent shared access out.
+unsafe impl Send for GrammarCompiler {}
+
 impl std::fmt::Debug for GrammarCompiler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GrammarCompiler({:?})", self.raw)
+        write!(f, "GrammarCompiler({:p})", handle::handle_ptr(&self.raw))
     }
 }

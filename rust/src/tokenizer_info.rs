@@ -6,8 +6,9 @@ use serde::Deserialize;
 use tvm_ffi::{Array, Bytes as FfiBytes, String as FfiString};
 
 use crate::error::{Error, Result};
-use crate::ffi::objects::RawTokenizerInfo;
-use crate::ffi::{ffi_call, opt_any, ret};
+use tvm_ffi::object::ObjectRef;
+
+use crate::ffi::{ffi_call, handle, opt_any, ret};
 
 /// How tokens are encoded in the vocabulary passed to [`TokenizerInfo::new`].
 ///
@@ -85,11 +86,11 @@ struct HuggingFaceMetadata {
 /// and shared across threads.
 #[derive(Clone)]
 pub struct TokenizerInfo {
-    pub(crate) raw: RawTokenizerInfo,
+    pub(crate) raw: ObjectRef,
 }
 
 impl TokenizerInfo {
-    pub(crate) fn from_raw(raw: RawTokenizerInfo) -> Self {
+    pub(crate) fn from_raw(raw: ObjectRef) -> Self {
         Self { raw }
     }
 
@@ -335,17 +336,22 @@ impl TokenizerInfo {
 
 impl std::fmt::Debug for TokenizerInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TokenizerInfo({:?})", self.raw)
+        write!(f, "TokenizerInfo({:p})", handle::handle_ptr(&self.raw))
     }
 }
 
 /// Handle identity, like the Python `TokenizerInfo.__eq__`.
 impl PartialEq for TokenizerInfo {
     fn eq(&self, other: &Self) -> bool {
-        self.raw.same_as(&other.raw)
+        handle::same_handle(&self.raw, &other.raw)
     }
 }
 impl Eq for TokenizerInfo {}
+
+// SAFETY: the underlying C++ object is immutable after construction, and the
+// handle is a reference-counted pointer with atomic counts.
+unsafe impl Send for TokenizerInfo {}
+unsafe impl Sync for TokenizerInfo {}
 
 fn detect_vocab_type_from_vocab(vocab: &HashMap<String, u32>) -> Option<VocabType> {
     let num_byte_pieces = (0..=u8::MAX)

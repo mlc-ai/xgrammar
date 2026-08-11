@@ -5,8 +5,9 @@ use std::fmt;
 use tvm_ffi::{Array, String as FfiString};
 
 use crate::error::Result;
-use crate::ffi::objects::RawGrammar;
-use crate::ffi::{ffi_call, opt_any, ret};
+use tvm_ffi::object::ObjectRef;
+
+use crate::ffi::{ffi_call, handle, opt_any, ret};
 use crate::tokenizer_info::TokenizerInfo;
 
 /// Options for converting a JSON schema into a grammar.
@@ -64,11 +65,11 @@ pub enum NamedGrammar<'a> {
 /// functions, then compile it with [`crate::GrammarCompiler`].
 #[derive(Clone)]
 pub struct Grammar {
-    pub(crate) raw: RawGrammar,
+    pub(crate) raw: ObjectRef,
 }
 
 impl Grammar {
-    pub(crate) fn from_raw(raw: RawGrammar) -> Self {
+    pub(crate) fn from_raw(raw: ObjectRef) -> Self {
         Self { raw }
     }
 
@@ -154,7 +155,7 @@ impl Grammar {
         let value_anys: Vec<tvm_ffi::Any> = named_grammars
             .iter()
             .map(|(_, value)| match value {
-                NamedGrammar::Grammar(g) => tvm_ffi::Any::from(g.raw.clone()),
+                NamedGrammar::Grammar(g) => handle::object_arg(&g.raw),
                 NamedGrammar::Lark(src) => tvm_ffi::Any::from(FfiString::from(src)),
             })
             .collect();
@@ -197,14 +198,14 @@ impl Grammar {
 
     /// A grammar matching any input accepted by at least one of `grammars`.
     pub fn union(grammars: &[Grammar]) -> Result<Self> {
-        let array = Array::<RawGrammar>::new(grammars.iter().map(|g| g.raw.clone()).collect());
+        let array = Array::<ObjectRef>::new(grammars.iter().map(|g| g.raw.clone()).collect());
         let any = ffi_call!("xgrammar.tvm_ffi_binding.Grammar.union", array)?;
         Ok(Self::from_raw(ret(any)?))
     }
 
     /// A grammar matching the concatenation of inputs of `grammars`.
     pub fn concat(grammars: &[Grammar]) -> Result<Self> {
-        let array = Array::<RawGrammar>::new(grammars.iter().map(|g| g.raw.clone()).collect());
+        let array = Array::<ObjectRef>::new(grammars.iter().map(|g| g.raw.clone()).collect());
         let any = ffi_call!("xgrammar.tvm_ffi_binding.Grammar.concat", array)?;
         Ok(Self::from_raw(ret(any)?))
     }
@@ -245,14 +246,19 @@ impl fmt::Display for Grammar {
 
 impl fmt::Debug for Grammar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Grammar({:?})", self.raw)
+        write!(f, "Grammar({:p})", handle::handle_ptr(&self.raw))
     }
 }
 
 /// Handle identity, like the Python `Grammar.__eq__`.
 impl PartialEq for Grammar {
     fn eq(&self, other: &Self) -> bool {
-        self.raw.same_as(&other.raw)
+        handle::same_handle(&self.raw, &other.raw)
     }
 }
 impl Eq for Grammar {}
+
+// SAFETY: the underlying C++ object is immutable after construction, and the
+// handle is a reference-counted pointer with atomic counts.
+unsafe impl Send for Grammar {}
+unsafe impl Sync for Grammar {}

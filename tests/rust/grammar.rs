@@ -81,6 +81,35 @@ fn from_regex_and_lark() {
     assert!(lark.to_string().contains("root"));
 }
 
+/// Mirrors `tests/python/test_lark.py`'s named-grammar tests; the Grammar
+/// value exercises the runtime-tagged object argument path.
+#[test]
+fn from_lark_with_named_grammars() {
+    common::init();
+    let ti = common::tiny_tokenizer_info();
+    let item = Grammar::from_lark("start: \"x\" | \"y\"").unwrap();
+    let grammar = Grammar::from_lark_with(
+        "start: \"[\" @item (\",\" @item)* \"]\"",
+        None,
+        &[
+            ("item", xgrammar::NamedGrammar::Grammar(&item)),
+            (
+                "pair",
+                xgrammar::NamedGrammar::Lark("start: \"a\" \":\" \"b\""),
+            ),
+        ],
+    )
+    .unwrap();
+
+    let compiler = xgrammar::GrammarCompiler::new(&ti).unwrap();
+    let compiled = compiler.compile_grammar(&grammar).unwrap();
+    let mut matcher = xgrammar::GrammarMatcher::new(&compiled).unwrap();
+    assert!(matcher.accept_string("[y,x]").unwrap());
+    assert!(matcher.is_completed().unwrap());
+    let mut matcher = xgrammar::GrammarMatcher::new(&compiled).unwrap();
+    assert!(!matcher.accept_string("[z]").unwrap());
+}
+
 #[test]
 fn clone_is_same_handle() {
     common::init();

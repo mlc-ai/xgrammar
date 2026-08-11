@@ -9,8 +9,7 @@ use tvm_ffi::{Any, AnyCompatible, Array, Bytes as FfiBytes, String as FfiString}
 use crate::bitmask::TokenBitmask;
 use crate::compiler::CompiledGrammar;
 use crate::error::{Error, Result};
-use crate::ffi::objects::{RawBatchGrammarMatcher, RawGrammarMatcher};
-use crate::ffi::{ffi_call, mixed_array, opt_any, ret, ret_opt, DlArg};
+use crate::ffi::{ffi_call, handle, mixed_array, opt_any, ret, ret_opt, DlArg};
 
 /// Options for [`GrammarMatcher::with_options`], mirroring the Python
 /// constructor's keyword arguments.
@@ -32,13 +31,13 @@ pub struct MatcherOptions {
 /// A matcher is a mutable state machine and is `Send` but not `Sync`; use
 /// [`GrammarMatcher::fork`] to branch the state (e.g. for beam search).
 pub struct GrammarMatcher {
-    pub(crate) raw: RawGrammarMatcher,
+    pub(crate) raw: tvm_ffi::object::ObjectRef,
     vocab_size: usize,
     _not_sync: PhantomData<std::cell::Cell<()>>,
 }
 
 impl GrammarMatcher {
-    fn from_raw(raw: RawGrammarMatcher, vocab_size: usize) -> Self {
+    fn from_raw(raw: tvm_ffi::object::ObjectRef, vocab_size: usize) -> Self {
         Self {
             raw,
             vocab_size,
@@ -328,9 +327,13 @@ impl GrammarMatcher {
     }
 }
 
+// SAFETY: the matcher is a self-contained state machine; moving it between
+// threads is safe. `_not_sync` keeps concurrent shared access out.
+unsafe impl Send for GrammarMatcher {}
+
 impl std::fmt::Debug for GrammarMatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GrammarMatcher({:?})", self.raw)
+        write!(f, "GrammarMatcher({:p})", handle::handle_ptr(&self.raw))
     }
 }
 
@@ -347,7 +350,7 @@ pub enum MaxThreads {
 /// Runs matcher operations over batches of [`GrammarMatcher`]s, using an
 /// internal thread pool for bitmask filling.
 pub struct BatchGrammarMatcher {
-    raw: RawBatchGrammarMatcher,
+    raw: tvm_ffi::object::ObjectRef,
     _not_sync: PhantomData<std::cell::Cell<()>>,
 }
 
@@ -508,13 +511,20 @@ impl BatchGrammarMatcher {
     }
 }
 
+// SAFETY: as for `GrammarMatcher`.
+unsafe impl Send for BatchGrammarMatcher {}
+
 impl std::fmt::Debug for BatchGrammarMatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BatchGrammarMatcher({:?})", self.raw)
+        write!(
+            f,
+            "BatchGrammarMatcher({:p})",
+            handle::handle_ptr(&self.raw)
+        )
     }
 }
 
-fn matcher_array(matchers: &mut [GrammarMatcher]) -> Array<RawGrammarMatcher> {
+fn matcher_array(matchers: &mut [GrammarMatcher]) -> Array<tvm_ffi::object::ObjectRef> {
     Array::new(matchers.iter().map(|m| m.raw.clone()).collect())
 }
 
