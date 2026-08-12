@@ -2005,13 +2005,7 @@ void GrammarFSMBuilderImpl::BuildRegex(
   }
   const std::string rule_hint = rule_name_ != nullptr ? *rule_name_ : "";
   auto build_result = json_string
-                          ? RegexFSMBuilder::BuildWithForbiddenChars(
-                                regex,
-                                GrammarFSMBuilder::JSONStringForbiddenChars(),
-                                grammar_builder_,
-                                rule_hint,
-                                byte_mode
-                            )
+                          ? RegexFSMBuilder::BuildForJSONString(regex, grammar_builder_, rule_hint)
                           : RegexFSMBuilder::Build(regex, grammar_builder_, rule_hint, byte_mode);
   if (build_result.IsErr()) {
     auto error = std::move(build_result).UnwrapErr();
@@ -2152,9 +2146,7 @@ Result<FSMWithStartEnd> GrammarFSMBuilderImpl::Regex(
   if (json_string && byte_mode) {
     return ResultErr("json_string and byte_mode cannot be enabled together");
   }
-  auto build_result = json_string ? RegexFSMBuilder::BuildWithForbiddenChars(
-                                        regex, GrammarFSMBuilder::JSONStringForbiddenChars()
-                                    )
+  auto build_result = json_string ? RegexFSMBuilder::BuildForJSONString(regex)
                                   : RegexFSMBuilder::Build(regex, nullptr, "", byte_mode);
   if (build_result.IsErr()) {
     return build_result;

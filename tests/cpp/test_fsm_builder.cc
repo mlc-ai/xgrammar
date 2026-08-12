@@ -426,11 +426,15 @@ TEST(XGrammarFSMBuilderTest, TestGrammarFSMBuilderRegex) {
   EXPECT_FALSE(fsm_wse.AcceptString("1234"));
   EXPECT_FALSE(fsm_wse.AcceptString("123456"));
 
-  // json_string=true excludes the JSON forbidden characters.
+  // json_string=true matches decoded characters through their valid JSON source spellings.
   fsm_wse = GrammarFSMBuilder::Regex("\\S+", /*json_string=*/true).Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a\\\"b"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a\\\\b"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a\\bb"));
   EXPECT_FALSE(fsm_wse.AcceptString("a\"b"));
-  EXPECT_FALSE(fsm_wse.AcceptString("a\\b"));
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string("a") + '\b' + "b"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a\\qb"));
 
   // Without the flag, the quote is accepted.
   fsm_wse = GrammarFSMBuilder::Regex("\\S+").Unwrap();
@@ -438,6 +442,65 @@ TEST(XGrammarFSMBuilderTest, TestGrammarFSMBuilderRegex) {
 
   // Invalid patterns report an error.
   EXPECT_TRUE(GrammarFSMBuilder::Regex("+a").IsErr());
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexJSONStringSpellings) {
+  auto fsm_wse = RegexFSMBuilder::BuildForJSONString("a[\\s\\S]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("ab"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a\\\""));
+  EXPECT_TRUE(fsm_wse.AcceptString("a\\n"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a\\u000A"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a\\u000a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a你"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a\\u4F60"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a😀"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a\\uD83D\\uDE00"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a\""));
+  EXPECT_FALSE(fsm_wse.AcceptString("a\\q"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a\\uD83D"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a\\uDE00"));
+
+  fsm_wse = RegexFSMBuilder::BuildForJSONString("[\\u01FE-\\u0201]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\\u01fE"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\\u0200"));
+  EXPECT_TRUE(fsm_wse.AcceptString("ȁ"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\\u01FD"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\\u0202"));
+
+  fsm_wse = RegexFSMBuilder::BuildForJSONString("[\\u{103FF}-\\u{10401}]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\\uD800\\uDFFF"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\\uD801\\uDC00"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\\uD801\\uDC01"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\\uD800\\uDFFE"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\\uD801\\uDC02"));
+
+  // Repetition counts decoded code points, not source bytes or escape characters.
+  fsm_wse = RegexFSMBuilder::BuildForJSONString(".{2}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a你"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\\u0061\\u4F60"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\\n\\uD83D\\uDE00"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\\u0061"));
+  EXPECT_FALSE(fsm_wse.AcceptString("abc"));
+
+  // ASCII case folding applies to raw and Unicode-escaped spellings alike.
+  fsm_wse = RegexFSMBuilder::BuildForJSONString("(?i)a").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\\u0061"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\\u0041"));
+  EXPECT_FALSE(fsm_wse.AcceptString("b"));
+
+  // A search-style expression must not lose its required middle literal during optimization.
+  constexpr const char* kSearchRegex = "(?:[\\s\\S]*)(?:x_)(?:[\\s\\S]*)";
+  fsm_wse = RegexFSMBuilder::BuildForJSONString(kSearchRegex).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("prefix_x_suffix"));
+  EXPECT_FALSE(fsm_wse.AcceptString("before_y_after"));
+  fsm_wse = GrammarFSMBuilder::Regex(kSearchRegex, /*json_string=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("prefix_x_suffix"));
+  EXPECT_FALSE(fsm_wse.AcceptString("before_y_after"));
+
+  std::string invalid_utf8_pattern(1, static_cast<char>(0xFF));
+  EXPECT_TRUE(RegexFSMBuilder::BuildForJSONString(invalid_utf8_pattern).IsErr());
 }
 
 TEST(XGrammarFSMBuilderTest, TestRegexRepeatZero) {

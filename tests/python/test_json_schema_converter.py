@@ -995,7 +995,9 @@ def test_repeated_string_patterns_preserve_each_property():
 
 def test_complex_restrictions():
     class RestrictedModel(BaseModel):
-        restricted_string: str = Field(..., pattern=r"[^\"]*")
+        # JSON Schema patterns use search semantics. Anchor the pattern because this field is
+        # intended to reject a quote anywhere in the complete string.
+        restricted_string: str = Field(..., pattern=r"^[^\"]*$")
         restricted_value: int = Field(..., strict=True, ge=0, lt=44)
 
     # working instance
@@ -1005,8 +1007,7 @@ def test_complex_restrictions():
         RestrictedModel.model_json_schema(), instance_str, any_whitespace=False
     )
 
-    instance_err = RestrictedModel(restricted_string='"', restricted_value=42)
-    instance_str = json.dumps(instance_err.model_dump(mode="json"))
+    instance_str = json.dumps({"restricted_string": '"', "restricted_value": 42})
     check_schema_with_instance(
         RestrictedModel.model_json_schema(), instance_str, is_accepted=False, any_whitespace=False
     )

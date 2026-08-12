@@ -427,6 +427,9 @@ class JSONSchemaConverter {
       const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
   );
 
+  /*! \brief Compile a JSON Schema pattern with search and branch-local anchor semantics. */
+  int32_t JSONSchemaPatternExpression(const std::string& regex);
+
   /*! \brief Helper to create rule with repetition constraints. */
   int32_t GetPropertyWithNumberConstraints(
       int32_t pattern,
@@ -517,6 +520,7 @@ class JSONSchemaConverter {
   std::unordered_map<std::string, int32_t> byte_string_expr_ids_;
   std::unordered_map<int32_t, int32_t> rule_ref_expr_ids_;
   std::unordered_map<std::string, int32_t> regex_expr_ids_;
+  std::unordered_map<std::string, int32_t> json_schema_pattern_expr_ids_;
   std::optional<int32_t> whitespace_expr_id_;
 
   // Helper for integer/number range regex generation

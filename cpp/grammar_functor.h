@@ -403,8 +403,8 @@ class GrammarFSMBuilder {
   /*!
    * \brief Build the automaton of a regex pattern. Returns the error message on failure.
    * \param regex The regex pattern string.
-   * \param json_string Whether the regex matches the body of a JSON string literal. If true,
-   * the characters in JSONStringForbiddenChars() are excluded from every character match.
+   * \param json_string Whether the regex matches decoded JSON string contents. If true, each
+   * logical code point accepts its valid raw or escaped JSON source spellings.
    * \param byte_mode Whether the regex matches raw bytes instead of Unicode codepoints.
    */
   static Result<FSMWithStartEnd> Regex(

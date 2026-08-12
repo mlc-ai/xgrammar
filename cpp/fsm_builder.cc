@@ -384,6 +384,164 @@ void AddCodepointRangesToFSM(
   }
 }
 
+void AddJSONStringHexDigitRange(FSM* fsm, int from, int to, int low, int high) {
+  XGRAMMAR_DCHECK(0 <= low && low <= high && high <= 15);
+  if (low <= 9) {
+    fsm->AddEdge(from, to, '0' + low, '0' + std::min(high, 9));
+  }
+  if (high >= 10) {
+    int letter_low = std::max(low, 10) - 10;
+    int letter_high = high - 10;
+    fsm->AddEdge(from, to, 'A' + letter_low, 'A' + letter_high);
+    fsm->AddEdge(from, to, 'a' + letter_low, 'a' + letter_high);
+  }
+}
+
+void AddAnyJSONStringHexDigits(FSM* fsm, int from, int to, int digits) {
+  int current = from;
+  for (int index = 0; index < digits; ++index) {
+    int next = index + 1 == digits ? to : fsm->AddState();
+    AddJSONStringHexDigitRange(fsm, current, next, 0, 15);
+    current = next;
+  }
+}
+
+/*! \brief Add the fixed-width hexadecimal spellings in the inclusive numeric range. */
+void AddJSONStringHexValueRange(
+    FSM* fsm, int from, int to, uint32_t low, uint32_t high, int digits
+) {
+  XGRAMMAR_DCHECK(low <= high && digits >= 1 && digits <= 4);
+  const uint32_t place = uint32_t{1} << (4 * (digits - 1));
+  if (low == 0 && high == place * 16 - 1) {
+    AddAnyJSONStringHexDigits(fsm, from, to, digits);
+    return;
+  }
+
+  const int low_digit = static_cast<int>(low / place);
+  const int high_digit = static_cast<int>(high / place);
+  const uint32_t low_suffix = low % place;
+  const uint32_t high_suffix = high % place;
+  auto add_branch = [&](int digit_low, int digit_high, uint32_t suffix_low, uint32_t suffix_high) {
+    if (digits == 1) {
+      AddJSONStringHexDigitRange(fsm, from, to, digit_low, digit_high);
+      return;
+    }
+    int next = fsm->AddState();
+    AddJSONStringHexDigitRange(fsm, from, next, digit_low, digit_high);
+    AddJSONStringHexValueRange(fsm, next, to, suffix_low, suffix_high, digits - 1);
+  };
+
+  if (low_digit == high_digit) {
+    add_branch(low_digit, high_digit, low_suffix, high_suffix);
+    return;
+  }
+  add_branch(low_digit, low_digit, low_suffix, place - 1);
+  if (low_digit + 1 <= high_digit - 1) {
+    add_branch(low_digit + 1, high_digit - 1, 0, place - 1);
+  }
+  add_branch(high_digit, high_digit, 0, high_suffix);
+}
+
+void AddJSONStringFixedBytes(FSM* fsm, int from, int to, const std::string& bytes) {
+  int current = from;
+  for (size_t index = 0; index < bytes.size(); ++index) {
+    int next = index + 1 == bytes.size() ? to : fsm->AddState();
+    uint8_t byte = static_cast<uint8_t>(bytes[index]);
+    fsm->AddEdge(current, next, byte, byte);
+    current = next;
+  }
+}
+
+void AddJSONStringUnicodeEscapeRange(FSM* fsm, int from, int to, uint32_t low, uint32_t high) {
+  int after_slash = fsm->AddState();
+  int after_u = fsm->AddState();
+  fsm->AddEdge(from, after_slash, '\\', '\\');
+  fsm->AddEdge(after_slash, after_u, 'u', 'u');
+  AddJSONStringHexValueRange(fsm, after_u, to, low, high, 4);
+}
+
+/*! \brief Add every valid JSON source spelling of the normalized Unicode scalar ranges. */
+void AddJSONStringCodepointRangesToFSM(
+    FSM* fsm, int from, int to, const std::vector<CodepointRange>& ranges
+) {
+  std::vector<CodepointRange> raw_ranges;
+  for (const auto& [low, high] : ranges) {
+    auto add_raw = [&](uint32_t raw_low, uint32_t raw_high) {
+      raw_low = std::max(raw_low, low);
+      raw_high = std::min(raw_high, high);
+      if (raw_low <= raw_high) {
+        raw_ranges.push_back({raw_low, raw_high});
+      }
+    };
+    add_raw(0x20, 0x21);
+    add_raw(0x23, 0x5B);
+    add_raw(0x5D, 0xD7FF);
+    add_raw(0xE000, kMaxCodepoint);
+  }
+  AddCodepointRangesToFSM(fsm, from, to, raw_ranges);
+
+  static constexpr std::array<std::pair<uint32_t, char>, 8> kShortEscapes = {
+      std::pair<uint32_t, char>{'"', '"'},
+      {'\\', '\\'},
+      {'/', '/'},
+      {'\b', 'b'},
+      {'\f', 'f'},
+      {'\n', 'n'},
+      {'\r', 'r'},
+      {'\t', 't'},
+  };
+  for (const auto& [codepoint, escaped] : kShortEscapes) {
+    if (std::any_of(ranges.begin(), ranges.end(), [&](const CodepointRange& range) {
+          return range.first <= codepoint && codepoint <= range.second;
+        })) {
+      AddJSONStringFixedBytes(fsm, from, to, std::string{'\\', escaped});
+    }
+  }
+
+  for (const auto& [low, high] : ranges) {
+    uint32_t bmp_low = low;
+    uint32_t bmp_high = std::min<uint32_t>(high, 0xFFFF);
+    if (bmp_low <= bmp_high) {
+      if (bmp_low <= 0xD7FF) {
+        AddJSONStringUnicodeEscapeRange(fsm, from, to, bmp_low, std::min(bmp_high, 0xD7FFu));
+      }
+      if (bmp_high >= 0xE000) {
+        AddJSONStringUnicodeEscapeRange(fsm, from, to, std::max(bmp_low, 0xE000u), bmp_high);
+      }
+    }
+
+    uint32_t scalar_low = std::max<uint32_t>(low, 0x10000);
+    uint32_t scalar_high = std::min<uint32_t>(high, kMaxCodepoint);
+    if (scalar_low > scalar_high) {
+      continue;
+    }
+    uint32_t offset_low = scalar_low - 0x10000;
+    uint32_t offset_high = scalar_high - 0x10000;
+    uint32_t high_surrogate_low = 0xD800 + (offset_low >> 10);
+    uint32_t high_surrogate_high = 0xD800 + (offset_high >> 10);
+    uint32_t low_surrogate_low = 0xDC00 + (offset_low & 0x3FF);
+    uint32_t low_surrogate_high = 0xDC00 + (offset_high & 0x3FF);
+
+    auto add_surrogate_branch =
+        [&](uint32_t high_low, uint32_t high_high, uint32_t low_low, uint32_t low_high) {
+          int between = fsm->AddState();
+          AddJSONStringUnicodeEscapeRange(fsm, from, between, high_low, high_high);
+          AddJSONStringUnicodeEscapeRange(fsm, between, to, low_low, low_high);
+        };
+    if (high_surrogate_low == high_surrogate_high) {
+      add_surrogate_branch(
+          high_surrogate_low, high_surrogate_high, low_surrogate_low, low_surrogate_high
+      );
+      continue;
+    }
+    add_surrogate_branch(high_surrogate_low, high_surrogate_low, low_surrogate_low, 0xDFFF);
+    if (high_surrogate_low + 1 <= high_surrogate_high - 1) {
+      add_surrogate_branch(high_surrogate_low + 1, high_surrogate_high - 1, 0xDC00, 0xDFFF);
+    }
+    add_surrogate_branch(high_surrogate_high, high_surrogate_high, 0xDC00, low_surrogate_high);
+  }
+}
+
 /*! \brief One parsed regex escape (or literal): either a single codepoint, or a (possibly
  * negated) set of codepoint ranges for class escapes like \d, \D, \w, \W, \s, \S. */
 struct RegexEscapeItem {
@@ -844,10 +1002,19 @@ class RegexIR {
   // Whether characters are interpreted as raw bytes instead of Unicode codepoints.
   bool byte_mode = false;
 
+  // Whether logical codepoints are matched through their valid JSON source spellings.
+  bool json_string = false;
+
   /*!
     \brief Constructs a NFA from the regex IR.
   */
   Result<FSMWithStartEnd> Build() const;
+
+  /*! \brief Validate all leaves without expanding repetition or composition nodes. */
+  Result<bool> Validate() const;
+
+  /*! \brief Whether the parsed regex contains a repetition retained by a GrammarBuilder. */
+  bool HasLargeRepeat() const;
 
   /*!
     \brief the visit function for the variant.
@@ -896,6 +1063,10 @@ class RegexIR {
    * case_insensitive is set) from `current` to a new state, and return the new state.
    */
   int AddSingleCodepoint(FSMWithStartEnd& result, int current, uint32_t codepoint) const;
+
+  Result<bool> ValidateState(const State& state) const;
+
+  static bool HasLargeRepeatState(const State& state);
 };
 
 Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& start) {
@@ -1008,6 +1179,85 @@ bool RegexIR::IsNullable(const State& state) {
       },
       state
   );
+}
+
+Result<bool> RegexIR::ValidateState(const State& state) const {
+  return std::visit(
+      [&](const auto& node) -> Result<bool> {
+        using T = std::decay_t<decltype(node)>;
+        if constexpr (std::is_same_v<T, Leaf>) {
+          auto leaf = BuildLeafFSMFromRegex(node.regex);
+          if (leaf.IsErr()) {
+            return ResultErr(std::move(leaf).UnwrapErr());
+          }
+          return ResultOk(true);
+        } else if constexpr (std::is_same_v<T, Symbol>) {
+          for (const auto& child : node.state) {
+            auto validation = ValidateState(child);
+            if (validation.IsErr()) {
+              return validation;
+            }
+          }
+          return ResultOk(true);
+        } else if constexpr (std::is_same_v<T, Union> || std::is_same_v<T, Bracket> ||
+                             std::is_same_v<T, Repeat>) {
+          for (const auto& child : node.states) {
+            auto validation = ValidateState(child);
+            if (validation.IsErr()) {
+              return validation;
+            }
+          }
+          return ResultOk(true);
+        } else {
+          return ResultOk(true);
+        }
+      },
+      state
+  );
+}
+
+Result<bool> RegexIR::Validate() const {
+  for (const auto& state : states) {
+    auto validation = ValidateState(state);
+    if (validation.IsErr()) {
+      return validation;
+    }
+  }
+  return ResultOk(true);
+}
+
+bool RegexIR::HasLargeRepeatState(const State& state) {
+  return std::visit(
+      [](const auto& node) -> bool {
+        using T = std::decay_t<decltype(node)>;
+        if constexpr (std::is_same_v<T, Repeat>) {
+          const bool is_large = node.upper_bound == kRepeatNoUpperBound
+                                    ? node.lower_bound > kLargeRepeatThreshold
+                                    : node.upper_bound > kLargeRepeatThreshold;
+          return is_large ||
+                 std::any_of(node.states.begin(), node.states.end(), [](const State& child) {
+                   return HasLargeRepeatState(child);
+                 });
+        } else if constexpr (std::is_same_v<T, Symbol>) {
+          return std::any_of(node.state.begin(), node.state.end(), [](const State& child) {
+            return HasLargeRepeatState(child);
+          });
+        } else if constexpr (std::is_same_v<T, Union> || std::is_same_v<T, Bracket>) {
+          return std::any_of(node.states.begin(), node.states.end(), [](const State& child) {
+            return HasLargeRepeatState(child);
+          });
+        } else {
+          return false;
+        }
+      },
+      state
+  );
+}
+
+bool RegexIR::HasLargeRepeat() const {
+  return std::any_of(states.begin(), states.end(), [](const State& state) {
+    return HasLargeRepeatState(state);
+  });
 }
 
 Result<FSMWithStartEnd> RegexIR::Build() const {
@@ -1217,6 +1467,17 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
 
 int RegexIR::AddSingleCodepoint(FSMWithStartEnd& result, int current, uint32_t codepoint) const {
   int next = result.AddState();
+  if (json_string) {
+    std::vector<CodepointRange> ranges = {{codepoint, codepoint}};
+    if (case_insensitive && codepoint >= 'a' && codepoint <= 'z') {
+      ranges.push_back({codepoint - ('a' - 'A'), codepoint - ('a' - 'A')});
+    } else if (case_insensitive && codepoint >= 'A' && codepoint <= 'Z') {
+      ranges.push_back({codepoint + ('a' - 'A'), codepoint + ('a' - 'A')});
+    }
+    NormalizeRanges(&ranges);
+    AddJSONStringCodepointRangesToFSM(&result.GetFsm(), current, next, ranges);
+    return next;
+  }
   if (byte_mode || codepoint <= kMax1ByteUnicode) {
     XGRAMMAR_DCHECK(!byte_mode || codepoint <= kMaxByteValue);
     result.GetFsm().AddEdge(current, next, codepoint, codepoint);
@@ -1262,6 +1523,8 @@ Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(const std::string& regex)
       for (const auto& [low, high] : ranges) {
         result.GetFsm().AddEdge(0, end_state, low, high);
       }
+    } else if (json_string) {
+      AddJSONStringCodepointRangesToFSM(&result.GetFsm(), 0, end_state, ranges);
     } else {
       AddCodepointRangesToFSM(&result.GetFsm(), 0, end_state, ranges);
     }
@@ -1277,6 +1540,8 @@ Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(const std::string& regex)
       int next = result.AddState();
       if (byte_mode) {
         result.GetFsm().AddEdge(current, next, 0, kMaxByteValue);
+      } else if (json_string) {
+        AddJSONStringCodepointRangesToFSM(&result.GetFsm(), current, next, {{0, kMaxCodepoint}});
       } else {
         AddCodepointRangesToFSM(&result.GetFsm(), current, next, {{0, kMaxCodepoint}});
       }
@@ -1305,6 +1570,8 @@ Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(const std::string& regex)
           for (const auto& [low, high] : ranges) {
             result.GetFsm().AddEdge(current, next, low, high);
           }
+        } else if (json_string) {
+          AddJSONStringCodepointRangesToFSM(&result.GetFsm(), current, next, ranges);
         } else {
           AddCodepointRangesToFSM(&result.GetFsm(), current, next, ranges);
         }
@@ -1319,6 +1586,9 @@ Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(const std::string& regex)
     }
     auto [codepoint, num_bytes] = ParseNextUTF8(regex.c_str() + pos);
     if (codepoint == CharHandlingError::kInvalidUTF8 || pos + num_bytes > regex.size()) {
+      if (json_string) {
+        return ResultErr("Invalid UTF-8 in regex matched as decoded JSON string contents");
+      }
       // Be permissive with non-UTF-8 patterns: match the raw byte.
       int next = result.AddState();
       uint8_t byte = static_cast<uint8_t>(regex[pos]);
@@ -1378,10 +1648,12 @@ Result<RegexIR> ParseRegexToIR(
     const std::string& regex_with_flags,
     GrammarBuilder* builder,
     const std::string& rule_hint,
-    bool byte_mode
+    bool byte_mode,
+    bool json_string = false
 ) {
   RegexIR ir;
   ir.byte_mode = byte_mode;
+  ir.json_string = json_string;
   std::string regex = regex_with_flags;
   int flag_prefix_length = 0;
   if (regex.size() >= 4 && regex.compare(0, 4, "(?i)") == 0) {
@@ -1654,8 +1926,7 @@ Result<RegexIR> ParseRegexToIR(
         }
         std::string name_hint = (rule_hint.empty() ? "regex" : rule_hint) + "_repeat";
         int32_t inner_rule_id = builder->AddRuleWithHint(
-            name_hint,
-            builder->AddRegex(inner_regex, /*json_string=*/false, /*byte_mode=*/byte_mode)
+            name_hint, builder->AddRegex(inner_regex, json_string, /*byte_mode=*/byte_mode)
         );
         builder->UpdateLookaheadExact(inner_rule_id, true);
         if (upper_bound == RegexIR::kRepeatNoUpperBound) {
@@ -1770,6 +2041,33 @@ Result<bool> RegexFSMBuilder::MatchesEmpty(const std::string& regex, bool byte_m
   return ResultOk(RegexIR::IsNullableSequence(ir.states));
 }
 
+Result<bool> RegexFSMBuilder::CanDeferLargeRepeat(
+    const std::string& regex, bool json_string, bool byte_mode
+) {
+  if (json_string && byte_mode) {
+    return ResultErr("json_string and byte_mode cannot be enabled together");
+  }
+  auto ir_result = ParseRegexToIR(regex, nullptr, "", byte_mode, json_string);
+  if (ir_result.IsErr()) {
+    return ResultErr(std::move(ir_result).UnwrapErr());
+  }
+  auto ir = std::move(ir_result).Unwrap();
+  auto validation = ir.Validate();
+  if (validation.IsErr()) {
+    return validation;
+  }
+  if (!ir.HasLargeRepeat()) {
+    return ResultOk(false);
+  }
+
+  // Confirm that the real GrammarBuilder-backed representation can also be assembled. This
+  // keeps deferral specific to errors that the compact repeat path actually resolves.
+  GrammarBuilder probe_builder;
+  auto probe = json_string ? BuildForJSONString(regex, &probe_builder, "regex_probe")
+                           : Build(regex, &probe_builder, "regex_probe", byte_mode);
+  return ResultOk(probe.IsOk());
+}
+
 Result<FSMWithStartEnd> RegexFSMBuilder::BuildWithForbiddenChars(
     const std::string& regex,
     const std::bitset<256>& forbidden_chars,
@@ -1805,6 +2103,17 @@ Result<FSMWithStartEnd> RegexFSMBuilder::BuildWithForbiddenChars(
     }
   }
   return ResultOk(FSMWithStartEnd(new_fsm, fsm_wse.GetStart(), fsm_wse.GetEnds()));
+}
+
+Result<FSMWithStartEnd> RegexFSMBuilder::BuildForJSONString(
+    const std::string& regex, GrammarBuilder* builder, const std::string& rule_hint
+) {
+  auto ir_result =
+      ParseRegexToIR(regex, builder, rule_hint, /*byte_mode=*/false, /*json_string=*/true);
+  if (ir_result.IsErr()) {
+    return ResultErr(std::move(ir_result).UnwrapErr());
+  }
+  return std::move(ir_result).Unwrap().Build();
 }
 
 class TrieFSMBuilderImpl {

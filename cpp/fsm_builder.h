@@ -91,6 +91,28 @@ class RegexFSMBuilder {
   );
 
   /*!
+   * \brief Converts a regex over decoded JSON string contents to an FSM over the encoded body.
+   * Every logical code point accepts its raw JSON spelling where permitted, its applicable short
+   * escape, and its Unicode escape spelling. Repetition therefore counts decoded code points.
+   * \param regex The regex string.
+   * \param builder See Build().
+   * \param rule_hint See Build().
+   * \return The FSM with start and end states.
+   */
+  static Result<FSMWithStartEnd> BuildForJSONString(
+      const std::string& regex, GrammarBuilder* builder = nullptr, const std::string& rule_hint = ""
+  );
+
+  /*!
+   * \brief Check whether a regex contains a large repetition that can be deferred to a
+   * GrammarBuilder. Every atom is validated without expanding repetitions into a complete FSM.
+   * \return True only when validation succeeds and a deferrable large repetition is present.
+   */
+  static Result<bool> CanDeferLargeRepeat(
+      const std::string& regex, bool json_string = false, bool byte_mode = false
+  );
+
+  /*!
    * \brief Check whether the regex matches the empty string. Only parses the regex; no FSM is
    * built, so this is cheap even for regexes with huge bounded repetitions.
    */

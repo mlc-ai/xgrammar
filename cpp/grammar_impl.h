@@ -186,9 +186,8 @@ class Grammar::Impl {
     // The bytes are the regex pattern string. Like kTagDispatch, it can only be the body of a
     // rule. The pattern is carried through the grammar passes as-is; when GrammarFSMBuilder
     // runs, the pattern is compiled into an automaton, so every regex rule always has a
-    // per-rule FSM after optimization. If json_string is 1, the regex matches the body of a
-    // JSON string literal: the characters that must be escaped in a JSON string (the control
-    // characters, '"' and '\\') are excluded from every character match of the automaton.
+    // per-rule FSM after optimization. If json_string is 1, the regex matches decoded JSON
+    // string contents through their valid raw or escaped source spellings.
     kRegex,
     // data format: [chunk0_len, byte0_0, byte0_1, ..., chunk1_len, byte1_0, ...]
     // A list of length-prefixed byte string chunks. Matches every contiguous subsequence of

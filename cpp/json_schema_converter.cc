@@ -8,6 +8,7 @@
 #include <picojson.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <climits>
 #include <cmath>
@@ -25,6 +26,7 @@
 #include <variant>
 #include <vector>
 
+#include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
@@ -32,6 +34,189 @@
 #include "support/logging.h"
 
 namespace xgrammar {
+
+namespace {
+
+struct RegexScanState {
+  int group_depth = 0;
+  bool in_character_class = false;
+  bool escaped = false;
+};
+
+void AdvanceRegexScanState(char character, RegexScanState* state) {
+  if (state->escaped) {
+    state->escaped = false;
+    return;
+  }
+  if (character == '\\') {
+    state->escaped = true;
+    return;
+  }
+  if (state->in_character_class) {
+    if (character == ']') {
+      state->in_character_class = false;
+    }
+    return;
+  }
+  if (character == '[') {
+    state->in_character_class = true;
+  } else if (character == '(') {
+    ++state->group_depth;
+  } else if (character == ')') {
+    --state->group_depth;
+  }
+}
+
+std::optional<std::string> UnwrapWholeRegexGroup(const std::string& pattern) {
+  if (pattern.size() < 2 || pattern.front() != '(') {
+    return std::nullopt;
+  }
+  size_t content_begin = 1;
+  if (pattern.size() >= 4 && pattern.compare(0, 3, "(?:") == 0) {
+    content_begin = 3;
+  } else if (pattern.size() >= 3 && pattern[1] == '?') {
+    return std::nullopt;
+  }
+
+  RegexScanState state;
+  for (size_t index = 0; index < pattern.size(); ++index) {
+    AdvanceRegexScanState(pattern[index], &state);
+    if (state.group_depth == 0 && !state.in_character_class && !state.escaped) {
+      if (index != pattern.size() - 1) {
+        return std::nullopt;
+      }
+      return pattern.substr(content_begin, pattern.size() - content_begin - 1);
+    }
+  }
+  return std::nullopt;
+}
+
+std::vector<std::string> SplitTopLevelRegexAlternatives(const std::string& pattern) {
+  std::vector<std::string> alternatives;
+  RegexScanState state;
+  size_t alternative_begin = 0;
+  for (size_t index = 0; index < pattern.size(); ++index) {
+    if (pattern[index] == '|' && state.group_depth == 0 && !state.in_character_class &&
+        !state.escaped) {
+      alternatives.push_back(pattern.substr(alternative_begin, index - alternative_begin));
+      alternative_begin = index + 1;
+      continue;
+    }
+    AdvanceRegexScanState(pattern[index], &state);
+  }
+  if (!alternatives.empty()) {
+    alternatives.push_back(pattern.substr(alternative_begin));
+  }
+  return alternatives;
+}
+
+bool IsRegexSyntaxCharacterAt(const std::string& pattern, size_t target) {
+  RegexScanState state;
+  for (size_t index = 0; index <= target; ++index) {
+    if (index == target) {
+      return !state.escaped && !state.in_character_class;
+    }
+    AdvanceRegexScanState(pattern[index], &state);
+  }
+  return false;
+}
+
+struct JSONSchemaPatternAlternative {
+  std::string body;
+  bool anchored_at_start;
+  bool anchored_at_end;
+};
+
+void CollectJSONSchemaPatternAlternatives(
+    const std::string& pattern, std::vector<JSONSchemaPatternAlternative>* result
+) {
+  if (auto unwrapped = UnwrapWholeRegexGroup(pattern)) {
+    CollectJSONSchemaPatternAlternatives(*unwrapped, result);
+    return;
+  }
+
+  auto alternatives = SplitTopLevelRegexAlternatives(pattern);
+  if (!alternatives.empty()) {
+    for (const auto& alternative : alternatives) {
+      CollectJSONSchemaPatternAlternatives(alternative, result);
+    }
+    return;
+  }
+
+  size_t content_begin = 0;
+  size_t content_end = pattern.size();
+  bool anchored_at_start = false;
+  bool anchored_at_end = false;
+  while (content_begin < content_end && pattern[content_begin] == '^') {
+    anchored_at_start = true;
+    ++content_begin;
+  }
+  while (content_begin < content_end && pattern[content_end - 1] == '$' &&
+         IsRegexSyntaxCharacterAt(pattern, content_end - 1)) {
+    anchored_at_end = true;
+    --content_end;
+  }
+  result->push_back(
+      {pattern.substr(content_begin, content_end - content_begin),
+       anchored_at_start,
+       anchored_at_end}
+  );
+}
+
+/*! \brief Rewrite JSON Schema search semantics for the whole-string regex engine. */
+std::string RewriteJSONSchemaPatternForFullMatch(const std::string& pattern) {
+  std::vector<JSONSchemaPatternAlternative> alternatives;
+  CollectJSONSchemaPatternAlternatives(pattern, &alternatives);
+
+  std::array<std::vector<std::string>, 4> grouped_bodies;
+  for (auto& alternative : alternatives) {
+    int group = (alternative.anchored_at_start ? 2 : 0) | (alternative.anchored_at_end ? 1 : 0);
+    grouped_bodies[group].push_back(std::move(alternative.body));
+  }
+
+  std::vector<std::string> rewritten_groups;
+  for (int group = 0; group < 4; ++group) {
+    if (grouped_bodies[group].empty()) {
+      continue;
+    }
+    std::string rewritten;
+    if ((group & 2) == 0) {
+      rewritten += "(?:[\\s\\S]*)";
+    }
+    if (grouped_bodies[group].size() == 1) {
+      rewritten += "(?:" + grouped_bodies[group][0] + ")";
+    } else {
+      rewritten += "(?:";
+      for (size_t index = 0; index < grouped_bodies[group].size(); ++index) {
+        if (index != 0) {
+          rewritten.push_back('|');
+        }
+        rewritten += "(?:" + grouped_bodies[group][index] + ")";
+      }
+      rewritten.push_back(')');
+    }
+    if ((group & 1) == 0) {
+      rewritten += "(?:[\\s\\S]*)";
+    }
+    rewritten_groups.push_back(std::move(rewritten));
+  }
+
+  XGRAMMAR_DCHECK(!rewritten_groups.empty());
+  if (rewritten_groups.size() == 1) {
+    return std::move(rewritten_groups[0]);
+  }
+  std::string result = "(?:";
+  for (size_t index = 0; index < rewritten_groups.size(); ++index) {
+    if (index != 0) {
+      result.push_back('|');
+    }
+    result += "(?:" + rewritten_groups[index] + ")";
+  }
+  result.push_back(')');
+  return result;
+}
+
+}  // namespace
 
 // ==================== Spec ToString implementations ====================
 
@@ -2233,12 +2418,8 @@ int32_t JSONSchemaConverter::GenerateFromSpec(
 
 /*!
  * \brief Emit the grammar expression matching a regex. Prefer the Regex node with
- * json_string=true so the pattern is compiled into a single automaton by GrammarFSMBuilder;
- * json_string=true excludes the characters that must be escaped in a JSON string ('"', '\\'
- * and the control characters) from every character match, so classes like \S cannot emit an
- * unescaped quote. Fall back to the CFG expansion when the FSM regex engine does not support
- * the pattern, or when the exclusion makes the pattern unmatchable (e.g. a pattern requiring
- * a literal '"').
+ * json_string=true so the pattern is compiled into one automaton over valid JSON source
+ * spellings. Fall back to the CFG expansion when the FSM regex engine does not support it.
  */
 int32_t JSONSchemaConverter::RegexExpression(
     const std::string& regex, bool json_string, bool force_cfg_expansion
@@ -2254,15 +2435,10 @@ int32_t JSONSchemaConverter::RegexExpression(
   }
 
   bool can_use_fsm = !force_cfg_expansion;
-  if (json_string) {
-    can_use_fsm =
-        can_use_fsm && std::all_of(regex.begin(), regex.end(), [](unsigned char character) {
-          return character >= 0x20 && character <= 0x7e;
-        });
-  }
   if (can_use_fsm) {
     std::optional<FSMWithStartEnd> local_fsm;
     const FSMWithStartEnd* fsm = nullptr;
+    bool defer_fsm_build = false;
     std::string fsm_cache_key;
     if (regex_fsm_cache_ != nullptr) {
       fsm_cache_key = MakeRegexFSMCacheKey(regex, json_string);
@@ -2282,6 +2458,13 @@ int32_t JSONSchemaConverter::RegexExpression(
           local_fsm.emplace(std::move(fsm_result).Unwrap());
           fsm = &*local_fsm;
         }
+      } else {
+        auto can_defer =
+            RegexFSMBuilder::CanDeferLargeRepeat(regex, json_string, /*byte_mode=*/false);
+        // The probe validates every atom and confirms that the real GrammarBuilder-backed path
+        // can assemble this regex with compact repeat edges. Other build errors continue through
+        // the ordinary fallback.
+        defer_fsm_build = can_defer.IsOk() && std::move(can_defer).Unwrap();
       }
     }
     if (fsm != nullptr) {
@@ -2297,12 +2480,28 @@ int32_t JSONSchemaConverter::RegexExpression(
         return result;
       }
     }
+    if (defer_fsm_build) {
+      const int32_t result = builder_.AddRegex(regex, json_string);
+      regex_expr_ids_.emplace(std::move(cache_key), result);
+      return result;
+    }
   }
 
   // Keep regex conversion independent. Only the uncommon fallback path converts its existing
   // EBNF result to a subgrammar; the JSON Schema rule graph itself is still built directly.
   const int32_t result = AddSubGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
   regex_expr_ids_.emplace(std::move(cache_key), result);
+  return result;
+}
+
+int32_t JSONSchemaConverter::JSONSchemaPatternExpression(const std::string& regex) {
+  const auto cached = json_schema_pattern_expr_ids_.find(regex);
+  if (cached != json_schema_pattern_expr_ids_.end()) {
+    return cached->second;
+  }
+  int32_t result =
+      RegexExpression(RewriteJSONSchemaPatternForFullMatch(regex), /*json_string=*/true);
+  json_schema_pattern_expr_ids_.emplace(regex, result);
   return result;
 }
 
@@ -2446,8 +2645,7 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   }
   // Check for pattern
   if (spec.pattern.has_value()) {
-    return Sequence(
-        {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
+    return Sequence({ByteString("\""), JSONSchemaPatternExpression(*spec.pattern), ByteString("\"")}
     );
   }
   // Check for length constraints
@@ -2949,7 +3147,7 @@ int32_t JSONSchemaConverter::GenerateObject(
             CreateRule(pattern_property.schema, rule_name + "_pp_" + std::to_string(index));
         patterns.push_back(Sequence(
             {ByteString("\""),
-             RegexExpression(pattern_property.pattern, /*json_string=*/true),
+             JSONSchemaPatternExpression(pattern_property.pattern),
              ByteString("\""),
              colon_expr_id_,
              RuleRef(value_rule_id)}
@@ -3004,7 +3202,7 @@ int32_t JSONSchemaConverter::GenerateObject(
           property_choices.push_back(Sequence(
               {beginning_separator,
                ByteString("\""),
-               RegexExpression(pattern_property.pattern, /*json_string=*/true),
+               JSONSchemaPatternExpression(pattern_property.pattern),
                ByteString("\""),
                colon_expr_id_,
                RuleRef(value_rule_id)}
