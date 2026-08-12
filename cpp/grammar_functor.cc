@@ -1028,6 +1028,7 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
   struct RuleLookaheadInfo {
     bool is_triggered_by_dispatch = false;
     bool appears_as_last_in_other_rule = false;
+    bool appears_in_multi_repeat = false;
     int non_last_occurrence_count = 0;
     std::vector<int32_t> suffix_after_first_occurrence;
   };
@@ -1035,7 +1036,7 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
   bool CanUseDerivedLookahead(int32_t rule_id) const {
     const auto& info = rule_lookahead_infos_[rule_id];
     return !info.is_triggered_by_dispatch && !info.appears_as_last_in_other_rule &&
-           info.non_last_occurrence_count == 1;
+           !info.appears_in_multi_repeat && info.non_last_occurrence_count == 1;
   }
 
   void BuildRuleLookaheadInfo() {
@@ -1068,16 +1069,29 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
         if (sequence_expr.type != GrammarExprType::kSequence || sequence_expr.size() == 0) {
           continue;
         }
-        auto last_element = base_grammar_->GetGrammarExpr(sequence_expr.end()[-1]);
-        if (last_element.type == GrammarExprType::kRuleRef && i != last_element[0]) {
-          rule_lookahead_infos_[last_element[0]].appears_as_last_in_other_rule = true;
-        }
-        for (int j = 0; j < sequence_expr.size() - 1; ++j) {
+        for (int j = 0; j < sequence_expr.size(); ++j) {
           auto element_expr = base_grammar_->GetGrammarExpr(sequence_expr[j]);
-          if (element_expr.type != GrammarExprType::kRuleRef) {
+          if (element_expr.type == GrammarExprType::kRepeat) {
+            // A completion inside a multi-repeat can be followed either by another occurrence or
+            // by the surrounding suffix, so there is no single exact derived lookahead. An
+            // at-most-once repeat has the same post-completion suffix as an ordinary reference.
+            if (element_expr[2] == 0) {
+              continue;
+            }
+            if (element_expr[2] != 1) {
+              rule_lookahead_infos_[element_expr[0]].appears_in_multi_repeat = true;
+              continue;
+            }
+          } else if (element_expr.type != GrammarExprType::kRuleRef) {
             continue;
           }
           auto& info = rule_lookahead_infos_[element_expr[0]];
+          if (j == sequence_expr.size() - 1) {
+            if (i != element_expr[0]) {
+              info.appears_as_last_in_other_rule = true;
+            }
+            continue;
+          }
           if (info.non_last_occurrence_count == 0) {
             info.suffix_after_first_occurrence.assign(
                 sequence_expr.begin() + j + 1, sequence_expr.end()
@@ -1155,7 +1169,14 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
   AllowEmptyRuleAnalyzerImpl() = default;
 
   std::vector<int32_t> Apply(const Grammar& grammar) final {
+    return Apply(grammar, &local_regex_fsm_cache_);
+  }
+
+  std::vector<int32_t> Apply(
+      const Grammar& grammar, std::unordered_map<std::string, FSMWithStartEnd>* regex_fsm_cache
+  ) {
     InitGrammar(grammar);
+    regex_fsm_cache_ = regex_fsm_cache;
 
     // Step 1: Find rules that explicitly allow empty string
     std::unordered_set<int32_t> empty_rule_id_set;
@@ -1271,6 +1292,9 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
       }
     }
   }
+
+  std::unordered_map<std::string, FSMWithStartEnd> local_regex_fsm_cache_;
+  std::unordered_map<std::string, FSMWithStartEnd>* regex_fsm_cache_{nullptr};
 };
 
 class GrammarFSMBuilderImpl {
@@ -1278,14 +1302,21 @@ class GrammarFSMBuilderImpl {
   explicit GrammarFSMBuilderImpl(
       FSM& target_fsm,
       const std::string* rule_name = nullptr,
-      GrammarBuilder* grammar_builder = nullptr
+      GrammarBuilder* grammar_builder = nullptr,
+      RegexFSMCache* regex_fsm_cache = nullptr
   )
-      : target_fsm_(target_fsm), rule_name_(rule_name), grammar_builder_(grammar_builder) {}
+      : target_fsm_(target_fsm),
+        rule_name_(rule_name),
+        grammar_builder_(grammar_builder),
+        regex_fsm_cache_(regex_fsm_cache) {}
 
-  static void Apply(Grammar* grammar) {
+  static void Apply(Grammar* grammar, RegexFSMCache* supplied_regex_fsm_cache = nullptr) {
     FSM complete_fsm;
     std::vector<std::optional<FSMWithStartEndWithSize>> per_rule_fsms;
     std::vector<int> state_mapping;
+    RegexFSMCache local_regex_fsm_cache;
+    RegexFSMCache* regex_fsm_cache =
+        supplied_regex_fsm_cache != nullptr ? supplied_regex_fsm_cache : &local_regex_fsm_cache;
 
     // Compiling a kRegex rule may append new rules through this builder: large bounded
     // repetitions in a regex become kRepeatRef edges referencing new rules. NumRules() is
@@ -1293,7 +1324,7 @@ class GrammarFSMBuilderImpl {
     int32_t num_original_rules = (*grammar)->NumRules();
     GrammarBuilder grammar_builder = GrammarBuilder::FromMutableGrammar(grammar);
     for (int i = 0; i < (*grammar)->NumRules(); ++i) {
-      auto rule_fsm = BuildRuleFSM(*grammar, i, &grammar_builder);
+      auto rule_fsm = BuildRuleFSM(*grammar, i, &grammar_builder, regex_fsm_cache);
       per_rule_fsms.push_back(rule_fsm.AddToCompleteFSM(&complete_fsm, &state_mapping));
     }
 
@@ -1360,13 +1391,17 @@ class GrammarFSMBuilderImpl {
 
  private:
   static FSMWithStartEnd BuildRuleFSM(
-      const Grammar& grammar, int rule_id, GrammarBuilder* grammar_builder = nullptr
+      const Grammar& grammar,
+      int rule_id,
+      GrammarBuilder* grammar_builder = nullptr,
+      RegexFSMCache* regex_fsm_cache = nullptr
   );
   static FSMWithStartEnd BuildExpressionFSM(
       const GrammarExpr& expr,
       const Grammar& grammar,
       const std::string* rule_name = nullptr,
-      GrammarBuilder* grammar_builder = nullptr
+      GrammarBuilder* grammar_builder = nullptr,
+      RegexFSMCache* regex_fsm_cache = nullptr
   );
   void BuildExpression(
       const GrammarExpr& expr,
@@ -1416,15 +1451,27 @@ class GrammarFSMBuilderImpl {
       int start_state,
       std::vector<int32_t>* end_states
   );
+  bool BuildByteStringRuleRefChoices(
+      const GrammarExpr& expr,
+      const Grammar& grammar,
+      int start_state,
+      std::vector<int32_t>* end_states
+  );
   void AddCharacterClassTransitions(const GrammarExpr& expr, int start_state, int end_state);
   void BuildNegativeCharacterClass(const GrammarExpr& expr, int start_state, int end_state);
   void AppendFSM(FSMWithStartEnd fsm, int start_state, std::vector<int32_t>* end_states);
+  void AppendCachedFSM(
+      const FSMWithStartEnd& fsm, int start_state, std::vector<int32_t>* end_states
+  );
   void AddCharacterRange(int from, int to, uint32_t min, uint32_t max);
 
   FSM& target_fsm_;
   const std::string* rule_name_;
   // If not null, kRegex expressions may add new rules through this builder; see Apply().
   GrammarBuilder* grammar_builder_ = nullptr;
+  // If not null, regex FSMs are looked up in and stored into this cache; see Apply().
+  RegexFSMCache* regex_fsm_cache_ = nullptr;
+  bool skip_equivalent_state_merge_{false};
 };
 
 // This function will add a range [min, max] of unicode characters to the FSM.
@@ -1514,11 +1561,18 @@ void GrammarFSMBuilderImpl::BuildCharacterClassStar(
 }
 
 FSMWithStartEnd GrammarFSMBuilderImpl::BuildRuleFSM(
-    const Grammar& grammar, int rule_id, GrammarBuilder* grammar_builder
+    const Grammar& grammar,
+    int rule_id,
+    GrammarBuilder* grammar_builder,
+    RegexFSMCache* regex_fsm_cache
 ) {
   const auto& rule = grammar->GetRule(rule_id);
   return BuildExpressionFSM(
-      grammar->GetGrammarExpr(rule.body_expr_id), grammar, &rule.name, grammar_builder
+      grammar->GetGrammarExpr(rule.body_expr_id),
+      grammar,
+      &rule.name,
+      grammar_builder,
+      regex_fsm_cache
   );
 }
 
@@ -1526,17 +1580,20 @@ FSMWithStartEnd GrammarFSMBuilderImpl::BuildExpressionFSM(
     const GrammarExpr& expr,
     const Grammar& grammar,
     const std::string* rule_name,
-    GrammarBuilder* grammar_builder
+    GrammarBuilder* grammar_builder,
+    RegexFSMCache* regex_fsm_cache
 ) {
   FSM result_fsm;
   int start_state = result_fsm.AddState();
   std::vector<int32_t> end_states;
-  GrammarFSMBuilderImpl builder(result_fsm, rule_name, grammar_builder);
+  GrammarFSMBuilderImpl builder(result_fsm, rule_name, grammar_builder, regex_fsm_cache);
   builder.BuildExpression(expr, grammar, start_state, &end_states);
   FSMWithStartEnd result(result_fsm, start_state, std::move(end_states));
   if (expr.type != ExprType::kTagDispatch && expr.type != ExprType::kTokenTagDispatch) {
     result = result.SimplifyEpsilon();
-    result = result.MergeEquivalentStates();
+    if (!builder.skip_equivalent_state_merge_) {
+      result = result.MergeEquivalentStates();
+    }
   }
   return result;
 }
@@ -1783,6 +1840,10 @@ void GrammarFSMBuilderImpl::BuildChoices(
     XGRAMMAR_UNREACHABLE();
   }
 
+  if (!nullable && BuildByteStringRuleRefChoices(expr, grammar, start_state, end_states)) {
+    return;
+  }
+
   std::vector<int32_t> branch_end_states;
   for (int32_t choice_id : expr) {
     const auto& choice_expr = grammar->GetGrammarExpr(choice_id);
@@ -1800,6 +1861,79 @@ void GrammarFSMBuilderImpl::BuildChoices(
     target_fsm_.AddEpsilonEdge(start_state, nullable_branch_state);
     end_states->push_back(nullable_branch_state);
   }
+}
+
+bool GrammarFSMBuilderImpl::BuildByteStringRuleRefChoices(
+    const GrammarExpr& expr,
+    const Grammar& grammar,
+    int start_state,
+    std::vector<int32_t>* end_states
+) {
+  struct Branch {
+    std::string prefix;
+    int32_t rule_id;
+    std::string suffix;
+  };
+
+  std::vector<Branch> branches;
+  branches.reserve(expr.size());
+  std::vector<std::string> prefixes;
+  prefixes.reserve(expr.size());
+  for (int32_t choice_id : expr) {
+    const auto& sequence = grammar->GetGrammarExpr(choice_id);
+    if (sequence.type != ExprType::kSequence || sequence.size() != 3) {
+      return false;
+    }
+    const auto& prefix = grammar->GetGrammarExpr(sequence[0]);
+    const auto& rule_ref = grammar->GetGrammarExpr(sequence[1]);
+    const auto& suffix = grammar->GetGrammarExpr(sequence[2]);
+    if (prefix.type != ExprType::kByteString || rule_ref.type != ExprType::kRuleRef ||
+        suffix.type != ExprType::kByteString) {
+      return false;
+    }
+
+    Branch branch;
+    branch.prefix.reserve(prefix.size());
+    for (int32_t byte : prefix) {
+      branch.prefix.push_back(static_cast<char>(static_cast<uint8_t>(byte)));
+    }
+    branch.rule_id = rule_ref[0];
+    branch.suffix.reserve(suffix.size());
+    for (int32_t byte : suffix) {
+      branch.suffix.push_back(static_cast<char>(static_cast<uint8_t>(byte)));
+    }
+    prefixes.push_back(branch.prefix);
+    branches.push_back(std::move(branch));
+  }
+
+  std::vector<int32_t> prefix_end_states;
+  auto trie = TrieFSMBuilder::Build(prefixes, {}, &prefix_end_states, true, false);
+  XGRAMMAR_DCHECK(trie.has_value());
+
+  std::vector<int> state_mapping;
+  target_fsm_.AddFSM(trie->GetFsm(), &state_mapping);
+  target_fsm_.AddEpsilonEdge(start_state, state_mapping[trie->GetStart()]);
+
+  std::unordered_map<std::string, int32_t> suffix_start_states;
+  suffix_start_states.reserve(branches.size());
+  end_states->clear();
+  for (int index = 0; index < static_cast<int>(branches.size()); ++index) {
+    const auto& branch = branches[index];
+    auto [it, inserted] = suffix_start_states.emplace(branch.suffix, -1);
+    if (inserted) {
+      int32_t current_state = target_fsm_.AddState();
+      it->second = current_state;
+      for (uint8_t byte : branch.suffix) {
+        int32_t next_state = target_fsm_.AddState();
+        target_fsm_.AddEdge(current_state, next_state, byte, byte);
+        current_state = next_state;
+      }
+      end_states->push_back(current_state);
+    }
+    target_fsm_.AddRuleEdge(state_mapping[prefix_end_states[index]], it->second, branch.rule_id);
+  }
+  skip_equivalent_state_merge_ = true;
+  return true;
 }
 
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::Choices(
@@ -1830,10 +1964,32 @@ void GrammarFSMBuilderImpl::AppendFSM(
   }
 }
 
+void GrammarFSMBuilderImpl::AppendCachedFSM(
+    const FSMWithStartEnd& fsm, int start_state, std::vector<int32_t>* end_states
+) {
+  std::vector<int> state_mapping;
+  target_fsm_.AddFSM(fsm.GetFsm(), &state_mapping);
+  target_fsm_.AddEpsilonEdge(start_state, state_mapping[fsm.GetStart()]);
+  end_states->clear();
+  end_states->reserve(fsm.GetEnds().size());
+  for (int end_state : fsm.GetEnds()) {
+    end_states->push_back(state_mapping[end_state]);
+  }
+}
+
 void GrammarFSMBuilderImpl::BuildRegex(
     const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
 ) {
   const std::string rule_hint = rule_name_ != nullptr ? *rule_name_ : "";
+  std::string cache_key;
+  if (regex_fsm_cache_ != nullptr) {
+    cache_key = MakeRegexFSMCacheKey(regex, json_string);
+    const auto cached = regex_fsm_cache_->find(cache_key);
+    if (cached != regex_fsm_cache_->end()) {
+      AppendCachedFSM(cached->second, start_state, end_states);
+      return;
+    }
+  }
   auto build_result =
       json_string
           ? RegexFSMBuilder::BuildWithForbiddenChars(
@@ -1849,7 +2005,13 @@ void GrammarFSMBuilderImpl::BuildRegex(
     XGRAMMAR_LOG(FATAL) << "Failed to build the automaton for regex " << regex << ": "
                         << error.what();
   }
-  AppendFSM(std::move(build_result).Unwrap(), start_state, end_states);
+  auto built_fsm = std::move(build_result).Unwrap();
+  if (regex_fsm_cache_ != nullptr) {
+    const auto inserted = regex_fsm_cache_->emplace(std::move(cache_key), std::move(built_fsm));
+    AppendCachedFSM(inserted.first->second, start_state, end_states);
+  } else {
+    AppendFSM(std::move(built_fsm), start_state, end_states);
+  }
 }
 
 void GrammarFSMBuilderImpl::BuildSubstring(
@@ -2801,7 +2963,11 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
 
 class GrammarOptimizerImpl {
  public:
-  static Grammar Apply(const Grammar& grammar) {
+  static Grammar Apply(
+      const Grammar& grammar,
+      bool expand_repetition_ranges,
+      RegexFSMCache* supplied_regex_fsm_cache = nullptr
+  ) {
     // ByteStringFuser and RuleInliner rewrite the grammar in place, so work on a private copy: the
     // input grammar may be shared (e.g. a cached grammar) and must not be mutated. Copy the impl
     // directly (contiguous vector copies) instead of going through GrammarBuilder, which would
@@ -2809,14 +2975,19 @@ class GrammarOptimizerImpl {
     Grammar result(std::make_shared<Grammar::Impl>(*grammar.operator->()));
     ByteStringFuser::Apply(&result);
     RuleInliner::Apply(&result);
-    result = RepetitionRangeExpander::Apply(result);
+    if (expand_repetition_ranges) {
+      result = RepetitionRangeExpander::Apply(result);
+    }
     result = LazyBodyFlattenerImpl().Apply(result);
     result = DeadCodeEliminator::Apply(result);
     result = LookaheadAssertionAnalyzer::Apply(result);
-    result->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(result);
+    RegexFSMCache local_regex_fsm_cache;
+    RegexFSMCache* regex_fsm_cache =
+        supplied_regex_fsm_cache != nullptr ? supplied_regex_fsm_cache : &local_regex_fsm_cache;
+    result->allow_empty_rule_ids = AllowEmptyRuleAnalyzerImpl().Apply(result, regex_fsm_cache);
     ValidateLazyRules(result);
     RepetitionNormalizer::Apply(&result);
-    GrammarFSMBuilder::Apply(&result);
+    GrammarFSMBuilderImpl::Apply(&result, regex_fsm_cache);
     result->optimized = true;
     return result;
   }
@@ -2980,8 +3151,16 @@ class GrammarFSMHasherImpl {
   std::vector<bool> visited_;
   std::vector<std::vector<int32_t>> ref_graph_from_referrer_to_referee_;
   std::vector<std::vector<int32_t>> ref_graph_from_referee_to_referrer_;
-  std::vector<std::vector<FSMEdge>> sorted_edges_;
   std::vector<bool> has_inward_edges_;
+
+  // Reused by HashFsm and IsPartialHashable. FSM state ids index the complete FSM, so an epoch
+  // array avoids constructing a tree map (or clearing a complete-FSM-sized vector) for every
+  // rule. bfs_states_ also records the canonical id: its index is the new state id.
+  std::vector<uint32_t> state_id_epochs_;
+  std::vector<int32_t> state_new_ids_;
+  uint32_t state_id_epoch_{0};
+  std::vector<int32_t> bfs_states_;
+  std::vector<std::pair<uint64_t, int32_t>> hash_and_target_;
 
   /*!
    * \brief The worklist of fsms that are ready to be hashed: fsms whose references are all
@@ -3025,6 +3204,42 @@ class GrammarFSMHasherImpl {
   void RemoveHashedFsmFromRefGraph(int32_t fsm_index);
 
   std::pair<bool, uint64_t> IsPartialHashable(int fsm_index);
+
+  void ResetStateIDScratch() {
+    ++state_id_epoch_;
+    if (state_id_epoch_ == 0) {
+      std::fill(state_id_epochs_.begin(), state_id_epochs_.end(), 0);
+      ++state_id_epoch_;
+    }
+    bfs_states_.clear();
+  }
+
+  bool HasNewStateID(int32_t state_id) const {
+    return state_id_epochs_[state_id] == state_id_epoch_;
+  }
+
+  int32_t AddNewStateID(int32_t state_id) {
+    XGRAMMAR_DCHECK(!HasNewStateID(state_id));
+    const int32_t new_state_id = static_cast<int32_t>(bfs_states_.size());
+    state_id_epochs_[state_id] = state_id_epoch_;
+    state_new_ids_[state_id] = new_state_id;
+    bfs_states_.push_back(state_id);
+    return new_state_id;
+  }
+
+  int32_t GetNewStateID(int32_t state_id) const {
+    XGRAMMAR_DCHECK(HasNewStateID(state_id));
+    return state_new_ids_[state_id];
+  }
+
+  void StoreNewStateIDs(int32_t fsm_index) {
+    auto& result = grammar_->ImplPtr()->per_rule_fsm_new_state_ids[fsm_index];
+    result.clear();
+    result.reserve(bfs_states_.size());
+    for (int32_t state_id : bfs_states_) {
+      result.emplace_back(state_id, GetNewStateID(state_id));
+    }
+  }
 };
 
 bool GrammarFSMHasherImpl::FindSimpleCycle() {
@@ -3124,10 +3339,15 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
   grammar->ImplPtr()->per_rule_fsm_new_state_ids.resize((*grammar)->NumRules());
   ref_graph_from_referee_to_referrer_.clear();
   ref_graph_from_referrer_to_referee_.clear();
-  sorted_edges_.clear();
   visited_ = std::vector<bool>((*grammar)->NumRules(), false);
-  has_inward_edges_ = std::vector<bool>((*grammar)->complete_fsm.NumStates(), false);
-  for (int i = 0; i < grammar_->ImplPtr()->complete_fsm.NumStates(); i++) {
+  const int32_t complete_fsm_states = (*grammar)->complete_fsm.NumStates();
+  has_inward_edges_ = std::vector<bool>(complete_fsm_states, false);
+  state_id_epochs_.assign(complete_fsm_states, 0);
+  state_new_ids_.resize(complete_fsm_states);
+  state_id_epoch_ = 0;
+  bfs_states_.clear();
+  hash_and_target_.clear();
+  for (int i = 0; i < complete_fsm_states; i++) {
     for (const auto& edge : grammar->ImplPtr()->complete_fsm.GetEdges(i)) {
       has_inward_edges_[edge.target] = true;
     }
@@ -3141,19 +3361,6 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
     for (int referer : ref_graph_from_referee_to_referrer_[referee]) {
       ref_graph_from_referrer_to_referee_[referer].push_back(referee);
     }
-  }
-
-  // Sort the edges.
-  const auto& complete_fsm = grammar->ImplPtr()->complete_fsm;
-  sorted_edges_.reserve(complete_fsm.NumStates());
-  for (int i = 0; i < complete_fsm.NumStates(); i++) {
-    const auto& edges = complete_fsm.GetEdges(i);
-    sorted_edges_.emplace_back();
-    sorted_edges_.back().reserve(edges.size());
-    for (const auto& edge : edges) {
-      sorted_edges_.back().emplace_back(edge);
-    }
-    std::sort(sorted_edges_.back().begin(), sorted_edges_.back().end());
   }
 
   // Disable non-fsms.
@@ -3223,17 +3430,15 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
       << "Invalid fsm index: " << fsm_index << " num_rules: " << (*grammar_)->NumRules();
   XGRAMMAR_DCHECK(grammar_->ImplPtr()->per_rule_fsms[fsm_index].has_value());
   const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[fsm_index].value().GetFsm();
-  std::map<int32_t, int32_t> original_state_id_to_new_id;
-  original_state_id_to_new_id[fsm.GetStart()] = 0;
-  std::queue<int32_t> bfs_queue;
-  std::set<std::pair<uint64_t, int32_t>> hash_and_target;
-  bfs_queue.push(fsm.GetStart());
+  ResetStateIDScratch();
+  AddNewStateID(fsm.GetStart());
+  size_t bfs_index = 0;
   // Perform a bfs to hash all the edges.
-  while (!bfs_queue.empty()) {
-    int current_old_state_id = bfs_queue.front();
+  while (bfs_index < bfs_states_.size()) {
+    int current_old_state_id = bfs_states_[bfs_index++];
     bool is_start = current_old_state_id == fsm.GetStart();
-    int current_new_state_id = original_state_id_to_new_id[current_old_state_id];
-    bfs_queue.pop();
+    int current_new_state_id = GetNewStateID(current_old_state_id);
+    hash_and_target_.clear();
 
     // Check if the current state is an end state.
     if (fsm.IsEndState(current_old_state_id)) {
@@ -3255,60 +3460,67 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
     // First, check the edges which are rule references (including repeat refs).
     // To keep consistent, we need to sort them with hashes.
     int32_t unhashed_rules_count = 0;
-    auto hash_rule_like_edge = [&](int32_t ref_rule_id, int32_t target) {
+    auto hash_rule_like_edge = [&](int32_t ref_rule_id,
+                                   int32_t target,
+                                   std::optional<std::pair<int32_t, int32_t>> repeat_bounds) {
+      uint64_t edge_hash;
       if (ref_rule_id == fsm_index) {
-        hash_and_target.insert({kSelfRecursionFlag, target});
-        return true;
-      }
-      if (!grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value()) {
+        edge_hash = kSelfRecursionFlag;
+      } else if (!grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value()) {
         if (!is_start) {
           return false;
-        } else {
-          unhashed_rules_count++;
-          if (unhashed_rules_count > 1) {
-            return false;
-          }
-          hash_and_target.insert({kUnKnownFlag, target});
         }
-        return true;
+        unhashed_rules_count++;
+        if (unhashed_rules_count > 1) {
+          return false;
+        }
+        edge_hash = kUnKnownFlag;
+      } else {
+        edge_hash = grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value();
       }
-      hash_and_target.insert({grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value(), target}
-      );
+      if (repeat_bounds.has_value()) {
+        edge_hash = HashCombine(edge_hash, repeat_bounds->first, repeat_bounds->second);
+      }
+      hash_and_target_.emplace_back(edge_hash, target);
       return true;
     };
 
-    for (const auto& edge : sorted_edges_[current_old_state_id]) {
+    // Compact FSM construction sorts every row by (min, max, target).
+    const auto edges = fsm.GetFsm().GetEdges(current_old_state_id);
+    for (const auto& edge : edges) {
       if (edge.IsRuleRef()) {
-        if (!hash_rule_like_edge(edge.GetRefRuleId(), edge.target)) {
+        if (!hash_rule_like_edge(edge.GetRefRuleId(), edge.target, std::nullopt)) {
           return {false, 0};
         }
       } else if (edge.IsRepeatRef()) {
         auto info = grammar_->ImplPtr()->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
-        if (!hash_rule_like_edge(info.RuleId(), edge.target)) {
+        if (!hash_rule_like_edge(
+                info.RuleId(), edge.target, std::make_pair(info.Lower(), info.Upper())
+            )) {
           return {false, 0};
         }
       }
     }
 
     // Hash them.
-    for (const auto& [hash, target] : hash_and_target) {
-      if (original_state_id_to_new_id.find(target) == original_state_id_to_new_id.end()) {
-        original_state_id_to_new_id[target] =
-            static_cast<int32_t>(original_state_id_to_new_id.size());
-        bfs_queue.push(target);
+    std::sort(hash_and_target_.begin(), hash_and_target_.end());
+    hash_and_target_.erase(
+        std::unique(hash_and_target_.begin(), hash_and_target_.end()), hash_and_target_.end()
+    );
+    for (const auto& [hash, target] : hash_and_target_) {
+      if (!HasNewStateID(target)) {
+        AddNewStateID(target);
       }
-      int32_t target_new_id = original_state_id_to_new_id[target];
+      int32_t target_new_id = GetNewStateID(target);
       hash_result = HashCombine(hash_result, current_new_state_id, hash, target_new_id);
     }
 
     // Then, check the edges which are not rule/repeat references.
-    for (const auto& edge : sorted_edges_[current_old_state_id]) {
-      if (original_state_id_to_new_id.find(edge.target) == original_state_id_to_new_id.end()) {
-        original_state_id_to_new_id[edge.target] =
-            static_cast<int32_t>(original_state_id_to_new_id.size());
-        bfs_queue.push(edge.target);
+    for (const auto& edge : edges) {
+      if (!HasNewStateID(edge.target)) {
+        AddNewStateID(edge.target);
       }
-      int32_t target_new_id = original_state_id_to_new_id[edge.target];
+      int32_t target_new_id = GetNewStateID(edge.target);
       if (edge.IsRuleRef() || edge.IsRepeatRef()) {
         continue;
       }
@@ -3321,12 +3533,7 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
       );
     }
   }
-  std::vector<std::pair<int32_t, int32_t>> new_id_mapping;
-  new_id_mapping.reserve(original_state_id_to_new_id.size());
-  for (const auto& [original_state_id, new_state_id] : original_state_id_to_new_id) {
-    new_id_mapping.emplace_back(original_state_id, new_state_id);
-  }
-  grammar_->ImplPtr()->per_rule_fsm_new_state_ids[fsm_index] = new_id_mapping;
+  StoreNewStateIDs(fsm_index);
   return {true, hash_result};
 }
 
@@ -3336,17 +3543,15 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
       << "Invalid fsm index: " << fsm_index << " num_rules: " << (*grammar_)->NumRules();
   XGRAMMAR_DCHECK(grammar_->ImplPtr()->per_rule_fsms[fsm_index].has_value());
   const auto& fsm = grammar_->ImplPtr()->per_rule_fsms[fsm_index].value().GetFsm();
-  std::map<int32_t, int32_t> original_state_id_to_new_id;
-  original_state_id_to_new_id[fsm.GetStart()] = 0;
-  std::queue<int32_t> bfs_queue;
-  std::set<std::pair<int32_t, int32_t>> hash_and_target;
-  bfs_queue.push(fsm.GetStart());
+  ResetStateIDScratch();
+  AddNewStateID(fsm.GetStart());
+  size_t bfs_index = 0;
 
   // Perform a bfs to hash all the edges.
-  while (!bfs_queue.empty()) {
-    int current_old_state_id = bfs_queue.front();
-    int current_new_state_id = original_state_id_to_new_id[current_old_state_id];
-    bfs_queue.pop();
+  while (bfs_index < bfs_states_.size()) {
+    int current_old_state_id = bfs_states_[bfs_index++];
+    int current_new_state_id = GetNewStateID(current_old_state_id);
+    hash_and_target_.clear();
 
     // Check if the current state is an end state.
     if (fsm.IsEndState(current_old_state_id)) {
@@ -3367,15 +3572,17 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
 
     // First, check the edges which are rule references (including repeat refs).
     // To keep consistent, we need to sort them with hashes.
-    for (const auto& edge : sorted_edges_[current_old_state_id]) {
+    // Compact FSM construction sorts every row by (min, max, target).
+    const auto edges = fsm.GetFsm().GetEdges(current_old_state_id);
+    for (const auto& edge : edges) {
       if (edge.IsRuleRef()) {
         int32_t ref_rule_id = edge.GetRefRuleId();
         if (ref_rule_id == fsm_index) {
-          hash_and_target.insert({kSelfRecursionFlag, edge.target});
+          hash_and_target_.emplace_back(kSelfRecursionFlag, edge.target);
         } else {
           XGRAMMAR_CHECK(grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value());
-          hash_and_target.insert(
-              {grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value(), edge.target}
+          hash_and_target_.emplace_back(
+              grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value(), edge.target
           );
         }
       } else if (edge.IsRepeatRef()) {
@@ -3384,35 +3591,35 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
         if (ref_rule_id == fsm_index) {
           uint64_t base_hash = kSelfRecursionFlag;
           uint64_t repeat_hash = HashCombine(base_hash, info.Lower(), info.Upper());
-          hash_and_target.insert({repeat_hash, edge.target});
+          hash_and_target_.emplace_back(repeat_hash, edge.target);
         } else {
           XGRAMMAR_CHECK(grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value());
           uint64_t base_hash = grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value();
           uint64_t repeat_hash = HashCombine(base_hash, info.Lower(), info.Upper());
-          hash_and_target.insert({static_cast<int32_t>(repeat_hash), edge.target});
+          hash_and_target_.emplace_back(repeat_hash, edge.target);
         }
       }
     }
 
     // Hash them.
-    for (const auto& [hash, target] : hash_and_target) {
-      if (original_state_id_to_new_id.find(target) == original_state_id_to_new_id.end()) {
-        original_state_id_to_new_id[target] =
-            static_cast<int32_t>(original_state_id_to_new_id.size());
-        bfs_queue.push(target);
+    std::sort(hash_and_target_.begin(), hash_and_target_.end());
+    hash_and_target_.erase(
+        std::unique(hash_and_target_.begin(), hash_and_target_.end()), hash_and_target_.end()
+    );
+    for (const auto& [hash, target] : hash_and_target_) {
+      if (!HasNewStateID(target)) {
+        AddNewStateID(target);
       }
-      int32_t target_new_id = original_state_id_to_new_id[target];
+      int32_t target_new_id = GetNewStateID(target);
       hash_result = HashCombine(hash_result, current_new_state_id, hash, target_new_id);
     }
 
     // Then, check the edges which are not rule/repeat references.
-    for (const auto& edge : sorted_edges_[current_old_state_id]) {
-      if (original_state_id_to_new_id.find(edge.target) == original_state_id_to_new_id.end()) {
-        original_state_id_to_new_id[edge.target] =
-            static_cast<int32_t>(original_state_id_to_new_id.size());
-        bfs_queue.push(edge.target);
+    for (const auto& edge : edges) {
+      if (!HasNewStateID(edge.target)) {
+        AddNewStateID(edge.target);
       }
-      int32_t target_new_id = original_state_id_to_new_id[edge.target];
+      int32_t target_new_id = GetNewStateID(edge.target);
       if (edge.IsRuleRef() || edge.IsRepeatRef()) {
         continue;
       }
@@ -3425,12 +3632,7 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
       );
     }
   }
-  std::vector<std::pair<int32_t, int32_t>> new_id_mapping;
-  new_id_mapping.reserve(original_state_id_to_new_id.size());
-  for (const auto& [original_state_id, new_state_id] : original_state_id_to_new_id) {
-    new_id_mapping.emplace_back(original_state_id, new_state_id);
-  }
-  grammar_->ImplPtr()->per_rule_fsm_new_state_ids[fsm_index] = new_id_mapping;
+  StoreNewStateIDs(fsm_index);
   return hash_result;
 }
 
@@ -3820,7 +4022,17 @@ Grammar RepetitionRangeExpander::Apply(const Grammar& grammar) {
 }
 
 Grammar GrammarOptimizer::Apply(const Grammar& grammar) {
-  return GrammarOptimizerImpl::Apply(grammar);
+  return GrammarOptimizerImpl::Apply(grammar, true);
+}
+
+Grammar GrammarOptimizer::Apply(const Grammar& grammar, bool expand_repetition_ranges) {
+  return GrammarOptimizerImpl::Apply(grammar, expand_repetition_ranges);
+}
+
+Grammar GrammarOptimizer::Apply(
+    const Grammar& grammar, bool expand_repetition_ranges, RegexFSMCache* regex_fsm_cache
+) {
+  return GrammarOptimizerImpl::Apply(grammar, expand_repetition_ranges, regex_fsm_cache);
 }
 
 void ByteStringFuser::Apply(Grammar* grammar) { ByteStringFuserImpl().Apply(grammar); }

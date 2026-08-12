@@ -253,6 +253,9 @@ class FSM {
    */
   const std::vector<FSMEdge>& GetEdges(int state) const;
 
+  /*! \brief Check that a state with a repeat edge has no other outgoing edges. */
+  void ValidateRepeatEdgeInvariant() const;
+
   /*!
    * \brief Convert the edges of the FSM to a string. Used in printing the FSM.
    * \return The string representation of the edges of the FSM.

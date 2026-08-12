@@ -10,11 +10,14 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
+#include "character_class_token_summary.h"
 #include "earley_parser.h"
 #include "support/dynamic_bitset.h"
 #include "support/reflection.h"
@@ -22,6 +25,9 @@
 #include "xgrammar/exception.h"
 
 namespace xgrammar {
+
+class RuleLevelCache;
+class CharacterClassTokenSummaryCache;
 
 /******************* CompiledGrammar Datastructures *******************/
 
@@ -77,6 +83,13 @@ struct AdaptiveTokenMask {
       const std::vector<int32_t>& uncertain_indices
   );
 
+  AdaptiveTokenMask(
+      const DynamicBitset& base_accepted_bitset,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
+      const std::vector<int32_t>& additional_accepted_indices,
+      const std::vector<int32_t>& uncertain_indices
+  );
+
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask) {
@@ -99,6 +112,11 @@ XGRAMMAR_MEMBER_TABLE(
     &AdaptiveTokenMask::uncertain_indices
 );
 
+struct CharacterClassRepeatTokenMask {
+  AdaptiveTokenMask adaptive_token_mask;
+  DynamicBitset accepted_prefix_tokens;
+};
+
 /*!
  * \brief All information that we need to match tokens in the tokenizer to the specified grammar.
  * It is the result of preprocessing.
@@ -118,6 +136,37 @@ class CompiledGrammar::Impl {
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>
       adaptive_token_mask_cache;
+
+  /*! \brief Protects on-demand token mask lookup and insertion. */
+  mutable std::mutex adaptive_token_mask_cache_mutex;
+
+  /*! \brief Whether missing token masks should be generated on first use. */
+  bool enable_dynamic_compilation{false};
+
+  /*! \brief Rule masks shared by grammars compiled with the same compiler. */
+  std::shared_ptr<RuleLevelCache> rule_level_cache;
+
+  /*! \brief Whether each rule is independent of runtime parser context. */
+  std::vector<uint8_t> rule_level_cacheable;
+
+  /*! \brief Character-class repeat masks shared by matchers using this grammar. */
+  std::shared_ptr<CharacterClassTokenSummaryCache> character_class_token_summary_cache;
+  std::unordered_map<uint64_t, std::shared_ptr<const CharacterClassRepeatTokenMask>>
+      character_class_repeat_token_masks;
+  mutable std::mutex character_class_repeat_token_masks_mutex;
+
+  /*! \brief Grammar-wide flags and nullable rules shared by Earley parsers. */
+  std::shared_ptr<const EarleyParserGrammarFeatures> earley_parser_grammar_features;
+  /*! \brief Tag-dispatch data retained for on-demand token mask generation. */
+  std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
+
+  const AdaptiveTokenMask& GetAdaptiveTokenMask(const ParserState& state, bool is_root_rule);
+
+  const CharacterClassRepeatTokenMask& GetCharacterClassRepeatTokenMask(
+      int32_t character_class_expr_id, int32_t max_characters
+  );
+
+  void MaterializeAdaptiveTokenMaskCache();
 
   Grammar GetGrammar() const { return grammar; }
 

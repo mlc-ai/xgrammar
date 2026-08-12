@@ -701,7 +701,7 @@ class SchemaParser {
   );
 
   Config config_;
-  picojson::value root_schema_;
+  const picojson::value& root_schema_;
   std::unordered_map<std::string, SchemaSpecPtr> ref_cache_;
   std::unordered_map<std::string, SchemaSpecPtr> schema_cache_;
 };
@@ -721,14 +721,14 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
 
   if (schema.is<picojson::object>()) {
     std::string result = "{";
-    std::vector<std::pair<std::string, picojson::value>> sorted_kv;
+    std::vector<std::pair<const std::string*, const picojson::value*>> sorted_kv;
     for (const auto& kv : schema.get<picojson::object>()) {
       if (kSkippedKeys.count(kv.first) == 0) {
-        sorted_kv.push_back(kv);
+        sorted_kv.emplace_back(&kv.first, &kv.second);
       }
     }
     std::sort(sorted_kv.begin(), sorted_kv.end(), [](const auto& lhs, const auto& rhs) {
-      return lhs.first < rhs.first;
+      return *lhs.first < *rhs.first;
     });
     int64_t idx = 0;
     for (const auto& [key, value] : sorted_kv) {
@@ -736,7 +736,7 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
         result += ",";
       }
       ++idx;
-      result += "\"" + key + "\":" + ComputeCacheKey(value);
+      result += "\"" + *key + "\":" + ComputeCacheKey(*value);
     }
     return result + "}";
   } else if (schema.is<picojson::array>()) {
@@ -1427,6 +1427,7 @@ Result<EnumSpec, SchemaError> SchemaParser::ParseEnum(const picojson::object& sc
   if (enum_array.empty()) {
     return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "enum array must not be empty");
   }
+  spec.json_values.reserve(enum_array.size());
   for (const auto& value : enum_array) {
     spec.json_values.push_back(value.serialize());
   }
@@ -1724,7 +1725,8 @@ JSONSchemaConverter::JSONSchemaConverter(
     bool any_whitespace,
     std::optional<int> max_whitespace_cnt,
     RefResolver ref_resolver,
-    bool any_order
+    bool any_order,
+    RegexFSMCache* regex_fsm_cache
 )
     : indent_manager_(
           indent,
@@ -1736,6 +1738,7 @@ JSONSchemaConverter::JSONSchemaConverter(
       any_whitespace_(any_whitespace),
       max_whitespace_cnt_(max_whitespace_cnt),
       any_order_(any_order),
+      regex_fsm_cache_(regex_fsm_cache),
       ref_resolver_(std::move(ref_resolver)) {
   std::string colon_sep =
       separators.has_value() ? separators->second : (any_whitespace ? ":" : ": ");
@@ -1755,14 +1758,15 @@ Grammar JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
   uri_to_rule_id_["#"] = root_rule_id;
 
   // Check if the spec can be directly mapped to an existing rule
-  auto cached_rule = GetCache(spec->cache_key);
+  bool indentation_sensitive = IsIndentationSensitive(spec);
+  auto cached_rule = GetCache(spec->cache_key, indentation_sensitive);
   if (cached_rule.has_value()) {
     // Root schema matches a basic type, just reference it
     builder_.UpdateRuleBody(root_rule_id, RuleRef(*cached_rule));
   } else {
     // Generate the rule body
     if (!spec->cache_key.empty()) {
-      AddCache(spec->cache_key, root_rule_id);
+      AddCache(spec->cache_key, root_rule_id, indentation_sensitive);
     }
     builder_.UpdateRuleBody(root_rule_id, GenerateFromSpec(spec, root_rule_name));
   }
@@ -2108,29 +2112,74 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
 
 std::string JSONSchemaConverter::GetBasicAnyRuleName() const { return kBasicAny; }
 
-void JSONSchemaConverter::AddCache(const std::string& key, int32_t rule_id) {
+void JSONSchemaConverter::AddCache(
+    const std::string& key, int32_t rule_id, bool indentation_sensitive
+) {
   if (!key.empty()) {
-    rule_cache_manager_.AddCache(key, true, rule_id);
+    int64_t indentation_context = indentation_sensitive ? indent_manager_.GetCacheContext() : 0;
+    rule_cache_manager_.AddCache(key, 0, indentation_context, rule_id);
   }
 }
 
-std::optional<int32_t> JSONSchemaConverter::GetCache(const std::string& key) const {
+std::optional<int32_t> JSONSchemaConverter::GetCache(
+    const std::string& key, bool indentation_sensitive
+) const {
   if (key.empty()) {
     return std::nullopt;
   }
-  return rule_cache_manager_.GetCache(key, true);
+  int64_t indentation_context = indentation_sensitive ? indent_manager_.GetCacheContext() : 0;
+  return rule_cache_manager_.GetCache(key, 0, indentation_context);
+}
+
+bool JSONSchemaConverter::IsIndentationSensitive(const SchemaSpecPtr& spec) const {
+  auto cached = indentation_sensitivity_cache_.find(spec);
+  if (cached != indentation_sensitivity_cache_.end()) {
+    return cached->second;
+  }
+  bool result = std::visit(
+      [this](const auto& value) {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<T, ArraySpec> || std::is_same_v<T, ObjectSpec> ||
+                      std::is_same_v<T, RefSpec>) {
+          return true;
+        } else if constexpr (std::is_same_v<T, AnyOfSpec> || std::is_same_v<T, OneOfSpec>) {
+          return std::any_of(
+              value.options.begin(),
+              value.options.end(),
+              [this](const auto& option) { return IsIndentationSensitive(option); }
+          );
+        } else if constexpr (std::is_same_v<T, AllOfSpec>) {
+          return std::any_of(
+              value.schemas.begin(),
+              value.schemas.end(),
+              [this](const auto& schema) { return IsIndentationSensitive(schema); }
+          );
+        } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
+          return std::any_of(
+              value.type_schemas.begin(),
+              value.type_schemas.end(),
+              [this](const auto& schema) { return IsIndentationSensitive(schema); }
+          );
+        } else {
+          return false;
+        }
+      },
+      spec->spec
+  );
+  indentation_sensitivity_cache_.emplace(spec, result);
+  return result;
 }
 
 int32_t JSONSchemaConverter::CreateRule(
     const SchemaSpecPtr& spec, const std::string& rule_name_hint
 ) {
-  // Only check cache for basic rules (pre-populated in AddBasicRules)
-  // Don't cache other rules to match original behavior
-  auto cached = GetCache(spec->cache_key);
+  bool indentation_sensitive = IsIndentationSensitive(spec);
+  auto cached = GetCache(spec->cache_key, indentation_sensitive);
   if (cached.has_value()) {
     return cached.value();
   }
   int32_t rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
+  AddCache(spec->cache_key, rule_id, indentation_sensitive);
   // Copy the name before generating: GenerateFromSpec may add rules and reallocate the
   // builder's rule storage, invalidating references into it.
   std::string rule_name = builder_.GetRule(rule_id).name;
@@ -2194,6 +2243,16 @@ int32_t JSONSchemaConverter::GenerateFromSpec(
 int32_t JSONSchemaConverter::RegexExpression(
     const std::string& regex, bool json_string, bool force_cfg_expansion
 ) {
+  std::string cache_key;
+  cache_key.reserve(regex.size() + 2);
+  cache_key.push_back(static_cast<char>(json_string));
+  cache_key.push_back(static_cast<char>(force_cfg_expansion));
+  cache_key.append(regex);
+  const auto cached = regex_expr_ids_.find(cache_key);
+  if (cached != regex_expr_ids_.end()) {
+    return cached->second;
+  }
+
   bool can_use_fsm = !force_cfg_expansion;
   if (json_string) {
     can_use_fsm =
@@ -2202,24 +2261,49 @@ int32_t JSONSchemaConverter::RegexExpression(
         });
   }
   if (can_use_fsm) {
-    auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
-    if (fsm_result.IsOk()) {
-      auto fsm = std::move(fsm_result).Unwrap();
+    std::optional<FSMWithStartEnd> local_fsm;
+    const FSMWithStartEnd* fsm = nullptr;
+    std::string fsm_cache_key;
+    if (regex_fsm_cache_ != nullptr) {
+      fsm_cache_key = MakeRegexFSMCacheKey(regex, json_string);
+      const auto cached_fsm = regex_fsm_cache_->find(fsm_cache_key);
+      if (cached_fsm != regex_fsm_cache_->end()) {
+        fsm = &cached_fsm->second;
+      }
+    }
+    if (fsm == nullptr) {
+      auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
+      if (fsm_result.IsOk()) {
+        if (regex_fsm_cache_ != nullptr) {
+          const auto inserted =
+              regex_fsm_cache_->emplace(std::move(fsm_cache_key), std::move(fsm_result).Unwrap());
+          fsm = &inserted.first->second;
+        } else {
+          local_fsm.emplace(std::move(fsm_result).Unwrap());
+          fsm = &*local_fsm;
+        }
+      }
+    }
+    if (fsm != nullptr) {
       std::unordered_set<int> reachable_states;
-      fsm.GetReachableStates(&reachable_states);
+      fsm->GetReachableStates(&reachable_states);
       bool language_is_empty =
           std::none_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
-            return fsm.IsEndState(state);
+            return fsm->IsEndState(state);
           });
       if (!language_is_empty) {
-        return builder_.AddRegex(regex, json_string);
+        const int32_t result = builder_.AddRegex(regex, json_string);
+        regex_expr_ids_.emplace(std::move(cache_key), result);
+        return result;
       }
     }
   }
 
   // Keep regex conversion independent. Only the uncommon fallback path converts its existing
   // EBNF result to a subgrammar; the JSON Schema rule graph itself is still built directly.
-  return AddSubGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
+  const int32_t result = AddSubGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
+  regex_expr_ids_.emplace(std::move(cache_key), result);
+  return result;
 }
 
 // ==================== Generate Methods ====================
@@ -3040,9 +3124,9 @@ int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string&
     XGRAMMAR_LOG(FATAL) << "Ref resolver not set; cannot resolve $ref: " << spec.uri;
   }
 
-  // Derive rule name from URI path (like original URIToRule) so that the same
-  // $ref always gets the same rule name, and allocate before resolving to prevent
-  // dead recursion when the ref target contains a ref back.
+  // Derive the rule name from the URI path, then resolve before allocating so an
+  // equivalent rule can be reused. Register the new rule before generating its body
+  // to prevent recursion when the resolved target refers back to this URI.
   std::string rule_name_hint = "ref";
   if (spec.uri.size() >= 2 && spec.uri[0] == '#' && spec.uri[1] == '/') {
     std::string new_rule_name_prefix;
@@ -3065,14 +3149,19 @@ int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string&
     }
   }
 
+  SchemaSpecPtr resolved = ref_resolver_(spec.uri, rule_name_hint);
+  bool indentation_sensitive = IsIndentationSensitive(resolved);
+  auto cached = GetCache(resolved->cache_key, indentation_sensitive);
+  if (cached.has_value()) {
+    uri_to_rule_id_[spec.uri] = *cached;
+    return RuleRef(*cached);
+  }
+
   int32_t allocated_rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
   std::string allocated_rule_name = builder_.GetRule(allocated_rule_id).name;
   uri_to_rule_id_[spec.uri] = allocated_rule_id;
-  SchemaSpecPtr resolved = ref_resolver_(spec.uri, allocated_rule_name);
+  AddCache(resolved->cache_key, allocated_rule_id, indentation_sensitive);
   builder_.UpdateRuleBody(allocated_rule_id, GenerateFromSpec(resolved, allocated_rule_name));
-  if (!resolved->cache_key.empty()) {
-    AddCache(resolved->cache_key, allocated_rule_id);
-  }
   return RuleRef(allocated_rule_id);
 }
 
@@ -4054,7 +4143,8 @@ Grammar JSONSchemaToGrammar(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     bool any_order,
-    JSONFormat json_format
+    JSONFormat json_format,
+    RegexFSMCache* regex_fsm_cache
 ) {
   picojson::value schema_value;
   std::string error = picojson::parse(schema_value, schema);
@@ -4082,7 +4172,8 @@ Grammar JSONSchemaToGrammar(
           any_whitespace,
           max_whitespace_cnt,
           std::move(ref_resolver),
-          any_order
+          any_order,
+          regex_fsm_cache
       );
       return converter.Convert(spec);
     }
@@ -4097,7 +4188,8 @@ Grammar JSONSchemaToGrammar(
           max_whitespace_cnt,
           std::move(ref_resolver),
           json_format,
-          any_order
+          any_order,
+          regex_fsm_cache
       );
       return converter.Convert(spec);
     }

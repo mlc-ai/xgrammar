@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -17,11 +18,13 @@
 #include <variant>
 #include <vector>
 
+#include "character_class_token_summary.h"
 #include "compiled_grammar_impl.h"
 #include "earley_parser.h"
 #include "fsm.h"
 #include "grammar_functor.h"
 #include "grammar_impl.h"
+#include "json_schema_converter.h"
 #include "support/dynamic_bitset.h"
 #include "support/int_set.h"
 #include "support/logging.h"
@@ -36,6 +39,203 @@ namespace xgrammar {
 
 /************** AdaptiveTokenMaskCache Generator **************/
 
+std::vector<uint8_t> GetRuleLevelCacheableRules(const Grammar& grammar) {
+  const int32_t num_rules = grammar->NumRules();
+  std::vector<uint8_t> context_dependent(num_rules, 0);
+  std::vector<std::vector<int32_t>> referenced_rules(num_rules);
+  std::vector<uint32_t> state_epochs(grammar->complete_fsm.NumStates(), 0);
+  uint32_t state_epoch = 0;
+  std::vector<int32_t> reachable_states;
+  for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
+    const auto& rule = grammar->GetRule(rule_id);
+    context_dependent[rule_id] = rule.max_tokens >= 0 || rule.max_chars >= 0 || rule.is_lazy ||
+                                 rule.temperature.has_value() ||
+                                 grammar->GetSuffixStopInfo(rule_id) != nullptr;
+    const auto& fsm = grammar->per_rule_fsms[rule_id]->GetFsm();
+    ++state_epoch;
+    if (state_epoch == 0) {
+      std::fill(state_epochs.begin(), state_epochs.end(), 0);
+      ++state_epoch;
+    }
+    reachable_states.clear();
+    reachable_states.push_back(fsm.GetStart());
+    state_epochs[fsm.GetStart()] = state_epoch;
+    for (size_t state_index = 0; state_index < reachable_states.size(); ++state_index) {
+      int32_t state_id = reachable_states[state_index];
+      for (const auto& edge : fsm.GetFsm().GetEdges(state_id)) {
+        if (edge.IsRuleRef()) {
+          referenced_rules[rule_id].push_back(edge.GetRefRuleId());
+        } else if (edge.IsRepeatRef()) {
+          referenced_rules[rule_id].push_back(
+              grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId()
+          );
+        }
+        if (state_epochs[edge.target] != state_epoch) {
+          state_epochs[edge.target] = state_epoch;
+          reachable_states.push_back(edge.target);
+        }
+      }
+    }
+  }
+
+  // Propagate context dependence through rule references once, instead of rescanning the complete
+  // graph until a fixed point is reached.
+  std::vector<int32_t> worklist;
+  worklist.reserve(num_rules);
+  for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
+    if (context_dependent[rule_id]) {
+      worklist.push_back(rule_id);
+    }
+  }
+  for (size_t work_index = 0; work_index < worklist.size(); ++work_index) {
+    for (int32_t referenced_rule_id : referenced_rules[worklist[work_index]]) {
+      if (!context_dependent[referenced_rule_id]) {
+        context_dependent[referenced_rule_id] = 1;
+        worklist.push_back(referenced_rule_id);
+      }
+    }
+  }
+  for (uint8_t& value : context_dependent) {
+    value = !value;
+  }
+  return context_dependent;
+}
+
+class CharacterClassTokenSummaryCache {
+ private:
+  struct KeyHash {
+    size_t operator()(const std::vector<int32_t>& key) const {
+      uint64_t result = 0;
+      for (int32_t value : key) {
+        HashCombineBinary(result, static_cast<uint64_t>(value));
+      }
+      return result;
+    }
+  };
+
+  struct RepeatKey {
+    std::vector<int32_t> character_class;
+    int32_t max_characters;
+
+    bool operator==(const RepeatKey& other) const {
+      return max_characters == other.max_characters && character_class == other.character_class;
+    }
+  };
+
+  struct RepeatKeyHash {
+    size_t operator()(const RepeatKey& key) const {
+      uint64_t result = KeyHash{}(key.character_class);
+      HashCombineBinary(result, static_cast<uint64_t>(key.max_characters));
+      return result;
+    }
+  };
+
+ public:
+  struct Result {
+    std::vector<CharacterClassTokenSummary> summaries;
+    DynamicBitset consumed_whole_token_bitset;
+  };
+
+  std::shared_ptr<const Result> GetOrCreate(
+      const Grammar::Impl::GrammarExpr& character_class,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_vocab,
+      size_t vocab_size
+  ) {
+    std::vector<int32_t> key(character_class.begin(), character_class.end());
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      const auto existing = cache_.find(key);
+      if (existing != cache_.end()) {
+        return existing->second;
+      }
+    }
+
+    auto summaries = BuildCharacterClassTokenSummaries(character_class, sorted_vocab);
+    DynamicBitset consumed_whole_token_bitset(vocab_size);
+    for (const auto& summary : summaries) {
+      if (summary.consumed_whole_token) {
+        consumed_whole_token_bitset.Set(sorted_vocab[summary.sorted_vocab_index].first, true);
+      }
+    }
+    auto computed = std::make_shared<const Result>(
+        Result{std::move(summaries), std::move(consumed_whole_token_bitset)}
+    );
+    std::lock_guard<std::mutex> lock(mutex_);
+    return cache_.emplace(std::move(key), computed).first->second;
+  }
+
+  std::shared_ptr<const CharacterClassRepeatTokenMask> GetOrCreateRepeatMask(
+      const Grammar::Impl::GrammarExpr& character_class,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_vocab,
+      size_t vocab_size,
+      int32_t max_characters
+  ) {
+    RepeatKey key{
+        std::vector<int32_t>(character_class.begin(), character_class.end()), max_characters
+    };
+    {
+      std::lock_guard<std::mutex> lock(repeat_mutex_);
+      const auto existing = repeat_cache_.find(key);
+      if (existing != repeat_cache_.end()) {
+        if (auto retained = existing->second.lock()) {
+          return retained;
+        }
+      }
+    }
+
+    const auto summaries = GetOrCreate(character_class, sorted_vocab, vocab_size);
+    std::vector<int32_t> accepted_indices;
+    std::vector<int32_t> uncertain_indices;
+    accepted_indices.reserve(summaries->summaries.size());
+    uncertain_indices.reserve(summaries->summaries.size());
+    DynamicBitset accepted_prefix_tokens(vocab_size);
+    for (const auto& summary : summaries->summaries) {
+      if (max_characters < 0) {
+        if (summary.consumed_whole_token) {
+          accepted_indices.push_back(summary.sorted_vocab_index);
+        } else if (summary.has_completed_character_prefix) {
+          uncertain_indices.push_back(summary.sorted_vocab_index);
+        }
+      } else if (!summary.consumed_whole_token ||
+                 summary.locally_consumed_characters > max_characters) {
+        uncertain_indices.push_back(summary.sorted_vocab_index);
+      } else {
+        accepted_prefix_tokens.Set(sorted_vocab[summary.sorted_vocab_index].first);
+      }
+    }
+    auto computed =
+        std::make_shared<const CharacterClassRepeatTokenMask>(CharacterClassRepeatTokenMask{
+            AdaptiveTokenMask(vocab_size, sorted_vocab, accepted_indices, uncertain_indices),
+            std::move(accepted_prefix_tokens)
+        });
+    std::lock_guard<std::mutex> lock(repeat_mutex_);
+    auto& cached = repeat_cache_[std::move(key)];
+    if (auto retained = cached.lock()) {
+      return retained;
+    }
+    cached = computed;
+    return computed;
+  }
+
+  void Clear() {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      cache_.clear();
+    }
+    std::lock_guard<std::mutex> lock(repeat_mutex_);
+    repeat_cache_.clear();
+  }
+
+ private:
+  std::mutex mutex_;
+  std::unordered_map<std::vector<int32_t>, std::shared_ptr<const Result>, KeyHash> cache_;
+  std::mutex repeat_mutex_;
+  // Compiled grammars retain shared ownership. Weak values keep evicted grammars from making the
+  // compiler-wide index retain their token bitmasks indefinitely.
+  std::unordered_map<RepeatKey, std::weak_ptr<const CharacterClassRepeatTokenMask>, RepeatKeyHash>
+      repeat_cache_;
+};
+
 /*! \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcherForTokenMaskCache : public EarleyParser {
  public:
@@ -45,15 +245,20 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const std::unordered_map<int32_t, DynamicBitset>&
           tag_dispatch_rule_id_to_second_slicing_bitset,
       const TokenizerInfo& tokenizer_info,
-      std::optional<RuleLevelCache>& rule_level_cache
+      std::optional<RuleLevelCache>& rule_level_cache,
+      const std::shared_ptr<CharacterClassTokenSummaryCache>& character_class_token_summary_cache,
+      bool enable_direct_character_class_mask,
+      const std::shared_ptr<const EarleyParserGrammarFeatures>& grammar_features
   )
-      : EarleyParser(grammar, init_state),
+      : EarleyParser(grammar, init_state, grammar_features),
         init_rule_id_(init_state.rule_id),
         initial_state_(init_state),
         tag_dispatch_rule_id_to_second_slicing_bitset_(tag_dispatch_rule_id_to_second_slicing_bitset
         ),
         tokenizer_info_(tokenizer_info),
-        rule_level_cache_(rule_level_cache) {}
+        rule_level_cache_(rule_level_cache),
+        character_class_token_summary_cache_(character_class_token_summary_cache),
+        enable_direct_character_class_mask_(enable_direct_character_class_mask) {}
   /*!
    * \brief Get the adaptive token mask for the given ParserState.
    * \param is_root_rule Whether to consider the parent rule. If false, there will be
@@ -83,6 +288,16 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   void AdaptCacheWithLookahead(AdaptiveTokenMask* cache, bool is_root_rule);
 
  private:
+  /*! \brief Build a token mask directly for a context-independent single character class. */
+  std::optional<AdaptiveTokenMask> GetSingleCharacterClassDirectMask(bool is_root_rule) const;
+
+  AdaptiveTokenMask BuildAdaptiveTokenMask(
+      bool rejected_filled,
+      const std::vector<int32_t>& accepted_indices,
+      const std::vector<int32_t>& rejected_indices,
+      const std::vector<int32_t>& uncertain_indices
+  ) const;
+
   /*! \brief Check if a token can pass the lookahead assertion. */
   std::pair</*acceptable*/ bool, /*can reach end*/ bool> IsTokenPassLookaheadAssertion(
       const std::string& token, const std::vector<bool>& can_reach_end_stack
@@ -95,6 +310,9 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
    * which can be used in speculative calculation.
    */
   std::pair<bool, std::bitset<256>> GetSpeculativeCalculation();
+
+  /*! \brief Return a character class that loops directly back to this rule's start state. */
+  std::optional<int32_t> GetSpeculativeCharacterClassExprId() const;
 
   /*!
    * \brief Get the first character mask.
@@ -131,6 +349,10 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
 
   std::optional<RuleLevelCache> rule_level_cache_;
 
+  std::shared_ptr<CharacterClassTokenSummaryCache> character_class_token_summary_cache_;
+
+  bool enable_direct_character_class_mask_;
+
   // Temporary data for GetAdaptiveTokenMask.
   std::vector<int32_t> tmp_accepted_indices_;
   std::vector<int32_t> tmp_rejected_indices_;
@@ -139,6 +361,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   std::vector<int32_t> tmp_accepted_by_lookahead_indices_;
   std::vector<bool> tmp_can_reach_end_stack_;
   std::vector<bool> tmp_can_reach_end_prefix_or_stack_;
+  std::shared_ptr<const CharacterClassTokenSummaryCache::Result>
+      speculative_character_class_summary_;
   // Temporary data for GetTokenEdgeAcceptedIndices.
   std::vector<int32_t> tmp_token_edge_accepted_;
   std::vector<int32_t> tmp_token_edge_excluded_;
@@ -494,6 +718,36 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
   return {can_be_applied, speculative_mask};
 }
 
+std::optional<int32_t> GrammarMatcherForTokenMaskCache::GetSpeculativeCharacterClassExprId() const {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  const auto& rule = grammar_->GetRule(init_rule_id_);
+  if (rule.is_lazy || initial_state_.sub_element_id != 0) {
+    return std::nullopt;
+  }
+  XGRAMMAR_DCHECK(grammar_->per_rule_fsms[init_rule_id_].has_value());
+  if (initial_state_.element_id != grammar_->per_rule_fsms[init_rule_id_]->GetFsm().GetStart()) {
+    return std::nullopt;
+  }
+  const auto& body = grammar_->GetGrammarExpr(rule.body_expr_id);
+  if (body.type != GrammarExprType::kChoices) {
+    return std::nullopt;
+  }
+  for (int32_t sequence_id : body) {
+    const auto& sequence = grammar_->GetGrammarExpr(sequence_id);
+    if (sequence.type != GrammarExprType::kSequence || sequence.size() != 2) {
+      continue;
+    }
+    const auto& character_class = grammar_->GetGrammarExpr(sequence[0]);
+    const auto& recursive_reference = grammar_->GetGrammarExpr(sequence[1]);
+    if (character_class.type == GrammarExprType::kCharacterClass &&
+        recursive_reference.type == GrammarExprType::kRuleRef &&
+        recursive_reference[0] == init_rule_id_) {
+      return sequence[0];
+    }
+  }
+  return std::nullopt;
+}
+
 bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     const std::bitset<256>& first_char_mask,
     bool is_root_rule,
@@ -538,9 +792,33 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     definite_accepted_bitset = &tag_dispatch_rule_id_to_second_slicing_bitset_.at(init_rule_id_);
   }
 
+  if (speculative_calculation && !definite_accepted_bitset.has_value()) {
+    if (auto character_class_expr_id = GetSpeculativeCharacterClassExprId()) {
+      XGRAMMAR_DCHECK(character_class_token_summary_cache_ != nullptr);
+      speculative_character_class_summary_ = character_class_token_summary_cache_->GetOrCreate(
+          grammar_->GetGrammarExpr(*character_class_expr_id),
+          sorted_decoded_vocab,
+          tokenizer_info_.GetVocabSize()
+      );
+    }
+  }
+
   const std::string* prev_token = nullptr;
   int32_t skip_ptr = 0;
   const int32_t skip_size = static_cast<int32_t>(token_edge_accepted.size());
+  bool accepts_ascii_string_safe_slice = speculative_calculation &&
+                                         !definite_accepted_bitset.has_value() &&
+                                         !speculative_character_class_summary_;
+  if (accepts_ascii_string_safe_slice) {
+    for (int32_t byte = 0x20; byte < 0x7f; ++byte) {
+      if (byte != '"' && byte != '\\' && !speculative_mask[byte]) {
+        accepts_ascii_string_safe_slice = false;
+        break;
+      }
+    }
+  }
+  const auto& ascii_string_safe_indices = tokenizer_info_.ImplPtr()->GetAsciiStringSafeIndices();
+  size_t ascii_string_safe_position = 0;
   for (size_t interval_idx = 0; interval_idx < possible_intervals.size(); ++interval_idx) {
     const auto& interval = possible_intervals[interval_idx];
     for (int i = interval.first; i < interval.second; ++i) {
@@ -563,6 +841,22 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
         continue;
       }
       const auto& token = sorted_decoded_vocab[i].second;
+      if (speculative_character_class_summary_ &&
+          speculative_character_class_summary_
+              ->consumed_whole_token_bitset[sorted_decoded_vocab[i].first]) {
+        continue;
+      }
+      if (accepts_ascii_string_safe_slice) {
+        while (ascii_string_safe_position < ascii_string_safe_indices.size() &&
+               ascii_string_safe_indices[ascii_string_safe_position] < i) {
+          ++ascii_string_safe_position;
+        }
+        if (ascii_string_safe_position < ascii_string_safe_indices.size() &&
+            ascii_string_safe_indices[ascii_string_safe_position] == i) {
+          tmp_accepted_indices_.push_back(i);
+          continue;
+        }
+      }
       // This optimization is useful for simple self-recursive rules, like string content.
       if (speculative_calculation) {
         // Optimization for tag dispatch rules.
@@ -790,6 +1084,81 @@ const std::vector<int32_t>& GrammarMatcherForTokenMaskCache::GetTokenEdgeAccepte
   return tmp_token_edge_accepted_;
 }
 
+std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetSingleCharacterClassDirectMask(
+    bool is_root_rule
+) const {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  if (!enable_direct_character_class_mask_ || is_root_rule || initial_state_.sub_element_id != 0 ||
+      initial_state_.element_id != grammar_->per_rule_fsms[init_rule_id_]->GetFsm().GetStart() ||
+      grammar_->GetRule(init_rule_id_).lookahead_assertion_id != -1) {
+    return std::nullopt;
+  }
+  const auto& body = grammar_->GetGrammarExpr(grammar_->GetRule(init_rule_id_).body_expr_id);
+  if (body.type != GrammarExprType::kChoices || body.size() != 1) {
+    return std::nullopt;
+  }
+  const auto& sequence = grammar_->GetGrammarExpr(body[0]);
+  if (sequence.type != GrammarExprType::kSequence || sequence.size() != 1) {
+    return std::nullopt;
+  }
+  const auto& character_class = grammar_->GetGrammarExpr(sequence[0]);
+  if (character_class.type != GrammarExprType::kCharacterClass) {
+    return std::nullopt;
+  }
+
+  XGRAMMAR_DCHECK(character_class_token_summary_cache_ != nullptr);
+  const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  const auto summaries = character_class_token_summary_cache_->GetOrCreate(
+      character_class, sorted_vocab, tokenizer_info_.GetVocabSize()
+  );
+  std::vector<int32_t> accepted_indices;
+  std::vector<int32_t> uncertain_indices;
+  accepted_indices.reserve(summaries->summaries.size() / 16);
+  uncertain_indices.reserve(summaries->summaries.size());
+  for (const auto& summary : summaries->summaries) {
+    if (summary.consumed_whole_token && summary.locally_consumed_characters <= 1) {
+      accepted_indices.push_back(summary.sorted_vocab_index);
+    } else if (summary.has_completed_character_prefix) {
+      uncertain_indices.push_back(summary.sorted_vocab_index);
+    }
+  }
+  return AdaptiveTokenMask(
+      tokenizer_info_.GetVocabSize(),
+      sorted_vocab,
+      std::move(accepted_indices),
+      std::move(uncertain_indices)
+  );
+}
+
+AdaptiveTokenMask GrammarMatcherForTokenMaskCache::BuildAdaptiveTokenMask(
+    bool rejected_filled,
+    const std::vector<int32_t>& accepted_indices,
+    const std::vector<int32_t>& rejected_indices,
+    const std::vector<int32_t>& uncertain_indices
+) const {
+  const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  if (speculative_character_class_summary_) {
+    return AdaptiveTokenMask(
+        speculative_character_class_summary_->consumed_whole_token_bitset,
+        sorted_vocab,
+        accepted_indices,
+        uncertain_indices
+    );
+  }
+  if (rejected_filled) {
+    return AdaptiveTokenMask(
+        tokenizer_info_.GetVocabSize(),
+        sorted_vocab,
+        accepted_indices,
+        rejected_indices,
+        uncertain_indices
+    );
+  }
+  return AdaptiveTokenMask(
+      tokenizer_info_.GetVocabSize(), sorted_vocab, accepted_indices, uncertain_indices
+  );
+}
+
 AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_root_rule) {
   tmp_accepted_indices_.clear();
   tmp_rejected_indices_.clear();
@@ -798,6 +1167,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   tmp_accepted_by_lookahead_indices_.clear();
   tmp_can_reach_end_prefix_or_stack_.clear();
   tmp_can_reach_end_stack_.clear();
+  speculative_character_class_summary_.reset();
   // For every character in the current token, stores whether it is possible to reach the end of
   // the rule when matching until this character. Store it in a stack for later rollback.
   tmp_can_reach_end_stack_.push_back(false);
@@ -846,6 +1216,21 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
     }
   }
 
+  auto direct_character_class_mask = GetSingleCharacterClassDirectMask(is_root_rule);
+  if (direct_character_class_mask.has_value()) {
+    if (rule_level_cache_is_available) {
+      const auto& fsm = grammar_->per_rule_fsms[init_rule_id_].value();
+      rule_level_cache_->AddCache(
+          fsm_hash.value(),
+          new_state_id,
+          fsm.GetNodeNum(),
+          fsm.GetEdgeNum(),
+          *direct_character_class_mask
+      );
+    }
+    return std::move(*direct_character_class_mask);
+  }
+
   std::bitset<256> first_character_mask;
   GetFirstCharacterMask(first_character_mask);
 
@@ -874,12 +1259,8 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
     IntsetDifference(&tmp_rejected_indices_, token_edge_accepted);
   }
   if (rejected_filled) {
-    auto return_value = AdaptiveTokenMask(
-        tokenizer_info_.GetVocabSize(),
-        tokenizer_info_.GetSortedDecodedVocab(),
-        tmp_accepted_indices_,
-        tmp_rejected_indices_,
-        tmp_uncertain_indices_
+    auto return_value = BuildAdaptiveTokenMask(
+        true, tmp_accepted_indices_, tmp_rejected_indices_, tmp_uncertain_indices_
     );
     if (rule_level_cache_is_available) {
       if (lookahead_id == -1 && !is_root_rule) {
@@ -923,9 +1304,8 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
           new_state_id,
           fsm.GetNodeNum(),
           fsm.GetEdgeNum(),
-          AdaptiveTokenMask(
-              tokenizer_info_.GetVocabSize(),
-              tokenizer_info_.GetSortedDecodedVocab(),
+          BuildAdaptiveTokenMask(
+              true,
               accepted_indices_without_lookahead,
               rejected_indices_without_lookahead,
               tmp_uncertain_indices_
@@ -944,12 +1324,8 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
     }
     return return_value;
   } else {
-    auto return_value = AdaptiveTokenMask(
-        tokenizer_info_.GetVocabSize(),
-        tokenizer_info_.GetSortedDecodedVocab(),
-        tmp_accepted_indices_,
-        tmp_uncertain_indices_
-    );
+    auto return_value =
+        BuildAdaptiveTokenMask(false, tmp_accepted_indices_, {}, tmp_uncertain_indices_);
 
     if (rule_level_cache_is_available) {
       // Prepare for cache.
@@ -981,11 +1357,8 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
           new_state_id,
           fsm.GetNodeNum(),
           fsm.GetEdgeNum(),
-          AdaptiveTokenMask(
-              tokenizer_info_.GetVocabSize(),
-              tokenizer_info_.GetSortedDecodedVocab(),
-              accepted_indices_without_lookahead,
-              tmp_uncertain_indices_
+          BuildAdaptiveTokenMask(
+              false, accepted_indices_without_lookahead, {}, tmp_uncertain_indices_
           )
       );
 
@@ -1003,6 +1376,97 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   }
 }
 
+const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(
+    const ParserState& state, bool is_root_rule
+) {
+  if (!enable_dynamic_compilation) {
+    const auto it = adaptive_token_mask_cache.find(state);
+    XGRAMMAR_CHECK(it != adaptive_token_mask_cache.end())
+        << "The token mask cache is incomplete while dynamic compilation is disabled: " << state;
+    return it->second;
+  }
+
+  std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex);
+  const auto existing = adaptive_token_mask_cache.find(state);
+  if (existing != adaptive_token_mask_cache.end()) {
+    return existing->second;
+  }
+
+  const ParserState cache_state(
+      state.rule_id,
+      state.sequence_id,
+      state.element_id,
+      ParserState::kNoPrevInputPos,
+      -1,
+      state.sub_element_id
+  );
+  std::optional<RuleLevelCache> retained_rule_level_cache;
+  const bool is_context_independent =
+      state.rule_id >= 0 && state.rule_id < static_cast<int32_t>(rule_level_cacheable.size()) &&
+      rule_level_cacheable[state.rule_id];
+  if (rule_level_cache != nullptr && is_context_independent) {
+    retained_rule_level_cache = *rule_level_cache;
+  }
+  AdaptiveTokenMask mask = GrammarMatcherForTokenMaskCache(
+                               grammar,
+                               cache_state,
+                               tag_dispatch_rule_id_to_second_slicing_bitset,
+                               tokenizer_info,
+                               retained_rule_level_cache,
+                               character_class_token_summary_cache,
+                               is_context_independent,
+                               earley_parser_grammar_features
+  )
+                               .GetAdaptiveTokenMask(is_root_rule);
+  return adaptive_token_mask_cache.emplace(cache_state, std::move(mask)).first->second;
+}
+
+const CharacterClassRepeatTokenMask& CompiledGrammar::Impl::GetCharacterClassRepeatTokenMask(
+    int32_t character_class_expr_id, int32_t max_characters
+) {
+  std::lock_guard<std::mutex> lock(character_class_repeat_token_masks_mutex);
+  const uint64_t cache_key = (static_cast<uint64_t>(character_class_expr_id) << 32) |
+                             static_cast<uint32_t>(max_characters + 1);
+  const auto existing = character_class_repeat_token_masks.find(cache_key);
+  if (existing != character_class_repeat_token_masks.end()) {
+    return *existing->second;
+  }
+
+  const auto& sorted_vocab = tokenizer_info.GetSortedDecodedVocab();
+  XGRAMMAR_DCHECK(character_class_token_summary_cache != nullptr);
+  auto repeat_mask = character_class_token_summary_cache->GetOrCreateRepeatMask(
+      grammar->GetGrammarExpr(character_class_expr_id),
+      sorted_vocab,
+      tokenizer_info.GetVocabSize(),
+      max_characters
+  );
+  return *character_class_repeat_token_masks.emplace(cache_key, std::move(repeat_mask))
+              .first->second;
+}
+
+void CompiledGrammar::Impl::MaterializeAdaptiveTokenMaskCache() {
+  if (tokenizer_info.GetVocabSize() == 0) {
+    return;
+  }
+  const int32_t root_rule_id = grammar->GetRootRuleId();
+  for (int32_t rule_id = 0; rule_id < static_cast<int32_t>(grammar->NumRules()); ++rule_id) {
+    const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
+    XGRAMMAR_DCHECK(rule_fsm.has_value());
+    ParserState state(
+        rule_id, grammar->GetRule(rule_id).body_expr_id, 0, ParserState::kNoPrevInputPos, -1, 0
+    );
+    std::unordered_set<int> reachable_states;
+    rule_fsm->GetFsm().GetReachableStates(&reachable_states);
+    for (int32_t element_id : reachable_states) {
+      if (!rule_fsm->GetFsm().IsScanableState(element_id)) {
+        continue;
+      }
+      state.element_id = element_id;
+      GetAdaptiveTokenMask(state, rule_id == root_rule_id);
+    }
+  }
+}
+
 /******************* GrammarCompilerNoCache *******************/
 
 /*!
@@ -1013,11 +1477,13 @@ class GrammarCompilerSub {
   GrammarCompilerSub(
       const TokenizerInfo& tokenizer_info,
       int max_threads,
-      std::optional<RuleLevelCache> rule_level_cache
+      std::optional<RuleLevelCache> rule_level_cache,
+      bool enable_dynamic_compilation
   )
       : tokenizer_info_(tokenizer_info),
         max_threads_(max_threads),
-        rule_level_cache_(rule_level_cache) {}
+        rule_level_cache_(rule_level_cache),
+        enable_dynamic_compilation_(enable_dynamic_compilation) {}
 
   CompiledGrammar CompileBuiltinJSONGrammar();
 
@@ -1039,9 +1505,18 @@ class GrammarCompilerSub {
 
   CompiledGrammar CompileGrammar(const std::string& ebnf_str, std::string root_rule_name);
 
+  void ClearCharacterClassTokenSummaryCache() { character_class_token_summary_cache_->Clear(); }
+
+  void ClearTagDispatchSlicingCache() {
+    std::lock_guard<std::mutex> lock(tag_dispatch_slicing_cache_mutex_);
+    tag_dispatch_slicing_cache_.clear();
+  }
+
  private:
   /*! \brief The main logic. Compile the grammar with multi-threading. */
-  CompiledGrammar MultiThreadCompileGrammar(Grammar grammar);
+  CompiledGrammar MultiThreadCompileGrammar(
+      Grammar grammar, RegexFSMCache* regex_fsm_cache = nullptr
+  );
   /*! \brief Optimization for TagDispatch.
    *  \param compiled_grammar_impl the compiled_grammar to be optimized.
    *  \param tag_dispatch_rule_id_to_second_slicing_bitset Return value. Mapping from the rule_id to
@@ -1052,6 +1527,10 @@ class GrammarCompilerSub {
       std::unordered_map<int32_t, DynamicBitset>* tag_dispatch_rule_id_to_second_slicing_bitset
   );
 
+  std::shared_ptr<const DynamicBitset> GetTagDispatchSecondSlicingBitset(
+      std::vector<std::string> patterns
+  );
+
   /*! \brief The vocabulary associated with this storage class. */
   const TokenizerInfo tokenizer_info_;
   /*! \brief The maximum number of threads to use. */
@@ -1059,22 +1538,62 @@ class GrammarCompilerSub {
 
   /*! \brief The manager of the rule level cache.*/
   std::optional<RuleLevelCache> rule_level_cache_;
+
+  std::shared_ptr<CharacterClassTokenSummaryCache> character_class_token_summary_cache_ =
+      std::make_shared<CharacterClassTokenSummaryCache>();
+  /*! \brief Whether token masks are generated on first use. */
+  const bool enable_dynamic_compilation_;
+  struct StringVectorHash {
+    size_t operator()(const std::vector<std::string>& strings) const {
+      uint64_t result = 0;
+      for (const auto& string : strings) {
+        HashCombineBinary(result, std::hash<std::string>{}(string));
+      }
+      return result;
+    }
+  };
+  std::mutex tag_dispatch_slicing_cache_mutex_;
+  std::unordered_map<
+      std::vector<std::string>,
+      std::shared_ptr<const DynamicBitset>,
+      StringVectorHash>
+      tag_dispatch_slicing_cache_;
 };
 
-CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
+CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
+    Grammar grammar_unoptimized, RegexFSMCache* regex_fsm_cache
+) {
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
-  compiled_grammar_impl->grammar = GrammarOptimizer::Apply(grammar_unoptimized);
+  compiled_grammar_impl->grammar =
+      GrammarOptimizer::Apply(grammar_unoptimized, !enable_dynamic_compilation_, regex_fsm_cache);
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
+  compiled_grammar_impl->enable_dynamic_compilation = enable_dynamic_compilation_;
+  compiled_grammar_impl->earley_parser_grammar_features =
+      std::make_shared<const EarleyParserGrammarFeatures>(compiled_grammar_impl->grammar);
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
   std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
   TagDispatchOptimization(compiled_grammar_impl, &tag_dispatch_rule_id_to_second_slicing_bitset);
 
-  // If the compiler is cache-enabled, then we hash the grammars for crossing-grammar caching.
+  // Rule hashes are needed by both eager and on-demand cross-grammar mask reuse.
   if (rule_level_cache_.has_value()) {
     GrammarFSMHasher().Apply(&compiled_grammar_impl->grammar);
   }
+  if (enable_dynamic_compilation_) {
+    compiled_grammar_impl->character_class_token_summary_cache =
+        character_class_token_summary_cache_;
+    if (rule_level_cache_.has_value()) {
+      compiled_grammar_impl->rule_level_cache =
+          std::make_shared<RuleLevelCache>(rule_level_cache_.value());
+      compiled_grammar_impl->rule_level_cacheable =
+          GetRuleLevelCacheableRules(compiled_grammar_impl->grammar);
+    }
+    compiled_grammar_impl->tag_dispatch_rule_id_to_second_slicing_bitset =
+        std::move(tag_dispatch_rule_id_to_second_slicing_bitset);
+    return CompiledGrammar(compiled_grammar_impl);
+  }
+
   // Step 3. Compute the adaptive token mask cache
   // The token mask cache is computed for these positions in the grammar:
   // 1. All character class or character class star (with last_utf8_bytes=0, 1, 2, 3)
@@ -1097,7 +1616,10 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
         state,
         tag_dispatch_rule_id_to_second_slicing_bitset,
         tokenizer_info_,
-        rule_level_cache_
+        rule_level_cache_,
+        character_class_token_summary_cache_,
+        false,
+        compiled_grammar_impl->earley_parser_grammar_features
     );
     auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(is_root_rule);
     if (max_threads_ > 1) {
@@ -1159,16 +1681,19 @@ CompiledGrammar GrammarCompilerSub::CompileJSONSchema(
     std::optional<int> max_whitespace_cnt,
     bool any_order
 ) {
-  return MultiThreadCompileGrammar(Grammar::FromJSONSchema(
+  RegexFSMCache regex_fsm_cache;
+  Grammar grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
       schema,
       any_whitespace,
       indent,
       separators,
       strict_mode,
       max_whitespace_cnt,
-      /*print_converted_ebnf=*/false,
-      any_order
+      any_order,
+      JSONFormat::kJSON,
+      &regex_fsm_cache
   ));
+  return MultiThreadCompileGrammar(std::move(grammar), &regex_fsm_cache);
 }
 
 CompiledGrammar GrammarCompilerSub::CompileStructuralTag(const std::string& structural_tag_json) {
@@ -1209,39 +1734,56 @@ void GrammarCompilerSub::TagDispatchOptimization(
     XGRAMMAR_DCHECK(rule_body.type == GrammarExprType::kTagDispatch);
     Grammar::Impl::TagDispatch tag_dispatch =
         compiled_grammar_impl->GetGrammar()->GetTagDispatch(rule.body_expr_id);
-    const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
-    DynamicBitset definite_accepted_tokens_since_second_char(sorted_decoded_vocab.size());
-    for (int j = 0; j < static_cast<int32_t>(sorted_decoded_vocab.size()); j++) {
-      bool definite_accept_since_second_char = true;
-      const auto& token = sorted_decoded_vocab[j].second;
-      if (token.empty()) {
-        definite_accepted_tokens_since_second_char.Set(j);
-        continue;
-      }
-
-      // Check if the token contains any string trigger or exclude string after first char.
-      for (const auto& [trigger, rule_id] : tag_dispatch.tag_rule_pairs) {
-        if (token.find(trigger, 1) != std::string::npos) {
-          definite_accept_since_second_char = false;
-          break;
-        }
-      }
-      if (definite_accept_since_second_char) {
-        for (const auto& excl : tag_dispatch.excludes) {
-          if (token.find(excl, 1) != std::string::npos) {
-            definite_accept_since_second_char = false;
-            break;
-          }
-        }
-      }
-
-      if (definite_accept_since_second_char) {
-        definite_accepted_tokens_since_second_char.Set(j);
-      }
+    std::vector<std::string> patterns;
+    patterns.reserve(tag_dispatch.tag_rule_pairs.size() + tag_dispatch.excludes.size());
+    for (const auto& [trigger, rule_id] : tag_dispatch.tag_rule_pairs) {
+      patterns.push_back(trigger);
     }
+    patterns.insert(patterns.end(), tag_dispatch.excludes.begin(), tag_dispatch.excludes.end());
+    std::sort(patterns.begin(), patterns.end());
+    patterns.erase(std::unique(patterns.begin(), patterns.end()), patterns.end());
     (*tag_dispatch_rule_id_to_second_slicing_bitset)[i] =
-        definite_accepted_tokens_since_second_char;
+        *GetTagDispatchSecondSlicingBitset(std::move(patterns));
   }
+}
+
+std::shared_ptr<const DynamicBitset> GrammarCompilerSub::GetTagDispatchSecondSlicingBitset(
+    std::vector<std::string> patterns
+) {
+  {
+    std::lock_guard<std::mutex> lock(tag_dispatch_slicing_cache_mutex_);
+    auto it = tag_dispatch_slicing_cache_.find(patterns);
+    if (it != tag_dispatch_slicing_cache_.end()) {
+      return it->second;
+    }
+  }
+
+  const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  auto computed = std::make_shared<DynamicBitset>(sorted_decoded_vocab.size());
+  for (int32_t index = 0; index < static_cast<int32_t>(sorted_decoded_vocab.size()); ++index) {
+    const auto& token = sorted_decoded_vocab[index].second;
+    bool definitely_accepted = token.empty();
+    if (!definitely_accepted) {
+      definitely_accepted =
+          std::none_of(patterns.begin(), patterns.end(), [&](const std::string& pattern) {
+            return token.find(pattern, 1) != std::string::npos;
+          });
+    }
+    if (definitely_accepted) {
+      computed->Set(index);
+    }
+  }
+
+  constexpr size_t kMaxTagDispatchSlicingCacheEntries = 64;
+  std::lock_guard<std::mutex> lock(tag_dispatch_slicing_cache_mutex_);
+  auto it = tag_dispatch_slicing_cache_.find(patterns);
+  if (it != tag_dispatch_slicing_cache_.end()) {
+    return it->second;
+  }
+  if (tag_dispatch_slicing_cache_.size() < kMaxTagDispatchSlicingCacheEntries) {
+    tag_dispatch_slicing_cache_.emplace(std::move(patterns), computed);
+  }
+  return computed;
 }
 
 /******************* GrammarCompiler::Impl *******************/
@@ -1343,9 +1885,10 @@ class GrammarCompiler::Impl {
       const TokenizerInfo& tokenizer_info,
       int max_threads,
       bool cache_enabled,
-      int64_t max_memory_bytes
+      int64_t max_memory_bytes,
+      bool enable_dynamic_compilation
   )
-      : cache_enabled_(cache_enabled),
+      : cache_enabled_(cache_enabled && (!enable_dynamic_compilation || max_memory_bytes == -1)),
         rule_level_cache_(
             cache_enabled
                 ? std::optional<RuleLevelCache>(
@@ -1355,7 +1898,9 @@ class GrammarCompiler::Impl {
                   )
                 : std::nullopt
         ),
-        no_cache_compiler_(tokenizer_info, max_threads, rule_level_cache_),
+        no_cache_compiler_(
+            tokenizer_info, max_threads, rule_level_cache_, enable_dynamic_compilation
+        ),
         grammar_level_cache_(
             max_memory_bytes == -1 ? static_cast<std::size_t>(-1)
                                    : static_cast<std::size_t>(max_memory_bytes / 3 * 2),
@@ -1515,6 +2060,8 @@ CompiledGrammar GrammarCompiler::Impl::CompileGrammar(
 
 void GrammarCompiler::Impl::ClearCache() {
   grammar_level_cache_.Clear();
+  no_cache_compiler_.ClearCharacterClassTokenSummaryCache();
+  no_cache_compiler_.ClearTagDispatchSlicingCache();
   if (rule_level_cache_.has_value()) {
     rule_level_cache_->ClearCache();
   }
@@ -1541,8 +2088,18 @@ GrammarCompiler::GrammarCompiler(
     bool cache_enabled,
     int64_t max_memory_bytes
 )
-    : pimpl_(std::make_shared<Impl>(tokenizer_info, max_threads, cache_enabled, max_memory_bytes)) {
-}
+    : GrammarCompiler(tokenizer_info, max_threads, cache_enabled, max_memory_bytes, false) {}
+
+GrammarCompiler::GrammarCompiler(
+    const TokenizerInfo& tokenizer_info,
+    int max_threads,
+    bool cache_enabled,
+    int64_t max_memory_bytes,
+    bool enable_dynamic_compilation
+)
+    : pimpl_(std::make_shared<Impl>(
+          tokenizer_info, max_threads, cache_enabled, max_memory_bytes, enable_dynamic_compilation
+      )) {}
 
 CompiledGrammar GrammarCompiler::CompileJSONSchema(
     const std::string& schema,

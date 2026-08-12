@@ -57,6 +57,43 @@ def _check_glm_grammar(schema: dict, instance: str, accepted: bool):
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 
+def test_qwen_xml_object_cache_keeps_nested_context():
+    schema = {
+        "type": "object",
+        "properties": {"payload": {"type": "object"}},
+        "required": ["payload"],
+        "additionalProperties": False,
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format="qwen_xml")
+    assert _is_grammar_accept_string(grammar, "<parameter=payload>{}</parameter>")
+    assert not _is_grammar_accept_string(grammar, "<parameter=payload></parameter>")
+
+
+def test_qwen_xml_rule_cache_separates_outer_xml_from_nested_json():
+    repeated_schema = {"type": "string", "minLength": 2, "maxLength": 4}
+    schema = {
+        "type": "object",
+        "properties": {
+            "outer": repeated_schema,
+            "payload": {
+                "type": "object",
+                "properties": {"inner": repeated_schema},
+                "required": ["inner"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["outer", "payload"],
+        "additionalProperties": False,
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format="qwen_xml")
+    assert _is_grammar_accept_string(
+        grammar, '<parameter=outer>ab</parameter><parameter=payload>{"inner":"cd"}</parameter>'
+    )
+    assert not _is_grammar_accept_string(
+        grammar, '<parameter=outer>ab</parameter><parameter=payload>{"inner":cd}</parameter>'
+    )
+
+
 test_string_schema_input_str_accepted = (
     ("<parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>", True),
     ("<parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>", True),

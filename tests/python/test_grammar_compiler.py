@@ -12,7 +12,45 @@ from pydantic import BaseModel
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import _get_allow_empty_rule_ids
+from xgrammar.testing import _get_allow_empty_rule_ids, bitmask_to_bool_mask
+
+
+@pytest.mark.parametrize(
+    "schema,prefixes",
+    [
+        ({"type": "string", "minLength": 1}, ['"', '"safe']),
+        ({"type": "string", "minLength": 2, "maxLength": 4}, ['"', '"sa']),
+        ({"type": "string", "pattern": "^[A-Z0-9 ]+$"}, ['"', '"AZ']),
+        ({"enum": ["safe ASCII", 'quote"', "slash\\", "é"]}, ['"']),
+    ],
+)
+def test_json_safe_ascii_token_classification_preserves_masks(schema, prefixes):
+    vocabulary = [
+        "",
+        '"',
+        "\\",
+        "safe",
+        "safe ASCII",
+        "AZ09 !#[]{}",
+        'quote"',
+        "slash\\",
+        "\n",
+        "é",
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    tokenizer_info = xgr.TokenizerInfo.deserialize_json(tokenizer_info.serialize_json())
+    compiled = xgr.GrammarCompiler(tokenizer_info, max_threads=1).compile_json_schema(schema)
+
+    for prefix in prefixes:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert matcher.accept_string(prefix)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+        for token_id in range(1, tokenizer_info.vocab_size):
+            oracle = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+            assert oracle.accept_string(prefix)
+            assert bool(allowed[token_id]) == oracle.accept_token(token_id)
 
 
 @pytest.mark.hf_token_required
@@ -445,6 +483,38 @@ item ::= "a" | "bc"
 def _compiled_accepts(compiled_grammar: xgr.CompiledGrammar, input_str: str) -> bool:
     matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
     return matcher.accept_string(input_str) and matcher.is_terminated()
+
+
+def test_repeated_regex_fsm_reuse_preserves_nullable_rules():
+    tokenizer_info = xgr.TokenizerInfo(["!", "a", "aa", "b"], stop_token_ids=[])
+    grammar = xgr.Grammar.from_lark('start: left "!" right\nleft: /a*/\nright: /a*/')
+
+    for enable_dynamic_compilation in [False, True]:
+        compiled = xgr.GrammarCompiler(
+            tokenizer_info, max_threads=1, enable_dynamic_compilation=enable_dynamic_compilation
+        ).compile_grammar(grammar)
+        for value in ["!", "a!", "!a", "aa!aa"]:
+            assert _compiled_accepts(compiled, value)
+        for value in ["", "aa", "!!", "b!"]:
+            assert not _compiled_accepts(compiled, value)
+
+
+def test_regex_fsm_cache_distinguishes_json_string_mode():
+    tokenizer_info = xgr.TokenizerInfo([])
+    grammar = xgr.Grammar.from_ebnf(
+        'root ::= plain "!" plain json "!" json\n'
+        'plain ::= Regex(".")\n'
+        'json ::= Regex(".", json_string=true)'
+    )
+
+    for enable_dynamic_compilation in [False, True]:
+        compiled = xgr.GrammarCompiler(
+            tokenizer_info, max_threads=1, enable_dynamic_compilation=enable_dynamic_compilation
+        ).compile_grammar(grammar)
+        for value in ['"!ab!c', "\\!ab!c", "a!bc!d"]:
+            assert _compiled_accepts(compiled, value)
+        for value in ['a!a"!b', "a!a\\!b", "a!ab!\n"]:
+            assert not _compiled_accepts(compiled, value)
 
 
 def _mask_trace(compiled_grammar: xgr.CompiledGrammar, input_str: str):

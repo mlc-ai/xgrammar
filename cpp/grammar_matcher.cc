@@ -10,6 +10,7 @@
 #include <xgrammar/matcher.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -466,7 +467,11 @@ class GrammarMatcher::Impl : public EarleyParser {
       int max_rollback_tokens = -1,
       std::optional<float> default_temperature = std::nullopt
   )
-      : EarleyParser(compiled_grammar->grammar),
+      : EarleyParser(
+            compiled_grammar->grammar,
+            std::nullopt,
+            compiled_grammar->earley_parser_grammar_features
+        ),
         compiled_grammar_(compiled_grammar),
         tokenizer_info_(compiled_grammar->tokenizer_info),
         stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
@@ -492,6 +497,7 @@ class GrammarMatcher::Impl : public EarleyParser {
         !default_temperature_.has_value() ||
         (std::isfinite(default_temperature_.value()) && default_temperature_.value() >= 0)
     ) << "The default_temperature must be a finite non-negative number";
+    repeat_mask_cache_enabled_ = compiled_grammar_->enable_dynamic_compilation;
   }
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
@@ -535,6 +541,20 @@ class GrammarMatcher::Impl : public EarleyParser {
 
  private:
   using StoreType = AdaptiveTokenMask::StoreType;
+
+  struct CharacterClassRepeat {
+    int32_t character_class_expr_id;
+    int32_t max_characters;
+    ParserState parent;
+    int32_t lower;
+    bool has_stable_upper;
+  };
+
+  std::optional<CharacterClassRepeat> GetCharacterClassRepeat(const ParserState& state) const;
+
+  std::optional<std::vector<int32_t>> GetStableCharacterClassRepeatMaskKey(
+      const std::vector<ParserState>& states
+  ) const;
 
   /*!
    * \brief If is_uncertain_saved is true, find the next token in uncertain_indices. Otherwise,
@@ -738,7 +758,529 @@ class GrammarMatcher::Impl : public EarleyParser {
   DynamicBitset tmp_accepted_bitset_;
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
+  std::vector<ParserState> tmp_latest_states_;
+  std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> tmp_latest_states_with_masks_;
+  bool repeat_mask_cache_enabled_{false};
+  struct RepeatMaskCacheEntry {
+    std::vector<int32_t> key;
+    DynamicBitset mask;
+  };
+  std::vector<RepeatMaskCacheEntry> repeat_mask_cache_;
+
+  class ContinuationTransitionCache;
 };
+
+class GrammarMatcher::Impl::ContinuationTransitionCache {
+ public:
+  explicit ContinuationTransitionCache(Impl* matcher)
+      : matcher_(matcher),
+        external_row_count_(matcher_->rule_id_to_completable_states_.size() - 1) {
+    first_configuration_for_row_.fill(kNoConfiguration);
+    // FillBitmaskForStates creates at most one cache at a time in its normal path. Reuse a
+    // per-thread table, while retaining an owned fallback for any same-thread nested call.
+    auto& scratch = GetThreadLocalScratch();
+    if (!scratch.in_use) {
+      scratch.in_use = true;
+      uses_thread_local_scratch_ = true;
+      transition_table_ = scratch.transition_table.data();
+    } else {
+      owned_transition_table_ = std::make_unique<uint16_t[]>(kMaxConfigurations * 256);
+      transition_table_ = owned_transition_table_.get();
+    }
+    try {
+      const auto initial_row_id = InternCurrentCompletableRow();
+      if (!initial_row_id.has_value()) {
+        enabled_ = false;
+        return;
+      }
+      const auto initial_configuration_id = InternCurrentConfiguration(*initial_row_id);
+      if (!initial_configuration_id.has_value()) {
+        enabled_ = false;
+        return;
+      }
+      PushAcceptedTransition(EncodeAccepted(*initial_row_id, *initial_configuration_id));
+      RecordMaterializedRow(*initial_row_id);
+      materialized_depth_ = 1;
+    } catch (...) {
+      ReleaseThreadLocalScratch();
+      throw;
+    }
+  }
+
+  ~ContinuationTransitionCache() { ReleaseThreadLocalScratch(); }
+
+  ContinuationTransitionCache(const ContinuationTransitionCache&) = delete;
+  ContinuationTransitionCache& operator=(const ContinuationTransitionCache&) = delete;
+  ContinuationTransitionCache(ContinuationTransitionCache&&) = delete;
+  ContinuationTransitionCache& operator=(ContinuationTransitionCache&&) = delete;
+
+#ifdef _MSC_VER
+  __forceinline bool Advance(uint8_t byte) {
+#else
+  __attribute__((always_inline)) inline bool Advance(uint8_t byte) {
+#endif
+    if (!enabled_) {
+      return matcher_->EarleyParser::Advance(byte);
+    }
+    if (transition_depth_ >= kMaxVirtualDepth) {
+      DisableAndMaterialize();
+      return matcher_->EarleyParser::Advance(byte);
+    }
+    XGRAMMAR_DCHECK(transition_depth_ != 0);
+    ++queries_;
+    XGRAMMAR_DCHECK(current_transition_row_ != nullptr);
+    const uint16_t cached = current_transition_row_[byte];
+    if (cached == kRejected) {
+      ++hits_;
+      return false;
+    }
+    if (cached != kEmpty) {
+      ++hits_;
+      PushAcceptedTransition(cached);
+      return true;
+    }
+
+    MaterializeVirtualPrefix();
+    const bool accepted = matcher_->EarleyParser::Advance(byte);
+    if (!accepted) {
+      current_transition_row_[byte] = kRejected;
+      return false;
+    }
+    const auto output_row_id = InternCurrentCompletableRow();
+    if (!output_row_id.has_value()) {
+      enabled_ = false;
+      return true;
+    }
+    const auto output_configuration_id = InternCurrentConfiguration(*output_row_id);
+    if (!output_configuration_id.has_value()) {
+      enabled_ = false;
+      return true;
+    }
+    const uint16_t output_transition = EncodeAccepted(*output_row_id, *output_configuration_id);
+    current_transition_row_[byte] = output_transition;
+    PushAcceptedTransition(output_transition);
+    RecordMaterializedRow(*output_row_id);
+    ++materialized_depth_;
+    return true;
+  }
+
+  void PopLastStates(int32_t count) {
+    if (!enabled_) {
+      matcher_->EarleyParser::PopLastStates(count);
+      return;
+    }
+    XGRAMMAR_DCHECK(count >= 0 && count <= static_cast<int32_t>(transition_depth_));
+    const size_t target_depth = transition_depth_ - count;
+    if (materialized_depth_ > target_depth) {
+      matcher_->EarleyParser::PopLastStates(materialized_depth_ - target_depth);
+    }
+    while (materialized_depth_ > target_depth) {
+      const int32_t row_id = DecodeRowId(transition_history_[materialized_depth_ - 1]);
+      XGRAMMAR_DCHECK(!absolute_rows_by_id_[row_id].empty());
+      absolute_rows_by_id_[row_id].pop_back();
+      --materialized_depth_;
+    }
+    transition_depth_ = target_depth;
+    current_transition_row_ =
+        target_depth == 0
+            ? nullptr
+            : transition_table_ +
+                  static_cast<size_t>(DecodeConfigurationId(transition_history_[target_depth - 1])
+                  ) * 256;
+  }
+
+  uint64_t Queries() const { return queries_; }
+  uint64_t Hits() const { return hits_; }
+  size_t CanonicalRows() const { return rows_.size(); }
+  size_t CanonicalConfigurations() const { return configurations_.size(); }
+  bool IsEnabled() const { return enabled_; }
+
+ private:
+  void ReleaseThreadLocalScratch() noexcept {
+    if (uses_thread_local_scratch_) {
+      GetThreadLocalScratch().in_use = false;
+      uses_thread_local_scratch_ = false;
+    }
+  }
+  static constexpr int32_t kMaxRows = 128;
+  static constexpr int32_t kMaxConfigurations = 128;
+  static constexpr size_t kMaxVirtualDepth = 1024;
+  static constexpr uint16_t kEmpty = 0;
+  static constexpr uint16_t kRejected = 1;
+  static constexpr int32_t kRowShift = 2;
+  static constexpr int32_t kConfigurationShift = 9;
+  static constexpr uint16_t kIdMask = 127;
+
+  struct ThreadLocalScratch {
+    std::array<uint16_t, kMaxConfigurations * 256> transition_table;
+    bool in_use{false};
+  };
+
+  static ThreadLocalScratch& GetThreadLocalScratch() {
+    static thread_local ThreadLocalScratch scratch;
+    return scratch;
+  }
+
+  enum class RowRefKind : uint8_t { kNone, kExternal, kCanonical, kCurrent };
+
+  struct CachedState {
+    int32_t rule_id;
+    int32_t sequence_id;
+    int32_t element_id;
+    RowRefKind row_ref_kind;
+    int32_t row_ref_id;
+    int32_t budget_deadline;
+    int32_t sub_element_id;
+    int32_t repeat_count;
+    int32_t partial_codepoint;
+    int32_t active_temperature_rule_id;
+    int32_t char_budget_deadline;
+
+    bool operator==(const CachedState& other) const {
+      return rule_id == other.rule_id && sequence_id == other.sequence_id &&
+             element_id == other.element_id && row_ref_kind == other.row_ref_kind &&
+             row_ref_id == other.row_ref_id && budget_deadline == other.budget_deadline &&
+             sub_element_id == other.sub_element_id && repeat_count == other.repeat_count &&
+             partial_codepoint == other.partial_codepoint &&
+             active_temperature_rule_id == other.active_temperature_rule_id &&
+             char_budget_deadline == other.char_budget_deadline;
+    }
+  };
+
+  struct CanonicalRow {
+    std::vector<std::pair<int32_t, CachedState>> entries;
+
+    bool operator==(const CanonicalRow& other) const { return entries == other.entries; }
+  };
+
+  struct CanonicalConfiguration {
+    int32_t current_row_id;
+    bool is_completed;
+    std::vector<CachedState> scanable_states;
+
+    bool operator==(const CanonicalConfiguration& other) const {
+      return current_row_id == other.current_row_id && is_completed == other.is_completed &&
+             scanable_states == other.scanable_states;
+    }
+  };
+
+  static uint16_t EncodeAccepted(int32_t row_id, int32_t configuration_id) {
+    XGRAMMAR_DCHECK(
+        row_id >= 0 && row_id < kMaxRows && configuration_id >= 0 &&
+        configuration_id < kMaxConfigurations
+    );
+    return static_cast<uint16_t>(
+        2 | (row_id << kRowShift) | (configuration_id << kConfigurationShift)
+    );
+  }
+
+  static int32_t DecodeRowId(uint16_t transition) { return (transition >> kRowShift) & kIdMask; }
+
+  static int32_t DecodeConfigurationId(uint16_t transition) {
+    return (transition >> kConfigurationShift) & kIdMask;
+  }
+
+  void PushAcceptedTransition(uint16_t transition) {
+    transition_history_[transition_depth_++] = transition;
+    current_transition_row_ =
+        transition_table_ + static_cast<size_t>(DecodeConfigurationId(transition)) * 256;
+  }
+
+  std::optional<CachedState> NormalizeState(const ParserState& state, int32_t current_row) const {
+    RowRefKind row_ref_kind = RowRefKind::kNone;
+    int32_t row_ref_id = -1;
+    if (state.rule_start_pos != ParserState::kNoPrevInputPos) {
+      if (state.rule_start_pos < external_row_count_) {
+        row_ref_kind = RowRefKind::kExternal;
+        row_ref_id = state.rule_start_pos;
+      } else if (state.rule_start_pos == current_row) {
+        row_ref_kind = RowRefKind::kCurrent;
+      } else {
+        const int32_t local_index = state.rule_start_pos - external_row_count_;
+        if (local_index < 0 || local_index >= static_cast<int32_t>(transition_depth_)) {
+          return std::nullopt;
+        }
+        row_ref_kind = RowRefKind::kCanonical;
+        row_ref_id = DecodeRowId(transition_history_[local_index]);
+      }
+    }
+    return CachedState{
+        state.rule_id,
+        state.sequence_id,
+        state.element_id,
+        row_ref_kind,
+        row_ref_id,
+        state.budget_deadline,
+        state.sub_element_id,
+        state.repeat_count,
+        state.partial_codepoint,
+        state.active_temperature_rule_id,
+        state.char_budget_deadline
+    };
+  }
+
+  ParserState MaterializeState(const CachedState& state, int32_t current_row) const {
+    int32_t rule_start_pos = ParserState::kNoPrevInputPos;
+    switch (state.row_ref_kind) {
+      case RowRefKind::kNone:
+        break;
+      case RowRefKind::kExternal:
+        rule_start_pos = state.row_ref_id;
+        break;
+      case RowRefKind::kCanonical:
+        XGRAMMAR_DCHECK(!absolute_rows_by_id_[state.row_ref_id].empty());
+        rule_start_pos = absolute_rows_by_id_[state.row_ref_id].back();
+        break;
+      case RowRefKind::kCurrent:
+        rule_start_pos = current_row;
+        break;
+    }
+    return ParserState{
+        state.rule_id,
+        state.sequence_id,
+        state.element_id,
+        rule_start_pos,
+        state.budget_deadline,
+        state.sub_element_id,
+        state.repeat_count,
+        state.partial_codepoint,
+        state.active_temperature_rule_id,
+        state.char_budget_deadline
+    };
+  }
+
+  std::optional<int32_t> InternCurrentCompletableRow() {
+    const int32_t current_row = matcher_->rule_id_to_completable_states_.size() - 1;
+    const auto row = matcher_->rule_id_to_completable_states_[current_row];
+    CanonicalRow normalized;
+    normalized.entries.reserve(row.size());
+    for (const auto& [ref_rule_id, parent_state] : row) {
+      const auto normalized_state = NormalizeState(parent_state, current_row);
+      if (!normalized_state.has_value()) {
+        return std::nullopt;
+      }
+      normalized.entries.emplace_back(ref_rule_id, *normalized_state);
+    }
+    for (int32_t i = 0; i < static_cast<int32_t>(rows_.size()); ++i) {
+      if (rows_[i] == normalized) {
+        return i;
+      }
+    }
+    if (rows_.size() >= kMaxRows) {
+      return std::nullopt;
+    }
+    rows_.push_back(std::move(normalized));
+    absolute_rows_by_id_.emplace_back();
+    return rows_.size() - 1;
+  }
+
+  std::optional<int32_t> InternCurrentConfiguration(int32_t current_row_id) {
+    XGRAMMAR_DCHECK(current_row_id >= 0 && current_row_id < kMaxRows);
+    const int32_t current_row = matcher_->scanable_state_history_.size() - 1;
+    const auto scanable_states = matcher_->scanable_state_history_[current_row];
+    CanonicalConfiguration normalized{current_row_id, matcher_->is_completed_.back(), {}};
+    normalized.scanable_states.reserve(scanable_states.size());
+    for (const auto& state : scanable_states) {
+      const auto normalized_state = NormalizeState(state, current_row);
+      if (!normalized_state.has_value()) {
+        return std::nullopt;
+      }
+      normalized.scanable_states.push_back(*normalized_state);
+    }
+    for (int32_t i = first_configuration_for_row_[current_row_id]; i != kNoConfiguration;
+         i = next_configuration_for_row_[i]) {
+      if (configurations_[i] == normalized) {
+        return i;
+      }
+    }
+    if (configurations_.size() >= kMaxConfigurations) {
+      return std::nullopt;
+    }
+    const int32_t new_configuration_id = configurations_.size();
+    configurations_.push_back(std::move(normalized));
+    next_configuration_for_row_[new_configuration_id] =
+        first_configuration_for_row_[current_row_id];
+    first_configuration_for_row_[current_row_id] = new_configuration_id;
+    std::fill_n(transition_table_ + new_configuration_id * 256, 256, kEmpty);
+    return new_configuration_id;
+  }
+
+  void RecordMaterializedRow(int32_t row_id) {
+    const int32_t absolute_row = matcher_->rule_id_to_completable_states_.size() - 1;
+    absolute_rows_by_id_[row_id].push_back(absolute_row);
+  }
+
+  void MaterializeTransition(int32_t row_id, int32_t configuration_id) {
+    const int32_t current_row = matcher_->rule_id_to_completable_states_.size();
+    const auto& cached_row = rows_[row_id];
+    tmp_completable_states_.clear();
+    tmp_completable_states_.reserve(cached_row.entries.size());
+    for (const auto& [ref_rule_id, parent_state] : cached_row.entries) {
+      tmp_completable_states_.emplace_back(
+          ref_rule_id, MaterializeState(parent_state, current_row)
+      );
+    }
+
+    const auto& cached_configuration = configurations_[configuration_id];
+    XGRAMMAR_DCHECK(cached_configuration.current_row_id == row_id);
+    tmp_scanable_states_.clear();
+    tmp_scanable_states_.reserve(cached_configuration.scanable_states.size());
+    for (const auto& state : cached_configuration.scanable_states) {
+      tmp_scanable_states_.push_back(MaterializeState(state, current_row));
+    }
+
+    matcher_->rule_id_to_completable_states_.PushBack(tmp_completable_states_);
+    matcher_->is_completed_.push_back(cached_configuration.is_completed);
+    matcher_->scanable_state_history_.PushBack(tmp_scanable_states_);
+    matcher_->tmp_accept_stop_token_ = cached_configuration.is_completed;
+    matcher_->tmp_states_to_be_added_.clear();
+  }
+
+  void MaterializeVirtualPrefix() {
+    while (materialized_depth_ < transition_depth_) {
+      const uint16_t transition = transition_history_[materialized_depth_];
+      MaterializeTransition(DecodeRowId(transition), DecodeConfigurationId(transition));
+      RecordMaterializedRow(DecodeRowId(transition));
+      ++materialized_depth_;
+    }
+  }
+
+  void DisableAndMaterialize() {
+    MaterializeVirtualPrefix();
+    enabled_ = false;
+    current_transition_row_ = nullptr;
+  }
+
+  Impl* matcher_;
+  int32_t external_row_count_;
+  bool enabled_{true};
+  uint64_t queries_{0};
+  uint64_t hits_{0};
+  std::unique_ptr<uint16_t[]> owned_transition_table_;
+  uint16_t* transition_table_{nullptr};
+  bool uses_thread_local_scratch_{false};
+  uint16_t* current_transition_row_{nullptr};
+  std::vector<CanonicalRow> rows_;
+  std::vector<CanonicalConfiguration> configurations_;
+  static constexpr int16_t kNoConfiguration = -1;
+  std::array<int16_t, kMaxRows> first_configuration_for_row_;
+  std::array<int16_t, kMaxConfigurations> next_configuration_for_row_;
+  std::vector<std::vector<int32_t>> absolute_rows_by_id_;
+  std::array<uint16_t, kMaxVirtualDepth> transition_history_;
+  size_t transition_depth_{0};
+  size_t materialized_depth_{0};
+  std::vector<std::pair<int32_t, ParserState>> tmp_completable_states_;
+  std::vector<ParserState> tmp_scanable_states_;
+};
+
+std::optional<GrammarMatcher::Impl::CharacterClassRepeat>
+GrammarMatcher::Impl::GetCharacterClassRepeat(const ParserState& state) const {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  if (!repeat_mask_cache_enabled_ || state.rule_id < 0 || state.sub_element_id != 0 ||
+      state.rule_id >= static_cast<int32_t>(compiled_grammar_->rule_level_cacheable.size()) ||
+      !compiled_grammar_->rule_level_cacheable[state.rule_id] || state.partial_codepoint != 0 ||
+      state.rule_start_pos < 0 ||
+      state.rule_start_pos >= static_cast<int32_t>(rule_id_to_completable_states_.size()) ||
+      state.element_id != grammar_->per_rule_fsms[state.rule_id]->GetFsm().GetStart()) {
+    return std::nullopt;
+  }
+
+  const auto& body = grammar_->GetGrammarExpr(grammar_->GetRule(state.rule_id).body_expr_id);
+  if (body.type != GrammarExprType::kChoices || body.size() != 1) {
+    return std::nullopt;
+  }
+  const auto& sequence = grammar_->GetGrammarExpr(body[0]);
+  if (sequence.type != GrammarExprType::kSequence || sequence.size() != 1 ||
+      grammar_->GetGrammarExpr(sequence[0]).type != GrammarExprType::kCharacterClass) {
+    return std::nullopt;
+  }
+
+  const int32_t max_token_characters = tokenizer_info_.ImplPtr()->GetMaxTokenChars();
+  for (const auto& [completed_rule_id, parent] :
+       rule_id_to_completable_states_[state.rule_start_pos]) {
+    if (completed_rule_id != state.rule_id || parent.rule_id < 0) {
+      continue;
+    }
+    for (const auto& edge : grammar_->complete_fsm.GetEdges(parent.element_id)) {
+      if (!edge.IsRepeatRef()) {
+        continue;
+      }
+      const auto repeat = grammar_->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+      if (repeat.RuleId() != state.rule_id) {
+        continue;
+      }
+      const int32_t remaining =
+          repeat.Upper() == -1 ? max_token_characters : repeat.Upper() - parent.repeat_count;
+      if (remaining > 0) {
+        return CharacterClassRepeat{
+            sequence[0],
+            std::min(remaining, max_token_characters),
+            parent,
+            repeat.Lower(),
+            repeat.Upper() == -1 || remaining >= max_token_characters
+        };
+      }
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetStableCharacterClassRepeatMaskKey(
+    const std::vector<ParserState>& states
+) const {
+  if (!repeat_mask_cache_enabled_) {
+    return std::nullopt;
+  }
+  std::vector<int32_t> key;
+  key.reserve(states.size() * 12 + 2);
+  key.push_back(static_cast<int32_t>(states.size()));
+  key.push_back(IsCompleted());
+  bool found_repeat = false;
+  for (const auto& state : states) {
+    if (state.rule_id < 0 ||
+        state.rule_id >= static_cast<int32_t>(compiled_grammar_->rule_level_cacheable.size()) ||
+        !compiled_grammar_->rule_level_cacheable[state.rule_id]) {
+      return std::nullopt;
+    }
+    if (auto repeat = GetCharacterClassRepeat(state);
+        repeat.has_value() && repeat->has_stable_upper &&
+        repeat->parent.repeat_count >= repeat->lower) {
+      const auto& parent = repeat->parent;
+      found_repeat = true;
+      key.insert(
+          key.end(),
+          {1,
+           state.rule_id,
+           state.sequence_id,
+           state.element_id,
+           state.sub_element_id,
+           state.partial_codepoint,
+           parent.rule_id,
+           parent.sequence_id,
+           parent.element_id,
+           parent.rule_start_pos,
+           parent.sub_element_id,
+           parent.partial_codepoint}
+      );
+    } else {
+      key.insert(
+          key.end(),
+          {0,
+           state.rule_id,
+           state.sequence_id,
+           state.element_id,
+           state.rule_start_pos,
+           state.budget_deadline,
+           state.sub_element_id,
+           state.repeat_count,
+           state.partial_codepoint,
+           state.active_temperature_rule_id,
+           state.char_budget_deadline}
+      );
+    }
+  }
+  return found_repeat ? std::optional<std::vector<int32_t>>(std::move(key)) : std::nullopt;
+}
 
 class BatchGrammarMatcher::Impl {
  public:
@@ -915,11 +1457,11 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
     Complete(state, debug_print, /*marker_present=*/false);
   }
   while (!tmp_process_state_queue_.empty()) {
-    const auto state = std::move(tmp_process_state_queue_.front());
+    const ParserState* state = tmp_process_state_queue_.front();
     tmp_process_state_queue_.pop();
-    auto [scanable, completable] = Predict(state, debug_print);
+    auto [scanable, completable] = Predict(*state, debug_print);
     if (completable) {
-      Complete(state, debug_print);
+      Complete(*state, debug_print);
     }
     if (scanable) {
       tmp_states_to_be_added_.push_back(state);
@@ -932,7 +1474,7 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
   bool any_expired = false;
   bool any_alive = false;
   for (const auto& state : tmp_states_to_be_added_) {
-    if (IsExpiredState(state)) {
+    if (IsExpiredState(*state)) {
       any_expired = true;
     } else {
       any_alive = true;
@@ -946,7 +1488,7 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
         std::remove_if(
             tmp_states_to_be_added_.begin(),
             tmp_states_to_be_added_.end(),
-            [&](const ParserState& state) { return IsExpiredState(state); }
+            [&](const ParserState* state) { return IsExpiredState(*state); }
         ),
         tmp_states_to_be_added_.end()
     );
@@ -957,7 +1499,7 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
     return false;
   }
   scanable_state_history_.PopBack(1);
-  scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  scanable_state_history_.PushBackIndirect(tmp_states_to_be_added_);
   is_completed_.back() = tmp_accept_stop_token_;
   return true;
 }
@@ -1002,11 +1544,11 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
     Complete(state, debug_print, /*marker_present=*/false);
   }
   while (!tmp_process_state_queue_.empty()) {
-    const auto state = std::move(tmp_process_state_queue_.front());
+    const ParserState* state = tmp_process_state_queue_.front();
     tmp_process_state_queue_.pop();
-    auto [scanable, completable] = Predict(state, debug_print);
+    auto [scanable, completable] = Predict(*state, debug_print);
     if (completable) {
-      Complete(state, debug_print);
+      Complete(*state, debug_print);
     }
     if (scanable) {
       tmp_states_to_be_added_.push_back(state);
@@ -1019,7 +1561,7 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
   bool any_expired = false;
   bool any_alive = false;
   for (const auto& state : tmp_states_to_be_added_) {
-    if (IsCharExpiredState(state)) {
+    if (IsCharExpiredState(*state)) {
       any_expired = true;
     } else {
       any_alive = true;
@@ -1030,7 +1572,7 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
         std::remove_if(
             tmp_states_to_be_added_.begin(),
             tmp_states_to_be_added_.end(),
-            [&](const ParserState& state) { return IsCharExpiredState(state); }
+            [&](const ParserState* state) { return IsCharExpiredState(*state); }
         ),
         tmp_states_to_be_added_.end()
     );
@@ -1047,7 +1589,7 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
     return false;
   }
   scanable_state_history_.PopBack(1);
-  scanable_state_history_.PushBack(tmp_states_to_be_added_);
+  scanable_state_history_.PushBackIndirect(tmp_states_to_be_added_);
   is_completed_.back() = tmp_accept_stop_token_;
   return true;
 }
@@ -1832,15 +2374,31 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 ) {
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
-  const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
   // We need to have a copy, because scanable_state_history_ will be modified during the
   // FillNextTokenBitmask process, which can lead to undefined behavior.
-  std::vector<ParserState> latest_states;
+  auto& latest_states = tmp_latest_states_;
+  latest_states.clear();
   for (const auto& state : scanable_state_history_[scanable_state_history_.size() - 1]) {
     if (skip_expired && IsExpiredState(state)) {
       continue;
     }
     latest_states.push_back(state);
+  }
+
+  const auto repeat_mask_key = GetStableCharacterClassRepeatMaskKey(latest_states);
+  if (repeat_mask_key.has_value()) {
+    const auto cached = std::find_if(
+        repeat_mask_cache_.begin(),
+        repeat_mask_cache_.end(),
+        [&](const RepeatMaskCacheEntry& entry) { return entry.key == *repeat_mask_key; }
+    );
+    if (cached != repeat_mask_cache_.end()) {
+      DynamicBitset output(
+          tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
+      );
+      output = cached->mask;
+      return;
+    }
   }
 
   // We check all the latest states of the earley parser, and check all the masks of the leaf
@@ -1858,13 +2416,22 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                        << ", num of states=" << latest_states.size();
   }
 
-  std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
-      latest_states_with_masks;
+  auto& latest_states_with_masks = tmp_latest_states_with_masks_;
+  latest_states_with_masks.clear();
 
   for (const auto& state : latest_states) {
-    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
-    XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+    const auto repeat = GetCharacterClassRepeat(state);
+    const CharacterClassRepeatTokenMask* repeat_token_mask =
+        repeat.has_value() ? &compiled_grammar_->GetCharacterClassRepeatTokenMask(
+                                 repeat->character_class_expr_id,
+                                 repeat->has_stable_upper ? -1 : repeat->max_characters
+                             )
+                           : nullptr;
+    const AdaptiveTokenMask& adaptive_token_mask =
+        repeat_token_mask != nullptr ? repeat_token_mask->adaptive_token_mask
+                                     : compiled_grammar_->GetAdaptiveTokenMask(
+                                           state, state.rule_id == grammar_->GetRootRuleId()
+                                       );
     if (state.char_budget_deadline >= 0) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
@@ -1872,7 +2439,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         continue;
       }
     }
-    latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
+    latest_states_with_masks.emplace_back(state, &adaptive_token_mask);
     if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
       tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
     } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
@@ -1880,10 +2447,13 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
       }
     }
+    if (repeat_token_mask != nullptr) {
+      tmp_accepted_bitset_ |= repeat_token_mask->accepted_prefix_tokens;
+    }
   }
 
-  for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+  for (const auto& [state, adaptive_token_mask_ptr] : latest_states_with_masks) {
+    const auto& adaptive_token_mask = *adaptive_token_mask_ptr;
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
     // rejected list.
@@ -1903,6 +2473,13 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       atomic_trial_base->capture_recording_ = false;
     }
     PushOneStateToCheck(state);
+    std::optional<ContinuationTransitionCache> continuation_cache;
+    constexpr size_t kMinUncertainTokensForContinuationCache = 128;
+    if (!has_budget_rules_ && !has_char_budget_rules_ && !capture_tracking_ &&
+        adaptive_token_mask.store_type != StoreType::kRejected &&
+        adaptive_token_mask.uncertain_indices.size() >= kMinUncertainTokensForContinuationCache) {
+      continuation_cache.emplace(this);
+    }
     bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
     int32_t saved_temporary_input_start_row = -1;
     std::string saved_temporary_input_bytes;
@@ -1950,7 +2527,11 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
           last_rejected_uncertain_range = subtree_range[cur_token_idx];
           accepted = false;
         } else if (lcp_len < prev_matched_size) {
-          PopLastStates(prev_matched_size - lcp_len);
+          if (continuation_cache) {
+            continuation_cache->PopLastStates(prev_matched_size - lcp_len);
+          } else {
+            PopLastStates(prev_matched_size - lcp_len);
+          }
           if (track_temporary_input) {
             temporary_input_bytes_.resize(lcp_len);
           }
@@ -1961,7 +2542,9 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       // Step 2.2. Find if the current token is accepted or rejected.
       if (accepted) {
         for (int j = prev_matched_size; j < static_cast<int>(cur_token.size()); ++j) {
-          bool byte_accepted = has_char_budget_rules_
+          bool byte_accepted = continuation_cache
+                                   ? continuation_cache->Advance(static_cast<uint8_t>(cur_token[j]))
+                               : has_char_budget_rules_
                                    ? AdvanceWithCharacterBudget(static_cast<uint8_t>(cur_token[j]))
                                    : Advance(static_cast<uint8_t>(cur_token[j]));
           if (!byte_accepted) {
@@ -2007,7 +2590,11 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       prev_token = &cur_token;
     }
 
-    PopLastStates(prev_matched_size + 1);
+    if (continuation_cache) {
+      continuation_cache->PopLastStates(prev_matched_size + 1);
+    } else {
+      PopLastStates(prev_matched_size + 1);
+    }
     if (track_temporary_input) {
       temporary_input_start_row_ = saved_temporary_input_start_row;
       temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
@@ -2020,6 +2607,17 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       IntsetUnion(&tmp_rejected_indices_delta_, adaptive_token_mask.rejected_indices);
       IntsetIntersection(&tmp_rejected_indices_, tmp_rejected_indices_delta_);
     }
+    if (debug_print && continuation_cache) {
+      const double hit_rate =
+          continuation_cache->Queries() == 0
+              ? 0.0
+              : static_cast<double>(continuation_cache->Hits()) / continuation_cache->Queries();
+      XGRAMMAR_LOG(INFO) << "ContinuationTransitionCache(queries=" << continuation_cache->Queries()
+                         << ", hits=" << continuation_cache->Hits() << ", hit_rate=" << hit_rate
+                         << ", rows=" << continuation_cache->CanonicalRows()
+                         << ", configurations=" << continuation_cache->CanonicalConfigurations()
+                         << ", enabled=" << continuation_cache->IsEnabled() << ")";
+    }
   }
 
   // Finally update the rejected_ids bitset
@@ -2027,6 +2625,15 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   SetTokenBitmask(
       bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end, false
   );
+  constexpr size_t kMaxRepeatMaskCacheEntries = 32;
+  if (repeat_mask_key.has_value() && repeat_mask_cache_.size() < kMaxRepeatMaskCacheEntries) {
+    DynamicBitset output(
+        tokenizer_info_.GetVocabSize(), reinterpret_cast<uint32_t*>(bitmask_data_ptr)
+    );
+    DynamicBitset owned_mask(tokenizer_info_.GetVocabSize());
+    owned_mask = output;
+    repeat_mask_cache_.push_back(RepeatMaskCacheEntry{*repeat_mask_key, std::move(owned_mask)});
+  }
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }

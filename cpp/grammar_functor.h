@@ -17,6 +17,7 @@
 #include "compiled_grammar_impl.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
+#include "regex_fsm_cache.h"
 #include "support/utils.h"
 #include "xgrammar/grammar.h"
 
@@ -445,6 +446,10 @@ class RepetitionRangeExpander {
 class GrammarOptimizer {
  public:
   static Grammar Apply(const Grammar& grammar);
+  static Grammar Apply(const Grammar& grammar, bool expand_repetition_ranges);
+  static Grammar Apply(
+      const Grammar& grammar, bool expand_repetition_ranges, RegexFSMCache* regex_fsm_cache
+  );
 };
 
 /*!

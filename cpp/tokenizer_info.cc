@@ -326,11 +326,19 @@ TokenizerInfo::Impl::Impl(
 
 void TokenizerInfo::Impl::BuildTokenCharData() {
   token_char_counts_.assign(sorted_decoded_vocab_.size(), 0);
+  ascii_string_safe_indices_.clear();
+  ascii_string_safe_indices_.reserve(sorted_decoded_vocab_.size() / 2);
   int32_t max_chars = 0;
   for (int32_t index = 0; index < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++index) {
     int32_t count = 0;
-    for (uint8_t byte : sorted_decoded_vocab_[index].second) {
+    const auto& token = sorted_decoded_vocab_[index].second;
+    for (uint8_t byte : token) {
       count += (byte & 0xC0) != 0x80;
+    }
+    if (!token.empty() && std::all_of(token.begin(), token.end(), [](uint8_t byte) {
+          return byte >= 0x20 && byte < 0x7f && byte != '"' && byte != '\\';
+        })) {
+      ascii_string_safe_indices_.push_back(index);
     }
     token_char_counts_[index] = count;
     max_chars = std::max(max_chars, count);

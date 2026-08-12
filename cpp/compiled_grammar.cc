@@ -45,6 +45,20 @@ AdaptiveTokenMask::AdaptiveTokenMask(
 }
 
 AdaptiveTokenMask::AdaptiveTokenMask(
+    const DynamicBitset& base_accepted_bitset,
+    const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
+    const std::vector<int32_t>& additional_accepted_indices,
+    const std::vector<int32_t>& uncertain_indices
+)
+    : store_type(StoreType::kAcceptedBitset),
+      accepted_bitset(base_accepted_bitset),
+      uncertain_indices(uncertain_indices) {
+  for (int32_t index : additional_accepted_indices) {
+    accepted_bitset.Set(sorted_decoded_vocab[index].first, true);
+  }
+}
+
+AdaptiveTokenMask::AdaptiveTokenMask(
     size_t vocab_size,
     const std::vector<std::pair<int32_t, std::string>>& sorted_decoded_vocab,
     const std::vector<int32_t>& accepted_indices,
@@ -206,7 +220,13 @@ std::optional<SerializationError> DeserializeJSONValue(
 /************** CompiledGrammar **************/
 
 std::size_t MemorySize(const CompiledGrammar::Impl& impl) {
-  return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache);
+  std::lock_guard<std::mutex> lock(impl.adaptive_token_mask_cache_mutex);
+  return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache) +
+         MemorySize(impl.tag_dispatch_rule_id_to_second_slicing_bitset) +
+         MemorySize(impl.rule_level_cacheable) +
+         (impl.earley_parser_grammar_features == nullptr
+              ? 0
+              : MemorySize(*impl.earley_parser_grammar_features));
 }
 
 std::size_t CompiledGrammar::MemorySizeBytes() const { return MemorySize(*pimpl_); }
@@ -216,7 +236,12 @@ Grammar CompiledGrammar::GetGrammar() const { return pimpl_->GetGrammar(); }
 TokenizerInfo CompiledGrammar::GetTokenizerInfo() const { return pimpl_->GetTokenizerInfo(); }
 
 /*! \brief Return the serialized JSON string of the compiled grammar. */
-std::string CompiledGrammar::SerializeJSON() const { return AutoSerializeJSON(*this, true); }
+std::string CompiledGrammar::SerializeJSON() const {
+  if (pimpl_->enable_dynamic_compilation) {
+    pimpl_->MaterializeAdaptiveTokenMaskCache();
+  }
+  return AutoSerializeJSON(*this, true);
+}
 
 /*! \brief Deserialize a compiled grammar from a JSON string and tokenizer info. */
 std::variant<CompiledGrammar, SerializationError> CompiledGrammar::DeserializeJSON(

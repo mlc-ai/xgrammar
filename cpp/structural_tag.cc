@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 #include "grammar_builder.h"
@@ -1804,7 +1805,12 @@ bool StructuralTagGrammarConverter::IsPrefix(
 Result<Grammar, ISTError> StructuralTagGrammarConverter::Convert(const StructuralTag& structural_tag
 ) {
   StructuralTagGrammarConverter converter;
-  auto result = converter.Visit(structural_tag.format);
+  // The root format is visited exactly once, so fingerprinting the entire format tree cannot
+  // produce a cache hit. Nested formats still go through Visit() and retain deduplication.
+  auto result = std::visit(
+      [&](const auto& format) -> Result<int, ISTError> { return converter.VisitSub(format); },
+      structural_tag.format
+  );
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
   }
@@ -1822,7 +1828,28 @@ Grammar StructuralTagGrammarConverter::AddRootRuleAndGetGrammar(int ref_rule_id)
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::Visit(const Format& format) {
-  std::string fingerprint = FormatToJSONValue(format).serialize();
+  std::string fingerprint = std::visit(
+      [](const auto& value) {
+        using T = std::decay_t<decltype(value)>;
+        if constexpr (std::is_same_v<T, JSONSchemaFormat>) {
+          // ParseStructuralTag already canonicalizes json_schema. Reusing that representation
+          // avoids reparsing it solely to build the converter's deduplication key.
+          std::string result = "json_schema\n" + value.style + "\n";
+          result.push_back(value.any_order ? '1' : '0');
+          result.push_back('\n');
+          result.append(
+              value.max_whitespace_cnt.has_value() ? std::to_string(*value.max_whitespace_cnt)
+                                                   : std::string("null")
+          );
+          result.push_back('\n');
+          result.append(value.json_schema);
+          return result;
+        } else {
+          return value.ToJSON().serialize();
+        }
+      },
+      format
+  );
 
   // Check if we've already processed an identical format
   auto it = serialization_to_rule_id_.find(fingerprint);

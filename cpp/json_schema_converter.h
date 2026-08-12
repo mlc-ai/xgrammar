@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "grammar_builder.h"
+#include "regex_fsm_cache.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -215,21 +216,45 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format);
 class GenerateCacheManager {
  public:
   /*! \brief Add a key-value pair to the cache. */
-  void AddCache(const std::string& key, bool is_inner_layer, int32_t rule_id) {
-    cache_[{key, is_inner_layer}] = rule_id;
+  void AddCache(
+      const std::string& key, int format_context, int64_t indentation_context, int32_t rule_id
+  ) {
+    cache_[key][{format_context, indentation_context}] = rule_id;
   }
 
   /*! \brief Get cached rule id by key. Returns std::nullopt if not found. */
-  std::optional<int32_t> GetCache(const std::string& key, bool is_inner_layer) const {
-    auto it = cache_.find({key, is_inner_layer});
-    if (it != cache_.end()) {
-      return it->second;
+  std::optional<int32_t> GetCache(
+      const std::string& key, int format_context, int64_t indentation_context
+  ) const {
+    auto key_it = cache_.find(key);
+    if (key_it == cache_.end()) {
+      return std::nullopt;
+    }
+    auto context_it = key_it->second.find({format_context, indentation_context});
+    if (context_it != key_it->second.end()) {
+      return context_it->second;
     }
     return std::nullopt;
   }
 
  private:
-  std::unordered_map<std::pair<std::string, bool>, int32_t> cache_;
+  struct Context {
+    int format;
+    int64_t indentation;
+
+    bool operator==(const Context& other) const {
+      return format == other.format && indentation == other.indentation;
+    }
+  };
+
+  struct ContextHash {
+    size_t operator()(const Context& context) const {
+      return HashCombine(context.format, context.indentation);
+    }
+  };
+
+  using ContextCache = std::unordered_map<Context, int32_t, ContextHash>;
+  std::unordered_map<std::string, ContextCache> cache_;
 };
 
 /*!
@@ -251,6 +276,9 @@ class IndentManager {
   std::string EndSeparator();
   std::string EmptySeparator();
   std::string NextSeparator(bool is_end = false);
+  int64_t GetCacheContext() const {
+    return any_whitespace_ || !enable_newline_ ? 0 : total_indent_;
+  }
 
  private:
   bool any_whitespace_;
@@ -281,7 +309,8 @@ class JSONSchemaConverter {
       bool any_whitespace,
       std::optional<int> max_whitespace_cnt,
       RefResolver ref_resolver = nullptr,
-      bool any_order = false
+      bool any_order = false,
+      RegexFSMCache* regex_fsm_cache = nullptr
   );
 
   virtual ~JSONSchemaConverter() = default;
@@ -351,10 +380,17 @@ class JSONSchemaConverter {
   void AddBasicRules(const std::vector<std::string>& additional_rule_names);
 
   /*! \brief Add a key-value pair to the generation cache. Override for custom cache behavior. */
-  virtual void AddCache(const std::string& key, int32_t rule_id);
+  virtual void AddCache(
+      const std::string& key, int32_t rule_id, bool indentation_sensitive = false
+  );
 
   /*! \brief Get cached value by key. Returns std::nullopt if not found. */
-  virtual std::optional<int32_t> GetCache(const std::string& key) const;
+  virtual std::optional<int32_t> GetCache(
+      const std::string& key, bool indentation_sensitive = false
+  ) const;
+
+  /*! \brief Whether a schema's grammar depends on the current indentation depth. */
+  bool IsIndentationSensitive(const SchemaSpecPtr& spec) const;
 
   // ==================== Helper methods (for subclasses to use) ====================
 
@@ -442,6 +478,9 @@ class JSONSchemaConverter {
   // Applies to all objects (including nested ones). Default false preserves the fixed-order
   // behavior.
   bool any_order_ = false;
+  // Optional cache owned by the caller. It lets grammar optimization reuse the automata built
+  // here to validate regex-backed schema constraints.
+  RegexFSMCache* regex_fsm_cache_ = nullptr;
 
  public:
   // Basic rule names
@@ -464,6 +503,7 @@ class JSONSchemaConverter {
 
   std::unordered_map<std::string, int32_t> uri_to_rule_id_;  // For circular reference handling
   RefResolver ref_resolver_;  // Resolves $ref URI to SchemaSpecPtr at generate time
+  mutable std::unordered_map<SchemaSpecPtr, bool> indentation_sensitivity_cache_;
 
   // Trie over property names, for key patterns that exclude specific properties
   struct TrieNode {
@@ -476,6 +516,7 @@ class JSONSchemaConverter {
   std::optional<int32_t> empty_expr_id_;
   std::unordered_map<std::string, int32_t> byte_string_expr_ids_;
   std::unordered_map<int32_t, int32_t> rule_ref_expr_ids_;
+  std::unordered_map<std::string, int32_t> regex_expr_ids_;
   std::optional<int32_t> whitespace_expr_id_;
 
   // Helper for integer/number range regex generation
@@ -516,7 +557,8 @@ Grammar JSONSchemaToGrammar(
     bool strict_mode = true,
     std::optional<int> max_whitespace_cnt = std::nullopt,
     bool any_order = false,
-    JSONFormat json_format = JSONFormat::kJSON
+    JSONFormat json_format = JSONFormat::kJSON,
+    RegexFSMCache* regex_fsm_cache = nullptr
 );
 
 // ==================== Public API functions (backward compatible) ====================
