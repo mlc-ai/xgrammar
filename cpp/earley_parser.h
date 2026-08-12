@@ -543,13 +543,16 @@ class EarleyParser {
   }
 
   /*! \brief Whether completion under equal or tighter deadlines can advance the parent. */
-  static bool IsCompletionCompatibleWithParent(
+  bool IsCompletionCompatibleWithParent(
       const ParserState& completed_state, const ParserState& parent_state
-  ) {
-    return (parent_state.budget_deadline < 0 ||
+  ) const {
+    if (!has_budget_rules_ && !has_char_budget_rules_) {
+      return true;
+    }
+    return (!has_budget_rules_ || parent_state.budget_deadline < 0 ||
             (completed_state.budget_deadline >= 0 &&
              completed_state.budget_deadline <= parent_state.budget_deadline)) &&
-           (parent_state.char_budget_deadline < 0 ||
+           (!has_char_budget_rules_ || parent_state.char_budget_deadline < 0 ||
             (completed_state.char_budget_deadline >= 0 &&
              completed_state.char_budget_deadline <= parent_state.char_budget_deadline));
   }

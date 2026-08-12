@@ -475,6 +475,7 @@ class GrammarMatcher::Impl : public EarleyParser {
         compiled_grammar_(compiled_grammar),
         tokenizer_info_(compiled_grammar->tokenizer_info),
         stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
+        active_stop_tokens_are_tokenizer_defaults_(!override_stop_tokens.has_value()),
         terminate_without_stop_token_(terminate_without_stop_token),
         default_temperature_(default_temperature),
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
@@ -721,6 +722,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   CompiledGrammar compiled_grammar_;
   TokenizerInfo tokenizer_info_;
   std::vector<int> stop_token_ids_;
+  bool active_stop_tokens_are_tokenizer_defaults_;
   bool terminate_without_stop_token_;
   std::optional<float> default_temperature_;
   mutable bool has_warned_temperature_conflict_ = false;
@@ -3120,11 +3122,17 @@ void GrammarMatcher::Impl::SetTokenBitmask(
   // overridden they must not leak through an all-true mask as ordinary tokens. Conversely, an
   // override can name a normal or special token that the grammar mask rejected, so apply the
   // active stop-token policy after constructing either mask representation.
-  for (int id : tokenizer_info_.GetStopTokenIds()) {
-    next_token_bitset.Set(id, false);
-  }
-  for (int id : stop_token_ids_) {
-    next_token_bitset.Set(id, can_reach_end);
+  if (active_stop_tokens_are_tokenizer_defaults_) {
+    for (int id : stop_token_ids_) {
+      next_token_bitset.Set(id, can_reach_end);
+    }
+  } else {
+    for (int id : tokenizer_info_.GetStopTokenIds()) {
+      next_token_bitset.Set(id, false);
+    }
+    for (int id : stop_token_ids_) {
+      next_token_bitset.Set(id, can_reach_end);
+    }
   }
 }
 
