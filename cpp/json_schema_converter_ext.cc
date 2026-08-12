@@ -558,6 +558,11 @@ std::optional<std::vector<SchemaSpecPtr>> CohereXMLToolCallingConverter::GetCohe
           return spec.options;
         } else if constexpr (std::is_same_v<T, OneOfSpec>) {
           return spec.options;
+        } else if constexpr (std::is_same_v<T, AllOfSpec>) {
+          if (spec.schemas.size() == 1) {
+            return spec.schemas;
+          }
+          return std::nullopt;
         } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
           return spec.type_schemas;
         } else if constexpr (std::is_same_v<T, EnumSpec>) {
@@ -630,7 +635,7 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParam(
         CreateRule(option, value_rule_name + "_cohere_case_" + std::to_string(index));
     choices.push_back(FormatCohereParam(name, key_pattern_expr, option, option_rule_id));
   }
-  return Choice(choices);
+  return choices.size() == 1 ? choices[0] : Choice(choices);
 }
 
 int32_t CohereXMLToolCallingConverter::GenerateString(

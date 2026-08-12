@@ -621,6 +621,17 @@ def test_json_schema_style_cohere_xml_nested_values():
             '<cofl:value name="value" type="dict">123</cofl:value>',
             False,
         ),
+        # Single-schema allOf is transparent and uses its child schema's type handling.
+        pytest.param(
+            {"allOf": [{"type": "string"}]},
+            '<cofl:value name="value" type="raw">hello</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"allOf": [{"type": "string"}]},
+            '<cofl:value name="value" type="json">hello</cofl:value>',
+            False,
+        ),
     ],
 )
 def test_json_schema_style_cohere_xml_type_correlation(

@@ -1889,6 +1889,64 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value name="value" type="dict">123</cofl:value>',
         False,
     ),
+    # Single-schema allOf is transparent and uses the child schema's Cohere type.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"allOf": [{"type": "string"}]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="raw">hello</cofl:value>',
+        True,
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"allOf": [{"type": "string"}]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="json">hello</cofl:value>',
+        False,
+    ),
+    # Single-schema allOf around a composite still reuses the child branch correlation.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {
+                "value": {"allOf": [{"anyOf": [{"type": "string"}, {"type": "integer"}]}]}
+            },
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="raw">hello</cofl:value>',
+        True,
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {
+                "value": {"allOf": [{"anyOf": [{"type": "string"}, {"type": "integer"}]}]}
+            },
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="json">123</cofl:value>',
+        True,
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {
+                "value": {"allOf": [{"anyOf": [{"type": "string"}, {"type": "integer"}]}]}
+            },
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="dict">123</cofl:value>',
+        False,
+    ),
     # additionalProperties uses its composite schema for dynamic-key wrapper branches.
     pytest.param(
         {
