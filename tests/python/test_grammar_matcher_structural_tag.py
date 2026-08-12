@@ -628,5 +628,242 @@ def test_tag_dispatch_perf(ebnf, input_str):
     print(f"Accept token: avg={statistics.mean(flat_accept):.2f} us, max={max(flat_accept):.2f} us")
 
 
+# ---------- AnyTextFormat / AnyTokensFormat length budgets ----------
+
+_LENGTH_BUDGET_VOCAB = ["<think>", "a", "b", "c", "de", "中", "a</", "</", "think>", "<eos>"]
+
+
+def _budget_token_id(token: str) -> int:
+    return _LENGTH_BUDGET_VOCAB.index(token)
+
+
+def _compile_any_text_budget(
+    *, max_tokens=None, max_chars=None, compiler=None, cache_enabled=False
+):
+    tokenizer_info = xgr.TokenizerInfo(
+        _LENGTH_BUDGET_VOCAB, stop_token_ids=[_budget_token_id("<eos>")]
+    )
+    compiler = compiler or xgr.GrammarCompiler(tokenizer_info, cache_enabled=cache_enabled)
+    content = {"type": "any_text", "excludes": ["</think>"]}
+    if max_tokens is not None:
+        content["max_tokens"] = max_tokens
+    if max_chars is not None:
+        content["max_chars"] = max_chars
+    structural_tag = {
+        "type": "structural_tag",
+        "format": {"type": "tag", "begin": "<think>", "content": content, "end": "</think>"},
+    }
+    return tokenizer_info, compiler.compile_structural_tag(structural_tag)
+
+
+def _budget_accepts(compiled, *tokens: str) -> bool:
+    matcher = xgr.GrammarMatcher(compiled)
+    for token in tokens:
+        bitmask = xgr.allocate_token_bitmask(1, len(_LENGTH_BUDGET_VOCAB))
+        matcher.fill_next_token_bitmask(bitmask)
+        rejected = _get_masked_tokens_from_bitmask(bitmask, len(_LENGTH_BUDGET_VOCAB))
+        if _budget_token_id(token) in rejected:
+            return False
+        if not matcher.accept_token(_budget_token_id(token)):
+            return False
+    return matcher.is_completed()
+
+
+def _budget_matcher_mask_allows(matcher, token: str) -> bool:
+    bitmask = xgr.allocate_token_bitmask(1, len(_LENGTH_BUDGET_VOCAB))
+    matcher.fill_next_token_bitmask(bitmask)
+    rejected = _get_masked_tokens_from_bitmask(bitmask, len(_LENGTH_BUDGET_VOCAB))
+    return _budget_token_id(token) not in rejected
+
+
+def _budget_mask_allows(compiled, prefix: List[str], token: str) -> bool:
+    matcher = xgr.GrammarMatcher(compiled)
+    for prefix_token in prefix:
+        assert matcher.accept_token(_budget_token_id(prefix_token))
+    bitmask = xgr.allocate_token_bitmask(1, len(_LENGTH_BUDGET_VOCAB))
+    matcher.fill_next_token_bitmask(bitmask)
+    rejected = _get_masked_tokens_from_bitmask(bitmask, len(_LENGTH_BUDGET_VOCAB))
+    return _budget_token_id(token) not in rejected
+
+
+def test_any_text_max_tokens_forces_multitoken_end():
+    _, compiled = _compile_any_text_budget(max_tokens=2)
+    assert _budget_accepts(compiled, "<think>", "a", "b", "</", "think>")
+    assert _budget_accepts(compiled, "<think>", "a", "</", "think>")
+    assert _budget_accepts(compiled, "<think>", "a", "a</", "think>")
+    assert not _budget_accepts(compiled, "<think>", "a", "b", "c", "</", "think>")
+    assert _budget_mask_allows(compiled, ["<think>", "a", "b"], "</")
+    assert not _budget_mask_allows(compiled, ["<think>", "a", "b"], "a")
+    assert not _budget_mask_allows(compiled, ["<think>", "a", "b"], "<eos>")
+
+
+def test_any_text_zero_token_budget_forces_immediate_end():
+    _, compiled = _compile_any_text_budget(max_tokens=0)
+    assert _budget_accepts(compiled, "<think>", "</", "think>")
+    assert _budget_mask_allows(compiled, ["<think>"], "</")
+    assert not _budget_mask_allows(compiled, ["<think>"], "a")
+
+    _, char_compiled = _compile_any_text_budget(max_chars=0)
+    assert _budget_accepts(char_compiled, "<think>", "</", "think>")
+    assert not _budget_mask_allows(char_compiled, ["<think>"], "a")
+
+
+def test_any_text_max_tokens_rollback_and_fork():
+    _, compiled = _compile_any_text_budget(max_tokens=2)
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_token(_budget_token_id("<think>"))
+    assert matcher.accept_token(_budget_token_id("a"))
+    forked = matcher.fork()
+
+    assert matcher.accept_token(_budget_token_id("b"))
+    assert not _budget_matcher_mask_allows(matcher, "c")
+    matcher.rollback(1)
+    assert _budget_matcher_mask_allows(matcher, "c")
+    assert matcher.accept_token(_budget_token_id("c"))
+
+    assert forked.accept_token(_budget_token_id("c"))
+    assert not _budget_matcher_mask_allows(forked, "b")
+
+
+def test_any_text_max_chars_counts_codepoints():
+    _, compiled = _compile_any_text_budget(max_chars=3)
+    end = ["</", "think>"]
+    assert _budget_accepts(compiled, "<think>", "de", "a", *end)
+    assert not _budget_accepts(compiled, "<think>", "de", "de", *end)
+    assert _budget_accepts(compiled, "<think>", "中", "中", "中", *end)
+    assert not _budget_accepts(compiled, "<think>", "中", "中", "中", "中", *end)
+    assert _budget_mask_allows(compiled, ["<think>", "a", "b"], "a")
+    assert not _budget_mask_allows(compiled, ["<think>", "a", "b"], "de")
+
+    grammar = compiled.grammar
+    assert _is_grammar_accept_string(grammar, "<think>中中中</think>")
+    assert not _is_grammar_accept_string(grammar, "<think>中中中中</think>")
+
+
+def test_any_text_token_and_character_budgets_combine():
+    _, compiled = _compile_any_text_budget(max_tokens=2, max_chars=3)
+    end = ["</", "think>"]
+    assert _budget_accepts(compiled, "<think>", "de", "a", *end)
+    assert not _budget_accepts(compiled, "<think>", "a", "b", "c", *end)
+    assert not _budget_accepts(compiled, "<think>", "de", "de", *end)
+
+
+def test_any_text_budgets_are_independent_per_format():
+    tokenizer_info = xgr.TokenizerInfo(
+        _LENGTH_BUDGET_VOCAB, stop_token_ids=[_budget_token_id("<eos>")]
+    )
+
+    def think_tag(max_tokens: int):
+        return {
+            "type": "tag",
+            "begin": "<think>",
+            "content": {"type": "any_text", "max_tokens": max_tokens},
+            "end": "</think>",
+        }
+
+    structural_tag = {
+        "type": "structural_tag",
+        "format": {"type": "sequence", "elements": [think_tag(1), think_tag(2)]},
+    }
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_structural_tag(
+        structural_tag
+    )
+    first = ["<think>", "a", "</", "think>"]
+    second = ["<think>", "a", "b", "</", "think>"]
+    assert _budget_accepts(compiled, *first, *second)
+    assert not _budget_accepts(compiled, *second, *first)
+
+
+def test_any_text_max_tokens_int32_does_not_overflow_after_prefix():
+    vocab = ["prefix", "<think>", "a", "</think>", "<eos>"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[4])
+    structural_tag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "sequence",
+            "elements": [
+                {"type": "const_string", "value": "prefix"},
+                {
+                    "type": "tag",
+                    "begin": "<think>",
+                    "content": {"type": "any_text", "max_tokens": 2**31 - 1},
+                    "end": "</think>",
+                },
+            ],
+        },
+    }
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_structural_tag(
+        structural_tag
+    )
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(1)
+    assert "budget_deadline=2147483647" in matcher._debug_print_internal_state()
+
+
+def test_any_tokens_max_tokens_forces_token_end():
+    vocab = ["<begin>", "x", "y", "<end>", "<eos>"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[4])
+    structural_tag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": {"type": "token", "token": 0},
+            "content": {"type": "any_tokens", "max_tokens": 2},
+            "end": {"type": "token", "token": 3},
+        },
+    }
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_structural_tag(
+        structural_tag
+    )
+
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(1)
+    assert matcher.accept_token(2)
+    bitmask = xgr.allocate_token_bitmask(1, len(vocab))
+    matcher.fill_next_token_bitmask(bitmask)
+    rejected = _get_masked_tokens_from_bitmask(bitmask, len(vocab))
+    assert 3 not in rejected
+    assert 1 in rejected and 2 in rejected and 4 in rejected
+    assert matcher.accept_token(3)
+    assert matcher.is_completed()
+
+    zero_budget_tag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": {"type": "token", "token": 0},
+            "content": {"type": "any_tokens", "max_tokens": 0},
+            "end": {"type": "token", "token": 3},
+        },
+    }
+    zero_compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_structural_tag(
+        zero_budget_tag
+    )
+    zero_matcher = xgr.GrammarMatcher(zero_compiled)
+    assert zero_matcher.accept_token(0)
+    zero_matcher.fill_next_token_bitmask(bitmask)
+    zero_rejected = _get_masked_tokens_from_bitmask(bitmask, len(vocab))
+    assert 3 not in zero_rejected
+    assert 1 in zero_rejected and 2 in zero_rejected
+
+
+def test_any_text_budget_cache_and_serialization_roundtrip():
+    tokenizer_info = xgr.TokenizerInfo(
+        _LENGTH_BUDGET_VOCAB, stop_token_ids=[_budget_token_id("<eos>")]
+    )
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=True)
+    _, unbounded = _compile_any_text_budget(compiler=compiler)
+    _, bounded = _compile_any_text_budget(max_tokens=2, compiler=compiler)
+
+    assert _budget_accepts(unbounded, "<think>", "a", "b", "c", "</", "think>")
+    assert not _budget_accepts(bounded, "<think>", "a", "b", "c", "</", "think>")
+
+    recovered = xgr.CompiledGrammar.deserialize_json(bounded.serialize_json(), tokenizer_info)
+    assert _budget_accepts(recovered, "<think>", "a", "b", "</", "think>")
+    assert not _budget_accepts(recovered, "<think>", "a", "b", "c", "</", "think>")
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
