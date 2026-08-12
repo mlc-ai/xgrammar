@@ -513,7 +513,30 @@ int32_t CohereXMLToolCallingConverter::GetCohereTypePattern(const SchemaSpecPtr&
   );
 }
 
-int32_t CohereXMLToolCallingConverter::FormatCohereParam(
+std::optional<std::vector<SchemaSpecPtr>> CohereXMLToolCallingConverter::GetCohereCompositeOptions(
+    const SchemaSpecPtr& schema
+) const {
+  if (schema == nullptr) {
+    return std::nullopt;
+  }
+  return std::visit(
+      [](const auto& spec) -> std::optional<std::vector<SchemaSpecPtr>> {
+        using T = std::decay_t<decltype(spec)>;
+        if constexpr (std::is_same_v<T, AnyOfSpec>) {
+          return spec.options;
+        } else if constexpr (std::is_same_v<T, OneOfSpec>) {
+          return spec.options;
+        } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
+          return spec.type_schemas;
+        } else {
+          return std::nullopt;
+        }
+      },
+      schema->spec
+  );
+}
+
+int32_t CohereXMLToolCallingConverter::FormatSingleCohereParam(
     const std::optional<std::string>& name,
     const std::optional<int32_t>& key_pattern_expr,
     const SchemaSpecPtr& schema,
@@ -537,6 +560,29 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParam(
   elements.push_back(FormatCohereValue(value_rule_id));
   elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
   return Sequence(elements);
+}
+
+int32_t CohereXMLToolCallingConverter::FormatCohereParam(
+    const std::optional<std::string>& name,
+    const std::optional<int32_t>& key_pattern_expr,
+    const SchemaSpecPtr& schema,
+    int32_t value_rule_id
+) {
+  auto options = GetCohereCompositeOptions(schema);
+  if (!options.has_value()) {
+    return FormatSingleCohereParam(name, key_pattern_expr, schema, value_rule_id);
+  }
+
+  std::vector<int32_t> choices;
+  choices.reserve(options->size());
+  const std::string& value_rule_name = builder_.GetRule(value_rule_id).name;
+  for (size_t index = 0; index < options->size(); ++index) {
+    const SchemaSpecPtr& option = (*options)[index];
+    int32_t option_rule_id =
+        CreateRule(option, value_rule_name + "_cohere_case_" + std::to_string(index));
+    choices.push_back(FormatCohereParam(name, key_pattern_expr, option, option_rule_id));
+  }
+  return Choice(choices);
 }
 
 int32_t CohereXMLToolCallingConverter::GenerateString(

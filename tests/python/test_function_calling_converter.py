@@ -1527,6 +1527,106 @@ def test_cohere_additional_properties_do_not_match_declared_keys():
     _check_cohere_grammar(schema, '<cofl:value name="foo" type="raw">wrong</cofl:value>', False)
 
 
+def test_cohere_anyof_correlates_type_with_branch():
+    """Cohere composite schemas choose the value tag type together with the branch body."""
+    schema = {
+        "type": "object",
+        "properties": {"value": {"anyOf": [{"type": "string"}, {"type": "integer"}]}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+
+    _check_cohere_grammar(schema, '<cofl:value name="value" type="raw">hello</cofl:value>', True)
+    _check_cohere_grammar(schema, '<cofl:value name="value" type="json">123</cofl:value>', True)
+    _check_cohere_grammar(schema, '<cofl:value name="value" type="dict">123</cofl:value>', False)
+    _check_cohere_grammar(schema, '<cofl:value name="value" type="list">hello</cofl:value>', False)
+
+
+def test_cohere_oneof_correlates_container_type_with_branch():
+    """Container branches use their matching Cohere dict/list tag types."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "value": {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "properties": {"id": {"type": "integer"}},
+                        "required": ["id"],
+                        "additionalProperties": False,
+                    },
+                    {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "minItems": 1,
+                        "maxItems": 1,
+                    },
+                ]
+            }
+        },
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    dict_value = (
+        '<cofl:value name="value" type="dict">'
+        '<cofl:value name="id" type="json">1</cofl:value>'
+        "</cofl:value>"
+    )
+    list_value = (
+        '<cofl:value name="value" type="list">'
+        '<cofl:value type="json">1</cofl:value>'
+        "</cofl:value>"
+    )
+
+    _check_cohere_grammar(schema, dict_value, True)
+    _check_cohere_grammar(schema, list_value, True)
+    _check_cohere_grammar(schema, dict_value.replace('type="dict"', 'type="list"', 1), False)
+    _check_cohere_grammar(schema, list_value.replace('type="list"', 'type="dict"', 1), False)
+
+
+def test_cohere_type_array_correlates_type_with_branch():
+    """JSON Schema type arrays get the same Cohere branch correlation as anyOf."""
+    schema = {
+        "type": "object",
+        "properties": {"value": {"type": ["string", "integer"]}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+
+    _check_cohere_grammar(schema, '<cofl:value name="value" type="raw">hello</cofl:value>', True)
+    _check_cohere_grammar(schema, '<cofl:value name="value" type="json">123</cofl:value>', True)
+    _check_cohere_grammar(schema, '<cofl:value name="value" type="dict">123</cofl:value>', False)
+
+
+def test_cohere_additional_properties_correlate_composite_type_with_branch():
+    """Dynamic Cohere properties use the additionalProperties schema for branch correlation."""
+    schema = {
+        "type": "object",
+        "properties": {"foo": {"type": "integer"}},
+        "required": ["foo"],
+        "additionalProperties": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+    }
+
+    _check_cohere_grammar(
+        schema,
+        '<cofl:value name="foo" type="json">1</cofl:value>'
+        '<cofl:value name="bar" type="raw">extra</cofl:value>',
+        True,
+    )
+    _check_cohere_grammar(
+        schema,
+        '<cofl:value name="foo" type="json">1</cofl:value>'
+        '<cofl:value name="bar" type="json">2</cofl:value>',
+        True,
+    )
+    _check_cohere_grammar(
+        schema,
+        '<cofl:value name="foo" type="json">1</cofl:value>'
+        '<cofl:value name="bar" type="dict">2</cofl:value>',
+        False,
+    )
+
+
 def test_cohere_additional_properties_support_nested_schema():
     """Additional Cohere properties can use complex nested schemas."""
     schema = {

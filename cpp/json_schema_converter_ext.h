@@ -189,8 +189,17 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
       const SchemaSpecPtr& schema,
       int32_t value_rule_id
   );
+  int32_t FormatSingleCohereParam(
+      const std::optional<std::string>& name,
+      const std::optional<int32_t>& key_pattern_expr,
+      const SchemaSpecPtr& schema,
+      int32_t value_rule_id
+  );
   int32_t FormatCohereValue(int32_t value_rule_id);
   int32_t GetCohereTypePattern(const SchemaSpecPtr& schema);
+  std::optional<std::vector<SchemaSpecPtr>> GetCohereCompositeOptions(
+      const SchemaSpecPtr& schema
+  ) const;
   int32_t BuildXMLIdentifierExcludingBody(
       const XMLIdentifierTrieNode& node, const std::string& rule_name, int depth
   );
