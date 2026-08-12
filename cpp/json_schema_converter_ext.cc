@@ -495,9 +495,7 @@ int32_t CohereXMLToolCallingConverter::FormatCohereValue(int32_t value_rule_id) 
   return Sequence({WhitespaceExpression(), RuleRef(value_rule_id), WhitespaceExpression()});
 }
 
-std::string CohereXMLToolCallingConverter::CohereTypeForJSONLiteral(
-    const std::string& json_value
-) {
+std::string CohereXMLToolCallingConverter::CohereTypeForJSONLiteral(const std::string& json_value) {
   picojson::value value;
   std::string error = picojson::parse(value, json_value);
   // Const/enum object and array literals are emitted as JSON text today, not recursive Cohere
@@ -576,9 +574,9 @@ std::optional<std::vector<SchemaSpecPtr>> CohereXMLToolCallingConverter::GetCohe
             const auto& json_value = spec.json_values[index];
             ConstSpec const_spec;
             const_spec.json_value = json_value;
-            options.push_back(SchemaSpec::Make(
-                std::move(const_spec), "", "enum_case_" + std::to_string(index)
-            ));
+            options.push_back(
+                SchemaSpec::Make(std::move(const_spec), "", "enum_case_" + std::to_string(index))
+            );
           }
           return options;
         } else {

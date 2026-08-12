@@ -203,8 +203,7 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   static std::optional<std::string> CommonCohereTypeForJSONLiterals(
       const std::vector<std::string>& json_values
   );
-  std::optional<std::vector<SchemaSpecPtr>> GetCohereCompositeOptions(
-      const SchemaSpecPtr& schema
+  std::optional<std::vector<SchemaSpecPtr>> GetCohereCompositeOptions(const SchemaSpecPtr& schema
   ) const;
   int32_t BuildXMLIdentifierExcludingBody(
       const XMLIdentifierTrieNode& node, const std::string& rule_name, int depth
