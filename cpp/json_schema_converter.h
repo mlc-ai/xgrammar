@@ -200,12 +200,13 @@ enum class JSONFormat : int {
   kDeepSeekXML = 3,
   kGlmXML = 4,
   kCohereXML = 5,
+  kKimiK3XML = 6,
 };
 
 /*!
  * \brief Convert a format name to JSONFormat.
  * \param format One of "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml",
- * "cohere_xml".
+ * "cohere_xml", or "kimi_k3_xml".
  * \return The corresponding JSONFormat, or std::nullopt if the name is not recognized.
  */
 std::optional<JSONFormat> JSONFormatFromString(const std::string& format);
@@ -321,20 +322,33 @@ class JSONSchemaConverter {
 
   // ==================== Hooks for customization ====================
 
-  /*! \brief Format a property key. Override for different formats. */
-  virtual int32_t FormatPropertyKey(const std::string& key);
+  /*!
+   * \brief Format a property key. Override for different formats.
+   * \param schema The schema of the property's value. Formats that encode the value's type
+   * next to the key (e.g. the Kimi-K3 `type` attribute) need it; the JSON format ignores it.
+   */
+  virtual int32_t FormatPropertyKey(const std::string& key, const SchemaSpecPtr& schema);
 
   /*! \brief Format a property (key + value). Override for different formats. */
   virtual int32_t FormatProperty(
-      const std::string& key, int32_t value_rule_id, const std::string& rule_name, int64_t idx
+      const std::string& key,
+      int32_t value_rule_id,
+      const std::string& rule_name,
+      int64_t idx,
+      const SchemaSpecPtr& schema
   );
 
-  /*! \brief Format an "other" property (additional/unevaluated). Override for different formats. */
+  /*!
+   * \brief Format an "other" property (additional/unevaluated). Override for different formats.
+   * \param schema The schema selected for the property's value, or nullptr when the dynamic key
+   * has no single schema. Formats that encode the value's type next to the key need it.
+   */
   virtual int32_t FormatOtherProperty(
       int32_t key_pattern_expr,
       int32_t value_rule_id,
       const std::string& rule_name,
-      const std::string& rule_name_suffix
+      const std::string& rule_name_suffix,
+      const SchemaSpecPtr& schema
   );
 
   /*! \brief Get the basic string rule name. Override for different formats. */
