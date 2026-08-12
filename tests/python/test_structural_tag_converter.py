@@ -545,6 +545,102 @@ def test_json_schema_style_cohere_xml_nested_values():
     check_stag_with_instance(stag_format, named_list_item, False)
 
 
+@pytest.mark.parametrize(
+    "json_schema, instance, is_accepted",
+    [
+        # Mixed enum accepts the raw string branch and JSON scalar branch, but not mismatched tags.
+        pytest.param(
+            {"enum": ["ready", 7]},
+            '<cofl:value name="value" type="raw">ready</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"enum": ["ready", 7]},
+            '<cofl:value name="value" type="json">7</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"enum": ["ready", 7]},
+            '<cofl:value name="value" type="json">ready</cofl:value>',
+            False,
+        ),
+        # anyOf accepts the string branch's raw tag and rejects unrelated container tags.
+        pytest.param(
+            {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+            '<cofl:value name="value" type="raw">hello</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+            '<cofl:value name="value" type="dict">123</cofl:value>',
+            False,
+        ),
+        # oneOf keeps object bodies paired with dict tags, not list tags.
+        pytest.param(
+            {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "properties": {"id": {"type": "integer"}},
+                        "required": ["id"],
+                        "additionalProperties": False,
+                    },
+                    {"type": "array", "items": {"type": "integer"}, "minItems": 1, "maxItems": 1},
+                ]
+            },
+            '<cofl:value name="value" type="dict">'
+            '<cofl:value name="id" type="json">1</cofl:value>'
+            "</cofl:value>",
+            True,
+        ),
+        pytest.param(
+            {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "properties": {"id": {"type": "integer"}},
+                        "required": ["id"],
+                        "additionalProperties": False,
+                    },
+                    {"type": "array", "items": {"type": "integer"}, "minItems": 1, "maxItems": 1},
+                ]
+            },
+            '<cofl:value name="value" type="list">'
+            '<cofl:value name="id" type="json">1</cofl:value>'
+            "</cofl:value>",
+            False,
+        ),
+        # JSON Schema type arrays accept the integer json branch and reject unrelated dict tags.
+        pytest.param(
+            {"type": ["string", "integer"]},
+            '<cofl:value name="value" type="json">123</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"type": ["string", "integer"]},
+            '<cofl:value name="value" type="dict">123</cofl:value>',
+            False,
+        ),
+    ],
+)
+def test_json_schema_style_cohere_xml_type_correlation(
+    json_schema: dict, instance: str, is_accepted: bool
+):
+    """Smoke-test Cohere type/body correlation through JSONSchemaFormat(style='cohere_xml')."""
+    stag_format = {
+        "type": "json_schema",
+        "json_schema": {
+            "type": "object",
+            "properties": {"value": json_schema},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        "style": "cohere_xml",
+    }
+
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
 # JSONSchemaFormat with style="kimi_k3_xml"
 # (<|open|>argument key="key" type="type"<|sep|>value<|close|>argument<|sep|>)
 #

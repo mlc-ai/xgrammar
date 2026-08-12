@@ -1545,7 +1545,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="raw">ready</cofl:value>',
         True,
-        id="const-string-raw",
     ),
     pytest.param(
         {
@@ -1556,7 +1555,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="json">ready</cofl:value>',
         False,
-        id="const-string-wrong-json",
     ),
     # Non-string consts stay JSON-tagged.
     pytest.param(
@@ -1574,7 +1572,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value name="flag" type="json">true</cofl:value>'
         '<cofl:value name="empty" type="json">null</cofl:value>',
         True,
-        id="const-non-string-json",
     ),
     pytest.param(
         {
@@ -1591,7 +1588,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value name="flag" type="json">true</cofl:value>'
         '<cofl:value name="empty" type="json">null</cofl:value>',
         False,
-        id="const-non-string-wrong-raw",
     ),
     # Homogeneous string enums share one raw wrapper type.
     pytest.param(
@@ -1603,7 +1599,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="raw">ready</cofl:value>',
         True,
-        id="enum-string-raw-ready",
     ),
     pytest.param(
         {
@@ -1614,7 +1609,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="raw">done</cofl:value>',
         True,
-        id="enum-string-raw-done",
     ),
     pytest.param(
         {
@@ -1625,7 +1619,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="json">ready</cofl:value>',
         False,
-        id="enum-string-wrong-json",
     ),
     # Mixed string/scalar enums branch the wrapper type with the literal body.
     pytest.param(
@@ -1637,7 +1630,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="raw">ready</cofl:value>',
         True,
-        id="enum-mixed-string-raw",
     ),
     pytest.param(
         {
@@ -1648,7 +1640,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="json">7</cofl:value>',
         True,
-        id="enum-mixed-integer-json",
     ),
     pytest.param(
         {
@@ -1659,7 +1650,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="raw">7</cofl:value>',
         False,
-        id="enum-mixed-integer-wrong-raw",
     ),
     pytest.param(
         {
@@ -1670,7 +1660,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="json">ready</cofl:value>',
         False,
-        id="enum-mixed-string-wrong-json",
     ),
     # Nested const strings still use Cohere raw rendering inside recursive dicts.
     pytest.param(
@@ -1691,7 +1680,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value name="mode" type="raw">fast</cofl:value>'
         "</cofl:value>",
         True,
-        id="nested-const-string-raw",
     ),
     pytest.param(
         {
@@ -1711,7 +1699,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value name="mode" type="json">fast</cofl:value>'
         "</cofl:value>",
         False,
-        id="nested-const-string-wrong-json",
     ),
     # anyOf branches correlate raw string bodies with json integer bodies.
     pytest.param(
@@ -1723,7 +1710,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="raw">hello</cofl:value>',
         True,
-        id="anyof-string-raw",
     ),
     pytest.param(
         {
@@ -1734,7 +1720,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="json">123</cofl:value>',
         True,
-        id="anyof-integer-json",
     ),
     pytest.param(
         {
@@ -1745,7 +1730,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="dict">123</cofl:value>',
         False,
-        id="anyof-wrong-dict",
     ),
     pytest.param(
         {
@@ -1756,7 +1740,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="list">hello</cofl:value>',
         False,
-        id="anyof-wrong-list",
     ),
     # oneOf container branches correlate dict/list tags with their nested bodies.
     pytest.param(
@@ -1787,7 +1770,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value name="id" type="json">1</cofl:value>'
         "</cofl:value>",
         True,
-        id="oneof-object-dict",
     ),
     pytest.param(
         {
@@ -1817,7 +1799,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value type="json">1</cofl:value>'
         "</cofl:value>",
         True,
-        id="oneof-array-list",
     ),
     pytest.param(
         {
@@ -1847,7 +1828,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value name="id" type="json">1</cofl:value>'
         "</cofl:value>",
         False,
-        id="oneof-object-wrong-list",
     ),
     pytest.param(
         {
@@ -1877,7 +1857,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value type="json">1</cofl:value>'
         "</cofl:value>",
         False,
-        id="oneof-array-wrong-dict",
     ),
     # JSON Schema type arrays get the same branch correlation as anyOf.
     pytest.param(
@@ -1889,7 +1868,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="raw">hello</cofl:value>',
         True,
-        id="type-array-string-raw",
     ),
     pytest.param(
         {
@@ -1900,7 +1878,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="json">123</cofl:value>',
         True,
-        id="type-array-integer-json",
     ),
     pytest.param(
         {
@@ -1911,7 +1888,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         },
         '<cofl:value name="value" type="dict">123</cofl:value>',
         False,
-        id="type-array-wrong-dict",
     ),
     # additionalProperties uses its composite schema for dynamic-key wrapper branches.
     pytest.param(
@@ -1924,7 +1900,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value name="foo" type="json">1</cofl:value>'
         '<cofl:value name="bar" type="raw">extra</cofl:value>',
         True,
-        id="additional-anyof-string-raw",
     ),
     pytest.param(
         {
@@ -1936,7 +1911,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value name="foo" type="json">1</cofl:value>'
         '<cofl:value name="bar" type="json">2</cofl:value>',
         True,
-        id="additional-anyof-integer-json",
     ),
     pytest.param(
         {
@@ -1948,7 +1922,6 @@ _COHERE_TYPE_CORRELATION_CASES = (
         '<cofl:value name="foo" type="json">1</cofl:value>'
         '<cofl:value name="bar" type="dict">2</cofl:value>',
         False,
-        id="additional-anyof-wrong-dict",
     ),
 )
 
