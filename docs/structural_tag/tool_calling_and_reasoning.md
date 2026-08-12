@@ -205,6 +205,7 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `"glm_4_7"` | GLM-5, GLM-4.7 |
 | `"deepseek_v4"` | DeepSeek-V4 |
 | `"cohere"` | Cohere Command models using XML tool calls |
+| `"exaone"` | EXAONE-4.0-32B, EXAONE-4.0-1.2B |
 
 ## Extending with custom models
 
