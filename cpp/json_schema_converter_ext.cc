@@ -495,6 +495,31 @@ int32_t CohereXMLToolCallingConverter::FormatCohereValue(int32_t value_rule_id) 
   return Sequence({WhitespaceExpression(), RuleRef(value_rule_id), WhitespaceExpression()});
 }
 
+std::string CohereXMLToolCallingConverter::CohereTypeForJSONLiteral(
+    const std::string& json_value
+) {
+  picojson::value value;
+  std::string error = picojson::parse(value, json_value);
+  // Const/enum object and array literals are emitted as JSON text today, not recursive Cohere
+  // dict/list bodies, so only JSON strings get the raw Cohere type.
+  return error.empty() && value.is<std::string>() ? "raw" : "json";
+}
+
+std::optional<std::string> CohereXMLToolCallingConverter::CommonCohereTypeForJSONLiterals(
+    const std::vector<std::string>& json_values
+) {
+  std::optional<std::string> common_type;
+  for (const auto& json_value : json_values) {
+    auto type = CohereTypeForJSONLiteral(json_value);
+    if (!common_type.has_value()) {
+      common_type = type;
+    } else if (*common_type != type) {
+      return std::nullopt;
+    }
+  }
+  return common_type;
+}
+
 int32_t CohereXMLToolCallingConverter::GetCohereTypePattern(const SchemaSpecPtr& schema) {
   return std::visit(
       [this](const auto& spec) -> int32_t {
@@ -505,6 +530,13 @@ int32_t CohereXMLToolCallingConverter::GetCohereTypePattern(const SchemaSpecPtr&
           return ByteString("dict");
         } else if constexpr (std::is_same_v<T, ArraySpec>) {
           return ByteString("list");
+        } else if constexpr (std::is_same_v<T, ConstSpec>) {
+          return ByteString(CohereTypeForJSONLiteral(spec.json_value));
+        } else if constexpr (std::is_same_v<T, EnumSpec>) {
+          auto common_type = CommonCohereTypeForJSONLiterals(spec.json_values);
+          // Mixed enums are branch-correlated by FormatCohereParam. This fallback is only used if
+          // a mixed enum somehow reaches the single-wrapper path, where there is no one true type.
+          return ByteString(common_type.has_value() ? *common_type : "json");
         } else {
           return ByteString("json");
         }
@@ -528,6 +560,22 @@ std::optional<std::vector<SchemaSpecPtr>> CohereXMLToolCallingConverter::GetCohe
           return spec.options;
         } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
           return spec.type_schemas;
+        } else if constexpr (std::is_same_v<T, EnumSpec>) {
+          if (spec.json_values.empty() ||
+              CommonCohereTypeForJSONLiterals(spec.json_values).has_value()) {
+            return std::nullopt;
+          }
+          std::vector<SchemaSpecPtr> options;
+          options.reserve(spec.json_values.size());
+          for (size_t index = 0; index < spec.json_values.size(); ++index) {
+            const auto& json_value = spec.json_values[index];
+            ConstSpec const_spec;
+            const_spec.json_value = json_value;
+            options.push_back(SchemaSpec::Make(
+                std::move(const_spec), "", "enum_case_" + std::to_string(index)
+            ));
+          }
+          return options;
         } else {
           return std::nullopt;
         }
@@ -626,6 +674,31 @@ int32_t CohereXMLToolCallingConverter::GenerateAny(
     return RuleRef(kXMLObject);
   }
   return JSONSchemaConverter::GenerateAny(spec, rule_name);
+}
+
+int32_t CohereXMLToolCallingConverter::GenerateConst(
+    const ConstSpec& spec, const std::string& rule_name
+) {
+  if (!InCohereValueContext()) {
+    return JSONSchemaConverter::GenerateConst(spec, rule_name);
+  }
+  return ByteString(XMLValue(spec.json_value));
+}
+
+int32_t CohereXMLToolCallingConverter::GenerateEnum(
+    const EnumSpec& spec, const std::string& rule_name
+) {
+  XGRAMMAR_DCHECK(!spec.json_values.empty())
+      << "GenerateEnum called with empty enum spec for rule: " << rule_name;
+  if (!InCohereValueContext()) {
+    return JSONSchemaConverter::GenerateEnum(spec, rule_name);
+  }
+  std::vector<int32_t> values;
+  values.reserve(spec.json_values.size());
+  for (const auto& value : spec.json_values) {
+    values.push_back(ByteString(XMLValue(value)));
+  }
+  return Choice(values);
 }
 
 int32_t CohereXMLToolCallingConverter::GenerateObject(

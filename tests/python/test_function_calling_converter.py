@@ -1405,40 +1405,7 @@ cohere_reject_wrong_parameter_format_input_str_accepted = (
 )
 
 
-_XML_DYNAMIC_PROPERTY_CASES = (
-    (
-        "qwen_xml",
-        "<parameter=name>n</parameter>",
-        "<parameter=x_key>3</parameter>",
-        "<parameter=x_key>v</parameter>",
-    ),
-    (
-        "minimax_xml",
-        '<parameter name="name">n</parameter>',
-        '<parameter name="x_key">3</parameter>',
-        '<parameter name="x_key">v</parameter>',
-    ),
-    (
-        "deepseek_xml",
-        '<｜DSML｜parameter name="name" string="true">n</｜DSML｜parameter>',
-        '<｜DSML｜parameter name="x_key" string="false">3</｜DSML｜parameter>',
-        '<｜DSML｜parameter name="x_key" string="true">v</｜DSML｜parameter>',
-    ),
-    (
-        "glm_xml",
-        "<arg_key>name</arg_key><arg_value>n</arg_value>",
-        "<arg_key>x_key</arg_key><arg_value>3</arg_value>",
-        "<arg_key>x_key</arg_key><arg_value>v</arg_value>",
-    ),
-    (
-        "kimi_k3_xml",
-        '<|open|>argument key="name" type="string"<|sep|>n<|close|>argument<|sep|>',
-        '<|open|>argument key="x_key" type="number"<|sep|>3<|close|>argument<|sep|>',
-        '<|open|>argument key="x_key" type="string"<|sep|>v<|close|>argument<|sep|>',
-    ),
-)
-
-
+# Basic Cohere wrapper shape.
 @pytest.mark.parametrize(
     "input_str, accepted", cohere_reject_wrong_parameter_format_input_str_accepted
 )
@@ -1459,6 +1426,7 @@ def test_cohere_reject_wrong_parameter_format(input_str: str, accepted: bool):
     _check_cohere_grammar(schema, input_str, accepted)
 
 
+# Recursive Cohere values and dynamic object properties.
 def test_cohere_nested_dict_and_list_values():
     """Cohere XML recursively formats dicts and lists with unnamed list items."""
     schema = {
@@ -1527,106 +1495,6 @@ def test_cohere_additional_properties_do_not_match_declared_keys():
     _check_cohere_grammar(schema, '<cofl:value name="foo" type="raw">wrong</cofl:value>', False)
 
 
-def test_cohere_anyof_correlates_type_with_branch():
-    """Cohere composite schemas choose the value tag type together with the branch body."""
-    schema = {
-        "type": "object",
-        "properties": {"value": {"anyOf": [{"type": "string"}, {"type": "integer"}]}},
-        "required": ["value"],
-        "additionalProperties": False,
-    }
-
-    _check_cohere_grammar(schema, '<cofl:value name="value" type="raw">hello</cofl:value>', True)
-    _check_cohere_grammar(schema, '<cofl:value name="value" type="json">123</cofl:value>', True)
-    _check_cohere_grammar(schema, '<cofl:value name="value" type="dict">123</cofl:value>', False)
-    _check_cohere_grammar(schema, '<cofl:value name="value" type="list">hello</cofl:value>', False)
-
-
-def test_cohere_oneof_correlates_container_type_with_branch():
-    """Container branches use their matching Cohere dict/list tag types."""
-    schema = {
-        "type": "object",
-        "properties": {
-            "value": {
-                "oneOf": [
-                    {
-                        "type": "object",
-                        "properties": {"id": {"type": "integer"}},
-                        "required": ["id"],
-                        "additionalProperties": False,
-                    },
-                    {
-                        "type": "array",
-                        "items": {"type": "integer"},
-                        "minItems": 1,
-                        "maxItems": 1,
-                    },
-                ]
-            }
-        },
-        "required": ["value"],
-        "additionalProperties": False,
-    }
-    dict_value = (
-        '<cofl:value name="value" type="dict">'
-        '<cofl:value name="id" type="json">1</cofl:value>'
-        "</cofl:value>"
-    )
-    list_value = (
-        '<cofl:value name="value" type="list">'
-        '<cofl:value type="json">1</cofl:value>'
-        "</cofl:value>"
-    )
-
-    _check_cohere_grammar(schema, dict_value, True)
-    _check_cohere_grammar(schema, list_value, True)
-    _check_cohere_grammar(schema, dict_value.replace('type="dict"', 'type="list"', 1), False)
-    _check_cohere_grammar(schema, list_value.replace('type="list"', 'type="dict"', 1), False)
-
-
-def test_cohere_type_array_correlates_type_with_branch():
-    """JSON Schema type arrays get the same Cohere branch correlation as anyOf."""
-    schema = {
-        "type": "object",
-        "properties": {"value": {"type": ["string", "integer"]}},
-        "required": ["value"],
-        "additionalProperties": False,
-    }
-
-    _check_cohere_grammar(schema, '<cofl:value name="value" type="raw">hello</cofl:value>', True)
-    _check_cohere_grammar(schema, '<cofl:value name="value" type="json">123</cofl:value>', True)
-    _check_cohere_grammar(schema, '<cofl:value name="value" type="dict">123</cofl:value>', False)
-
-
-def test_cohere_additional_properties_correlate_composite_type_with_branch():
-    """Dynamic Cohere properties use the additionalProperties schema for branch correlation."""
-    schema = {
-        "type": "object",
-        "properties": {"foo": {"type": "integer"}},
-        "required": ["foo"],
-        "additionalProperties": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
-    }
-
-    _check_cohere_grammar(
-        schema,
-        '<cofl:value name="foo" type="json">1</cofl:value>'
-        '<cofl:value name="bar" type="raw">extra</cofl:value>',
-        True,
-    )
-    _check_cohere_grammar(
-        schema,
-        '<cofl:value name="foo" type="json">1</cofl:value>'
-        '<cofl:value name="bar" type="json">2</cofl:value>',
-        True,
-    )
-    _check_cohere_grammar(
-        schema,
-        '<cofl:value name="foo" type="json">1</cofl:value>'
-        '<cofl:value name="bar" type="dict">2</cofl:value>',
-        False,
-    )
-
-
 def test_cohere_additional_properties_support_nested_schema():
     """Additional Cohere properties can use complex nested schemas."""
     schema = {
@@ -1663,6 +1531,466 @@ def test_cohere_additional_properties_support_nested_schema():
     _check_cohere_grammar(schema, accepted, True)
     _check_cohere_grammar(schema, missing_nested_required, False)
     _check_cohere_grammar(schema, declared_key_with_additional_schema, False)
+
+
+# Cohere type-attribute correlation for const/enum/composite schemas.
+_COHERE_TYPE_CORRELATION_CASES = (
+    # String consts render as raw Cohere values.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"const": "ready"}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="raw">ready</cofl:value>',
+        True,
+        id="const-string-raw",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"const": "ready"}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="json">ready</cofl:value>',
+        False,
+        id="const-string-wrong-json",
+    ),
+    # Non-string consts stay JSON-tagged.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {
+                "count": {"const": 7},
+                "flag": {"const": True},
+                "empty": {"const": None},
+            },
+            "required": ["count", "flag", "empty"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="count" type="json">7</cofl:value>'
+        '<cofl:value name="flag" type="json">true</cofl:value>'
+        '<cofl:value name="empty" type="json">null</cofl:value>',
+        True,
+        id="const-non-string-json",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {
+                "count": {"const": 7},
+                "flag": {"const": True},
+                "empty": {"const": None},
+            },
+            "required": ["count", "flag", "empty"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="count" type="raw">7</cofl:value>'
+        '<cofl:value name="flag" type="json">true</cofl:value>'
+        '<cofl:value name="empty" type="json">null</cofl:value>',
+        False,
+        id="const-non-string-wrong-raw",
+    ),
+    # Homogeneous string enums share one raw wrapper type.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"enum": ["ready", "done"]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="raw">ready</cofl:value>',
+        True,
+        id="enum-string-raw-ready",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"enum": ["ready", "done"]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="raw">done</cofl:value>',
+        True,
+        id="enum-string-raw-done",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"enum": ["ready", "done"]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="json">ready</cofl:value>',
+        False,
+        id="enum-string-wrong-json",
+    ),
+    # Mixed string/scalar enums branch the wrapper type with the literal body.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"enum": ["ready", 7]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="raw">ready</cofl:value>',
+        True,
+        id="enum-mixed-string-raw",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"enum": ["ready", 7]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="json">7</cofl:value>',
+        True,
+        id="enum-mixed-integer-json",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"enum": ["ready", 7]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="raw">7</cofl:value>',
+        False,
+        id="enum-mixed-integer-wrong-raw",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"enum": ["ready", 7]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="json">ready</cofl:value>',
+        False,
+        id="enum-mixed-string-wrong-json",
+    ),
+    # Nested const strings still use Cohere raw rendering inside recursive dicts.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "properties": {"mode": {"const": "fast"}},
+                    "required": ["mode"],
+                    "additionalProperties": False,
+                }
+            },
+            "required": ["config"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="config" type="dict">'
+        '<cofl:value name="mode" type="raw">fast</cofl:value>'
+        "</cofl:value>",
+        True,
+        id="nested-const-string-raw",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {
+                "config": {
+                    "type": "object",
+                    "properties": {"mode": {"const": "fast"}},
+                    "required": ["mode"],
+                    "additionalProperties": False,
+                }
+            },
+            "required": ["config"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="config" type="dict">'
+        '<cofl:value name="mode" type="json">fast</cofl:value>'
+        "</cofl:value>",
+        False,
+        id="nested-const-string-wrong-json",
+    ),
+    # anyOf branches correlate raw string bodies with json integer bodies.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"anyOf": [{"type": "string"}, {"type": "integer"}]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="raw">hello</cofl:value>',
+        True,
+        id="anyof-string-raw",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"anyOf": [{"type": "string"}, {"type": "integer"}]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="json">123</cofl:value>',
+        True,
+        id="anyof-integer-json",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"anyOf": [{"type": "string"}, {"type": "integer"}]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="dict">123</cofl:value>',
+        False,
+        id="anyof-wrong-dict",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"anyOf": [{"type": "string"}, {"type": "integer"}]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="list">hello</cofl:value>',
+        False,
+        id="anyof-wrong-list",
+    ),
+    # oneOf container branches correlate dict/list tags with their nested bodies.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "oneOf": [
+                        {
+                            "type": "object",
+                            "properties": {"id": {"type": "integer"}},
+                            "required": ["id"],
+                            "additionalProperties": False,
+                        },
+                        {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "minItems": 1,
+                            "maxItems": 1,
+                        },
+                    ]
+                }
+            },
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="dict">'
+        '<cofl:value name="id" type="json">1</cofl:value>'
+        "</cofl:value>",
+        True,
+        id="oneof-object-dict",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "oneOf": [
+                        {
+                            "type": "object",
+                            "properties": {"id": {"type": "integer"}},
+                            "required": ["id"],
+                            "additionalProperties": False,
+                        },
+                        {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "minItems": 1,
+                            "maxItems": 1,
+                        },
+                    ]
+                }
+            },
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="list">'
+        '<cofl:value type="json">1</cofl:value>'
+        "</cofl:value>",
+        True,
+        id="oneof-array-list",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "oneOf": [
+                        {
+                            "type": "object",
+                            "properties": {"id": {"type": "integer"}},
+                            "required": ["id"],
+                            "additionalProperties": False,
+                        },
+                        {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "minItems": 1,
+                            "maxItems": 1,
+                        },
+                    ]
+                }
+            },
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="list">'
+        '<cofl:value name="id" type="json">1</cofl:value>'
+        "</cofl:value>",
+        False,
+        id="oneof-object-wrong-list",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "oneOf": [
+                        {
+                            "type": "object",
+                            "properties": {"id": {"type": "integer"}},
+                            "required": ["id"],
+                            "additionalProperties": False,
+                        },
+                        {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "minItems": 1,
+                            "maxItems": 1,
+                        },
+                    ]
+                }
+            },
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="dict">'
+        '<cofl:value type="json">1</cofl:value>'
+        "</cofl:value>",
+        False,
+        id="oneof-array-wrong-dict",
+    ),
+    # JSON Schema type arrays get the same branch correlation as anyOf.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"type": ["string", "integer"]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="raw">hello</cofl:value>',
+        True,
+        id="type-array-string-raw",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"type": ["string", "integer"]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="json">123</cofl:value>',
+        True,
+        id="type-array-integer-json",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"value": {"type": ["string", "integer"]}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="dict">123</cofl:value>',
+        False,
+        id="type-array-wrong-dict",
+    ),
+    # additionalProperties uses its composite schema for dynamic-key wrapper branches.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"foo": {"type": "integer"}},
+            "required": ["foo"],
+            "additionalProperties": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+        },
+        '<cofl:value name="foo" type="json">1</cofl:value>'
+        '<cofl:value name="bar" type="raw">extra</cofl:value>',
+        True,
+        id="additional-anyof-string-raw",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"foo": {"type": "integer"}},
+            "required": ["foo"],
+            "additionalProperties": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+        },
+        '<cofl:value name="foo" type="json">1</cofl:value>'
+        '<cofl:value name="bar" type="json">2</cofl:value>',
+        True,
+        id="additional-anyof-integer-json",
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"foo": {"type": "integer"}},
+            "required": ["foo"],
+            "additionalProperties": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+        },
+        '<cofl:value name="foo" type="json">1</cofl:value>'
+        '<cofl:value name="bar" type="dict">2</cofl:value>',
+        False,
+        id="additional-anyof-wrong-dict",
+    ),
+)
+
+
+@pytest.mark.parametrize("schema, instance, accepted", _COHERE_TYPE_CORRELATION_CASES)
+def test_cohere_type_attribute_correlates_with_schema(schema: dict, instance: str, accepted: bool):
+    """Cohere value tag types stay aligned with const/enum/composite value bodies."""
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+_XML_DYNAMIC_PROPERTY_CASES = (
+    (
+        "qwen_xml",
+        "<parameter=name>n</parameter>",
+        "<parameter=x_key>3</parameter>",
+        "<parameter=x_key>v</parameter>",
+    ),
+    (
+        "minimax_xml",
+        '<parameter name="name">n</parameter>',
+        '<parameter name="x_key">3</parameter>',
+        '<parameter name="x_key">v</parameter>',
+    ),
+    (
+        "deepseek_xml",
+        '<｜DSML｜parameter name="name" string="true">n</｜DSML｜parameter>',
+        '<｜DSML｜parameter name="x_key" string="false">3</｜DSML｜parameter>',
+        '<｜DSML｜parameter name="x_key" string="true">v</｜DSML｜parameter>',
+    ),
+    (
+        "glm_xml",
+        "<arg_key>name</arg_key><arg_value>n</arg_value>",
+        "<arg_key>x_key</arg_key><arg_value>3</arg_value>",
+        "<arg_key>x_key</arg_key><arg_value>v</arg_value>",
+    ),
+    (
+        "kimi_k3_xml",
+        '<|open|>argument key="name" type="string"<|sep|>n<|close|>argument<|sep|>',
+        '<|open|>argument key="x_key" type="number"<|sep|>3<|close|>argument<|sep|>',
+        '<|open|>argument key="x_key" type="string"<|sep|>v<|close|>argument<|sep|>',
+    ),
+)
 
 
 @pytest.mark.parametrize(

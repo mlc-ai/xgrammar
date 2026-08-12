@@ -152,6 +152,8 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   ) override;
   int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
   int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
 
   int32_t FormatProperty(
       const std::string& key,
@@ -197,6 +199,10 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   );
   int32_t FormatCohereValue(int32_t value_rule_id);
   int32_t GetCohereTypePattern(const SchemaSpecPtr& schema);
+  static std::string CohereTypeForJSONLiteral(const std::string& json_value);
+  static std::optional<std::string> CommonCohereTypeForJSONLiterals(
+      const std::vector<std::string>& json_values
+  );
   std::optional<std::vector<SchemaSpecPtr>> GetCohereCompositeOptions(
       const SchemaSpecPtr& schema
   ) const;
