@@ -3196,6 +3196,14 @@ class GrammarFSMHasherImpl {
    */
   uint64_t HashFsm(int fsm_index);
 
+  /*! \brief Hash a non-rule FSM edge, including token-set auxiliary payloads. */
+  uint64_t HashNonRuleEdge(
+      uint64_t hash_result,
+      int32_t current_new_state_id,
+      const FSMEdge& edge,
+      int32_t target_new_state_id
+  ) const;
+
   /*!
    * \brief Find a simple cycle in the reference graph, And hash the
    * fsms in the simple cycle.
@@ -3446,6 +3454,32 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
   }
 }
 
+uint64_t GrammarFSMHasherImpl::HashNonRuleEdge(
+    uint64_t hash_result,
+    int32_t current_new_state_id,
+    const FSMEdge& edge,
+    int32_t target_new_state_id
+) const {
+  hash_result = HashCombine(hash_result, current_new_state_id, static_cast<int32_t>(edge.min));
+  if (edge.IsToken()) {
+    const auto token_edge = grammar_->ImplPtr()->complete_fsm.GetTokenEdgeInfo(edge.GetAuxIndex());
+    hash_result = HashCombine(hash_result, token_edge.Count());
+    for (int32_t index = 0; index < token_edge.Count(); ++index) {
+      hash_result = HashCombine(hash_result, token_edge.TokenIds()[index]);
+    }
+  } else if (edge.IsExcludeToken()) {
+    const auto exclude_token_edge =
+        grammar_->ImplPtr()->complete_fsm.GetExcludeTokenEdgeInfo(edge.GetAuxIndex());
+    hash_result = HashCombine(hash_result, exclude_token_edge.Count());
+    for (int32_t index = 0; index < exclude_token_edge.Count(); ++index) {
+      hash_result = HashCombine(hash_result, exclude_token_edge.TokenIds()[index]);
+    }
+  } else {
+    hash_result = HashCombine(hash_result, static_cast<int32_t>(edge.max));
+  }
+  return HashCombine(hash_result, target_new_state_id);
+}
+
 std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index) {
   uint64_t hash_result = 0;
   XGRAMMAR_DCHECK(fsm_index >= 0 && fsm_index < (*grammar_)->NumRules())
@@ -3546,13 +3580,7 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
       if (edge.IsRuleRef() || edge.IsRepeatRef()) {
         continue;
       }
-      hash_result = HashCombine(
-          hash_result,
-          current_new_state_id,
-          static_cast<int32_t>(edge.min),
-          static_cast<int32_t>(edge.max),
-          target_new_id
-      );
+      hash_result = HashNonRuleEdge(hash_result, current_new_state_id, edge, target_new_id);
     }
   }
   StoreNewStateIDs(fsm_index);
@@ -3645,13 +3673,7 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
       if (edge.IsRuleRef() || edge.IsRepeatRef()) {
         continue;
       }
-      hash_result = HashCombine(
-          hash_result,
-          current_new_state_id,
-          static_cast<int32_t>(edge.min),
-          static_cast<int32_t>(edge.max),
-          target_new_id
-      );
+      hash_result = HashNonRuleEdge(hash_result, current_new_state_id, edge, target_new_id);
     }
   }
   StoreNewStateIDs(fsm_index);
