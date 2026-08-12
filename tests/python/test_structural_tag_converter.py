@@ -550,19 +550,13 @@ def test_json_schema_style_cohere_xml_nested_values():
     [
         # Mixed enum accepts the raw string branch and JSON scalar branch, but not mismatched tags.
         pytest.param(
-            {"enum": ["ready", 7]},
-            '<cofl:value name="value" type="raw">ready</cofl:value>',
-            True,
+            {"enum": ["ready", 7]}, '<cofl:value name="value" type="raw">ready</cofl:value>', True
         ),
         pytest.param(
-            {"enum": ["ready", 7]},
-            '<cofl:value name="value" type="json">7</cofl:value>',
-            True,
+            {"enum": ["ready", 7]}, '<cofl:value name="value" type="json">7</cofl:value>', True
         ),
         pytest.param(
-            {"enum": ["ready", 7]},
-            '<cofl:value name="value" type="json">ready</cofl:value>',
-            False,
+            {"enum": ["ready", 7]}, '<cofl:value name="value" type="json">ready</cofl:value>', False
         ),
         # anyOf accepts the string branch's raw tag and rejects unrelated container tags.
         pytest.param(
