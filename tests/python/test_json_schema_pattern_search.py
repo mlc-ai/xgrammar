@@ -74,6 +74,26 @@ def test_pattern_properties_use_search_semantics_and_json_escapes():
     assert not _is_grammar_accept_string(grammar, '{"before_y_after": 1}')
 
 
+@pytest.mark.parametrize(
+    "pattern,value,expected",
+    [
+        (r"^[A-F\d]{2,3}$", '"A\\u0039"', True),
+        (r"^[A-F\d]{2,3}$", '"\\u0041F0"', True),
+        (r"^[A-F\d]{2,3}$", '"\\u0041F09"', False),
+        (r"^[A-F\d]{2,3}$", '"A\\u0061"', False),
+        (r'^["\\/\n]{4}$', r'"\"\\\/\n"', True),
+        (r'^["\\/\n]{4}$', r'"\u0022\u005c\u002f\u000a"', True),
+        (r'^["\\/\n]{4}$', r'"\"\\\/x"', False),
+        (r"^[A]{0}$", '""', True),
+        (r"^[A]{0}$", '"A"', False),
+    ],
+)
+def test_bounded_ascii_character_class_repeat_json_spellings(
+    pattern: str, value: str, expected: bool
+):
+    assert _accepts(pattern, value) is expected
+
+
 def _large_identifier_pattern() -> str:
     # Hundreds of disjoint Unicode ranges make a single encoded-character FSM large enough that
     # physically unrolling {1,200} would exceed the guard. The GrammarBuilder path must retain a

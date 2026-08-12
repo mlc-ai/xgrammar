@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bitset>
 #include <cctype>
 #include <climits>
 #include <cmath>
@@ -214,6 +215,114 @@ std::string RewriteJSONSchemaPatternForFullMatch(const std::string& pattern) {
   }
   result.push_back(')');
   return result;
+}
+
+struct SimpleCharacterClassRepeat {
+  std::bitset<256> allowed_bytes;
+  int min_count;
+  int max_count;
+};
+
+bool ParseNonnegativeDecimal(const std::string& text, int* value) {
+  if (text.empty()) {
+    return false;
+  }
+  int result = 0;
+  for (char character : text) {
+    if (character < '0' || character > '9') {
+      return false;
+    }
+    int digit = character - '0';
+    if (result > (std::numeric_limits<int>::max() - digit) / 10) {
+      return false;
+    }
+    result = result * 10 + digit;
+  }
+  *value = result;
+  return true;
+}
+
+/*! \brief Recognize an anchored ASCII character class followed by one finite repeat quantifier.
+ *
+ * This deliberately stays narrow. The general regex path remains the semantic fallback, while
+ * common identifier patterns such as `^[A-Za-z0-9_-]{1,255}$` avoid constructing the much larger
+ * decoded-Unicode JSON-string automaton.
+ */
+std::optional<SimpleCharacterClassRepeat> ParseSimpleCharacterClassRepeat(const std::string& pattern
+) {
+  if (pattern.size() < 7 || pattern[0] != '^' || pattern[1] != '[' || pattern.back() != '$') {
+    return std::nullopt;
+  }
+
+  bool escaped = false;
+  size_t class_end = std::string::npos;
+  for (size_t index = 2; index + 1 < pattern.size(); ++index) {
+    if (escaped) {
+      escaped = false;
+    } else if (pattern[index] == '\\') {
+      escaped = true;
+    } else if (pattern[index] == ']') {
+      class_end = index;
+      break;
+    }
+  }
+  if (class_end == std::string::npos || class_end + 4 > pattern.size() ||
+      pattern[class_end + 1] != '{' || pattern[pattern.size() - 2] != '}') {
+    return std::nullopt;
+  }
+
+  const std::string bounds = pattern.substr(class_end + 2, pattern.size() - class_end - 4);
+  const size_t comma = bounds.find(',');
+  int min_count = 0;
+  int max_count = 0;
+  if (comma == std::string::npos) {
+    if (!ParseNonnegativeDecimal(bounds, &min_count)) {
+      return std::nullopt;
+    }
+    max_count = min_count;
+  } else {
+    if (bounds.find(',', comma + 1) != std::string::npos ||
+        !ParseNonnegativeDecimal(bounds.substr(0, comma), &min_count) ||
+        !ParseNonnegativeDecimal(bounds.substr(comma + 1), &max_count)) {
+      return std::nullopt;
+    }
+  }
+  if (min_count > max_count) {
+    return std::nullopt;
+  }
+
+  auto class_result = RegexFSMBuilder::Build(pattern.substr(1, class_end));
+  if (class_result.IsErr()) {
+    return std::nullopt;
+  }
+  auto class_fsm = std::move(class_result).Unwrap();
+  if (class_fsm.GetEnds().size() != 1) {
+    return std::nullopt;
+  }
+  const int start = class_fsm.GetStart();
+  const int end = class_fsm.GetEnds()[0];
+  std::bitset<256> allowed_bytes;
+  for (int state = 0; state < class_fsm.NumStates(); ++state) {
+    for (const auto& edge : class_fsm.GetFsm().GetEdges(state)) {
+      if (state != start || edge.target != end || !edge.IsCharRange()) {
+        return std::nullopt;
+      }
+      for (int byte = edge.min; byte <= edge.max; ++byte) {
+        allowed_bytes.set(byte);
+      }
+    }
+  }
+  if (allowed_bytes.none()) {
+    return std::nullopt;
+  }
+  for (int byte = 0x80; byte < 256; ++byte) {
+    if (allowed_bytes.test(byte)) {
+      // Grammar character classes use Unicode codepoints rather than raw UTF-8 bytes. Keep the
+      // general Unicode-aware path authoritative for every non-ASCII class.
+      return std::nullopt;
+    }
+  }
+  return SimpleCharacterClassRepeat{allowed_bytes, min_count, max_count};
 }
 
 }  // namespace
@@ -2499,6 +2608,79 @@ int32_t JSONSchemaConverter::JSONSchemaPatternExpression(const std::string& rege
   if (cached != json_schema_pattern_expr_ids_.end()) {
     return cached->second;
   }
+
+  if (auto simple_repeat = ParseSimpleCharacterClassRepeat(regex)) {
+    std::vector<int32_t> encoded_character_choices;
+
+    std::vector<CharacterClassElement> raw_elements;
+    for (int byte = 0; byte < 256;) {
+      const bool allowed =
+          simple_repeat->allowed_bytes.test(byte) && byte >= 0x20 && byte != '"' && byte != '\\';
+      if (!allowed) {
+        ++byte;
+        continue;
+      }
+      int range_end = byte;
+      while (range_end + 1 < 256 && simple_repeat->allowed_bytes.test(range_end + 1) &&
+             range_end + 1 >= 0x20 && range_end + 1 != '"' && range_end + 1 != '\\') {
+        ++range_end;
+      }
+      raw_elements.push_back({byte, range_end});
+      byte = range_end + 1;
+    }
+    if (!raw_elements.empty()) {
+      encoded_character_choices.push_back(builder_.AddCharacterClass(raw_elements));
+    }
+
+    static constexpr std::pair<int, char> kShortEscapes[] = {
+        {'"', '"'},
+        {'\\', '\\'},
+        {'/', '/'},
+        {'\b', 'b'},
+        {'\f', 'f'},
+        {'\n', 'n'},
+        {'\r', 'r'},
+        {'\t', 't'},
+    };
+    for (const auto& escaped_character : kShortEscapes) {
+      if (simple_repeat->allowed_bytes.test(escaped_character.first)) {
+        encoded_character_choices.push_back(ByteString(std::string{'\\', escaped_character.second})
+        );
+      }
+    }
+
+    for (int high = 0; high <= 7; ++high) {
+      std::vector<CharacterClassElement> low_nibble_spellings;
+      for (int low = 0; low <= 15; ++low) {
+        if (!simple_repeat->allowed_bytes.test((high << 4) | low)) {
+          continue;
+        }
+        if (low <= 9) {
+          low_nibble_spellings.push_back({'0' + low, '0' + low});
+        } else {
+          low_nibble_spellings.push_back({'A' + low - 10, 'A' + low - 10});
+          low_nibble_spellings.push_back({'a' + low - 10, 'a' + low - 10});
+        }
+      }
+      if (!low_nibble_spellings.empty()) {
+        encoded_character_choices.push_back(Sequence(
+            {ByteString("\\u00" + std::string(1, static_cast<char>('0' + high))),
+             builder_.AddCharacterClass(low_nibble_spellings)}
+        ));
+      }
+    }
+
+    int32_t encoded_character = Choice(encoded_character_choices);
+    int32_t result = Repeat(
+        "json_schema_pattern_character",
+        encoded_character,
+        simple_repeat->min_count,
+        simple_repeat->max_count
+    );
+    json_schema_pattern_expr_ids_.emplace(regex, result);
+    return result;
+  }
+
   int32_t result =
       RegexExpression(RewriteJSONSchemaPatternForFullMatch(regex), /*json_string=*/true);
   json_schema_pattern_expr_ids_.emplace(regex, result);
