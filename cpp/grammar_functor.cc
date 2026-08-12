@@ -1994,7 +1994,6 @@ void GrammarFSMBuilderImpl::BuildRegex(
     int start_state,
     std::vector<int32_t>* end_states
 ) {
-  const std::string rule_hint = rule_name_ != nullptr ? *rule_name_ : "";
   std::string cache_key;
   if (regex_fsm_cache_ != nullptr) {
     cache_key = MakeRegexFSMCacheKey(regex, json_string, byte_mode);
@@ -2004,6 +2003,7 @@ void GrammarFSMBuilderImpl::BuildRegex(
       return;
     }
   }
+  const std::string rule_hint = rule_name_ != nullptr ? *rule_name_ : "";
   auto build_result = json_string
                           ? RegexFSMBuilder::BuildWithForbiddenChars(
                                 regex,

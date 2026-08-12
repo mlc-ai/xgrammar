@@ -2438,7 +2438,9 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TokenDispatc
 /************** StructuralTag Conversion Public API **************/
 
 Result<Grammar, StructuralTagError> StructuralTagToGrammar(
-    const std::string& structural_tag_json, const std::optional<TokenizerInfo>& tokenizer_info
+    const std::string& structural_tag_json,
+    const std::optional<TokenizerInfo>& tokenizer_info,
+    bool normalize
 ) {
   auto structural_tag_result = StructuralTagParser::FromJSON(structural_tag_json);
   if (structural_tag_result.IsErr()) {
@@ -2460,7 +2462,10 @@ Result<Grammar, StructuralTagError> StructuralTagToGrammar(
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
   }
-  return ResultOk(GrammarNormalizer::Apply(std::move(result).Unwrap()));
+  if (normalize) {
+    return ResultOk(GrammarNormalizer::Apply(std::move(result).Unwrap()));
+  }
+  return ResultOk(std::move(result).Unwrap());
 }
 
 }  // namespace xgrammar
