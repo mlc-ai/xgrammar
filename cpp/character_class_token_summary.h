@@ -27,7 +27,8 @@ struct CharacterClassTokenSummary {
 template <typename CharacterClass>
 std::vector<CharacterClassTokenSummary> BuildCharacterClassTokenSummaries(
     const CharacterClass& character_class,
-    const std::vector<std::pair<int32_t, std::string>>& sorted_vocab
+    const std::vector<std::pair<int32_t, std::string>>& sorted_vocab,
+    const std::vector<int32_t>& ascii_string_safe_indices
 ) {
   const bool is_negative = static_cast<bool>(character_class[0]);
   const auto codepoint_is_in_ranges = [&](TCodepoint codepoint) {
@@ -65,12 +66,40 @@ std::vector<CharacterClassTokenSummary> BuildCharacterClassTokenSummaries(
         return false;
       };
 
+  // TokenizerInfo already records tokens made entirely from the printable ASCII bytes that are
+  // safe inside a JSON string. When this character class accepts that complete byte alphabet,
+  // their summaries are known without decoding the same token bytes again.
+  bool accepts_ascii_string_safe_alphabet = true;
+  for (TCodepoint codepoint = 0x20; codepoint < 0x7f; ++codepoint) {
+    if (codepoint == '"' || codepoint == '\\') {
+      continue;
+    }
+    if (codepoint_is_in_ranges(codepoint) == is_negative) {
+      accepts_ascii_string_safe_alphabet = false;
+      break;
+    }
+  }
+
   std::vector<CharacterClassTokenSummary> summaries;
   summaries.reserve(sorted_vocab.size());
+  size_t ascii_string_safe_position = 0;
   for (int32_t sorted_vocab_index = 0;
        sorted_vocab_index < static_cast<int32_t>(sorted_vocab.size());
        ++sorted_vocab_index) {
     const auto& token = sorted_vocab[sorted_vocab_index].second;
+    if (accepts_ascii_string_safe_alphabet) {
+      while (ascii_string_safe_position < ascii_string_safe_indices.size() &&
+             ascii_string_safe_indices[ascii_string_safe_position] < sorted_vocab_index) {
+        ++ascii_string_safe_position;
+      }
+      if (ascii_string_safe_position < ascii_string_safe_indices.size() &&
+          ascii_string_safe_indices[ascii_string_safe_position] == sorted_vocab_index) {
+        summaries.push_back(CharacterClassTokenSummary{
+            sorted_vocab_index, static_cast<int32_t>(token.size()), true, true
+        });
+        continue;
+      }
+    }
     int32_t byte_offset = 0;
     int32_t completed_characters = 0;
     bool incomplete_character = false;
