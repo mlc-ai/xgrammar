@@ -23,7 +23,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 ### Parameters
 
-- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm_4_7"`, `"deepseek_v4"`.
+- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"kimi_k3"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm_4_7"`, `"deepseek_v4"`.
 - **tools** (`List[ToolParam | dict]`, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:
   - **Function tools** use the OpenAI Chat Completions shape:
     ```json
@@ -196,6 +196,7 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `"qwen_3_5"` | Qwen3.5, Qwen3.6 |
 | `"qwen_3_coder"` | Qwen3-Coder, Qwen3-Coder-Next |
 | `"kimi"` | Kimi-K2, Kimi-K2.5 |
+| `"kimi_k3"` | Kimi-K3 |
 | `"deepseek_r1"` | DeepSeek-R1, DeepSeek-R1-0528 |
 | `"deepseek_v3_1"` | DeepSeek-V3.1, DeepSeek-V3.2-Exp |
 | `"harmony"` | gpt-oss |
