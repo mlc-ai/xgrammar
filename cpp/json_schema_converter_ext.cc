@@ -626,7 +626,9 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParam(
 
   std::vector<int32_t> choices;
   choices.reserve(options->size());
-  const std::string& value_rule_name = builder_.GetRule(value_rule_id).name;
+  // Copy the name before generating: GenerateFromSpec may add rules and reallocate the
+  // builder's rule storage, invalidating references into it.
+  const std::string value_rule_name = builder_.GetRule(value_rule_id).name;
   for (size_t index = 0; index < options->size(); ++index) {
     const SchemaSpecPtr& option = (*options)[index];
     int32_t option_rule_id =
@@ -823,8 +825,7 @@ int32_t CohereXMLToolCallingConverter::FormatOtherProperty(
   }
   if (!value_schema && InCohereValueContext()) {
     value_schema = SchemaSpec::Make(AnySpec{}, "", "any");
-    value_rule_id =
-        CreateRule(value_schema, rule_name + "_" + rule_name_suffix + "_cohere_any");
+    value_rule_id = CreateRule(value_schema, rule_name + "_" + rule_name_suffix + "_cohere_any");
   }
   if (value_schema) {
     return FormatCohereParam(std::nullopt, key_pattern_expr, value_schema, value_rule_id);
