@@ -1495,6 +1495,34 @@ def test_cohere_additional_properties_do_not_match_declared_keys():
     _check_cohere_grammar(schema, '<cofl:value name="foo" type="raw">wrong</cofl:value>', False)
 
 
+def test_cohere_additional_properties_true_accepts_arbitrary_json_values():
+    """Unconstrained Cohere properties accept any JSON value through type=json."""
+    schema = {
+        "type": "object",
+        "properties": {"foo": {"type": "integer"}},
+        "required": ["foo"],
+        "additionalProperties": True,
+    }
+
+    instance = (
+        '<cofl:value name="foo" type="json">1</cofl:value>'
+        '<cofl:value name="text" type="json">"extra"</cofl:value>'
+        '<cofl:value name="count" type="json">2</cofl:value>'
+        '<cofl:value name="enabled" type="json">true</cofl:value>'
+        '<cofl:value name="nothing" type="json">null</cofl:value>'
+        '<cofl:value name="items" type="json">[1, "two"]</cofl:value>'
+        '<cofl:value name="metadata" type="json">{"id": 2}</cofl:value>'
+    )
+
+    _check_cohere_grammar(schema, instance, True)
+    _check_cohere_grammar(
+        schema,
+        '<cofl:value name="foo" type="json">1</cofl:value>'
+        '<cofl:value name="text" type="raw">extra</cofl:value>',
+        False,
+    )
+
+
 def test_cohere_additional_properties_support_nested_schema():
     """Additional Cohere properties can use complex nested schemas."""
     schema = {
