@@ -817,10 +817,17 @@ int32_t CohereXMLToolCallingConverter::FormatOtherProperty(
     const std::string& rule_name_suffix,
     const SchemaSpecPtr& schema
 ) {
-  if (!additional_property_stack_.empty() && additional_property_stack_.back()) {
-    return FormatCohereParam(
-        std::nullopt, key_pattern_expr, additional_property_stack_.back(), value_rule_id
-    );
+  SchemaSpecPtr value_schema = schema;
+  if (!value_schema && !additional_property_stack_.empty()) {
+    value_schema = additional_property_stack_.back();
+  }
+  if (!value_schema && InCohereValueContext()) {
+    value_schema = SchemaSpec::Make(AnySpec{}, "", "any");
+    value_rule_id =
+        CreateRule(value_schema, rule_name + "_" + rule_name_suffix + "_cohere_any");
+  }
+  if (value_schema) {
+    return FormatCohereParam(std::nullopt, key_pattern_expr, value_schema, value_rule_id);
   }
   return XMLToolCallingConverter::FormatOtherProperty(
       key_pattern_expr, value_rule_id, rule_name, rule_name_suffix, schema

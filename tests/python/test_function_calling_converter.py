@@ -1495,7 +1495,22 @@ def test_cohere_additional_properties_do_not_match_declared_keys():
     _check_cohere_grammar(schema, '<cofl:value name="foo" type="raw">wrong</cofl:value>', False)
 
 
-def test_cohere_additional_properties_true_accepts_arbitrary_json_values():
+_COHERE_ARBITRARY_JSON_CASES = (
+    # Scalar JSON values.
+    pytest.param("text", '"extra"', id="string"),
+    pytest.param("count", "2", id="number"),
+    pytest.param("enabled", "true", id="boolean"),
+    pytest.param("nothing", "null", id="null"),
+    # Composite JSON values remain serialized inside type="json".
+    pytest.param("items", '[1, "two"]', id="array"),
+    pytest.param("metadata", '{"id": 2}', id="object"),
+)
+
+
+@pytest.mark.parametrize("property_name, json_value", _COHERE_ARBITRARY_JSON_CASES)
+def test_cohere_additional_properties_true_accepts_arbitrary_json_values(
+    property_name: str, json_value: str
+):
     """Unconstrained Cohere properties accept any JSON value through type=json."""
     schema = {
         "type": "object",
@@ -1503,24 +1518,16 @@ def test_cohere_additional_properties_true_accepts_arbitrary_json_values():
         "required": ["foo"],
         "additionalProperties": True,
     }
-
-    instance = (
-        '<cofl:value name="foo" type="json">1</cofl:value>'
-        '<cofl:value name="text" type="json">"extra"</cofl:value>'
-        '<cofl:value name="count" type="json">2</cofl:value>'
-        '<cofl:value name="enabled" type="json">true</cofl:value>'
-        '<cofl:value name="nothing" type="json">null</cofl:value>'
-        '<cofl:value name="items" type="json">[1, "two"]</cofl:value>'
-        '<cofl:value name="metadata" type="json">{"id": 2}</cofl:value>'
+    declared_property = '<cofl:value name="foo" type="json">1</cofl:value>'
+    additional_property = (
+        f'<cofl:value name="{property_name}" type="json">{json_value}</cofl:value>'
+    )
+    wrong_wrapper = (
+        f'<cofl:value name="{property_name}" type="raw">{json_value}</cofl:value>'
     )
 
-    _check_cohere_grammar(schema, instance, True)
-    _check_cohere_grammar(
-        schema,
-        '<cofl:value name="foo" type="json">1</cofl:value>'
-        '<cofl:value name="text" type="raw">extra</cofl:value>',
-        False,
-    )
+    _check_cohere_grammar(schema, declared_property + additional_property, True)
+    _check_cohere_grammar(schema, declared_property + wrong_wrapper, False)
 
 
 def test_cohere_additional_properties_support_nested_schema():
@@ -1559,6 +1566,159 @@ def test_cohere_additional_properties_support_nested_schema():
     _check_cohere_grammar(schema, accepted, True)
     _check_cohere_grammar(schema, missing_nested_required, False)
     _check_cohere_grammar(schema, declared_key_with_additional_schema, False)
+
+
+_COHERE_PATTERN_WRAPPER_CASES = (
+    # Primitive schemas use raw for strings and json for non-string scalars.
+    pytest.param(
+        {"type": "string"},
+        '<cofl:value name="value" type="raw">text</cofl:value>',
+        '<cofl:value name="value" type="json">"text"</cofl:value>',
+        id="raw-string",
+    ),
+    pytest.param(
+        {"type": "integer"},
+        '<cofl:value name="value" type="json">3</cofl:value>',
+        '<cofl:value name="value" type="raw">3</cofl:value>',
+        id="json-integer",
+    ),
+    # Composite schemas use recursive Cohere dict/list wrappers.
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"id": {"type": "integer"}},
+            "required": ["id"],
+            "additionalProperties": False,
+        },
+        '<cofl:value name="value" type="dict">'
+        '<cofl:value name="id" type="json">3</cofl:value>'
+        "</cofl:value>",
+        '<cofl:value name="value" type="json">{"id":3}</cofl:value>',
+        id="dict-object",
+    ),
+    pytest.param(
+        {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 1},
+        '<cofl:value name="value" type="list">'
+        '<cofl:value type="raw">item</cofl:value>'
+        "</cofl:value>",
+        '<cofl:value name="value" type="json">["item"]</cofl:value>',
+        id="list-array",
+    ),
+)
+
+
+@pytest.mark.parametrize(
+    "value_schema, accepted_value, wrong_value",
+    _COHERE_PATTERN_WRAPPER_CASES,
+)
+def test_cohere_pattern_properties_correlate_value_wrappers(
+    value_schema: dict, accepted_value: str, wrong_value: str
+):
+    """Pattern-property schemas select the matching Cohere value wrapper."""
+    schema = {
+        "type": "object",
+        "patternProperties": {"^value$": value_schema},
+        "additionalProperties": False,
+    }
+
+    _check_cohere_grammar(schema, accepted_value, True)
+    _check_cohere_grammar(schema, wrong_value, False)
+
+
+def test_cohere_pattern_properties_override_additional_property_schema():
+    """Pattern values keep their own schema when additional properties use another schema."""
+    schema = {
+        "type": "object",
+        "properties": {"id": {"type": "integer"}},
+        "required": ["id"],
+        "patternProperties": {"^text_[a-z]+$": {"type": "string"}},
+        "additionalProperties": {"type": "boolean"},
+    }
+    instance = (
+        '<cofl:value name="id" type="json">1</cofl:value>'
+        '<cofl:value name="text_label" type="raw">hello</cofl:value>'
+        '<cofl:value name="enabled" type="json">true</cofl:value>'
+    )
+
+    _check_cohere_grammar(schema, instance, True)
+
+
+def test_cohere_nested_pattern_properties():
+    """Nested Cohere dictionaries preserve pattern-property wrappers and schemas."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "config": {
+                "type": "object",
+                "patternProperties": {"^item_[a-z]+$": {"type": "string"}},
+                "additionalProperties": False,
+            }
+        },
+        "required": ["config"],
+    }
+    accepted = (
+        '<cofl:value name="config" type="dict">'
+        '<cofl:value name="item_name" type="raw">value</cofl:value>'
+        "</cofl:value>"
+    )
+
+    _check_cohere_grammar(schema, accepted, True)
+    _check_cohere_grammar(schema, accepted.replace('type="raw"', 'type="json"'), False)
+    _check_cohere_grammar(schema, accepted.replace("item_name", "other"), False)
+
+
+@pytest.mark.parametrize("property_name, json_value", _COHERE_ARBITRARY_JSON_CASES)
+def test_cohere_property_names_accept_arbitrary_json_values(
+    property_name: str, json_value: str
+):
+    """Property-name constraints leave Cohere values unconstrained JSON."""
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z_]+$"},
+    }
+    instance = f'<cofl:value name="{property_name}" type="json">{json_value}</cofl:value>'
+
+    _check_cohere_grammar(schema, instance, True)
+
+
+@pytest.mark.parametrize(
+    "instance",
+    (
+        pytest.param(
+            '<cofl:value name="Bad" type="json">"extra"</cofl:value>', id="invalid-name"
+        ),
+        pytest.param('<cofl:value name="text" type="raw">extra</cofl:value>', id="wrong-wrapper"),
+    ),
+)
+def test_cohere_property_names_reject_invalid_name_or_wrapper(instance: str):
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z_]+$"},
+    }
+
+    _check_cohere_grammar(schema, instance, False)
+
+
+def test_cohere_nested_property_names():
+    """Nested Cohere dictionaries retain property-name constraints and JSON values."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "config": {
+                "type": "object",
+                "propertyNames": {"pattern": "^item_[a-z]+$"},
+            }
+        },
+        "required": ["config"],
+    }
+    accepted = (
+        '<cofl:value name="config" type="dict">'
+        '<cofl:value name="item_data" type="json">{"id": 1}</cofl:value>'
+        "</cofl:value>"
+    )
+
+    _check_cohere_grammar(schema, accepted, True)
+    _check_cohere_grammar(schema, accepted.replace("item_data", "other"), False)
 
 
 # Cohere type-attribute correlation for const/enum/composite schemas.
@@ -2049,6 +2209,12 @@ _XML_DYNAMIC_PROPERTY_CASES = (
         '<|open|>argument key="x_key" type="number"<|sep|>3<|close|>argument<|sep|>',
         '<|open|>argument key="x_key" type="string"<|sep|>v<|close|>argument<|sep|>',
     ),
+    (
+        "cohere_xml",
+        '<cofl:value name="name" type="raw">n</cofl:value>',
+        '<cofl:value name="x_key" type="json">3</cofl:value>',
+        '<cofl:value name="x_key" type="json">"v"</cofl:value>',
+    ),
 )
 
 
@@ -2081,6 +2247,10 @@ def test_xml_pattern_properties_use_property_format_hook(
         if json_format == "kimi_k3_xml":
             assert not _is_grammar_accept_string(
                 grammar, instance.replace('type="number"', 'type="string"')
+            )
+        elif json_format == "cohere_xml":
+            assert not _is_grammar_accept_string(
+                grammar, instance.replace('type="json"', 'type="raw"')
             )
 
 
