@@ -1522,9 +1522,7 @@ def test_cohere_additional_properties_true_accepts_arbitrary_json_values(
     additional_property = (
         f'<cofl:value name="{property_name}" type="json">{json_value}</cofl:value>'
     )
-    wrong_wrapper = (
-        f'<cofl:value name="{property_name}" type="raw">{json_value}</cofl:value>'
-    )
+    wrong_wrapper = f'<cofl:value name="{property_name}" type="raw">{json_value}</cofl:value>'
 
     _check_cohere_grammar(schema, declared_property + additional_property, True)
     _check_cohere_grammar(schema, declared_property + wrong_wrapper, False)
@@ -1607,10 +1605,7 @@ _COHERE_PATTERN_WRAPPER_CASES = (
 )
 
 
-@pytest.mark.parametrize(
-    "value_schema, accepted_value, wrong_value",
-    _COHERE_PATTERN_WRAPPER_CASES,
-)
+@pytest.mark.parametrize("value_schema, accepted_value, wrong_value", _COHERE_PATTERN_WRAPPER_CASES)
 def test_cohere_pattern_properties_correlate_value_wrappers(
     value_schema: dict, accepted_value: str, wrong_value: str
 ):
@@ -1668,14 +1663,9 @@ def test_cohere_nested_pattern_properties():
 
 
 @pytest.mark.parametrize("property_name, json_value", _COHERE_ARBITRARY_JSON_CASES)
-def test_cohere_property_names_accept_arbitrary_json_values(
-    property_name: str, json_value: str
-):
+def test_cohere_property_names_accept_arbitrary_json_values(property_name: str, json_value: str):
     """Property-name constraints leave Cohere values unconstrained JSON."""
-    schema = {
-        "type": "object",
-        "propertyNames": {"pattern": "^[a-z_]+$"},
-    }
+    schema = {"type": "object", "propertyNames": {"pattern": "^[a-z_]+$"}}
     instance = f'<cofl:value name="{property_name}" type="json">{json_value}</cofl:value>'
 
     _check_cohere_grammar(schema, instance, True)
@@ -1684,17 +1674,12 @@ def test_cohere_property_names_accept_arbitrary_json_values(
 @pytest.mark.parametrize(
     "instance",
     (
-        pytest.param(
-            '<cofl:value name="Bad" type="json">"extra"</cofl:value>', id="invalid-name"
-        ),
+        pytest.param('<cofl:value name="Bad" type="json">"extra"</cofl:value>', id="invalid-name"),
         pytest.param('<cofl:value name="text" type="raw">extra</cofl:value>', id="wrong-wrapper"),
     ),
 )
 def test_cohere_property_names_reject_invalid_name_or_wrapper(instance: str):
-    schema = {
-        "type": "object",
-        "propertyNames": {"pattern": "^[a-z_]+$"},
-    }
+    schema = {"type": "object", "propertyNames": {"pattern": "^[a-z_]+$"}}
 
     _check_cohere_grammar(schema, instance, False)
 
@@ -1703,12 +1688,7 @@ def test_cohere_nested_property_names():
     """Nested Cohere dictionaries retain property-name constraints and JSON values."""
     schema = {
         "type": "object",
-        "properties": {
-            "config": {
-                "type": "object",
-                "propertyNames": {"pattern": "^item_[a-z]+$"},
-            }
-        },
+        "properties": {"config": {"type": "object", "propertyNames": {"pattern": "^item_[a-z]+$"}}},
         "required": ["config"],
     }
     accepted = (
