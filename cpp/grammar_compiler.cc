@@ -1739,11 +1739,16 @@ CompiledGrammar GrammarCompilerSub::CompileJSONSchema(
 }
 
 CompiledGrammar GrammarCompilerSub::CompileStructuralTag(const std::string& structural_tag_json) {
-  auto result =
-      StructuralTagToGrammar(structural_tag_json, tokenizer_info_, /*normalize=*/false).ToVariant();
+  auto result = StructuralTagToGrammar(
+                    structural_tag_json,
+                    tokenizer_info_,
+                    /*normalize=*/true,
+                    /*normalize_json_schema_subgrammars=*/false
+  )
+                    .ToVariant();
   XGRAMMAR_CHECK(std::holds_alternative<Grammar>(result))
       << GetMessageFromVariantError(std::get<1>(result));
-  return MultiThreadCompileGrammar(RootRuleRenamer::Apply(std::get<0>(result)));
+  return MultiThreadCompileGrammar(std::get<0>(result));
 }
 
 CompiledGrammar GrammarCompilerSub::CompileRegex(const std::string& regex) {

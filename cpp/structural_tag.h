@@ -82,7 +82,10 @@ struct ConstStringFormat {
 
 struct JSONSchemaFormat {
   static constexpr const char* type = "json_schema";
-  std::string json_schema;
+  // Alias the schema value in the parsed structural-tag document. Keeping the parsed value avoids
+  // serializing and reparsing every nested schema during grammar conversion; the aliasing shared
+  // pointer keeps the complete JSON document alive.
+  std::shared_ptr<const picojson::value> json_schema;
   std::string style = "json";  // "json","qwen_xml","minimax_xml","deepseek_xml","glm_xml"
   // Whether to allow object properties to appear in any order. See
   // Grammar::FromJSONSchema / JSONSchemaToEBNF for the semantics.
@@ -90,7 +93,7 @@ struct JSONSchemaFormat {
   // Per-tag cap on consecutive whitespace characters in the JSON-schema content.
   std::optional<int> max_whitespace_cnt = std::nullopt;
   JSONSchemaFormat(
-      std::string json_schema,
+      std::shared_ptr<const picojson::value> json_schema,
       std::string style = "json",
       bool any_order = false,
       std::optional<int> max_whitespace_cnt = std::nullopt
@@ -396,7 +399,8 @@ struct StructuralTag {
 Result<Grammar, StructuralTagError> StructuralTagToGrammar(
     const std::string& structural_tag_json,
     const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt,
-    bool normalize = true
+    bool normalize = true,
+    bool normalize_json_schema_subgrammars = true
 );
 
 }  // namespace xgrammar

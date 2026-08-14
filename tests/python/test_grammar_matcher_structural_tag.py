@@ -41,24 +41,18 @@ def test_utf8():
 
 expected_grammar_test_structural_tag_after_optimization = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
-basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_integer ::= (("0") | (basic_integer_2 [1-9] [0-9]*))
 basic_string ::= (("\"" basic_string_sub)) (=(root_part_0 [ \n\t]* "}"))
 root_0 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0 [ \n\t]* "}"))
 root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer)) (=([ \n\t]* "}"))
-basic_integer_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub_1))
 basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
-basic_number_6 ::= ((basic_number_1_1 basic_number_2_1 basic_number_3_1 basic_number_5_1)) (=(root_part_0_1 [ \n\t]* "}"))
+basic_number_1 ::= ((basic_number_1_1 basic_number_1_2 basic_number_1_3 basic_number_1_5)) (=(root_part_0_1 [ \n\t]* "}"))
 basic_string_1 ::= (("\"" basic_string_sub_1))
-root_1 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number_6 root_part_0_1 [ \n\t]* "}")) (=("</function>"))
+root_1 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number_1 root_part_0_1 [ \n\t]* "}")) (=("</function>"))
 root_prop_1 ::= (("[" [ \n\t]* basic_string_1 root_prop_1_2 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
 root_prop_1_items ::= (([ \n\t]* "," [ \n\t]* basic_string_1)) (=(root_prop_1_1))
 root_part_0_1 ::= (([ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1)) (=([ \n\t]* "}"))
-basic_number_1_1 ::= ("" | ("-")) (=(basic_number_2_1 basic_number_3_1 basic_number_5_1))
-basic_number_2_1 ::= (("0") | ([1-9] [0-9]*)) (=(basic_number_3_1 basic_number_5_1))
-basic_number_3_1 ::= ("" | ("." basic_number_3_3)) (=(basic_number_5_1))
-basic_number_4_1 ::= ("" | ([+\-])) (=(basic_number_3_3))
-basic_number_5_1 ::= ("" | ([eE] basic_number_4_1 basic_number_3_3))
 triggered_tags_group ::= (("1>" root_0 "</function>") | ("2>" root_0 "</function>"))
 triggered_tags_group_1 ::= ((">" root_1 "</function>"))
 triggered_tags ::= TagDispatch(
@@ -68,10 +62,16 @@ triggered_tags ::= TagDispatch(
   excludes=()
 )
 root ::= ((triggered_tags))
-basic_number_3_2 ::= ("" | ([0-9] basic_number_3_2))
-basic_number_3_3 ::= (([0-9] basic_number_3_2))
+basic_integer_2 ::= ("" | ("-")) (=([1-9] [0-9]*))
+basic_number_1_1 ::= ("" | ("-")) (=(basic_number_1_2 basic_number_1_3 basic_number_1_5))
+basic_number_1_2 ::= (("0") | ([1-9] [0-9]*)) (=(basic_number_1_3 basic_number_1_5))
+basic_number_1_3 ::= ("" | ("." basic_number_4_2)) (=(basic_number_1_5))
+basic_number_1_4 ::= ("" | ([+\-])) (=(basic_number_4_2))
+basic_number_1_5 ::= ("" | ([eE] basic_number_1_4 basic_number_4_2))
 root_prop_1_1 ::= ("" | (root_prop_1_items root_prop_1_1))
 root_prop_1_2 ::= ((root_prop_1_1)) (=([ \n\t]* "]"))
+basic_number_4_1 ::= ("" | ([0-9] basic_number_4_1))
+basic_number_4_2 ::= (([0-9] basic_number_4_1))
 """
 
 expected_grammar_test_structural_tag_before_optimization = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
@@ -183,6 +183,35 @@ def test_structural_tag_compiler():
     compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
     compiled_grammar = compiler.compile_structural_tag(tags, triggers)
     assert str(compiled_grammar.grammar) == expected_grammar_test_structural_tag_after_optimization
+
+    # The deprecated tags-plus-triggers entry point serializes its equivalent payload directly to
+    # avoid constructing a second nested Pydantic object graph. Keep it exactly aligned with the
+    # modern StructuralTag entry point for string, dictionary, and Pydantic schema inputs.
+    modern_structural_tag = xgr.StructuralTag.from_legacy_structural_tag(tags, triggers)
+    modern_compiled_grammar = xgr.GrammarCompiler(xgr.TokenizerInfo([])).compile_structural_tag(
+        modern_structural_tag
+    )
+    assert str(compiled_grammar.grammar) == str(modern_compiled_grammar.grammar)
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "object", "properties": {"value": {"type": "integer"}}},
+        '{"type":"object","properties":{"value":{"type":"integer"}}}',
+        '  { "type": "object", "properties": { "value": { "type": "integer" } } }\n',
+    ],
+    ids=["dict", "json-string", "json-string-with-whitespace"],
+)
+def test_legacy_structural_tag_payload_matches_modern_entry(schema):
+    tags = [xgr.StructuralTagItem(begin="<call>", schema=schema, end="</call>")]
+    triggers = ["<call>"]
+    tokenizer_info = xgr.TokenizerInfo([])
+    legacy = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(tags, triggers)
+    modern = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(
+        xgr.StructuralTag.from_legacy_structural_tag(tags, triggers)
+    )
+    assert str(legacy.grammar) == str(modern.grammar)
 
 
 def test_structural_tag_overlapping_branch_prefixes():

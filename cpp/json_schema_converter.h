@@ -565,6 +565,19 @@ Grammar JSONSchemaToGrammar(
     RegexFSMCache* regex_fsm_cache = nullptr
 );
 
+/*! \brief Convert an already parsed JSON Schema directly to an unnormalized grammar AST. */
+Grammar JSONSchemaValueToGrammar(
+    const picojson::value& schema,
+    bool any_whitespace = true,
+    std::optional<int> indent = std::nullopt,
+    std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
+    bool strict_mode = true,
+    std::optional<int> max_whitespace_cnt = std::nullopt,
+    bool any_order = false,
+    JSONFormat json_format = JSONFormat::kJSON,
+    RegexFSMCache* regex_fsm_cache = nullptr
+);
+
 // ==================== Public API functions (backward compatible) ====================
 
 /*!

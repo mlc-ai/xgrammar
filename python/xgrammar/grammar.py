@@ -113,21 +113,55 @@ def _get_structural_tag_str_from_args(args: List[Any], kwargs: Dict[str, Any]) -
     TypeError
         When the arguments are invalid.
     """
+
+    def legacy_to_json(tags: List[StructuralTagItem], triggers: List[str]) -> str:
+        # The legacy API is still used with hundreds of tools. Building a full nested Pydantic
+        # object graph only to serialize it immediately adds fixed work to every compilation.
+        # StructuralTagItem has already validated each tag. Preserve string schemas as JSON
+        # fragments instead of parsing and immediately serializing them again; the C++ parser
+        # remains the authoritative validator for the complete structural-tag document.
+        serialized_tags = []
+        for tag in tags:
+            schema = tag.schema_
+            if isinstance(schema, str):
+                # Preserve the legacy API's rejection of trailing data and prevent a raw JSON
+                # fragment from escaping its enclosing content object.
+                json.loads(schema)
+            elif isinstance(schema, type) and issubclass(schema, BaseModel):
+                schema = schema.model_json_schema()
+            schema_json = (
+                schema
+                if isinstance(schema, str)
+                else json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
+            )
+            serialized_tags.append(
+                '{"type":"tag","begin":'
+                + json.dumps(tag.begin, ensure_ascii=False)
+                + ',"content":{"type":"json_schema","json_schema":'
+                + schema_json
+                + '},"end":'
+                + json.dumps(tag.end, ensure_ascii=False)
+                + "}"
+            )
+        return (
+            '{"type":"structural_tag","format":{"type":"triggered_tags","triggers":'
+            + json.dumps(triggers, ensure_ascii=False, separators=(",", ":"))
+            + ',"tags":['
+            + ",".join(serialized_tags)
+            + "]}}"
+        )
+
     if len(args) == 1:
         if isinstance(args[0], (str, dict, StructuralTag)):
             return _convert_instance_to_str(args[0])
         else:
             raise TypeError("Invalid argument type for from_structural_tag")
     elif len(args) == 2 and isinstance(args[0], list) and isinstance(args[1], list):
-        return StructuralTag.from_legacy_structural_tag(args[0], args[1]).model_dump_json(
-            indent=None
-        )
+        return legacy_to_json(args[0], args[1])
     elif "structural_tag" in kwargs:
         return _convert_instance_to_str(kwargs["structural_tag"])
     elif "tags" in kwargs and "triggers" in kwargs:
-        return StructuralTag.from_legacy_structural_tag(
-            kwargs["tags"], kwargs["triggers"]
-        ).model_dump_json(indent=None)
+        return legacy_to_json(kwargs["tags"], kwargs["triggers"])
     else:
         raise TypeError("Invalid arguments for from_structural_tag")
 

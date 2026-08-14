@@ -4530,6 +4530,30 @@ Grammar JSONSchemaToGrammar(
   std::string error = picojson::parse(schema_value, schema);
   XGRAMMAR_CHECK(error.empty()) << "Failed to parse JSON: " << error
                                 << ". The JSON string is:" << schema;
+  return JSONSchemaValueToGrammar(
+      schema_value,
+      any_whitespace,
+      indent,
+      std::move(separators),
+      strict_mode,
+      max_whitespace_cnt,
+      any_order,
+      json_format,
+      regex_fsm_cache
+  );
+}
+
+Grammar JSONSchemaValueToGrammar(
+    const picojson::value& schema_value,
+    bool any_whitespace,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
+    bool any_order,
+    JSONFormat json_format,
+    RegexFSMCache* regex_fsm_cache
+) {
   SchemaParser parser(schema_value, {strict_mode, json_format});
   auto spec_result = parser.Parse(schema_value, "root");
   if (spec_result.IsErr()) {
