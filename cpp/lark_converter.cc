@@ -1482,8 +1482,34 @@ class LarkParser {
       flags = "i";
       json_string.pop_back();
     }
+    // Lark string literals allow Python-style \xHH escapes, while picojson only accepts JSON
+    // escapes. Rewrite a valid hexadecimal byte escape to the equivalent Unicode escape before
+    // decoding. Escaped backslashes are copied as a pair, so "\\x41" remains literal text.
+    std::string normalized_string;
+    normalized_string.reserve(json_string.size());
+    for (size_t index = 0; index < json_string.size(); ++index) {
+      if (json_string[index] != '\\' || index + 1 >= json_string.size()) {
+        normalized_string += json_string[index];
+        continue;
+      }
+      if (json_string[index + 1] == '\\') {
+        normalized_string += "\\\\";
+        ++index;
+        continue;
+      }
+      if (json_string[index + 1] == 'x' && index + 3 < json_string.size() &&
+          std::isxdigit(static_cast<unsigned char>(json_string[index + 2])) &&
+          std::isxdigit(static_cast<unsigned char>(json_string[index + 3]))) {
+        normalized_string += "\\u00";
+        normalized_string += json_string[index + 2];
+        normalized_string += json_string[index + 3];
+        index += 3;
+        continue;
+      }
+      normalized_string += json_string[index];
+    }
     picojson::value value;
-    std::string error = picojson::parse(value, json_string);
+    std::string error = picojson::parse(value, normalized_string);
     if (!error.empty() || !value.is<std::string>()) {
       RaiseLarkError(source_, token.location, "invalid string literal: " + error);
     }
@@ -2196,6 +2222,11 @@ class LarkCompiler {
             RaiseLarkError(source_, location, "allow_initial_skip must be a boolean");
           }
           allow_initial_skip_ = allow_initial_skip_ || option.get<bool>();
+        } else if (key == "ignore_once") {
+          if (!option.is<bool>()) {
+            RaiseLarkError(source_, location, "ignore_once must be a boolean");
+          }
+          ignore_once_ = ignore_once_ || option.get<bool>();
         } else if (key == "allow_invalid_utf8") {
           if (!option.is<bool>()) {
             RaiseLarkError(source_, location, "allow_invalid_utf8 must be a boolean");
@@ -2291,7 +2322,7 @@ class LarkCompiler {
     int32_t ignore_body =
         ignore_choices.size() == 1 ? ignore_choices[0] : builder_.AddChoices(ignore_choices);
     int32_t ignore_item_rule = builder_.AddRuleWithHint("lark_ignore_item", ignore_body);
-    int32_t ignore_repeat = builder_.AddRepeat(ignore_item_rule, 0, -1);
+    int32_t ignore_repeat = builder_.AddRepeat(ignore_item_rule, 0, ignore_once_ ? 1 : -1);
     skip_rule_id_ = builder_.AddRuleWithHint("lark_ignore", ignore_repeat);
   }
 
@@ -3455,6 +3486,7 @@ class LarkCompiler {
   int32_t skip_rule_id_ = -1;
   int32_t never_rule_id_ = -1;
   bool allow_initial_skip_ = false;
+  bool ignore_once_ = false;
   bool allow_invalid_utf8_ = false;
   std::unordered_set<std::string> dynamic_unused_rules_;
 };

@@ -412,6 +412,13 @@ def test_lark_core_languages(
     _assert_language(grammar, accepted, rejected)
 
 
+def test_lark_hex_string_escapes() -> None:
+    _assert_language(r'start: "a\x00b"', ["a\x00b"], ["ab", "a\x01b"])
+    _assert_language(r'start: "\x41\x42"', ["AB"], ["ab", "A", "ABC"])
+    _assert_language(r'start: "\\x41"', [r"\x41"], ["A", "x41"])
+    _assert_language(r'start: "\x7f\xFF"', ["\x7fÿ"], ["ÿ\x7f", "ab"])
+
+
 @pytest.mark.parametrize(
     "grammar, accepted, rejected",
     [
@@ -572,6 +579,35 @@ def test_lark_default_disallows_initial_skip_but_allows_trailing_skip() -> None:
         start: "a" "b"
     """
     _assert_language(grammar, ["ab", "a b", "ab  "], [" ab", "a\nb"])
+
+
+def test_lark_ignore_once_bounds_each_skipped_span() -> None:
+    grammar = r"""
+        %grammar_options {"ignore_once": true}
+        %ignore /[ \t]{1,8}/
+        start: "A" "!"
+    """
+    _assert_language(
+        grammar, ["A!", "A !", "A        !", "A!        "], [" A!", "A         !", "A!         "]
+    )
+
+    # Without ignore_once, the skip expression can be matched repeatedly at one grammar position.
+    repeated = r"%ignore /[ \t]{1,8}/" '\nstart: "A" "!"'
+    _assert_language(repeated, ["A         !", "A!         "], [" A!"])
+
+
+def test_lark_ignore_once_merges_and_is_scoped_to_nested_grammars() -> None:
+    grammar = r"""
+        %grammar_options {"ignore_once": false}
+        %grammar_options {"ignore_once": true}
+        %grammar_options {"ignore_once": false}
+        %ignore /[ ]{1,2}/
+        start: "[" %lark {
+          %ignore /[ ]{1,2}/
+          start: "a" "b"
+        } "]"
+    """
+    _assert_language(grammar, ["[a   b]", "[a b]", "[ab   ]"], ["[   a b]"])
 
 
 def test_lark_parametric_permutations() -> None:
@@ -2186,6 +2222,11 @@ def test_lark_large_choice_grammar() -> None:
             '%grammar_options {"allow_initial_skip": 1}\nstart: "a"',
             "allow_initial_skip must be a boolean",
             id="initial-skip-type",
+        ),
+        pytest.param(
+            '%grammar_options {"ignore_once": 1}\nstart: "a"',
+            "ignore_once must be a boolean",
+            id="ignore-once-type",
         ),
         pytest.param(
             '%grammar_options {"no_forcing": true}\nstart: "a"',

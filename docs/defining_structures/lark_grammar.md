@@ -118,9 +118,11 @@ strings the grammar accepts.
 
 ### String Literals
 
-String literals use double quotes and JSON escape syntax: `\"`, `\\`, `\/`, `\b`, `\f`, `\n`,
-`\r`, `\t`, and `\uXXXX`. Non-ASCII characters may be written directly (`"中文"`, `"😀"`) or with
-Unicode escapes (`"\u03bb"` matches `λ`).
+String literals use double quotes. They accept JSON escape syntax (`\"`, `\\`, `\/`, `\b`, `\f`,
+`\n`, `\r`, `\t`, and `\uXXXX`) and the Lark/Python hexadecimal form `\xHH`. Non-ASCII characters
+may be written directly (`"中文"`, `"😀"`) or with Unicode escapes (`"\u03bb"` matches `λ`). A
+hexadecimal escape denotes the corresponding Unicode codepoint, so `"\x41"` matches `A` and
+`"\xFF"` matches `ÿ`.
 
 A trailing `i` makes the literal case-insensitive: `"yes"i` matches `yes`, `YES`, `Yes`, and so
 on. Case-insensitive literals currently support ASCII characters only; a case-insensitive literal
@@ -343,6 +345,11 @@ The `%ignore` expression may be a terminal name, a string, a regex, or a combina
 
 `allow_initial_skip` (boolean, default `false`) allows `%ignore` content to appear before the
 first lexeme of the output.
+
+`ignore_once` (boolean, default `false`) makes the combined `%ignore` expression match at most once
+at each grammar position. By default it may match repeatedly. For example, `%ignore /[ ]{1,8}/`
+normally accepts any number of spaces between two lexemes because it can consume several groups
+of up to eight. With `ignore_once` enabled, each skipped span is limited to eight spaces.
 
 `allow_invalid_utf8` (boolean, default `false`) changes regular expressions in this grammar from
 Unicode codepoints to individual bytes. It permits standalone bytes such as `0x80`; string
