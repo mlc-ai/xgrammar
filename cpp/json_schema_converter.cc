@@ -2896,12 +2896,21 @@ int32_t JSONSchemaConverter::GenerateObject(
             RuleRef(key_rule_id), value_rule_id, rule_name, pattern_suffix, pattern_property.schema
         ));
       }
-      // Merge with existing additionalProperties if present
+      // Merge with existing additionalProperties if present. When
+      // propertyNames also constrains the keys, apply it to the additional
+      // branch so non-pattern keys cannot bypass the name constraint
+      // (issue #841). Pattern-matching keys keep their pattern key rule
+      // (choice semantics; a key matching both cannot be intersected by a
+      // static grammar).
       if (effective_additional) {
         int32_t value_rule_id =
             CreateRule(effective_additional, rule_name + "_" + effective_suffix);
+        int32_t additional_key_rule_id = KeyPatternExpression();
+        if (spec.property_names) {
+          additional_key_rule_id = RuleRef(CreateRule(spec.property_names, rule_name + "_name"));
+        }
         patterns.push_back(FormatOtherProperty(
-            KeyPatternExpression(),
+            additional_key_rule_id,
             value_rule_id,
             rule_name,
             effective_suffix,
@@ -2973,10 +2982,17 @@ int32_t JSONSchemaConverter::GenerateObject(
         if (additional_property) {
           int32_t value_rule_id =
               CreateRule(additional_property, rule_name + "_" + additional_suffix);
+          // When propertyNames also constrains the keys, apply it to the
+          // additional branch so non-pattern keys cannot bypass the name
+          // constraint (issue #841).
+          int32_t additional_key_rule_id = KeyPatternExpression();
+          if (spec.property_names) {
+            additional_key_rule_id = RuleRef(CreateRule(spec.property_names, rule_name + "_name"));
+          }
           property_choices.push_back(Sequence(
               {beginning_separator,
                FormatOtherProperty(
-                   KeyPatternExpression(),
+                   additional_key_rule_id,
                    value_rule_id,
                    rule_name,
                    additional_suffix,

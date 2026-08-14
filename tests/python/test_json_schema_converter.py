@@ -3426,5 +3426,21 @@ def test_pattern_properties_preserves_additional_properties_value_schema():
     check_schema_with_instance(schema, '{"y": 1}', is_accepted=False)
 
 
+def test_property_names_constrains_additional_keys_with_pattern_properties():
+    # Regression for issue #841: when patternProperties and propertyNames
+    # coexist, propertyNames must still constrain the additional branch's
+    # keys. Pattern-matching keys keep their pattern key rule (choice
+    # semantics; a static grammar cannot intersect the two).
+    schema = {
+        "type": "object",
+        "patternProperties": {"^x[0-9]+$": {"type": "integer"}},
+        "propertyNames": {"pattern": "^[a-z0-9]+$"},
+        "additionalProperties": {"type": "string"},
+    }
+    check_schema_with_instance(schema, '{"x1": 1}', is_accepted=True)
+    check_schema_with_instance(schema, '{"y": "ok"}', is_accepted=True)
+    check_schema_with_instance(schema, '{"UPPER": "bad"}', is_accepted=False)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
