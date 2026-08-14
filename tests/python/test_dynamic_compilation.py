@@ -241,6 +241,201 @@ def test_shared_character_class_repeat_masks_survive_compiler_cache_clear():
             torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
 
 
+def test_cache_disabled_bounded_character_class_uses_repeat_masks():
+    tokenizer_info = xgr.TokenizerInfo(
+        [chr(value) for value in range(32, 127)] + ["ab", "abc", "abcd", "ab>", ">"],
+        stop_token_ids=[],
+    )
+    grammar = 'root ::= value ">"\nvalue ::= [a-z]{2,4}'
+    dynamic = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+    eager = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=False
+    ).compile_grammar(grammar)
+
+    initial_size = dynamic.memory_size_bytes
+    expected = _mask_trace(eager, "ab>")
+    actual = _mask_trace(dynamic, "ab>")
+    # The closing literal can materialize one ordinary mask, but each bounded repeat count must
+    # use the compact repeat-mask path instead of populating another full adaptive mask.
+    assert dynamic.memory_size_bytes <= initial_size + 256
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+        assert actual_apply == expected_apply
+        torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize(
+    "grammar,prefixes,vocabulary",
+    [
+        (
+            'root ::= literal "x"\nliteral[capture="literal"] ::= "abc"',
+            ["", "a", "ab", "abc"],
+            ["a", "ab", "abc", "abc", "abcx", "abcy", "x", "xy", "bad"],
+        ),
+        (
+            'root ::= left "!" | right "?"\n'
+            'left[capture="left"] ::= "abc"\n'
+            'right[capture="right"] ::= "abd"',
+            ["", "a", "ab", "abc"],
+            ["a", "ab", "abc", "abc!", "abc?", "abd", "abd!", "abd?", "abe", "!", "?"],
+        ),
+        (
+            'root ::= literal "x"\nliteral[capture="literal"] ::= "abc" | "abd"',
+            ["", "a", "ab", "abc"],
+            ["a", "ab", "abc", "abcx", "abc?", "abd", "abdx", "abd?", "abe", "x"],
+        ),
+        (
+            "root ::= property\n"
+            'property[capture="property"] ::= "\\"name\\":" value\n'
+            "value ::= [0-9]",
+            ["", '"', '"name', '"name":'],
+            ['"', '"name', '"name":', '"name":1', '"name":x', "1", "x"],
+        ),
+        (
+            "root ::= property\n"
+            'property[capture="property"] ::= "\\"name\\":" value | '
+            '"\\"address\\":" value\n'
+            "value ::= [0-9]",
+            ["", '"', '"name', '"name":', '"address', '"address":'],
+            [
+                '"',
+                '"name',
+                '"name":',
+                '"name":1',
+                '"address',
+                '"address":',
+                '"address":1',
+                '"other":1',
+                "1",
+            ],
+        ),
+        (
+            'root ::= literal "x"\nliteral[capture="literal"] ::= "é"',
+            ["", b"\xc3", "é"],
+            [b"\xc3", "é", "éx", "éy", "x", b"\xff"],
+        ),
+    ],
+    ids=[
+        "parent-continuation",
+        "multiple-live-states",
+        "branched-literal-rule",
+        "literal-prefix-before-rule-ref",
+        "branched-prefixes-before-rule-ref",
+        "utf8-byte-prefix",
+    ],
+)
+def test_cache_disabled_deterministic_byte_path_masks_match_token_oracle(
+    grammar, prefixes, vocabulary
+):
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    eager = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=False
+    ).compile_grammar(grammar)
+    dynamic = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+
+    for prefix in prefixes:
+        masks = []
+        for compiled_grammar in [eager, dynamic]:
+            matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+            if prefix:
+                assert matcher.accept_string(prefix)
+            bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+            xgr.reset_token_bitmask(bitmask)
+            matcher.fill_next_token_bitmask(bitmask)
+            masks.append(bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0])
+        torch.testing.assert_close(masks[0], masks[1], rtol=0, atol=0)
+
+        for token_id in range(tokenizer_info.vocab_size):
+            oracle = xgr.GrammarMatcher(dynamic, terminate_without_stop_token=True)
+            if prefix:
+                assert oracle.accept_string(prefix)
+            assert bool(masks[1][token_id]) == oracle.accept_token(token_id), (
+                prefix,
+                token_id,
+                vocabulary[token_id],
+            )
+
+
+def test_additional_property_exclusion_sink_masks_match_token_oracle():
+    vocabulary = [
+        '"',
+        "n",
+        "na",
+        "name",
+        'name"',
+        'name":',
+        'name":1',
+        "p",
+        "profile",
+        'profile":',
+        "x",
+        "xname",
+        'xname"',
+        'xname":',
+        "x中",
+        "x🙂",
+        b"x\xe4",
+        b"x\xe4\xb8",
+        b'x\xe4\xb8\xad"',
+        b"x\xff",
+        b"x\xc0\x80",
+        "x\\u0061",
+        b"x\\",
+        b"x\\u",
+        b"x\\u0",
+        b"x\\u00",
+        b"x\\u006",
+        b'x\\u0061"',
+        b"x\\q",
+        b"x\\u0g",
+        b'x\\"',
+        "x\n",
+        " other",
+        '\\"',
+        "\\u0061",
+        "\\n",
+        b"\xff",
+        ":",
+        "1",
+        "}",
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "integer"}, "profile": {"type": "integer"}},
+        "additionalProperties": {"type": "integer"},
+    }
+    eager = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=False
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=False)
+    dynamic = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=True
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=False)
+
+    for prefix in ['{"', '{"n', '{"na', '{"name', '{"p', '{"x', '{"xname']:
+        masks = []
+        for compiled_grammar in [eager, dynamic]:
+            matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+            assert matcher.accept_string(prefix)
+            bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+            xgr.reset_token_bitmask(bitmask)
+            assert matcher.fill_next_token_bitmask(bitmask)
+            masks.append(bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0])
+        torch.testing.assert_close(masks[0], masks[1], rtol=0, atol=0)
+
+        for token_id in range(tokenizer_info.vocab_size):
+            oracle = xgr.GrammarMatcher(dynamic, terminate_without_stop_token=True)
+            assert oracle.accept_string(prefix)
+            assert bool(masks[1][token_id]) == oracle.accept_token(token_id), (
+                prefix,
+                token_id,
+                vocabulary[token_id],
+            )
+
+
 def test_limited_compiler_cache_does_not_retain_growing_grammar():
     tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
     cache_limit = 64 * 1024
@@ -575,6 +770,104 @@ def test_continuation_transition_cache_filters_active_json_length(
             oracle = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
             assert oracle.accept_string(prefix)
             assert bool(allowed_tokens[token_id]) == oracle.accept_token(token_id), token_id
+
+
+def test_continuation_mask_cache_classifies_tokens_independently_of_other_states(capfd):
+    suffixes = [
+        chr(first) + chr(second)
+        for first in range(ord("a"), ord("z") + 1)
+        for second in range(ord("a"), ord("z") + 1)
+    ]
+    vocabulary = ['"x'] + ['"x' + suffix for suffix in suffixes] + ["a", "x", "Q"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=True
+    ).compile_grammar(
+        'root ::= value "x" | branch\n'
+        'value[temperature=0.7] ::= [a-z]* "\\""\n'
+        'branch ::= "aQ" | "\\"xaa"'
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    # The branch accepts this token at the initial position, while value rejects it. The cached
+    # value result must therefore be computed independently of the other live branch.
+    shared_token_id = vocabulary.index('"xaa')
+    xgr.reset_token_bitmask(bitmask)
+    assert matcher.fill_next_token_bitmask(bitmask, debug_print=True)
+    initial_mask = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert initial_mask[shared_token_id]
+
+    # Consuming "a" keeps value in the same logical state but advances the other branch to "Q".
+    # Reusing value's cached continuation must now reject the formerly shared token.
+    assert matcher.accept_token(vocabulary.index("a"))
+    xgr.reset_token_bitmask(bitmask)
+    assert matcher.fill_next_token_bitmask(bitmask, debug_print=True)
+    cached_mask = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not cached_mask[shared_token_id]
+    for token_id in range(tokenizer_info.vocab_size):
+        oracle = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert oracle.accept_token(vocabulary.index("a"))
+        assert bool(cached_mask[token_id]) == oracle.accept_token(token_id), token_id
+
+    # The 677-token adaptive continuation is printed only for the first fill. Its absence from
+    # the second debug trace confirms that this test exercised the matcher-local cache hit.
+    assert capfd.readouterr().err.count("uncertain_num=677") == 1
+
+
+def test_continuation_mask_cache_is_cleared_before_rollback_row_reuse(capfd):
+    suffixes = [
+        chr(first) + chr(second)
+        for first in range(ord("a"), ord("m"))
+        for second in range(ord("a"), ord("m"))
+    ]
+    vocabulary = (
+        ['L"', 'R"', '"x', '"y']
+        + ['"x' + suffix for suffix in suffixes]
+        + ['"y' + suffix for suffix in suffixes]
+        + ["a", "x", "y"]
+    )
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=True
+    ).compile_grammar(
+        'root ::= "L\\"" wrapper "x" | "R\\"" wrapper "y"\n'
+        "wrapper ::= value\n"
+        'value[temperature=0.7] ::= [a-z]* "\\""'
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    def fill_mask():
+        xgr.reset_token_bitmask(bitmask)
+        assert matcher.fill_next_token_bitmask(bitmask, debug_print=True)
+        return bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0].clone()
+
+    assert matcher.accept_token(vocabulary.index('L"'))
+    left_mask = fill_mask()
+    assert left_mask[vocabulary.index('"x')]
+    assert not left_mask[vocabulary.index('"y')]
+
+    # The repeated character-class state and its parent context are logically unchanged here, so
+    # this fill reuses the first result.
+    assert matcher.accept_token(vocabulary.index("a"))
+    left_cached_mask = fill_mask()
+    torch.testing.assert_close(left_cached_mask, left_mask, rtol=0, atol=0)
+
+    # Rollback reuses the same absolute parser rows for a different grandparent branch. The old
+    # left-context entry must be gone before those row numbers are populated by the right branch.
+    matcher.rollback(2)
+    assert matcher.accept_token(vocabulary.index('R"'))
+    right_mask = fill_mask()
+    assert not right_mask[vocabulary.index('"x')]
+    assert right_mask[vocabulary.index('"y')]
+    for token_id in range(tokenizer_info.vocab_size):
+        oracle = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert oracle.accept_token(vocabulary.index('R"'))
+        assert bool(right_mask[token_id]) == oracle.accept_token(token_id), token_id
+
+    # The middle fill is a hit; the first and post-rollback fills are independent misses.
+    assert capfd.readouterr().err.count("uncertain_num=290") == 2
 
 
 def test_shared_parser_features_preserve_budget_and_capture_behavior():

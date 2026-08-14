@@ -405,6 +405,97 @@ def test_pattern_properties_use_search_semantics_and_json_escapes():
 
 
 @pytest.mark.parametrize(
+    "value,expected",
+    [
+        ('""', False),
+        ('"a"', True),
+        ('"你好"', True),
+        ('"하"', True),
+        ('"퟿"', True),
+        ('"\\u4F60\\u597D"', True),
+        (r'"\""', True),
+        (r'"\\"', True),
+        (r'"\n"', True),
+        (r'"\u0061"', True),
+        ('"a\n"', False),
+    ],
+)
+def test_nonempty_wildcard_pattern_json_spellings(value: str, expected: bool):
+    assert _accepts(".+", value) is expected
+
+
+def test_nonempty_wildcard_pattern_property_preserves_parent_continuation():
+    schema = {
+        "type": "object",
+        "patternProperties": {".+": {"type": "integer"}},
+        "additionalProperties": False,
+    }
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema), any_whitespace=False)
+
+    assert _is_grammar_accept_string(grammar, '{"a": 1, "b": 2}')
+    assert _is_grammar_accept_string(grammar, '{"\\u4F60": 1}')
+    assert _is_grammar_accept_string(grammar, r'{"\"": 1}')
+    assert _is_grammar_accept_string(grammar, r'{"\\": 1}')
+    assert not _is_grammar_accept_string(grammar, '{"": 1}')
+    assert not _is_grammar_accept_string(grammar, '{"a": "bad"}')
+
+
+def test_nonempty_wildcard_pattern_dynamic_masks_match_eager_at_every_step():
+    vocabulary = [
+        "{",
+        '"',
+        "a",
+        "\\n",
+        "\\u0061",
+        '\\"',
+        "\\\\",
+        '": ',
+        'a": 1',
+        ', "',
+        "2",
+        "}",
+        b"\xff",
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    schema = {
+        "type": "object",
+        "patternProperties": {".+": {"type": "integer"}},
+        "additionalProperties": False,
+    }
+    compilers = [
+        xgr.GrammarCompiler(
+            tokenizer_info,
+            max_threads=1,
+            cache_enabled=False,
+            enable_dynamic_compilation=enable_dynamic_compilation,
+        )
+        for enable_dynamic_compilation in (False, True)
+    ]
+    eager, dynamic = [
+        compiler.compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+        for compiler in compilers
+    ]
+
+    def mask_trace(compiled):
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        trace = []
+        for character in '{"a": 1, "\\n": 2}':
+            xgr.reset_token_bitmask(bitmask)
+            trace.append((matcher.fill_next_token_bitmask(bitmask), bitmask.clone()))
+            assert matcher.accept_string(character)
+        assert matcher.is_terminated()
+        return trace
+
+    expected = mask_trace(eager)
+    actual = mask_trace(dynamic)
+    assert len(actual) == len(expected)
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+        assert actual_apply == expected_apply
+        assert actual_mask.tolist() == expected_mask.tolist()
+
+
+@pytest.mark.parametrize(
     "pattern,value,expected",
     [
         (r"^[A-F\d]{2,3}$", '"A\\u0039"', True),

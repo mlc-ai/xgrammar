@@ -2371,6 +2371,141 @@ int32_t JSONSchemaConverter::BuildTrieBody(const TrieNode& node, const std::stri
   return Choice(choices);
 }
 
+std::string JSONSchemaConverter::BuildTrieMismatchRegex(const TrieNode& node) const {
+  static constexpr const char* kEscape =
+      R"(\x5C(?:[\x22\x2F\x5C\x62\x66\x6E\x72\x74]|\x75[0-9A-Fa-f]{4}))";
+  static constexpr char kHex[] = "0123456789ABCDEF";
+  auto byte_escape = [](uint8_t byte) {
+    std::string result = "\\x00";
+    result[2] = kHex[byte >> 4];
+    result[3] = kHex[byte & 0x0f];
+    return result;
+  };
+
+  std::vector<std::string> choices;
+  choices.reserve(node.children.size() + 2);
+
+  std::string mismatch = R"([^\x00-\x1F\x22\x5C)";
+  for (const auto& [character, child] : node.children) {
+    static_cast<void>(child);
+    mismatch += byte_escape(character);
+  }
+  mismatch += "]";
+  choices.push_back(std::move(mismatch));
+  choices.emplace_back(kEscape);
+  for (const auto& [character, child] : node.children) {
+    choices.push_back(byte_escape(character) + BuildTrieMismatchRegex(child));
+  }
+
+  std::string result = "(?:";
+  for (size_t i = 0; i < choices.size(); ++i) {
+    if (i != 0) {
+      result.push_back('|');
+    }
+    result += choices[i];
+  }
+  result.push_back(')');
+  return result;
+}
+
+std::optional<std::string> JSONSchemaConverter::BuildTrieNonterminalRegex(const TrieNode& node
+) const {
+  static constexpr char kHex[] = "0123456789ABCDEF";
+  auto byte_escape = [](uint8_t byte) {
+    std::string result = "\\x00";
+    result[2] = kHex[byte >> 4];
+    result[3] = kHex[byte & 0x0f];
+    return result;
+  };
+
+  std::vector<std::string> child_choices;
+  child_choices.reserve(node.children.size());
+  for (const auto& [character, child] : node.children) {
+    if (auto child_regex = BuildTrieNonterminalRegex(child)) {
+      child_choices.push_back(byte_escape(character) + std::move(*child_regex));
+    }
+  }
+  if (child_choices.empty()) {
+    return node.is_terminal ? std::nullopt : std::optional<std::string>("");
+  }
+
+  std::string children_regex;
+  if (child_choices.size() == 1) {
+    children_regex = std::move(child_choices[0]);
+  } else {
+    children_regex = "(?:";
+    for (size_t i = 0; i < child_choices.size(); ++i) {
+      if (i != 0) {
+        children_regex.push_back('|');
+      }
+      children_regex += child_choices[i];
+    }
+    children_regex.push_back(')');
+  }
+  if (!node.is_terminal) {
+    children_regex = "(?:" + children_regex + ")?";
+  }
+  return children_regex;
+}
+
+std::optional<std::string> JSONSchemaConverter::BuildTrieTerminalRegex(const TrieNode& node) const {
+  static constexpr char kHex[] = "0123456789ABCDEF";
+  auto byte_escape = [](uint8_t byte) {
+    std::string result = "\\x00";
+    result[2] = kHex[byte >> 4];
+    result[3] = kHex[byte & 0x0f];
+    return result;
+  };
+
+  std::vector<std::string> child_choices;
+  child_choices.reserve(node.children.size());
+  for (const auto& [character, child] : node.children) {
+    if (auto child_regex = BuildTrieTerminalRegex(child)) {
+      child_choices.push_back(byte_escape(character) + std::move(*child_regex));
+    }
+  }
+  if (child_choices.empty()) {
+    return node.is_terminal ? std::optional<std::string>("") : std::nullopt;
+  }
+
+  std::string children_regex;
+  if (child_choices.size() == 1) {
+    children_regex = std::move(child_choices[0]);
+  } else {
+    children_regex = "(?:";
+    for (size_t i = 0; i < child_choices.size(); ++i) {
+      if (i != 0) {
+        children_regex.push_back('|');
+      }
+      children_regex += child_choices[i];
+    }
+    children_regex.push_back(')');
+  }
+  if (node.is_terminal) {
+    children_regex = "(?:" + children_regex + ")?";
+  }
+  return children_regex;
+}
+
+std::string JSONSchemaConverter::BuildTrieRegex(const TrieNode& node) const {
+  // Factor every first-mismatch path before one shared generic JSON string tail. This preserves
+  // the source-spelling exclusion language while avoiding a complete copy of the tail automaton
+  // at every trie node.
+  static constexpr const char* kStringTail =
+      R"((?:[^\x00-\x1F\x22\x5C]|\x5C(?:[\x22\x2F\x5C\x62\x66\x6E\x72\x74]|\x75[0-9A-Fa-f]{4}))*\x22)";
+  std::string result = "(?:(?:" + BuildTrieMismatchRegex(node) + ")" + kStringTail;
+
+  if (auto nonterminal_regex = BuildTrieNonterminalRegex(node)) {
+    result.push_back('|');
+    if (!nonterminal_regex->empty()) {
+      result += "(?:" + std::move(*nonterminal_regex) + ")";
+    }
+    result += "\\x22";
+  }
+  result.push_back(')');
+  return result;
+}
+
 int32_t JSONSchemaConverter::GetKeyPatternExcluding(
     const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
 ) {
@@ -2381,9 +2516,14 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
   // Build trie from property names
   // TODO(linzhang): The trie only excludes the literal unescaped spelling of each property name.
   TrieNode root;
+  bool can_use_regex_fsm = true;
   for (const auto& prop : properties) {
     TrieNode* cur = &root;
     for (unsigned char c : prop.name) {
+      // The historical trie is byte-oriented while grammar character classes are codepoint-
+      // oriented. Restrict the FSM rewrite to unescaped printable ASCII, where the two models are
+      // identical, and retain the established CFG for every edge case.
+      can_use_regex_fsm &= c >= 0x20 && c <= 0x7e && c != '"' && c != '\\';
       cur = &cur->children[c];
     }
     cur->is_terminal = true;
@@ -2391,9 +2531,21 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
 
   int32_t key_rule_id = builder_.AddEmptyRuleWithHint(rule_name + "_addl_key");
   std::string key_rule_name = builder_.GetRule(key_rule_id).name;
-  builder_.UpdateRuleBody(
-      key_rule_id, Sequence({ByteString("\""), BuildTrieBody(root, key_rule_name)})
-  );
+  if (can_use_regex_fsm) {
+    builder_.UpdateRuleBody(
+        key_rule_id,
+        builder_.AddRegex(
+            "\\x22" + BuildTrieRegex(root),
+            /*json_string=*/false,
+            /*byte_mode=*/false,
+            /*has_json_string_normal_sink=*/true
+        )
+    );
+  } else {
+    builder_.UpdateRuleBody(
+        key_rule_id, Sequence({ByteString("\""), BuildTrieBody(root, key_rule_name)})
+    );
+  }
   builder_.UpdateLookaheadAssertion(
       key_rule_id,
       Sequence(
@@ -2548,15 +2700,45 @@ int32_t JSONSchemaConverter::RegexExpression(
     std::optional<FSMWithStartEnd> local_fsm;
     const FSMWithStartEnd* fsm = nullptr;
     bool defer_fsm_build = false;
+
+    // A JSON-source atom has several raw/escaped spellings, so even a moderate compound repeat
+    // can create thousands of expanded states. Detect repeat counts with at least two digits as a
+    // cheap prefilter; every repeat above the JSON-specific threshold necessarily has one. The
+    // full parser below remains authoritative and rejects false positives such as escaped braces.
+    bool may_have_large_json_repeat = false;
+    if (json_string) {
+      for (size_t i = 0; i < regex.size() && !may_have_large_json_repeat; ++i) {
+        if (regex[i] != '{') {
+          continue;
+        }
+        int consecutive_digits = 0;
+        for (size_t j = i + 1; j < regex.size() && regex[j] != '}'; ++j) {
+          if (std::isdigit(static_cast<unsigned char>(regex[j]))) {
+            if (++consecutive_digits >= 2) {
+              may_have_large_json_repeat = true;
+              break;
+            }
+          } else {
+            consecutive_digits = 0;
+          }
+        }
+      }
+    }
+    if (may_have_large_json_repeat) {
+      auto can_defer =
+          RegexFSMBuilder::CanDeferLargeRepeat(regex, json_string, /*byte_mode=*/false);
+      defer_fsm_build = can_defer.IsOk() && std::move(can_defer).Unwrap();
+    }
+
     std::string fsm_cache_key;
-    if (regex_fsm_cache_ != nullptr) {
+    if (!defer_fsm_build && regex_fsm_cache_ != nullptr) {
       fsm_cache_key = MakeRegexFSMCacheKey(regex, json_string);
       const auto cached_fsm = regex_fsm_cache_->find(fsm_cache_key);
       if (cached_fsm != regex_fsm_cache_->end()) {
         fsm = &cached_fsm->second;
       }
     }
-    if (fsm == nullptr) {
+    if (!defer_fsm_build && fsm == nullptr) {
       auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
       if (fsm_result.IsOk()) {
         if (regex_fsm_cache_ != nullptr) {
@@ -2621,6 +2803,27 @@ int32_t JSONSchemaConverter::JSONSchemaPatternExpression(
   const auto cached = json_schema_pattern_expr_ids_.find(cache_key);
   if (cached != json_schema_pattern_expr_ids_.end()) {
     return cached->second;
+  }
+
+  // Under JSON Schema search semantics, `.*` accepts every string and `.+` accepts every nonempty
+  // string. Emit the much smaller source-spelling language directly instead of surrounding and
+  // re-encoding overlapping decoded wildcard automata.
+  if (regex == ".*" || regex == ".+") {
+    static constexpr const char* kAnyJSONStringContent =
+        R"((?:[^\x00-\x1F\x22\x5C]|\x5C(?:[\x22\x2F\x5C\x62\x66\x6E\x72\x74]|\x75[0-9A-Fa-f]{4}))*)";
+    std::string json_content = kAnyJSONStringContent;
+    if (regex == ".+") {
+      XGRAMMAR_DCHECK(json_content.back() == '*');
+      json_content.back() = '+';
+    }
+    const int32_t result = builder_.AddRegex(
+        json_content,
+        /*json_string=*/false,
+        /*byte_mode=*/false,
+        /*has_json_string_normal_sink=*/true
+    );
+    json_schema_pattern_expr_ids_.emplace(std::move(cache_key), result);
+    return result;
   }
 
   if (simple_repeat.has_value()) {
@@ -3517,6 +3720,20 @@ int32_t JSONSchemaConverter::GenerateConst(const ConstSpec& spec, const std::str
 int32_t JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::string& rule_name) {
   XGRAMMAR_DCHECK(!spec.json_values.empty())
       << "GenerateEnum called with empty enum spec for rule: " << rule_name;
+  constexpr size_t kByteTrieEnumThreshold = 128;
+  if (spec.json_values.size() >= kByteTrieEnumThreshold) {
+    TrieNode root;
+    for (const std::string& value : spec.json_values) {
+      TrieNode* current = &root;
+      for (uint8_t byte : value) {
+        current = &current->children[byte];
+      }
+      current->is_terminal = true;
+    }
+    auto regex = BuildTrieTerminalRegex(root);
+    XGRAMMAR_DCHECK(regex.has_value() && !regex->empty());
+    return builder_.AddRegex(*regex, /*json_string=*/false, /*byte_mode=*/true);
+  }
   std::vector<int32_t> values;
   values.reserve(spec.json_values.size());
   for (const auto& value : spec.json_values) {

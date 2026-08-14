@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <deque>
 #include <limits>
 #include <optional>
 #include <string>
@@ -535,6 +536,7 @@ class GrammarMatcher::Impl : public EarleyParser {
     budget_body_match_cache_.clear();
     temporary_input_start_row_ = -1;
     temporary_input_bytes_.clear();
+    continuation_mask_cache_.clear();
     accepted_bytes_.clear();
     row_byte_end_.assign(1, 0);
     EarleyParser::Reset();
@@ -563,6 +565,14 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   std::optional<std::vector<int32_t>> GetStableCharacterClassRepeatMaskKey(
       const std::vector<ParserState>& states
+  ) const;
+
+  /*! \brief Return the minimum byte length of a reference-free rule, or -1 when unknown. */
+  int32_t GetLeafRuleMinimumBytes(int32_t rule_id) const;
+
+  /*! \brief Build a matcher-local key for reusing uncertain-token continuation results. */
+  std::optional<std::vector<int32_t>> GetContinuationMaskCacheKey(
+      const ParserState& state, bool canonicalize_context
   ) const;
 
   /*!
@@ -790,6 +800,15 @@ class GrammarMatcher::Impl : public EarleyParser {
   };
   std::vector<RepeatMaskCacheEntry> repeat_mask_cache_;
 
+  struct ContinuationMaskCacheEntry {
+    std::vector<int32_t> key;
+    const AdaptiveTokenMask* adaptive_token_mask;
+    std::vector<int32_t> accepted_indices;
+    std::vector<int32_t> rejected_indices;
+  };
+  std::vector<ContinuationMaskCacheEntry> continuation_mask_cache_;
+  mutable std::unordered_map<int32_t, int32_t> leaf_rule_min_bytes_cache_;
+
   class ContinuationTransitionCache;
 };
 
@@ -807,7 +826,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
       uses_thread_local_scratch_ = true;
       transition_table_ = scratch.transition_table.data();
     } else {
-      owned_transition_table_ = std::make_unique<uint16_t[]>(kMaxConfigurations * 256);
+      owned_transition_table_ = std::make_unique<uint32_t[]>(kMaxConfigurations * 256);
       transition_table_ = owned_transition_table_.get();
     }
     try {
@@ -859,7 +878,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     }
     ++queries_;
     XGRAMMAR_DCHECK(current_transition_row_ != nullptr);
-    const uint16_t cached = current_transition_row_[byte];
+    const uint32_t cached = current_transition_row_[byte];
     if (cached == kRejected) {
       ++hits_;
       return false;
@@ -894,7 +913,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
       enabled_ = false;
       return true;
     }
-    const uint16_t output_transition = EncodeAccepted(*output_row_id, *output_configuration_id);
+    const uint32_t output_transition = EncodeAccepted(*output_row_id, *output_configuration_id);
     current_transition_row_[byte] = output_transition;
     transition_byte_history_[transition_depth_] = byte;
     PushAcceptedTransition(output_transition);
@@ -914,7 +933,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
       matcher_->EarleyParser::PopLastStates(materialized_depth_ - target_depth);
     }
     while (materialized_depth_ > target_depth) {
-      const uint16_t transition = transition_history_[materialized_depth_ - 1];
+      const uint32_t transition = transition_history_[materialized_depth_ - 1];
       if (transition != kUncacheable) {
         const int32_t row_id = DecodeRowId(transition);
         XGRAMMAR_DCHECK(!absolute_rows_by_id_[row_id].empty());
@@ -944,18 +963,18 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
       uses_thread_local_scratch_ = false;
     }
   }
-  static constexpr int32_t kMaxRows = 128;
-  static constexpr int32_t kMaxConfigurations = 128;
+  static constexpr int32_t kMaxRows = 1024;
+  static constexpr int32_t kMaxConfigurations = 1024;
   static constexpr size_t kMaxVirtualDepth = 1024;
-  static constexpr uint16_t kEmpty = 0;
-  static constexpr uint16_t kRejected = 1;
-  static constexpr uint16_t kUncacheable = 3;  // Materialized JSON-length boundary transition.
+  static constexpr uint32_t kEmpty = 0;
+  static constexpr uint32_t kRejected = 1;
+  static constexpr uint32_t kUncacheable = 3;  // Materialized JSON-length boundary transition.
   static constexpr int32_t kRowShift = 2;
-  static constexpr int32_t kConfigurationShift = 9;
-  static constexpr uint16_t kIdMask = 127;
+  static constexpr int32_t kConfigurationShift = 12;
+  static constexpr uint32_t kIdMask = 1023;
 
   struct ThreadLocalScratch {
-    std::array<uint16_t, kMaxConfigurations * 256> transition_table;
+    std::array<uint32_t, kMaxConfigurations * 256> transition_table;
     bool in_use{false};
   };
 
@@ -1020,23 +1039,23 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     }
   };
 
-  static uint16_t EncodeAccepted(int32_t row_id, int32_t configuration_id) {
+  static uint32_t EncodeAccepted(int32_t row_id, int32_t configuration_id) {
     XGRAMMAR_DCHECK(
         row_id >= 0 && row_id < kMaxRows && configuration_id >= 0 &&
         configuration_id < kMaxConfigurations
     );
-    return static_cast<uint16_t>(
+    return static_cast<uint32_t>(
         2 | (row_id << kRowShift) | (configuration_id << kConfigurationShift)
     );
   }
 
-  static int32_t DecodeRowId(uint16_t transition) { return (transition >> kRowShift) & kIdMask; }
+  static int32_t DecodeRowId(uint32_t transition) { return (transition >> kRowShift) & kIdMask; }
 
-  static int32_t DecodeConfigurationId(uint16_t transition) {
+  static int32_t DecodeConfigurationId(uint32_t transition) {
     return (transition >> kConfigurationShift) & kIdMask;
   }
 
-  void PushAcceptedTransition(uint16_t transition) {
+  void PushAcceptedTransition(uint32_t transition) {
     transition_history_[transition_depth_++] = transition;
     current_transition_row_ =
         transition_table_ + static_cast<size_t>(DecodeConfigurationId(transition)) * 256;
@@ -1227,7 +1246,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
 
   void MaterializeVirtualPrefix() {
     while (materialized_depth_ < transition_depth_) {
-      const uint16_t transition = transition_history_[materialized_depth_];
+      const uint32_t transition = transition_history_[materialized_depth_];
       XGRAMMAR_DCHECK(transition != kUncacheable);
       MaterializeTransition(
           DecodeRowId(transition),
@@ -1250,10 +1269,10 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
   bool enabled_{true};
   uint64_t queries_{0};
   uint64_t hits_{0};
-  std::unique_ptr<uint16_t[]> owned_transition_table_;
-  uint16_t* transition_table_{nullptr};
+  std::unique_ptr<uint32_t[]> owned_transition_table_;
+  uint32_t* transition_table_{nullptr};
   bool uses_thread_local_scratch_{false};
-  uint16_t* current_transition_row_{nullptr};
+  uint32_t* current_transition_row_{nullptr};
   std::vector<CanonicalRow> rows_;
   std::vector<CanonicalConfiguration> configurations_;
   // Keep JSON length context out of CanonicalConfiguration's no-length hot path. This side table
@@ -1263,7 +1282,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
   std::array<int16_t, kMaxRows> first_configuration_for_row_;
   std::array<int16_t, kMaxConfigurations> next_configuration_for_row_;
   std::vector<std::vector<int32_t>> absolute_rows_by_id_;
-  std::array<uint16_t, kMaxVirtualDepth> transition_history_;
+  std::array<uint32_t, kMaxVirtualDepth> transition_history_;
   std::array<uint8_t, kMaxVirtualDepth> transition_byte_history_;
   size_t transition_depth_{0};
   size_t materialized_depth_{0};
@@ -1384,6 +1403,212 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetStableCharacterClas
     }
   }
   return found_repeat ? std::optional<std::vector<int32_t>>(std::move(key)) : std::nullopt;
+}
+
+int32_t GrammarMatcher::Impl::GetLeafRuleMinimumBytes(int32_t rule_id) const {
+  const auto cached = leaf_rule_min_bytes_cache_.find(rule_id);
+  if (cached != leaf_rule_min_bytes_cache_.end()) {
+    return cached->second;
+  }
+  auto cache_result = [&](int32_t result) {
+    leaf_rule_min_bytes_cache_.emplace(rule_id, result);
+    return result;
+  };
+  if (rule_id < 0 || rule_id >= static_cast<int32_t>(grammar_->per_rule_fsms.size()) ||
+      !grammar_->per_rule_fsms[rule_id].has_value()) {
+    return cache_result(-1);
+  }
+  const auto& rule_fsm = grammar_->per_rule_fsms[rule_id]->GetFsm();
+  if (!rule_fsm.IsLeaf()) {
+    return cache_result(-1);
+  }
+
+  std::unordered_set<int32_t> reachable;
+  rule_fsm.GetReachableStates(&reachable);
+  const auto& fsm = rule_fsm.GetFsm();
+  for (int32_t source : reachable) {
+    for (const auto& edge : fsm.GetEdges(source)) {
+      if (!edge.IsCharRange() && !edge.IsEpsilon()) {
+        return cache_result(-1);
+      }
+    }
+  }
+
+  constexpr int32_t kInfinity = std::numeric_limits<int32_t>::max();
+  std::vector<int32_t> distances(fsm.NumStates(), kInfinity);
+  std::deque<int32_t> pending;
+  distances[rule_fsm.GetStart()] = 0;
+  pending.push_back(rule_fsm.GetStart());
+  while (!pending.empty()) {
+    const int32_t source = pending.front();
+    pending.pop_front();
+    const int32_t source_distance = distances[source];
+    for (const auto& edge : fsm.GetEdges(source)) {
+      const int32_t weight = edge.IsCharRange() ? 1 : 0;
+      const int32_t next_distance = source_distance + weight;
+      if (next_distance >= distances[edge.target]) {
+        continue;
+      }
+      distances[edge.target] = next_distance;
+      if (weight == 0) {
+        pending.push_front(edge.target);
+      } else {
+        pending.push_back(edge.target);
+      }
+    }
+  }
+  int32_t result = kInfinity;
+  for (int32_t end : rule_fsm.GetEnds()) {
+    result = std::min(result, distances[end]);
+  }
+  return cache_result(result == kInfinity ? -1 : result);
+}
+
+std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetContinuationMaskCacheKey(
+    const ParserState& state, bool canonicalize_context
+) const {
+  if (has_budget_rules_ || has_char_budget_rules_ || capture_tracking_ ||
+      state.rule_start_pos < 0 ||
+      state.rule_start_pos >= static_cast<int32_t>(rule_id_to_completable_states_.size())) {
+    return std::nullopt;
+  }
+  constexpr int32_t kMaxParentStatesForContinuationMaskCache = 64;
+  constexpr int32_t kMaxContinuationContextStates = 256;
+
+  std::vector<int32_t> key{
+      state.rule_id,
+      state.sequence_id,
+      state.element_id,
+      state.budget_deadline,
+      state.sub_element_id,
+      state.repeat_count,
+      state.partial_codepoint,
+      state.active_temperature_rule_id,
+      state.char_budget_deadline,
+      IsCompleted()
+  };
+  if (!canonicalize_context) {
+    const auto parent_row = rule_id_to_completable_states_[state.rule_start_pos];
+    if (parent_row.size() > kMaxParentStatesForContinuationMaskCache) {
+      return std::nullopt;
+    }
+    std::vector<std::vector<int32_t>> canonical_parent_row;
+    canonical_parent_row.reserve(parent_row.size());
+    for (const auto& [ref_rule_id, parent] : parent_row) {
+      canonical_parent_row.push_back(
+          {ref_rule_id,
+           parent.rule_id,
+           parent.sequence_id,
+           parent.element_id,
+           parent.rule_start_pos,
+           parent.budget_deadline,
+           parent.sub_element_id,
+           parent.repeat_count,
+           parent.partial_codepoint,
+           parent.active_temperature_rule_id,
+           parent.char_budget_deadline}
+      );
+    }
+    std::sort(canonical_parent_row.begin(), canonical_parent_row.end());
+    canonical_parent_row.erase(
+        std::unique(canonical_parent_row.begin(), canonical_parent_row.end()),
+        canonical_parent_row.end()
+    );
+    key.push_back(static_cast<int32_t>(canonical_parent_row.size()));
+    for (const auto& parent : canonical_parent_row) {
+      key.insert(key.end(), parent.begin(), parent.end());
+    }
+    return key;
+  }
+  int32_t context_states = 0;
+  auto append_parent_row = [&](auto&& self, int32_t row_index, std::vector<int32_t>* output
+                           ) -> bool {
+    if (row_index < 0 || row_index >= static_cast<int32_t>(rule_id_to_completable_states_.size())) {
+      return false;
+    }
+    const auto parent_row = rule_id_to_completable_states_[row_index];
+    if (parent_row.size() > kMaxParentStatesForContinuationMaskCache ||
+        context_states + parent_row.size() > kMaxContinuationContextStates) {
+      return false;
+    }
+    context_states += parent_row.size();
+
+    std::vector<std::vector<int32_t>> canonical_parent_row;
+    canonical_parent_row.reserve(parent_row.size());
+    for (const auto& [ref_rule_id, parent] : parent_row) {
+      int32_t canonical_repeat_count = parent.repeat_count;
+      for (const auto& edge : grammar_->complete_fsm.GetEdges(parent.element_id)) {
+        if (!edge.IsRepeatRef()) {
+          continue;
+        }
+        const auto repeat = grammar_->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+        if (repeat.RuleId() != ref_rule_id || parent.repeat_count < repeat.Lower()) {
+          continue;
+        }
+        const int32_t min_rule_bytes = GetLeafRuleMinimumBytes(ref_rule_id);
+        if (min_rule_bytes <= 0) {
+          continue;
+        }
+        // One token can finish the in-progress occurrence and then complete at most
+        // max_token_bytes / min_rule_bytes new occurrences. Counts farther from the upper bound
+        // therefore have identical single-token continuation behavior.
+        const int32_t max_completed_in_token =
+            1 + tokenizer_info_.ImplPtr()->GetMaxTokenBytes() / min_rule_bytes;
+        if (repeat.Upper() == -1 || repeat.Upper() - parent.repeat_count > max_completed_in_token) {
+          canonical_repeat_count = std::numeric_limits<int32_t>::min();
+        }
+        break;
+      }
+      std::vector<int32_t> entry{
+          ref_rule_id,
+          parent.rule_id,
+          parent.sequence_id,
+          parent.element_id,
+          parent.budget_deadline,
+          parent.sub_element_id,
+          canonical_repeat_count,
+          parent.partial_codepoint,
+          parent.active_temperature_rule_id,
+          parent.char_budget_deadline
+      };
+      if (parent.rule_start_pos == ParserState::kNoPrevInputPos) {
+        entry.push_back(0);
+      } else if (parent.rule_start_pos == row_index) {
+        // Epsilon recursion can point back to the row currently being canonicalized. The parent
+        // fields above identify the recursive edge; a self-row marker preserves that cycle
+        // without depending on the absolute input position.
+        entry.push_back(2);
+      } else {
+        // A dependency on a later row cannot be part of the current Earley continuation graph.
+        if (parent.rule_start_pos > row_index) {
+          return false;
+        }
+        entry.push_back(1);
+        std::vector<int32_t> ancestor;
+        if (!self(self, parent.rule_start_pos, &ancestor)) {
+          return false;
+        }
+        entry.push_back(static_cast<int32_t>(ancestor.size()));
+        entry.insert(entry.end(), ancestor.begin(), ancestor.end());
+      }
+      canonical_parent_row.push_back(std::move(entry));
+    }
+    std::sort(canonical_parent_row.begin(), canonical_parent_row.end());
+    canonical_parent_row.erase(
+        std::unique(canonical_parent_row.begin(), canonical_parent_row.end()),
+        canonical_parent_row.end()
+    );
+    output->push_back(static_cast<int32_t>(canonical_parent_row.size()));
+    for (const auto& parent : canonical_parent_row) {
+      output->push_back(static_cast<int32_t>(parent.size()));
+      output->insert(output->end(), parent.begin(), parent.end());
+    }
+    return true;
+  };
+  if (!append_parent_row(append_parent_row, state.rule_start_pos, &key)) {
+    return std::nullopt;
+  }
+  return key;
 }
 
 class BatchGrammarMatcher::Impl {
@@ -2892,6 +3117,51 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       }
     }
 
+    constexpr size_t kMinUncertainTokensForContinuationCache = 128;
+    constexpr size_t kMinUncertainTokensForCanonicalContext = 32768;
+    std::optional<std::vector<int32_t>> continuation_mask_key;
+    if (adaptive_token_mask.uncertain_indices.size() >= kMinUncertainTokensForContinuationCache) {
+      continuation_mask_key = GetContinuationMaskCacheKey(
+          state,
+          adaptive_token_mask.uncertain_indices.size() >= kMinUncertainTokensForCanonicalContext
+      );
+    }
+    if (continuation_mask_key.has_value()) {
+      const auto cached = std::find_if(
+          continuation_mask_cache_.begin(),
+          continuation_mask_cache_.end(),
+          [&](const ContinuationMaskCacheEntry& entry) {
+            if (entry.key != *continuation_mask_key || entry.adaptive_token_mask == nullptr) {
+              return false;
+            }
+            const auto& cached_mask = *entry.adaptive_token_mask;
+            return cached_mask.store_type == adaptive_token_mask.store_type &&
+                   cached_mask.accepted_indices == adaptive_token_mask.accepted_indices &&
+                   cached_mask.rejected_indices == adaptive_token_mask.rejected_indices &&
+                   cached_mask.accepted_bitset == adaptive_token_mask.accepted_bitset &&
+                   cached_mask.uncertain_indices == adaptive_token_mask.uncertain_indices;
+          }
+      );
+      if (cached != continuation_mask_cache_.end()) {
+        if (adaptive_token_mask.store_type == StoreType::kRejected) {
+          tmp_rejected_indices_delta_ = cached->rejected_indices;
+          IntsetUnion(&tmp_rejected_indices_delta_, adaptive_token_mask.rejected_indices);
+          IntsetIntersection(&tmp_rejected_indices_, tmp_rejected_indices_delta_);
+        } else {
+          for (int32_t idx : cached->accepted_indices) {
+            tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
+          }
+        }
+        continue;
+      }
+    }
+    std::vector<int32_t> continuation_accepted_indices;
+    std::vector<int32_t> continuation_rejected_indices;
+    if (continuation_mask_key.has_value()) {
+      continuation_accepted_indices.reserve(adaptive_token_mask.uncertain_indices.size());
+      continuation_rejected_indices.reserve(adaptive_token_mask.uncertain_indices.size());
+    }
+
     // Examine only the current one ParserState
     std::optional<Impl> atomic_trial_base;
     if (has_char_budget_rules_ && !json_string_length_active && !indices_to_check->empty()) {
@@ -2900,7 +3170,6 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     }
     PushOneStateToCheck(state);
     std::optional<ContinuationTransitionCache> continuation_cache;
-    constexpr size_t kMinUncertainTokensForContinuationCache = 128;
     // The canonical configuration includes the complete JSON lexical counter, so transitions
     // inside a constrained string are reused only at the same decoded length and escape phase.
     // Materialized hits restore that counter, and the cache still stops exactly when a transition
@@ -2929,13 +3198,19 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     int last_rejected_uncertain_range = 0;
     for (const auto& cur_token_idx : *indices_to_check) {
       // Check if the current token is already accepted. If it is, we can skip it.
-      if (tmp_accepted_bitset_[sorted_decoded_vocab[cur_token_idx].first]) {
+      // A continuation-cache miss must classify every uncertain token independently of the other
+      // live parser states, so its result remains valid when those states differ on a later call.
+      if (!continuation_mask_key.has_value() &&
+          tmp_accepted_bitset_[sorted_decoded_vocab[cur_token_idx].first]) {
         continue;
       }
 
       // Check if the current token is in the rejected range. i.e. check if the current token
       // is on the subtree of the rejected token.
       if (cur_token_idx < last_rejected_uncertain_range) {
+        if (continuation_mask_key.has_value()) {
+          continuation_rejected_indices.push_back(cur_token_idx);
+        }
         if (adaptive_token_mask.store_type == StoreType::kRejected) {
           tmp_rejected_indices_delta_.push_back(cur_token_idx);
         }
@@ -3006,6 +3281,10 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       }
 
       // Step 2.3. Push the result to the delta list.
+      if (continuation_mask_key.has_value()) {
+        (accepted ? continuation_accepted_indices : continuation_rejected_indices)
+            .push_back(cur_token_idx);
+      }
       if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset ||
           adaptive_token_mask.store_type == StoreType::kAccepted) {
         if (accepted) {
@@ -3028,6 +3307,16 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     if (track_temporary_input) {
       temporary_input_start_row_ = saved_temporary_input_start_row;
       temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
+    }
+    constexpr size_t kMaxContinuationMaskCacheEntries = 64;
+    if (continuation_mask_key.has_value() &&
+        continuation_mask_cache_.size() < kMaxContinuationMaskCacheEntries) {
+      continuation_mask_cache_.push_back(ContinuationMaskCacheEntry{
+          std::move(*continuation_mask_key),
+          &adaptive_token_mask,
+          std::move(continuation_accepted_indices),
+          std::move(continuation_rejected_indices)
+      });
     }
     // Step 3. Update the accepted_indices or rejected_indices
     if (adaptive_token_mask.store_type == StoreType::kRejected) {
@@ -3179,6 +3468,7 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
   temporary_input_start_row_ = -1;
   temporary_input_bytes_.clear();
   budget_body_match_cache_.clear();
+  continuation_mask_cache_.clear();
 }
 
 std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptures(bool deduplicate

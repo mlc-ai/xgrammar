@@ -3945,6 +3945,36 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
 
   // Get the reference graph.
   ref_graph_from_referee_to_referrer_ = RuleRefGraphFinder().Apply(*grammar);
+  // Repetition normalization can encode a bounded repeat directly as a RepeatRef edge in the
+  // optimized FSM even when the original grammar expression no longer exposes the same reference
+  // shape to RuleRefGraphFinder. Hashing must follow the final FSM dependencies: otherwise a
+  // parent can be dequeued before its repeated child has a hash.
+  std::unordered_set<int32_t> reachable_states;
+  for (int32_t referrer = 0; referrer < (*grammar)->NumRules(); ++referrer) {
+    const auto& rule_fsm = grammar->ImplPtr()->per_rule_fsms[referrer];
+    if (!rule_fsm.has_value()) {
+      continue;
+    }
+    reachable_states.clear();
+    rule_fsm->GetFsm().GetReachableStates(&reachable_states);
+    for (int32_t state : reachable_states) {
+      for (const auto& edge : rule_fsm->GetFsm().GetFsm().GetEdges(state)) {
+        int32_t referee = -1;
+        if (edge.IsRuleRef()) {
+          referee = edge.GetRefRuleId();
+        } else if (edge.IsRepeatRef()) {
+          referee = grammar->ImplPtr()->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId();
+        }
+        if (referee >= 0) {
+          ref_graph_from_referee_to_referrer_[referee].push_back(referrer);
+        }
+      }
+    }
+  }
+  for (auto& referrers : ref_graph_from_referee_to_referrer_) {
+    std::sort(referrers.begin(), referrers.end());
+    referrers.erase(std::unique(referrers.begin(), referrers.end()), referrers.end());
+  }
   ref_graph_from_referrer_to_referee_ = std::vector<std::vector<int32_t>>((*grammar)->NumRules());
   for (int referee = 0; referee < static_cast<int>(ref_graph_from_referee_to_referrer_.size());
        ++referee) {

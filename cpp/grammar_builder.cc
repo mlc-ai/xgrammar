@@ -87,12 +87,17 @@ int32_t GrammarBuilder::AddByteString(const std::string& str) {
   );
 }
 
-int32_t GrammarBuilder::AddRegex(const std::string& regex_str, bool json_string, bool byte_mode) {
+int32_t GrammarBuilder::AddRegex(
+    const std::string& regex_str, bool json_string, bool byte_mode, bool has_json_string_normal_sink
+) {
   std::vector<int32_t> data;
   data.reserve(regex_str.size() + 1);
-  // Bit 0 is json_string and bit 1 is byte_mode. Keeping both in the existing flag word makes
-  // serialized grammars backward-compatible: old values 0 and 1 retain their meanings.
-  data.push_back(static_cast<int32_t>(json_string) | (static_cast<int32_t>(byte_mode) << 1));
+  // Keeping the flags in the existing word makes serialized grammars backward-compatible: old
+  // values 0 and 1 retain their meanings.
+  data.push_back(
+      static_cast<int32_t>(json_string) | (static_cast<int32_t>(byte_mode) << 1) |
+      (static_cast<int32_t>(has_json_string_normal_sink) << 2)
+  );
   for (char c : regex_str) {
     data.push_back(static_cast<int32_t>(static_cast<uint8_t>(c)));
   }

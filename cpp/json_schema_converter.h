@@ -516,6 +516,10 @@ class JSONSchemaConverter {
     std::map<uint8_t, TrieNode> children;
   };
   int32_t BuildTrieBody(const TrieNode& node, const std::string& rule_name);
+  std::string BuildTrieMismatchRegex(const TrieNode& node) const;
+  std::optional<std::string> BuildTrieNonterminalRegex(const TrieNode& node) const;
+  std::optional<std::string> BuildTrieTerminalRegex(const TrieNode& node) const;
+  std::string BuildTrieRegex(const TrieNode& node) const;
 
   // Reused grammar expression ids
   std::optional<int32_t> empty_expr_id_;

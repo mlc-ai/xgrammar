@@ -14,6 +14,7 @@ from xgrammar.testing import (
     _generate_range_regex,
     _is_grammar_accept_string,
     _json_schema_to_ebnf,
+    _print_grammar_fsms,
 )
 
 basic_json_rules_ebnf = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
@@ -991,6 +992,23 @@ def test_repeated_string_patterns_preserve_each_property():
     check_schema_with_instance(
         schema, {"first": "ab", "second": "z"}, is_accepted=False, any_whitespace=False
     )
+
+
+def test_compound_bounded_string_pattern_uses_compact_repeat_ref():
+    schema = {"type": "string", "pattern": r"^(?:\S+\s+){0,20}\S+$"}
+    compiled = xgr.GrammarCompiler(
+        xgr.TokenizerInfo([], stop_token_ids=[]), cache_enabled=False
+    ).compile_json_schema(schema, any_whitespace=False)
+    assert "Repeat(" in _print_grammar_fsms(compiled.grammar)
+
+    grammar = compiled.grammar
+    assert _is_grammar_accept_string(grammar, '"word"')
+    assert _is_grammar_accept_string(grammar, '"' + " ".join(["word"] * 21) + '"')
+    assert not _is_grammar_accept_string(grammar, '"' + " ".join(["word"] * 22) + '"')
+    assert not _is_grammar_accept_string(grammar, '""')
+    assert _is_grammar_accept_string(grammar, r'"a\"b"')
+    assert _is_grammar_accept_string(grammar, r'"a\nb"')
+    assert not _is_grammar_accept_string(grammar, '"a"b"')
 
 
 def test_complex_restrictions():
@@ -3024,6 +3042,17 @@ def test_utf8_in_enum():
     assert _is_grammar_accept_string(grammar, '"你好"')
     assert _is_grammar_accept_string(grammar, '"hello"')
     assert _is_grammar_accept_string(grammar, '"\\n"')
+
+
+def test_large_shared_prefix_enum_byte_trie():
+    values = [f"org.example.shared.prefix.{index:03d}" for index in range(127)]
+    values.append('org.example.shared.prefix.quote"slash\\newline\n')
+    grammar = xgr.Grammar.from_json_schema({"type": "string", "enum": values})
+
+    for value in [values[0], values[63], values[126], values[127]]:
+        assert _is_grammar_accept_string(grammar, json.dumps(value, ensure_ascii=False))
+    assert not _is_grammar_accept_string(grammar, '"org.example.shared.prefix.127"')
+    assert not _is_grammar_accept_string(grammar, '"org.example.shared.prefix.00"')
 
 
 def test_utf8_string_in_const():

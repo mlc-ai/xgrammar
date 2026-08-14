@@ -93,8 +93,15 @@ class GrammarBuilder {
    * \param json_string Whether the regex matches the decoded body of a JSON string literal. If
    * true, each logical code point accepts its valid raw or escaped JSON source spellings.
    * \param byte_mode Whether the regex matches raw bytes (0-255) instead of Unicode codepoints.
+   * \param has_json_string_normal_sink Whether absorbing ASCII states are known to accept every
+   * valid unescaped JSON string character and UTF-8 prefix.
    */
-  int32_t AddRegex(const std::string& regex_str, bool json_string = false, bool byte_mode = false);
+  int32_t AddRegex(
+      const std::string& regex_str,
+      bool json_string = false,
+      bool byte_mode = false,
+      bool has_json_string_normal_sink = false
+  );
 
   /*!
    * \brief Add a GrammarExpr for a substring expression, which matches every contiguous

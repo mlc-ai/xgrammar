@@ -190,7 +190,8 @@ class Grammar::Impl {
     //               loop_after_dispatch,
     //               exclude_cnt, token_id × M]
     kTokenTagDispatch,
-    // data format: [json_string, byte0, byte1, ...]
+    // data format: [flags, byte0, byte1, ...]
+    // flags: bit 0 = json_string, bit 1 = byte_mode, bit 2 = has_json_string_normal_sink
     // The bytes are the regex pattern string. Like kTagDispatch, it can only be the body of a
     // rule. The pattern is carried through the grammar passes as-is; when GrammarFSMBuilder
     // runs, the pattern is compiled into an automaton, so every regex rule always has a
@@ -312,6 +313,13 @@ class Grammar::Impl {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kRegex) << "GrammarExpr is not a regex";
     XGRAMMAR_DCHECK(grammar_expr.size() >= 1) << "Regex expr must contain the flags element";
     return (grammar_expr[0] & 2) != 0;
+  }
+
+  /*! \brief Get whether absorbing ASCII states in this regex accept normal JSON string tokens. */
+  bool GetRegexHasJSONStringNormalSink(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kRegex) << "GrammarExpr is not a regex";
+    XGRAMMAR_DCHECK(grammar_expr.size() >= 1) << "Regex expr must contain the flags element";
+    return (grammar_expr[0] & 4) != 0;
   }
 
   /*! \brief Get the chunk list of the substring grammar expr. */

@@ -636,6 +636,12 @@ constexpr uint32_t kMaxByteValue = 0xFF;
  * of the grammar-level RepetitionRangeExpander. */
 constexpr int kLargeRepeatThreshold = 128;
 
+/*! \brief JSON-source encoding expands every logical regex atom into raw, escaped, and Unicode
+ * spellings. Use a lower unroll threshold there so bounded compound patterns do not create a new
+ * full-vocabulary mask for dozens of structurally repeated FSM states. Simple character-class
+ * JSON Schema patterns take a dedicated compact path before reaching this builder. */
+constexpr int kLargeJSONStringRepeatThreshold = 16;
+
 /*! \brief Hard cap of the estimated state count when a bounded repetition has to be unrolled
  * because no GrammarBuilder is available. */
 constexpr int64_t kMaxUnrolledRepeatStates = 100000;
@@ -1665,7 +1671,7 @@ class RegexIR {
 
   Result<bool> ValidateState(const State& state) const;
 
-  static bool HasLargeRepeatState(const State& state);
+  static bool HasLargeRepeatState(const State& state, int threshold);
 };
 
 Result<std::pair<int, int>> RegexIR::CheckRepeat(const std::string& regex, int& start) {
@@ -1825,26 +1831,31 @@ Result<bool> RegexIR::Validate() const {
   return ResultOk(true);
 }
 
-bool RegexIR::HasLargeRepeatState(const State& state) {
+bool RegexIR::HasLargeRepeatState(const State& state, int threshold) {
   return std::visit(
-      [](const auto& node) -> bool {
+      [threshold](const auto& node) -> bool {
         using T = std::decay_t<decltype(node)>;
         if constexpr (std::is_same_v<T, Repeat>) {
           const bool is_large = node.upper_bound == kRepeatNoUpperBound
-                                    ? node.lower_bound > kLargeRepeatThreshold
-                                    : node.upper_bound > kLargeRepeatThreshold;
-          return is_large ||
-                 std::any_of(node.states.begin(), node.states.end(), [](const State& child) {
-                   return HasLargeRepeatState(child);
-                 });
+                                    ? node.lower_bound > threshold
+                                    : node.upper_bound > threshold;
+          return is_large || std::any_of(
+                                 node.states.begin(),
+                                 node.states.end(),
+                                 [threshold](const State& child) {
+                                   return HasLargeRepeatState(child, threshold);
+                                 }
+                             );
         } else if constexpr (std::is_same_v<T, Symbol>) {
-          return std::any_of(node.state.begin(), node.state.end(), [](const State& child) {
-            return HasLargeRepeatState(child);
+          return std::any_of(node.state.begin(), node.state.end(), [threshold](const State& child) {
+            return HasLargeRepeatState(child, threshold);
           });
         } else if constexpr (std::is_same_v<T, Union> || std::is_same_v<T, Bracket>) {
-          return std::any_of(node.states.begin(), node.states.end(), [](const State& child) {
-            return HasLargeRepeatState(child);
-          });
+          return std::any_of(
+              node.states.begin(),
+              node.states.end(),
+              [threshold](const State& child) { return HasLargeRepeatState(child, threshold); }
+          );
         } else {
           return false;
         }
@@ -1854,8 +1865,9 @@ bool RegexIR::HasLargeRepeatState(const State& state) {
 }
 
 bool RegexIR::HasLargeRepeat() const {
-  return std::any_of(states.begin(), states.end(), [](const State& state) {
-    return HasLargeRepeatState(state);
+  const int threshold = json_string ? kLargeJSONStringRepeatThreshold : kLargeRepeatThreshold;
+  return std::any_of(states.begin(), states.end(), [threshold](const State& state) {
+    return HasLargeRepeatState(state, threshold);
   });
 }
 
@@ -2693,9 +2705,11 @@ Result<RegexIR> ParseRegexToIR(
                            regex[i + 1] == '{')) {
         return ResultErr(error_at(i + 1, "Two consecutive repetition modifiers are not allowed"));
       }
+      const int repeat_threshold =
+          json_string ? kLargeJSONStringRepeatThreshold : kLargeRepeatThreshold;
       bool is_large_repeat = upper_bound == RegexIR::kRepeatNoUpperBound
-                                 ? lower_bound > kLargeRepeatThreshold
-                                 : upper_bound > kLargeRepeatThreshold;
+                                 ? lower_bound > repeat_threshold
+                                 : upper_bound > repeat_threshold;
       if (is_large_repeat && builder != nullptr) {
         // Compile the repeated sub-pattern into a new rule (with a kRegex body), and represent
         // the repetition as a kRepeatRef FSM edge. The Earley parser executes it with a counter

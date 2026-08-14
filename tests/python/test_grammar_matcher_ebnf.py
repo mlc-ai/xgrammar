@@ -846,6 +846,23 @@ def test_repeat_ref_boundary():
     assert not _is_grammar_accept_string(g129, "a" * 130)
 
 
+def test_json_string_regex_uses_compact_repeat_ref():
+    """JSON-source regexes compact compound bounded repeats before the generic threshold."""
+    grammar = xgr.Grammar.from_ebnf(r'root ::= Regex("(\\S+\\s+){0,20}\\S+", json_string=true)')
+    _assert_repeat_ref_active(grammar)
+
+    assert _is_grammar_accept_string(grammar, "word")
+    assert _is_grammar_accept_string(grammar, " ".join(["word"] * 21))
+    assert not _is_grammar_accept_string(grammar, " ".join(["word"] * 22))
+    assert not _is_grammar_accept_string(grammar, "")
+
+    # Match logical characters through their valid JSON source spellings. An escaped quote is a
+    # non-space character, while an escaped newline acts as the separator between two words.
+    assert _is_grammar_accept_string(grammar, r"a\"b")
+    assert _is_grammar_accept_string(grammar, r"a\nb")
+    assert not _is_grammar_accept_string(grammar, 'a"b')
+
+
 def test_repeat_ref_multichar_rule():
     """Test RepeatRef with a multi-character rule body."""
     grammar_str = """

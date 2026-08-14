@@ -6,6 +6,7 @@
 #include <xgrammar/compiler.h>
 
 #include <algorithm>
+#include <array>
 #include <bitset>
 #include <cctype>
 #include <cstddef>
@@ -14,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -155,10 +157,25 @@ class CharacterClassTokenSummaryCache {
     }
   };
 
+  using ASCIIByteLoopKey = std::array<uint64_t, 2>;
+
+  struct ASCIIByteLoopKeyHash {
+    size_t operator()(const ASCIIByteLoopKey& key) const {
+      uint64_t result = key[0];
+      HashCombineBinary(result, key[1]);
+      return result;
+    }
+  };
+
  public:
   struct Result {
     std::vector<CharacterClassTokenSummary> summaries;
     DynamicBitset consumed_whole_token_bitset;
+  };
+
+  struct ASCIIByteLoopTokenMask {
+    DynamicBitset accepted_bitset;
+    std::vector<int32_t> unaccepted_indices;
   };
 
   std::shared_ptr<const Result> GetOrCreate(
@@ -278,13 +295,63 @@ class CharacterClassTokenSummaryCache {
     return computed;
   }
 
+  std::shared_ptr<const ASCIIByteLoopTokenMask> GetOrCreateASCIIByteLoopMask(
+      const std::bitset<256>& byte_mask,
+      const std::vector<std::pair<int32_t, std::string>>& sorted_vocab,
+      size_t vocab_size
+  ) {
+    ASCIIByteLoopKey key{0, 0};
+    for (int32_t byte = 0; byte < 128; ++byte) {
+      if (byte_mask[byte]) {
+        key[byte / 64] |= uint64_t{1} << (byte % 64);
+      }
+    }
+    {
+      std::lock_guard<std::mutex> lock(ascii_byte_loop_mutex_);
+      const auto existing = ascii_byte_loop_cache_.find(key);
+      if (existing != ascii_byte_loop_cache_.end()) {
+        return existing->second;
+      }
+    }
+
+    DynamicBitset accepted_bitset(vocab_size);
+    std::vector<int32_t> unaccepted_indices;
+    unaccepted_indices.reserve(sorted_vocab.size() / 4);
+    for (int32_t index = 0; index < static_cast<int32_t>(sorted_vocab.size()); ++index) {
+      const std::string& token = sorted_vocab[index].second;
+      bool token_accepted = !token.empty();
+      for (uint8_t byte : token) {
+        if (byte >= 0x80 || !byte_mask[byte]) {
+          token_accepted = false;
+          break;
+        }
+      }
+      if (token_accepted) {
+        accepted_bitset.Set(sorted_vocab[index].first, true);
+      } else {
+        unaccepted_indices.push_back(index);
+      }
+    }
+    auto computed = std::make_shared<const ASCIIByteLoopTokenMask>(
+        ASCIIByteLoopTokenMask{std::move(accepted_bitset), std::move(unaccepted_indices)}
+    );
+    std::lock_guard<std::mutex> lock(ascii_byte_loop_mutex_);
+    return ascii_byte_loop_cache_.emplace(key, computed).first->second;
+  }
+
   void Clear() {
     {
       std::lock_guard<std::mutex> lock(mutex_);
       cache_.clear();
     }
-    std::lock_guard<std::mutex> lock(repeat_mutex_);
-    repeat_cache_.clear();
+    {
+      std::lock_guard<std::mutex> lock(repeat_mutex_);
+      repeat_cache_.clear();
+    }
+    {
+      std::lock_guard<std::mutex> lock(ascii_byte_loop_mutex_);
+      ascii_byte_loop_cache_.clear();
+    }
   }
 
  private:
@@ -295,6 +362,18 @@ class CharacterClassTokenSummaryCache {
   // compiler-wide index retain their token bitmasks indefinitely.
   std::unordered_map<RepeatKey, std::weak_ptr<const CharacterClassRepeatTokenMask>, RepeatKeyHash>
       repeat_cache_;
+  std::mutex ascii_byte_loop_mutex_;
+  std::unordered_map<
+      ASCIIByteLoopKey,
+      std::shared_ptr<const ASCIIByteLoopTokenMask>,
+      ASCIIByteLoopKeyHash>
+      ascii_byte_loop_cache_;
+};
+
+struct JSONStringSinkInfo {
+  std::bitset<256> ascii_transition_mask;
+  std::bitset<256> content_prefix_transition_mask;
+  bool current_state_accepts_content_prefixes{false};
 };
 
 /*! \brief The concrete implementation of GrammarMatcherNode. */
@@ -362,6 +441,15 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
  private:
   /*! \brief Build a token mask directly for a context-independent single character class. */
   std::optional<AdaptiveTokenMask> GetSingleCharacterClassDirectMask(bool is_root_rule) const;
+
+  /*! \brief Build a token mask directly for a deterministic byte path from the current state. */
+  std::optional<AdaptiveTokenMask> GetDeterministicBytePathDirectMask(bool is_root_rule) const;
+
+  /*! \brief Build a token mask for a long byte prefix before a non-byte FSM transition. */
+  std::optional<AdaptiveTokenMask> GetDeterministicBytePrefixDirectMask(bool is_root_rule) const;
+
+  /*! \brief Find absorbing JSON string states and the first bytes that enter them. */
+  JSONStringSinkInfo GetJSONStringSinkInfo() const;
 
   AdaptiveTokenMask BuildAdaptiveTokenMask(
       bool rejected_filled,
@@ -433,6 +521,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   std::vector<int32_t> tmp_accepted_by_lookahead_indices_;
   std::vector<bool> tmp_can_reach_end_stack_;
   std::vector<bool> tmp_can_reach_end_prefix_or_stack_;
+  std::optional<DynamicBitset> tmp_base_accepted_bitset_;
   std::shared_ptr<const CharacterClassTokenSummaryCache::Result>
       speculative_character_class_summary_;
   // Temporary data for GetTokenEdgeAcceptedIndices.
@@ -880,12 +969,24 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     }
   }
 
+  std::shared_ptr<const CharacterClassTokenSummaryCache::ASCIIByteLoopTokenMask>
+      speculative_ascii_byte_loop_mask;
+  if (speculative_calculation && !definite_accepted_bitset.has_value() &&
+      !speculative_character_class_summary_) {
+    XGRAMMAR_DCHECK(character_class_token_summary_cache_ != nullptr);
+    speculative_ascii_byte_loop_mask =
+        character_class_token_summary_cache_->GetOrCreateASCIIByteLoopMask(
+            speculative_mask, sorted_decoded_vocab, tokenizer_info_.GetVocabSize()
+        );
+    tmp_base_accepted_bitset_ = speculative_ascii_byte_loop_mask->accepted_bitset;
+  }
+
   const std::string* prev_token = nullptr;
   int32_t skip_ptr = 0;
   const int32_t skip_size = static_cast<int32_t>(token_edge_accepted.size());
-  bool accepts_ascii_string_safe_slice = speculative_calculation &&
-                                         !definite_accepted_bitset.has_value() &&
-                                         !speculative_character_class_summary_;
+  bool accepts_ascii_string_safe_slice =
+      speculative_calculation && !definite_accepted_bitset.has_value() &&
+      !speculative_character_class_summary_ && !speculative_ascii_byte_loop_mask;
   if (accepts_ascii_string_safe_slice) {
     for (int32_t byte = 0x20; byte < 0x7f; ++byte) {
       if (byte != '"' && byte != '\\' && !speculative_mask[byte]) {
@@ -894,11 +995,69 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       }
     }
   }
-  const auto& ascii_string_safe_indices = tokenizer_info_.ImplPtr()->GetAsciiStringSafeIndices();
-  size_t ascii_string_safe_position = 0;
+  const JSONStringSinkInfo string_sink_info = GetJSONStringSinkInfo();
+  std::bitset<256> directly_accepted_ascii_first_bytes = string_sink_info.ascii_transition_mask;
+  if (accepts_ascii_string_safe_slice) {
+    for (int32_t byte = 0x20; byte < 0x7f; ++byte) {
+      if (byte != '"' && byte != '\\') {
+        directly_accepted_ascii_first_bytes.set(byte);
+      }
+    }
+  }
+  const auto tokenizer_impl = tokenizer_info_.ImplPtr();
+  if (string_sink_info.current_state_accepts_content_prefixes) {
+    tmp_base_accepted_bitset_ = tokenizer_impl->GetJSONStringContentPrefixBitset();
+  } else if (string_sink_info.content_prefix_transition_mask.any() ||
+             directly_accepted_ascii_first_bytes.any()) {
+    if (!tmp_base_accepted_bitset_.has_value()) {
+      tmp_base_accepted_bitset_.emplace(tokenizer_info_.GetVocabSize());
+    }
+  }
+  if (tmp_base_accepted_bitset_.has_value()) {
+    const auto& content_prefix_by_first_byte =
+        tokenizer_impl->GetJSONStringContentPrefixIndicesByFirstByte();
+    const auto& ascii_by_first_byte = tokenizer_impl->GetAsciiStringSafeIndicesByFirstByte();
+    if (!string_sink_info.current_state_accepts_content_prefixes) {
+      for (int32_t byte = 0; byte < 256; ++byte) {
+        if (!string_sink_info.content_prefix_transition_mask[byte]) {
+          continue;
+        }
+        for (int32_t index : content_prefix_by_first_byte[byte]) {
+          tmp_base_accepted_bitset_->Set(sorted_decoded_vocab[index].first, true);
+        }
+      }
+    }
+    for (int32_t byte = 0x20; byte < 0x7f; ++byte) {
+      if (!directly_accepted_ascii_first_bytes[byte] ||
+          string_sink_info.content_prefix_transition_mask[byte]) {
+        continue;
+      }
+      for (int32_t index : ascii_by_first_byte[byte]) {
+        tmp_base_accepted_bitset_->Set(sorted_decoded_vocab[index].first, true);
+      }
+    }
+  }
+  const std::vector<int32_t>* token_candidate_indices = nullptr;
+  if (string_sink_info.current_state_accepts_content_prefixes) {
+    token_candidate_indices = &tokenizer_impl->GetJSONStringCrossingIndices();
+  } else if (speculative_ascii_byte_loop_mask) {
+    token_candidate_indices = &speculative_ascii_byte_loop_mask->unaccepted_indices;
+  }
+  size_t token_candidate_ptr = 0;
   for (size_t interval_idx = 0; interval_idx < possible_intervals.size(); ++interval_idx) {
     const auto& interval = possible_intervals[interval_idx];
     for (int i = interval.first; i < interval.second; ++i) {
+      if (token_candidate_indices != nullptr) {
+        while (token_candidate_ptr < token_candidate_indices->size() &&
+               (*token_candidate_indices)[token_candidate_ptr] < i) {
+          ++token_candidate_ptr;
+        }
+        if (token_candidate_ptr == token_candidate_indices->size() ||
+            (*token_candidate_indices)[token_candidate_ptr] >= interval.second) {
+          break;
+        }
+        i = (*token_candidate_indices)[token_candidate_ptr++];
+      }
       // Skip tokens already accepted by token edges (avoid expensive Earley simulation).
       while (skip_ptr < skip_size && token_edge_accepted[skip_ptr] < i) ++skip_ptr;
       if (skip_ptr < skip_size && token_edge_accepted[skip_ptr] == i) continue;
@@ -918,21 +1077,14 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
         continue;
       }
       const auto& token = sorted_decoded_vocab[i].second;
+      if (tmp_base_accepted_bitset_.has_value() &&
+          (*tmp_base_accepted_bitset_)[sorted_decoded_vocab[i].first]) {
+        continue;
+      }
       if (speculative_character_class_summary_ &&
           speculative_character_class_summary_
               ->consumed_whole_token_bitset[sorted_decoded_vocab[i].first]) {
         continue;
-      }
-      if (accepts_ascii_string_safe_slice) {
-        while (ascii_string_safe_position < ascii_string_safe_indices.size() &&
-               ascii_string_safe_indices[ascii_string_safe_position] < i) {
-          ++ascii_string_safe_position;
-        }
-        if (ascii_string_safe_position < ascii_string_safe_indices.size() &&
-            ascii_string_safe_indices[ascii_string_safe_position] == i) {
-          tmp_accepted_indices_.push_back(i);
-          continue;
-        }
       }
       // This optimization is useful for simple self-recursive rules, like string content.
       if (speculative_calculation) {
@@ -1210,6 +1362,310 @@ std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetSingleChara
   );
 }
 
+std::optional<AdaptiveTokenMask>
+GrammarMatcherForTokenMaskCache::GetDeterministicBytePathDirectMask(bool is_root_rule) const {
+  if (!enable_direct_character_class_mask_ || is_root_rule || initial_state_.sub_element_id != 0 ||
+      grammar_->GetRule(init_rule_id_).is_lazy ||
+      grammar_->GetRule(init_rule_id_).lookahead_assertion_id != -1) {
+    return std::nullopt;
+  }
+
+  const auto& rule_fsm = grammar_->per_rule_fsms[init_rule_id_]->GetFsm();
+  const auto& fsm = rule_fsm.GetFsm();
+  struct PendingPath {
+    int32_t state;
+    std::string bytes;
+  };
+  std::vector<PendingPath> pending{{initial_state_.element_id, {}}};
+  std::vector<std::string> accepted_prefixes;
+  std::vector<std::string> boundary_prefixes;
+  constexpr size_t kMaxDirectPaths = 32768;
+  constexpr size_t kMaxDirectPathBytes = 256;
+  constexpr size_t kMinBoundaryPrefixBytes = 2;
+  size_t visited_paths = 0;
+  while (!pending.empty()) {
+    PendingPath path = std::move(pending.back());
+    pending.pop_back();
+    if (++visited_paths > kMaxDirectPaths) {
+      return std::nullopt;
+    }
+    if (rule_fsm.IsEndState(path.state)) {
+      // A token ending here is accepted locally. Longer tokens depend on either the outgoing path
+      // or parent completion; keep only a selective boundary range for runtime classification.
+      if (path.bytes.size() < kMinBoundaryPrefixBytes) {
+        return std::nullopt;
+      }
+      boundary_prefixes.push_back(std::move(path.bytes));
+      continue;
+    }
+    if (path.bytes.size() >= kMaxDirectPathBytes) {
+      return std::nullopt;
+    }
+
+    const auto& edges = fsm.GetEdges(path.state);
+    std::bitset<256> seen_bytes;
+    bool deterministic_byte_edges = edges.size() != 0;
+    for (const auto& edge : edges) {
+      if (!edge.IsCharRange() || edge.min != edge.max || seen_bytes[edge.min]) {
+        deterministic_byte_edges = false;
+        break;
+      }
+      seen_bytes[edge.min] = true;
+    }
+    if (!deterministic_byte_edges) {
+      // The rejected linear experiment admitted a one-byte boundary (commonly an opening quote)
+      // before a broad string state, making a large part of the vocabulary uncertain. A two-byte
+      // boundary remains selective while covering property-name tries followed by rule refs.
+      if (path.bytes.size() < kMinBoundaryPrefixBytes) {
+        return std::nullopt;
+      }
+      boundary_prefixes.push_back(std::move(path.bytes));
+      continue;
+    }
+    for (const auto& edge : edges) {
+      std::string next_bytes = path.bytes;
+      next_bytes.push_back(static_cast<char>(edge.min));
+      accepted_prefixes.push_back(next_bytes);
+      pending.push_back(PendingPath{edge.target, std::move(next_bytes)});
+    }
+  }
+  if (boundary_prefixes.empty() ||
+      std::any_of(boundary_prefixes.begin(), boundary_prefixes.end(), [](const auto& prefix) {
+        return prefix.empty();
+      })) {
+    return std::nullopt;
+  }
+
+  const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  std::vector<int32_t> accepted_indices;
+  std::vector<int32_t> uncertain_indices;
+
+  // A token ending at any visited byte prefix is accepted locally. Equal decoded strings can
+  // have multiple token ids, so collect the full equal range for every distinct prefix.
+  std::sort(accepted_prefixes.begin(), accepted_prefixes.end());
+  accepted_prefixes.erase(
+      std::unique(accepted_prefixes.begin(), accepted_prefixes.end()), accepted_prefixes.end()
+  );
+  for (const auto& prefix : accepted_prefixes) {
+    auto first = std::lower_bound(
+        sorted_vocab.begin(),
+        sorted_vocab.end(),
+        prefix,
+        [](const auto& token, const std::string& value) { return token.second < value; }
+    );
+    for (auto it = first; it != sorted_vocab.end() && it->second == prefix; ++it) {
+      accepted_indices.push_back(static_cast<int32_t>(it - sorted_vocab.begin()));
+    }
+  }
+  std::sort(accepted_indices.begin(), accepted_indices.end());
+  accepted_indices.erase(
+      std::unique(accepted_indices.begin(), accepted_indices.end()), accepted_indices.end()
+  );
+
+  // A token crossing a boundary depends on the remainder of this rule and, when the rule
+  // completes, its parent parser states. Preserve that exact distinction by leaving only these
+  // lexicographic prefix ranges for the runtime continuation check. Remove descendant boundaries
+  // because their token ranges are already covered by the shortest ancestor.
+  std::sort(boundary_prefixes.begin(), boundary_prefixes.end());
+  boundary_prefixes.erase(
+      std::unique(boundary_prefixes.begin(), boundary_prefixes.end()), boundary_prefixes.end()
+  );
+  std::vector<std::string> minimal_boundaries;
+  for (auto& prefix : boundary_prefixes) {
+    if (!minimal_boundaries.empty() && prefix.size() >= minimal_boundaries.back().size() &&
+        prefix.compare(0, minimal_boundaries.back().size(), minimal_boundaries.back()) == 0) {
+      continue;
+    }
+    minimal_boundaries.push_back(std::move(prefix));
+  }
+  for (const auto& prefix : minimal_boundaries) {
+    auto first = std::lower_bound(
+        sorted_vocab.begin(),
+        sorted_vocab.end(),
+        prefix,
+        [](const auto& token, const std::string& value) { return token.second < value; }
+    );
+    for (auto it = first; it != sorted_vocab.end(); ++it) {
+      const auto& token = it->second;
+      if (token.size() < prefix.size() || token.compare(0, prefix.size(), prefix) != 0) {
+        break;
+      }
+      if (token.size() > prefix.size()) {
+        uncertain_indices.push_back(static_cast<int32_t>(it - sorted_vocab.begin()));
+      }
+    }
+  }
+  std::sort(uncertain_indices.begin(), uncertain_indices.end());
+  uncertain_indices.erase(
+      std::unique(uncertain_indices.begin(), uncertain_indices.end()), uncertain_indices.end()
+  );
+
+  return AdaptiveTokenMask(
+      tokenizer_info_.GetVocabSize(), sorted_vocab, accepted_indices, uncertain_indices
+  );
+}
+
+std::optional<AdaptiveTokenMask>
+GrammarMatcherForTokenMaskCache::GetDeterministicBytePrefixDirectMask(bool is_root_rule) const {
+  if (!enable_direct_character_class_mask_ || is_root_rule || initial_state_.sub_element_id != 0 ||
+      grammar_->GetRule(init_rule_id_).is_lazy ||
+      grammar_->GetRule(init_rule_id_).lookahead_assertion_id != -1) {
+    return std::nullopt;
+  }
+
+  const auto& rule_fsm = grammar_->per_rule_fsms[init_rule_id_]->GetFsm();
+  const auto& fsm = rule_fsm.GetFsm();
+  int32_t state = initial_state_.element_id;
+  std::string deterministic_bytes;
+  constexpr size_t kMinDirectPrefixBytes = 2;
+  constexpr size_t kMaxDirectPrefixBytes = 256;
+  while (deterministic_bytes.size() < kMaxDirectPrefixBytes) {
+    if (rule_fsm.IsEndState(state)) {
+      // Completion can enter arbitrary parent states. The finite-path builder handles a terminal
+      // end state exactly; accepting states that also continue retain the general builder.
+      return std::nullopt;
+    }
+    const auto& edges = fsm.GetEdges(state);
+    if (edges.size() != 1 || !edges[0].IsCharRange() || edges[0].min != edges[0].max) {
+      break;
+    }
+    deterministic_bytes.push_back(static_cast<char>(edges[0].min));
+    state = edges[0].target;
+  }
+  // The rejected linear experiment admitted one-byte boundaries such as a quote before a broad
+  // string state, making a large vocabulary range uncertain. Two literal bytes are selective
+  // enough for structural suffixes such as `\":` while still covering complete property names.
+  if (deterministic_bytes.size() < kMinDirectPrefixBytes ||
+      deterministic_bytes.size() == kMaxDirectPrefixBytes) {
+    return std::nullopt;
+  }
+
+  const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  std::vector<int32_t> accepted_indices;
+  std::vector<int32_t> uncertain_indices;
+
+  std::string prefix;
+  prefix.reserve(deterministic_bytes.size());
+  for (char byte : deterministic_bytes) {
+    prefix.push_back(byte);
+    auto first = std::lower_bound(
+        sorted_vocab.begin(),
+        sorted_vocab.end(),
+        prefix,
+        [](const auto& token, const std::string& value) { return token.second < value; }
+    );
+    for (auto it = first; it != sorted_vocab.end() && it->second == prefix; ++it) {
+      accepted_indices.push_back(static_cast<int32_t>(it - sorted_vocab.begin()));
+    }
+  }
+
+  auto first_crossing = std::lower_bound(
+      sorted_vocab.begin(),
+      sorted_vocab.end(),
+      deterministic_bytes,
+      [](const auto& token, const std::string& value) { return token.second < value; }
+  );
+  for (auto it = first_crossing; it != sorted_vocab.end(); ++it) {
+    const auto& token = it->second;
+    if (token.size() < deterministic_bytes.size() ||
+        token.compare(0, deterministic_bytes.size(), deterministic_bytes) != 0) {
+      break;
+    }
+    if (token.size() > deterministic_bytes.size()) {
+      uncertain_indices.push_back(static_cast<int32_t>(it - sorted_vocab.begin()));
+    }
+  }
+
+  return AdaptiveTokenMask(
+      tokenizer_info_.GetVocabSize(), sorted_vocab, accepted_indices, uncertain_indices
+  );
+}
+
+JSONStringSinkInfo GrammarMatcherForTokenMaskCache::GetJSONStringSinkInfo() const {
+  JSONStringSinkInfo result;
+  const auto& rule = grammar_->GetRule(init_rule_id_);
+  if (has_char_budget_rules_ || rule.is_lazy || initial_state_.sub_element_id != 0) {
+    return result;
+  }
+
+  const auto& rule_fsm = grammar_->per_rule_fsms[init_rule_id_]->GetFsm();
+  const auto& fsm = rule_fsm.GetFsm();
+  const auto& edges = fsm.GetEdges(initial_state_.element_id);
+  auto accepts_all_ascii_string_bytes = [&](int32_t state) {
+    std::bitset<256> accepted_bytes;
+    for (const auto& edge : fsm.GetEdges(state)) {
+      if (edge.IsCharRange()) {
+        for (int32_t byte = edge.min; byte <= edge.max; ++byte) {
+          accepted_bytes.set(byte);
+        }
+      }
+    }
+    for (int32_t byte = 0x20; byte < 0x7f; ++byte) {
+      if (byte != '"' && byte != '\\' && !accepted_bytes[byte]) {
+        return false;
+      }
+    }
+    return true;
+  };
+  auto is_ascii_sink = [&](int32_t state) {
+    if (rule_fsm.IsEndState(state)) {
+      return false;
+    }
+    std::bitset<256> self_loop_bytes;
+    for (const auto& edge : fsm.GetEdges(state)) {
+      if (edge.IsCharRange() && edge.target == state) {
+        for (int32_t byte = edge.min; byte <= edge.max; ++byte) {
+          self_loop_bytes.set(byte);
+        }
+      }
+    }
+    for (int32_t byte = 0x20; byte < 0x7f; ++byte) {
+      if (byte != '"' && byte != '\\' && !self_loop_bytes[byte]) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  std::vector<int32_t> checked_targets;
+  std::vector<uint8_t> target_is_sink;
+  for (const auto& edge : edges) {
+    if (!edge.IsCharRange()) {
+      continue;
+    }
+    auto target_it = std::find(checked_targets.begin(), checked_targets.end(), edge.target);
+    bool is_sink;
+    if (target_it != checked_targets.end()) {
+      is_sink = target_is_sink[target_it - checked_targets.begin()];
+    } else {
+      is_sink = is_ascii_sink(edge.target);
+      checked_targets.push_back(edge.target);
+      target_is_sink.push_back(is_sink);
+    }
+    if (is_sink) {
+      for (int32_t byte = edge.min; byte <= edge.max; ++byte) {
+        result.ascii_transition_mask.set(byte);
+      }
+    }
+  }
+
+  const auto& rule_body = grammar_->GetGrammarExpr(rule.body_expr_id);
+  if (has_budget_rules_ || rule_body.type != Grammar::Impl::GrammarExprType::kRegex ||
+      !grammar_->GetRegexHasJSONStringNormalSink(rule_body)) {
+    return result;
+  }
+  // The marker is set only on the converter's additional-key exclusion regex. At every
+  // codepoint boundary inside that regex, all ordinary JSON characters are valid prefixes: they
+  // either continue an excluded key or make it distinct and enter the absorbing suffix. Requiring
+  // all safe ASCII outgoing bytes mechanically excludes the opening-quote, escape, UTF-8
+  // continuation, and end states.
+  if (accepts_all_ascii_string_bytes(initial_state_.element_id)) {
+    result.current_state_accepts_content_prefixes = true;
+  }
+  result.content_prefix_transition_mask = result.ascii_transition_mask;
+  return result;
+}
+
 AdaptiveTokenMask GrammarMatcherForTokenMaskCache::BuildAdaptiveTokenMask(
     bool rejected_filled,
     const std::vector<int32_t>& accepted_indices,
@@ -1223,6 +1679,11 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::BuildAdaptiveTokenMask(
         sorted_vocab,
         accepted_indices,
         uncertain_indices
+    );
+  }
+  if (tmp_base_accepted_bitset_.has_value()) {
+    return AdaptiveTokenMask(
+        *tmp_base_accepted_bitset_, sorted_vocab, accepted_indices, uncertain_indices
     );
   }
   if (rejected_filled) {
@@ -1247,6 +1708,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   tmp_accepted_by_lookahead_indices_.clear();
   tmp_can_reach_end_prefix_or_stack_.clear();
   tmp_can_reach_end_stack_.clear();
+  tmp_base_accepted_bitset_.reset();
   speculative_character_class_summary_.reset();
   // For every character in the current token, stores whether it is possible to reach the end of
   // the rule when matching until this character. Store it in a stack for later rollback.
@@ -1309,6 +1771,32 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
       );
     }
     return std::move(*direct_character_class_mask);
+  }
+
+  auto direct_byte_path_mask = GetDeterministicBytePathDirectMask(is_root_rule);
+  if (direct_byte_path_mask.has_value()) {
+    if (rule_level_cache_is_available) {
+      const auto& fsm = grammar_->per_rule_fsms[init_rule_id_].value();
+      rule_level_cache_->AddCache(
+          fsm_hash.value(), new_state_id, fsm.GetNodeNum(), fsm.GetEdgeNum(), *direct_byte_path_mask
+      );
+    }
+    return std::move(*direct_byte_path_mask);
+  }
+
+  auto direct_byte_prefix_mask = GetDeterministicBytePrefixDirectMask(is_root_rule);
+  if (direct_byte_prefix_mask.has_value()) {
+    if (rule_level_cache_is_available) {
+      const auto& fsm = grammar_->per_rule_fsms[init_rule_id_].value();
+      rule_level_cache_->AddCache(
+          fsm_hash.value(),
+          new_state_id,
+          fsm.GetNodeNum(),
+          fsm.GetEdgeNum(),
+          *direct_byte_prefix_mask
+      );
+    }
+    return std::move(*direct_byte_prefix_mask);
   }
 
   std::bitset<256> first_character_mask;
@@ -1480,10 +1968,10 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(
       -1,
       state.sub_element_id
   );
-  std::optional<RuleLevelCache> retained_rule_level_cache;
   const bool is_context_independent =
       state.rule_id >= 0 && state.rule_id < static_cast<int32_t>(rule_level_cacheable.size()) &&
       rule_level_cacheable[state.rule_id];
+  std::optional<RuleLevelCache> retained_rule_level_cache;
   if (rule_level_cache != nullptr && is_context_independent) {
     retained_rule_level_cache = *rule_level_cache;
   }
@@ -1657,8 +2145,10 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
   std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
   TagDispatchOptimization(compiled_grammar_impl, &tag_dispatch_rule_id_to_second_slicing_bitset);
 
-  // Rule hashes are needed by both eager and on-demand cross-grammar mask reuse.
-  if (rule_level_cache_.has_value()) {
+  // Dynamic compilation also uses rule hashes to reuse masks between structurally identical
+  // context-independent rules in one compiled grammar. The public compiler cache only controls
+  // whether that reuse extends across separately compiled grammars.
+  if (rule_level_cache_.has_value() || enable_dynamic_compilation_) {
     GrammarFSMHasher().Apply(&compiled_grammar_impl->grammar);
     compiled_grammar_impl->rule_level_cacheable =
         GetRuleLevelCacheableRules(compiled_grammar_impl->grammar);
@@ -1666,10 +2156,12 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
   if (enable_dynamic_compilation_) {
     compiled_grammar_impl->character_class_token_summary_cache =
         character_class_token_summary_cache_;
-    if (rule_level_cache_.has_value()) {
-      compiled_grammar_impl->rule_level_cache =
-          std::make_shared<RuleLevelCache>(rule_level_cache_.value());
-    }
+    // Context-independent rule metadata also drives matcher-local character-class repeat
+    // masks. Keep it available when the public compiler cache is disabled; otherwise bounded
+    // repeats fall back to materializing one full-vocabulary mask for every repeat count.
+    compiled_grammar_impl->rule_level_cache =
+        rule_level_cache_.has_value() ? std::make_shared<RuleLevelCache>(rule_level_cache_.value())
+                                      : std::make_shared<RuleLevelCache>();
     compiled_grammar_impl->tag_dispatch_rule_id_to_second_slicing_bitset =
         std::move(tag_dispatch_rule_id_to_second_slicing_bitset);
     return CompiledGrammar(compiled_grammar_impl);

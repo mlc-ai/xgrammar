@@ -25,6 +25,96 @@
 
 namespace xgrammar {
 
+namespace {
+
+enum class JSONStringTokenKind : uint8_t { kInvalid, kContentPrefix, kCrossing };
+
+JSONStringTokenKind ClassifyJSONStringTokenFromBoundary(const std::string& token) {
+  for (size_t offset = 0; offset < token.size();) {
+    const uint8_t first = static_cast<uint8_t>(token[offset]);
+    if (first < 0x80) {
+      if (first < 0x20) {
+        return JSONStringTokenKind::kInvalid;
+      }
+      if (first == '"') {
+        return JSONStringTokenKind::kCrossing;
+      }
+      if (first == '\\') {
+        ++offset;
+        if (offset == token.size()) {
+          return JSONStringTokenKind::kContentPrefix;
+        }
+        const uint8_t escape = static_cast<uint8_t>(token[offset++]);
+        if (escape == '"' || escape == '/' || escape == '\\' || escape == 'b' || escape == 'f' ||
+            escape == 'n' || escape == 'r' || escape == 't') {
+          continue;
+        }
+        if (escape != 'u') {
+          return JSONStringTokenKind::kInvalid;
+        }
+        for (int32_t hex_index = 0; hex_index < 4; ++hex_index) {
+          if (offset == token.size()) {
+            return JSONStringTokenKind::kContentPrefix;
+          }
+          const uint8_t hex = static_cast<uint8_t>(token[offset++]);
+          if (!((hex >= '0' && hex <= '9') || (hex >= 'A' && hex <= 'F') ||
+                (hex >= 'a' && hex <= 'f'))) {
+            return JSONStringTokenKind::kInvalid;
+          }
+        }
+        continue;
+      }
+      ++offset;
+      continue;
+    }
+
+    int32_t total_bytes;
+    uint8_t second_min = 0x80;
+    uint8_t second_max = 0xbf;
+    if (first >= 0xc2 && first <= 0xdf) {
+      total_bytes = 2;
+    } else if (first == 0xe0) {
+      total_bytes = 3;
+      second_min = 0xa0;
+    } else if (first >= 0xe1 && first <= 0xec) {
+      total_bytes = 3;
+    } else if (first == 0xed) {
+      total_bytes = 3;
+      second_max = 0x9f;
+    } else if (first >= 0xee && first <= 0xef) {
+      total_bytes = 3;
+    } else if (first == 0xf0) {
+      total_bytes = 4;
+      second_min = 0x90;
+    } else if (first >= 0xf1 && first <= 0xf3) {
+      total_bytes = 4;
+    } else if (first == 0xf4) {
+      total_bytes = 4;
+      second_max = 0x8f;
+    } else {
+      return JSONStringTokenKind::kInvalid;
+    }
+
+    for (int32_t continuation_index = 1; continuation_index < total_bytes; ++continuation_index) {
+      if (offset + continuation_index == token.size()) {
+        // A token may end in the middle of a UTF-8 scalar; the matcher can consume its remaining
+        // continuation bytes from the next token.
+        return JSONStringTokenKind::kContentPrefix;
+      }
+      const uint8_t continuation = static_cast<uint8_t>(token[offset + continuation_index]);
+      const uint8_t minimum = continuation_index == 1 ? second_min : 0x80;
+      const uint8_t maximum = continuation_index == 1 ? second_max : 0xbf;
+      if (continuation < minimum || continuation > maximum) {
+        return JSONStringTokenKind::kInvalid;
+      }
+    }
+    offset += total_bytes;
+  }
+  return JSONStringTokenKind::kContentPrefix;
+}
+
+}  // namespace
+
 /************* Token decoders: ByteFallback and ByteLevel *************/
 
 class TokenDecoder {
@@ -342,7 +432,17 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
   std::vector<std::vector<int32_t>> plain_token_ids_by_prefix_count(
       kMaxPrecomputedJSONStringPrefixLimit + 1
   );
+  ascii_string_safe_bitset_ = DynamicBitset(vocab_size_);
+  json_string_content_prefix_bitset_ = DynamicBitset(vocab_size_);
+  for (auto& indices : ascii_string_safe_indices_by_first_byte_) {
+    indices.clear();
+  }
+  for (auto& indices : json_string_content_prefix_indices_by_first_byte_) {
+    indices.clear();
+  }
+  json_string_crossing_indices_.clear();
   int32_t max_chars = 0;
+  int32_t max_bytes = 0;
   for (int32_t index = 0; index < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++index) {
     int32_t count = 0;
     const auto& token = sorted_decoded_vocab_[index].second;
@@ -353,6 +453,19 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
           return byte >= 0x20 && byte < 0x7f && byte != '"' && byte != '\\';
         })) {
       ascii_string_safe_indices_.push_back(index);
+      ascii_string_safe_bitset_.Set(sorted_decoded_vocab_[index].first, true);
+      ascii_string_safe_indices_by_first_byte_[static_cast<uint8_t>(token.front())].push_back(index
+      );
+    }
+    const JSONStringTokenKind json_string_kind = ClassifyJSONStringTokenFromBoundary(token);
+    if (json_string_kind == JSONStringTokenKind::kContentPrefix) {
+      json_string_content_prefix_bitset_.Set(sorted_decoded_vocab_[index].first, true);
+      if (!token.empty()) {
+        json_string_content_prefix_indices_by_first_byte_[static_cast<uint8_t>(token.front())]
+            .push_back(index);
+      }
+    } else if (json_string_kind == JSONStringTokenKind::kCrossing) {
+      json_string_crossing_indices_.push_back(index);
     }
     const bool contains_quote = token.find('"') != std::string::npos;
     const bool contains_escape = token.find('\\') != std::string::npos;
@@ -382,6 +495,7 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
     token_char_counts_[index] = count;
     token_indices_by_descending_char_count_[index] = index;
     max_chars = std::max(max_chars, count);
+    max_bytes = std::max(max_bytes, static_cast<int32_t>(token.size()));
   }
   std::stable_sort(
       token_indices_by_descending_char_count_.begin(),
@@ -405,6 +519,7 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
     json_string_plain_prefix_within_limit_bitsets_.push_back(within_limit);
   }
   max_token_chars_ = max_chars;
+  max_token_bytes_ = max_bytes;
 }
 
 const std::vector<int32_t>& TokenizerInfo::Impl::GetTokenCharCounts() const {
