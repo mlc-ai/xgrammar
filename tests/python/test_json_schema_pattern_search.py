@@ -61,6 +61,216 @@ def test_pattern_matches_decoded_json_string_characters(pattern: str, value: str
     assert _accepts(pattern, value) is expected
 
 
+@pytest.mark.parametrize(
+    "schema,value,expected",
+    [
+        ({"type": "string", "pattern": "foo", "maxLength": 2}, '"foo"', False),
+        ({"type": "string", "pattern": "foo", "maxLength": 3}, '"foo"', True),
+        ({"type": "string", "pattern": "foo", "maxLength": 3}, '"xfoo"', False),
+        ({"type": "string", "pattern": "foo", "minLength": 4}, '"foo"', False),
+        ({"type": "string", "pattern": "foo", "minLength": 4}, '"xfoo"', True),
+        ({"type": "string", "pattern": "foo", "minLength": 4}, '"foox"', True),
+        (
+            {"type": "string", "pattern": "^[^x]{0,3}$", "minLength": 2, "maxLength": 5},
+            '"a"',
+            False,
+        ),
+        (
+            {"type": "string", "pattern": "^[^x]{0,3}$", "minLength": 2, "maxLength": 5},
+            '"ab"',
+            True,
+        ),
+        (
+            {"type": "string", "pattern": "^[^x]{0,3}$", "minLength": 2, "maxLength": 5},
+            '"abcd"',
+            False,
+        ),
+        ({"type": "string", "pattern": "b", "minLength": 2, "maxLength": 2}, '"b"', False),
+        ({"type": "string", "pattern": "b", "minLength": 2, "maxLength": 2}, '"ab"', True),
+        ({"type": "string", "pattern": "b", "minLength": 2, "maxLength": 2}, '"a\\u0062"', True),
+        ({"type": "string", "pattern": "b", "minLength": 2, "maxLength": 2}, '"\\u0062"', False),
+    ],
+)
+def test_pattern_intersects_min_and_max_length(schema: dict, value: str, expected: bool):
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema), any_whitespace=False)
+    assert _is_grammar_accept_string(grammar, value) is expected
+
+
+@pytest.mark.parametrize(
+    "value,expected", [('"A"', False), ('"AA"', True), ('"AAA"', True), ('"AAAA"', False)]
+)
+def test_pattern_length_intersects_unbounded_simple_repeat(value: str, expected: bool):
+    grammar = xgr.Grammar.from_json_schema(
+        json.dumps({"type": "string", "pattern": "^[A]*$", "minLength": 2, "maxLength": 3}),
+        any_whitespace=False,
+    )
+    assert _is_grammar_accept_string(grammar, value) is expected
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_pattern_max_length_masks_content_at_decoded_boundary(enable_dynamic_compilation: bool):
+    vocabulary = ['"', "a", "b", 'b"', "ab"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_json_schema(
+        {"type": "string", "pattern": "b", "minLength": 2, "maxLength": 2}, any_whitespace=False
+    )
+
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string('"a')
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[0])  # Too short to close.
+    assert bool(allowed[2])
+    assert bool(allowed[3])  # A token may supply the final character and closing quote together.
+
+    assert matcher.accept_token(2)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert bool(allowed[0])
+    assert not bool(allowed[1])
+    assert not bool(allowed[2])
+    assert not bool(allowed[4])
+
+    too_short = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert too_short.accept_string('"b')
+    assert too_short.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[0])  # Completion at one decoded character violates minLength.
+
+
+@pytest.mark.parametrize("value", ['"😀"', '"\\uD83D\\uDE00"'])
+def test_pattern_length_counts_surrogate_pair_as_one_decoded_character(value: str):
+    schema = {"type": "string", "pattern": ".", "minLength": 1, "maxLength": 1}
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema), any_whitespace=False)
+    assert _is_grammar_accept_string(grammar, value)
+
+
+def test_pattern_length_counter_resets_at_embedded_grammar_boundary():
+    prefix = xgr.Grammar.from_ebnf('root ::= ["]')
+    constrained = xgr.Grammar.from_json_schema(
+        json.dumps({"type": "string", "pattern": "b", "minLength": 2, "maxLength": 2}),
+        any_whitespace=False,
+    )
+    grammar = xgr.Grammar.concat(prefix, constrained)
+
+    # The unmatched quote in the surrounding grammar must not be mistaken for the constrained
+    # JSON string's opening quote.
+    assert _is_grammar_accept_string(grammar, '""ab"')
+    assert not _is_grammar_accept_string(grammar, '""b"')
+    assert not _is_grammar_accept_string(grammar, '""abc"')
+
+
+def test_pattern_length_completion_survives_tail_call_elision():
+    grammar = xgr.Grammar.from_ebnf(
+        'root ::= "\\"x\\"" constrained\n'
+        'constrained[json_string_min_length=1, json_string_max_length=1] ::= "\\"a\\""'
+    )
+
+    # The first quoted segment increments the shared decoded-character counter. The tail-called
+    # constrained rule must retain its own start position and completion-time length check.
+    assert _is_grammar_accept_string(grammar, '"x""a"')
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_pattern_length_rechecks_direct_character_class_mask(enable_dynamic_compilation: bool):
+    grammar = xgr.Grammar.from_ebnf(
+        'root[json_string_min_length=0, json_string_max_length=0] ::= "\\"" body "\\""\n'
+        'body[capture="body"] ::= [a]'
+    )
+    tokenizer_info = xgr.TokenizerInfo(['"', "a"], stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_string('"')
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[1])
+
+
+def test_pattern_length_preserves_nested_character_budget():
+    grammar = xgr.Grammar.from_ebnf(
+        'root[json_string_min_length=1, json_string_max_length=2] ::= "\\"" body "\\""\n'
+        "body[max_chars=1] ::= [ab]+"
+    )
+
+    assert _is_grammar_accept_string(grammar, '"a"')
+    assert not _is_grammar_accept_string(grammar, '"ab"')
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_pattern_length_rechecks_mask_with_nested_character_budget(
+    enable_dynamic_compilation: bool,
+):
+    grammar = xgr.Grammar.from_ebnf(
+        'root[json_string_min_length=0, json_string_max_length=0] ::= "\\"" body "\\""\n'
+        "body[max_chars=1] ::= [a]"
+    )
+    tokenizer_info = xgr.TokenizerInfo(['"', "a"], stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_string('"')
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[1])
+
+
+def test_pattern_length_jump_forward_stops_at_hard_boundary():
+    grammar = xgr.Grammar.from_ebnf(
+        'root[json_string_min_length=0, json_string_max_length=1] ::= "\\"ab\\""'
+    )
+    tokenizer_info = xgr.TokenizerInfo(['"', "a", "b"], stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.find_jump_forward_string() == '"a'
+    assert matcher.accept_string('"a')
+    assert not matcher.accept_string("b")
+
+
+def test_pattern_length_metadata_round_trips_through_ebnf():
+    schema = {"type": "string", "pattern": "b", "minLength": 2, "maxLength": 2}
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema), any_whitespace=False)
+    reparsed = xgr.Grammar.from_ebnf(str(grammar))
+    assert _is_grammar_accept_string(reparsed, '"ab"')
+    assert not _is_grammar_accept_string(reparsed, '"b"')
+    assert not _is_grammar_accept_string(reparsed, '"abb"')
+
+
+def test_pattern_length_metadata_survives_structural_tag_embedding():
+    grammar = xgr.Grammar.from_structural_tag(
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "json_schema",
+                "json_schema": {"type": "string", "pattern": "b", "minLength": 2, "maxLength": 2},
+            },
+        }
+    )
+
+    assert _is_grammar_accept_string(grammar, '"ab"')
+    assert not _is_grammar_accept_string(grammar, '"b"')
+    assert not _is_grammar_accept_string(grammar, '"abb"')
+
+
 def test_pattern_properties_use_search_semantics_and_json_escapes():
     schema = {
         "type": "object",

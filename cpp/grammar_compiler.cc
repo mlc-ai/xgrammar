@@ -49,7 +49,8 @@ std::vector<uint8_t> GetRuleLevelCacheableRules(const Grammar& grammar) {
   std::vector<int32_t> reachable_states;
   for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
     const auto& rule = grammar->GetRule(rule_id);
-    context_dependent[rule_id] = rule.max_tokens >= 0 || rule.max_chars >= 0 || rule.is_lazy ||
+    context_dependent[rule_id] = rule.max_tokens >= 0 || rule.max_chars >= 0 ||
+                                 rule.json_string_min_length >= 0 || rule.is_lazy ||
                                  rule.temperature.has_value() ||
                                  grammar->GetSuffixStopInfo(rule_id) != nullptr;
     const auto& fsm = grammar->per_rule_fsms[rule_id]->GetFsm();
@@ -287,7 +288,12 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       bool enable_direct_character_class_mask,
       const std::shared_ptr<const EarleyParserGrammarFeatures>& grammar_features
   )
-      : EarleyParser(grammar, init_state, grammar_features),
+      : EarleyParser(
+            grammar,
+            init_state,
+            grammar_features,
+            /*enforce_json_string_lengths=*/false
+        ),
         init_rule_id_(init_state.rule_id),
         initial_state_(init_state),
         tag_dispatch_rule_id_to_second_slicing_bitset_(tag_dispatch_rule_id_to_second_slicing_bitset
@@ -813,7 +819,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 
   XGRAMMAR_DCHECK(init_rule_id_ != -1 && grammar_->per_rule_fsms[init_rule_id_].has_value());
   auto [speculative_calculation, speculative_mask] = GetSpeculativeCalculation();
-  if (has_char_budget_rules_) {
+  if (has_char_budget_rules_ || has_json_string_length_rules_) {
     speculative_calculation = false;
   }
 
@@ -1163,6 +1169,12 @@ std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetSingleChara
       uncertain_indices.push_back(summary.sorted_vocab_index);
     }
   }
+  if (has_json_string_length_rules_) {
+    // A direct character-class mask bypasses the general accepted-to-uncertain conversion below.
+    // Recheck even its one-character tokens because the state may be at a decoded-length boundary.
+    IntsetUnion(&uncertain_indices, accepted_indices);
+    accepted_indices.clear();
+  }
   return AdaptiveTokenMask(
       tokenizer_info_.GetVocabSize(),
       sorted_vocab,
@@ -1215,7 +1227,8 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   tmp_can_reach_end_prefix_or_stack_.push_back(false);
 
   // Try to get the crossing cache.
-  bool rule_level_cache_is_available = !has_char_budget_rules_ && rule_level_cache_.has_value() &&
+  bool rule_level_cache_is_available = !has_char_budget_rules_ && !has_json_string_length_rules_ &&
+                                       rule_level_cache_.has_value() &&
                                        grammar_->per_rule_fsm_hashes[init_rule_id_].has_value();
   std::optional<uint64_t> fsm_hash = std::nullopt;
   int32_t new_state_id = -1;
@@ -1291,13 +1304,20 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   // Token edges are rechecked at runtime when a character budget is present because accepting
   // one can enter a budgeted rule within the same token.
   if (!token_edge_accepted.empty()) {
-    if (has_char_budget_rules_) {
+    if (has_char_budget_rules_ || has_json_string_length_rules_) {
       IntsetUnion(&tmp_uncertain_indices_, token_edge_accepted);
     } else {
       IntsetUnion(&tmp_accepted_indices_, token_edge_accepted);
       IntsetDifference(&tmp_uncertain_indices_, token_edge_accepted);
     }
     IntsetDifference(&tmp_rejected_indices_, token_edge_accepted);
+  }
+  if (has_json_string_length_rules_) {
+    // The same regex FSM state can be reached with different remaining decoded JSON lengths.
+    // Recheck every otherwise accepted token against the runtime counter instead of caching it as
+    // definitely accepted for all occurrences of that state.
+    IntsetUnion(&tmp_uncertain_indices_, tmp_accepted_indices_);
+    tmp_accepted_indices_.clear();
   }
   if (rejected_filled) {
     auto return_value = BuildAdaptiveTokenMask(

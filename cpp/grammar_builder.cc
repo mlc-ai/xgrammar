@@ -355,6 +355,17 @@ void GrammarBuilder::UpdateMaxChars(std::string rule_name, int32_t max_chars) {
   UpdateMaxChars(rule_id, max_chars);
 }
 
+void GrammarBuilder::UpdateJSONStringLength(
+    int32_t rule_id, int32_t min_length, int32_t max_length
+) {
+  XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  XGRAMMAR_CHECK(min_length >= 0 && (max_length == -1 || max_length >= min_length))
+      << "Invalid JSON string length range [" << min_length << ", " << max_length << "]";
+  grammar_->rules_[rule_id].json_string_min_length = min_length;
+  grammar_->rules_[rule_id].json_string_max_length = max_length;
+}
+
 void GrammarBuilder::UpdateCaptureName(int32_t rule_id, const std::string& capture_name) {
   XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
       << "Rule id " << rule_id << " is out of range.";

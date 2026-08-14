@@ -254,6 +254,9 @@ class GrammarBuilder {
   /*! \brief Update the character budget of the rule referred by the given name. -1 means none. */
   void UpdateMaxChars(std::string rule_name, int32_t max_chars);
 
+  /*! \brief Set hard decoded-character bounds for a generated JSON string rule. */
+  void UpdateJSONStringLength(int32_t rule_id, int32_t min_length, int32_t max_length);
+
   /*!
    * \brief Update the capture group name of the rule referred by the given rule_id. An empty
    * string means no capture.

@@ -177,6 +177,8 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
     bool matched = true;
     bool has_max_tokens = false;
     bool has_max_chars = false;
+    bool has_json_string_min_length = false;
+    bool has_json_string_max_length = false;
     bool has_capture = false;
     bool has_capture_hidden_suffix_bytes = false;
     bool has_capture_hidden_stop_bytes = false;
@@ -189,6 +191,8 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
     double temperature_value = 0;
     int64_t max_tokens_value = -1;
     int64_t max_chars_value = -1;
+    int64_t json_string_min_length_value = -1;
+    int64_t json_string_max_length_value = -1;
     int64_t capture_hidden_suffix_bytes_value = 0;
     int64_t capture_hidden_stop_bytes_value = 0;
     int64_t capture_hidden_body_rule_id_value = -1;
@@ -271,6 +275,12 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
       } else if (!has_max_chars && match_keyword("max_chars")) {
         has_max_chars = true;
         matched = parse_integer_value(&max_chars_value);
+      } else if (!has_json_string_min_length && match_keyword("json_string_min_length")) {
+        has_json_string_min_length = true;
+        matched = parse_integer_value(&json_string_min_length_value);
+      } else if (!has_json_string_max_length && match_keyword("json_string_max_length")) {
+        has_json_string_max_length = true;
+        matched = parse_integer_value(&json_string_max_length_value);
       } else if (!has_capture_hidden_suffix_bytes && match_keyword("capture_hidden_suffix_bytes")) {
         has_capture_hidden_suffix_bytes = true;
         matched = parse_integer_value(&capture_hidden_suffix_bytes_value);
@@ -359,7 +369,28 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
             "The max_chars rule attribute must be non-negative", start_line, start_column
         );
       }
+      if (has_json_string_max_length && !has_json_string_min_length) {
+        ReportLexerError(
+            "json_string_max_length requires json_string_min_length", start_line, start_column
+        );
+      }
+      if ((has_json_string_min_length && json_string_min_length_value < 0) ||
+          (has_json_string_max_length && json_string_max_length_value < 0)) {
+        ReportLexerError(
+            "The JSON string length attributes must be non-negative", start_line, start_column
+        );
+      }
+      if (has_json_string_min_length && has_json_string_max_length &&
+          json_string_min_length_value > json_string_max_length_value) {
+        ReportLexerError(
+            "json_string_min_length must not exceed json_string_max_length",
+            start_line,
+            start_column
+        );
+      }
       if ((has_max_chars && max_chars_value > kMaxInt32) ||
+          (has_json_string_min_length && json_string_min_length_value > kMaxInt32) ||
+          (has_json_string_max_length && json_string_max_length_value > kMaxInt32) ||
           (has_capture_hidden_suffix_bytes && capture_hidden_suffix_bytes_value > kMaxInt32) ||
           (has_capture_hidden_stop_bytes && capture_hidden_stop_bytes_value > kMaxInt32) ||
           (has_capture_hidden_body_rule_id && capture_hidden_body_rule_id_value > kMaxInt32) ||
@@ -376,6 +407,8 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
       Token token{TokenType::Identifier, identifier, identifier, start_line, start_column};
       token.max_tokens = static_cast<int32_t>(max_tokens_value);
       token.max_chars = static_cast<int32_t>(max_chars_value);
+      token.json_string_min_length = static_cast<int32_t>(json_string_min_length_value);
+      token.json_string_max_length = static_cast<int32_t>(json_string_max_length_value);
       token.capture_name = capture_value;
       token.capture_hidden_suffix_bytes = static_cast<int32_t>(capture_hidden_suffix_bytes_value);
       token.capture_hidden_stop_bytes = static_cast<int32_t>(capture_hidden_stop_bytes_value);
@@ -1554,6 +1587,8 @@ EBNFParser::ParsedRule EBNFParser::ParseRule() {
   cur_rule_name_ = std::any_cast<std::string>(Peek().value);
   int32_t max_tokens = Peek().max_tokens;
   int32_t max_chars = Peek().max_chars;
+  int32_t json_string_min_length = Peek().json_string_min_length;
+  int32_t json_string_max_length = Peek().json_string_max_length;
   std::string capture_name = Peek().capture_name;
   int32_t capture_hidden_suffix_bytes = Peek().capture_hidden_suffix_bytes;
   int32_t capture_hidden_stop_bytes = Peek().capture_hidden_stop_bytes;
@@ -1578,6 +1613,8 @@ EBNFParser::ParsedRule EBNFParser::ParseRule() {
   result.rule = Rule{cur_rule_name_, body_id, lookahead_id};
   result.rule.max_tokens = max_tokens;
   result.rule.max_chars = max_chars;
+  result.rule.json_string_min_length = json_string_min_length;
+  result.rule.json_string_max_length = json_string_max_length;
   result.rule.capture_name = capture_name;
   result.rule.is_lazy = is_lazy;
   result.rule.temperature = temperature;
@@ -1629,6 +1666,11 @@ Grammar EBNFParser::Parse(
     builder_.UpdateLookaheadAssertion(rule.name, rule.lookahead_assertion_id);
     builder_.UpdateMaxTokens(rule.name, rule.max_tokens);
     builder_.UpdateMaxChars(rule.name, rule.max_chars);
+    if (rule.json_string_min_length >= 0) {
+      builder_.UpdateJSONStringLength(
+          builder_.GetRuleId(rule.name), rule.json_string_min_length, rule.json_string_max_length
+      );
+    }
     builder_.UpdateCaptureName(rule.name, rule.capture_name);
     builder_.UpdateSuffixStopInfo(rule.name, parsed_rule.suffix_stop_info);
     builder_.UpdateLazy(rule.name, rule.is_lazy);

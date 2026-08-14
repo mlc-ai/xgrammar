@@ -2603,13 +2603,27 @@ int32_t JSONSchemaConverter::RegexExpression(
   return result;
 }
 
-int32_t JSONSchemaConverter::JSONSchemaPatternExpression(const std::string& regex) {
-  const auto cached = json_schema_pattern_expr_ids_.find(regex);
+int32_t JSONSchemaConverter::JSONSchemaPatternExpression(
+    const std::string& regex, int min_length, int max_length
+) {
+  auto simple_repeat = ParseSimpleCharacterClassRepeat(regex);
+  std::string cache_key = regex;
+  cache_key.push_back('\0');
+  if (simple_repeat.has_value()) {
+    cache_key += std::to_string(min_length);
+    cache_key.push_back(':');
+    cache_key += std::to_string(max_length);
+  } else {
+    // General regex expressions do not encode the length bounds. Share their FSM across schemas
+    // with the same pattern; each call site attaches its own runtime length metadata.
+    cache_key += "regex";
+  }
+  const auto cached = json_schema_pattern_expr_ids_.find(cache_key);
   if (cached != json_schema_pattern_expr_ids_.end()) {
     return cached->second;
   }
 
-  if (auto simple_repeat = ParseSimpleCharacterClassRepeat(regex)) {
+  if (simple_repeat.has_value()) {
     std::vector<int32_t> encoded_character_choices;
 
     std::vector<CharacterClassElement> raw_elements;
@@ -2671,19 +2685,26 @@ int32_t JSONSchemaConverter::JSONSchemaPatternExpression(const std::string& rege
     }
 
     int32_t encoded_character = Choice(encoded_character_choices);
+    int effective_min_count = std::max(simple_repeat->min_count, min_length);
+    int effective_max_count = simple_repeat->max_count;
+    if (max_length != -1 && (effective_max_count == -1 || max_length < effective_max_count)) {
+      effective_max_count = max_length;
+    }
+    if (effective_max_count != -1 && effective_min_count > effective_max_count) {
+      int32_t result = builder_.AddCharacterClass({});
+      json_schema_pattern_expr_ids_.emplace(std::move(cache_key), result);
+      return result;
+    }
     int32_t result = Repeat(
-        "json_schema_pattern_character",
-        encoded_character,
-        simple_repeat->min_count,
-        simple_repeat->max_count
+        "json_schema_pattern_character", encoded_character, effective_min_count, effective_max_count
     );
-    json_schema_pattern_expr_ids_.emplace(regex, result);
+    json_schema_pattern_expr_ids_.emplace(std::move(cache_key), result);
     return result;
   }
 
-  int32_t result =
-      RegexExpression(RewriteJSONSchemaPatternForFullMatch(regex), /*json_string=*/true);
-  json_schema_pattern_expr_ids_.emplace(regex, result);
+  const std::string rewritten_pattern = RewriteJSONSchemaPatternForFullMatch(regex);
+  int32_t result = RegexExpression(rewritten_pattern, /*json_string=*/true);
+  json_schema_pattern_expr_ids_.emplace(std::move(cache_key), result);
   return result;
 }
 
@@ -2827,8 +2848,18 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   }
   // Check for pattern
   if (spec.pattern.has_value()) {
-    return Sequence({ByteString("\""), JSONSchemaPatternExpression(*spec.pattern), ByteString("\"")}
+    int32_t pattern_string = Sequence(
+        {ByteString("\""),
+         JSONSchemaPatternExpression(*spec.pattern, spec.min_length, spec.max_length),
+         ByteString("\"")}
     );
+    if (spec.min_length == 0 && spec.max_length == -1) {
+      return pattern_string;
+    }
+    int32_t length_rule_id =
+        builder_.AddRuleWithHint(rule_name + "_pattern_length", pattern_string);
+    builder_.UpdateJSONStringLength(length_rule_id, spec.min_length, spec.max_length);
+    return RuleRef(length_rule_id);
   }
   // Check for length constraints
   if (spec.min_length != 0 || spec.max_length != -1) {

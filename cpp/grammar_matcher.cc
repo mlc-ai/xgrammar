@@ -944,6 +944,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     int32_t partial_codepoint;
     int32_t active_temperature_rule_id;
     int32_t char_budget_deadline;
+    int32_t json_string_length_deadline;
 
     bool operator==(const CachedState& other) const {
       return rule_id == other.rule_id && sequence_id == other.sequence_id &&
@@ -952,7 +953,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
              sub_element_id == other.sub_element_id && repeat_count == other.repeat_count &&
              partial_codepoint == other.partial_codepoint &&
              active_temperature_rule_id == other.active_temperature_rule_id &&
-             char_budget_deadline == other.char_budget_deadline;
+             char_budget_deadline == other.char_budget_deadline &&
+             json_string_length_deadline == other.json_string_length_deadline;
     }
   };
 
@@ -1024,7 +1026,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
         state.repeat_count,
         state.partial_codepoint,
         state.active_temperature_rule_id,
-        state.char_budget_deadline
+        state.char_budget_deadline,
+        state.json_string_length_deadline
     };
   }
 
@@ -1054,7 +1057,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
         state.repeat_count,
         state.partial_codepoint,
         state.active_temperature_rule_id,
-        state.char_budget_deadline
+        state.char_budget_deadline,
+        state.json_string_length_deadline
     };
   }
 
@@ -1269,7 +1273,9 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetStableCharacterClas
            parent.element_id,
            parent.rule_start_pos,
            parent.sub_element_id,
-           parent.partial_codepoint}
+           parent.partial_codepoint,
+           state.json_string_length_deadline,
+           parent.json_string_length_deadline}
       );
     } else {
       key.insert(
@@ -1284,7 +1290,8 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetStableCharacterClas
            state.repeat_count,
            state.partial_codepoint,
            state.active_temperature_rule_id,
-           state.char_budget_deadline}
+           state.char_budget_deadline,
+           state.json_string_length_deadline}
       );
     }
   }
@@ -1514,6 +1521,10 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
 
 bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
   XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
+  std::optional<JSONStringCharCounterState> previous_json_string_char_count;
+  if (has_json_string_length_rules_) {
+    previous_json_string_char_count = json_string_char_count_history_.back();
+  }
   const auto latest_row = scanable_state_history_[scanable_state_history_.size() - 1];
   std::vector<ParserState> latest_states(latest_row.begin(), latest_row.end());
   auto previous_completable_row = rule_id_to_completable_states_.Back();
@@ -1593,6 +1604,9 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
       capture_event_history_.PopBack(1);
       capture_event_history_.PushBack(previous_capture_events);
     }
+    if (previous_json_string_char_count.has_value()) {
+      json_string_char_count_history_.back() = *previous_json_string_char_count;
+    }
     return false;
   }
   scanable_state_history_.PopBack(1);
@@ -1649,6 +1663,10 @@ bool GrammarMatcher::Impl::AdvanceWithCharacterBudget(uint8_t byte, bool debug_p
   if (capture_tracking_) {
     previous_capture_events = CopyLastCaptureRow();
   }
+  std::optional<JSONStringCharCounterState> previous_json_string_char_count;
+  if (has_json_string_length_rules_) {
+    previous_json_string_char_count = json_string_char_count_history_.back();
+  }
 
   bool enforced = ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
   if (!enforced && record_char_budget_relaxation_) {
@@ -1664,6 +1682,9 @@ bool GrammarMatcher::Impl::AdvanceWithCharacterBudget(uint8_t byte, bool debug_p
     if (capture_tracking_) {
       capture_event_history_.PopBack(1);
       capture_event_history_.PushBack(previous_capture_events);
+    }
+    if (previous_json_string_char_count.has_value()) {
+      json_string_char_count_history_.back() = *previous_json_string_char_count;
     }
   }
   return accepted;
@@ -1904,9 +1925,10 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   std::vector<CaptureEvent> atomic_capture_row;
   bool atomic_completed = false;
   bool atomic_success =
-      has_char_budget_rules_
-          ? AdvanceAtomicTokenWithCharacterBudget(token_id, token_char_count, debug_print)
-          : AdvanceAtomicToken(token_id, debug_print);
+      !has_json_string_length_rules_ &&
+      (has_char_budget_rules_
+           ? AdvanceAtomicTokenWithCharacterBudget(token_id, token_char_count, debug_print)
+           : AdvanceAtomicToken(token_id, debug_print));
   if (atomic_success) {
     atomic_states = GetLatestScanableStates();
     auto row = rule_id_to_completable_states_.Back();
@@ -2513,7 +2535,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                                      : compiled_grammar_->GetAdaptiveTokenMask(
                                            state, state.rule_id == grammar_->GetRootRuleId()
                                        );
-    if (state.char_budget_deadline >= 0) {
+    if (state.char_budget_deadline >= 0 && !has_json_string_length_rules_) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
         FillBitmaskForCharBudgetBoundary(adaptive_token_mask, std::max(remaining_chars, 0));
@@ -2549,15 +2571,16 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
     // Examine only the current one ParserState
     std::optional<Impl> atomic_trial_base;
-    if (has_char_budget_rules_ && !adaptive_token_mask.uncertain_indices.empty()) {
+    if (has_char_budget_rules_ && !has_json_string_length_rules_ &&
+        !adaptive_token_mask.uncertain_indices.empty()) {
       atomic_trial_base.emplace(*this);
       atomic_trial_base->capture_recording_ = false;
     }
     PushOneStateToCheck(state);
     std::optional<ContinuationTransitionCache> continuation_cache;
     constexpr size_t kMinUncertainTokensForContinuationCache = 128;
-    if (!has_budget_rules_ && !has_char_budget_rules_ && !capture_tracking_ &&
-        adaptive_token_mask.store_type != StoreType::kRejected &&
+    if (!has_budget_rules_ && !has_char_budget_rules_ && !has_json_string_length_rules_ &&
+        !capture_tracking_ && adaptive_token_mask.store_type != StoreType::kRejected &&
         adaptive_token_mask.uncertain_indices.size() >= kMinUncertainTokensForContinuationCache) {
       continuation_cache.emplace(this);
     }
@@ -2594,7 +2617,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       }
 
       const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
-      bool accepted = !cur_token.empty() || !has_char_budget_rules_;
+      bool accepted =
+          !cur_token.empty() || (!has_char_budget_rules_ && !has_json_string_length_rules_);
 
       // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
       // We can reuse the previous matched size to avoid unnecessary matching.
@@ -2640,7 +2664,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         }
       }
 
-      if (!accepted && has_char_budget_rules_) {
+      if (!accepted && has_char_budget_rules_ && !has_json_string_length_rules_) {
         int32_t token_char_count = 0;
         for (uint8_t byte : cur_token) {
           token_char_count += StartsUTF8Codepoint(byte);
@@ -2791,8 +2815,10 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
           })) {
         break;
       }
+      if (!Advance(next_char)) {
+        break;
+      }
       result += static_cast<uint8_t>(next_char);
-      Advance(next_char);
       ++num_accepted_chars;
     }
   }

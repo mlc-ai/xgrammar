@@ -23,6 +23,129 @@ using GrammarExprType = Grammar::Impl::GrammarExprType;
 
 using GrammarExpr = Grammar::Impl::GrammarExpr;
 
+EarleyParser::JSONStringCharCounterState EarleyParser::AdvanceJSONStringCharCounter(uint8_t byte
+) const {
+  JSONStringCharCounterState result = json_string_char_count_history_.back();
+  using Phase = JSONStringCharCounterState::Phase;
+
+  auto start_unicode_escape = [&](bool follows_high_surrogate) {
+    result.phase = Phase::kUnicode;
+    result.unicode_value = 0;
+    result.unicode_digits_remaining = 4;
+    result.unicode_follows_high_surrogate = follows_high_surrogate;
+  };
+  auto process_inside_byte = [&]() {
+    if (byte == '"') {
+      result.phase = Phase::kOutside;
+    } else if (byte == '\\') {
+      result.phase = Phase::kEscape;
+    } else if ((byte & 0xC0) != 0x80) {
+      ++result.count;
+    }
+  };
+
+  switch (result.phase) {
+    case Phase::kOutside:
+      if (byte == '"') result.phase = Phase::kInside;
+      break;
+    case Phase::kInside:
+      process_inside_byte();
+      break;
+    case Phase::kEscape:
+      if (byte == 'u') {
+        start_unicode_escape(false);
+      } else {
+        ++result.count;
+        result.phase = Phase::kInside;
+      }
+      break;
+    case Phase::kUnicode: {
+      int hex = HexCharToInt(byte);
+      result.unicode_value = (result.unicode_value << 4) | static_cast<uint32_t>(std::max(hex, 0));
+      if (--result.unicode_digits_remaining != 0) break;
+      bool is_high_surrogate = result.unicode_value >= 0xD800 && result.unicode_value <= 0xDBFF;
+      bool is_low_surrogate = result.unicode_value >= 0xDC00 && result.unicode_value <= 0xDFFF;
+      if (!result.unicode_follows_high_surrogate || !is_low_surrogate) ++result.count;
+      result.phase = is_high_surrogate ? Phase::kAfterHighSurrogate : Phase::kInside;
+      result.unicode_follows_high_surrogate = false;
+      break;
+    }
+    case Phase::kAfterHighSurrogate:
+      if (byte == '\\') {
+        result.phase = Phase::kAfterHighSurrogateEscape;
+      } else {
+        result.phase = Phase::kInside;
+        process_inside_byte();
+      }
+      break;
+    case Phase::kAfterHighSurrogateEscape:
+      if (byte == 'u') {
+        start_unicode_escape(true);
+      } else {
+        ++result.count;
+        result.phase = Phase::kInside;
+      }
+      break;
+  }
+  return result;
+}
+
+bool EarleyParser::StartsNewJSONStringCharacter(uint8_t byte) const {
+  using Phase = JSONStringCharCounterState::Phase;
+  const auto& state = json_string_char_count_history_.back();
+  if (state.phase == Phase::kInside) {
+    return byte != '"' && (byte & 0xC0) != 0x80;
+  }
+  if (state.phase == Phase::kAfterHighSurrogate) {
+    // A backslash may begin the low-surrogate half of the same decoded character. Defer that
+    // decision until the escape is known; every other non-quote leading byte starts a new one.
+    return byte != '"' && byte != '\\' && (byte & 0xC0) != 0x80;
+  }
+  if (state.phase == Phase::kAfterHighSurrogateEscape) {
+    // Only \u can still form the low-surrogate half of the preceding decoded character.
+    return byte != 'u';
+  }
+  if (state.phase == Phase::kUnicode && state.unicode_follows_high_surrogate &&
+      state.unicode_digits_remaining == 1) {
+    int hex = HexCharToInt(byte);
+    if (hex < 0) return false;
+    uint32_t value = (state.unicode_value << 4) | static_cast<uint32_t>(hex);
+    return value < 0xDC00 || value > 0xDFFF;
+  }
+  return false;
+}
+
+bool EarleyParser::IsJSONStringLengthCompletionAllowed(const ParserState& state) const {
+  if (!enforce_json_string_lengths_) return true;
+  if (state.rule_id < 0) return true;
+  const auto& rule = grammar_->GetRule(state.rule_id);
+  if (rule.json_string_min_length < 0) return true;
+  int32_t start_position =
+      state.rule_start_pos == ParserState::kNoPrevInputPos ? 0 : state.rule_start_pos;
+  XGRAMMAR_DCHECK(
+      start_position >= 0 &&
+      start_position < static_cast<int32_t>(json_string_char_count_history_.size())
+  );
+  int32_t length =
+      GetCurrentJSONStringCharIndex() - json_string_char_count_history_[start_position].count;
+  return length >= rule.json_string_min_length &&
+         (rule.json_string_max_length == -1 || length <= rule.json_string_max_length);
+}
+
+void EarleyParser::EnterJSONStringLengthRule(int32_t rule_id) {
+  if (!enforce_json_string_lengths_ || json_string_char_count_history_.empty() || rule_id < 0 ||
+      grammar_->GetRule(rule_id).json_string_min_length < 0) {
+    return;
+  }
+  // A constrained rule always spans one complete JSON string. Reset the lexical phase at the
+  // occurrence boundary so quotes in surrounding free text or XML markup cannot contaminate it.
+  auto& state = json_string_char_count_history_.back();
+  state.unicode_value = 0;
+  state.unicode_digits_remaining = 0;
+  state.unicode_follows_high_surrogate = false;
+  state.phase = JSONStringCharCounterState::Phase::kOutside;
+}
+
 bool EarleyParser::IsCompleted() const { return is_completed_.back(); }
 
 bool EarleyParser::CompletionConsumedMarker(const ParserState& state) const {
@@ -122,9 +245,17 @@ void EarleyParser::PopLastStates(int32_t cnt) {
         char_budget_entry_history_.end() - cnt, char_budget_entry_history_.end()
     );
   }
+  if (has_json_string_length_rules_) {
+    json_string_char_count_history_.erase(
+        json_string_char_count_history_.end() - cnt, json_string_char_count_history_.end()
+    );
+  }
 }
 
 void EarleyParser::Complete(const ParserState& state, bool debug_print, bool marker_present) {
+  if (!IsJSONStringLengthCompletionAllowed(state)) {
+    return;
+  }
   // Record capture and hidden-span events. This is only enabled during definitive advances;
   // speculative completions (mask computation, lookahead) never record events.
   if (capture_recording_ && RuleNeedsCaptureEvent(state.rule_id)) {
@@ -178,7 +309,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_state.json_string_length_deadline
         });
         continue;
       }
@@ -203,7 +335,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_state.json_string_length_deadline
         });
       }
       // If the repeat count is less than the max repeat count, we can continue to
@@ -251,7 +384,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_state.json_string_length_deadline
         });
       }
       const bool preserve_empty_capture =
@@ -268,7 +402,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             new_count,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_state.json_string_length_deadline
         });
       }
       continue;
@@ -316,7 +451,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             0,
             0,
             state.active_temperature_rule_id,
-            state.char_budget_deadline
+            state.char_budget_deadline,
+            state.json_string_length_deadline
         });
       }
       return std::make_pair(true, false);
@@ -341,7 +477,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             0,
             0,
             state.active_temperature_rule_id,
-            state.char_budget_deadline
+            state.char_budget_deadline,
+            state.json_string_length_deadline
         });
       }
       return std::make_pair(false, false);
@@ -421,13 +558,22 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
     if (skip_expired_states_ && IsExpiredState(state)) {
       continue;
     }
+    if (has_json_string_length_rules_ && IsJSONStringLengthExpiredState(state, ch)) {
+      continue;
+    }
     Scan(state, ch);
+  }
+  if (has_json_string_length_rules_) {
+    json_string_char_count_history_.push_back(AdvanceJSONStringCharCounter(ch));
   }
 
   // Check if the character is accepted.
   if (tmp_process_state_queue_.empty() && tmp_states_to_be_added_.empty()) {
     if (has_char_budget_rules_) {
       char_count_history_.pop_back();
+    }
+    if (has_json_string_length_rules_) {
+      json_string_char_count_history_.pop_back();
     }
     return false;
   }
@@ -452,6 +598,22 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   // Check if the grammar is completed, and add the scannable states to the history.
   if (!tmp_completed_lazy_occurrences_.empty()) {
     RemoveCommittedLazyStates();
+  }
+  if (!tmp_accept_stop_token_ && tmp_states_to_be_added_.empty()) {
+    // Scanning can initially succeed but leave no viable derivation after completion-time
+    // constraints are applied (for example, a JSON closing quote below minLength). Treat the
+    // byte as rejected and roll back every history row created speculatively above.
+    rule_id_to_completable_states_.PopBack(1);
+    if (capture_tracking_) {
+      capture_event_history_.PopBack(1);
+    }
+    if (has_char_budget_rules_) {
+      char_count_history_.pop_back();
+    }
+    if (has_json_string_length_rules_) {
+      json_string_char_count_history_.pop_back();
+    }
+    return false;
   }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBackIndirect(tmp_states_to_be_added_);
@@ -508,6 +670,7 @@ EarleyParserGrammarFeatures::EarleyParserGrammarFeatures(const Grammar& grammar)
     const auto* suffix_stop_info = grammar->GetSuffixStopInfo(rule_id);
     has_budget_rules = has_budget_rules || rule.max_tokens >= 0;
     has_char_budget_rules = has_char_budget_rules || rule.max_chars >= 0;
+    has_json_string_length_rules = has_json_string_length_rules || rule.json_string_min_length >= 0;
     capture_tracking =
         capture_tracking || !rule.capture_name.empty() ||
         (suffix_stop_info != nullptr && !suffix_stop_info->stop_capture_name.empty());
@@ -524,20 +687,23 @@ EarleyParserGrammarFeatures::EarleyParserGrammarFeatures(const Grammar& grammar)
 EarleyParser::EarleyParser(
     const Grammar& grammar,
     std::optional<ParserState> initial_state,
-    std::shared_ptr<const EarleyParserGrammarFeatures> grammar_features
+    std::shared_ptr<const EarleyParserGrammarFeatures> grammar_features,
+    bool enforce_json_string_lengths
 )
     : grammar_(grammar),
       complete_fsm_edges_(&grammar_->complete_fsm.GetEdges()),
       grammar_features_(
           grammar_features != nullptr ? std::move(grammar_features)
                                       : std::make_shared<const EarleyParserGrammarFeatures>(grammar)
-      ) {
+      ),
+      enforce_json_string_lengths_(enforce_json_string_lengths) {
   if (!grammar->optimized) {
     XGRAMMAR_LOG(FATAL) << "The grammar is not optimized. Please optimize the grammar before using "
                            "the Earley parser.";
   }
   has_budget_rules_ = grammar_features_->has_budget_rules;
   has_char_budget_rules_ = grammar_features_->has_char_budget_rules;
+  has_json_string_length_rules_ = grammar_features_->has_json_string_length_rules;
   capture_tracking_ = grammar_features_->capture_tracking;
   has_hidden_capture_rules_ = grammar_features_->has_hidden_capture_rules;
   PushStateAndExpand(initial_state.has_value() ? *initial_state : RootInitialState());
@@ -556,7 +722,8 @@ ParserState EarleyParser::RootInitialState() const {
       0,
       0,
       ResolveActiveTemperatureRule(root_rule_id, -1),
-      CharDeadlineForRule(root_rule_id, -1)
+      CharDeadlineForRule(root_rule_id, -1),
+      JSONStringLengthDeadlineForRule(root_rule_id, -1)
   );
 }
 
@@ -569,6 +736,13 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   rule_id_to_completable_states_.PushBackEmpty();
   if (capture_tracking_) {
     capture_event_history_.PushBack(std::vector<CaptureEvent>());
+  }
+  if (has_json_string_length_rules_) {
+    json_string_char_count_history_.push_back(
+        json_string_char_count_history_.empty() ? JSONStringCharCounterState{}
+                                                : json_string_char_count_history_.back()
+    );
+    EnterJSONStringLengthRule(state.rule_id);
   }
   while (!tmp_process_state_queue_.empty()) {
     const ParserState& state = *tmp_process_state_queue_.front();
@@ -602,6 +776,7 @@ void EarleyParser::Reset() {
   }
   char_count_history_.clear();
   char_budget_entry_history_.clear();
+  json_string_char_count_history_.clear();
   tmp_char_budget_entered_ = false;
   capture_recording_ = false;
   XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
@@ -636,7 +811,8 @@ void EarleyParser::ExpandNextRuleRefElement(
   if (state.element_id != grammar_expr.size() - 1 ||
       sub_grammar_expr->type == GrammarExprType::kRepeat ||
       (state.rule_start_pos == rule_id_to_completable_states_.size() - 1) ||
-      RuleNeedsCaptureEvent(state.rule_id) || RuleNeedsCaptureEvent(ref_rule_id)) {
+      RuleNeedsCaptureEvent(state.rule_id) || RuleNeedsCaptureEvent(ref_rule_id) ||
+      RuleHasJSONStringLength(state.rule_id) || RuleHasJSONStringLength(ref_rule_id)) {
     // It's not the right recursion, or it's the root rule.
     rule_id_to_completable_states_.PushBackInLatestRow(std::make_pair(ref_rule_id, state));
   } else {
@@ -683,12 +859,14 @@ void EarleyParser::ExpandNextRuleRefElement(
         0,
         0,
         state.active_temperature_rule_id,
-        state.char_budget_deadline
+        state.char_budget_deadline,
+        state.json_string_length_deadline
     });
   }
 
   // If the reference rule is not visited, we need to add it to the queue.
   const auto& ref_rule = grammar_->GetRule(ref_rule_id);
+  EnterJSONStringLengthRule(ref_rule_id);
   if (ref_rule.max_chars >= 0) {
     tmp_char_budget_entered_ = true;
   }
@@ -707,7 +885,8 @@ void EarleyParser::ExpandNextRuleRefElement(
       0,
       0,
       ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id),
-      CharDeadlineForRule(ref_rule_id, state.char_budget_deadline)
+      CharDeadlineForRule(ref_rule_id, state.char_budget_deadline),
+      JSONStringLengthDeadlineForRule(ref_rule_id, state.json_string_length_deadline)
   });
 }
 
@@ -726,7 +905,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           0,
           0,
           state.active_temperature_rule_id,
-          state.char_budget_deadline
+          state.char_budget_deadline,
+          state.json_string_length_deadline
       });
       continue;
     }
@@ -759,7 +939,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
             0,
             0,
             state.active_temperature_rule_id,
-            state.char_budget_deadline
+            state.char_budget_deadline,
+            state.json_string_length_deadline
         });
       }
       if (repeat_info.Upper() != -1 && state.repeat_count >= repeat_info.Upper()) {
@@ -778,7 +959,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
     const bool can_elide_parent_completion =
         !is_repeat && !(target_flags & kFsmStateHasEdges) && (target_flags & kFsmStateEnd) &&
         state.rule_start_pos != static_cast<int32_t>(rule_id_to_completable_states_.size() - 1) &&
-        !RuleNeedsCaptureEvent(state.rule_id) && !RuleNeedsCaptureEvent(ref_rule_id);
+        !RuleNeedsCaptureEvent(state.rule_id) && !RuleNeedsCaptureEvent(ref_rule_id) &&
+        !RuleHasJSONStringLength(state.rule_id) && !RuleHasJSONStringLength(ref_rule_id);
     // Eliding this rule's completion would also elide the repeat-count increment in a parent
     // kRepeatRef. A state can represent several parent occurrences, so one repeated parent makes
     // the optimization unsafe for the merged state.
@@ -846,7 +1028,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  state.repeat_count,
                  0,
                  state.active_temperature_rule_id,
-                 state.char_budget_deadline
+                 state.char_budget_deadline,
+                 state.json_string_length_deadline
              }}
         );
       } else {
@@ -863,7 +1046,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  0,
                  0,
                  state.active_temperature_rule_id,
-                 state.char_budget_deadline
+                 state.char_budget_deadline,
+                 state.json_string_length_deadline
              }}
         );
       }
@@ -881,12 +1065,14 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           0,
           0,
           state.active_temperature_rule_id,
-          state.char_budget_deadline
+          state.char_budget_deadline,
+          state.json_string_length_deadline
       });
     }
 
     // If the reference rule is not visited, we need to add it to the queue.
     const auto& ref_rule = grammar_->GetRule(ref_rule_id);
+    EnterJSONStringLengthRule(ref_rule_id);
     if (ref_rule.max_chars >= 0) {
       tmp_char_budget_entered_ = true;
     }
@@ -905,7 +1091,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
         0,
         0,
         ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id),
-        CharDeadlineForRule(ref_rule_id, state.char_budget_deadline)
+        CharDeadlineForRule(ref_rule_id, state.char_budget_deadline),
+        JSONStringLengthDeadlineForRule(ref_rule_id, state.json_string_length_deadline)
     });
   }
 }

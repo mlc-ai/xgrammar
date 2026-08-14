@@ -20,7 +20,8 @@ std::string GrammarPrinter::PrintRule(
 ) {
   std::string res = rule.name;
   // Print the attributes as one comma-separated bracket group, re-parseable by the EBNF lexer.
-  if (rule.max_tokens >= 0 || rule.max_chars >= 0 || !rule.capture_name.empty() ||
+  if (rule.max_tokens >= 0 || rule.max_chars >= 0 || rule.json_string_min_length >= 0 ||
+      rule.json_string_max_length >= 0 || !rule.capture_name.empty() ||
       suffix_stop_info != nullptr || rule.is_lazy || no_forcing || rule.temperature.has_value()) {
     std::string attributes;
     auto append_attribute = [&](const std::string& attribute) {
@@ -34,6 +35,12 @@ std::string GrammarPrinter::PrintRule(
     }
     if (rule.max_chars >= 0) {
       append_attribute("max_chars=" + std::to_string(rule.max_chars));
+    }
+    if (rule.json_string_min_length >= 0) {
+      append_attribute("json_string_min_length=" + std::to_string(rule.json_string_min_length));
+    }
+    if (rule.json_string_max_length >= 0) {
+      append_attribute("json_string_max_length=" + std::to_string(rule.json_string_max_length));
     }
     if (!rule.capture_name.empty()) {
       append_attribute("capture=\"" + rule.capture_name + "\"");

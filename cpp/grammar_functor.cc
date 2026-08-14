@@ -72,6 +72,11 @@ class SubGrammarAdderImpl : public GrammarMutator {
       builder_->UpdateLookaheadAssertion(new_rule_ids_names[i].first, new_lookahead_assertion_id);
       builder_->UpdateMaxTokens(new_rule_ids_names[i].first, rule.max_tokens);
       builder_->UpdateMaxChars(new_rule_ids_names[i].first, rule.max_chars);
+      if (rule.json_string_min_length >= 0) {
+        builder_->UpdateJSONStringLength(
+            new_rule_ids_names[i].first, rule.json_string_min_length, rule.json_string_max_length
+        );
+      }
       builder_->UpdateCaptureName(new_rule_ids_names[i].first, rule.capture_name);
       if (const auto* suffix_stop_info = base_grammar_->GetSuffixStopInfo(i)) {
         auto remapped_info = *suffix_stop_info;
@@ -303,6 +308,11 @@ class StructureNormalizerImpl : public GrammarMutator {
       builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       builder_->UpdateMaxTokens(i, rule.max_tokens);
       builder_->UpdateMaxChars(i, rule.max_chars);
+      if (rule.json_string_min_length >= 0) {
+        builder_->UpdateJSONStringLength(
+            i, rule.json_string_min_length, rule.json_string_max_length
+        );
+      }
       builder_->UpdateCaptureName(i, rule.capture_name);
       if (const auto* suffix_stop_info = base_grammar_->GetSuffixStopInfo(i)) {
         builder_->UpdateSuffixStopInfo(i, *suffix_stop_info);
@@ -845,9 +855,9 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
     // capture-relevant rule would eliminate its completion events, so its capture or hidden span
     // would never be recorded. Inlining a lazy rule would erase its committed-shortest semantics.
     // Inlining a temperature rule would erase the rule its sampling temperature applies to.
-    if (rule.max_tokens >= 0 || rule.max_chars >= 0 || !rule.capture_name.empty() ||
-        (*grammar_)->GetSuffixStopInfo(rule_id) != nullptr || rule.is_lazy ||
-        rule.temperature.has_value()) {
+    if (rule.max_tokens >= 0 || rule.max_chars >= 0 || rule.json_string_min_length >= 0 ||
+        !rule.capture_name.empty() || (*grammar_)->GetSuffixStopInfo(rule_id) != nullptr ||
+        rule.is_lazy || rule.temperature.has_value()) {
       can_rule_be_inlined_[rule_id] = false;
       return false;
     }
@@ -968,6 +978,11 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
       );
       builder_->UpdateMaxTokens(rule_id_map_[rule_id], rule.max_tokens);
       builder_->UpdateMaxChars(rule_id_map_[rule_id], rule.max_chars);
+      if (rule.json_string_min_length >= 0) {
+        builder_->UpdateJSONStringLength(
+            rule_id_map_[rule_id], rule.json_string_min_length, rule.json_string_max_length
+        );
+      }
       builder_->UpdateCaptureName(rule_id_map_[rule_id], rule.capture_name);
       if (const auto* suffix_stop_info = grammar->GetSuffixStopInfo(rule_id)) {
         auto remapped_info = *suffix_stop_info;
@@ -2838,7 +2853,7 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   const auto& ref_rule_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
   // Keep the reference to budgeted, suffix/stop, lazy, and temperature rules: replacing it with
   // the rule's content would erase the rule that the runtime semantics apply to.
-  if (ref_rule.max_tokens < 0 && ref_rule.max_chars < 0 &&
+  if (ref_rule.max_tokens < 0 && ref_rule.max_chars < 0 && ref_rule.json_string_min_length < 0 &&
       base_grammar_->GetSuffixStopInfo(rule_id) == nullptr && !ref_rule.is_lazy &&
       !ref_rule.temperature.has_value() &&
       ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
@@ -3010,6 +3025,11 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
       builder_->UpdateLookaheadAssertion(i, VisitLookaheadAssertion(rule.lookahead_assertion_id));
       builder_->UpdateMaxTokens(i, rule.max_tokens);
       builder_->UpdateMaxChars(i, rule.max_chars);
+      if (rule.json_string_min_length >= 0) {
+        builder_->UpdateJSONStringLength(
+            i, rule.json_string_min_length, rule.json_string_max_length
+        );
+      }
       builder_->UpdateCaptureName(i, rule.capture_name);
       if (const auto* suffix_stop_info = base_grammar_->GetSuffixStopInfo(i)) {
         builder_->UpdateSuffixStopInfo(i, *suffix_stop_info);
@@ -3039,7 +3059,8 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
         break;
       }
       const auto& element = base_grammar_->GetGrammarExpr(choice[0]);
-      if (element.type != GrammarExprType::kRuleRef || base_grammar_->GetRule(element[0]).is_lazy) {
+      if (element.type != GrammarExprType::kRuleRef || base_grammar_->GetRule(element[0]).is_lazy ||
+          base_grammar_->GetRule(element[0]).json_string_min_length >= 0) {
         break;
       }
       cur_rule_id = element[0];
@@ -3100,7 +3121,7 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
         return false;
       }
       const auto& ref_rule = base_grammar_->GetRule(element[0]);
-      if (ref_rule.is_lazy) {
+      if (ref_rule.is_lazy || ref_rule.json_string_min_length >= 0) {
         return false;
       }
       const auto& ref_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
@@ -3150,7 +3171,7 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
       return false;
     }
     const auto& rule = base_grammar_->GetRule(expr[0]);
-    if (rule.is_lazy) {
+    if (rule.is_lazy || rule.json_string_min_length >= 0) {
       return false;
     }
     const auto& body = base_grammar_->GetGrammarExpr(rule.body_expr_id);
@@ -3342,7 +3363,7 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
     }
     int32_t rule_id = expr[0];
     const auto& rule = base_grammar_->GetRule(rule_id);
-    if (rule.is_lazy) {
+    if (rule.is_lazy || rule.json_string_min_length >= 0) {
       return false;
     }
     const auto& body = base_grammar_->GetGrammarExpr(rule.body_expr_id);
@@ -3499,7 +3520,7 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
         return -1;
       }
       const auto& ref_rule = base_grammar_->GetRule(cur[0]);
-      if (ref_rule.is_lazy) {
+      if (ref_rule.is_lazy || ref_rule.json_string_min_length >= 0) {
         return -1;
       }
       const auto& ref_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);

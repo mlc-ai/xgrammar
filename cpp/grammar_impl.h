@@ -91,6 +91,10 @@ class Grammar::Impl {
      * each occurrence of this rule to at most max_chars codepoints, forcing it to end at the
      * earliest possible position once the budget is exhausted. -1 means no budget. */
     int32_t max_chars = -1;
+    /*! \brief Minimum number of decoded characters for a JSON string rule. -1 means none. */
+    int32_t json_string_min_length = -1;
+    /*! \brief Maximum number of decoded characters for a JSON string rule. -1 means none. */
+    int32_t json_string_max_length = -1;
     /*! \brief The capture group name of the rule. When non-empty, the matcher records the input
      * span matched by this rule on every completion, retrievable via GrammarMatcher::GetCaptures.
      * Empty means no capture. */
@@ -480,6 +484,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::Rule::is_exact_lookahead,
     &Grammar::Impl::Rule::max_tokens,
     &Grammar::Impl::Rule::max_chars,
+    &Grammar::Impl::Rule::json_string_min_length,
+    &Grammar::Impl::Rule::json_string_max_length,
     &Grammar::Impl::Rule::capture_name,
     &Grammar::Impl::Rule::is_lazy,
     &Grammar::Impl::Rule::temperature
