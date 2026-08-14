@@ -563,6 +563,13 @@ class EarleyParser {
     uint8_t unicode_digits_remaining = 0;
     bool unicode_follows_high_surrogate = false;
     Phase phase = Phase::kOutside;
+
+    bool operator==(const JSONStringCharCounterState& other) const {
+      return count == other.count && unicode_value == other.unicode_value &&
+             unicode_digits_remaining == other.unicode_digits_remaining &&
+             unicode_follows_high_surrogate == other.unicode_follows_high_surrogate &&
+             phase == other.phase;
+    }
   };
 
   /*! \brief Prefix history for decoded JSON string characters, active only when required. */

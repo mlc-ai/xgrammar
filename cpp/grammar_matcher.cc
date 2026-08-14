@@ -1004,10 +1004,14 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     int32_t current_row_id;
     bool is_completed;
     std::vector<CachedState> scanable_states;
+    JSONStringCharCounterState json_string_counter;
+    bool json_string_length_entered;
 
     bool operator==(const CanonicalConfiguration& other) const {
       return current_row_id == other.current_row_id && is_completed == other.is_completed &&
-             scanable_states == other.scanable_states;
+             scanable_states == other.scanable_states &&
+             json_string_counter == other.json_string_counter &&
+             json_string_length_entered == other.json_string_length_entered;
     }
   };
 
@@ -1136,7 +1140,15 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     XGRAMMAR_DCHECK(current_row_id >= 0 && current_row_id < kMaxRows);
     const int32_t current_row = matcher_->scanable_state_history_.size() - 1;
     const auto scanable_states = matcher_->scanable_state_history_[current_row];
-    CanonicalConfiguration normalized{current_row_id, matcher_->is_completed_.back(), {}};
+    CanonicalConfiguration normalized{
+        current_row_id,
+        matcher_->is_completed_.back(),
+        {},
+        matcher_->has_json_string_length_rules_ ? matcher_->json_string_char_count_history_.back()
+                                                : JSONStringCharCounterState{},
+        matcher_->has_json_string_length_rules_ &&
+            matcher_->json_string_length_entry_history_.back()
+    };
     normalized.scanable_states.reserve(scanable_states.size());
     for (const auto& state : scanable_states) {
       const auto normalized_state = NormalizeState(state, current_row);
@@ -1193,11 +1205,13 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     matcher_->tmp_accept_stop_token_ = cached_configuration.is_completed;
     matcher_->tmp_states_to_be_added_.clear();
     if (matcher_->has_json_string_length_rules_) {
-      matcher_->json_string_char_count_history_.push_back(matcher_->AdvanceJSONStringCharCounter(
+      const auto next_counter = matcher_->AdvanceJSONStringCharCounter(
           matcher_->json_string_char_count_history_.back(), byte
-      ));
+      );
+      XGRAMMAR_DCHECK(next_counter == cached_configuration.json_string_counter);
+      matcher_->json_string_char_count_history_.push_back(next_counter);
       matcher_->json_string_length_entry_history_.push_back(
-          matcher_->json_string_length_entry_history_.back()
+          cached_configuration.json_string_length_entered
       );
     }
   }
@@ -2875,11 +2889,12 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     PushOneStateToCheck(state);
     std::optional<ContinuationTransitionCache> continuation_cache;
     constexpr size_t kMinUncertainTokensForContinuationCache = 128;
-    // JSON length rules elsewhere in the grammar do not invalidate cached continuations for this
-    // unconstrained state. Materialized cache hits advance the shared JSON lexical counter, and
-    // the cache stops exactly when a transition enters a constrained rule.
-    if (!has_budget_rules_ && !has_char_budget_rules_ && !json_string_length_active &&
-        !capture_tracking_ && adaptive_token_mask.store_type != StoreType::kRejected &&
+    // The canonical configuration includes the complete JSON lexical counter, so transitions
+    // inside a constrained string are reused only at the same decoded length and escape phase.
+    // Materialized hits restore that counter, and the cache still stops exactly when a transition
+    // enters another constrained rule.
+    if (!has_budget_rules_ && !has_char_budget_rules_ && !capture_tracking_ &&
+        adaptive_token_mask.store_type != StoreType::kRejected &&
         adaptive_token_mask.uncertain_indices.size() >= kMinUncertainTokensForContinuationCache) {
       continuation_cache.emplace(this);
     }
