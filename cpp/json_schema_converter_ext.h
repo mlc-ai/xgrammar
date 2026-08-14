@@ -7,6 +7,7 @@
 #ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 #define XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 
+#include <map>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -81,7 +82,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   void AddCache(const std::string& key, int32_t rule_id) override;
   std::optional<int32_t> GetCache(const std::string& key) const override;
 
- private:
+ protected:
   // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
   struct XMLWrapper {
     std::string key_wrapper_prefix;
@@ -124,6 +125,94 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   // Track if we're at the root object level
   int nested_object_level_ = 0;
   const XMLWrapper xml_wrapper_;
+};
+
+/*!
+ * \brief Converter for Cohere XML Tool Calling format.
+ *
+ * This converter generates recursive Cohere value tags:
+ * <cofl:value name="key" type="raw|json|dict|list">value</cofl:value>.
+ * Object properties use named value tags. Array items use unnamed value tags.
+ */
+class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
+ public:
+  CohereXMLToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false
+  );
+
+ protected:
+  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateObject(
+      const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
+  ) override;
+  int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
+
+  int32_t FormatProperty(
+      const std::string& key,
+      int32_t value_rule_id,
+      const std::string& rule_name,
+      int64_t idx,
+      const SchemaSpecPtr& schema
+  ) override;
+  int32_t FormatOtherProperty(
+      int32_t key_pattern_expr,
+      int32_t value_rule_id,
+      const std::string& rule_name,
+      const std::string& rule_name_suffix,
+      const SchemaSpecPtr& schema
+  ) override;
+
+  std::string GetKeyPattern() const override;
+  int32_t GetKeyPatternExcluding(
+      const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+  ) override;
+  std::string NextSeparator(bool is_end = false) override;
+
+  void AddCache(const std::string& key, int32_t rule_id) override;
+  std::optional<int32_t> GetCache(const std::string& key) const override;
+
+ private:
+  struct XMLIdentifierTrieNode {
+    bool is_terminal = false;
+    std::map<char, XMLIdentifierTrieNode> children;
+  };
+
+  int32_t FormatCohereParam(
+      const std::optional<std::string>& name,
+      const std::optional<int32_t>& key_pattern_expr,
+      const SchemaSpecPtr& schema,
+      int32_t value_rule_id
+  );
+  int32_t FormatSingleCohereParam(
+      const std::optional<std::string>& name,
+      const std::optional<int32_t>& key_pattern_expr,
+      const SchemaSpecPtr& schema,
+      int32_t value_rule_id
+  );
+  int32_t FormatCohereValue(int32_t value_rule_id);
+  int32_t GetCohereTypePattern(const SchemaSpecPtr& schema);
+  static std::string CohereTypeForJSONLiteral(const std::string& json_value);
+  static std::optional<std::string> CommonCohereTypeForJSONLiterals(
+      const std::vector<std::string>& json_values
+  );
+  std::optional<std::vector<SchemaSpecPtr>> GetCohereCompositeOptions(const SchemaSpecPtr& schema
+  ) const;
+  int32_t BuildXMLIdentifierExcludingBody(
+      const XMLIdentifierTrieNode& node, const std::string& rule_name, int depth
+  );
+  bool InCohereValueContext() const;
+
+  std::vector<const ObjectSpec*> object_stack_;
+  std::vector<SchemaSpecPtr> additional_property_stack_;
+  int cohere_array_level_ = 0;
 };
 
 }  // namespace xgrammar

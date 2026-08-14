@@ -199,13 +199,14 @@ enum class JSONFormat : int {
   kMiniMaxXML = 2,
   kDeepSeekXML = 3,
   kGlmXML = 4,
-  kKimiK3XML = 5,
+  kCohereXML = 5,
+  kKimiK3XML = 6,
 };
 
 /*!
  * \brief Convert a format name to JSONFormat.
  * \param format One of "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml",
- * "kimi_k3_xml".
+ * "cohere_xml", or "kimi_k3_xml".
  * \return The corresponding JSONFormat, or std::nullopt if the name is not recognized.
  */
 std::optional<JSONFormat> JSONFormatFromString(const std::string& format);
@@ -378,6 +379,9 @@ class JSONSchemaConverter {
 
   /*! \brief Create a rule and return the rule id (handles caching). */
   int32_t CreateRule(const SchemaSpecPtr& spec, const std::string& rule_name_hint);
+
+  /*! \brief Resolve a reference to its parsed schema. */
+  SchemaSpecPtr ResolveRefSchema(const RefSpec& spec, const std::string& rule_name_hint);
 
   /*! \brief Get next separator from indent manager. */
   virtual std::string NextSeparator(bool is_end = false);

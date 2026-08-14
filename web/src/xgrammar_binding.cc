@@ -156,7 +156,8 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .value("kJSON", xgrammar::JSONFormat::kJSON)
       .value("kQwenXML", xgrammar::JSONFormat::kQwenXML)
       .value("kMiniMaxXML", xgrammar::JSONFormat::kMiniMaxXML)
-      .value("kDeepSeekXML", xgrammar::JSONFormat::kDeepSeekXML);
+      .value("kDeepSeekXML", xgrammar::JSONFormat::kDeepSeekXML)
+      .value("kCohereXML", xgrammar::JSONFormat::kCohereXML);
 
   // Register std::optional used in Grammar::FromJSONSchema
   register_optional<int>();

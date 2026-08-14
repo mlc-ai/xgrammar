@@ -3081,14 +3081,19 @@ int32_t JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::strin
   return Choice(values);
 }
 
+SchemaSpecPtr JSONSchemaConverter::ResolveRefSchema(
+    const RefSpec& spec, const std::string& rule_name_hint
+) {
+  if (!ref_resolver_) {
+    XGRAMMAR_LOG(FATAL) << "Ref resolver not set; cannot resolve $ref: " << spec.uri;
+  }
+  return ref_resolver_(spec.uri, rule_name_hint);
+}
+
 int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string& rule_name) {
   // First check if we have a direct URI mapping (for circular references)
   if (uri_to_rule_id_.count(spec.uri)) {
     return RuleRef(uri_to_rule_id_[spec.uri]);
-  }
-
-  if (!ref_resolver_) {
-    XGRAMMAR_LOG(FATAL) << "Ref resolver not set; cannot resolve $ref: " << spec.uri;
   }
 
   // Derive rule name from URI path (like original URIToRule) so that the same
@@ -3119,7 +3124,7 @@ int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string&
   int32_t allocated_rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
   std::string allocated_rule_name = builder_.GetRule(allocated_rule_id).name;
   uri_to_rule_id_[spec.uri] = allocated_rule_id;
-  SchemaSpecPtr resolved = ref_resolver_(spec.uri, allocated_rule_name);
+  SchemaSpecPtr resolved = ResolveRefSchema(spec, allocated_rule_name);
   builder_.UpdateRuleBody(allocated_rule_id, GenerateFromSpec(resolved, allocated_rule_name));
   if (!resolved->cache_key.empty()) {
     AddCache(resolved->cache_key, allocated_rule_id);
@@ -4089,6 +4094,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"minimax_xml", JSONFormat::kMiniMaxXML},
       {"deepseek_xml", JSONFormat::kDeepSeekXML},
       {"glm_xml", JSONFormat::kGlmXML},
+      {"cohere_xml", JSONFormat::kCohereXML},
       {"kimi_k3_xml", JSONFormat::kKimiK3XML},
   };
   auto it = kNameToFormat.find(format);
@@ -4150,6 +4156,17 @@ Grammar JSONSchemaToGrammar(
           max_whitespace_cnt,
           std::move(ref_resolver),
           json_format,
+          any_order
+      );
+      return converter.Convert(spec);
+    }
+    case JSONFormat::kCohereXML: {
+      CohereXMLToolCallingConverter converter(
+          indent,
+          std::move(separators),
+          any_whitespace,
+          max_whitespace_cnt,
+          std::move(ref_resolver),
           any_order
       );
       return converter.Convert(spec);
@@ -4233,6 +4250,12 @@ std::string JSONSchemaToEBNF(
           ref_resolver,
           json_format,
           any_order
+      );
+      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
+    }
+    case JSONFormat::kCohereXML: {
+      CohereXMLToolCallingConverter converter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
       return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
     }

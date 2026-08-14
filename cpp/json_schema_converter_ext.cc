@@ -7,7 +7,11 @@
 
 #include <picojson.h>
 
+#include <algorithm>
+#include <map>
+#include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -15,8 +19,46 @@
 
 namespace xgrammar {
 
+namespace {
+
+bool IsXMLIdentifierChar(char c, bool is_first) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' ||
+         (!is_first && c >= '0' && c <= '9');
+}
+
+template <typename Children>
+std::vector<GrammarBuilder::CharacterClassElement> XMLIdentifierCharClassExcluding(
+    const Children& children, bool is_first
+) {
+  std::vector<GrammarBuilder::CharacterClassElement> chars;
+  auto add_if_missing = [&](char c) {
+    if (!children.count(c)) {
+      chars.push_back({c, c});
+    }
+  };
+  for (char c = 'A'; c <= 'Z'; ++c) {
+    add_if_missing(c);
+  }
+  add_if_missing('_');
+  for (char c = 'a'; c <= 'z'; ++c) {
+    add_if_missing(c);
+  }
+  if (!is_first) {
+    for (char c = '0'; c <= '9'; ++c) {
+      add_if_missing(c);
+    }
+  }
+  return chars;
+}
+
+std::vector<GrammarBuilder::CharacterClassElement> XMLIdentifierContinuationChars() {
+  return {{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}};
+}
+
 constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
 constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
+
+}  // namespace
 
 // Static constants
 const std::string XMLToolCallingConverter::kXMLString = "xml_string";
@@ -34,6 +76,7 @@ const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
           // TODO(Linzhang): We do not validate the string's value, and we accept both.
           "</｜DSML｜parameter>"}},
         {JSONFormat::kGlmXML, {"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"}},
+        {JSONFormat::kCohereXML, {"<cofl:value", ">", "", "</cofl:value>"}},
         {JSONFormat::kKimiK3XML,
          {"<|open|>argument key=\"",
           "",
@@ -422,6 +465,480 @@ std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key)
     return rule_cache_manager_.GetCache(key, true);
   }
   return rule_cache_manager_.GetCache(key, nested_object_level_ > 1);
+}
+
+CohereXMLToolCallingConverter::CohereXMLToolCallingConverter(
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool any_whitespace,
+    std::optional<int> max_whitespace_cnt,
+    RefResolver ref_resolver,
+    bool any_order
+)
+    : XMLToolCallingConverter(
+          indent,
+          separators,
+          any_whitespace,
+          max_whitespace_cnt,
+          ref_resolver,
+          JSONFormat::kCohereXML,
+          any_order
+      ) {}
+
+bool CohereXMLToolCallingConverter::InCohereValueContext() const {
+  return nested_object_level_ <= 1 || !object_stack_.empty() || cohere_array_level_ > 0;
+}
+
+int32_t CohereXMLToolCallingConverter::FormatCohereValue(int32_t value_rule_id) {
+  if (value_rule_id == builder_.GetRuleId(kXMLString)) {
+    return RuleRef(value_rule_id);
+  }
+  return Sequence({WhitespaceExpression(), RuleRef(value_rule_id), WhitespaceExpression()});
+}
+
+std::string CohereXMLToolCallingConverter::CohereTypeForJSONLiteral(const std::string& json_value) {
+  picojson::value value;
+  std::string error = picojson::parse(value, json_value);
+  // Const/enum object and array literals are emitted as JSON text today, not recursive Cohere
+  // dict/list bodies, so only JSON strings get the raw Cohere type.
+  return error.empty() && value.is<std::string>() ? "raw" : "json";
+}
+
+std::optional<std::string> CohereXMLToolCallingConverter::CommonCohereTypeForJSONLiterals(
+    const std::vector<std::string>& json_values
+) {
+  std::optional<std::string> common_type;
+  for (const auto& json_value : json_values) {
+    auto type = CohereTypeForJSONLiteral(json_value);
+    if (!common_type.has_value()) {
+      common_type = type;
+    } else if (*common_type != type) {
+      return std::nullopt;
+    }
+  }
+  return common_type;
+}
+
+int32_t CohereXMLToolCallingConverter::GetCohereTypePattern(const SchemaSpecPtr& schema) {
+  return std::visit(
+      [this](const auto& spec) -> int32_t {
+        using T = std::decay_t<decltype(spec)>;
+        if constexpr (std::is_same_v<T, StringSpec>) {
+          return ByteString("raw");
+        } else if constexpr (std::is_same_v<T, ObjectSpec>) {
+          return ByteString("dict");
+        } else if constexpr (std::is_same_v<T, ArraySpec>) {
+          return ByteString("list");
+        } else if constexpr (std::is_same_v<T, ConstSpec>) {
+          return ByteString(CohereTypeForJSONLiteral(spec.json_value));
+        } else if constexpr (std::is_same_v<T, EnumSpec>) {
+          auto common_type = CommonCohereTypeForJSONLiterals(spec.json_values);
+          // Mixed enums are branch-correlated by FormatCohereParam. This fallback is only used if
+          // a mixed enum somehow reaches the single-wrapper path, where there is no one true type.
+          return ByteString(common_type.has_value() ? *common_type : "json");
+        } else {
+          return ByteString("json");
+        }
+      },
+      schema->spec
+  );
+}
+
+std::optional<std::vector<SchemaSpecPtr>> CohereXMLToolCallingConverter::GetCohereCompositeOptions(
+    const SchemaSpecPtr& schema
+) const {
+  if (schema == nullptr) {
+    return std::nullopt;
+  }
+  return std::visit(
+      [](const auto& spec) -> std::optional<std::vector<SchemaSpecPtr>> {
+        using T = std::decay_t<decltype(spec)>;
+        if constexpr (std::is_same_v<T, AnyOfSpec>) {
+          return spec.options;
+        } else if constexpr (std::is_same_v<T, OneOfSpec>) {
+          return spec.options;
+        } else if constexpr (std::is_same_v<T, AllOfSpec>) {
+          if (spec.schemas.size() == 1) {
+            return spec.schemas;
+          }
+          return std::nullopt;
+        } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
+          return spec.type_schemas;
+        } else if constexpr (std::is_same_v<T, EnumSpec>) {
+          if (spec.json_values.empty() ||
+              CommonCohereTypeForJSONLiterals(spec.json_values).has_value()) {
+            return std::nullopt;
+          }
+          std::vector<SchemaSpecPtr> options;
+          options.reserve(spec.json_values.size());
+          for (size_t index = 0; index < spec.json_values.size(); ++index) {
+            const auto& json_value = spec.json_values[index];
+            ConstSpec const_spec;
+            const_spec.json_value = json_value;
+            options.push_back(
+                SchemaSpec::Make(std::move(const_spec), "", "enum_case_" + std::to_string(index))
+            );
+          }
+          return options;
+        } else {
+          return std::nullopt;
+        }
+      },
+      schema->spec
+  );
+}
+
+int32_t CohereXMLToolCallingConverter::FormatSingleCohereParam(
+    const std::optional<std::string>& name,
+    const std::optional<int32_t>& key_pattern_expr,
+    const SchemaSpecPtr& schema,
+    int32_t value_rule_id
+) {
+  std::vector<int32_t> elements = {ByteString(xml_wrapper_.key_wrapper_prefix)};
+  if (name.has_value()) {
+    elements.push_back(ByteString(" name=\"" + *name + "\""));
+  } else if (key_pattern_expr.has_value()) {
+    elements.push_back(ByteString(" name=\""));
+    elements.push_back(*key_pattern_expr);
+    elements.push_back(ByteString("\""));
+  }
+  elements.push_back(ByteString(" type=\""));
+  elements.push_back(GetCohereTypePattern(schema));
+  elements.push_back(ByteString("\"" + xml_wrapper_.key_wrapper_suffix));
+
+  if (!xml_wrapper_.value_wrapper_prefix.empty()) {
+    elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
+  }
+  elements.push_back(FormatCohereValue(value_rule_id));
+  elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
+  return Sequence(elements);
+}
+
+int32_t CohereXMLToolCallingConverter::FormatCohereParam(
+    const std::optional<std::string>& name,
+    const std::optional<int32_t>& key_pattern_expr,
+    const SchemaSpecPtr& schema,
+    int32_t value_rule_id
+) {
+  // Copy the name before generating: GenerateFromSpec may add rules and reallocate the
+  // builder's rule storage, invalidating references into it.
+  std::string value_rule_name = builder_.GetRule(value_rule_id).name;
+  SchemaSpecPtr resolved_schema = schema;
+  // Resolve RefSpecs only for Cohere wrapper classification; the value rule is already resolved.
+  if (const auto* ref = std::get_if<RefSpec>(&resolved_schema->spec); ref != nullptr) {
+    std::unordered_set<std::string> visited_ref_uris;
+    do {
+      if (!visited_ref_uris.insert(ref->uri).second) {
+        break;
+      }
+      resolved_schema = ResolveRefSchema(*ref, value_rule_name);
+      ref = std::get_if<RefSpec>(&resolved_schema->spec);
+    } while (ref != nullptr);
+  }
+
+  auto options = GetCohereCompositeOptions(resolved_schema);
+  if (!options.has_value()) {
+    return FormatSingleCohereParam(name, key_pattern_expr, resolved_schema, value_rule_id);
+  }
+
+  std::vector<int32_t> choices;
+  choices.reserve(options->size());
+  for (size_t index = 0; index < options->size(); ++index) {
+    const SchemaSpecPtr& option = (*options)[index];
+    int32_t option_rule_id =
+        CreateRule(option, value_rule_name + "_cohere_case_" + std::to_string(index));
+    choices.push_back(FormatCohereParam(name, key_pattern_expr, option, option_rule_id));
+  }
+  return choices.size() == 1 ? choices[0] : Choice(choices);
+}
+
+int32_t CohereXMLToolCallingConverter::GenerateString(
+    const StringSpec& spec, const std::string& rule_name
+) {
+  if (!InCohereValueContext()) {
+    return JSONSchemaConverter::GenerateString(spec, rule_name);
+  }
+  if (!spec.pattern.has_value() && !spec.format.has_value() && spec.min_length == 0 &&
+      spec.max_length == -1) {
+    return RuleRef(kXMLString);
+  }
+  if (spec.format.has_value()) {
+    const std::string& format = *spec.format;
+    auto regex_pattern = JSONFormatToRegexPattern(format);
+    if (regex_pattern.has_value()) {
+      return RegexExpression(regex_pattern.value(), false, true);
+    }
+  }
+  if (spec.pattern.has_value()) {
+    return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
+  }
+  if (spec.min_length != 0 || spec.max_length != -1) {
+    return Repeat(
+        rule_name + "_characters",
+        builder_.AddCharacterClass({{0, 0x10ffff}}),
+        spec.min_length,
+        spec.max_length
+    );
+  }
+  return JSONSchemaConverter::GenerateString(spec, rule_name);
+}
+
+int32_t CohereXMLToolCallingConverter::GenerateAny(
+    const AnySpec& spec, const std::string& rule_name
+) {
+  if (!InCohereValueContext()) {
+    return JSONSchemaConverter::GenerateAny(spec, rule_name);
+  }
+  if (nested_object_level_ == 0) {
+    return RuleRef(kXMLObject);
+  }
+  return JSONSchemaConverter::GenerateAny(spec, rule_name);
+}
+
+int32_t CohereXMLToolCallingConverter::GenerateConst(
+    const ConstSpec& spec, const std::string& rule_name
+) {
+  if (!InCohereValueContext()) {
+    return JSONSchemaConverter::GenerateConst(spec, rule_name);
+  }
+  return ByteString(XMLValue(spec.json_value));
+}
+
+int32_t CohereXMLToolCallingConverter::GenerateEnum(
+    const EnumSpec& spec, const std::string& rule_name
+) {
+  XGRAMMAR_DCHECK(!spec.json_values.empty())
+      << "GenerateEnum called with empty enum spec for rule: " << rule_name;
+  if (!InCohereValueContext()) {
+    return JSONSchemaConverter::GenerateEnum(spec, rule_name);
+  }
+  std::vector<int32_t> values;
+  values.reserve(spec.json_values.size());
+  for (const auto& value : spec.json_values) {
+    values.push_back(ByteString(XMLValue(value)));
+  }
+  return Choice(values);
+}
+
+int32_t CohereXMLToolCallingConverter::GenerateObject(
+    const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces
+) {
+  nested_object_level_++;
+  bool use_cohere_object = InCohereValueContext();
+
+  int32_t result;
+  if (use_cohere_object) {
+    SchemaSpecPtr additional_property;
+    if (spec.allow_additional_properties && spec.additional_properties_schema) {
+      additional_property = spec.additional_properties_schema;
+    } else if (spec.allow_unevaluated_properties && spec.unevaluated_properties_schema) {
+      additional_property = spec.unevaluated_properties_schema;
+    } else if (spec.allow_additional_properties || spec.allow_unevaluated_properties) {
+      additional_property = SchemaSpec::Make(AnySpec{}, "", "any");
+    }
+
+    object_stack_.push_back(&spec);
+    additional_property_stack_.push_back(additional_property);
+    result = JSONSchemaConverter::GenerateObject(spec, rule_name, false);
+    additional_property_stack_.pop_back();
+    object_stack_.pop_back();
+  } else {
+    result = JSONSchemaConverter::GenerateObject(spec, rule_name, nested_object_level_ > 1);
+  }
+
+  nested_object_level_--;
+  return result;
+}
+
+int32_t CohereXMLToolCallingConverter::GenerateArray(
+    const ArraySpec& spec, const std::string& rule_name
+) {
+  if (!InCohereValueContext()) {
+    nested_object_level_++;
+    auto result = JSONSchemaConverter::GenerateArray(spec, rule_name);
+    nested_object_level_--;
+    return result;
+  }
+
+  cohere_array_level_++;
+  std::vector<int32_t> item_patterns;
+  for (size_t i = 0; i < spec.prefix_items.size(); ++i) {
+    int32_t item_rule_id =
+        CreateRule(spec.prefix_items[i], rule_name + "_item_" + std::to_string(i));
+    item_patterns.push_back(
+        FormatCohereParam(std::nullopt, std::nullopt, spec.prefix_items[i], item_rule_id)
+    );
+  }
+
+  std::optional<int32_t> additional_item_pattern;
+  if (spec.allow_additional_items && spec.additional_items) {
+    int32_t additional_rule_id = CreateRule(spec.additional_items, rule_name + "_additional");
+    additional_item_pattern =
+        FormatCohereParam(std::nullopt, std::nullopt, spec.additional_items, additional_rule_id);
+  }
+  cohere_array_level_--;
+
+  if (item_patterns.empty()) {
+    if (!additional_item_pattern.has_value() || spec.max_items == 0) {
+      return Empty();
+    }
+    return Repeat(
+        rule_name + "_items",
+        *additional_item_pattern,
+        static_cast<int>(spec.min_items),
+        spec.max_items == -1 ? -1 : static_cast<int>(spec.max_items)
+    );
+  }
+
+  int32_t prefix_part = Sequence(item_patterns);
+  if (!additional_item_pattern.has_value()) {
+    return prefix_part;
+  }
+
+  int64_t min_additional = std::max(
+      static_cast<int64_t>(0), spec.min_items - static_cast<int64_t>(item_patterns.size())
+  );
+  int64_t max_additional =
+      spec.max_items == -1 ? -1 : spec.max_items - static_cast<int64_t>(item_patterns.size());
+  return Sequence(
+      {prefix_part,
+       Repeat(
+           rule_name + "_additional_items",
+           *additional_item_pattern,
+           static_cast<int>(min_additional),
+           max_additional == -1 ? -1 : static_cast<int>(max_additional)
+       )}
+  );
+}
+
+int32_t CohereXMLToolCallingConverter::FormatProperty(
+    const std::string& key,
+    int32_t value_rule_id,
+    const std::string& rule_name,
+    int64_t idx,
+    const SchemaSpecPtr& schema
+) {
+  if (!object_stack_.empty() && idx >= 0 &&
+      idx < static_cast<int64_t>(object_stack_.back()->properties.size())) {
+    const auto& prop = object_stack_.back()->properties[idx];
+    return FormatCohereParam(prop.name, std::nullopt, prop.schema, value_rule_id);
+  }
+  return XMLToolCallingConverter::FormatProperty(key, value_rule_id, rule_name, idx, schema);
+}
+
+int32_t CohereXMLToolCallingConverter::FormatOtherProperty(
+    int32_t key_pattern_expr,
+    int32_t value_rule_id,
+    const std::string& rule_name,
+    const std::string& rule_name_suffix,
+    const SchemaSpecPtr& schema
+) {
+  SchemaSpecPtr value_schema = schema;
+  if (!value_schema && !additional_property_stack_.empty()) {
+    value_schema = additional_property_stack_.back();
+  }
+  if (!value_schema && InCohereValueContext()) {
+    value_schema = SchemaSpec::Make(AnySpec{}, "", "any");
+    value_rule_id = CreateRule(value_schema, rule_name + "_" + rule_name_suffix + "_cohere_any");
+  }
+  if (value_schema) {
+    return FormatCohereParam(std::nullopt, key_pattern_expr, value_schema, value_rule_id);
+  }
+  return XMLToolCallingConverter::FormatOtherProperty(
+      key_pattern_expr, value_rule_id, rule_name, rule_name_suffix, schema
+  );
+}
+
+std::string CohereXMLToolCallingConverter::GetKeyPattern() const {
+  if (InCohereValueContext()) {
+    return kXMLVariableName;
+  }
+  return JSONSchemaConverter::GetKeyPattern();
+}
+
+int32_t CohereXMLToolCallingConverter::BuildXMLIdentifierExcludingBody(
+    const XMLIdentifierTrieNode& node, const std::string& rule_name, int depth
+) {
+  std::vector<int32_t> choices;
+  if (depth > 0 && !node.is_terminal) {
+    choices.push_back(Empty());
+  }
+
+  auto divergent_chars = XMLIdentifierCharClassExcluding(node.children, depth == 0);
+  if (!divergent_chars.empty()) {
+    choices.push_back(Sequence(
+        {builder_.AddCharacterClass(divergent_chars),
+         builder_.AddCharacterClassStar(XMLIdentifierContinuationChars())}
+    ));
+  }
+
+  for (const auto& [c, child] : node.children) {
+    if (!IsXMLIdentifierChar(c, depth == 0)) {
+      continue;
+    }
+    choices.push_back(Sequence(
+        {ByteString(std::string(1, c)), BuildXMLIdentifierExcludingBody(child, rule_name, depth + 1)
+        }
+    ));
+  }
+
+  if (choices.empty()) {
+    return Empty();
+  }
+  return Choice(choices);
+}
+
+int32_t CohereXMLToolCallingConverter::GetKeyPatternExcluding(
+    const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+) {
+  if (InCohereValueContext()) {
+    if (properties.empty()) {
+      return RuleRef(GetKeyPattern());
+    }
+    XMLIdentifierTrieNode root;
+    for (const auto& prop : properties) {
+      XMLIdentifierTrieNode* cur = &root;
+      bool is_valid_identifier = true;
+      for (size_t i = 0; i < prop.name.size(); ++i) {
+        char c = prop.name[i];
+        if (!IsXMLIdentifierChar(c, i == 0)) {
+          is_valid_identifier = false;
+          break;
+        }
+        cur = &cur->children[c];
+      }
+      if (is_valid_identifier && !prop.name.empty()) {
+        cur->is_terminal = true;
+      }
+    }
+    int32_t key_rule_id = builder_.AddEmptyRuleWithHint(rule_name + "_cohere_addl_key");
+    builder_.UpdateRuleBody(
+        key_rule_id, BuildXMLIdentifierExcludingBody(root, builder_.GetRule(key_rule_id).name, 0)
+    );
+    return RuleRef(key_rule_id);
+  }
+  return JSONSchemaConverter::GetKeyPatternExcluding(properties, rule_name);
+}
+
+std::string CohereXMLToolCallingConverter::NextSeparator(bool is_end) {
+  if (InCohereValueContext()) {
+    return GetWhitespacePattern();
+  }
+  return JSONSchemaConverter::NextSeparator(is_end);
+}
+
+void CohereXMLToolCallingConverter::AddCache(const std::string& key, int32_t rule_id) {
+  if (key.empty()) {
+    return;
+  }
+  rule_cache_manager_.AddCache(key, nested_object_level_ > 1 && !InCohereValueContext(), rule_id);
+}
+
+std::optional<int32_t> CohereXMLToolCallingConverter::GetCache(const std::string& key) const {
+  if (key.empty()) {
+    return std::nullopt;
+  }
+  return rule_cache_manager_.GetCache(key, nested_object_level_ > 1 && !InCohereValueContext());
 }
 
 }  // namespace xgrammar
