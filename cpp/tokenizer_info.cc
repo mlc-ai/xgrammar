@@ -328,7 +328,7 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
   token_char_counts_.assign(sorted_decoded_vocab_.size(), 0);
   json_string_quote_token_indices_.clear();
   json_string_quote_token_flags_.assign(sorted_decoded_vocab_.size(), false);
-  json_string_special_token_flags_.assign(sorted_decoded_vocab_.size(), false);
+  json_string_plain_prefix_char_counts_.assign(sorted_decoded_vocab_.size(), 0);
   token_indices_by_descending_char_count_.resize(sorted_decoded_vocab_.size());
   ascii_string_safe_indices_.clear();
   json_string_quote_token_indices_.reserve(sorted_decoded_vocab_.size() / 16);
@@ -346,12 +346,23 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
       ascii_string_safe_indices_.push_back(index);
     }
     const bool contains_quote = token.find('"') != std::string::npos;
+    const bool contains_escape = token.find('\\') != std::string::npos;
     if (contains_quote) {
       json_string_quote_token_indices_.push_back(index);
     }
     json_string_quote_token_flags_[index] = contains_quote;
-    json_string_special_token_flags_[index] =
-        contains_quote || token.find('\\') != std::string::npos;
+    if (contains_escape) {
+      json_string_plain_prefix_char_counts_[index] = -1;
+    } else {
+      int32_t prefix_count = 0;
+      for (uint8_t byte : token) {
+        if (byte == '"') {
+          break;
+        }
+        prefix_count += (byte & 0xC0) != 0x80;
+      }
+      json_string_plain_prefix_char_counts_[index] = prefix_count;
+    }
     token_char_counts_[index] = count;
     token_indices_by_descending_char_count_[index] = index;
     max_chars = std::max(max_chars, count);

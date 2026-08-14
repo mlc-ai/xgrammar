@@ -579,6 +579,7 @@ void GrammarMatcherForTokenMaskCache::AdaptCacheWithLookahead(
       break;
     }
   }
+  cache.RecomputeAcceptedCount(sorted_decoded_vocab.size());
 }
 
 std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAssertion(

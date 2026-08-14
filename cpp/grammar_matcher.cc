@@ -652,6 +652,8 @@ class GrammarMatcher::Impl : public EarleyParser {
       const DynamicBitset* additional_accepted_tokens
   );
 
+  bool NeedsJSONStringLengthTokenFilter(const ParserState& state) const;
+
   bool AdvanceWithCharacterBudget(uint8_t byte, bool debug_print = false);
 
   bool AdvanceAtomicTokenWithCharacterBudget(
@@ -2518,7 +2520,7 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
                               current_count < state.json_string_min_length_deadline;
   const auto& quote_indices = tokenizer_impl->GetJSONStringQuoteTokenIndices();
   const auto& quote_flags = tokenizer_impl->GetJSONStringQuoteTokenFlags();
-  const auto& special_flags = tokenizer_impl->GetJSONStringSpecialTokenFlags();
+  const auto& plain_prefix_char_counts = tokenizer_impl->GetJSONStringPlainPrefixCharCounts();
   const auto& token_char_counts = tokenizer_impl->GetTokenCharCounts();
   const auto& descending_char_count_indices =
       tokenizer_impl->GetTokenIndicesByDescendingCharCount();
@@ -2536,22 +2538,35 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
   const size_t candidate_upper_bound =
       (minimum_active ? quote_indices.size() : 0) +
       static_cast<size_t>(too_long_end - descending_char_count_indices.begin());
-  if (static_cast<size_t>(tmp_state_accepted_bitset_.Count()) <= candidate_upper_bound) {
+  const int32_t base_accepted_count = adaptive_token_mask.GetAcceptedCount();
+  const bool iterate_accepted =
+      static_cast<size_t>(base_accepted_count) <= candidate_upper_bound &&
+      (additional_accepted_tokens == nullptr ||
+       static_cast<size_t>(tmp_state_accepted_bitset_.Count()) <= candidate_upper_bound);
+  auto token_is_invalid = [&](int32_t token_index) {
+    const bool may_close_too_early = minimum_active && quote_flags[token_index];
+    const bool may_exceed_maximum = token_char_counts[token_index] > remaining;
+    if (!may_close_too_early && !may_exceed_maximum) {
+      return false;
+    }
+    const int32_t plain_prefix_count = plain_prefix_char_counts[token_index];
+    if (IsJSONStringCounterInside() && plain_prefix_count >= 0) {
+      return (may_close_too_early && static_cast<int64_t>(current_count) + plain_prefix_count <
+                                         state.json_string_min_length_deadline) ||
+             (state.json_string_length_deadline >= 0 && plain_prefix_count > remaining);
+    }
+    return !IsCachedAcceptedTokenWithinJSONStringLength(
+        state, sorted_decoded_vocab[token_index].second
+    );
+  };
+  if (iterate_accepted) {
     for (int32_t token_id = tmp_state_accepted_bitset_.FindFirstOne(); token_id >= 0;
          token_id = tmp_state_accepted_bitset_.FindNextOne(token_id)) {
       int32_t token_index = token_id_to_sorted_index[token_id];
       if (token_index < 0) {
         continue;
       }
-      const auto& token = sorted_decoded_vocab[token_index].second;
-      const bool may_close_too_early = minimum_active && quote_flags[token_index];
-      const bool may_exceed_maximum = token_char_counts[token_index] > remaining;
-      bool invalid =
-          may_exceed_maximum && IsJSONStringCounterInside() && !special_flags[token_index];
-      if (!invalid && (may_close_too_early || may_exceed_maximum)) {
-        invalid = !IsCachedAcceptedTokenWithinJSONStringLength(state, token);
-      }
-      if (invalid) {
+      if (token_is_invalid(token_index)) {
         tmp_state_accepted_bitset_.Reset(token_id);
         if (adaptive_token_mask.store_type == StoreType::kRejected) {
           tmp_json_length_invalid_indices_.push_back(token_index);
@@ -2581,15 +2596,7 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
       if (!tmp_state_accepted_bitset_[token_id]) {
         continue;
       }
-      const bool may_exceed_maximum = token_char_counts[token_index] > remaining;
-      bool invalid =
-          may_exceed_maximum && IsJSONStringCounterInside() && !special_flags[token_index];
-      if (!invalid) {
-        invalid = !IsCachedAcceptedTokenWithinJSONStringLength(
-            state, sorted_decoded_vocab[token_index].second
-        );
-      }
-      if (invalid) {
+      if (token_is_invalid(token_index)) {
         tmp_state_accepted_bitset_.Reset(token_id);
         if (adaptive_token_mask.store_type == StoreType::kRejected) {
           tmp_json_length_invalid_indices_.push_back(token_index);
@@ -2598,6 +2605,19 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
     }
   }
   std::sort(tmp_json_length_invalid_indices_.begin(), tmp_json_length_invalid_indices_.end());
+}
+
+bool GrammarMatcher::Impl::NeedsJSONStringLengthTokenFilter(const ParserState& state) const {
+  const auto* tokenizer_impl = tokenizer_info_.ImplPtr();
+  const int32_t current_count = GetCurrentJSONStringCharIndex();
+  if (state.json_string_min_length_deadline >= 0 &&
+      current_count < state.json_string_min_length_deadline &&
+      !tokenizer_impl->GetJSONStringQuoteTokenIndices().empty()) {
+    return true;
+  }
+  return state.json_string_length_deadline >= 0 &&
+         static_cast<int64_t>(state.json_string_length_deadline) - current_count <
+             tokenizer_impl->GetMaxTokenChars();
 }
 
 void GrammarMatcher::Impl::FillBitmaskForStates(
@@ -2676,6 +2696,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                                            state, state.rule_id == grammar_->GetRootRuleId()
                                        );
     const bool json_string_length_active = IsJSONStringLengthConstraintActive(state);
+    const bool json_string_length_filter_needed =
+        json_string_length_active && NeedsJSONStringLengthTokenFilter(state);
     if (state.char_budget_deadline >= 0 && !json_string_length_active) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
@@ -2684,7 +2706,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       }
     }
     latest_states_with_masks.emplace_back(state, &adaptive_token_mask);
-    if (!json_string_length_active) {
+    if (!json_string_length_filter_needed) {
       if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
         tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
       } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
@@ -2708,6 +2730,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                              )
                            : nullptr;
     const bool json_string_length_active = IsJSONStringLengthConstraintActive(state);
+    const bool json_string_length_filter_needed =
+        json_string_length_active && NeedsJSONStringLengthTokenFilter(state);
 
     const std::vector<int32_t>* indices_to_check = &adaptive_token_mask.uncertain_indices;
 
@@ -2721,7 +2745,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     // tokens, so we will just find the accepted tokens, and vice versa.
 
     tmp_rejected_indices_delta_.clear();
-    if (json_string_length_active) {
+    if (json_string_length_filter_needed) {
       BuildJSONStringLengthFilteredAcceptedTokens(
           state,
           adaptive_token_mask,

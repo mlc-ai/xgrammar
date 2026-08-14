@@ -24,6 +24,7 @@ AdaptiveTokenMask::AdaptiveTokenMask(
 ) {
   auto size_acc = accepted_indices.size();
   auto size_rej = rejected_indices.size();
+  accepted_count = static_cast<int32_t>(size_acc);
 
   store_type = size_acc >= USE_BITSET_THRESHOLD && size_rej >= USE_BITSET_THRESHOLD
                    ? StoreType::kAcceptedBitset
@@ -56,6 +57,7 @@ AdaptiveTokenMask::AdaptiveTokenMask(
   for (int32_t index : additional_accepted_indices) {
     accepted_bitset.Set(sorted_decoded_vocab[index].first, true);
   }
+  accepted_count = accepted_bitset.Count();
 }
 
 AdaptiveTokenMask::AdaptiveTokenMask(
@@ -65,6 +67,7 @@ AdaptiveTokenMask::AdaptiveTokenMask(
     const std::vector<int32_t>& uncertain_indices
 ) {
   auto size_acc = accepted_indices.size();
+  accepted_count = static_cast<int32_t>(size_acc);
 
   store_type = size_acc >= USE_BITSET_THRESHOLD ? StoreType::kAcceptedBitset : StoreType::kAccepted;
 
@@ -78,6 +81,22 @@ AdaptiveTokenMask::AdaptiveTokenMask(
     this->accepted_indices = accepted_indices;
   }
   this->uncertain_indices = uncertain_indices;
+}
+
+void AdaptiveTokenMask::RecomputeAcceptedCount(size_t sorted_vocab_size) {
+  switch (store_type) {
+    case StoreType::kAccepted:
+      accepted_count = static_cast<int32_t>(accepted_indices.size());
+      break;
+    case StoreType::kRejected:
+      accepted_count = static_cast<int32_t>(
+          sorted_vocab_size - rejected_indices.size() - uncertain_indices.size()
+      );
+      break;
+    case StoreType::kAcceptedBitset:
+      accepted_count = accepted_bitset.Count();
+      break;
+  }
 }
 
 std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const {
@@ -216,6 +235,10 @@ std::optional<SerializationError> DeserializeJSONValue(
     return ConstructDeserializeError("Expect a 'adaptive_token_mask_cache' field", type_name);
   }
   AutoDeserializeJSONValue(&(impl->adaptive_token_mask_cache), object["adaptive_token_mask_cache"]);
+  const size_t sorted_vocab_size = tokenizer_info.GetSortedDecodedVocab().size();
+  for (auto& entry : impl->adaptive_token_mask_cache) {
+    entry.second.RecomputeAcceptedCount(sorted_vocab_size);
+  }
   return std::nullopt;
 }
 

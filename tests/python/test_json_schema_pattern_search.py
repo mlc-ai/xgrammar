@@ -284,17 +284,19 @@ def test_pattern_length_filters_narrow_cached_accept_set(enable_dynamic_compilat
         {"type": "string", "pattern": "^[0-9]{10,10}$", "minLength": 10, "maxLength": 10},
         any_whitespace=False,
     )
-    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    restored = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), tokenizer_info)
+    for candidate in (compiled, restored):
+        matcher = xgr.GrammarMatcher(candidate, terminate_without_stop_token=True)
 
-    assert matcher.accept_string('"')
-    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-    assert matcher.fill_next_token_bitmask(bitmask)
-    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
-    assert bool(allowed[1])
-    assert bool(allowed[2])
-    assert not bool(allowed[3])
-    assert bool(allowed[4])
-    assert not bool(allowed[5])
+        assert matcher.accept_string('"')
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+        assert bool(allowed[1])
+        assert bool(allowed[2])
+        assert not bool(allowed[3])
+        assert bool(allowed[4])
+        assert not bool(allowed[5])
 
 
 def test_pattern_length_preserves_nested_character_budget():

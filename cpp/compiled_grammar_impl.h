@@ -65,6 +65,9 @@ struct AdaptiveTokenMask {
 
   std::vector<int32_t> uncertain_indices;
 
+  /*! \brief Number of definitely accepted decoded-vocabulary tokens. Derived, not serialized. */
+  int32_t accepted_count{-1};
+
   /*! \brief Default constructor. Only for deserialization. */
   AdaptiveTokenMask() = default;
 
@@ -89,6 +92,13 @@ struct AdaptiveTokenMask {
       const std::vector<int32_t>& additional_accepted_indices,
       const std::vector<int32_t>& uncertain_indices
   );
+
+  int32_t GetAcceptedCount() const {
+    XGRAMMAR_DCHECK(accepted_count >= 0);
+    return accepted_count;
+  }
+
+  void RecomputeAcceptedCount(size_t sorted_vocab_size);
 
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
