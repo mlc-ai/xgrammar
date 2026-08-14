@@ -3531,6 +3531,33 @@ def test_prefix_items_no_additional_items_allows_shorter():
     check_schema_with_instance(schema, '["a"]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1, true]', is_accepted=False)
+def test_contains_implies_min_one_non_strict():
+    # Regression for issue #833: a bare 'contains' implies minContains = 1 per
+    # Draft 2020-12; previously the keyword was ignored entirely and the array
+    # compiled as if unconstrained.
+    schema = {"type": "array", "contains": {"type": "integer"}}
+    check_schema_with_instance(schema, "[]", is_accepted=False, strict_mode=False)
+    check_schema_with_instance(schema, "[1]", is_accepted=True, strict_mode=False)
+    check_schema_with_instance(schema, "[1, 2]", is_accepted=True, strict_mode=False)
+
+
+def test_contains_strict_mode_raises_instead_of_only_empty():
+    # Regression for issue #833: strict mode (unevaluatedItems=false) cannot
+    # satisfy a bare 'contains' on a shapeless array; it must raise the
+    # unsatisfiable-schema error instead of compiling an only-empty grammar
+    # that accepts [] (the one document the schema forbids).
+    schema = {"type": "array", "contains": {"type": "integer"}}
+    with pytest.raises(Exception, match="minItems is greater than the number of prefixItems"):
+        _json_schema_to_ebnf(schema)
+
+
+def test_contains_false_is_rejected():
+    # Regression for issue #833: 'contains: false' (no element may match the
+    # schema) cannot be expressed as a count and must fail loudly instead of
+    # compiling a silently wrong grammar.
+    schema = {"type": "array", "contains": False}
+    with pytest.raises(Exception, match="not supported"):
+        _json_schema_to_ebnf(schema)
 
 
 if __name__ == "__main__":

@@ -1224,6 +1224,28 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
     }
     spec.min_items = std::max(spec.min_items, schema.at("minContains").get<int64_t>());
   }
+  if (schema.count("contains")) {
+    // Draft 2020-12: a bare 'contains' implies minContains = 1 (at least one
+    // element must match). Previously the keyword was ignored entirely, so a
+    // shapeless array compiled as if unconstrained and, in strict mode, as an
+    // only-empty-array grammar accepting exactly the document the schema
+    // forbids (issue #833). Model it with the same min-count approximation
+    // already used for 'minContains'; 'contains: false' (no element may match)
+    // cannot be expressed as a count and is rejected explicitly.
+    auto contains_value = schema.at("contains");
+    if (!contains_value.is<picojson::object>() && !contains_value.is<bool>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "contains must be an object or a boolean"
+      );
+    }
+    if (contains_value.is<bool>() && !contains_value.get<bool>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema,
+          "contains: false requires that no element match, which is not supported"
+      );
+    }
+    spec.min_items = std::max(spec.min_items, static_cast<int64_t>(1));
+  }
   if (schema.count("maxItems")) {
     if (!schema.at("maxItems").is<int64_t>() || schema.at("maxItems").get<int64_t>() < 0) {
       return ResultErr<SchemaError>(
