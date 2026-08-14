@@ -199,6 +199,50 @@ def test_pattern_length_rechecks_direct_character_class_mask(enable_dynamic_comp
     assert not bool(allowed[1])
 
 
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_pattern_length_rechecks_token_that_enters_constrained_rule(
+    enable_dynamic_compilation: bool,
+):
+    grammar = xgr.Grammar.from_ebnf(
+        'root ::= "x" constrained\n'
+        'constrained[json_string_min_length=0, json_string_max_length=0] ::= "\\"" body "\\""\n'
+        "body ::= [a]*"
+    )
+    tokenizer_info = xgr.TokenizerInfo(['x"a', 'x""'], stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[0])
+    assert bool(allowed[1])
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_pattern_min_length_rechecks_closing_token(enable_dynamic_compilation: bool):
+    tokenizer_info = xgr.TokenizerInfo(['"', "a", "b"], stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_json_schema({"type": "string", "pattern": "b", "minLength": 2}, any_whitespace=False)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_string('"b')
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[0])
+    assert bool(allowed[1])
+
+
 def test_pattern_length_preserves_nested_character_budget():
     grammar = xgr.Grammar.from_ebnf(
         'root[json_string_min_length=1, json_string_max_length=2] ::= "\\"" body "\\""\n'

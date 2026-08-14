@@ -301,7 +301,13 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
         tokenizer_info_(tokenizer_info),
         rule_level_cache_(rule_level_cache),
         character_class_token_summary_cache_(character_class_token_summary_cache),
-        enable_direct_character_class_mask_(enable_direct_character_class_mask) {}
+        enable_direct_character_class_mask_(enable_direct_character_class_mask) {
+    if (has_json_string_length_rules_) {
+      XGRAMMAR_DCHECK(!json_string_length_entry_history_.empty());
+      json_string_length_entry_history_.back() = false;
+      tmp_json_string_length_entered_ = false;
+    }
+  }
   /*!
    * \brief Get the adaptive token mask for the given ParserState.
    * \param is_root_rule Whether to consider the parent rule. If false, there will be
@@ -982,7 +988,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       bool can_reach_end = tmp_can_reach_end_prefix_or_stack_.back();
 
       if (accepted) {
-        if (HasEnteredCharBudget()) {
+        if (HasEnteredCharBudget() || HasEnteredJSONStringLengthRule()) {
           tmp_uncertain_indices_.push_back(i);
         } else {
           tmp_accepted_indices_.push_back(i);
@@ -993,7 +999,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
         if ((!is_root_rule) && lookahead_accepted) {
           if (lookahead_completed || !is_exact_lookahead) {
             tmp_uncertain_indices_.push_back(i);
-          } else if (HasEnteredCharBudget()) {
+          } else if (HasEnteredCharBudget() || HasEnteredJSONStringLengthRule()) {
             tmp_uncertain_indices_.push_back(i);
           } else {
             tmp_accepted_indices_.push_back(i);
@@ -1169,12 +1175,6 @@ std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetSingleChara
       uncertain_indices.push_back(summary.sorted_vocab_index);
     }
   }
-  if (has_json_string_length_rules_) {
-    // A direct character-class mask bypasses the general accepted-to-uncertain conversion below.
-    // Recheck even its one-character tokens because the state may be at a decoded-length boundary.
-    IntsetUnion(&uncertain_indices, accepted_indices);
-    accepted_indices.clear();
-  }
   return AdaptiveTokenMask(
       tokenizer_info_.GetVocabSize(),
       sorted_vocab,
@@ -1311,13 +1311,6 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
       IntsetDifference(&tmp_uncertain_indices_, token_edge_accepted);
     }
     IntsetDifference(&tmp_rejected_indices_, token_edge_accepted);
-  }
-  if (has_json_string_length_rules_) {
-    // The same regex FSM state can be reached with different remaining decoded JSON lengths.
-    // Recheck every otherwise accepted token against the runtime counter instead of caching it as
-    // definitely accepted for all occurrences of that state.
-    IntsetUnion(&tmp_uncertain_indices_, tmp_accepted_indices_);
-    tmp_accepted_indices_.clear();
   }
   if (rejected_filled) {
     auto return_value = BuildAdaptiveTokenMask(

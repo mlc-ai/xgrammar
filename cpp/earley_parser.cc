@@ -133,8 +133,11 @@ bool EarleyParser::IsJSONStringLengthCompletionAllowed(const ParserState& state)
 }
 
 void EarleyParser::EnterJSONStringLengthRule(int32_t rule_id) {
-  if (!enforce_json_string_lengths_ || json_string_char_count_history_.empty() || rule_id < 0 ||
-      grammar_->GetRule(rule_id).json_string_min_length < 0) {
+  if (rule_id < 0 || grammar_->GetRule(rule_id).json_string_min_length < 0) {
+    return;
+  }
+  tmp_json_string_length_entered_ = true;
+  if (!enforce_json_string_lengths_ || json_string_char_count_history_.empty()) {
     return;
   }
   // A constrained rule always spans one complete JSON string. Reset the lexical phase at the
@@ -248,6 +251,9 @@ void EarleyParser::PopLastStates(int32_t cnt) {
   if (has_json_string_length_rules_) {
     json_string_char_count_history_.erase(
         json_string_char_count_history_.end() - cnt, json_string_char_count_history_.end()
+    );
+    json_string_length_entry_history_.erase(
+        json_string_length_entry_history_.end() - cnt, json_string_length_entry_history_.end()
     );
   }
 }
@@ -552,6 +558,9 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
     tmp_char_budget_entered_ = char_budget_entry_history_.back();
     char_count_history_.push_back(GetCurrentCharIndex() + StartsUTF8Codepoint(ch));
   }
+  if (has_json_string_length_rules_) {
+    tmp_json_string_length_entered_ = json_string_length_entry_history_.back();
+  }
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   // Scan all the scanable states.
   for (const auto& state : latest_states) {
@@ -619,6 +628,9 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   scanable_state_history_.PushBackIndirect(tmp_states_to_be_added_);
   if (has_char_budget_rules_) {
     char_budget_entry_history_.push_back(tmp_char_budget_entered_);
+  }
+  if (has_json_string_length_rules_) {
+    json_string_length_entry_history_.push_back(tmp_json_string_length_entered_);
   }
   return true;
 }
@@ -732,6 +744,7 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   tmp_accept_stop_token_ = false;
   tmp_states_to_be_added_.clear();
   tmp_completed_lazy_occurrences_.clear();
+  tmp_json_string_length_entered_ = false;
   Enqueue(state);
   rule_id_to_completable_states_.PushBackEmpty();
   if (capture_tracking_) {
@@ -764,6 +777,9 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
     char_count_history_.push_back(GetCurrentCharIndex());
     char_budget_entry_history_.push_back(tmp_char_budget_entered_);
   }
+  if (has_json_string_length_rules_) {
+    json_string_length_entry_history_.push_back(tmp_json_string_length_entered_);
+  }
 }
 
 void EarleyParser::Reset() {
@@ -777,7 +793,9 @@ void EarleyParser::Reset() {
   char_count_history_.clear();
   char_budget_entry_history_.clear();
   json_string_char_count_history_.clear();
+  json_string_length_entry_history_.clear();
   tmp_char_budget_entered_ = false;
+  tmp_json_string_length_entered_ = false;
   capture_recording_ = false;
   XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
   PushStateAndExpand(RootInitialState());
@@ -1463,6 +1481,10 @@ bool EarleyParser::AdvanceAtomicToken(
     tmp_char_budget_entered_ = char_budget_entry_history_.back();
     char_count_history_.push_back(GetCurrentCharIndex() + token_char_count);
   }
+  if (has_json_string_length_rules_) {
+    tmp_json_string_length_entered_ = json_string_length_entry_history_.back();
+    json_string_char_count_history_.push_back(json_string_char_count_history_.back());
+  }
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
   for (const auto& state : latest_states) {
     if (skip_expired_states_ && IsExpiredState(state)) {
@@ -1473,6 +1495,9 @@ bool EarleyParser::AdvanceAtomicToken(
   if (tmp_process_state_queue_.empty() && tmp_states_to_be_added_.empty()) {
     if (has_char_budget_rules_) {
       char_count_history_.pop_back();
+    }
+    if (has_json_string_length_rules_) {
+      json_string_char_count_history_.pop_back();
     }
     return false;
   }
@@ -1498,6 +1523,9 @@ bool EarleyParser::AdvanceAtomicToken(
   scanable_state_history_.PushBackIndirect(tmp_states_to_be_added_);
   if (has_char_budget_rules_) {
     char_budget_entry_history_.push_back(tmp_char_budget_entered_);
+  }
+  if (has_json_string_length_rules_) {
+    json_string_length_entry_history_.push_back(tmp_json_string_length_entered_);
   }
   return true;
 }

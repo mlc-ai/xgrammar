@@ -548,7 +548,10 @@ class EarleyParser {
 
   /*! \brief Prefix history for decoded JSON string characters, active only when required. */
   std::vector<JSONStringCharCounterState> json_string_char_count_history_;
+  /*! \brief Whether matching since each history row entered a constrained JSON string rule. */
+  std::vector<bool> json_string_length_entry_history_;
   bool has_json_string_length_rules_ = false;
+  bool tmp_json_string_length_entered_ = false;
 
   /*! \brief Whether decoded-JSON-string length constraints are enforced by this parser.
    * Token-mask cache construction disables enforcement so its cached rejection set reflects only
@@ -598,8 +601,11 @@ class EarleyParser {
       return parent_deadline;
     }
     const auto& rule = grammar_->GetRule(rule_id);
-    int32_t json_max_length = rule.json_string_max_length;
-    if (json_max_length >= 0) {
+    if (rule.json_string_min_length >= 0) {
+      int32_t json_max_length = rule.json_string_max_length;
+      if (json_max_length < 0) {
+        return parent_deadline >= 0 ? parent_deadline : std::numeric_limits<int32_t>::max();
+      }
       int64_t deadline = static_cast<int64_t>(GetCurrentJSONStringCharIndex()) + json_max_length;
       int32_t own_deadline = deadline > std::numeric_limits<int32_t>::max()
                                  ? std::numeric_limits<int32_t>::max()
@@ -965,6 +971,7 @@ class EarleyParser {
     }
     if (has_json_string_length_rules_) {
       json_string_char_count_history_.push_back(json_string_char_count_history_.back());
+      json_string_length_entry_history_.push_back(json_string_length_entry_history_.back());
     }
   }
 
@@ -994,6 +1001,10 @@ class EarleyParser {
 
   bool HasEnteredCharBudget() const {
     return has_char_budget_rules_ && char_budget_entry_history_.back();
+  }
+
+  bool HasEnteredJSONStringLengthRule() const {
+    return has_json_string_length_rules_ && json_string_length_entry_history_.back();
   }
 
   /*! \brief Whether the grammar has any captured rule. */
