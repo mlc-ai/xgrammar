@@ -1004,14 +1004,19 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     int32_t current_row_id;
     bool is_completed;
     std::vector<CachedState> scanable_states;
-    JSONStringCharCounterState json_string_counter;
-    bool json_string_length_entered;
 
     bool operator==(const CanonicalConfiguration& other) const {
       return current_row_id == other.current_row_id && is_completed == other.is_completed &&
-             scanable_states == other.scanable_states &&
-             json_string_counter == other.json_string_counter &&
-             json_string_length_entered == other.json_string_length_entered;
+             scanable_states == other.scanable_states;
+    }
+  };
+
+  struct JSONStringContext {
+    JSONStringCharCounterState counter;
+    bool length_entered;
+
+    bool operator==(const JSONStringContext& other) const {
+      return counter == other.counter && length_entered == other.length_entered;
     }
   };
 
@@ -1140,15 +1145,14 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     XGRAMMAR_DCHECK(current_row_id >= 0 && current_row_id < kMaxRows);
     const int32_t current_row = matcher_->scanable_state_history_.size() - 1;
     const auto scanable_states = matcher_->scanable_state_history_[current_row];
-    CanonicalConfiguration normalized{
-        current_row_id,
-        matcher_->is_completed_.back(),
-        {},
-        matcher_->has_json_string_length_rules_ ? matcher_->json_string_char_count_history_.back()
-                                                : JSONStringCharCounterState{},
-        matcher_->has_json_string_length_rules_ &&
-            matcher_->json_string_length_entry_history_.back()
-    };
+    CanonicalConfiguration normalized{current_row_id, matcher_->is_completed_.back(), {}};
+    std::optional<JSONStringContext> json_string_context;
+    if (matcher_->has_json_string_length_rules_) {
+      json_string_context = JSONStringContext{
+          matcher_->json_string_char_count_history_.back(),
+          matcher_->json_string_length_entry_history_.back()
+      };
+    }
     normalized.scanable_states.reserve(scanable_states.size());
     for (const auto& state : scanable_states) {
       const auto normalized_state = NormalizeState(state, current_row);
@@ -1159,7 +1163,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     }
     for (int32_t i = first_configuration_for_row_[current_row_id]; i != kNoConfiguration;
          i = next_configuration_for_row_[i]) {
-      if (configurations_[i] == normalized) {
+      if (configurations_[i] == normalized &&
+          (!json_string_context.has_value() || json_string_contexts_[i] == *json_string_context)) {
         return i;
       }
     }
@@ -1168,6 +1173,10 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     }
     const int32_t new_configuration_id = configurations_.size();
     configurations_.push_back(std::move(normalized));
+    if (json_string_context.has_value()) {
+      XGRAMMAR_DCHECK(json_string_contexts_.size() == static_cast<size_t>(new_configuration_id));
+      json_string_contexts_.push_back(*json_string_context);
+    }
     next_configuration_for_row_[new_configuration_id] =
         first_configuration_for_row_[current_row_id];
     first_configuration_for_row_[current_row_id] = new_configuration_id;
@@ -1205,14 +1214,14 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     matcher_->tmp_accept_stop_token_ = cached_configuration.is_completed;
     matcher_->tmp_states_to_be_added_.clear();
     if (matcher_->has_json_string_length_rules_) {
+      XGRAMMAR_DCHECK(configuration_id < static_cast<int32_t>(json_string_contexts_.size()));
+      const auto& json_string_context = json_string_contexts_[configuration_id];
       const auto next_counter = matcher_->AdvanceJSONStringCharCounter(
           matcher_->json_string_char_count_history_.back(), byte
       );
-      XGRAMMAR_DCHECK(next_counter == cached_configuration.json_string_counter);
+      XGRAMMAR_DCHECK(next_counter == json_string_context.counter);
       matcher_->json_string_char_count_history_.push_back(next_counter);
-      matcher_->json_string_length_entry_history_.push_back(
-          cached_configuration.json_string_length_entered
-      );
+      matcher_->json_string_length_entry_history_.push_back(json_string_context.length_entered);
     }
   }
 
@@ -1247,6 +1256,9 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
   uint16_t* current_transition_row_{nullptr};
   std::vector<CanonicalRow> rows_;
   std::vector<CanonicalConfiguration> configurations_;
+  // Keep JSON length context out of CanonicalConfiguration's no-length hot path. This side table
+  // is populated only for grammars that contain JSON string length rules.
+  std::vector<JSONStringContext> json_string_contexts_;
   static constexpr int16_t kNoConfiguration = -1;
   std::array<int16_t, kMaxRows> first_configuration_for_row_;
   std::array<int16_t, kMaxConfigurations> next_configuration_for_row_;
