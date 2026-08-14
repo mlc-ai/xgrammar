@@ -221,6 +221,12 @@ def test_get_allow_empty_rule_ids(grammar: str, expected: List[int]):
     assert allow_empty_rule_ids == expected
 
 
+def test_get_allow_empty_rule_ids_with_preserved_zero_lower_repeat():
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), enable_dynamic_compilation=True)
+    compiled = compiler.compile_grammar('root ::= unit\nunit ::= inner{0,2}\ninner ::= "a"')
+    assert _get_allow_empty_rule_ids(compiled) == [0]
+
+
 schema_instances = [
     (
         '{"type": "object","properties":{"username":{"type": "string"}},"required":["username"]}',

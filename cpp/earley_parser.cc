@@ -188,9 +188,11 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
       const int32_t& min_repeat_count = element_expr[1];
       const int32_t& max_repeat_count = element_expr[2];
       new_state.repeat_count++;
+      XGRAMMAR_DCHECK(max_repeat_count == -1 || new_state.repeat_count <= max_repeat_count);
       // The repeat rule can be completed, and we advance the state. Don't forget to
-      // reset the repeat count.
-      if (new_state.repeat_count >= min_repeat_count) {
+      // reset the repeat count. An empty completion proves that every remaining required
+      // occurrence can also complete without consuming input.
+      if (completed_without_input || new_state.repeat_count >= min_repeat_count) {
         Enqueue(ParserState{
             parent_state.rule_id,
             parent_state.sequence_id,
@@ -205,10 +207,14 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
         });
       }
       // If the repeat count is less than the max repeat count, we can continue to
-      // visit the repeat state for another round.
-      if ((max_repeat_count == -1 &&
-           (!completed_without_input || new_state.repeat_count < min_repeat_count)) ||
-          (max_repeat_count != -1 && new_state.repeat_count < max_repeat_count)) {
+      // visit the repeat state for another round. Empty repetitions cannot add another string,
+      // but finite capture-producing repetitions retain each observable occurrence. For an
+      // unbounded capture-producing repetition, retaining the required prefix is sufficient.
+      const bool preserve_empty_capture =
+          capture_tracking_ &&
+          (max_repeat_count != -1 || new_state.repeat_count < min_repeat_count);
+      if ((!completed_without_input || preserve_empty_capture) &&
+          (max_repeat_count == -1 || new_state.repeat_count < max_repeat_count)) {
         Enqueue(new_state);
       }
       continue;
@@ -229,7 +235,12 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
         continue;
       }
       int32_t new_count = parent_state.repeat_count + 1;
-      if (new_count >= info.Lower() && (info.Upper() == -1 || new_count <= info.Upper())) {
+      XGRAMMAR_DCHECK(info.Upper() == -1 || new_count <= info.Upper());
+      // Do not require the counter to reach its lower bound one duplicate nullable state at a
+      // time: the parser deduplicates that child state at a fixed input position. One empty
+      // completion proves that the rest of the minimum is satisfiable too.
+      if (completed_without_input ||
+          (new_count >= info.Lower() && (info.Upper() == -1 || new_count <= info.Upper()))) {
         Enqueue(ParserState{
             parent_state.rule_id,
             parent_state.sequence_id,
@@ -243,8 +254,10 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             parent_state.char_budget_deadline
         });
       }
-      if ((info.Upper() == -1 && (!completed_without_input || new_count < info.Lower())) ||
-          (info.Upper() != -1 && new_count < info.Upper())) {
+      const bool preserve_empty_capture =
+          capture_tracking_ && (info.Upper() != -1 || new_count < info.Lower());
+      if ((!completed_without_input || preserve_empty_capture) &&
+          (info.Upper() == -1 || new_count < info.Upper())) {
         Enqueue(ParserState{
             parent_state.rule_id,
             parent_state.sequence_id,

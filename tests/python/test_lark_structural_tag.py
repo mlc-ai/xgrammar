@@ -660,7 +660,11 @@ def test_lark_structural_tag_byte_mode_does_not_leak_and_explicit_byte_mode_work
             assert (matcher.accept_token(token_id) and matcher.is_terminated()) == should_accept
 
 
-def test_lark_structural_tag_byte_parametric_validation_rollback_and_serialization() -> None:
+@pytest.mark.parametrize("cache_enabled", [False, True], ids=["cache-off", "cache-on"])
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True], ids=["eager", "dynamic"])
+def test_lark_structural_tag_byte_parametric_validation_rollback_and_serialization(
+    cache_enabled: bool, enable_dynamic_compilation: bool
+) -> None:
     byte_payload = _structural_tag(
         {"type": "grammar", "grammar": r'root ::= Regex("\\x80", byte_mode=true)'}
     )
@@ -678,9 +682,11 @@ state::_: %structural_tag {json.dumps(byte_payload)} state::set_bit(0) %if bit_c
         xgr.Grammar.from_ebnf(str(grammar)),
         xgr.Grammar.deserialize_json(grammar.serialize_json()),
     ]:
-        compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(
-            candidate
-        )
+        compiled = xgr.GrammarCompiler(
+            tokenizer_info,
+            cache_enabled=cache_enabled,
+            enable_dynamic_compilation=enable_dynamic_compilation,
+        ).compile_grammar(candidate)
         matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
         initial_state = matcher._debug_print_internal_state()
         assert matcher.validate_tokens([0, 1]) == 2

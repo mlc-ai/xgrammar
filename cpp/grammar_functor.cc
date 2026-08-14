@@ -1255,9 +1255,7 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
 
       for (auto seq_id : grammar_expr) {
         auto seq_expr = base_grammar_->GetGrammarExpr(seq_id);
-        if (std::all_of(seq_expr.begin(), seq_expr.end(), [&](int32_t i) {
-              return ElementAllowsEmptyWithoutRules(base_grammar_->GetGrammarExpr(i));
-            })) {
+        if (SeqExprIsEpsilon(seq_expr, *empty_rule_id_set)) {
           empty_rule_id_set->insert(i);
           break;
         }
