@@ -23,6 +23,9 @@
 #include "grammar_builder.h"
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/unicode_case_folding.h"
+#include "support/unicode_char_class.h"
+#include "support/unicode_regex_char_class.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -263,34 +266,224 @@ void AddPackedUTF8RangeEdges(FSM& fsm, int from, int to, uint32_t min, uint32_t 
   return;
 }
 
-std::string RewriteRegexDots(const std::string& pattern, bool dot_matches_newline) {
-  if (dot_matches_newline) {
-    return pattern;
+namespace {
+
+struct InlineRegexFlagSpec {
+  size_t end = 0;
+  bool scoped = false;
+  std::optional<bool> case_insensitive;
+  std::optional<bool> dot_matches_newline;
+  std::optional<bool> multiline;
+  std::optional<bool> unicode;
+  std::optional<bool> extended;
+};
+
+/*! \brief Parse an inline flag directive beginning at `(?`. */
+std::optional<InlineRegexFlagSpec> ParseInlineRegexFlagSpec(
+    const std::string& pattern, size_t position
+) {
+  if (position + 2 >= pattern.size() || pattern[position] != '(' || pattern[position + 1] != '?') {
+    return std::nullopt;
   }
-  std::string result;
-  result.reserve(pattern.size());
-  bool escaped = false;
-  bool in_character_class = false;
-  for (char c : pattern) {
-    if (escaped) {
-      result.push_back(c);
-      escaped = false;
+  InlineRegexFlagSpec result;
+  bool enabled = true;
+  bool saw_flag = false;
+  bool saw_dash = false;
+  size_t cursor = position + 2;
+  for (; cursor < pattern.size(); ++cursor) {
+    char character = pattern[cursor];
+    if (character == ':' || character == ')') {
+      if (!saw_flag) {
+        return std::nullopt;
+      }
+      result.end = cursor + 1;
+      result.scoped = character == ':';
+      return result;
+    }
+    if (character == '-') {
+      if (saw_dash) {
+        return std::nullopt;
+      }
+      saw_dash = true;
+      enabled = false;
       continue;
     }
-    if (c == '\\') {
-      result.push_back(c);
-      escaped = true;
-    } else if (c == '[') {
-      result.push_back(c);
-      in_character_class = true;
-    } else if (c == ']' && in_character_class) {
-      result.push_back(c);
-      in_character_class = false;
-    } else if (c == '.' && !in_character_class) {
-      result += "[^\\n]";
-    } else {
-      result.push_back(c);
+    saw_flag = true;
+    switch (character) {
+      case 'i':
+        result.case_insensitive = enabled;
+        break;
+      case 's':
+        result.dot_matches_newline = enabled;
+        break;
+      case 'm':
+        result.multiline = enabled;
+        break;
+      case 'u':
+        result.unicode = enabled;
+        break;
+      case 'x':
+        result.extended = enabled;
+        break;
+      case 'R':
+      case 'U':
+        // CRLF mode and greediness do not change the accepted language in the supported subset.
+        break;
+      default:
+        return std::nullopt;
     }
+  }
+  return std::nullopt;
+}
+
+/*! \brief Remove whitespace and comments enabled by scoped or top-level inline `x` flags. */
+std::string RewriteInlineExtendedRegex(const std::string& pattern) {
+  std::string result;
+  result.reserve(pattern.size());
+  bool extended = false;
+  bool in_character_class = false;
+  std::vector<bool> group_flag_stack;
+  for (size_t position = 0; position < pattern.size();) {
+    char character = pattern[position];
+    if (character == '\\') {
+      result.push_back(character);
+      ++position;
+      if (position < pattern.size()) {
+        result.push_back(pattern[position++]);
+      }
+      continue;
+    }
+    if (extended && character == '#') {
+      while (position < pattern.size() && pattern[position] != '\n') {
+        ++position;
+      }
+      continue;
+    }
+    if (extended) {
+      auto [codepoint, num_bytes] = ParseNextUTF8(pattern.c_str() + position);
+      if (codepoint != CharHandlingError::kInvalidUTF8 && IsUnicodeWhitespace(codepoint)) {
+        position += num_bytes;
+        continue;
+      }
+    }
+    if (character == '[') {
+      result.push_back(character);
+      in_character_class = true;
+      ++position;
+      continue;
+    }
+    if (character == ']' && in_character_class) {
+      result.push_back(character);
+      in_character_class = false;
+      ++position;
+      continue;
+    }
+    if (in_character_class) {
+      result.push_back(character);
+      ++position;
+      continue;
+    }
+    if (character == '(') {
+      auto flag_spec = ParseInlineRegexFlagSpec(pattern, position);
+      if (flag_spec.has_value()) {
+        result.append(pattern, position, flag_spec->end - position);
+        if (flag_spec->scoped) {
+          group_flag_stack.push_back(extended);
+        }
+        if (flag_spec->extended.has_value()) {
+          extended = flag_spec->extended.value();
+        }
+        position = flag_spec->end;
+        continue;
+      }
+      group_flag_stack.push_back(extended);
+      result.push_back(character);
+      ++position;
+      continue;
+    }
+    if (character == ')') {
+      result.push_back(character);
+      if (!group_flag_stack.empty()) {
+        extended = group_flag_stack.back();
+        group_flag_stack.pop_back();
+      }
+      ++position;
+      continue;
+    }
+    result.push_back(character);
+    ++position;
+  }
+  return result;
+}
+
+}  // namespace
+
+std::string RewriteRegexDots(const std::string& pattern, bool dot_matches_newline) {
+  std::string result;
+  result.reserve(pattern.size());
+  bool in_character_class = false;
+  std::vector<bool> group_flag_stack;
+  for (size_t position = 0; position < pattern.size();) {
+    char character = pattern[position];
+    if (character == '\\') {
+      result.push_back(character);
+      ++position;
+      if (position < pattern.size()) {
+        result.push_back(pattern[position++]);
+      }
+      continue;
+    }
+    if (character == '[') {
+      result.push_back(character);
+      in_character_class = true;
+      ++position;
+      continue;
+    }
+    if (character == ']' && in_character_class) {
+      result.push_back(character);
+      in_character_class = false;
+      ++position;
+      continue;
+    }
+    if (in_character_class) {
+      result.push_back(character);
+      ++position;
+      continue;
+    }
+    if (character == '(') {
+      auto flag_spec = ParseInlineRegexFlagSpec(pattern, position);
+      if (flag_spec.has_value()) {
+        result.append(pattern, position, flag_spec->end - position);
+        if (flag_spec->scoped) {
+          group_flag_stack.push_back(dot_matches_newline);
+        }
+        if (flag_spec->dot_matches_newline.has_value()) {
+          dot_matches_newline = flag_spec->dot_matches_newline.value();
+        }
+        position = flag_spec->end;
+        continue;
+      }
+      group_flag_stack.push_back(dot_matches_newline);
+      result.push_back(character);
+      ++position;
+      continue;
+    }
+    if (character == ')') {
+      result.push_back(character);
+      if (!group_flag_stack.empty()) {
+        dot_matches_newline = group_flag_stack.back();
+        group_flag_stack.pop_back();
+      }
+      ++position;
+      continue;
+    }
+    if (character == '.' && !dot_matches_newline) {
+      result += "[^\\n]";
+      ++position;
+      continue;
+    }
+    result.push_back(character);
+    ++position;
   }
   return result;
 }
@@ -363,6 +556,23 @@ void FoldAsciiCaseRanges(std::vector<CodepointRange>* ranges) {
     if (fold_low <= fold_high) {
       ranges->push_back({fold_low + ('a' - 'A'), fold_high + ('a' - 'A')});
     }
+  }
+}
+
+/*! \brief Append simple Unicode case-fold equivalents, or ASCII equivalents in byte mode. */
+void FoldCaseRanges(std::vector<CodepointRange>* ranges, bool byte_mode) {
+  if (byte_mode) {
+    FoldAsciiCaseRanges(ranges);
+    return;
+  }
+  const size_t original_size = ranges->size();
+  std::vector<TCodepoint> folded;
+  for (size_t i = 0; i < original_size; ++i) {
+    AppendUnicodeSimpleCaseFold((*ranges)[i].first, (*ranges)[i].second, &folded);
+  }
+  ranges->reserve(ranges->size() + folded.size());
+  for (TCodepoint codepoint : folded) {
+    ranges->push_back({codepoint, codepoint});
   }
 }
 
@@ -711,24 +921,46 @@ Result<RegexEscapeItem> ParseCodepointRegexEscape(
     case '9':
       return ResultErr("Backreference \\" + std::string(1, escaped) + " is not supported in regex");
     case 'd':
-      item.ranges = {{'0', '9'}};
+      AppendUnicodeRegexDecimalRanges(&item.ranges);
       return ResultOk(std::move(item));
     case 'D':
-      item.ranges = {{'0', '9'}};
+      AppendUnicodeRegexDecimalRanges(&item.ranges);
       item.negated = true;
       return ResultOk(std::move(item));
     case 'w':
-      item.ranges = {{'0', '9'}, {'A', 'Z'}, {'_', '_'}, {'a', 'z'}};
+      AppendUnicodeRegexWordRanges(&item.ranges);
       return ResultOk(std::move(item));
     case 'W':
-      item.ranges = {{'0', '9'}, {'A', 'Z'}, {'_', '_'}, {'a', 'z'}};
+      AppendUnicodeRegexWordRanges(&item.ranges);
       item.negated = true;
       return ResultOk(std::move(item));
     case 's':
-      item.ranges = {{0x09, 0x0D}, {' ', ' '}};
+      item.ranges = {
+          {0x0009, 0x000D},
+          {0x0020, 0x0020},
+          {0x0085, 0x0085},
+          {0x00A0, 0x00A0},
+          {0x1680, 0x1680},
+          {0x2000, 0x200A},
+          {0x2028, 0x2029},
+          {0x202F, 0x202F},
+          {0x205F, 0x205F},
+          {0x3000, 0x3000},
+      };
       return ResultOk(std::move(item));
     case 'S':
-      item.ranges = {{0x09, 0x0D}, {' ', ' '}};
+      item.ranges = {
+          {0x0009, 0x000D},
+          {0x0020, 0x0020},
+          {0x0085, 0x0085},
+          {0x00A0, 0x00A0},
+          {0x1680, 0x1680},
+          {0x2000, 0x200A},
+          {0x2028, 0x2029},
+          {0x202F, 0x202F},
+          {0x205F, 0x205F},
+          {0x3000, 0x3000},
+      };
       item.negated = true;
       return ResultOk(std::move(item));
     case 'x': {
@@ -814,7 +1046,7 @@ Result<RegexEscapeItem> ParseRegexEscape(
 
 /*!
  * \brief Parse a character class leaf "[...]" into the final set of accepted codepoint ranges.
- * ASCII case folding (if requested) is applied before negation.
+ * Simple Unicode case folding (or ASCII folding in byte mode) is applied before negation.
  */
 Result<std::vector<CodepointRange>> ParseCharacterClassLeaf(
     const std::string& regex, bool case_insensitive, bool byte_mode
@@ -912,7 +1144,7 @@ Result<std::vector<CodepointRange>> ParseCharacterClassLeaf(
   }
 
   if (case_insensitive) {
-    FoldAsciiCaseRanges(&ranges);
+    FoldCaseRanges(&ranges, byte_mode);
   }
   NormalizeRanges(&ranges);
   if (negated) {
@@ -949,6 +1181,7 @@ class RegexIR {
   // character class (regex == "[...]"), or a short sequence of literal characters / escapes.
   struct Leaf {
     std::string regex;
+    bool case_insensitive = false;
   };
 
   // This struct is used to store the symbol in regex, i.e.
@@ -995,9 +1228,6 @@ class RegexIR {
 
   // The top-level sequence of the regex.
   std::vector<State> states;
-
-  // Whether matching is ASCII case-insensitive (enabled by a leading "(?i)").
-  bool case_insensitive = false;
 
   // Whether characters are interpreted as raw bytes instead of Unicode codepoints.
   bool byte_mode = false;
@@ -1056,13 +1286,16 @@ class RegexIR {
    * \param regex The regex string.
    * \return The FSM with start and end states.
    */
-  Result<FSMWithStartEnd> BuildLeafFSMFromRegex(const std::string& regex) const;
+  Result<FSMWithStartEnd> BuildLeafFSMFromRegex(const std::string& regex, bool case_insensitive)
+      const;
 
   /*!
-   * \brief Add the transition(s) accepting a single codepoint (with ASCII case folding when
-   * case_insensitive is set) from `current` to a new state, and return the new state.
+   * \brief Add the transition(s) accepting a single codepoint (with case folding when requested)
+   * from `current` to a new state, and return the new state.
    */
-  int AddSingleCodepoint(FSMWithStartEnd& result, int current, uint32_t codepoint) const;
+  int AddSingleCodepoint(
+      FSMWithStartEnd& result, int current, uint32_t codepoint, bool case_insensitive
+  ) const;
 
   Result<bool> ValidateState(const State& state) const;
 
@@ -1186,7 +1419,7 @@ Result<bool> RegexIR::ValidateState(const State& state) const {
       [&](const auto& node) -> Result<bool> {
         using T = std::decay_t<decltype(node)>;
         if constexpr (std::is_same_v<T, Leaf>) {
-          auto leaf = BuildLeafFSMFromRegex(node.regex);
+          auto leaf = BuildLeafFSMFromRegex(node.regex, node.case_insensitive);
           if (leaf.IsErr()) {
             return ResultErr(std::move(leaf).UnwrapErr());
           }
@@ -1283,7 +1516,7 @@ Result<FSMWithStartEnd> RegexIR::Build() const {
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Leaf& state) const {
-  return BuildLeafFSMFromRegex(state.regex);
+  return BuildLeafFSMFromRegex(state.regex, state.case_insensitive);
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Union& state) const {
@@ -1465,17 +1698,23 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
   return ResultOk(std::move(result));
 }
 
-int RegexIR::AddSingleCodepoint(FSMWithStartEnd& result, int current, uint32_t codepoint) const {
+int RegexIR::AddSingleCodepoint(
+    FSMWithStartEnd& result, int current, uint32_t codepoint, bool case_insensitive
+) const {
   int next = result.AddState();
-  if (json_string) {
+  if (case_insensitive && !byte_mode) {
     std::vector<CodepointRange> ranges = {{codepoint, codepoint}};
-    if (case_insensitive && codepoint >= 'a' && codepoint <= 'z') {
-      ranges.push_back({codepoint - ('a' - 'A'), codepoint - ('a' - 'A')});
-    } else if (case_insensitive && codepoint >= 'A' && codepoint <= 'Z') {
-      ranges.push_back({codepoint + ('a' - 'A'), codepoint + ('a' - 'A')});
-    }
+    FoldCaseRanges(&ranges, /*byte_mode=*/false);
     NormalizeRanges(&ranges);
-    AddJSONStringCodepointRangesToFSM(&result.GetFsm(), current, next, ranges);
+    if (json_string) {
+      AddJSONStringCodepointRangesToFSM(&result.GetFsm(), current, next, ranges);
+    } else {
+      AddCodepointRangesToFSM(&result.GetFsm(), current, next, ranges);
+    }
+    return next;
+  }
+  if (json_string) {
+    AddJSONStringCodepointRangesToFSM(&result.GetFsm(), current, next, {{codepoint, codepoint}});
     return next;
   }
   if (byte_mode || codepoint <= kMax1ByteUnicode) {
@@ -1503,7 +1742,9 @@ int RegexIR::AddSingleCodepoint(FSMWithStartEnd& result, int current, uint32_t c
   return next;
 }
 
-Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(const std::string& regex) const {
+Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(
+    const std::string& regex, bool case_insensitive
+) const {
   FSM initial_fsm(1);
   FSMWithStartEnd result(initial_fsm, 0, {}, false);
   if (regex.empty()) {
@@ -1555,11 +1796,11 @@ Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(const std::string& regex)
       }
       auto item = std::move(item_result).Unwrap();
       if (item.is_single) {
-        current = AddSingleCodepoint(result, current, item.codepoint);
+        current = AddSingleCodepoint(result, current, item.codepoint, case_insensitive);
       } else {
         auto ranges = std::move(item.ranges);
         if (case_insensitive) {
-          FoldAsciiCaseRanges(&ranges);
+          FoldCaseRanges(&ranges, byte_mode);
         }
         NormalizeRanges(&ranges);
         if (item.negated) {
@@ -1580,7 +1821,8 @@ Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(const std::string& regex)
       continue;
     }
     if (byte_mode) {
-      current = AddSingleCodepoint(result, current, static_cast<uint8_t>(regex[pos]));
+      current =
+          AddSingleCodepoint(result, current, static_cast<uint8_t>(regex[pos]), case_insensitive);
       ++pos;
       continue;
     }
@@ -1597,7 +1839,8 @@ Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(const std::string& regex)
       ++pos;
       continue;
     }
-    current = AddSingleCodepoint(result, current, static_cast<uint32_t>(codepoint));
+    current =
+        AddSingleCodepoint(result, current, static_cast<uint32_t>(codepoint), case_insensitive);
     pos += num_bytes;
   }
   result.AddEndState(current);
@@ -1614,6 +1857,8 @@ struct RegexStackEntry {
   std::variant<RegexIR::State, char> item;
   int span_begin = 0;
   int span_end = 0;
+  bool inherited_case_insensitive = false;
+  bool inherited_multiline = false;
 };
 
 /*! \brief Skip a character class starting at regex[pos] == '['. Returns the position right after
@@ -1639,7 +1884,7 @@ size_t SkipCharacterClass(const std::string& regex, size_t pos) {
 
 /*!
  * \brief Parse a regex string into a RegexIR.
- * \param regex_with_flags The regex. A leading "(?i)" enables ASCII case-insensitive matching.
+ * \param regex_with_flags The regex, including any top-level or scoped inline flags.
  * \param builder If not null, large bounded repetitions are compiled into subrules added through
  * this builder; see RegexFSMBuilder::Build.
  * \param rule_hint Name hint for the created subrules.
@@ -1654,19 +1899,14 @@ Result<RegexIR> ParseRegexToIR(
   RegexIR ir;
   ir.byte_mode = byte_mode;
   ir.json_string = json_string;
-  std::string regex = regex_with_flags;
-  int flag_prefix_length = 0;
-  if (regex.size() >= 4 && regex.compare(0, 4, "(?i)") == 0) {
-    ir.case_insensitive = true;
-    regex = regex.substr(4);
-    flag_prefix_length = 4;
-  }
+  std::string rewritten_regex = RewriteInlineExtendedRegex(regex_with_flags);
+  const std::string& regex = rewritten_regex;
+  bool case_insensitive = false;
+  bool multiline = false;
 
-  // Mirror the error format of the RegexConverter path: a 1-based position in the pattern
-  // (including the "(?i)" prefix when present), followed by the description.
+  // Mirror the error format of the RegexConverter path: a 1-based position in the pattern.
   auto error_at = [&](int pos, const std::string& message) {
-    return "Regex parsing error at position " + std::to_string(pos + flag_prefix_length + 1) +
-           ": " + message;
+    return "Regex parsing error at position " + std::to_string(pos + 1) + ": " + message;
   };
 
   std::vector<RegexStackEntry> stack;
@@ -1675,7 +1915,13 @@ Result<RegexIR> ParseRegexToIR(
     char current_char = regex[i];
     // Handle anchors.
     if (current_char == '^' || current_char == '$') {
-      if (!((current_char == '^' && i == 0) || (current_char == '$' && i == size - 1))) {
+      if (multiline) {
+        return ResultErr(error_at(i, "line anchors in multiline mode are not supported"));
+      }
+      bool at_branch_boundary =
+          current_char == '^' ? (stack.empty() || std::holds_alternative<char>(stack.back().item))
+                              : (i + 1 == size || regex[i + 1] == ')' || regex[i + 1] == '|');
+      if (!at_branch_boundary) {
         if (byte_mode) {
           return ResultErr(error_at(
               i,
@@ -1703,14 +1949,14 @@ Result<RegexIR> ParseRegexToIR(
       }
       RegexIR::Leaf leaf;
       leaf.regex = regex.substr(i, class_end - i);
+      leaf.case_insensitive = case_insensitive;
       if (byte_mode) {
-        auto validation =
-            ParseCharacterClassLeaf(leaf.regex, ir.case_insensitive, /*byte_mode=*/true);
+        auto validation = ParseCharacterClassLeaf(leaf.regex, case_insensitive, /*byte_mode=*/true);
         if (validation.IsErr()) {
           return ResultErr(error_at(i, std::move(validation).UnwrapErr().what()));
         }
       }
-      stack.push_back({leaf, i, static_cast<int>(class_end)});
+      stack.push_back({leaf, i, static_cast<int>(class_end), case_insensitive, multiline});
       i = static_cast<int>(class_end) - 1;
       continue;
     }
@@ -1751,7 +1997,13 @@ Result<RegexIR> ParseRegexToIR(
                            regex[i + 1] == '{')) {
         return ResultErr(error_at(i + 1, "Two consecutive repetition modifiers are not allowed"));
       }
-      stack.push_back({std::move(symbol), atom.span_begin, i + 1});
+      stack.push_back(
+          {std::move(symbol),
+           atom.span_begin,
+           i + 1,
+           atom.inherited_case_insensitive,
+           atom.inherited_multiline}
+      );
       continue;
     }
     // Handle groups and alternation.
@@ -1760,9 +2012,31 @@ Result<RegexIR> ParseRegexToIR(
         if (i + 2 >= size) {
           return ResultErr(error_at(i, "Group modifier is not finished"));
         }
+        auto flag_spec = ParseInlineRegexFlagSpec(regex, i);
+        if (flag_spec.has_value()) {
+          if (flag_spec->unicode.has_value() && !flag_spec->unicode.value()) {
+            return ResultErr(error_at(i, "disabling Unicode mode is not supported"));
+          }
+          bool parent_case_insensitive = case_insensitive;
+          bool parent_multiline = multiline;
+          if (flag_spec->case_insensitive.has_value()) {
+            case_insensitive = flag_spec->case_insensitive.value();
+          }
+          if (flag_spec->multiline.has_value()) {
+            multiline = flag_spec->multiline.value();
+          }
+          if (flag_spec->scoped) {
+            stack.push_back(
+                {'(', i, static_cast<int>(flag_spec->end), parent_case_insensitive, parent_multiline
+                }
+            );
+          }
+          i = static_cast<int>(flag_spec->end) - 1;
+          continue;
+        }
         char modifier = regex[i + 2];
         if (modifier == ':') {
-          stack.push_back({'(', i, i + 1});
+          stack.push_back({'(', i, i + 1, case_insensitive, multiline});
           i += 2;
           continue;
         }
@@ -1798,7 +2072,13 @@ Result<RegexIR> ParseRegexToIR(
           if (depth != 0) {
             return ResultErr(error_at(i, "The parenthesis is not closed"));
           }
-          stack.push_back({RegexIR::Leaf{""}, i, static_cast<int>(j)});
+          stack.push_back(
+              {RegexIR::Leaf{"", case_insensitive},
+               i,
+               static_cast<int>(j),
+               case_insensitive,
+               multiline}
+          );
           i = static_cast<int>(j) - 1;
           continue;
         }
@@ -1820,7 +2100,7 @@ Result<RegexIR> ParseRegexToIR(
             return ResultErr(error_at(i, "Invalid named capturing group"));
           }
           // Ignore the group name and compile the content as a normal group.
-          stack.push_back({'(', i, i + 1});
+          stack.push_back({'(', i, i + 1, case_insensitive, multiline});
           i = static_cast<int>(j);
           continue;
         }
@@ -1830,7 +2110,7 @@ Result<RegexIR> ParseRegexToIR(
                       : "Unsupported group modifier '(?" + std::string(1, modifier) + "'"
         ));
       }
-      stack.push_back({'(', i, i + 1});
+      stack.push_back({'(', i, i + 1, case_insensitive, multiline});
       continue;
     }
     if (current_char == '|') {
@@ -1842,6 +2122,8 @@ Result<RegexIR> ParseRegexToIR(
       bool paired = false;
       bool unioned = false;
       int group_begin = 0;
+      bool group_inherited_case_insensitive = false;
+      bool group_inherited_multiline = false;
       while (!stack.empty()) {
         RegexStackEntry entry = std::move(stack.back());
         stack.pop_back();
@@ -1850,6 +2132,8 @@ Result<RegexIR> ParseRegexToIR(
           if (marker == '(') {
             paired = true;
             group_begin = entry.span_begin;
+            group_inherited_case_insensitive = entry.inherited_case_insensitive;
+            group_inherited_multiline = entry.inherited_multiline;
             break;
           }
           XGRAMMAR_DCHECK(marker == '|');
@@ -1860,6 +2144,8 @@ Result<RegexIR> ParseRegexToIR(
       if (!paired) {
         return ResultErr(error_at(i, "Unmatched ')'"));
       }
+      case_insensitive = group_inherited_case_insensitive;
+      multiline = group_inherited_multiline;
       // `popped` stores the group content from right to left.
       if (!unioned) {
         RegexIR::Bracket bracket;
@@ -1867,7 +2153,13 @@ Result<RegexIR> ParseRegexToIR(
           bracket.states.push_back(std::move(std::get<RegexIR::State>(it->item)));
         }
         // An empty bracket (e.g. "()") matches the empty string.
-        stack.push_back({std::move(bracket), group_begin, i + 1});
+        stack.push_back(
+            {std::move(bracket),
+             group_begin,
+             i + 1,
+             group_inherited_case_insensitive,
+             group_inherited_multiline}
+        );
       } else {
         RegexIR::Union union_state;
         RegexIR::Bracket bracket;
@@ -1882,7 +2174,13 @@ Result<RegexIR> ParseRegexToIR(
           bracket.states.push_back(std::move(std::get<RegexIR::State>(it->item)));
         }
         union_state.states.push_back(std::move(bracket));
-        stack.push_back({std::move(union_state), group_begin, i + 1});
+        stack.push_back(
+            {std::move(union_state),
+             group_begin,
+             i + 1,
+             group_inherited_case_insensitive,
+             group_inherited_multiline}
+        );
       }
       continue;
     }
@@ -1916,7 +2214,7 @@ Result<RegexIR> ParseRegexToIR(
         // at runtime, so the FSM is not unrolled.
         const auto& atom_state = std::get<RegexIR::State>(atom.item);
         std::string inner_regex = regex.substr(atom.span_begin, atom.span_end - atom.span_begin);
-        if (ir.case_insensitive) {
+        if (atom.inherited_case_insensitive) {
           inner_regex = "(?i)" + inner_regex;
         }
         if (RegexIR::IsNullable(atom_state)) {
@@ -1940,15 +2238,29 @@ Result<RegexIR> ParseRegexToIR(
             bracket.states.push_back(RegexIR::RepeatSubrule{inner_rule_id, lower_bound, lower_bound}
             );
             bracket.states.push_back(std::move(star_symbol));
-            stack.push_back({std::move(bracket), atom.span_begin, i + 1});
+            stack.push_back(
+                {std::move(bracket),
+                 atom.span_begin,
+                 i + 1,
+                 atom.inherited_case_insensitive,
+                 atom.inherited_multiline}
+            );
           } else {
-            stack.push_back({std::move(star_symbol), atom.span_begin, i + 1});
+            stack.push_back(
+                {std::move(star_symbol),
+                 atom.span_begin,
+                 i + 1,
+                 atom.inherited_case_insensitive,
+                 atom.inherited_multiline}
+            );
           }
         } else {
           stack.push_back(
               {RegexIR::RepeatSubrule{inner_rule_id, lower_bound, upper_bound},
                atom.span_begin,
-               i + 1}
+               i + 1,
+               atom.inherited_case_insensitive,
+               atom.inherited_multiline}
           );
         }
       } else {
@@ -1956,7 +2268,13 @@ Result<RegexIR> ParseRegexToIR(
         repeat.lower_bound = lower_bound;
         repeat.upper_bound = upper_bound;
         repeat.states.push_back(std::move(std::get<RegexIR::State>(atom.item)));
-        stack.push_back({std::move(repeat), atom.span_begin, i + 1});
+        stack.push_back(
+            {std::move(repeat),
+             atom.span_begin,
+             i + 1,
+             atom.inherited_case_insensitive,
+             atom.inherited_multiline}
+        );
       }
       continue;
     }
@@ -1970,7 +2288,10 @@ Result<RegexIR> ParseRegexToIR(
         return ResultErr(error_at(i, std::move(escape_result).UnwrapErr().what()));
       }
       leaf.regex = regex.substr(i, escape_end - i);
-      stack.push_back({std::move(leaf), i, static_cast<int>(escape_end)});
+      leaf.case_insensitive = case_insensitive;
+      stack.push_back(
+          {std::move(leaf), i, static_cast<int>(escape_end), case_insensitive, multiline}
+      );
       i = static_cast<int>(escape_end) - 1;
       continue;
     }
@@ -1983,7 +2304,8 @@ Result<RegexIR> ParseRegexToIR(
       }
     }
     leaf.regex = regex.substr(i, num_bytes);
-    stack.push_back({std::move(leaf), i, i + num_bytes});
+    leaf.case_insensitive = case_insensitive;
+    stack.push_back({std::move(leaf), i, i + num_bytes, case_insensitive, multiline});
     i += num_bytes - 1;
     continue;
   }

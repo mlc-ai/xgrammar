@@ -347,6 +347,7 @@ class StructureNormalizerImpl : public GrammarMutator {
       case GrammarExprType::kToken:
       case GrammarExprType::kExcludeToken:
       case GrammarExprType::kTokenTagDispatch:
+      case GrammarExprType::kEOS:
         return builder_->AddSequence({builder_->AddGrammarExpr(assertion_expr)});
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected lookahead assertion type: "
@@ -371,6 +372,7 @@ class StructureNormalizerImpl : public GrammarMutator {
       case GrammarExprType::kRepeat:
       case GrammarExprType::kToken:
       case GrammarExprType::kExcludeToken:
+      case GrammarExprType::kEOS:
         return builder_->AddChoices({builder_->AddSequence({builder_->AddGrammarExpr(grammar_expr)})
         });
       case GrammarExprType::kTagDispatch:
@@ -419,6 +421,7 @@ class StructureNormalizerImpl : public GrammarMutator {
         case GrammarExprType::kRepeat:
         case GrammarExprType::kToken:
         case GrammarExprType::kExcludeToken:
+        case GrammarExprType::kEOS:
           VisitElementInChoices(choice_expr, &new_choice_ids);
           break;
         case GrammarExprType::kTagDispatch: {
@@ -521,6 +524,7 @@ class StructureNormalizerImpl : public GrammarMutator {
         case GrammarExprType::kRepeat:
         case GrammarExprType::kToken:
         case GrammarExprType::kExcludeToken:
+        case GrammarExprType::kEOS:
           VisitElementInSequence(element_expr, &new_sequence_ids);
           break;
         case GrammarExprType::kTagDispatch: {
@@ -1492,7 +1496,7 @@ class GrammarFSMBuilderImpl {
    * flattened into one leaf FSM. Rule references are not allowed.
    */
   static Result<FSMWithStartEnd> BuildLeafExprFSM(const GrammarExpr& expr, const Grammar& grammar);
-  /*! \brief Build the leaf FSM of a regex through the regex-to-grammar converter. */
+  /*! \brief Build the leaf FSM of a regex, preserving compact large-repeat handling. */
   static Result<FSMWithStartEnd> RegexLeafFSM(const std::string& pattern);
   /*! \brief Inline the rule references of the per-rule FSMs into one leaf FSM. */
   static Result<FSMWithStartEnd> FlattenRuleFSMs(const Grammar& grammar, int32_t root_rule_id);
@@ -1506,6 +1510,7 @@ class GrammarFSMBuilderImpl {
       std::vector<int32_t>* end_states
   );
   void BuildEmptyString(int start_state, std::vector<int32_t>* end_states);
+  void BuildEOS(int start_state, std::vector<int32_t>* end_states);
   void BuildByteString(const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states);
   void BuildRuleRef(const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states);
   void BuildCharacterClass(
@@ -1780,6 +1785,8 @@ void GrammarFSMBuilderImpl::BuildExpression(
   switch (expr.type) {
     case ExprType::kEmptyStr:
       return BuildEmptyString(start_state, end_states);
+    case ExprType::kEOS:
+      return BuildEOS(start_state, end_states);
     case ExprType::kByteString:
       return BuildByteString(expr, start_state, end_states);
     case ExprType::kCharacterClass:
@@ -1823,6 +1830,13 @@ void GrammarFSMBuilderImpl::BuildExpression(
 void GrammarFSMBuilderImpl::BuildEmptyString(int start_state, std::vector<int32_t>* end_states) {
   end_states->clear();
   end_states->push_back(start_state);
+}
+
+void GrammarFSMBuilderImpl::BuildEOS(int start_state, std::vector<int32_t>* end_states) {
+  end_states->clear();
+  int end_state = target_fsm_.AddState();
+  target_fsm_.AddEOSEdge(start_state, end_state);
+  end_states->push_back(end_state);
 }
 
 void GrammarFSMBuilderImpl::BuildByteString(
@@ -2428,6 +2442,17 @@ Result<FSMWithStartEnd> GrammarFSMBuilderImpl::FlattenRuleFSMs(
 }
 
 Result<FSMWithStartEnd> GrammarFSMBuilderImpl::RegexLeafFSM(const std::string& pattern) {
+  auto can_defer_result =
+      RegexFSMBuilder::CanDeferLargeRepeat(pattern, /*json_string=*/false, /*byte_mode=*/false);
+  if (can_defer_result.IsErr()) {
+    return ResultErr(std::move(can_defer_result).UnwrapErr());
+  }
+  if (!std::move(can_defer_result).Unwrap()) {
+    // The direct builder understands scoped flags and Unicode character classes. The legacy
+    // regex-to-grammar converter does not, so use it only when a large repetition needs the
+    // converter's compact rule representation.
+    return Regex(pattern);
+  }
   try {
     Grammar grammar = Grammar::FromRegex(pattern);
     grammar = RepetitionRangeExpander::Apply(grammar);
@@ -4111,6 +4136,9 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
         for (const auto& element : expr) {
           hash_result = HashCombine(hash_result, element);
         }
+        break;
+      }
+      case (GrammarExprType::kEOS): {
         break;
       }
       case (GrammarExprType::kRuleRef): {

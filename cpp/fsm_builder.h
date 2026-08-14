@@ -51,7 +51,8 @@ class RegexFSMBuilder {
  public:
   /*!
    * \brief Converts a regex string to a FSM.
-   * \param regex The regex string. A leading "(?i)" makes the match ASCII case-insensitive.
+   * \param regex The regex string. A leading "(?i)" enables simple Unicode case folding, or
+   * ASCII case folding when byte_mode is true.
    * \param builder If not null, bounded repetitions whose upper bound exceeds the unroll
    * threshold are compiled into a kRepeatRef FSM edge referencing a new rule (with a kRegex
    * body holding the repeated sub-pattern) added through this builder, instead of being

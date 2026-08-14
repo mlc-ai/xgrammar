@@ -34,6 +34,7 @@
 #include "grammar_functor.h"
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/unicode_case_folding.h"
 #include "support/unicode_char_class.h"
 #include "support/utils.h"
 
@@ -978,9 +979,6 @@ class LarkParser {
       } else if (key.text == "stop") {
         Consume(TokenType::kEquals, "expected '=' after stop attribute");
         Node stop = ParseStopLikeValue("stop");
-        if (stop.kind == Node::Kind::kString && stop.text.empty()) {
-          RaiseLarkError(source_, stop.location, "stop must not be empty");
-        }
         if (definition->stop.has_value()) {
           RaiseLarkError(source_, key.location, "stop attribute is specified more than once");
         }
@@ -1113,9 +1111,6 @@ class LarkParser {
     }
     if (Match(TokenType::kArrow)) {
       Consume(TokenType::kName, "expected alias name after '->'");
-    }
-    if (Peek().type == TokenType::kIf) {
-      RaiseLarkError(source_, Peek().location, "parametric %if conditions are not supported");
     }
     Node result;
     result.kind = Node::Kind::kSequence;
@@ -2099,7 +2094,19 @@ class LarkCompiler {
         continue;
       }
       int32_t body_expr_id;
-      if (definition.temperature.has_value()) {
+      if (IsEmptyStop(definition)) {
+        int32_t rule_id = rule_ids_.at(definition.name);
+        if (definition.max_tokens.has_value()) {
+          builder_.UpdateMaxTokens(rule_id, definition.max_tokens.value());
+        }
+        if (definition.max_chars.has_value()) {
+          builder_.UpdateMaxChars(rule_id, definition.max_chars.value());
+        }
+        body_expr_id = CompileTerminalLeafExpr(definition.body);
+        if (definition.name == "start" && allow_initial_skip_ && skip_rule_id_ != -1) {
+          body_expr_id = builder_.AddSequence({builder_.AddRuleRef(skip_rule_id_), body_expr_id});
+        }
+      } else if (definition.temperature.has_value()) {
         if (definition.max_tokens.has_value()) {
           RaiseLarkError(
               source_,
@@ -2150,6 +2157,9 @@ class LarkCompiler {
         body_expr_id = CompileNode(definition.body, definition.name, false);
       }
       int32_t rule_id = rule_ids_.at(definition.name);
+      if (IsEmptyStop(definition)) {
+        body_expr_id = AttachEmptyStop(definition, body_expr_id);
+      }
       builder_.UpdateRuleBody(rule_id, body_expr_id);
       if (definition.capture_name.has_value()) {
         builder_.UpdateCaptureName(rule_id, definition.capture_name.value());
@@ -2195,8 +2205,28 @@ class LarkCompiler {
     int32_t marker_event_rule_id = -1;
   };
 
+  static bool IsEmptyStop(const Definition& definition) {
+    return definition.stop.has_value() && definition.stop->kind == Node::Kind::kString &&
+           definition.stop->text.empty();
+  }
+
   static bool HasLazySemantics(const Definition& definition) {
-    return definition.lazy || definition.suffix.has_value() || definition.stop.has_value();
+    return definition.lazy || definition.suffix.has_value() ||
+           (definition.stop.has_value() && !IsEmptyStop(definition));
+  }
+
+  int32_t AttachEmptyStop(const Definition& definition, int32_t body_expr_id) {
+    int32_t rule_id = rule_ids_.at(definition.name);
+    if (definition.stop_capture_name.has_value()) {
+      Grammar::Impl::SuffixStopInfo suffix_stop_info;
+      suffix_stop_info.stop_capture_name = definition.stop_capture_name.value();
+      builder_.UpdateSuffixStopInfo(rule_id, suffix_stop_info);
+    }
+    // An empty stop does not have committed-shortest semantics. The rule may end at an ordinary
+    // grammar boundary, and it may additionally consume an active matcher stop token when the
+    // body is currently acceptable (including in the middle of an enclosing rule).
+    int32_t optional_eos = builder_.AddChoices({builder_.AddEmptyStr(), builder_.AddEOS()});
+    return builder_.AddSequence({body_expr_id, optional_eos});
   }
 
   int32_t CompileTemperatureRule(const Definition& definition) {
@@ -2363,24 +2393,36 @@ class LarkCompiler {
     std::vector<int32_t> elements;
     elements.reserve(codepoints.size());
     for (TCodepoint codepoint : codepoints) {
-      if (codepoint > 0x7F) {
+      if (allow_invalid_utf8_ && codepoint > 0x7F) {
         RaiseLarkError(
             source_,
             node.location,
-            "case-insensitive string literals currently support ASCII characters only"
+            "non-ASCII case-insensitive strings are not available when allow_invalid_utf8 is "
+            "enabled"
         );
       }
-      if ((codepoint >= 'a' && codepoint <= 'z') || (codepoint >= 'A' && codepoint <= 'Z')) {
-        TCodepoint lowercase =
-            static_cast<TCodepoint>(std::tolower(static_cast<unsigned char>(codepoint)));
-        TCodepoint uppercase =
-            static_cast<TCodepoint>(std::toupper(static_cast<unsigned char>(codepoint)));
-        elements.push_back(
-            builder_.AddCharacterClass({{lowercase, lowercase}, {uppercase, uppercase}})
-        );
+      std::vector<TCodepoint> equivalents = {codepoint};
+      if (allow_invalid_utf8_) {
+        if (codepoint >= 'a' && codepoint <= 'z') {
+          equivalents.push_back(codepoint - ('a' - 'A'));
+        } else if (codepoint >= 'A' && codepoint <= 'Z') {
+          equivalents.push_back(codepoint + ('a' - 'A'));
+        }
       } else {
-        elements.push_back(builder_.AddByteString(CharToUTF8(codepoint)));
+        AppendUnicodeSimpleCaseFold(codepoint, codepoint, &equivalents);
       }
+      std::sort(equivalents.begin(), equivalents.end());
+      equivalents.erase(std::unique(equivalents.begin(), equivalents.end()), equivalents.end());
+      if (equivalents.size() == 1) {
+        elements.push_back(builder_.AddByteString(CharToUTF8(codepoint)));
+        continue;
+      }
+      std::vector<GrammarBuilder::CharacterClassElement> ranges;
+      ranges.reserve(equivalents.size());
+      for (TCodepoint equivalent : equivalents) {
+        ranges.push_back({equivalent, equivalent});
+      }
+      elements.push_back(builder_.AddCharacterClass(ranges));
     }
     if (elements.empty()) {
       return builder_.AddEmptyStr();
@@ -2391,6 +2433,8 @@ class LarkCompiler {
   struct RegexFlags {
     bool case_insensitive = false;
     bool dot_all = false;
+    bool multiline = false;
+    bool extended = false;
   };
 
   RegexFlags ParseRegexFlags(const Node& node) const {
@@ -2400,6 +2444,10 @@ class LarkCompiler {
         result.case_insensitive = true;
       } else if (flag == 's') {
         result.dot_all = true;
+      } else if (flag == 'm') {
+        result.multiline = true;
+      } else if (flag == 'x') {
+        result.extended = true;
       } else if (flag == 'u') {
         // XGrammar regular expressions use Unicode codepoint semantics by default.
       } else if (flag == 'l') {
@@ -2416,7 +2464,98 @@ class LarkCompiler {
   }
 
   std::string PrepareRegexPattern(const Node& node) const {
-    return RewriteRegexDots(node.text, ParseRegexFlags(node).dot_all);
+    RegexFlags flags = ParseRegexFlags(node);
+    std::string pattern = flags.extended ? RewriteExtendedRegex(node.text) : node.text;
+    if (flags.multiline && ContainsRegexLineAnchor(pattern)) {
+      RaiseLarkError(
+          source_,
+          node.location,
+          "regular-expression flag 'm' with line anchors is not supported by llguidance 1.8.0"
+      );
+    }
+    return RewriteRegexDots(pattern, flags.dot_all);
+  }
+
+  static bool RequiresFSMRegexCompilation(const std::string& pattern) {
+    bool in_character_class = false;
+    for (size_t position = 0; position < pattern.size(); ++position) {
+      if (pattern[position] == '\\') {
+        if (position + 1 < pattern.size() &&
+            std::string("dDsSwW").find(pattern[position + 1]) != std::string::npos) {
+          return true;
+        }
+        ++position;
+        continue;
+      }
+      if (pattern[position] == '[') {
+        in_character_class = true;
+      } else if (pattern[position] == ']' && in_character_class) {
+        in_character_class = false;
+      } else if (!in_character_class && pattern[position] == '(' && position + 2 < pattern.size() &&
+                 pattern[position + 1] == '?' &&
+                 std::string("-imsuURx").find(pattern[position + 2]) != std::string::npos) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static std::string RewriteExtendedRegex(const std::string& pattern) {
+    std::string result;
+    result.reserve(pattern.size());
+    for (size_t position = 0; position < pattern.size();) {
+      if (pattern[position] == '\\') {
+        result.push_back(pattern[position++]);
+        if (position >= pattern.size()) {
+          break;
+        }
+        auto [codepoint, num_bytes] = ParseNextUTF8(pattern.c_str() + position);
+        size_t length = codepoint == CharHandlingError::kInvalidUTF8 ? 1 : num_bytes;
+        result.append(pattern, position, length);
+        position += length;
+        continue;
+      }
+      auto [codepoint, num_bytes] = ParseNextUTF8(pattern.c_str() + position);
+      if (codepoint == CharHandlingError::kInvalidUTF8) {
+        result.push_back(pattern[position++]);
+        continue;
+      }
+      if (codepoint == '#') {
+        position += num_bytes;
+        while (position < pattern.size() && pattern[position] != '\n') {
+          ++position;
+        }
+        continue;
+      }
+      if (IsUnicodeWhitespace(codepoint)) {
+        position += num_bytes;
+        continue;
+      }
+      result.append(pattern, position, num_bytes);
+      position += num_bytes;
+    }
+    return result;
+  }
+
+  static bool ContainsRegexLineAnchor(const std::string& pattern) {
+    bool escaped = false;
+    bool in_character_class = false;
+    for (char character : pattern) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (character == '\\') {
+        escaped = true;
+      } else if (character == '[') {
+        in_character_class = true;
+      } else if (character == ']' && in_character_class) {
+        in_character_class = false;
+      } else if (!in_character_class && (character == '^' || character == '$')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   int32_t CompileTerminalPattern(const std::string& pattern, const Location& location) {
@@ -2479,23 +2618,37 @@ class LarkCompiler {
     }
     std::string result;
     for (TCodepoint codepoint : codepoints) {
-      if (codepoint > 0x7F) {
+      if (allow_invalid_utf8_ && codepoint > 0x7F) {
         RaiseLarkError(
             source_,
             node.location,
-            "case-insensitive string literals currently support ASCII characters only"
+            "non-ASCII case-insensitive strings are not available when allow_invalid_utf8 is "
+            "enabled"
         );
       }
-      char character = static_cast<char>(codepoint);
-      if ((character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z')) {
-        char lower = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
-        char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(character)));
-        result += "[";
-        result += lower;
-        result += upper;
-        result += "]";
+      std::vector<TCodepoint> equivalents = {codepoint};
+      if (allow_invalid_utf8_) {
+        if (codepoint >= 'a' && codepoint <= 'z') {
+          equivalents.push_back(codepoint - ('a' - 'A'));
+        } else if (codepoint >= 'A' && codepoint <= 'Z') {
+          equivalents.push_back(codepoint + ('a' - 'A'));
+        }
       } else {
-        result += EscapeRegexLiteral(std::string(1, character));
+        AppendUnicodeSimpleCaseFold(codepoint, codepoint, &equivalents);
+      }
+      std::sort(equivalents.begin(), equivalents.end());
+      equivalents.erase(std::unique(equivalents.begin(), equivalents.end()), equivalents.end());
+      if (equivalents.size() > 1) {
+        result += "(?:";
+      }
+      for (size_t index = 0; index < equivalents.size(); ++index) {
+        if (index != 0) {
+          result += "|";
+        }
+        result += EscapeRegexLiteral(CharToUTF8(equivalents[index]));
+      }
+      if (equivalents.size() > 1) {
+        result += ")";
       }
     }
     return result;
@@ -2779,6 +2932,34 @@ class LarkCompiler {
     }
   }
 
+  /*! \brief Whether a terminal subtree contains a regex whose `i` flag needs scoped folding. */
+  bool ContainsCaseInsensitiveRegex(const Node& node, std::unordered_set<std::string>* visiting) {
+    switch (node.kind) {
+      case Node::Kind::kRegex:
+        return ParseRegexFlags(node).case_insensitive;
+      case Node::Kind::kSequence:
+      case Node::Kind::kChoice:
+      case Node::Kind::kRepeat:
+      case Node::Kind::kIntersection:
+      case Node::Kind::kNot:
+        return std::any_of(node.children.begin(), node.children.end(), [&](const Node& child) {
+          return ContainsCaseInsensitiveRegex(child, visiting);
+        });
+      case Node::Kind::kName: {
+        auto definition_it = definition_by_name_.find(node.text);
+        if (definition_it == definition_by_name_.end() || !definition_it->second->is_terminal ||
+            !visiting->insert(node.text).second) {
+          return false;
+        }
+        bool result = ContainsCaseInsensitiveRegex(definition_it->second->body, visiting);
+        visiting->erase(node.text);
+        return result;
+      }
+      default:
+        return false;
+    }
+  }
+
   /*!
    * \brief Compile a terminal node into a leaf grammar expression: a regex, or a sequence /
    * choices / intersection / complement of leaf expressions, containing no rule references.
@@ -2793,7 +2974,7 @@ class LarkCompiler {
     if (visiting == nullptr) {
       visiting = &local_visiting;
     }
-    if (!ContainsFsmOperation(node, visiting)) {
+    if (!ContainsFsmOperation(node, visiting) && !ContainsCaseInsensitiveRegex(node, visiting)) {
       return builder_.AddRegex(
           TerminalNodeToRegex(node, visiting), /*json_string=*/false, allow_invalid_utf8_
       );
@@ -2827,6 +3008,22 @@ class LarkCompiler {
       }
       case Node::Kind::kRepeat: {
         if (node.max_repeat == -1) {
+          const Node* child = UnwrapSingle(&node.children[0]);
+          if (child->kind == Node::Kind::kRegex) {
+            RegexFlags flags = ParseRegexFlags(*child);
+            std::string pattern = "(?:" + PrepareRegexPattern(*child) + ")";
+            if (node.min_repeat == 0) {
+              pattern += "*";
+            } else if (node.min_repeat == 1) {
+              pattern += "+";
+            } else {
+              pattern += "{" + std::to_string(node.min_repeat) + ",}";
+            }
+            if (flags.case_insensitive) {
+              pattern = "(?i)" + pattern;
+            }
+            return builder_.AddRegex(pattern, /*json_string=*/false, allow_invalid_utf8_);
+          }
           RaiseLarkError(
               source_,
               node.location,
@@ -2862,6 +3059,19 @@ class LarkCompiler {
         int32_t result = CompileTerminalLeafExpr(definition_it->second->body, visiting);
         visiting->erase(node.text);
         return result;
+      }
+      case Node::Kind::kString:
+      case Node::Kind::kRange:
+        return builder_.AddRegex(
+            TerminalNodeToRegex(node, visiting), /*json_string=*/false, allow_invalid_utf8_
+        );
+      case Node::Kind::kRegex: {
+        RegexFlags flags = ParseRegexFlags(node);
+        std::string pattern = PrepareRegexPattern(node);
+        if (flags.case_insensitive) {
+          pattern = "(?i)" + pattern;
+        }
+        return builder_.AddRegex(pattern, /*json_string=*/false, allow_invalid_utf8_);
       }
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected node kind in a terminal intersection or complement";
@@ -2990,7 +3200,7 @@ class LarkCompiler {
       }
       case Node::Kind::kRegex: {
         RegexFlags flags = ParseRegexFlags(node);
-        std::string pattern = RewriteRegexDots(node.text, flags.dot_all);
+        std::string pattern = PrepareRegexPattern(node);
         if (allow_invalid_utf8_) {
           if (flags.case_insensitive) {
             pattern = "(?i)" + pattern;
@@ -3001,10 +3211,10 @@ class LarkCompiler {
           int32_t result = builder_.AddRuleRef(regex_rule_id);
           return terminal_mode || !append_skip ? result : AppendSkip(result);
         }
-        if (flags.case_insensitive) {
-          // The FSM regex engine handles the (?i) prefix with ASCII case folding. Validate the
-          // pattern eagerly so that errors carry the source location.
-          std::string flagged_pattern = "(?i)" + pattern;
+        if (flags.case_insensitive || RequiresFSMRegexCompilation(pattern)) {
+          // The FSM regex engine handles Unicode shorthands and inline flags. Validate the pattern
+          // eagerly so that errors carry the Lark source location.
+          std::string flagged_pattern = flags.case_insensitive ? "(?i)" + pattern : pattern;
           auto matches_empty = RegexFSMBuilder::MatchesEmpty(flagged_pattern);
           if (matches_empty.IsErr()) {
             RaiseLarkError(
@@ -3334,6 +3544,9 @@ class LarkCompiler {
   std::optional<Trigger> ExtractLazyTrigger(const Definition& definition) const {
     if (definition.stop.has_value()) {
       const Node& marker = definition.stop.value();
+      if (marker.kind == Node::Kind::kString && marker.text.empty()) {
+        return std::nullopt;
+      }
       if (!IsAnyText(definition.body) || marker.kind != Node::Kind::kString ||
           !marker.flags.empty()) {
         return std::nullopt;

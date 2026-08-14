@@ -138,6 +138,9 @@ class GrammarBuilder {
   /*! \brief Add a GrammarExpr for empty string.*/
   int32_t AddEmptyStr();
 
+  /*! \brief Add a GrammarExpr that accepts one active matcher stop token. */
+  int32_t AddEOS();
+
   /*! \brief Add a GrammarExpr for kToken (token-level matching). */
   int32_t AddTokenSet(const std::vector<int32_t>& token_ids);
 

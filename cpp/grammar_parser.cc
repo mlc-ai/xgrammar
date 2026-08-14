@@ -758,6 +758,7 @@ class EBNFParser {
   int32_t ParseTagDispatch();
   int32_t ParseTokenSet();
   int32_t ParseExcludeToken();
+  int32_t ParseEOS();
   int32_t ParseTokenTagDispatch();
   int32_t ParseRegexMacro();
   int32_t ParseSubstringMacro();
@@ -811,6 +812,7 @@ const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>>
         {"TagDispatch", [](EBNFParser* parser) { return parser->ParseTagDispatch(); }},
         {"Token", [](EBNFParser* parser) { return parser->ParseTokenSet(); }},
         {"ExcludeToken", [](EBNFParser* parser) { return parser->ParseExcludeToken(); }},
+        {"EOS", [](EBNFParser* parser) { return parser->ParseEOS(); }},
         {"TokenTagDispatch", [](EBNFParser* parser) { return parser->ParseTokenTagDispatch(); }},
         {"Regex", [](EBNFParser* parser) { return parser->ParseRegexMacro(); }},
         {"Substring", [](EBNFParser* parser) { return parser->ParseSubstringMacro(); }},
@@ -1448,6 +1450,17 @@ int32_t EBNFParser::ParseExcludeToken() {
   token_ids.erase(std::unique(token_ids.begin(), token_ids.end()), token_ids.end());
 
   return builder_.AddExcludeTokenSet(token_ids);
+}
+
+int32_t EBNFParser::ParseEOS() {
+  Consume();  // Consume EOS identifier.
+  auto start = current_token_;
+  auto args = ParseMacroArguments();
+  auto delta_element = start - current_token_;
+  if (!args.arguments.empty() || !args.named_arguments.empty()) {
+    ReportParseError("EOS() does not accept arguments", delta_element);
+  }
+  return builder_.AddEOS();
 }
 
 int32_t EBNFParser::ParseTokenTagDispatch() {

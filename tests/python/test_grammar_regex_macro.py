@@ -153,9 +153,9 @@ ebnf_str__input_str__accepted__test_regex_macro_engine_features = [
     ('root ::= Regex("(?i)[^k]")', "a", True),
     ('root ::= Regex("(?i)[^k]")', "k", False),
     ('root ::= Regex("(?i)[^k]")', "K", False),
-    # Only ASCII letters are folded; non-ASCII characters match literally.
+    # Simple Unicode case folding includes non-ASCII equivalence classes.
     ('root ::= Regex("(?i)Σ")', "Σ", True),
-    ('root ::= Regex("(?i)Σ")', "σ", False),
+    ('root ::= Regex("(?i)Σ")', "σ", True),
     # \xHH, \uHHHH and \u{...} escapes, standalone and inside classes.
     (r'root ::= Regex("\\x41\\u0042\\u{43}")', "ABC", True),
     (r'root ::= Regex("\\x41\\u0042\\u{43}")', "ABD", False),
@@ -217,9 +217,9 @@ ebnf_str__input_str__accepted__test_regex_macro_flags = [
     ('root ::= Regex("abc", flags="i")', "abd", False),
     ('root ::= Regex("[a-d]+", flags="i")', "AbCd", True),
     ('root ::= Regex("[a-d]+", flags="i")', "E", False),
-    # Only ASCII letters are folded.
+    # Simple Unicode case folding also applies outside ASCII.
     ('root ::= Regex("Σ", flags="i")', "Σ", True),
-    ('root ::= Regex("Σ", flags="i")', "σ", False),
+    ('root ::= Regex("Σ", flags="i")', "σ", True),
     # With the flags argument, '.' follows the standard semantics: no newline unless 's'.
     ('root ::= Regex("a.b", flags="")', "acb", True),
     ('root ::= Regex("a.b", flags="")', "a\nb", False),

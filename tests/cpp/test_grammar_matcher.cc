@@ -57,5 +57,33 @@ TEST(GrammarMatcherTest, ValidateTokensStopsWhenCompletionTerminatesMatcher) {
   EXPECT_EQ(matcher.ValidateTokens({0}), 0);
 }
 
+TEST(GrammarMatcherTest, EOSExpressionConsumesStopTokenInsideGrammar) {
+  TokenizerInfo tokenizer_info(
+      {"</s>", "a", "b"}, VocabType::RAW, std::nullopt, std::vector<int32_t>{0}
+  );
+  GrammarCompiler compiler(tokenizer_info, 1, false);
+  auto compiled = compiler.CompileGrammar(
+      R"(root ::= item "b"
+         item ::= "a"+ ("" | EOS()))"
+  );
+  GrammarMatcher matcher(compiled);
+
+  EXPECT_TRUE(matcher.AcceptToken(1));
+  EXPECT_FALSE(matcher.IsCompleted());
+  EXPECT_TRUE(matcher.AcceptToken(0));
+  EXPECT_FALSE(matcher.IsCompleted());
+  EXPECT_FALSE(matcher.IsTerminated());
+  EXPECT_TRUE(matcher.AcceptToken(2));
+  EXPECT_TRUE(matcher.IsCompleted());
+  EXPECT_FALSE(matcher.IsTerminated());
+  EXPECT_TRUE(matcher.AcceptToken(0));
+  EXPECT_TRUE(matcher.IsTerminated());
+
+  matcher.Rollback(2);
+  EXPECT_FALSE(matcher.IsCompleted());
+  EXPECT_FALSE(matcher.IsTerminated());
+  EXPECT_TRUE(matcher.AcceptToken(2));
+}
+
 }  // namespace
 }  // namespace xgrammar

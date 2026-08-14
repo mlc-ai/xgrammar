@@ -55,6 +55,8 @@ class GrammarPrinter {
   std::string PrintCharacterClassStar(const GrammarExpr& grammar_expr);
   /*! \brief Print a GrammarExpr for empty string. */
   std::string PrintEmptyStr(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for an active matcher stop token. */
+  std::string PrintEOS(const GrammarExpr& grammar_expr);
   /*! \brief Print a GrammarExpr for rule reference. */
   std::string PrintRuleRef(const GrammarExpr& grammar_expr);
   /*! \brief Print a GrammarExpr for grammar_expr sequence. */

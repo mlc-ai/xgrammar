@@ -134,18 +134,14 @@ TEST(LarkConverterTest, NumericAndNamedSpecialTokens) {
 }
 
 TEST(LarkConverterTest, StringAndRegexFlags) {
-  // The i flag folds ASCII letters; non-ASCII characters in the regex are matched literally.
+  // The i flag uses Unicode simple case folding for both strings and regular expressions.
   auto grammar = Grammar::FromLark(R"(
     start: "Case"i /Σ[^k].x/isu
   )");
   std::string printed = grammar.ToString();
   EXPECT_NE(printed.find("root"), std::string::npos);
 
-  XGRAMMAR_EXPECT_THROW(
-      Grammar::FromLark("start: \"Żółw\"i"),
-      XGrammarError,
-      "case-insensitive string literals currently support ASCII characters only"
-  );
+  EXPECT_NO_THROW(Grammar::FromLark("start: \"Żółw\"i"));
 }
 
 TEST(LarkConverterTest, NoForcingOptionRoundTripsThroughEBNF) {
@@ -211,10 +207,11 @@ TEST(LarkConverterTest, ErrorsContainSourceLocations) {
       XGrammarError,
       "terminal cannot reference rule 'item'"
   );
+  EXPECT_NO_THROW(Grammar::FromLark("start: /abc/m"));
   XGRAMMAR_EXPECT_THROW(
-      Grammar::FromLark("start: /abc/m"),
+      Grammar::FromLark("start: /^abc$/m"),
       XGrammarError,
-      "regular-expression flag 'm' is not supported"
+      "regular-expression flag 'm' with line anchors is not supported by llguidance 1.8.0"
   );
   XGRAMMAR_EXPECT_THROW(
       Grammar::FromLark("start: TOKEN\nTOKEN: %json {}"),

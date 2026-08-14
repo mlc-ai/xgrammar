@@ -165,6 +165,8 @@ int32_t GrammarBuilder::AddEmptyStr() {
   return AddGrammarExpr({GrammarExprType::kEmptyStr, nullptr, 0});
 }
 
+int32_t GrammarBuilder::AddEOS() { return AddGrammarExpr({GrammarExprType::kEOS, nullptr, 0}); }
+
 int32_t GrammarBuilder::AddTokenSet(const std::vector<int32_t>& token_ids) {
   return AddGrammarExpr(
       {GrammarExprType::kToken, token_ids.data(), static_cast<int32_t>(token_ids.size())}

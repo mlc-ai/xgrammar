@@ -123,6 +123,8 @@ std::string GrammarPrinter::PrintGrammarExpr(const GrammarExpr& grammar_expr) {
       return PrintIntersect(grammar_expr);
     case GrammarExprType::kComplement:
       return PrintComplement(grammar_expr);
+    case GrammarExprType::kEOS:
+      return PrintEOS(grammar_expr);
     default:
       XGRAMMAR_LOG(FATAL) << "Unexpected GrammarExpr type: " << static_cast<int>(grammar_expr.type);
       XGRAMMAR_UNREACHABLE();
@@ -168,6 +170,8 @@ std::string GrammarPrinter::PrintCharacterClassStar(const GrammarExpr& grammar_e
 }
 
 std::string GrammarPrinter::PrintEmptyStr(const GrammarExpr& grammar_expr) { return "\"\""; }
+
+std::string GrammarPrinter::PrintEOS(const GrammarExpr& grammar_expr) { return "EOS()"; }
 
 std::string GrammarPrinter::PrintRuleRef(const GrammarExpr& grammar_expr) {
   return grammar_->GetRule(grammar_expr[0]).name;

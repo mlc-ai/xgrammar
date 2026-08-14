@@ -603,7 +603,12 @@ class EarleyParser {
 
   /*! \brief Returns true if completing this rule must produce a capture-history event. */
   bool RuleNeedsCaptureEvent(int32_t rule_id) const {
-    return RuleHasCapture(rule_id) || RuleHasHiddenBytes(rule_id);
+    if (RuleHasCapture(rule_id) || RuleHasHiddenBytes(rule_id)) {
+      return true;
+    }
+    const auto* suffix_stop_info =
+        capture_tracking_ && rule_id >= 0 ? grammar_->GetSuffixStopInfo(rule_id) : nullptr;
+    return suffix_stop_info != nullptr && !suffix_stop_info->stop_capture_name.empty();
   }
 
   /*! \brief Record a capture or hidden-span event for a completed rule in the current row. */
@@ -735,6 +740,9 @@ class EarleyParser {
    */
   void ScanAtomicToken(const ParserState& state, int32_t token_id);
 
+  /*! \brief Scan an end-of-sequence edge from one FSM state. */
+  void ScanEOS(const ParserState& state);
+
   /*!
    * \brief Advance the parser by accepting a whole token via kToken/kExcludeToken edges.
    * \param token_id The token ID to accept.
@@ -742,6 +750,12 @@ class EarleyParser {
    * \return True if any state advanced, false otherwise.
    */
   bool AdvanceAtomicToken(int32_t token_id, bool debug_print = false, int32_t token_char_count = 0);
+
+  /*! \brief Advance the parser by accepting one active matcher stop token via kEOS edges. */
+  bool AdvanceEOS(bool debug_print = false);
+
+  /*! \brief Whether any current state has an immediately scanable kEOS edge. */
+  bool CanAdvanceEOS(bool skip_expired = false) const;
 
   /*!
    * \brief Enqueue the state into the queue.

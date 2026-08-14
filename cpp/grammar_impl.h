@@ -209,6 +209,10 @@ class Grammar::Impl {
     // GrammarFSMBuilder complements the operand automaton and intersects the result with the
     // valid-UTF-8 universe.
     kComplement,
+    // data format: []
+    // Accepts one active matcher stop token without consuming decoded bytes. This is distinct
+    // from kEmptyStr: it advances only when GrammarMatcher accepts a configured stop token.
+    kEOS,
   };
 
   /*! \brief Whether the expr type is compiled directly into an automaton by GrammarFSMBuilder

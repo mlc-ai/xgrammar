@@ -170,6 +170,8 @@ class GrammarFunctor {
         return VisitIntersection(grammar_expr);
       case GrammarExprType::kComplement:
         return VisitComplement(grammar_expr);
+      case GrammarExprType::kEOS:
+        return VisitEOS(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
         XGRAMMAR_UNREACHABLE();
@@ -234,6 +236,9 @@ class GrammarFunctor {
 
   /*! \brief Visit an empty string GrammarExpr. */
   virtual T VisitEmptyStr(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
+
+  /*! \brief Visit an end-of-sequence token GrammarExpr. */
+  virtual T VisitEOS(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }
 
   /*! \brief Visit a character class GrammarExpr. */
   virtual T VisitByteString(const GrammarExpr& grammar_expr) { return VisitElement(grammar_expr); }

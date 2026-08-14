@@ -477,7 +477,7 @@ EarleyParserGrammarFeatures::EarleyParserGrammarFeatures(const Grammar& grammar)
       flags |= kFsmStateHasEdges;
     }
     for (const auto& edge : edges) {
-      if (edge.IsCharRange() || edge.IsToken() || edge.IsExcludeToken()) {
+      if (edge.IsCharRange() || edge.IsToken() || edge.IsExcludeToken() || edge.IsEOS()) {
         flags |= kFsmStateScanable;
       } else if (edge.IsRuleRef() || edge.IsEpsilon() || edge.IsRepeatRef()) {
         flags |= kFsmStateNonTerminal;
@@ -1219,6 +1219,37 @@ void EarleyParser::ScanAtomicToken(const ParserState& state, int32_t token_id) {
   }
 }
 
+void EarleyParser::ScanEOS(const ParserState& state) {
+  if (state.rule_id == -1) return;
+  XGRAMMAR_DCHECK(grammar_->per_rule_fsms[state.rule_id].has_value());
+  for (const auto& edge : (*complete_fsm_edges_)[state.element_id]) {
+    if (!edge.IsEOS()) {
+      continue;
+    }
+    const uint8_t flags = GetFsmStateFlags(state.rule_id, edge.target);
+    if (!(flags & kFsmStateNonTerminal) && !(flags & kFsmStateEnd) && (flags & kFsmStateScanable)) {
+      EnqueueFsmTransitionWithoutProcessing(state, edge.target);
+    } else {
+      EnqueueFsmTransition(state, edge.target);
+    }
+  }
+}
+
+bool EarleyParser::CanAdvanceEOS(bool skip_expired) const {
+  const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
+  for (const auto& state : latest_states) {
+    if ((skip_expired && IsExpiredState(state)) || state.rule_id == -1) {
+      continue;
+    }
+    for (const auto& edge : (*complete_fsm_edges_)[state.element_id]) {
+      if (edge.IsEOS()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool EarleyParser::AdvanceAtomicToken(
     int32_t token_id, bool debug_print, int32_t token_char_count
 ) {
@@ -1238,6 +1269,56 @@ bool EarleyParser::AdvanceAtomicToken(
       continue;
     }
     ScanAtomicToken(state, token_id);
+  }
+  if (tmp_process_state_queue_.empty() && tmp_states_to_be_added_.empty()) {
+    if (has_char_budget_rules_) {
+      char_count_history_.pop_back();
+    }
+    return false;
+  }
+  rule_id_to_completable_states_.PushBackEmpty();
+  if (capture_tracking_) {
+    capture_event_history_.PushBack(std::vector<CaptureEvent>());
+  }
+  while (!tmp_process_state_queue_.empty()) {
+    const ParserState& state = *tmp_process_state_queue_.front();
+    tmp_process_state_queue_.pop();
+    auto [scanable, completable] = Predict(state, debug_print);
+    if (completable) {
+      Complete(state, debug_print);
+    }
+    if (scanable) {
+      tmp_states_to_be_added_.push_back(&state);
+    }
+  }
+  if (!tmp_completed_lazy_occurrences_.empty()) {
+    RemoveCommittedLazyStates();
+  }
+  is_completed_.push_back(tmp_accept_stop_token_);
+  scanable_state_history_.PushBackIndirect(tmp_states_to_be_added_);
+  if (has_char_budget_rules_) {
+    char_budget_entry_history_.push_back(tmp_char_budget_entered_);
+  }
+  return true;
+}
+
+bool EarleyParser::AdvanceEOS(bool debug_print) {
+  XGRAMMAR_DCHECK(tmp_process_state_queue_.empty())
+      << "The tmp_process_state_queue_ should be empty before AdvanceEOS.";
+  tmp_states_visited_in_queue_.Clear();
+  tmp_states_to_be_added_.clear();
+  tmp_accept_stop_token_ = false;
+  tmp_completed_lazy_occurrences_.clear();
+  if (has_char_budget_rules_) {
+    tmp_char_budget_entered_ = char_budget_entry_history_.back();
+    char_count_history_.push_back(GetCurrentCharIndex());
+  }
+  const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
+  for (const auto& state : latest_states) {
+    if (skip_expired_states_ && IsExpiredState(state)) {
+      continue;
+    }
+    ScanEOS(state);
   }
   if (tmp_process_state_queue_.empty() && tmp_states_to_be_added_.empty()) {
     if (has_char_budget_rules_) {

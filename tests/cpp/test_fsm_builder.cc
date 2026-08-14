@@ -139,6 +139,23 @@ TEST(XGrammarFSMBuilderTest, TestTokenTagDispatchFSMBuilder) {
   EXPECT_NE(fsm_printed.find("Token"), std::string::npos);
   EXPECT_NE(fsm_printed.find("ExcludeToken"), std::string::npos);
 }
+
+TEST(XGrammarFSMBuilderTest, TestEOSExpressionBuildsEOSEdge) {
+  auto grammar = Grammar::FromEBNF(R"(root ::= "a" EOS() "b")");
+  auto fsm_result = GrammarFSMBuilder::Choices(
+      grammar->GetGrammarExpr(grammar->GetRootRule().body_expr_id), grammar
+  );
+  ASSERT_TRUE(fsm_result.has_value());
+
+  int32_t eos_edge_count = 0;
+  for (const auto& edges : fsm_result->GetFsm().GetEdges()) {
+    for (const auto& edge : edges) {
+      eos_edge_count += edge.IsEOS();
+    }
+  }
+  EXPECT_EQ(eos_edge_count, 1);
+  EXPECT_NE(fsm_result->ToString().find("EOS->"), std::string::npos);
+}
 using GrammarExpr = Grammar::Impl::GrammarExpr;
 using GrammarExprType = Grammar::Impl::GrammarExprType;
 
@@ -644,14 +661,55 @@ TEST(XGrammarFSMBuilderTest, TestRegexCaseInsensitiveFlag) {
   EXPECT_FALSE(fsm_wse.AcceptString("k"));
   EXPECT_FALSE(fsm_wse.AcceptString("K"));
 
-  // Only ASCII letters are folded; non-ASCII characters match literally.
+  // Simple Unicode case-fold equivalents are accepted.
   fsm_wse = RegexFSMBuilder::Build("(?i)Σ").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("Σ"));
-  EXPECT_FALSE(fsm_wse.AcceptString("σ"));
+  EXPECT_TRUE(fsm_wse.AcceptString("σ"));
+  EXPECT_TRUE(fsm_wse.AcceptString("ς"));
 
   // Without the prefix the match stays case-sensitive.
   fsm_wse = RegexFSMBuilder::Build("abc").Unwrap();
   EXPECT_FALSE(fsm_wse.AcceptString("ABC"));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexScopedFlags) {
+  auto fsm_wse = RegexFSMBuilder::Build("(?i:a(?-i:b)c)d").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("AbCd"));
+  EXPECT_TRUE(fsm_wse.AcceptString("abcd"));
+  EXPECT_FALSE(fsm_wse.AcceptString("ABCd"));
+  EXPECT_FALSE(fsm_wse.AcceptString("AbCD"));
+
+  fsm_wse = RegexFSMBuilder::Build("a(?i:b)c").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("aBc"));
+  EXPECT_FALSE(fsm_wse.AcceptString("Abc"));
+
+  std::string rewritten = RewriteRegexDots("a(?s:.)(?-s:.)b", false);
+  EXPECT_EQ(rewritten, "a(?s:.)(?-s:[^\\n])b");
+  fsm_wse = RegexFSMBuilder::Build(rewritten).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a\nxb"));
+  EXPECT_FALSE(fsm_wse.AcceptString("ax\nb"));
+
+  rewritten = RewriteRegexDots("(?-s:.)(?s:.)", true);
+  EXPECT_EQ(rewritten, "(?-s:[^\\n])(?s:.)");
+
+  fsm_wse = RegexFSMBuilder::Build("(?x:a b # comment\n c)").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a b c"));
+
+  fsm_wse = RegexFSMBuilder::Build("(?x:ab(?-x:c d)e f)").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("abc def"));
+  EXPECT_FALSE(fsm_wse.AcceptString("abcdef"));
+
+  // regex-syntax verbose mode ignores unescaped whitespace and comments inside classes too.
+  fsm_wse = RegexFSMBuilder::Build("(?x:[ a # comment\n b])").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("b"));
+  EXPECT_FALSE(fsm_wse.AcceptString(" "));
+  EXPECT_FALSE(fsm_wse.AcceptString("#"));
+
+  fsm_wse = RegexFSMBuilder::Build("(?x:a\u00a0b)").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("ab"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a\u00a0b"));
 }
 
 TEST(XGrammarFSMBuilderTest, TestRegexEscapes) {
@@ -673,9 +731,18 @@ TEST(XGrammarFSMBuilderTest, TestRegexEscapes) {
   EXPECT_TRUE(fsm_wse.AcceptString("好好"));
   EXPECT_FALSE(fsm_wse.AcceptString("\xbd"));
 
-  // \s matches exactly the standard whitespace characters [ \t\n\r\f\v].
+  // Unicode-mode shorthands follow regex-syntax's Unicode 16.0.0 tables.
+  fsm_wse = RegexFSMBuilder::Build("\\d").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("১"));
+  EXPECT_FALSE(fsm_wse.AcceptString("A"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\w+").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("ł\u0301"));
+  EXPECT_FALSE(fsm_wse.AcceptString("😀"));
+  EXPECT_FALSE(fsm_wse.AcceptString("-"));
+
   fsm_wse = RegexFSMBuilder::Build("\\s+").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString(" \t\n\r\f\v"));
+  EXPECT_TRUE(fsm_wse.AcceptString(" \t\n\r\f\v\u0085\u00a0\u2003\u3000"));
   EXPECT_FALSE(fsm_wse.AcceptString(std::string(1, '\0')));
   EXPECT_FALSE(fsm_wse.AcceptString("\x01"));
 
@@ -684,6 +751,11 @@ TEST(XGrammarFSMBuilderTest, TestRegexEscapes) {
   EXPECT_TRUE(fsm_wse.AcceptString("好"));
   EXPECT_TRUE(fsm_wse.AcceptString(std::string(1, '\0')));
   EXPECT_FALSE(fsm_wse.AcceptString(" "));
+
+  // Byte mode deliberately retains ASCII shorthand semantics.
+  fsm_wse = RegexFSMBuilder::Build("\\w", /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_FALSE(fsm_wse.AcceptString("ł"));
 }
 
 TEST(XGrammarFSMBuilderTest, TestRegexUnsupportedFeatures) {

@@ -1838,6 +1838,21 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   }
   // Handle the stop token
   if (is_stop_token) {
+    // A grammar-level EOS edge consumes the active stop token as a zero-byte input position.
+    // It may finish the root rule, or it may end an inner stop="" rule and expose more grammar.
+    bool accepted_via_grammar = AdvanceEOS(debug_print);
+    if (accepted_via_grammar) {
+      token_length_history.push_back(1);
+      if (ShouldTrackAcceptedBytes()) {
+        AppendAtomicRow("");
+      }
+      stop_token_is_accepted_ = IsCompleted();
+      if (debug_print) {
+        XGRAMMAR_LOG(INFO) << "The token advanced a grammar EOS edge. Root completed: "
+                           << IsCompleted();
+      }
+      return FinishAccept(consumed_past_deadline);
+    }
     bool accepted = AcceptStopToken();
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: " << accepted;
@@ -2474,6 +2489,18 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   latest_states_with_masks.clear();
 
   for (const auto& state : latest_states) {
+    // EOS-only states contribute the active stop token below, not decoded vocabulary tokens.
+    // They intentionally have no adaptive token-mask cache entry.
+    bool has_ordinary_scan_edge = false;
+    for (const auto& edge : (*complete_fsm_edges_)[state.element_id]) {
+      if (edge.IsCharRange() || edge.IsToken() || edge.IsExcludeToken()) {
+        has_ordinary_scan_edge = true;
+        break;
+      }
+    }
+    if (!has_ordinary_scan_edge) {
+      continue;
+    }
     const auto repeat = GetCharacterClassRepeat(state);
     const CharacterClassRepeatTokenMask* repeat_token_mask =
         repeat.has_value() ? &compiled_grammar_->GetCharacterClassRepeatTokenMask(
@@ -2675,7 +2702,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   }
 
   // Finally update the rejected_ids bitset
-  bool can_reach_end = IsCompleted();
+  bool can_reach_end = IsCompleted() || CanAdvanceEOS(skip_expired);
   SetTokenBitmask(
       bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end, false
   );
@@ -2826,6 +2853,11 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
     for (const auto& event : capture_event_history_[row]) {
       int32_t start_row = event.start_pos == ParserState::kNoPrevInputPos ? 0 : event.start_pos;
       XGRAMMAR_DCHECK(start_row <= row);
+      const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(event.rule_id);
+      bool zero_width_stop_capture =
+          suffix_stop_info != nullptr && !suffix_stop_info->stop_capture_name.empty() &&
+          suffix_stop_info->hidden_suffix_bytes == 0 && suffix_stop_info->hidden_stop_bytes == 0 &&
+          suffix_stop_info->body_rule_id == -1 && suffix_stop_info->marker_rule_id == -1;
       events.push_back(
           {event.rule_id,
            start_row,
@@ -2834,8 +2866,8 @@ std::vector<std::pair<std::string, std::string>> GrammarMatcher::Impl::GetCaptur
            event.hidden_suffix_bytes,
            event.hidden_stop_bytes,
            event.stop_capture_targets,
-           false,
-           -1}
+           zero_width_stop_capture,
+           zero_width_stop_capture ? row_byte_end_[row] : -1}
       );
     }
   }

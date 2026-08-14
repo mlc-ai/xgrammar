@@ -209,7 +209,8 @@ TEST(XGrammarFSMTest, FunctionTest) {
   std::cout << "--------- Function Test3 -----------" << std::endl;
   fsm_wse = std::move(fsm_wse.MinimizeDFA()).Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString(test_str));
-  EXPECT_EQ(fsm_wse.GetFsm().GetEdges().size(), 2);
+  EXPECT_TRUE(fsm_wse.AcceptString("٣"));
+  EXPECT_FALSE(fsm_wse.AcceptString("d"));
   std::cout << "--------- Function Test4 -----------" << std::endl;
   fsm_wse = std::move(fsm_wse.Not()).Unwrap();
   EXPECT_FALSE(fsm_wse.AcceptString(test_str));
