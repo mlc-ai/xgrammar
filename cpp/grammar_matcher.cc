@@ -849,6 +849,13 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
       return matcher_->EarleyParser::Advance(byte);
     }
     XGRAMMAR_DCHECK(transition_depth_ != 0);
+    if (transition_history_[transition_depth_ - 1] == kUncacheable) {
+      const bool accepted = matcher_->EarleyParser::Advance(byte);
+      if (accepted) {
+        PushUncacheableTransition(byte);
+      }
+      return accepted;
+    }
     ++queries_;
     XGRAMMAR_DCHECK(current_transition_row_ != nullptr);
     const uint16_t cached = current_transition_row_[byte];
@@ -858,6 +865,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     }
     if (cached != kEmpty) {
       ++hits_;
+      transition_byte_history_[transition_depth_] = byte;
       PushAcceptedTransition(cached);
       return true;
     }
@@ -867,6 +875,13 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     if (!accepted) {
       current_transition_row_[byte] = kRejected;
       return false;
+    }
+    if (matcher_->EnteredJSONStringLengthRuleOnLatestAdvance()) {
+      // Cached hits do not run Earley prediction, so never let one cross the byte that first
+      // enters a constrained string. Keep the already materialized boundary and parse its suffix
+      // normally until trie backtracking returns to a cacheable prefix.
+      PushUncacheableTransition(byte);
+      return true;
     }
     const auto output_row_id = InternCurrentCompletableRow();
     if (!output_row_id.has_value()) {
@@ -880,6 +895,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     }
     const uint16_t output_transition = EncodeAccepted(*output_row_id, *output_configuration_id);
     current_transition_row_[byte] = output_transition;
+    transition_byte_history_[transition_depth_] = byte;
     PushAcceptedTransition(output_transition);
     RecordMaterializedRow(*output_row_id);
     ++materialized_depth_;
@@ -897,14 +913,17 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
       matcher_->EarleyParser::PopLastStates(materialized_depth_ - target_depth);
     }
     while (materialized_depth_ > target_depth) {
-      const int32_t row_id = DecodeRowId(transition_history_[materialized_depth_ - 1]);
-      XGRAMMAR_DCHECK(!absolute_rows_by_id_[row_id].empty());
-      absolute_rows_by_id_[row_id].pop_back();
+      const uint16_t transition = transition_history_[materialized_depth_ - 1];
+      if (transition != kUncacheable) {
+        const int32_t row_id = DecodeRowId(transition);
+        XGRAMMAR_DCHECK(!absolute_rows_by_id_[row_id].empty());
+        absolute_rows_by_id_[row_id].pop_back();
+      }
       --materialized_depth_;
     }
     transition_depth_ = target_depth;
     current_transition_row_ =
-        target_depth == 0
+        target_depth == 0 || transition_history_[target_depth - 1] == kUncacheable
             ? nullptr
             : transition_table_ +
                   static_cast<size_t>(DecodeConfigurationId(transition_history_[target_depth - 1])
@@ -929,6 +948,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
   static constexpr size_t kMaxVirtualDepth = 1024;
   static constexpr uint16_t kEmpty = 0;
   static constexpr uint16_t kRejected = 1;
+  static constexpr uint16_t kUncacheable = 3;  // Materialized JSON-length boundary transition.
   static constexpr int32_t kRowShift = 2;
   static constexpr int32_t kConfigurationShift = 9;
   static constexpr uint16_t kIdMask = 127;
@@ -1010,6 +1030,13 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     transition_history_[transition_depth_++] = transition;
     current_transition_row_ =
         transition_table_ + static_cast<size_t>(DecodeConfigurationId(transition)) * 256;
+  }
+
+  void PushUncacheableTransition(uint8_t byte) {
+    transition_byte_history_[transition_depth_] = byte;
+    transition_history_[transition_depth_++] = kUncacheable;
+    ++materialized_depth_;
+    current_transition_row_ = nullptr;
   }
 
   std::optional<CachedState> NormalizeState(const ParserState& state, int32_t current_row) const {
@@ -1140,7 +1167,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     absolute_rows_by_id_[row_id].push_back(absolute_row);
   }
 
-  void MaterializeTransition(int32_t row_id, int32_t configuration_id) {
+  void MaterializeTransition(int32_t row_id, int32_t configuration_id, uint8_t byte) {
     const int32_t current_row = matcher_->rule_id_to_completable_states_.size();
     const auto& cached_row = rows_[row_id];
     tmp_completable_states_.clear();
@@ -1164,12 +1191,25 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     matcher_->scanable_state_history_.PushBack(tmp_scanable_states_);
     matcher_->tmp_accept_stop_token_ = cached_configuration.is_completed;
     matcher_->tmp_states_to_be_added_.clear();
+    if (matcher_->has_json_string_length_rules_) {
+      matcher_->json_string_char_count_history_.push_back(matcher_->AdvanceJSONStringCharCounter(
+          matcher_->json_string_char_count_history_.back(), byte
+      ));
+      matcher_->json_string_length_entry_history_.push_back(
+          matcher_->json_string_length_entry_history_.back()
+      );
+    }
   }
 
   void MaterializeVirtualPrefix() {
     while (materialized_depth_ < transition_depth_) {
       const uint16_t transition = transition_history_[materialized_depth_];
-      MaterializeTransition(DecodeRowId(transition), DecodeConfigurationId(transition));
+      XGRAMMAR_DCHECK(transition != kUncacheable);
+      MaterializeTransition(
+          DecodeRowId(transition),
+          DecodeConfigurationId(transition),
+          transition_byte_history_[materialized_depth_]
+      );
       RecordMaterializedRow(DecodeRowId(transition));
       ++materialized_depth_;
     }
@@ -1197,6 +1237,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
   std::array<int16_t, kMaxConfigurations> next_configuration_for_row_;
   std::vector<std::vector<int32_t>> absolute_rows_by_id_;
   std::array<uint16_t, kMaxVirtualDepth> transition_history_;
+  std::array<uint8_t, kMaxVirtualDepth> transition_byte_history_;
   size_t transition_depth_{0};
   size_t materialized_depth_{0};
   std::vector<std::pair<int32_t, ParserState>> tmp_completable_states_;
@@ -2518,7 +2559,9 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
   const int32_t current_count = GetCurrentJSONStringCharIndex();
   const bool minimum_active = state.json_string_min_length_deadline >= 0 &&
                               current_count < state.json_string_min_length_deadline;
-  const auto& quote_indices = tokenizer_impl->GetJSONStringQuoteTokenIndices();
+  const auto& plain_quote_indices =
+      tokenizer_impl->GetJSONStringPlainQuoteTokenIndicesByPrefixCount();
+  const auto& escaped_quote_indices = tokenizer_impl->GetJSONStringEscapedQuoteTokenIndices();
   const auto& quote_flags = tokenizer_impl->GetJSONStringQuoteTokenFlags();
   const auto& plain_prefix_char_counts = tokenizer_impl->GetJSONStringPlainPrefixCharCounts();
   const auto& token_char_counts = tokenizer_impl->GetTokenCharCounts();
@@ -2534,9 +2577,27 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
         [&](int32_t token_index) { return token_char_counts[token_index] > remaining; }
     );
   }
+  auto early_plain_quote_end = plain_quote_indices.begin();
+  if (minimum_active) {
+    if (IsJSONStringCounterInside()) {
+      const int64_t remaining_minimum =
+          static_cast<int64_t>(state.json_string_min_length_deadline) - current_count;
+      early_plain_quote_end = std::partition_point(
+          plain_quote_indices.begin(),
+          plain_quote_indices.end(),
+          [&](int32_t token_index) {
+            return plain_prefix_char_counts[token_index] < remaining_minimum;
+          }
+      );
+    } else {
+      early_plain_quote_end = plain_quote_indices.end();
+    }
+  }
 
   const size_t candidate_upper_bound =
-      (minimum_active ? quote_indices.size() : 0) +
+      (minimum_active ? escaped_quote_indices.size() +
+                            static_cast<size_t>(early_plain_quote_end - plain_quote_indices.begin())
+                      : 0) +
       static_cast<size_t>(too_long_end - descending_char_count_indices.begin());
   const int32_t base_accepted_count = adaptive_token_mask.GetAcceptedCount();
   const bool iterate_accepted =
@@ -2576,7 +2637,14 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
   } else {
     if (minimum_active) {
       tmp_json_length_candidate_indices_.insert(
-          tmp_json_length_candidate_indices_.end(), quote_indices.begin(), quote_indices.end()
+          tmp_json_length_candidate_indices_.end(),
+          plain_quote_indices.begin(),
+          early_plain_quote_end
+      );
+      tmp_json_length_candidate_indices_.insert(
+          tmp_json_length_candidate_indices_.end(),
+          escaped_quote_indices.begin(),
+          escaped_quote_indices.end()
       );
     }
     tmp_json_length_candidate_indices_.insert(
@@ -2612,8 +2680,19 @@ bool GrammarMatcher::Impl::NeedsJSONStringLengthTokenFilter(const ParserState& s
   const int32_t current_count = GetCurrentJSONStringCharIndex();
   if (state.json_string_min_length_deadline >= 0 &&
       current_count < state.json_string_min_length_deadline &&
-      !tokenizer_impl->GetJSONStringQuoteTokenIndices().empty()) {
-    return true;
+      (!tokenizer_impl->GetJSONStringPlainQuoteTokenIndicesByPrefixCount().empty() ||
+       !tokenizer_impl->GetJSONStringEscapedQuoteTokenIndices().empty())) {
+    const auto& plain_quote_indices =
+        tokenizer_impl->GetJSONStringPlainQuoteTokenIndicesByPrefixCount();
+    const auto& plain_prefix_char_counts = tokenizer_impl->GetJSONStringPlainPrefixCharCounts();
+    const int64_t remaining_minimum =
+        static_cast<int64_t>(state.json_string_min_length_deadline) - current_count;
+    if (!tokenizer_impl->GetJSONStringEscapedQuoteTokenIndices().empty() ||
+        (!plain_quote_indices.empty() &&
+         (!IsJSONStringCounterInside() ||
+          plain_prefix_char_counts[plain_quote_indices.front()] < remaining_minimum))) {
+      return true;
+    }
   }
   return state.json_string_length_deadline >= 0 &&
          static_cast<int64_t>(state.json_string_length_deadline) - current_count <
@@ -2766,7 +2845,10 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     PushOneStateToCheck(state);
     std::optional<ContinuationTransitionCache> continuation_cache;
     constexpr size_t kMinUncertainTokensForContinuationCache = 128;
-    if (!has_budget_rules_ && !has_char_budget_rules_ && !has_json_string_length_rules_ &&
+    // JSON length rules elsewhere in the grammar do not invalidate cached continuations for this
+    // unconstrained state. Materialized cache hits advance the shared JSON lexical counter, and
+    // the cache stops exactly when a transition enters a constrained rule.
+    if (!has_budget_rules_ && !has_char_budget_rules_ && !json_string_length_active &&
         !capture_tracking_ && adaptive_token_mask.store_type != StoreType::kRejected &&
         adaptive_token_mask.uncertain_indices.size() >= kMinUncertainTokensForContinuationCache) {
       continuation_cache.emplace(this);

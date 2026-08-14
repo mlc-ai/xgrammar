@@ -571,6 +571,7 @@ class EarleyParser {
   std::vector<bool> json_string_length_entry_history_;
   bool has_json_string_length_rules_ = false;
   bool tmp_json_string_length_entered_ = false;
+  bool tmp_json_string_length_entered_on_latest_advance_ = false;
 
   /*! \brief Whether decoded-JSON-string length constraints are enforced by this parser.
    * Token-mask cache construction disables enforcement so its cached rejection set reflects only
@@ -1064,6 +1065,10 @@ class EarleyParser {
 
   bool HasEnteredJSONStringLengthRule() const {
     return has_json_string_length_rules_ && json_string_length_entry_history_.back();
+  }
+
+  bool EnteredJSONStringLengthRuleOnLatestAdvance() const {
+    return has_json_string_length_rules_ && tmp_json_string_length_entered_on_latest_advance_;
   }
 
   /*! \brief Whether the grammar has any captured rule. */

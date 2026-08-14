@@ -244,6 +244,26 @@ def test_pattern_min_length_rechecks_closing_token(enable_dynamic_compilation: b
 
 
 @pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_pattern_min_length_rechecks_quote_after_partial_unicode_escape(
+    enable_dynamic_compilation: bool,
+):
+    tokenizer_info = xgr.TokenizerInfo(['0062"', "x"], stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_json_schema({"type": "string", "pattern": ".", "minLength": 3}, any_whitespace=False)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_string('"a\\u')
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[0])  # Four raw hex digits decode to only one character.
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
 def test_pattern_length_filters_large_cached_accept_set(enable_dynamic_compilation: bool):
     vocabulary = ['"', "b", 'b"', r'\u0062"', r'\u0062x"'] + [f"x{index}" for index in range(1200)]
     tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])

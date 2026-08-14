@@ -173,6 +173,7 @@ void EarleyParser::EnterJSONStringLengthRule(int32_t rule_id) {
     return;
   }
   tmp_json_string_length_entered_ = true;
+  tmp_json_string_length_entered_on_latest_advance_ = true;
   if (!enforce_json_string_lengths_ || json_string_char_count_history_.empty()) {
     return;
   }
@@ -596,6 +597,7 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   tmp_states_to_be_added_.clear();
   tmp_accept_stop_token_ = false;
   tmp_completed_lazy_occurrences_.clear();
+  tmp_json_string_length_entered_on_latest_advance_ = false;
   if (has_char_budget_rules_) {
     tmp_char_budget_entered_ = char_budget_entry_history_.back();
     char_count_history_.push_back(GetCurrentCharIndex() + StartsUTF8Codepoint(ch));
@@ -788,6 +790,7 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   tmp_states_to_be_added_.clear();
   tmp_completed_lazy_occurrences_.clear();
   tmp_json_string_length_entered_ = false;
+  tmp_json_string_length_entered_on_latest_advance_ = false;
   Enqueue(state);
   rule_id_to_completable_states_.PushBackEmpty();
   if (capture_tracking_) {

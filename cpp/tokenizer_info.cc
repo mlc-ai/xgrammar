@@ -326,12 +326,14 @@ TokenizerInfo::Impl::Impl(
 
 void TokenizerInfo::Impl::BuildTokenCharData() {
   token_char_counts_.assign(sorted_decoded_vocab_.size(), 0);
-  json_string_quote_token_indices_.clear();
+  json_string_plain_quote_token_indices_by_prefix_count_.clear();
+  json_string_escaped_quote_token_indices_.clear();
   json_string_quote_token_flags_.assign(sorted_decoded_vocab_.size(), false);
   json_string_plain_prefix_char_counts_.assign(sorted_decoded_vocab_.size(), 0);
   token_indices_by_descending_char_count_.resize(sorted_decoded_vocab_.size());
   ascii_string_safe_indices_.clear();
-  json_string_quote_token_indices_.reserve(sorted_decoded_vocab_.size() / 16);
+  json_string_plain_quote_token_indices_by_prefix_count_.reserve(sorted_decoded_vocab_.size() / 16);
+  json_string_escaped_quote_token_indices_.reserve(sorted_decoded_vocab_.size() / 128);
   ascii_string_safe_indices_.reserve(sorted_decoded_vocab_.size() / 2);
   int32_t max_chars = 0;
   for (int32_t index = 0; index < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++index) {
@@ -347,12 +349,12 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
     }
     const bool contains_quote = token.find('"') != std::string::npos;
     const bool contains_escape = token.find('\\') != std::string::npos;
-    if (contains_quote) {
-      json_string_quote_token_indices_.push_back(index);
-    }
     json_string_quote_token_flags_[index] = contains_quote;
     if (contains_escape) {
       json_string_plain_prefix_char_counts_[index] = -1;
+      if (contains_quote) {
+        json_string_escaped_quote_token_indices_.push_back(index);
+      }
     } else {
       int32_t prefix_count = 0;
       for (uint8_t byte : token) {
@@ -362,6 +364,9 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
         prefix_count += (byte & 0xC0) != 0x80;
       }
       json_string_plain_prefix_char_counts_[index] = prefix_count;
+      if (contains_quote) {
+        json_string_plain_quote_token_indices_by_prefix_count_.push_back(index);
+      }
     }
     token_char_counts_[index] = count;
     token_indices_by_descending_char_count_[index] = index;
@@ -371,6 +376,14 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
       token_indices_by_descending_char_count_.begin(),
       token_indices_by_descending_char_count_.end(),
       [&](int32_t lhs, int32_t rhs) { return token_char_counts_[lhs] > token_char_counts_[rhs]; }
+  );
+  std::stable_sort(
+      json_string_plain_quote_token_indices_by_prefix_count_.begin(),
+      json_string_plain_quote_token_indices_by_prefix_count_.end(),
+      [&](int32_t lhs, int32_t rhs) {
+        return json_string_plain_prefix_char_counts_[lhs] <
+               json_string_plain_prefix_char_counts_[rhs];
+      }
   );
   max_token_chars_ = max_chars;
 }

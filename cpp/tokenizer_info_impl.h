@@ -41,8 +41,11 @@ class TokenizerInfo::Impl {
   }
   const std::vector<int32_t>& GetTokenCharCounts() const;
   int32_t GetMaxTokenChars() const;
-  const std::vector<int32_t>& GetJSONStringQuoteTokenIndices() const {
-    return json_string_quote_token_indices_;
+  const std::vector<int32_t>& GetJSONStringPlainQuoteTokenIndicesByPrefixCount() const {
+    return json_string_plain_quote_token_indices_by_prefix_count_;
+  }
+  const std::vector<int32_t>& GetJSONStringEscapedQuoteTokenIndices() const {
+    return json_string_escaped_quote_token_indices_;
   }
   const std::vector<uint8_t>& GetJSONStringQuoteTokenFlags() const {
     return json_string_quote_token_flags_;
@@ -100,8 +103,10 @@ class TokenizerInfo::Impl {
   /*! \brief Unicode codepoint counts for the sorted decoded vocabulary. */
   int32_t max_token_chars_ = 0;
   std::vector<int32_t> token_char_counts_;
-  /*! \brief Sorted-vocabulary indices containing a JSON quote byte. */
-  std::vector<int32_t> json_string_quote_token_indices_;
+  /*! \brief Plain quote-token indices ordered by the character count before the first quote. */
+  std::vector<int32_t> json_string_plain_quote_token_indices_by_prefix_count_;
+  /*! \brief Quote-token indices containing a backslash and requiring conservative scanning. */
+  std::vector<int32_t> json_string_escaped_quote_token_indices_;
   /*! \brief Whether each sorted-vocabulary token contains a JSON quote byte. */
   std::vector<uint8_t> json_string_quote_token_flags_;
   /*! \brief Character count before the first quote, or -1 when an escape requires scanning. */

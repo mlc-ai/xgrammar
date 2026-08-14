@@ -1,3 +1,4 @@
+import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -442,6 +443,55 @@ def test_continuation_transition_cache_isolated_between_parser_states(capfd):
     allowed_tokens = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
     for token_id in range(tokenizer_info.vocab_size):
         oracle = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert bool(allowed_tokens[token_id]) == oracle.accept_token(token_id), token_id
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_continuation_transition_cache_stops_at_json_length_entry(
+    enable_dynamic_compilation: bool, capfd
+):
+    suffixes = [
+        chr(first) + chr(second)
+        for first in range(ord("a"), ord("n"))
+        for second in range(ord("a"), ord("n"))
+    ]
+    accepted = suffixes
+    valid_continuations = [suffix + '""a"' for suffix in suffixes]
+    invalid_continuations = [suffix + '""ab"' for suffix in suffixes]
+    rejected = [
+        chr(first) + chr(second)
+        for first in range(ord("A"), ord("U"))
+        for second in range(ord("A"), ord("U"))
+    ]
+    vocabulary = accepted + valid_continuations + invalid_continuations + rejected
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_grammar(
+        "root ::= first free last\n"
+        'first[json_string_min_length=1, json_string_max_length=1] ::= "\\"" [a-m] "\\""\n'
+        'free ::= "\\"" [a-m]* "\\""\n'
+        'last[json_string_min_length=1, json_string_max_length=1] ::= "\\"" [a-m]* "\\""'
+    )
+    prefix = '"a""'
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string(prefix)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask, debug_print=True)
+
+    cache_rows = re.findall(
+        r"ContinuationTransitionCache\(queries=(\d+), hits=(\d+)", capfd.readouterr().err
+    )
+    assert cache_rows
+    assert any(int(queries) > 0 and int(hits) > 0 for queries, hits in cache_rows)
+
+    allowed_tokens = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    for token_id in range(tokenizer_info.vocab_size):
+        oracle = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert oracle.accept_string(prefix)
         assert bool(allowed_tokens[token_id]) == oracle.accept_token(token_id), token_id
 
 
