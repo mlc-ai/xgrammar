@@ -2426,31 +2426,70 @@ int32_t JSONSchemaConverter::GenerateArray(const ArraySpec& spec, const std::str
     return spec.min_items == 0 ? Choice({nonempty, empty_array}) : nonempty;
   }
 
+  // Per JSON Schema Draft 2020-12, prefixItems entries are positional: an
+  // instance may validly end after any prefix position (subject to minItems),
+  // but every element inside the prefix range must match its prefix schema —
+  // additional items are only allowed after the full prefix. Build the array
+  // content as an alternation of the full prefix (plus the additional tail)
+  // and every shorter truncation, so shorter arrays are accepted without
+  // letting the additional tail absorb prefix positions (issue #824).
+  size_t mandatory_count = static_cast<size_t>(std::min<int64_t>(
+      std::max<int64_t>(0, spec.min_items), static_cast<int64_t>(item_rule_ids.size())
+  ));
+
+  // Mandatory head: the first min(minItems, n) items, separated.
   std::vector<int32_t> prefix_elements;
-  for (size_t index = 0; index < item_rule_ids.size(); ++index) {
+  for (size_t index = 0; index < mandatory_count; ++index) {
     if (index != 0) {
       prefix_elements.push_back(middle_separator);
     }
     prefix_elements.push_back(RuleRef(item_rule_ids[index]));
   }
-  int32_t prefix = Sequence(prefix_elements);
-  if (!spec.allow_additional_items) {
-    return Sequence({left_bracket, start_separator, prefix, end_separator, right_bracket});
-  }
 
+  // Full-prefix suffix: items mandatory..n-1 followed by the additional tail.
+  std::vector<int32_t> full_suffix;
+  for (size_t index = mandatory_count; index < item_rule_ids.size(); ++index) {
+    if (index > 0) {
+      full_suffix.push_back(middle_separator);
+    }
+    full_suffix.push_back(RuleRef(item_rule_ids[index]));
+  }
   int64_t minimum_additional =
       std::max(int64_t{0}, spec.min_items - static_cast<int64_t>(item_rule_ids.size()));
-  int32_t additional_tail = Repeat(
-      rule_name + "_additional_items",
-      Sequence({middle_separator, RuleRef(additional_rule_id)}),
-      static_cast<int32_t>(minimum_additional),
-      spec.max_items == -1
-          ? -1
-          : static_cast<int32_t>(spec.max_items - static_cast<int64_t>(item_rule_ids.size()))
-  );
-  return Sequence(
-      {left_bracket, start_separator, prefix, additional_tail, end_separator, right_bracket}
-  );
+  if (spec.allow_additional_items && spec.additional_items) {
+    full_suffix.push_back(Repeat(
+        rule_name + "_additional_items",
+        Sequence({middle_separator, RuleRef(additional_rule_id)}),
+        static_cast<int32_t>(minimum_additional),
+        spec.max_items == -1
+            ? -1
+            : static_cast<int32_t>(spec.max_items - static_cast<int64_t>(item_rule_ids.size()))
+    ));
+  }
+
+  // Truncation alternatives: the prefix may end at exactly k items for
+  // k in [mandatory, n). The full-prefix alternative above covers k == n.
+  std::vector<int32_t> content_choices = {Sequence(full_suffix)};
+  for (size_t k = item_rule_ids.size() - 1; k > mandatory_count; --k) {
+    std::vector<int32_t> truncation_suffix;
+    for (size_t index = mandatory_count; index < k; ++index) {
+      if (index > 0) {
+        truncation_suffix.push_back(middle_separator);
+      }
+      truncation_suffix.push_back(RuleRef(item_rule_ids[index]));
+    }
+    content_choices.push_back(Sequence(truncation_suffix));
+  }
+  if (mandatory_count < item_rule_ids.size()) {
+    // Truncation at the mandatory head itself (k == mandatory): no suffix.
+    content_choices.push_back(Empty());
+  }
+  // Array content = mandatory head followed by one of the suffix
+  // alternatives (full prefix + tail, or a truncation).
+  std::vector<int32_t> content_elements = prefix_elements;
+  content_elements.push_back(Choice(content_choices));
+  int32_t prefix = Sequence(content_elements);
+  return Sequence({left_bracket, start_separator, prefix, end_separator, right_bracket});
 }
 
 int32_t JSONSchemaConverter::FormatPropertyKey(

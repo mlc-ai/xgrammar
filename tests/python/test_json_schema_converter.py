@@ -178,8 +178,10 @@ schema__grammar__accepted_instances__rejected_instances__test_non_strict = [
         + r"""root_additional ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 root ::= ("[" [ \n\t]* (basic_integer [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* root_additional)* [ \n\t]* "]")
 """,
-        [[1, 2], [1, 2, 3], [1, 2, 3, "123"]],
-        [[1]],
+        # Shorter prefixes are valid per Draft 2020-12 (issue #824): [1] and [] are
+        # accepted, so the rejected list is empty.
+        [[1, 2], [1, 2, 3], [1, 2, 3, "123"], [1], []],
+        [],
     ),
     (
         {
@@ -1141,7 +1143,10 @@ root ::= ("[" [ \n\t]* (root_item_0 [ \n\t]* "," [ \n\t]* basic_integer [ \n\t]*
         ),
         [
             ([{"name": "John", "age": 30}, 42, "test"], True),
-            ([{"name": "John", "age": 30}, 42], False),
+            # Shorter prefixes are valid per Draft 2020-12 (issue #824).
+            ([{"name": "John", "age": 30}, 42], True),
+            ([{"name": "John", "age": 30}], True),
+            ([], True),
             ([{"name": "John", "age": 30}, "test", 42], False),
             ([{"name": "John"}, 42, "test"], False),
         ],
@@ -1242,7 +1247,14 @@ schema__expected_grammar__instances__test_array_schema_min_max = [
             + r"""root ::= ("[" [ \n\t]* (basic_string [ \n\t]* "," [ \n\t]* basic_integer) [ \n\t]* "]")
 """
         ),
-        [(["foo", 42], True), (["foo", 42, "bar"], False), (["foo"], False), ([42, "foo"], False)],
+        [
+            (["foo", 42], True),
+            # Shorter prefixes are valid per Draft 2020-12 (issue #824).
+            (["foo"], True),
+            ([], True),
+            (["foo", 42, "bar"], False),
+            ([42, "foo"], False),
+        ],
     ),
     # prefix non-empty, additional items allowed
     (
@@ -3408,6 +3420,50 @@ def test_compile_json_schema_any_order(cache_enabled: bool):
     assert "root_item" not in ordered
     assert "root_item" in any_order
     assert ordered != any_order
+
+
+def test_prefix_items_truncated_prefix_accepted():
+    # Regression for issue #824: prefixItems entries are positional, so an
+    # instance may validly end after any prefix position. With a two-item
+    # prefix and unrestricted additional items the correct accept set is
+    # 1111 for ['[]', '["a"]', '["a",1]', '["a",1,true]']. The exact-length
+    # case passes either way; the discriminating fixtures are the empty and
+    # one-element arrays.
+    schema = {
+        "type": "array",
+        "prefixItems": [{"type": "string"}, {"type": "integer"}],
+        "items": {},
+    }
+    for instance in ("[]", '["a"]', '["a", 1]', '["a", 1, true]'):
+        check_schema_with_instance(schema, instance, is_accepted=True)
+
+
+def test_prefix_items_min_items_forces_prefix_head():
+    # Regression for issue #824: minItems still forces the head of the prefix.
+    schema = {
+        "type": "array",
+        "prefixItems": [{"type": "string"}, {"type": "integer"}],
+        "items": {},
+        "minItems": 1,
+    }
+    check_schema_with_instance(schema, "[]", is_accepted=False)
+    check_schema_with_instance(schema, '["a"]', is_accepted=True)
+    check_schema_with_instance(schema, '["a", 1]', is_accepted=True)
+    check_schema_with_instance(schema, '["a", 1, true]', is_accepted=True)
+
+
+def test_prefix_items_no_additional_items_allows_shorter():
+    # Regression for issue #824: items: false forbids elements beyond the
+    # prefix but must not force the full prefix length.
+    schema = {
+        "type": "array",
+        "prefixItems": [{"type": "string"}, {"type": "integer"}],
+        "items": False,
+    }
+    check_schema_with_instance(schema, "[]", is_accepted=True)
+    check_schema_with_instance(schema, '["a"]', is_accepted=True)
+    check_schema_with_instance(schema, '["a", 1]', is_accepted=True)
+    check_schema_with_instance(schema, '["a", 1, true]', is_accepted=False)
 
 
 if __name__ == "__main__":
