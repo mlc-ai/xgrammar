@@ -297,6 +297,44 @@ def test_rule_mask_sharing_does_not_cross_context_dependent_rules():
         torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
 
 
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_rule_mask_sharing_respects_json_length_entry_and_reuses_inner_rule(
+    enable_dynamic_compilation: bool,
+):
+    tokenizer_info = xgr.TokenizerInfo(['x"aa', 'x""', '"', "a", "aa"], stop_token_ids=[])
+    compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=True,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    )
+
+    unbounded = compiler.compile_grammar(
+        'root ::= "x" target\n' 'target ::= "\\"" body "\\""\n' "body ::= [a]*"
+    )
+    matcher = xgr.GrammarMatcher(unbounded, terminate_without_stop_token=True)
+    assert matcher.accept_string('x"')
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+
+    bounded = compiler.compile_grammar(
+        'root ::= "x" target\n'
+        'target[json_string_min_length=0, json_string_max_length=1] ::= "\\"" body "\\""\n'
+        "body ::= [a]*"
+    )
+    matcher = xgr.GrammarMatcher(bounded, terminate_without_stop_token=True)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[0])  # This token enters the constrained rule and exceeds maxLength.
+    assert bool(allowed[1])
+
+    assert matcher.accept_string('x"')
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert bool(allowed[3])
+    assert not bool(allowed[4])  # A reused body mask is still filtered by the active deadline.
+
+
 @pytest.mark.parametrize(
     "repeat_range,value",
     [

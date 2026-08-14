@@ -43,16 +43,18 @@ namespace xgrammar {
 std::vector<uint8_t> GetRuleLevelCacheableRules(const Grammar& grammar) {
   const int32_t num_rules = grammar->NumRules();
   std::vector<uint8_t> context_dependent(num_rules, 0);
+  std::vector<uint8_t> can_enter_json_string_length_rule(num_rules, 0);
   std::vector<std::vector<int32_t>> referenced_rules(num_rules);
+  std::vector<std::vector<int32_t>> referencing_rules(num_rules);
   std::vector<uint32_t> state_epochs(grammar->complete_fsm.NumStates(), 0);
   uint32_t state_epoch = 0;
   std::vector<int32_t> reachable_states;
   for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
     const auto& rule = grammar->GetRule(rule_id);
-    context_dependent[rule_id] = rule.max_tokens >= 0 || rule.max_chars >= 0 ||
-                                 rule.json_string_min_length >= 0 || rule.is_lazy ||
+    context_dependent[rule_id] = rule.max_tokens >= 0 || rule.max_chars >= 0 || rule.is_lazy ||
                                  rule.temperature.has_value() ||
                                  grammar->GetSuffixStopInfo(rule_id) != nullptr;
+    can_enter_json_string_length_rule[rule_id] = rule.json_string_min_length >= 0;
     const auto& fsm = grammar->per_rule_fsms[rule_id]->GetFsm();
     ++state_epoch;
     if (state_epoch == 0) {
@@ -67,10 +69,12 @@ std::vector<uint8_t> GetRuleLevelCacheableRules(const Grammar& grammar) {
       for (const auto& edge : fsm.GetFsm().GetEdges(state_id)) {
         if (edge.IsRuleRef()) {
           referenced_rules[rule_id].push_back(edge.GetRefRuleId());
+          referencing_rules[edge.GetRefRuleId()].push_back(rule_id);
         } else if (edge.IsRepeatRef()) {
-          referenced_rules[rule_id].push_back(
-              grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId()
-          );
+          const int32_t referenced_rule_id =
+              grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId();
+          referenced_rules[rule_id].push_back(referenced_rule_id);
+          referencing_rules[referenced_rule_id].push_back(rule_id);
         }
         if (state_epochs[edge.target] != state_epoch) {
           state_epochs[edge.target] = state_epoch;
@@ -97,8 +101,27 @@ std::vector<uint8_t> GetRuleLevelCacheableRules(const Grammar& grammar) {
       }
     }
   }
-  for (uint8_t& value : context_dependent) {
-    value = !value;
+  // A mask built inside a JSON-length rule is length-independent because the cache parser disables
+  // enforcement and the runtime filters its accepted tokens against the current deadline. A rule
+  // that can *enter* such a rule is different: a token may cross the boundary while its current
+  // state has no deadline, so that caller cannot reuse a mask whose grammar lacked the annotation.
+  worklist.clear();
+  for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
+    if (can_enter_json_string_length_rule[rule_id]) {
+      worklist.push_back(rule_id);
+    }
+  }
+  for (size_t work_index = 0; work_index < worklist.size(); ++work_index) {
+    for (int32_t referencing_rule_id : referencing_rules[worklist[work_index]]) {
+      if (!can_enter_json_string_length_rule[referencing_rule_id]) {
+        can_enter_json_string_length_rule[referencing_rule_id] = 1;
+        worklist.push_back(referencing_rule_id);
+      }
+    }
+  }
+  for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
+    context_dependent[rule_id] =
+        !(context_dependent[rule_id] || can_enter_json_string_length_rule[rule_id]);
   }
   return context_dependent;
 }
@@ -826,7 +849,10 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 
   XGRAMMAR_DCHECK(init_rule_id_ != -1 && grammar_->per_rule_fsms[init_rule_id_].has_value());
   auto [speculative_calculation, speculative_mask] = GetSpeculativeCalculation();
-  if (has_char_budget_rules_ || has_json_string_length_rules_) {
+  // A speculative byte stays on the current rule's self-loop. JSON length enforcement can
+  // therefore filter that definitely accepted token at runtime, while tokens that leave the loop
+  // still take the ordinary path below and become uncertain if they enter a length rule.
+  if (has_char_budget_rules_) {
     speculative_calculation = false;
   }
 
@@ -1228,8 +1254,7 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   tmp_can_reach_end_prefix_or_stack_.push_back(false);
 
   // Try to get the crossing cache.
-  bool rule_level_cache_is_available = !has_char_budget_rules_ && !has_json_string_length_rules_ &&
-                                       rule_level_cache_.has_value() &&
+  bool rule_level_cache_is_available = !has_char_budget_rules_ && rule_level_cache_.has_value() &&
                                        grammar_->per_rule_fsm_hashes[init_rule_id_].has_value();
   std::optional<uint64_t> fsm_hash = std::nullopt;
   int32_t new_state_id = -1;
@@ -1635,6 +1660,8 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
   // Rule hashes are needed by both eager and on-demand cross-grammar mask reuse.
   if (rule_level_cache_.has_value()) {
     GrammarFSMHasher().Apply(&compiled_grammar_impl->grammar);
+    compiled_grammar_impl->rule_level_cacheable =
+        GetRuleLevelCacheableRules(compiled_grammar_impl->grammar);
   }
   if (enable_dynamic_compilation_) {
     compiled_grammar_impl->character_class_token_summary_cache =
@@ -1642,8 +1669,6 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
     if (rule_level_cache_.has_value()) {
       compiled_grammar_impl->rule_level_cache =
           std::make_shared<RuleLevelCache>(rule_level_cache_.value());
-      compiled_grammar_impl->rule_level_cacheable =
-          GetRuleLevelCacheableRules(compiled_grammar_impl->grammar);
     }
     compiled_grammar_impl->tag_dispatch_rule_id_to_second_slicing_bitset =
         std::move(tag_dispatch_rule_id_to_second_slicing_bitset);
@@ -1667,12 +1692,20 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
   }
 
   auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
+    std::optional<RuleLevelCache> retained_rule_level_cache;
+    const bool is_context_independent =
+        state.rule_id >= 0 &&
+        state.rule_id < static_cast<int32_t>(compiled_grammar_impl->rule_level_cacheable.size()) &&
+        compiled_grammar_impl->rule_level_cacheable[state.rule_id];
+    if (rule_level_cache_.has_value() && is_context_independent) {
+      retained_rule_level_cache = *rule_level_cache_;
+    }
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(
         compiled_grammar_impl->grammar,
         state,
         tag_dispatch_rule_id_to_second_slicing_bitset,
         tokenizer_info_,
-        rule_level_cache_,
+        retained_rule_level_cache,
         character_class_token_summary_cache_,
         false,
         compiled_grammar_impl->earley_parser_grammar_features

@@ -325,16 +325,23 @@ TokenizerInfo::Impl::Impl(
 }
 
 void TokenizerInfo::Impl::BuildTokenCharData() {
+  constexpr int32_t kMaxPrecomputedJSONStringPrefixLimit = 32;
   token_char_counts_.assign(sorted_decoded_vocab_.size(), 0);
   json_string_plain_quote_token_indices_by_prefix_count_.clear();
   json_string_escaped_quote_token_indices_.clear();
+  json_string_escaped_token_indices_.clear();
+  json_string_plain_prefix_within_limit_bitsets_.clear();
   json_string_quote_token_flags_.assign(sorted_decoded_vocab_.size(), false);
   json_string_plain_prefix_char_counts_.assign(sorted_decoded_vocab_.size(), 0);
   token_indices_by_descending_char_count_.resize(sorted_decoded_vocab_.size());
   ascii_string_safe_indices_.clear();
   json_string_plain_quote_token_indices_by_prefix_count_.reserve(sorted_decoded_vocab_.size() / 16);
   json_string_escaped_quote_token_indices_.reserve(sorted_decoded_vocab_.size() / 128);
+  json_string_escaped_token_indices_.reserve(sorted_decoded_vocab_.size() / 32);
   ascii_string_safe_indices_.reserve(sorted_decoded_vocab_.size() / 2);
+  std::vector<std::vector<int32_t>> plain_token_ids_by_prefix_count(
+      kMaxPrecomputedJSONStringPrefixLimit + 1
+  );
   int32_t max_chars = 0;
   for (int32_t index = 0; index < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++index) {
     int32_t count = 0;
@@ -352,6 +359,7 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
     json_string_quote_token_flags_[index] = contains_quote;
     if (contains_escape) {
       json_string_plain_prefix_char_counts_[index] = -1;
+      json_string_escaped_token_indices_.push_back(index);
       if (contains_quote) {
         json_string_escaped_quote_token_indices_.push_back(index);
       }
@@ -364,6 +372,9 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
         prefix_count += (byte & 0xC0) != 0x80;
       }
       json_string_plain_prefix_char_counts_[index] = prefix_count;
+      if (prefix_count <= kMaxPrecomputedJSONStringPrefixLimit) {
+        plain_token_ids_by_prefix_count[prefix_count].push_back(sorted_decoded_vocab_[index].first);
+      }
       if (contains_quote) {
         json_string_plain_quote_token_indices_by_prefix_count_.push_back(index);
       }
@@ -385,6 +396,14 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
                json_string_plain_prefix_char_counts_[rhs];
       }
   );
+  DynamicBitset within_limit(vocab_size_);
+  json_string_plain_prefix_within_limit_bitsets_.reserve(kMaxPrecomputedJSONStringPrefixLimit + 1);
+  for (int32_t limit = 0; limit <= kMaxPrecomputedJSONStringPrefixLimit; ++limit) {
+    for (int32_t token_id : plain_token_ids_by_prefix_count[limit]) {
+      within_limit.Set(token_id);
+    }
+    json_string_plain_prefix_within_limit_bitsets_.push_back(within_limit);
+  }
   max_token_chars_ = max_chars;
 }
 

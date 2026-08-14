@@ -780,6 +780,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::vector<int32_t> tmp_rejected_indices_delta_;
   std::vector<int32_t> tmp_json_length_candidate_indices_;
   std::vector<int32_t> tmp_json_length_invalid_indices_;
+  std::vector<int32_t> tmp_json_length_valid_escaped_indices_;
   std::vector<ParserState> tmp_latest_states_;
   std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> tmp_latest_states_with_masks_;
   bool repeat_mask_cache_enabled_{false};
@@ -2577,6 +2578,29 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
         [&](int32_t token_index) { return token_char_counts[token_index] > remaining; }
     );
   }
+  bool used_precomputed_maximum_filter = false;
+  if (state.json_string_length_deadline >= 0 && IsJSONStringCounterInside() &&
+      adaptive_token_mask.store_type != StoreType::kRejected &&
+      adaptive_token_mask.GetAcceptedCount() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD) {
+    if (const DynamicBitset* plain_within_limit =
+            tokenizer_impl->GetJSONStringPlainPrefixWithinLimitBitset(remaining)) {
+      tmp_json_length_valid_escaped_indices_.clear();
+      for (int32_t token_index : tokenizer_impl->GetJSONStringEscapedTokenIndices()) {
+        const int32_t token_id = sorted_decoded_vocab[token_index].first;
+        if (tmp_state_accepted_bitset_[token_id] &&
+            IsCachedAcceptedTokenWithinJSONStringLength(
+                state, sorted_decoded_vocab[token_index].second
+            )) {
+          tmp_json_length_valid_escaped_indices_.push_back(token_index);
+        }
+      }
+      tmp_state_accepted_bitset_ &= *plain_within_limit;
+      for (int32_t token_index : tmp_json_length_valid_escaped_indices_) {
+        tmp_state_accepted_bitset_.Set(sorted_decoded_vocab[token_index].first);
+      }
+      used_precomputed_maximum_filter = true;
+    }
+  }
   auto early_plain_quote_end = plain_quote_indices.begin();
   if (minimum_active) {
     if (IsJSONStringCounterInside()) {
@@ -2598,8 +2622,12 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
       (minimum_active ? escaped_quote_indices.size() +
                             static_cast<size_t>(early_plain_quote_end - plain_quote_indices.begin())
                       : 0) +
-      static_cast<size_t>(too_long_end - descending_char_count_indices.begin());
-  const int32_t base_accepted_count = adaptive_token_mask.GetAcceptedCount();
+      (used_precomputed_maximum_filter
+           ? 0
+           : static_cast<size_t>(too_long_end - descending_char_count_indices.begin()));
+  const int32_t base_accepted_count = used_precomputed_maximum_filter
+                                          ? tmp_state_accepted_bitset_.Count()
+                                          : adaptive_token_mask.GetAcceptedCount();
   const bool iterate_accepted =
       static_cast<size_t>(base_accepted_count) <= candidate_upper_bound &&
       (additional_accepted_tokens == nullptr ||
@@ -2647,11 +2675,13 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
           escaped_quote_indices.end()
       );
     }
-    tmp_json_length_candidate_indices_.insert(
-        tmp_json_length_candidate_indices_.end(),
-        descending_char_count_indices.begin(),
-        too_long_end
-    );
+    if (!used_precomputed_maximum_filter) {
+      tmp_json_length_candidate_indices_.insert(
+          tmp_json_length_candidate_indices_.end(),
+          descending_char_count_indices.begin(),
+          too_long_end
+      );
+    }
     std::sort(tmp_json_length_candidate_indices_.begin(), tmp_json_length_candidate_indices_.end());
     tmp_json_length_candidate_indices_.erase(
         std::unique(

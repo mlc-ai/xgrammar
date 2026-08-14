@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "support/dynamic_bitset.h"
 #include "support/reflection.h"
 #include "xgrammar/tokenizer_info.h"
 
@@ -46,6 +47,16 @@ class TokenizerInfo::Impl {
   }
   const std::vector<int32_t>& GetJSONStringEscapedQuoteTokenIndices() const {
     return json_string_escaped_quote_token_indices_;
+  }
+  const std::vector<int32_t>& GetJSONStringEscapedTokenIndices() const {
+    return json_string_escaped_token_indices_;
+  }
+  const DynamicBitset* GetJSONStringPlainPrefixWithinLimitBitset(int32_t limit) const {
+    return limit >= 0 &&
+                   limit <
+                       static_cast<int32_t>(json_string_plain_prefix_within_limit_bitsets_.size())
+               ? &json_string_plain_prefix_within_limit_bitsets_[limit]
+               : nullptr;
   }
   const std::vector<uint8_t>& GetJSONStringQuoteTokenFlags() const {
     return json_string_quote_token_flags_;
@@ -107,6 +118,10 @@ class TokenizerInfo::Impl {
   std::vector<int32_t> json_string_plain_quote_token_indices_by_prefix_count_;
   /*! \brief Quote-token indices containing a backslash and requiring conservative scanning. */
   std::vector<int32_t> json_string_escaped_quote_token_indices_;
+  /*! \brief All token indices containing a backslash and requiring decoded-length scanning. */
+  std::vector<int32_t> json_string_escaped_token_indices_;
+  /*! \brief Plain-token ID masks whose pre-quote decoded length is at most a small limit. */
+  std::vector<DynamicBitset> json_string_plain_prefix_within_limit_bitsets_;
   /*! \brief Whether each sorted-vocabulary token contains a JSON quote byte. */
   std::vector<uint8_t> json_string_quote_token_flags_;
   /*! \brief Character count before the first quote, or -1 when an escape requires scanning. */
