@@ -645,8 +645,12 @@ class GrammarMatcher::Impl : public EarleyParser {
       const AdaptiveTokenMask& adaptive_token_mask, int32_t remaining_chars
   );
 
-  /*! \brief Collect cached grammar-accepted tokens rejected by the active JSON string length. */
-  void CollectJSONStringLengthInvalidTokenIndices(const ParserState& state);
+  /*! \brief Build the cached accepted-token set filtered by the active JSON string length. */
+  void BuildJSONStringLengthFilteredAcceptedTokens(
+      const ParserState& state,
+      const AdaptiveTokenMask& adaptive_token_mask,
+      const DynamicBitset* additional_accepted_tokens
+  );
 
   bool AdvanceWithCharacterBudget(uint8_t byte, bool debug_print = false);
 
@@ -2474,46 +2478,126 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
   temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
 }
 
-void GrammarMatcher::Impl::CollectJSONStringLengthInvalidTokenIndices(const ParserState& state) {
+void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
+    const ParserState& state,
+    const AdaptiveTokenMask& adaptive_token_mask,
+    const DynamicBitset* additional_accepted_tokens
+) {
   tmp_json_length_candidate_indices_.clear();
   tmp_json_length_invalid_indices_.clear();
 
   const auto* tokenizer_impl = tokenizer_info_.ImplPtr();
-  const int32_t current_count = GetCurrentJSONStringCharIndex();
-  if (state.json_string_min_length_deadline >= 0 &&
-      current_count < state.json_string_min_length_deadline) {
-    const auto& quote_indices = tokenizer_impl->GetJSONStringQuoteTokenIndices();
-    tmp_json_length_candidate_indices_.insert(
-        tmp_json_length_candidate_indices_.end(), quote_indices.begin(), quote_indices.end()
-    );
-  }
-  if (state.json_string_length_deadline >= 0) {
-    const int64_t remaining =
-        static_cast<int64_t>(state.json_string_length_deadline) - current_count;
-    const auto& token_char_counts = tokenizer_impl->GetTokenCharCounts();
-    for (int32_t token_index : tokenizer_impl->GetTokenIndicesByDescendingCharCount()) {
-      if (token_char_counts[token_index] <= remaining) {
-        break;
+  const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  const auto& token_id_to_sorted_index = tokenizer_impl->GetTokenIdToSortedVocabIndex();
+  tmp_state_accepted_bitset_.Reset();
+  switch (adaptive_token_mask.store_type) {
+    case StoreType::kAccepted:
+      for (int32_t token_index : adaptive_token_mask.accepted_indices) {
+        tmp_state_accepted_bitset_.Set(sorted_decoded_vocab[token_index].first);
       }
-      tmp_json_length_candidate_indices_.push_back(token_index);
-    }
+      break;
+    case StoreType::kAcceptedBitset:
+      tmp_state_accepted_bitset_ = adaptive_token_mask.accepted_bitset;
+      break;
+    case StoreType::kRejected:
+      tmp_state_accepted_bitset_.Set();
+      for (int32_t token_index : adaptive_token_mask.rejected_indices) {
+        tmp_state_accepted_bitset_.Reset(sorted_decoded_vocab[token_index].first);
+      }
+      for (int32_t token_index : adaptive_token_mask.uncertain_indices) {
+        tmp_state_accepted_bitset_.Reset(sorted_decoded_vocab[token_index].first);
+      }
+      break;
+  }
+  if (additional_accepted_tokens != nullptr) {
+    tmp_state_accepted_bitset_ |= *additional_accepted_tokens;
   }
 
-  std::sort(tmp_json_length_candidate_indices_.begin(), tmp_json_length_candidate_indices_.end());
-  tmp_json_length_candidate_indices_.erase(
-      std::unique(
-          tmp_json_length_candidate_indices_.begin(), tmp_json_length_candidate_indices_.end()
-      ),
-      tmp_json_length_candidate_indices_.end()
-  );
-  const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
-  for (int32_t token_index : tmp_json_length_candidate_indices_) {
-    if (!IsCachedAcceptedTokenWithinJSONStringLength(
+  const int32_t current_count = GetCurrentJSONStringCharIndex();
+  const bool minimum_active = state.json_string_min_length_deadline >= 0 &&
+                              current_count < state.json_string_min_length_deadline;
+  const auto& quote_indices = tokenizer_impl->GetJSONStringQuoteTokenIndices();
+  const auto& quote_flags = tokenizer_impl->GetJSONStringQuoteTokenFlags();
+  const auto& special_flags = tokenizer_impl->GetJSONStringSpecialTokenFlags();
+  const auto& token_char_counts = tokenizer_impl->GetTokenCharCounts();
+  const auto& descending_char_count_indices =
+      tokenizer_impl->GetTokenIndicesByDescendingCharCount();
+  auto too_long_end = descending_char_count_indices.begin();
+  int64_t remaining = std::numeric_limits<int64_t>::max();
+  if (state.json_string_length_deadline >= 0) {
+    remaining = static_cast<int64_t>(state.json_string_length_deadline) - current_count;
+    too_long_end = std::partition_point(
+        descending_char_count_indices.begin(),
+        descending_char_count_indices.end(),
+        [&](int32_t token_index) { return token_char_counts[token_index] > remaining; }
+    );
+  }
+
+  const size_t candidate_upper_bound =
+      (minimum_active ? quote_indices.size() : 0) +
+      static_cast<size_t>(too_long_end - descending_char_count_indices.begin());
+  if (static_cast<size_t>(tmp_state_accepted_bitset_.Count()) <= candidate_upper_bound) {
+    for (int32_t token_id = tmp_state_accepted_bitset_.FindFirstOne(); token_id >= 0;
+         token_id = tmp_state_accepted_bitset_.FindNextOne(token_id)) {
+      int32_t token_index = token_id_to_sorted_index[token_id];
+      if (token_index < 0) {
+        continue;
+      }
+      const auto& token = sorted_decoded_vocab[token_index].second;
+      const bool may_close_too_early = minimum_active && quote_flags[token_index];
+      const bool may_exceed_maximum = token_char_counts[token_index] > remaining;
+      bool invalid =
+          may_exceed_maximum && IsJSONStringCounterInside() && !special_flags[token_index];
+      if (!invalid && (may_close_too_early || may_exceed_maximum)) {
+        invalid = !IsCachedAcceptedTokenWithinJSONStringLength(state, token);
+      }
+      if (invalid) {
+        tmp_state_accepted_bitset_.Reset(token_id);
+        if (adaptive_token_mask.store_type == StoreType::kRejected) {
+          tmp_json_length_invalid_indices_.push_back(token_index);
+        }
+      }
+    }
+  } else {
+    if (minimum_active) {
+      tmp_json_length_candidate_indices_.insert(
+          tmp_json_length_candidate_indices_.end(), quote_indices.begin(), quote_indices.end()
+      );
+    }
+    tmp_json_length_candidate_indices_.insert(
+        tmp_json_length_candidate_indices_.end(),
+        descending_char_count_indices.begin(),
+        too_long_end
+    );
+    std::sort(tmp_json_length_candidate_indices_.begin(), tmp_json_length_candidate_indices_.end());
+    tmp_json_length_candidate_indices_.erase(
+        std::unique(
+            tmp_json_length_candidate_indices_.begin(), tmp_json_length_candidate_indices_.end()
+        ),
+        tmp_json_length_candidate_indices_.end()
+    );
+    for (int32_t token_index : tmp_json_length_candidate_indices_) {
+      const int32_t token_id = sorted_decoded_vocab[token_index].first;
+      if (!tmp_state_accepted_bitset_[token_id]) {
+        continue;
+      }
+      const bool may_exceed_maximum = token_char_counts[token_index] > remaining;
+      bool invalid =
+          may_exceed_maximum && IsJSONStringCounterInside() && !special_flags[token_index];
+      if (!invalid) {
+        invalid = !IsCachedAcceptedTokenWithinJSONStringLength(
             state, sorted_decoded_vocab[token_index].second
-        )) {
-      tmp_json_length_invalid_indices_.push_back(token_index);
+        );
+      }
+      if (invalid) {
+        tmp_state_accepted_bitset_.Reset(token_id);
+        if (adaptive_token_mask.store_type == StoreType::kRejected) {
+          tmp_json_length_invalid_indices_.push_back(token_index);
+        }
+      }
     }
   }
+  std::sort(tmp_json_length_invalid_indices_.begin(), tmp_json_length_invalid_indices_.end());
 }
 
 void GrammarMatcher::Impl::FillBitmaskForStates(
@@ -2616,6 +2700,13 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
   for (const auto& [state, adaptive_token_mask_ptr] : latest_states_with_masks) {
     const auto& adaptive_token_mask = *adaptive_token_mask_ptr;
+    const auto repeat = GetCharacterClassRepeat(state);
+    const CharacterClassRepeatTokenMask* repeat_token_mask =
+        repeat.has_value() ? &compiled_grammar_->GetCharacterClassRepeatTokenMask(
+                                 repeat->character_class_expr_id,
+                                 repeat->has_stable_upper ? -1 : repeat->max_characters
+                             )
+                           : nullptr;
     const bool json_string_length_active = IsJSONStringLengthConstraintActive(state);
 
     const std::vector<int32_t>* indices_to_check = &adaptive_token_mask.uncertain_indices;
@@ -2631,44 +2722,14 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
     tmp_rejected_indices_delta_.clear();
     if (json_string_length_active) {
-      CollectJSONStringLengthInvalidTokenIndices(state);
-      auto is_invalid = [&](int32_t token_index) {
-        return std::binary_search(
-            tmp_json_length_invalid_indices_.begin(),
-            tmp_json_length_invalid_indices_.end(),
-            token_index
-        );
-      };
-      switch (adaptive_token_mask.store_type) {
-        case StoreType::kAccepted:
-          for (int32_t token_index : adaptive_token_mask.accepted_indices) {
-            if (!is_invalid(token_index)) {
-              tmp_accepted_bitset_.Set(sorted_decoded_vocab[token_index].first, true);
-            }
-          }
-          break;
-        case StoreType::kAcceptedBitset:
-          tmp_state_accepted_bitset_ = adaptive_token_mask.accepted_bitset;
-          for (int32_t token_index : tmp_json_length_invalid_indices_) {
-            tmp_state_accepted_bitset_.Reset(sorted_decoded_vocab[token_index].first);
-          }
-          tmp_accepted_bitset_ |= tmp_state_accepted_bitset_;
-          break;
-        case StoreType::kRejected:
-          tmp_rejected_indices_delta_ = tmp_json_length_invalid_indices_;
-          break;
-      }
-      if (const auto repeat = GetCharacterClassRepeat(state); repeat.has_value()) {
-        tmp_state_accepted_bitset_ = compiled_grammar_
-                                         ->GetCharacterClassRepeatTokenMask(
-                                             repeat->character_class_expr_id,
-                                             repeat->has_stable_upper ? -1 : repeat->max_characters
-                                         )
-                                         .accepted_prefix_tokens;
-        for (int32_t token_index : tmp_json_length_invalid_indices_) {
-          tmp_state_accepted_bitset_.Reset(sorted_decoded_vocab[token_index].first);
-        }
-        tmp_accepted_bitset_ |= tmp_state_accepted_bitset_;
+      BuildJSONStringLengthFilteredAcceptedTokens(
+          state,
+          adaptive_token_mask,
+          repeat_token_mask == nullptr ? nullptr : &repeat_token_mask->accepted_prefix_tokens
+      );
+      tmp_accepted_bitset_ |= tmp_state_accepted_bitset_;
+      if (adaptive_token_mask.store_type == StoreType::kRejected) {
+        tmp_rejected_indices_delta_ = tmp_json_length_invalid_indices_;
       }
     }
 

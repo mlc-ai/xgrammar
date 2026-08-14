@@ -44,6 +44,12 @@ class TokenizerInfo::Impl {
   const std::vector<int32_t>& GetJSONStringQuoteTokenIndices() const {
     return json_string_quote_token_indices_;
   }
+  const std::vector<uint8_t>& GetJSONStringQuoteTokenFlags() const {
+    return json_string_quote_token_flags_;
+  }
+  const std::vector<uint8_t>& GetJSONStringSpecialTokenFlags() const {
+    return json_string_special_token_flags_;
+  }
   const std::vector<int32_t>& GetTokenIndicesByDescendingCharCount() const {
     return token_indices_by_descending_char_count_;
   }
@@ -96,6 +102,10 @@ class TokenizerInfo::Impl {
   std::vector<int32_t> token_char_counts_;
   /*! \brief Sorted-vocabulary indices containing a JSON quote byte. */
   std::vector<int32_t> json_string_quote_token_indices_;
+  /*! \brief Whether each sorted-vocabulary token contains a JSON quote byte. */
+  std::vector<uint8_t> json_string_quote_token_flags_;
+  /*! \brief Whether each sorted-vocabulary token contains a JSON quote or escape byte. */
+  std::vector<uint8_t> json_string_special_token_flags_;
   /*! \brief Sorted-vocabulary indices ordered by descending Unicode codepoint count. */
   std::vector<int32_t> token_indices_by_descending_char_count_;
   /*! \brief Sorted-vocabulary indices safe inside an unescaped JSON string. */

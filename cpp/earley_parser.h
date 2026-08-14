@@ -1046,6 +1046,12 @@ class EarleyParser {
                                                    : json_string_char_count_history_.back().count;
   }
 
+  bool IsJSONStringCounterInside() const {
+    return !json_string_char_count_history_.empty() &&
+           json_string_char_count_history_.back().phase ==
+               JSONStringCharCounterState::Phase::kInside;
+  }
+
   void PushJSONStringCharCountRow(const JSONStringCharCounterState& state) {
     if (has_json_string_length_rules_) {
       json_string_char_count_history_.push_back(state);
