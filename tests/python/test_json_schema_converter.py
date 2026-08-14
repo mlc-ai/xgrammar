@@ -3410,5 +3410,20 @@ def test_compile_json_schema_any_order(cache_enabled: bool):
     assert ordered != any_order
 
 
+def test_property_names_preserves_additional_properties_value_schema():
+    # Regression for issue #826: propertyNames constrains only the key; a
+    # typed additionalProperties schema must still constrain the value.
+    value = {
+        "type": "object",
+        "properties": {"n": {"type": "number"}},
+        "required": ["n"],
+        "additionalProperties": False,
+    }
+    schema = {"type": "object", "propertyNames": {"type": "string"}, "additionalProperties": value}
+    check_schema_with_instance(schema, '{"a":"plain"}', is_accepted=False)
+    check_schema_with_instance(schema, '{"a":{"n":1}}', is_accepted=True)
+    check_schema_with_instance(schema, '{"a":{"n":"x"}}', is_accepted=False)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
