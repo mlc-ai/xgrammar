@@ -125,8 +125,10 @@ hexadecimal escape denotes the corresponding Unicode codepoint, so `"\x41"` matc
 `"\xFF"` matches `ÿ`.
 
 A trailing `i` makes the literal case-insensitive: `"yes"i` matches `yes`, `YES`, `Yes`, and so
-on. Case-insensitive literals currently support ASCII characters only; a case-insensitive literal
-containing non-ASCII characters is rejected.
+on. Folding uses Unicode simple case-fold equivalence classes, so `"Σk"i` also matches `σK`,
+`ςk`, and `ΣK`. Simple folding maps one codepoint to one codepoint; it does not expand `ß` into
+the two-character string `ss`. When `%grammar_options {"allow_invalid_utf8": true}` enables byte
+mode, case-insensitive literals are restricted to ASCII.
 
 ### Character Ranges
 
@@ -144,14 +146,22 @@ usual escapes. A `/` inside the pattern is written `\/`.
 `.` matches one Unicode character. By default it does not match newline. Regular expressions
 support the following trailing flags, in any order:
 
-- `i`: make the match ASCII case-insensitive. ASCII letters in literals and character classes
-  match both cases; non-ASCII characters match literally.
+- `i`: use Unicode simple case folding for literals, escapes, and character classes.
 - `s`: make `.` match newline as well.
+- `m`: select multiline mode. It has no effect in a pattern without line anchors; patterns that
+  combine `m` with `^` or `$` are rejected because llguidance 1.8.0 rejects them too.
+- `x`: ignore unescaped whitespace and `#` comments outside character classes.
 - `u`: explicitly select Unicode semantics. This is a no-op because XGrammar regular expressions
   already use Unicode codepoints.
 
-The `i` flag is supported in ordinary rules, terminals, and `lazy` rules, but not on a regular
-expression used with a `suffix` or `stop` attribute. The `l`, `m`, and `x` flags are not supported.
+The same flags may be enabled within a pattern, either for the rest of the pattern (`(?i)`,
+`(?s)`, `(?x)`) or for one group (`(?i:...)`, `(?s:...)`, `(?x:...)`). A scoped flag can be
+disabled with forms such as `(?-i:...)`, `(?-s:...)`, and `(?-x:...)`. Flag state is preserved
+when a large bounded repetition is lowered to a helper rule. The locale flag `l` is not supported.
+
+In Unicode mode, `\d` uses the Unicode `Decimal_Number` category, `\w` uses the Unicode Perl-word
+class, and `\s` uses the Unicode `White_Space` property. Their uppercase forms are complements
+within the valid Unicode scalar range. Byte mode deliberately keeps the ASCII definitions.
 
 Word boundaries (`\b`, `\B`), Unicode property escapes (`\p{…}`), backreferences, and lookaround
 assertions are not supported. Large bounded repetitions such as `{0,10000}` are compiled through
@@ -160,7 +170,9 @@ the grammar-level repetition mechanism and do not expand the automaton.
 ```text
 start: /a.b/      // accepts "acb", "a😀b"; rejects "a\nb"
 line: /a.b/s      // also accepts "a\nb"
-word: /Σk+/i      // accepts "Σk", "ΣKK"; only ASCII letters fold, "Σ" matches literally
+word: /Σk+/i      // accepts "Σk", "σKK", and "ςK"
+compact: /(?x: a b \# c # comment
+                 d )/      // accepts "ab#cd"
 ```
 
 ### Terminal Intersections
@@ -842,10 +854,16 @@ field[capture="inner", suffix=/!!+/, stop_capture="marker"]: /[a-z]*/
 - `suffix` and `stop` cannot be specified on the same rule, and `stop_capture` requires one of
   them.
 - String flags and regex flags follow the same support as ordinary Lark terminals. In particular,
-  ASCII case-insensitive string markers such as `suffix="END"i` and dot-all regex markers such as
-  `stop=/BEGIN.*END/s` are supported.
-- An empty string literal marker is not accepted; in particular, the llguidance EOS shorthand
-  `stop=""` is not supported. A regex or named terminal marker may still be nullable.
+  Unicode case-insensitive string markers such as `suffix="ΣK"i`, scoped inline flags, and dot-all
+  regex markers such as `stop=/BEGIN.*END/s` are supported.
+- `stop=""` is the llguidance end-of-sequence (EOS) shorthand. It adds an optional grammar-level
+  EOS boundary after the body: the rule can end normally, or an active matcher stop token can end
+  it without contributing bytes and expose a following enclosing rule. Unlike a non-empty marker,
+  it does not use committed-shortest matching. `override_stop_tokens` changes which tokens can
+  take this boundary, while `terminate_without_stop_token=True` disables only the matcher's usual
+  root-stop requirement. If `stop_capture` is present, an EOS boundary records an empty byte span.
+  Printed EBNF represents this boundary with `EOS()`.
+- A regex or named terminal marker may be nullable. Empty `suffix` markers remain invalid.
 - Adding an explicit `lazy` attribute is allowed but redundant.
 - `max_tokens` and `max_chars` may annotate the same rule as `lazy`, `suffix`, or `stop`. The first
   boundary wins: a marker that completes first keeps the normal committed-shortest and capture

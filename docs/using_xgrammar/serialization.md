@@ -17,6 +17,10 @@ the deserialization will fail and raise a [`xgr.exception.DeserializeVersionErro
 > After upgrading XGrammar, the serialization format may change. If you have cached serialization
 > results to disk, please clear the cache after the upgrade to avoid potential version conflicts.
 
+The serialization layout in this source version is `v19`. It includes explicit regular-expression
+byte-mode flags and grammar-level `EOS()` expressions (used by Lark `stop=""`). Layouts through
+`v18` are rejected rather than interpreted with missing fields.
+
 Three error types are raised when deserialization fails:
 
 - [`xgr.exception.InvalidJSONError`](xgrammar.exception.InvalidJSONError): When the JSON string is invalid.

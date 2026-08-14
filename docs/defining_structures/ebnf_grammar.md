@@ -453,8 +453,8 @@ This grammar accepts `ID-12345`.
 - `byte_mode` is an optional named argument. It must be a boolean and defaults to `false`.
   It cannot be enabled together with `json_string`.
 - `flags` is an optional named argument. It must be a string of regular-expression flags, with
-  the same meaning as the flags of a Lark regex literal: `i` makes the match ASCII
-  case-insensitive, `s` makes `.` match newlines, and `u` is accepted as a no-op (patterns
+  the same meaning as the flags of a Lark regex literal: `i` enables Unicode simple case folding,
+  `s` makes `.` match newlines, and `u` is accepted as a no-op (patterns
   use Unicode codepoint semantics unless `byte_mode` is enabled). Other flags raise an error. When
   `flags` is given,
   `.` follows the standard semantics and does not match `\n` unless `s` is present; without the
@@ -470,8 +470,8 @@ surrounding EBNF string literal, so the regular expression `\d+\.\d+` is written
 root ::= Regex("hello, world.", flags="is")
 ```
 
-This grammar matches `hello, world` in any ASCII case, followed by any character including a
-newline.
+This grammar matches `hello, world` under Unicode simple case folding, followed by any character
+including a newline.
 
 When `json_string=true`, the regular expression is intended to match the body of a JSON string.
 Control characters, `"` and `\` are then excluded from every character match, preventing the
@@ -493,6 +493,26 @@ The `i`, `s`, and `u` flags remain accepted in byte mode. ASCII case folding is 
 controls whether dot accepts newline, and `u` is a compatibility no-op. Unicode escapes and
 properties, non-ASCII literals inside character classes, word boundaries, lookarounds, and
 backreferences are rejected in byte mode.
+
+In Unicode mode, `\d`, `\w`, and `\s` use the same Unicode 16.0.0 classes as llguidance's
+`regex-syntax` 0.8.5 dependency; their uppercase forms are Unicode-domain complements. Inline
+`i`, `s`, `m`, `u`, and `x` flags and scoped disabling forms are accepted inside `pattern`.
+Multiline line anchors and Unicode property escapes (`\p{...}` and `\P{...}`) remain unsupported.
+
+### `EOS`
+
+`EOS()` matches an active matcher stop token as a zero-byte grammar event:
+
+```text
+root ::= body ("" | EOS()) "suffix"
+body ::= [a-z]+
+```
+
+It takes no arguments. Unlike ordinary root termination, an `EOS()` inside a grammar can consume
+the stop token, leave the matcher active, and continue into the enclosing expression (for example,
+to require `"suffix"`). It honors `GrammarMatcher.override_stop_tokens` and is preserved by EBNF
+printing and JSON serialization. The Lark frontend emits this macro for `stop=""`; hand-written
+EBNF normally needs it only when reproducing that behavior.
 
 ### `Substring`
 
