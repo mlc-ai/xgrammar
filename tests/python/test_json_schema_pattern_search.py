@@ -243,6 +243,32 @@ def test_pattern_min_length_rechecks_closing_token(enable_dynamic_compilation: b
     assert bool(allowed[1])
 
 
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_pattern_length_filters_large_cached_accept_set(enable_dynamic_compilation: bool):
+    vocabulary = ['"', "b", 'b"', r'\u0062"', r'\u0062x"'] + [f"x{index}" for index in range(1200)]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_json_schema(
+        {"type": "string", "pattern": "a", "minLength": 2, "maxLength": 2}, any_whitespace=False
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_string('"a')
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[0])  # Closing now violates minLength.
+    assert bool(allowed[1])
+    assert bool(allowed[2])
+    assert bool(allowed[3])  # A six-byte JSON escape adds one decoded character.
+    assert not bool(allowed[4])
+    assert not bool(allowed[5])  # Cached grammar acceptance still crosses maxLength.
+
+
 def test_pattern_length_preserves_nested_character_budget():
     grammar = xgr.Grammar.from_ebnf(
         'root[json_string_min_length=1, json_string_max_length=2] ::= "\\"" body "\\""\n'

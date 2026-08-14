@@ -25,7 +25,13 @@ using GrammarExpr = Grammar::Impl::GrammarExpr;
 
 EarleyParser::JSONStringCharCounterState EarleyParser::AdvanceJSONStringCharCounter(uint8_t byte
 ) const {
-  JSONStringCharCounterState result = json_string_char_count_history_.back();
+  return AdvanceJSONStringCharCounter(json_string_char_count_history_.back(), byte);
+}
+
+EarleyParser::JSONStringCharCounterState EarleyParser::AdvanceJSONStringCharCounter(
+    const JSONStringCharCounterState& state, uint8_t byte
+) const {
+  JSONStringCharCounterState result = state;
   using Phase = JSONStringCharCounterState::Phase;
 
   auto start_unicode_escape = [&](bool follows_high_surrogate) {
@@ -91,8 +97,13 @@ EarleyParser::JSONStringCharCounterState EarleyParser::AdvanceJSONStringCharCoun
 }
 
 bool EarleyParser::StartsNewJSONStringCharacter(uint8_t byte) const {
+  return StartsNewJSONStringCharacter(json_string_char_count_history_.back(), byte);
+}
+
+bool EarleyParser::StartsNewJSONStringCharacter(
+    const JSONStringCharCounterState& state, uint8_t byte
+) const {
   using Phase = JSONStringCharCounterState::Phase;
-  const auto& state = json_string_char_count_history_.back();
   if (state.phase == Phase::kInside) {
     return byte != '"' && (byte & 0xC0) != 0x80;
   }
@@ -113,6 +124,31 @@ bool EarleyParser::StartsNewJSONStringCharacter(uint8_t byte) const {
     return value < 0xDC00 || value > 0xDFFF;
   }
   return false;
+}
+
+bool EarleyParser::IsCachedAcceptedTokenWithinJSONStringLength(
+    const ParserState& parser_state, const std::string& token
+) const {
+  const int32_t min_deadline = parser_state.json_string_min_length_deadline;
+  const int32_t max_deadline = parser_state.json_string_length_deadline;
+  if (min_deadline < 0 && max_deadline < 0) {
+    return true;
+  }
+
+  JSONStringCharCounterState counter = json_string_char_count_history_.back();
+  using Phase = JSONStringCharCounterState::Phase;
+  for (uint8_t byte : token) {
+    if (max_deadline >= 0 && StartsNewJSONStringCharacter(counter, byte) &&
+        counter.count >= max_deadline) {
+      return false;
+    }
+    const Phase previous_phase = counter.phase;
+    counter = AdvanceJSONStringCharCounter(counter, byte);
+    if (previous_phase != Phase::kOutside && counter.phase == Phase::kOutside) {
+      return min_deadline < 0 || counter.count >= min_deadline;
+    }
+  }
+  return true;
 }
 
 bool EarleyParser::IsJSONStringLengthCompletionAllowed(const ParserState& state) const {
@@ -316,7 +352,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             parent_state.active_temperature_rule_id,
             parent_state.char_budget_deadline,
-            parent_state.json_string_length_deadline
+            parent_state.json_string_length_deadline,
+            parent_state.json_string_min_length_deadline
         });
         continue;
       }
@@ -342,7 +379,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             parent_state.active_temperature_rule_id,
             parent_state.char_budget_deadline,
-            parent_state.json_string_length_deadline
+            parent_state.json_string_length_deadline,
+            parent_state.json_string_min_length_deadline
         });
       }
       // If the repeat count is less than the max repeat count, we can continue to
@@ -391,7 +429,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             parent_state.active_temperature_rule_id,
             parent_state.char_budget_deadline,
-            parent_state.json_string_length_deadline
+            parent_state.json_string_length_deadline,
+            parent_state.json_string_min_length_deadline
         });
       }
       const bool preserve_empty_capture =
@@ -409,7 +448,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             parent_state.active_temperature_rule_id,
             parent_state.char_budget_deadline,
-            parent_state.json_string_length_deadline
+            parent_state.json_string_length_deadline,
+            parent_state.json_string_min_length_deadline
         });
       }
       continue;
@@ -458,7 +498,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             0,
             state.active_temperature_rule_id,
             state.char_budget_deadline,
-            state.json_string_length_deadline
+            state.json_string_length_deadline,
+            state.json_string_min_length_deadline
         });
       }
       return std::make_pair(true, false);
@@ -484,7 +525,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             0,
             state.active_temperature_rule_id,
             state.char_budget_deadline,
-            state.json_string_length_deadline
+            state.json_string_length_deadline,
+            state.json_string_min_length_deadline
         });
       }
       return std::make_pair(false, false);
@@ -735,7 +777,8 @@ ParserState EarleyParser::RootInitialState() const {
       0,
       ResolveActiveTemperatureRule(root_rule_id, -1),
       CharDeadlineForRule(root_rule_id, -1),
-      JSONStringLengthDeadlineForRule(root_rule_id, -1)
+      JSONStringLengthDeadlineForRule(root_rule_id, -1),
+      JSONStringMinLengthDeadlineForRule(root_rule_id, -1)
   );
 }
 
@@ -878,7 +921,8 @@ void EarleyParser::ExpandNextRuleRefElement(
         0,
         state.active_temperature_rule_id,
         state.char_budget_deadline,
-        state.json_string_length_deadline
+        state.json_string_length_deadline,
+        state.json_string_min_length_deadline
     });
   }
 
@@ -904,7 +948,8 @@ void EarleyParser::ExpandNextRuleRefElement(
       0,
       ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id),
       CharDeadlineForRule(ref_rule_id, state.char_budget_deadline),
-      JSONStringLengthDeadlineForRule(ref_rule_id, state.json_string_length_deadline)
+      JSONStringLengthDeadlineForRule(ref_rule_id, state.json_string_length_deadline),
+      JSONStringMinLengthDeadlineForRule(ref_rule_id, state.json_string_min_length_deadline)
   });
 }
 
@@ -924,7 +969,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           0,
           state.active_temperature_rule_id,
           state.char_budget_deadline,
-          state.json_string_length_deadline
+          state.json_string_length_deadline,
+          state.json_string_min_length_deadline
       });
       continue;
     }
@@ -958,7 +1004,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
             0,
             state.active_temperature_rule_id,
             state.char_budget_deadline,
-            state.json_string_length_deadline
+            state.json_string_length_deadline,
+            state.json_string_min_length_deadline
         });
       }
       if (repeat_info.Upper() != -1 && state.repeat_count >= repeat_info.Upper()) {
@@ -1047,7 +1094,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  0,
                  state.active_temperature_rule_id,
                  state.char_budget_deadline,
-                 state.json_string_length_deadline
+                 state.json_string_length_deadline,
+                 state.json_string_min_length_deadline
              }}
         );
       } else {
@@ -1065,7 +1113,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  0,
                  state.active_temperature_rule_id,
                  state.char_budget_deadline,
-                 state.json_string_length_deadline
+                 state.json_string_length_deadline,
+                 state.json_string_min_length_deadline
              }}
         );
       }
@@ -1084,7 +1133,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           0,
           state.active_temperature_rule_id,
           state.char_budget_deadline,
-          state.json_string_length_deadline
+          state.json_string_length_deadline,
+          state.json_string_min_length_deadline
       });
     }
 
@@ -1110,7 +1160,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
         0,
         ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id),
         CharDeadlineForRule(ref_rule_id, state.char_budget_deadline),
-        JSONStringLengthDeadlineForRule(ref_rule_id, state.json_string_length_deadline)
+        JSONStringLengthDeadlineForRule(ref_rule_id, state.json_string_length_deadline),
+        JSONStringMinLengthDeadlineForRule(ref_rule_id, state.json_string_min_length_deadline)
     });
   }
 }

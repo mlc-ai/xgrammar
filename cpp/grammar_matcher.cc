@@ -478,7 +478,8 @@ class GrammarMatcher::Impl : public EarleyParser {
         active_stop_tokens_are_tokenizer_defaults_(!override_stop_tokens.has_value()),
         terminate_without_stop_token_(terminate_without_stop_token),
         default_temperature_(default_temperature),
-        tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
+        tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()),
+        tmp_state_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
     for (int token_id : stop_token_ids_) {
@@ -644,6 +645,9 @@ class GrammarMatcher::Impl : public EarleyParser {
       const AdaptiveTokenMask& adaptive_token_mask, int32_t remaining_chars
   );
 
+  /*! \brief Collect cached grammar-accepted tokens rejected by the active JSON string length. */
+  void CollectJSONStringLengthInvalidTokenIndices(const ParserState& state);
+
   bool AdvanceWithCharacterBudget(uint8_t byte, bool debug_print = false);
 
   bool AdvanceAtomicTokenWithCharacterBudget(
@@ -765,9 +769,11 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
   DynamicBitset tmp_accepted_bitset_;
+  DynamicBitset tmp_state_accepted_bitset_;
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
-  std::vector<int32_t> tmp_indices_to_check_;
+  std::vector<int32_t> tmp_json_length_candidate_indices_;
+  std::vector<int32_t> tmp_json_length_invalid_indices_;
   std::vector<ParserState> tmp_latest_states_;
   std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> tmp_latest_states_with_masks_;
   bool repeat_mask_cache_enabled_{false};
@@ -946,6 +952,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     int32_t active_temperature_rule_id;
     int32_t char_budget_deadline;
     int32_t json_string_length_deadline;
+    int32_t json_string_min_length_deadline;
 
     bool operator==(const CachedState& other) const {
       return rule_id == other.rule_id && sequence_id == other.sequence_id &&
@@ -955,7 +962,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
              partial_codepoint == other.partial_codepoint &&
              active_temperature_rule_id == other.active_temperature_rule_id &&
              char_budget_deadline == other.char_budget_deadline &&
-             json_string_length_deadline == other.json_string_length_deadline;
+             json_string_length_deadline == other.json_string_length_deadline &&
+             json_string_min_length_deadline == other.json_string_min_length_deadline;
     }
   };
 
@@ -1028,7 +1036,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
         state.partial_codepoint,
         state.active_temperature_rule_id,
         state.char_budget_deadline,
-        state.json_string_length_deadline
+        state.json_string_length_deadline,
+        state.json_string_min_length_deadline
     };
   }
 
@@ -1059,7 +1068,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
         state.partial_codepoint,
         state.active_temperature_rule_id,
         state.char_budget_deadline,
-        state.json_string_length_deadline
+        state.json_string_length_deadline,
+        state.json_string_min_length_deadline
     };
   }
 
@@ -1276,7 +1286,9 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetStableCharacterClas
            parent.sub_element_id,
            parent.partial_codepoint,
            state.json_string_length_deadline,
-           parent.json_string_length_deadline}
+           parent.json_string_length_deadline,
+           state.json_string_min_length_deadline,
+           parent.json_string_min_length_deadline}
       );
     } else {
       key.insert(
@@ -1292,7 +1304,8 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetStableCharacterClas
            state.partial_codepoint,
            state.active_temperature_rule_id,
            state.char_budget_deadline,
-           state.json_string_length_deadline}
+           state.json_string_length_deadline,
+           state.json_string_min_length_deadline}
       );
     }
   }
@@ -2461,6 +2474,48 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
   temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
 }
 
+void GrammarMatcher::Impl::CollectJSONStringLengthInvalidTokenIndices(const ParserState& state) {
+  tmp_json_length_candidate_indices_.clear();
+  tmp_json_length_invalid_indices_.clear();
+
+  const auto* tokenizer_impl = tokenizer_info_.ImplPtr();
+  const int32_t current_count = GetCurrentJSONStringCharIndex();
+  if (state.json_string_min_length_deadline >= 0 &&
+      current_count < state.json_string_min_length_deadline) {
+    const auto& quote_indices = tokenizer_impl->GetJSONStringQuoteTokenIndices();
+    tmp_json_length_candidate_indices_.insert(
+        tmp_json_length_candidate_indices_.end(), quote_indices.begin(), quote_indices.end()
+    );
+  }
+  if (state.json_string_length_deadline >= 0) {
+    const int64_t remaining =
+        static_cast<int64_t>(state.json_string_length_deadline) - current_count;
+    const auto& token_char_counts = tokenizer_impl->GetTokenCharCounts();
+    for (int32_t token_index : tokenizer_impl->GetTokenIndicesByDescendingCharCount()) {
+      if (token_char_counts[token_index] <= remaining) {
+        break;
+      }
+      tmp_json_length_candidate_indices_.push_back(token_index);
+    }
+  }
+
+  std::sort(tmp_json_length_candidate_indices_.begin(), tmp_json_length_candidate_indices_.end());
+  tmp_json_length_candidate_indices_.erase(
+      std::unique(
+          tmp_json_length_candidate_indices_.begin(), tmp_json_length_candidate_indices_.end()
+      ),
+      tmp_json_length_candidate_indices_.end()
+  );
+  const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  for (int32_t token_index : tmp_json_length_candidate_indices_) {
+    if (!IsCachedAcceptedTokenWithinJSONStringLength(
+            state, sorted_decoded_vocab[token_index].second
+        )) {
+      tmp_json_length_invalid_indices_.push_back(token_index);
+    }
+  }
+}
+
 void GrammarMatcher::Impl::FillBitmaskForStates(
     int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
 ) {
@@ -2536,7 +2591,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                                      : compiled_grammar_->GetAdaptiveTokenMask(
                                            state, state.rule_id == grammar_->GetRootRuleId()
                                        );
-    const bool json_string_length_active = state.json_string_length_deadline >= 0;
+    const bool json_string_length_active = IsJSONStringLengthConstraintActive(state);
     if (state.char_budget_deadline >= 0 && !json_string_length_active) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
@@ -2561,71 +2616,9 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
   for (const auto& [state, adaptive_token_mask_ptr] : latest_states_with_masks) {
     const auto& adaptive_token_mask = *adaptive_token_mask_ptr;
-    const bool json_string_length_active = state.json_string_length_deadline >= 0;
+    const bool json_string_length_active = IsJSONStringLengthConstraintActive(state);
 
     const std::vector<int32_t>* indices_to_check = &adaptive_token_mask.uncertain_indices;
-    if (json_string_length_active) {
-      tmp_indices_to_check_.clear();
-      switch (adaptive_token_mask.store_type) {
-        case StoreType::kAccepted:
-          tmp_indices_to_check_ = adaptive_token_mask.uncertain_indices;
-          tmp_indices_to_check_.insert(
-              tmp_indices_to_check_.end(),
-              adaptive_token_mask.accepted_indices.begin(),
-              adaptive_token_mask.accepted_indices.end()
-          );
-          break;
-        case StoreType::kAcceptedBitset:
-          tmp_indices_to_check_ = adaptive_token_mask.uncertain_indices;
-          for (int32_t token_index = 0;
-               token_index < static_cast<int32_t>(sorted_decoded_vocab.size());
-               ++token_index) {
-            if (adaptive_token_mask.accepted_bitset[sorted_decoded_vocab[token_index].first]) {
-              tmp_indices_to_check_.push_back(token_index);
-            }
-          }
-          break;
-        case StoreType::kRejected: {
-          tmp_indices_to_check_.reserve(sorted_decoded_vocab.size());
-          size_t rejected_position = 0;
-          for (int32_t token_index = 0;
-               token_index < static_cast<int32_t>(sorted_decoded_vocab.size());
-               ++token_index) {
-            while (rejected_position < adaptive_token_mask.rejected_indices.size() &&
-                   adaptive_token_mask.rejected_indices[rejected_position] < token_index) {
-              ++rejected_position;
-            }
-            if (rejected_position == adaptive_token_mask.rejected_indices.size() ||
-                adaptive_token_mask.rejected_indices[rejected_position] != token_index) {
-              tmp_indices_to_check_.push_back(token_index);
-            }
-          }
-          break;
-        }
-      }
-      if (const auto repeat = GetCharacterClassRepeat(state); repeat.has_value()) {
-        const auto& accepted_prefix_tokens =
-            compiled_grammar_
-                ->GetCharacterClassRepeatTokenMask(
-                    repeat->character_class_expr_id,
-                    repeat->has_stable_upper ? -1 : repeat->max_characters
-                )
-                .accepted_prefix_tokens;
-        for (int32_t token_index = 0;
-             token_index < static_cast<int32_t>(sorted_decoded_vocab.size());
-             ++token_index) {
-          if (accepted_prefix_tokens[sorted_decoded_vocab[token_index].first]) {
-            tmp_indices_to_check_.push_back(token_index);
-          }
-        }
-      }
-      std::sort(tmp_indices_to_check_.begin(), tmp_indices_to_check_.end());
-      tmp_indices_to_check_.erase(
-          std::unique(tmp_indices_to_check_.begin(), tmp_indices_to_check_.end()),
-          tmp_indices_to_check_.end()
-      );
-      indices_to_check = &tmp_indices_to_check_;
-    }
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
     // rejected list.
@@ -2637,6 +2630,47 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     // tokens, so we will just find the accepted tokens, and vice versa.
 
     tmp_rejected_indices_delta_.clear();
+    if (json_string_length_active) {
+      CollectJSONStringLengthInvalidTokenIndices(state);
+      auto is_invalid = [&](int32_t token_index) {
+        return std::binary_search(
+            tmp_json_length_invalid_indices_.begin(),
+            tmp_json_length_invalid_indices_.end(),
+            token_index
+        );
+      };
+      switch (adaptive_token_mask.store_type) {
+        case StoreType::kAccepted:
+          for (int32_t token_index : adaptive_token_mask.accepted_indices) {
+            if (!is_invalid(token_index)) {
+              tmp_accepted_bitset_.Set(sorted_decoded_vocab[token_index].first, true);
+            }
+          }
+          break;
+        case StoreType::kAcceptedBitset:
+          tmp_state_accepted_bitset_ = adaptive_token_mask.accepted_bitset;
+          for (int32_t token_index : tmp_json_length_invalid_indices_) {
+            tmp_state_accepted_bitset_.Reset(sorted_decoded_vocab[token_index].first);
+          }
+          tmp_accepted_bitset_ |= tmp_state_accepted_bitset_;
+          break;
+        case StoreType::kRejected:
+          tmp_rejected_indices_delta_ = tmp_json_length_invalid_indices_;
+          break;
+      }
+      if (const auto repeat = GetCharacterClassRepeat(state); repeat.has_value()) {
+        tmp_state_accepted_bitset_ = compiled_grammar_
+                                         ->GetCharacterClassRepeatTokenMask(
+                                             repeat->character_class_expr_id,
+                                             repeat->has_stable_upper ? -1 : repeat->max_characters
+                                         )
+                                         .accepted_prefix_tokens;
+        for (int32_t token_index : tmp_json_length_invalid_indices_) {
+          tmp_state_accepted_bitset_.Reset(sorted_decoded_vocab[token_index].first);
+        }
+        tmp_accepted_bitset_ |= tmp_state_accepted_bitset_;
+      }
+    }
 
     // Examine only the current one ParserState
     std::optional<Impl> atomic_trial_base;
@@ -2773,6 +2807,11 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     }
     // Step 3. Update the accepted_indices or rejected_indices
     if (adaptive_token_mask.store_type == StoreType::kRejected) {
+      std::sort(tmp_rejected_indices_delta_.begin(), tmp_rejected_indices_delta_.end());
+      tmp_rejected_indices_delta_.erase(
+          std::unique(tmp_rejected_indices_delta_.begin(), tmp_rejected_indices_delta_.end()),
+          tmp_rejected_indices_delta_.end()
+      );
       // rejected_indices = Intersect(
       //     rejected_indices,
       //     adaptive_token_mask.rejected_indices + rejected_indices_delta)

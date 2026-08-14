@@ -326,7 +326,10 @@ TokenizerInfo::Impl::Impl(
 
 void TokenizerInfo::Impl::BuildTokenCharData() {
   token_char_counts_.assign(sorted_decoded_vocab_.size(), 0);
+  json_string_quote_token_indices_.clear();
+  token_indices_by_descending_char_count_.resize(sorted_decoded_vocab_.size());
   ascii_string_safe_indices_.clear();
+  json_string_quote_token_indices_.reserve(sorted_decoded_vocab_.size() / 16);
   ascii_string_safe_indices_.reserve(sorted_decoded_vocab_.size() / 2);
   int32_t max_chars = 0;
   for (int32_t index = 0; index < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++index) {
@@ -340,9 +343,18 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
         })) {
       ascii_string_safe_indices_.push_back(index);
     }
+    if (token.find('"') != std::string::npos) {
+      json_string_quote_token_indices_.push_back(index);
+    }
     token_char_counts_[index] = count;
+    token_indices_by_descending_char_count_[index] = index;
     max_chars = std::max(max_chars, count);
   }
+  std::stable_sort(
+      token_indices_by_descending_char_count_.begin(),
+      token_indices_by_descending_char_count_.end(),
+      [&](int32_t lhs, int32_t rhs) { return token_char_counts_[lhs] > token_char_counts_[rhs]; }
+  );
   max_token_chars_ = max_chars;
 }
 
