@@ -692,6 +692,15 @@ TEST(XGrammarFSMBuilderTest, TestRegexScopedFlags) {
   rewritten = RewriteRegexDots("(?-s:.)(?s:.)", true);
   EXPECT_EQ(rewritten, "(?-s:[^\\n])(?s:.)");
 
+  rewritten = RewriteRegexDots("(?R:.)(?-R:.)", false);
+  EXPECT_EQ(rewritten, "(?R:[^\\r\\n])(?-R:[^\\n])");
+  fsm_wse = RegexFSMBuilder::Build(rewritten).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a\r"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\ra"));
+
+  rewritten = RewriteRegexDots("[](?=.].", false);
+  EXPECT_EQ(rewritten, "[](?=.][^\\n]");
+
   fsm_wse = RegexFSMBuilder::Build("(?x:a b # comment\n c)").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("abc"));
   EXPECT_FALSE(fsm_wse.AcceptString("a b c"));
@@ -699,6 +708,14 @@ TEST(XGrammarFSMBuilderTest, TestRegexScopedFlags) {
   fsm_wse = RegexFSMBuilder::Build("(?x:ab(?-x:c d)e f)").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("abc def"));
   EXPECT_FALSE(fsm_wse.AcceptString("abcdef"));
+
+  EXPECT_EQ(RewriteRegexExtended("a(?-x: )b", true), "(?x)a(?-x: )b");
+
+  EXPECT_TRUE(ContainsRegexMultilineLineAnchor("^a$", true));
+  EXPECT_FALSE(ContainsRegexMultilineLineAnchor("(?-m:^a$)", true));
+  EXPECT_TRUE(ContainsRegexMultilineLineAnchor("(?-m:^a$)(?m:^b$)", true));
+  EXPECT_FALSE(ContainsRegexMultilineLineAnchor("(?m:(?-m:(?<λ.[>^a$)))"));
+  EXPECT_FALSE(ContainsRegexMultilineLineAnchor("[]^]", true));
 
   // regex-syntax verbose mode ignores unescaped whitespace and comments inside classes too.
   fsm_wse = RegexFSMBuilder::Build("(?x:[ a # comment\n b])").Unwrap();
@@ -758,11 +775,171 @@ TEST(XGrammarFSMBuilderTest, TestRegexEscapes) {
   EXPECT_FALSE(fsm_wse.AcceptString("ł"));
 }
 
+TEST(XGrammarFSMBuilderTest, TestRegexUnicodeProperties) {
+  auto fsm_wse = RegexFSMBuilder::Build("\\pL").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_TRUE(fsm_wse.AcceptString("λ"));
+  EXPECT_FALSE(fsm_wse.AcceptString("1"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\p{Letter}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("字"));
+  EXPECT_FALSE(fsm_wse.AcceptString("_"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\p{IsGreek}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("Σ"));
+  EXPECT_FALSE(fsm_wse.AcceptString("A"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\p{ General_Category : Uppercase_Letter }").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\p{Script:Greek}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("Ω"));
+  EXPECT_FALSE(fsm_wse.AcceptString("Ж"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\p{scx=Hira}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("あ"));
+  EXPECT_FALSE(fsm_wse.AcceptString("A"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\p{Age=V1_1}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_FALSE(fsm_wse.AcceptString("😀"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\p{GCB=Extend}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\u0301"));
+  EXPECT_FALSE(fsm_wse.AcceptString("A"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\p{WB=Katakana}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("カ"));
+  EXPECT_FALSE(fsm_wse.AcceptString("A"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\p{SB=ATerm}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("."));
+  EXPECT_FALSE(fsm_wse.AcceptString("A"));
+
+  // regex-syntax 0.8.5 parses `!=` but translates it identically to `=`.
+  fsm_wse = RegexFSMBuilder::Build("\\p{gc!=Lu}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+
+  // Case folding is applied before property negation.
+  fsm_wse = RegexFSMBuilder::Build("(?i)\\P{Lu}").Unwrap();
+  EXPECT_FALSE(fsm_wse.AcceptString("A"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("1"));
+
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{Not_A_Property}").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{gc=Not_A_Value}").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{L", /*byte_mode=*/false).IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{L}", /*byte_mode=*/true).IsErr());
+
+  // Unicode complements range over scalar values only and never admit invalid UTF-8.
+  fsm_wse = RegexFSMBuilder::Build("\\P{L}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("1"));
+  EXPECT_FALSE(fsm_wse.AcceptString("A"));
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string("\xED\xA0\x80", 3)));
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string("\xFF", 1)));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexCharacterClassSets) {
+  auto fsm_wse = RegexFSMBuilder::Build("[[:alpha:]]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_FALSE(fsm_wse.AcceptString("1"));
+
+  fsm_wse = RegexFSMBuilder::Build("[[:^digit:]]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_FALSE(fsm_wse.AcceptString("1"));
+
+  fsm_wse = RegexFSMBuilder::Build("[a-y&&xyz]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("x"));
+  EXPECT_TRUE(fsm_wse.AcceptString("y"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("z"));
+
+  fsm_wse = RegexFSMBuilder::Build("[0-9--4]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("3"));
+  EXPECT_TRUE(fsm_wse.AcceptString("5"));
+  EXPECT_FALSE(fsm_wse.AcceptString("4"));
+
+  fsm_wse = RegexFSMBuilder::Build("[a-g~~b-h]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("h"));
+  EXPECT_FALSE(fsm_wse.AcceptString("b"));
+  EXPECT_FALSE(fsm_wse.AcceptString("g"));
+
+  fsm_wse = RegexFSMBuilder::Build("[\\p{Greek}&&\\pL]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("Σ"));
+  EXPECT_FALSE(fsm_wse.AcceptString("A"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\u0375"));
+
+  fsm_wse = RegexFSMBuilder::Build("[x[^xyz]]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("x"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("y"));
+  EXPECT_FALSE(fsm_wse.AcceptString("z"));
+
+  // Binary set operators have equal precedence and associate from left to right.
+  fsm_wse = RegexFSMBuilder::Build("[a-z--b-y&&x-z]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("z"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("x"));
+
+  fsm_wse = RegexFSMBuilder::Build("(?i)[a-z--A]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("b"));
+  EXPECT_TRUE(fsm_wse.AcceptString("B"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("A"));
+
+  // A leading ']' and leading '-' characters are literals. Unknown POSIX-like spellings fall
+  // back to ordinary nested-class syntax, matching regex-syntax.
+  fsm_wse = RegexFSMBuilder::Build("[]a]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("]"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  fsm_wse = RegexFSMBuilder::Build("[](?=.]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("]"));
+  EXPECT_TRUE(fsm_wse.AcceptString("."));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  fsm_wse = RegexFSMBuilder::Build("[--]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("-"));
+  fsm_wse = RegexFSMBuilder::Build("[[:loower:]]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString(":"));
+  EXPECT_TRUE(fsm_wse.AcceptString("w"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+
+  fsm_wse = RegexFSMBuilder::Build("[a&&b]").Unwrap();
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("b"));
+  EXPECT_TRUE(RegexFSMBuilder::Build("[a&&]").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("[&&a]").IsErr());
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexUnicodeModeFlagsAndAnchors) {
+  auto fsm_wse = RegexFSMBuilder::Build("(?-u:\\w)").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_FALSE(fsm_wse.AcceptString("é"));
+  EXPECT_TRUE(RegexFSMBuilder::Build("(?-u:.)").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("(?-u:[^A])").IsErr());
+
+  fsm_wse = RegexFSMBuilder::Build("(?u:\\w)", /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_TRUE(fsm_wse.AcceptString("é"));
+  fsm_wse = RegexFSMBuilder::Build("(?u:\\pL)", /*byte_mode=*/true).Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("λ"));
+  EXPECT_FALSE(fsm_wse.AcceptString("1"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\Aabc\\z").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+  EXPECT_FALSE(fsm_wse.AcceptString("xabc"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\x{41}\\U0001F600\\U{1F600}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A😀😀"));
+  EXPECT_FALSE(fsm_wse.AcceptString("A😀"));
+}
+
 TEST(XGrammarFSMBuilderTest, TestRegexUnsupportedFeatures) {
-  // Word boundaries, Unicode properties and backreferences raise errors.
+  // Word boundaries and backreferences raise errors.
   EXPECT_TRUE(RegexFSMBuilder::Build("a\\b").IsErr());
   EXPECT_TRUE(RegexFSMBuilder::Build("a\\B").IsErr());
-  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{L}").IsErr());
   EXPECT_TRUE(RegexFSMBuilder::Build("(a)\\1").IsErr());
   EXPECT_TRUE(RegexFSMBuilder::Build("(?<name>a)\\k<name>").IsErr());
   EXPECT_TRUE(RegexFSMBuilder::Build("(?<=a)b").IsErr());
@@ -774,12 +951,19 @@ TEST(XGrammarFSMBuilderTest, TestRegexUnsupportedFeatures) {
   EXPECT_TRUE(fsm_wse.AcceptString("ac"));
   fsm_wse = RegexFSMBuilder::Build("a(?!b)c").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("ac"));
+  fsm_wse = RegexFSMBuilder::Build("a(?=(?<λ.[>b))c").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("ac"));
 
   // Named groups compile like plain groups; the name is ignored.
   fsm_wse = RegexFSMBuilder::Build("(?<name>ab)+").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("abab"));
   fsm_wse = RegexFSMBuilder::Build("(?P<name>ab)c").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+  fsm_wse = RegexFSMBuilder::Build("(?<λ.名[1]>ab)c").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+  fsm_wse = RegexFSMBuilder::Build("(?x:(?<λ.[> a b ) c)").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+  EXPECT_TRUE(RegexFSMBuilder::Build("(?<same>a)(?<same>b)").IsErr());
 
   // Mid-pattern anchors are ignored with a warning.
   fsm_wse = RegexFSMBuilder::Build("a^b$c").Unwrap();
@@ -818,10 +1002,7 @@ TEST(XGrammarFSMBuilderTest, TestRegexErrorMessages) {
       error_message("a(bc"), "Regex parsing error at position 2: The parenthesis is not closed"
   );
   EXPECT_EQ(error_message("a[bc"), "Regex parsing error at position 2: Unclosed '['");
-  EXPECT_EQ(
-      error_message("a[]"),
-      "Regex parsing error at position 2: Empty character class is not allowed in regex"
-  );
+  EXPECT_EQ(error_message("a[]"), "Regex parsing error at position 2: Unclosed '['");
   EXPECT_EQ(
       error_message("a{,2}"),
       "Regex parsing error at position 2: Invalid repetition count: expected a number after '{'"

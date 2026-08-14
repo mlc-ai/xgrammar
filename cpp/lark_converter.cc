@@ -2435,6 +2435,60 @@ class LarkCompiler {
     bool dot_all = false;
     bool multiline = false;
     bool extended = false;
+    bool unicode = false;
+  };
+
+  /*! \brief Track nested Rust-style character classes and their literal leading punctuation. */
+  class RegexCharacterClassTracker {
+   public:
+    bool InClass() const { return !frames_.empty(); }
+
+    void ConsumeEscape() {
+      if (!frames_.empty()) {
+        frames_.back().at_start = false;
+      }
+    }
+
+    void Consume(char character) {
+      if (character == '[') {
+        if (!frames_.empty()) {
+          frames_.back().at_start = false;
+        }
+        frames_.push_back(Frame{});
+        return;
+      }
+      if (frames_.empty()) {
+        return;
+      }
+      Frame& frame = frames_.back();
+      if (frame.at_start) {
+        if (character == '^' && frame.allow_negation) {
+          frame.allow_negation = false;
+          return;
+        }
+        if (character == '-') {
+          frame.allow_negation = false;
+          frame.saw_initial_hyphen = true;
+          return;
+        }
+        if (character == ']' && !frame.saw_initial_hyphen) {
+          frame.at_start = false;
+          return;
+        }
+        frame.at_start = false;
+      }
+      if (character == ']') {
+        frames_.pop_back();
+      }
+    }
+
+   private:
+    struct Frame {
+      bool at_start = true;
+      bool allow_negation = true;
+      bool saw_initial_hyphen = false;
+    };
+    std::vector<Frame> frames_;
   };
 
   RegexFlags ParseRegexFlags(const Node& node) const {
@@ -2449,7 +2503,7 @@ class LarkCompiler {
       } else if (flag == 'x') {
         result.extended = true;
       } else if (flag == 'u') {
-        // XGrammar regular expressions use Unicode codepoint semantics by default.
+        result.unicode = true;
       } else if (flag == 'l') {
         RaiseLarkError(source_, node.location, "regular-expression flag 'l' is not supported");
       } else {
@@ -2465,93 +2519,185 @@ class LarkCompiler {
 
   std::string PrepareRegexPattern(const Node& node) const {
     RegexFlags flags = ParseRegexFlags(node);
-    std::string pattern = flags.extended ? RewriteExtendedRegex(node.text) : node.text;
-    if (flags.multiline && ContainsRegexLineAnchor(pattern)) {
+    std::string pattern = RewriteRegexExtended(node.text, flags.extended);
+    if (ContainsRegexMultilineLineAnchor(pattern, flags.multiline)) {
       RaiseLarkError(
           source_,
           node.location,
           "regular-expression flag 'm' with line anchors is not supported by llguidance 1.8.0"
       );
     }
-    return RewriteRegexDots(pattern, flags.dot_all);
+    ValidateLLGuidanceRegexSyntax(pattern, node.location);
+    pattern = RewriteRegexDots(pattern, flags.dot_all);
+    return flags.unicode ? "(?u)" + pattern : pattern;
+  }
+
+  void ValidateLLGuidanceRegexSyntax(const std::string& pattern, const Location& location) const {
+    RegexCharacterClassTracker class_tracker;
+    bool branch_start = true;
+    for (size_t position = 0; position < pattern.size(); ++position) {
+      char character = pattern[position];
+      if (character == '\\') {
+        if (position + 1 >= pattern.size()) {
+          RaiseLarkError(source_, location, "regular expression ends with a trailing backslash");
+        }
+        bool in_character_class = class_tracker.InClass();
+        class_tracker.ConsumeEscape();
+        char escaped = pattern[++position];
+        if (!in_character_class && (escaped == 'A' || escaped == 'z')) {
+          bool valid = escaped == 'A'
+                           ? branch_start
+                           : (position + 1 == pattern.size() || pattern[position + 1] == ')' ||
+                              pattern[position + 1] == '|');
+          if (!valid) {
+            RaiseLarkError(
+                source_,
+                location,
+                escaped == 'A' ? "start anchor is only allowed at the beginning of a branch"
+                               : "end anchor is only allowed at the end of a branch"
+            );
+          }
+          continue;
+        }
+        static const std::string kRustAlphaEscapes = "0AazbBxXuUpPdDsSwWfnrtv";
+        if (std::isalnum(static_cast<unsigned char>(escaped)) &&
+            kRustAlphaEscapes.find(escaped) == std::string::npos) {
+          if (allow_invalid_utf8_) {
+            if (escaped >= '1' && escaped <= '9') {
+              RaiseLarkError(source_, location, "backreferences are not supported");
+            }
+            // Let the byte-regex parser preserve its more specific diagnostics for this dialect.
+          } else {
+            RaiseLarkError(
+                source_,
+                location,
+                "unrecognized regular-expression escape '\\" + std::string(1, escaped) + "'"
+            );
+          }
+        }
+        if (escaped == '<' || escaped == '>') {
+          RaiseLarkError(
+              source_, location, "word-boundary assertions are not supported by llguidance"
+          );
+        }
+        if (!in_character_class) {
+          branch_start = false;
+        }
+        continue;
+      }
+      bool was_in_character_class = class_tracker.InClass();
+      class_tracker.Consume(character);
+      if (was_in_character_class || character == '[') {
+        if (!was_in_character_class) {
+          branch_start = false;
+        }
+        continue;
+      }
+      if (character == '^') {
+        if (!branch_start) {
+          RaiseLarkError(
+              source_, location, "start anchor is only allowed at the beginning of a branch"
+          );
+        }
+        continue;
+      }
+      if (character == '$') {
+        if (position + 1 < pattern.size() && pattern[position + 1] != ')' &&
+            pattern[position + 1] != '|') {
+          RaiseLarkError(source_, location, "end anchor is only allowed at the end of a branch");
+        }
+        continue;
+      }
+      if (character == '|') {
+        branch_start = true;
+        continue;
+      }
+      if (character == '(') {
+        if (position + 2 < pattern.size() && pattern[position + 1] == '?' &&
+            (pattern[position + 2] == '=' || pattern[position + 2] == '!')) {
+          RaiseLarkError(
+              source_, location, "lookaround assertions are not supported by llguidance"
+          );
+        }
+        if (position + 1 < pattern.size() && pattern[position + 1] == '?') {
+          bool previous_branch_start = branch_start;
+          bool named_capture = false;
+          size_t modifier_end = position + 2;
+          if (modifier_end < pattern.size() && pattern[modifier_end] == 'P' &&
+              modifier_end + 1 < pattern.size() && pattern[modifier_end + 1] == '<') {
+            named_capture = true;
+            modifier_end = pattern.find('>', modifier_end + 2);
+          } else if (modifier_end < pattern.size() && pattern[modifier_end] == '<') {
+            if (modifier_end + 1 < pattern.size() &&
+                (pattern[modifier_end + 1] == '=' || pattern[modifier_end + 1] == '!')) {
+              RaiseLarkError(
+                  source_, location, "lookaround assertions are not supported by llguidance"
+              );
+            }
+            named_capture = true;
+            modifier_end = pattern.find('>', modifier_end + 1);
+          } else {
+            modifier_end = pattern.find_first_of(":)", modifier_end);
+          }
+          if (modifier_end != std::string::npos) {
+            char delimiter = pattern[modifier_end];
+            position = modifier_end;
+            branch_start = named_capture || delimiter == ':' ? true : previous_branch_start;
+            continue;
+          }
+        }
+        branch_start = true;
+        continue;
+      }
+      if (character == ')') {
+        branch_start = false;
+        continue;
+      }
+      if (character != '?' && character != '*' && character != '+' && character != '{' &&
+          character != '}') {
+        branch_start = false;
+      }
+    }
   }
 
   static bool RequiresFSMRegexCompilation(const std::string& pattern) {
-    bool in_character_class = false;
+    RegexCharacterClassTracker class_tracker;
     for (size_t position = 0; position < pattern.size(); ++position) {
       if (pattern[position] == '\\') {
-        if (position + 1 < pattern.size() &&
-            std::string("dDsSwW").find(pattern[position + 1]) != std::string::npos) {
-          return true;
+        if (position + 1 < pattern.size()) {
+          char escaped = pattern[position + 1];
+          if (std::string("0AzdDsSwWpPU").find(escaped) != std::string::npos ||
+              (escaped == 'x' && position + 2 < pattern.size() && pattern[position + 2] == '{')) {
+            return true;
+          }
         }
+        class_tracker.ConsumeEscape();
         ++position;
         continue;
       }
+      bool was_in_character_class = class_tracker.InClass();
+      class_tracker.Consume(pattern[position]);
       if (pattern[position] == '[') {
-        in_character_class = true;
-      } else if (pattern[position] == ']' && in_character_class) {
-        in_character_class = false;
-      } else if (!in_character_class && pattern[position] == '(' && position + 2 < pattern.size() &&
-                 pattern[position + 1] == '?' &&
+        if (was_in_character_class ||
+            (position + 1 < pattern.size() &&
+             (pattern[position + 1] == '[' || pattern[position + 1] == ':' ||
+              pattern[position + 1] == ']'))) {
+          return true;
+        }
+      } else if (was_in_character_class && position + 1 < pattern.size() &&
+                 ((pattern[position] == '&' && pattern[position + 1] == '&') ||
+                  (pattern[position] == '-' && pattern[position + 1] == '-') ||
+                  (pattern[position] == '~' && pattern[position + 1] == '~'))) {
+        return true;
+      } else if (!was_in_character_class && pattern[position] == '(' &&
+                 position + 2 < pattern.size() && pattern[position + 1] == '?' &&
                  std::string("-imsuURx").find(pattern[position + 2]) != std::string::npos) {
         return true;
-      }
-    }
-    return false;
-  }
-
-  static std::string RewriteExtendedRegex(const std::string& pattern) {
-    std::string result;
-    result.reserve(pattern.size());
-    for (size_t position = 0; position < pattern.size();) {
-      if (pattern[position] == '\\') {
-        result.push_back(pattern[position++]);
-        if (position >= pattern.size()) {
-          break;
-        }
-        auto [codepoint, num_bytes] = ParseNextUTF8(pattern.c_str() + position);
-        size_t length = codepoint == CharHandlingError::kInvalidUTF8 ? 1 : num_bytes;
-        result.append(pattern, position, length);
-        position += length;
-        continue;
-      }
-      auto [codepoint, num_bytes] = ParseNextUTF8(pattern.c_str() + position);
-      if (codepoint == CharHandlingError::kInvalidUTF8) {
-        result.push_back(pattern[position++]);
-        continue;
-      }
-      if (codepoint == '#') {
-        position += num_bytes;
-        while (position < pattern.size() && pattern[position] != '\n') {
-          ++position;
-        }
-        continue;
-      }
-      if (IsUnicodeWhitespace(codepoint)) {
-        position += num_bytes;
-        continue;
-      }
-      result.append(pattern, position, num_bytes);
-      position += num_bytes;
-    }
-    return result;
-  }
-
-  static bool ContainsRegexLineAnchor(const std::string& pattern) {
-    bool escaped = false;
-    bool in_character_class = false;
-    for (char character : pattern) {
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (character == '\\') {
-        escaped = true;
-      } else if (character == '[') {
-        in_character_class = true;
-      } else if (character == ']' && in_character_class) {
-        in_character_class = false;
-      } else if (!in_character_class && (character == '^' || character == '$')) {
+      } else if (!was_in_character_class && pattern[position] == '(' &&
+                 position + 2 < pattern.size() && pattern[position + 1] == '?' &&
+                 (pattern[position + 2] == '<' ||
+                  (pattern[position + 2] == 'P' && position + 3 < pattern.size() &&
+                   pattern[position + 3] == '<'))) {
         return true;
       }
     }

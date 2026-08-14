@@ -701,9 +701,6 @@ def test_lark_suffix_stop_body_with_complement(attribute: str) -> None:
             id="regex-class-unicode-escape-folded",
         ),
         pytest.param(
-            r"start: /x\cAy/i", ["x\x01y", "X\x01Y"], ["xy", "xay"], id="regex-control-escape"
-        ),
-        pytest.param(
             r"start: /a\sb/i",
             ["a b", "A\tb", "a\nB", "a\fb", "a\vb", "a\u00a0b", "a\u2003B"],
             ["ab", "a\x00b", "a\x01b"],
@@ -727,7 +724,6 @@ def test_lark_suffix_stop_body_with_complement(attribute: str) -> None:
             ["a b", ""],
             id="regex-non-whitespace-codepoint-domain",
         ),
-        pytest.param("start: /a(?=b)c/i", ["ac", "AC"], ["abc", "a"], id="regex-lookahead-ignored"),
         pytest.param(
             "start: /(?<name>ab)+(?P<other>c)/i",
             ["abc", "ABabC"],
@@ -735,7 +731,6 @@ def test_lark_suffix_stop_body_with_complement(attribute: str) -> None:
             id="regex-named-groups-ignore-name",
         ),
         pytest.param("start: /(?:ab)+c/i", ["abc", "ababC"], ["c"], id="regex-non-capturing-group"),
-        pytest.param("start: /a^b$c/i", ["abc", "ABC"], ["ac"], id="regex-mid-anchors-ignored"),
         pytest.param(
             "start: /a+?b??c/i",
             ["ac", "abc", "AAC"],
@@ -806,6 +801,24 @@ def test_lark_suffix_stop_body_with_complement(attribute: str) -> None:
             id="regex-scoped-disable-extended-flag",
         ),
         pytest.param(
+            "start: /a(?-x: )b/x",
+            ["a b"],
+            ["ab", "a  b"],
+            id="regex-trailing-extended-with-scoped-disable",
+        ),
+        pytest.param(
+            "start: /(?-m:^a$)/m",
+            ["a"],
+            ["", "A", "a\n"],
+            id="regex-trailing-multiline-with-scoped-disable",
+        ),
+        pytest.param(
+            "start: /(?<λ.[>a b){2,300}/x",
+            ["abab", "ab" * 150],
+            ["ab", "a b" * 2, "ab" * 301],
+            id="regex-extended-complex-capture-large-repeat",
+        ),
+        pytest.param(
             'start: TOKEN\nTOKEN: "Yes"i | "no"',
             ["yes", "YES", "YeS", "no"],
             ["", "y", "No"],
@@ -838,6 +851,103 @@ def test_lark_suffix_stop_body_with_complement(attribute: str) -> None:
     ],
 )
 def test_lark_core_languages(
+    grammar: str, accepted: Sequence[str], rejected: Sequence[str]
+) -> None:
+    _assert_language(grammar, accepted, rejected)
+
+
+@pytest.mark.parametrize(
+    "grammar, accepted, rejected",
+    [
+        pytest.param(r"start: /\pL+/", ["Aλ字"], ["", "123", "A_"], id="property-one-letter"),
+        pytest.param(
+            r"start: /\p{Letter}+/", ["Aλ字"], ["", "123", "A_"], id="property-general-category"
+        ),
+        pytest.param(r"start: /\p{IsGreek}+/", ["Σλ"], ["A", "Ж"], id="property-script-bare"),
+        pytest.param(
+            r"start: /\p{ General_Category : Uppercase_Letter }/",
+            ["A", "Σ"],
+            ["a", "1"],
+            id="property-loose-matching",
+        ),
+        pytest.param(r"start: /\p{Script:Greek}/", ["Ω"], ["A", "Ж"], id="property-script"),
+        pytest.param(r"start: /\p{scx=Hira}/", ["あ"], ["A", "Σ"], id="property-script-extensions"),
+        pytest.param(r"start: /\p{Age=V1_1}/", ["A"], ["😀"], id="property-age"),
+        pytest.param(r"start: /\p{GCB=Extend}/", ["\u0301"], ["A"], id="property-grapheme-break"),
+        pytest.param(r"start: /\p{WB=Katakana}/", ["カ"], ["A"], id="property-word-break"),
+        pytest.param(r"start: /\p{SB=ATerm}/", ["."], ["A"], id="property-sentence-break"),
+        pytest.param(r"start: /\p{gc!=Lu}/", ["A", "Σ"], ["a", "1"], id="property-not-equal-0-8-5"),
+        pytest.param(
+            r"start: /\P{Lu}/i",
+            ["1", "_"],
+            ["A", "a", "Σ", "σ"],
+            id="property-negation-case-folding",
+        ),
+        pytest.param("start: /[[:alpha:]]+/", ["Az"], ["", "1", "é"], id="ascii-named-class"),
+        pytest.param("start: /[[:^digit:]]/", ["A", "é"], ["1"], id="ascii-named-class-negated"),
+        pytest.param("start: /[a-y&&xyz]/", ["x", "y"], ["a", "z"], id="class-intersection"),
+        pytest.param("start: /[0-9--4]/", ["3", "5"], ["4", "-"], id="class-difference"),
+        pytest.param(
+            "start: /[a-g~~b-h]/", ["a", "h"], ["b", "g"], id="class-symmetric-difference"
+        ),
+        pytest.param(
+            r"start: /[\p{Greek}&&\pL]/",
+            ["Σ", "λ"],
+            ["A", "\u0375"],
+            id="class-property-intersection",
+        ),
+        pytest.param("start: /[x[^xyz]]/", ["x", "a"], ["y", "z"], id="class-nested-complement"),
+        pytest.param("start: /[a-z--b-y&&x-z]/", ["z"], ["a", "x"], id="class-left-associative"),
+        pytest.param(
+            "start: /[a-z--A]/i", ["b", "B"], ["a", "A"], id="class-fold-before-difference"
+        ),
+        pytest.param("start: /[]a]/", ["]", "a"], ["b"], id="class-leading-close-literal"),
+        pytest.param("start: /[]^]/m", ["]", "^"], ["a"], id="class-leading-close-anchor-literal"),
+        pytest.param(
+            "start: /[](?=]/", ["]", "(", "?", "="], ["a"], id="class-leading-close-lookaround-text"
+        ),
+        pytest.param("start: /[--]/", ["-"], ["a"], id="class-leading-hyphens"),
+        pytest.param("start: /[[:loower:]]/", [":", "w"], ["a"], id="unknown-ascii-class-fallback"),
+    ],
+)
+def test_lark_regex_unicode_properties_and_class_sets(
+    grammar: str, accepted: Sequence[str], rejected: Sequence[str]
+) -> None:
+    _assert_language(grammar, accepted, rejected)
+
+
+@pytest.mark.parametrize(
+    "grammar, accepted, rejected",
+    [
+        pytest.param(r"start: /\Aabc\z/", ["abc"], ["", "xabc", "abcx"], id="text-anchors"),
+        pytest.param(
+            r"start: /\x{41}\U0001F600\U{1F600}/",
+            ["A😀😀"],
+            ["A😀", "a😀😀"],
+            id="rust-codepoint-escapes",
+        ),
+        pytest.param(
+            r"start: /(?-u:\w)+/", ["Az_9"], ["é", "Aé"], id="scoped-disable-unicode-safe"
+        ),
+        pytest.param("start: /(?R:.)/", ["A", "\x00"], ["\r", "\n"], id="scoped-crlf-dot"),
+        pytest.param("start: /(?R:(?-R:.))/", ["A", "\r"], ["\n"], id="scoped-disable-crlf"),
+        pytest.param(
+            "start: /(?s:[](?=.])/",
+            ["]", "(", "?", "=", "."],
+            ["a", "\n"],
+            id="scoped-dotall-leading-close-class",
+        ),
+        pytest.param("start: /(?U:a+?)/", ["a", "aaa"], ["", "b"], id="swap-greediness"),
+        pytest.param("start: /(?<λ.名[1]>ab)c/", ["abc"], ["ab", "xbc"], id="unicode-capture-name"),
+        pytest.param(
+            "start: /(?x:(?<λ.[> a b ) c)/",
+            ["abc"],
+            ["a b c", "ab"],
+            id="unicode-capture-name-extended",
+        ),
+    ],
+)
+def test_lark_regex_rust_flags_and_escapes(
     grammar: str, accepted: Sequence[str], rejected: Sequence[str]
 ) -> None:
     _assert_language(grammar, accepted, rejected)
@@ -1669,8 +1779,16 @@ def test_lark_allow_invalid_utf8_dot_flags_and_unicode_default() -> None:
     )
     _assert_byte_language(
         option + "start: /a./isu",
-        accepted=[b"A\n", b"a\x80"],
-        rejected=[b"a", b"a\xc2\xa2", b"b\n"],
+        accepted=[b"A\n", b"a\xc2\xa2"],
+        rejected=[b"a", b"a\x80", b"a\xc2", b"b\n"],
+    )
+    _assert_byte_language(
+        option + r"start: /(?u:\w)/",
+        accepted=[b"A", "é".encode()],
+        rejected=[b" ", b"\x80", b"\xc2"],
+    )
+    _assert_byte_language(
+        option + r"start: /(?u:\pL)/", accepted=[b"A", "λ".encode()], rejected=[b"1", b"\x80"]
     )
     _assert_byte_language(
         "start: /./",
@@ -2665,7 +2783,22 @@ def test_lark_large_choice_grammar() -> None:
             id="multiline-anchor-rejected-by-llguidance",
         ),
         pytest.param(
+            "start: /(?m:^abc$)/",
+            "flag 'm' with line anchors is not supported by llguidance 1.8.0",
+            id="inline-multiline-anchor-rejected-by-llguidance",
+        ),
+        pytest.param(
             "start: /abc/l", "regular-expression flag 'l' is not supported", id="unsupported-l-flag"
+        ),
+        pytest.param(
+            "start: /abc/U",
+            "regular-expression flag 'U' is not supported",
+            id="unsupported-outer-U-flag",
+        ),
+        pytest.param(
+            "start: /abc/R",
+            "regular-expression flag 'R' is not supported",
+            id="unsupported-outer-R-flag",
         ),
         pytest.param(
             'start: "a"i.."z"', "flags are not allowed on character ranges", id="range-start-flag"
@@ -2676,14 +2809,53 @@ def test_lark_large_choice_grammar() -> None:
         pytest.param("start: /[abc/", "failed to compile regular expression", id="invalid-regex"),
         pytest.param(r"start: /a\b/i", "Word boundary assertion", id="regex-word-boundary-error"),
         pytest.param(
-            r"start: /\p{L}/i", "Unicode property escape", id="regex-unicode-property-error"
+            r"start: /\p{Not_A_Property}/i",
+            "Unicode property not found",
+            id="regex-unknown-unicode-property-error",
         ),
-        pytest.param(r"start: /(a)\1/i", "Backreference", id="regex-backreference-error"),
-        pytest.param("start: /[]/i", "Empty character class", id="regex-empty-class-error"),
-        pytest.param("start: /(?<=a)b/i", "Lookbehind assertion", id="regex-lookbehind-error"),
+        pytest.param(
+            r"start: /\p{gc=Not_A_Value}/i",
+            "Unicode property not found",
+            id="regex-unknown-unicode-property-value-error",
+        ),
+        pytest.param(
+            r"start: /(a)\1/i",
+            "unrecognized regular-expression escape",
+            id="regex-backreference-error",
+        ),
+        pytest.param("start: /[]/i", "Unclosed '['", id="regex-empty-class-error"),
+        pytest.param("start: /(?<=a)b/i", "lookaround assertions", id="regex-lookbehind-error"),
+        pytest.param("start: /a(?=b)c/i", "lookaround assertions", id="regex-lookahead-error"),
+        pytest.param(
+            "start: /a^b$c/i", "start anchor is only allowed", id="regex-mid-anchor-error"
+        ),
+        pytest.param(
+            r"start: /x\cAy/i",
+            "unrecognized regular-expression escape",
+            id="regex-control-escape-error",
+        ),
+        pytest.param(
+            r"start: /\e/", "unrecognized regular-expression escape", id="regex-escape-e-error"
+        ),
+        pytest.param(
+            r"start: /(?-u:.)/", "pattern can match invalid UTF-8", id="regex-scoped-no-u-invalid"
+        ),
+        pytest.param(
+            "start: /(?<same>a)(?<same>b)/",
+            "Duplicate named capturing group",
+            id="regex-duplicate-capture-name",
+        ),
+        pytest.param(
+            "start: /(?<λ.[>^a)/m",
+            "flag 'm' with line anchors",
+            id="regex-multiline-anchor-after-unbalanced-capture-name-punctuation",
+        ),
+        pytest.param(
+            "start: /[a&&]/", "operator is missing an operand", id="regex-set-missing-rhs"
+        ),
         pytest.param(
             r"start: /\uZZ/i",
-            "must be followed by four hexadecimal digits",
+            "must be followed by 4 hexadecimal digits",
             id="regex-bad-unicode-escape-error",
         ),
         pytest.param('start: "\\q"', "invalid string literal", id="invalid-string-escape"),

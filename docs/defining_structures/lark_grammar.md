@@ -140,8 +140,9 @@ exactly one character and may be any Unicode character: `"α".."γ"` matches `α
 
 `/pattern/` matches text against a regular expression. The pattern is compiled through XGrammar's
 regex converter (the same engine as [`xgr.Grammar.from_regex`](xgrammar.Grammar.from_regex)) and
-supports character classes, alternation, groups, repetition (`*`, `+`, `?`, `{m,n}`), and the
-usual escapes. A `/` inside the pattern is written `\/`.
+implements the regular-expression language used by llguidance 1.8.0's `regex-syntax` 0.8.5
+dependency. It supports character classes, alternation, groups, repetition (`*`, `+`, `?`,
+`{m,n}`), Unicode properties, and Rust-style escapes. A `/` inside the pattern is written `\/`.
 
 `.` matches one Unicode character. By default it does not match newline. Regular expressions
 support the following trailing flags, in any order:
@@ -150,27 +151,47 @@ support the following trailing flags, in any order:
 - `s`: make `.` match newline as well.
 - `m`: select multiline mode. It has no effect in a pattern without line anchors; patterns that
   combine `m` with `^` or `$` are rejected because llguidance 1.8.0 rejects them too.
-- `x`: ignore unescaped whitespace and `#` comments outside character classes.
-- `u`: explicitly select Unicode semantics. This is a no-op because XGrammar regular expressions
-  already use Unicode codepoints.
+- `x`: ignore unescaped Unicode whitespace and `#` comments, including inside character classes.
+- `u`: explicitly select Unicode semantics. This is a no-op normally, but switches the whole
+  literal back to Unicode when `allow_invalid_utf8` has selected byte mode.
 
-The same flags may be enabled within a pattern, either for the rest of the pattern (`(?i)`,
-`(?s)`, `(?x)`) or for one group (`(?i:...)`, `(?s:...)`, `(?x:...)`). A scoped flag can be
-disabled with forms such as `(?-i:...)`, `(?-s:...)`, and `(?-x:...)`. Flag state is preserved
-when a large bounded repetition is lowered to a helper rule. The locale flag `l` is not supported.
+The `i`, `s`, `m`, `u`, and `x` flags may also be enabled within a pattern, either for the rest of
+the enclosing group (`(?i)`) or for one group (`(?i:...)`). Scoped forms may disable flags, as in
+`(?-i:...)` and `(?-u:...)`. The inline-only `R` flag makes a non-dotall `.` exclude both carriage
+return and line feed; `U` swaps greedy and non-greedy preference, which does not change the
+accepted language. Trailing `R` and `U` are not part of llguidance's Lark literal syntax. Flag
+state is preserved when a large bounded repetition is lowered to a helper rule. The locale flag
+`l` is not supported.
 
 In Unicode mode, `\d` uses the Unicode `Decimal_Number` category, `\w` uses the Unicode Perl-word
 class, and `\s` uses the Unicode `White_Space` property. Their uppercase forms are complements
 within the valid Unicode scalar range. Byte mode deliberately keeps the ASCII definitions.
 
-Word boundaries (`\b`, `\B`), Unicode property escapes (`\p{…}`), backreferences, and lookaround
-assertions are not supported. Large bounded repetitions such as `{0,10000}` are compiled through
-the grammar-level repetition mechanism and do not expand the automaton.
+Unicode property escapes accept the one-letter form `\pL`, braced forms such as `\p{Letter}` and
+`\p{Script=Greek}`, and complements with `\P`. General Category, Script, Script Extensions, Age,
+Grapheme Cluster Break, Word Break, and Sentence Break use the Unicode 16.0.0 tables bundled by
+`regex-syntax` 0.8.5. Property names and values use loose matching: case, spaces, underscores, and
+hyphens are ignored. `Is` prefixes, `=` and `:` separators, and aliases such as `gc`, `sc`, and
+`scx` are accepted.
+
+Character classes support nested classes; ASCII named classes such as `[[:alpha:]]`; and `&&`
+(intersection), `--` (difference), and `~~` (symmetric difference). The three set operators have
+equal precedence and associate from left to right. Case folding is applied to each operand before
+set operations and complement.
+
+The escapes `\A` and `\z` anchor the entire text, and `^` and `$` are accepted at branch
+boundaries. Rust codepoint spellings such as `\x{41}`, `\u0041`, `\U0001F600`, and `\U{1F600}`
+are supported. Named capturing groups accept Rust's Unicode names and compile as ordinary groups;
+XGrammar does not expose their captured substrings. Word boundaries (`\b`, `\B`), backreferences,
+and lookaround assertions are rejected. Large bounded repetitions such as `{0,10000}` are
+compiled through the grammar-level repetition mechanism and do not expand the automaton.
 
 ```text
 start: /a.b/      // accepts "acb", "a😀b"; rejects "a\nb"
 line: /a.b/s      // also accepts "a\nb"
 word: /Σk+/i      // accepts "Σk", "σKK", and "ςK"
+greek: /[\p{Greek}&&\pL]+/
+ascii_word: /(?-u:\w)+/
 compact: /(?x: a b \# c # comment
                  d )/      // accepts "ab#cd"
 ```
@@ -415,10 +436,13 @@ start: /[\x80-\xFF]+/ | "é"
 ```
 
 In byte mode, `.` consumes exactly one byte and still excludes newline unless the `s` flag is
-present. The `i`, `s`, and `u` flags remain available; case folding is ASCII-only. `\d`, `\w`, and
-`\s` use their ASCII definitions, and uppercase forms complement within all 256 bytes. Unicode
-escapes and properties, non-ASCII characters inside classes, word boundaries, lookarounds, and
-backreferences are rejected.
+present. Outside a Unicode scope, case folding is ASCII-only; `\d`, `\w`, and `\s` use their ASCII
+definitions; and uppercase forms complement within all 256 bytes. Unicode escapes and properties,
+non-ASCII characters inside classes, word boundaries, lookarounds, and backreferences are rejected
+there. A trailing `u` flag or inline `(?u:...)` scope switches back to Unicode, so constructs such
+as `/(?u:\pL)/` remain available inside a byte grammar. Conversely, a Unicode grammar may use an
+ASCII-safe scope such as `(?-u:\w)`; a scope such as `(?-u:.)` is rejected because it could match
+bytes that are not valid UTF-8.
 
 `no_forcing` (boolean, default `false`) makes
 [`GrammarMatcher.find_jump_forward_string`](xgrammar.GrammarMatcher.find_jump_forward_string)

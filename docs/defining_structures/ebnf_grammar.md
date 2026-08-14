@@ -489,15 +489,19 @@ denotes one byte, `.` consumes one byte, and a negated character class is comple
 raw_bytes ::= Regex("[\\x80-\\xFF]+", byte_mode=true)
 ```
 
-The `i`, `s`, and `u` flags remain accepted in byte mode. ASCII case folding is used for `i`, `s`
-controls whether dot accepts newline, and `u` is a compatibility no-op. Unicode escapes and
-properties, non-ASCII literals inside character classes, word boundaries, lookarounds, and
-backreferences are rejected in byte mode.
+The `i`, `s`, and `u` macro flags remain accepted in byte mode. ASCII case folding is used for `i`,
+`s` controls whether dot accepts newline, and the macro-level `u` flag is a compatibility no-op.
+Outside an inline Unicode scope, Unicode escapes and properties, non-ASCII literals inside
+character classes, word boundaries, lookarounds, and backreferences are rejected. An inline
+`(?u:...)` scope can switch part of a byte pattern back to Unicode.
 
 In Unicode mode, `\d`, `\w`, and `\s` use the same Unicode 16.0.0 classes as llguidance's
 `regex-syntax` 0.8.5 dependency; their uppercase forms are Unicode-domain complements. Inline
-`i`, `s`, `m`, `u`, and `x` flags and scoped disabling forms are accepted inside `pattern`.
-Multiline line anchors and Unicode property escapes (`\p{...}` and `\P{...}`) remain unsupported.
+`i`, `s`, `m`, `u`, `R`, `U`, and `x` flags and scoped disabling forms are accepted inside
+`pattern`. Unicode property escapes (`\pL`, `\p{...}`, and `\P{...}`), Rust codepoint escapes,
+nested character classes, ASCII named classes, and the class set operators `&&`, `--`, and `~~`
+are supported. Multiline line anchors, word boundaries, lookarounds, and backreferences remain
+unsupported.
 
 ### `EOS`
 
