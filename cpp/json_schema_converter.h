@@ -380,6 +380,9 @@ class JSONSchemaConverter {
   /*! \brief Create a rule and return the rule id (handles caching). */
   int32_t CreateRule(const SchemaSpecPtr& spec, const std::string& rule_name_hint);
 
+  /*! \brief Resolve a reference to its parsed schema. */
+  SchemaSpecPtr ResolveRefSchema(const RefSpec& spec, const std::string& rule_name_hint);
+
   /*! \brief Get next separator from indent manager. */
   virtual std::string NextSeparator(bool is_end = false);
 

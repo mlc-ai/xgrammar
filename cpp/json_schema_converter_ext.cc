@@ -11,6 +11,7 @@
 #include <map>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -619,14 +620,27 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParam(
     const SchemaSpecPtr& schema,
     int32_t value_rule_id
 ) {
-  auto options = GetCohereCompositeOptions(schema);
+  std::string value_rule_name = builder_.GetRule(value_rule_id).name;
+  SchemaSpecPtr resolved_schema = schema;
+  // Resolve RefSpecs only for Cohere wrapper classification; the value rule is already resolved.
+  if (const auto* ref = std::get_if<RefSpec>(&resolved_schema->spec); ref != nullptr) {
+    std::unordered_set<std::string> visited_ref_uris;
+    do {
+      if (!visited_ref_uris.insert(ref->uri).second) {
+        break;
+      }
+      resolved_schema = ResolveRefSchema(*ref, value_rule_name);
+      ref = std::get_if<RefSpec>(&resolved_schema->spec);
+    } while (ref != nullptr);
+  }
+
+  auto options = GetCohereCompositeOptions(resolved_schema);
   if (!options.has_value()) {
-    return FormatSingleCohereParam(name, key_pattern_expr, schema, value_rule_id);
+    return FormatSingleCohereParam(name, key_pattern_expr, resolved_schema, value_rule_id);
   }
 
   std::vector<int32_t> choices;
   choices.reserve(options->size());
-  const std::string& value_rule_name = builder_.GetRule(value_rule_id).name;
   for (size_t index = 0; index < options->size(); ++index) {
     const SchemaSpecPtr& option = (*options)[index];
     int32_t option_rule_id =
