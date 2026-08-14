@@ -620,6 +620,8 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParam(
     const SchemaSpecPtr& schema,
     int32_t value_rule_id
 ) {
+  // Copy the name before generating: GenerateFromSpec may add rules and reallocate the
+  // builder's rule storage, invalidating references into it.
   std::string value_rule_name = builder_.GetRule(value_rule_id).name;
   SchemaSpecPtr resolved_schema = schema;
   // Resolve RefSpecs only for Cohere wrapper classification; the value rule is already resolved.
@@ -641,9 +643,6 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParam(
 
   std::vector<int32_t> choices;
   choices.reserve(options->size());
-  // Copy the name before generating: GenerateFromSpec may add rules and reallocate the
-  // builder's rule storage, invalidating references into it.
-  const std::string value_rule_name = builder_.GetRule(value_rule_id).name;
   for (size_t index = 0; index < options->size(); ++index) {
     const SchemaSpecPtr& option = (*options)[index];
     int32_t option_rule_id =

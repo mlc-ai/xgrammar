@@ -1571,14 +1571,22 @@ _COHERE_PATTERN_WRAPPER_CASES = (
     pytest.param(
         {"type": "string"},
         '<cofl:value name="value" type="raw">text</cofl:value>',
+        True,
+    ),
+    pytest.param(
+        {"type": "string"},
         '<cofl:value name="value" type="json">"text"</cofl:value>',
-        id="raw-string",
+        False,
     ),
     pytest.param(
         {"type": "integer"},
         '<cofl:value name="value" type="json">3</cofl:value>',
+        True,
+    ),
+    pytest.param(
+        {"type": "integer"},
         '<cofl:value name="value" type="raw">3</cofl:value>',
-        id="json-integer",
+        False,
     ),
     # Composite schemas use recursive Cohere dict/list wrappers.
     pytest.param(
@@ -1591,23 +1599,36 @@ _COHERE_PATTERN_WRAPPER_CASES = (
         '<cofl:value name="value" type="dict">'
         '<cofl:value name="id" type="json">3</cofl:value>'
         "</cofl:value>",
+        True,
+    ),
+    pytest.param(
+        {
+            "type": "object",
+            "properties": {"id": {"type": "integer"}},
+            "required": ["id"],
+            "additionalProperties": False,
+        },
         '<cofl:value name="value" type="json">{"id":3}</cofl:value>',
-        id="dict-object",
+        False,
     ),
     pytest.param(
         {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 1},
         '<cofl:value name="value" type="list">'
         '<cofl:value type="raw">item</cofl:value>'
         "</cofl:value>",
+        True,
+    ),
+    pytest.param(
+        {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 1},
         '<cofl:value name="value" type="json">["item"]</cofl:value>',
-        id="list-array",
+        False,
     ),
 )
 
 
-@pytest.mark.parametrize("value_schema, accepted_value, wrong_value", _COHERE_PATTERN_WRAPPER_CASES)
+@pytest.mark.parametrize("value_schema, value, accepted", _COHERE_PATTERN_WRAPPER_CASES)
 def test_cohere_pattern_properties_correlate_value_wrappers(
-    value_schema: dict, accepted_value: str, wrong_value: str
+    value_schema: dict, value: str, accepted: bool
 ):
     """Pattern-property schemas select the matching Cohere value wrapper."""
     schema = {
@@ -1616,8 +1637,7 @@ def test_cohere_pattern_properties_correlate_value_wrappers(
         "additionalProperties": False,
     }
 
-    _check_cohere_grammar(schema, accepted_value, True)
-    _check_cohere_grammar(schema, wrong_value, False)
+    _check_cohere_grammar(schema, value, accepted)
 
 
 def test_cohere_pattern_properties_override_additional_property_schema():
@@ -2156,6 +2176,190 @@ _COHERE_TYPE_CORRELATION_CASES = (
 def test_cohere_type_attribute_correlates_with_schema(schema: dict, instance: str, accepted: bool):
     """Cohere value tag types stay aligned with const/enum/composite value bodies."""
     _check_cohere_grammar(schema, instance, accepted)
+
+
+@pytest.mark.parametrize(
+    "definition, value, accepted",
+    (
+        # Referenced strings use raw wrappers and preserve their value constraints.
+        pytest.param(
+            {"type": "string", "pattern": "^[a-z]+$"},
+            '<cofl:value name="value" type="raw">text</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"type": "string", "pattern": "^[a-z]+$"},
+            '<cofl:value name="value" type="json">text</cofl:value>',
+            False,
+        ),
+        pytest.param(
+            {"type": "string", "pattern": "^[a-z]+$"},
+            '<cofl:value name="value" type="raw">7</cofl:value>',
+            False,
+        ),
+        # Referenced JSON scalars keep json wrappers and their underlying value grammar.
+        pytest.param(
+            {"type": "integer"},
+            '<cofl:value name="value" type="json">7</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"type": "integer"},
+            '<cofl:value name="value" type="raw">7</cofl:value>',
+            False,
+        ),
+        pytest.param(
+            {"type": "integer"},
+            '<cofl:value name="value" type="json">1.5</cofl:value>',
+            False,
+        ),
+        pytest.param(
+            {"type": "number"},
+            '<cofl:value name="value" type="json">1.5</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"type": "number"},
+            '<cofl:value name="value" type="raw">1.5</cofl:value>',
+            False,
+        ),
+        pytest.param(
+            {"type": "boolean"},
+            '<cofl:value name="value" type="json">true</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"type": "null"},
+            '<cofl:value name="value" type="json">null</cofl:value>',
+            True,
+        ),
+        # Referenced containers select recursive dict/list wrappers rather than serialized JSON.
+        pytest.param(
+            {
+                "type": "object",
+                "properties": {"label": {"type": "string"}},
+                "required": ["label"],
+                "additionalProperties": False,
+            },
+            '<cofl:value name="value" type="dict">'
+            '<cofl:value name="label" type="raw">ok</cofl:value>'
+            "</cofl:value>",
+            True,
+        ),
+        pytest.param(
+            {
+                "type": "object",
+                "properties": {"label": {"type": "string"}},
+                "required": ["label"],
+                "additionalProperties": False,
+            },
+            '<cofl:value name="value" type="json">'
+            '<cofl:value name="label" type="raw">ok</cofl:value>'
+            "</cofl:value>",
+            False,
+        ),
+        pytest.param(
+            {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 1},
+            '<cofl:value name="value" type="list">'
+            '<cofl:value type="raw">item</cofl:value>'
+            "</cofl:value>",
+            True,
+        ),
+        pytest.param(
+            {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 1},
+            '<cofl:value name="value" type="json">'
+            '<cofl:value type="raw">item</cofl:value>'
+            "</cofl:value>",
+            False,
+        ),
+        # Referenced composites keep each wrapper correlated with its matching value branch.
+        pytest.param(
+            {"anyOf": [{"type": "string", "pattern": "^[a-z]+$"}, {"type": "integer"}]},
+            '<cofl:value name="value" type="raw">text</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"anyOf": [{"type": "string", "pattern": "^[a-z]+$"}, {"type": "integer"}]},
+            '<cofl:value name="value" type="json">7</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"anyOf": [{"type": "string", "pattern": "^[a-z]+$"}, {"type": "integer"}]},
+            '<cofl:value name="value" type="raw">7</cofl:value>',
+            False,
+        ),
+        pytest.param(
+            {"anyOf": [{"type": "string", "pattern": "^[a-z]+$"}, {"type": "integer"}]},
+            '<cofl:value name="value" type="json">text</cofl:value>',
+            False,
+        ),
+    ),
+)
+def test_cohere_ref_uses_resolved_schema(definition: dict, value: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "$defs": {"Value": definition},
+        "properties": {"value": {"$ref": "#/$defs/Value"}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    _check_cohere_grammar(schema, value, accepted)
+
+
+def test_cohere_reuses_ref():
+    """Reusing one reference preserves the resolved wrapper for every property."""
+    schema = {
+        "type": "object",
+        "$defs": {"Text": {"type": "string"}},
+        "properties": {
+            "first": {"$ref": "#/$defs/Text"},
+            "second": {"$ref": "#/$defs/Text"},
+        },
+        "required": ["first", "second"],
+        "additionalProperties": False,
+    }
+    accepted = (
+        '<cofl:value name="first" type="raw">one</cofl:value>'
+        '<cofl:value name="second" type="raw">two</cofl:value>'
+    )
+    _check_cohere_grammar(schema, accepted, True)
+    _check_cohere_grammar(schema, accepted.replace('type="raw">two', 'type="json">two'), False)
+
+
+def test_cohere_resolves_chained_recursive_ref():
+    """Reference chains reach their object type without looping through recursive children."""
+    schema = {
+        "type": "object",
+        "$defs": {
+            "NodeAlias": {"$ref": "#/$defs/Node"},
+            "Node": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "pattern": "^[a-z]+$"},
+                    "child": {"$ref": "#/$defs/NodeAlias"},
+                },
+                "required": ["name"],
+                "additionalProperties": False,
+            },
+        },
+        "properties": {"root": {"$ref": "#/$defs/NodeAlias"}},
+        "required": ["root"],
+        "additionalProperties": False,
+    }
+    accepted = (
+        '<cofl:value name="root" type="dict">'
+        '<cofl:value name="name" type="raw">parent</cofl:value>'
+        '<cofl:value name="child" type="dict">'
+        '<cofl:value name="name" type="raw">leaf</cofl:value>'
+        "</cofl:value>"
+        "</cofl:value>"
+    )
+    _check_cohere_grammar(schema, accepted, True)
+    _check_cohere_grammar(
+        schema,
+        accepted.replace('name="child" type="dict"', 'name="child" type="json"'),
+        False,
+    )
 
 
 _XML_DYNAMIC_PROPERTY_CASES = (

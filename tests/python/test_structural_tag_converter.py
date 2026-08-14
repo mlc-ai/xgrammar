@@ -548,6 +548,17 @@ def test_json_schema_style_cohere_xml_nested_values():
 @pytest.mark.parametrize(
     "json_schema, instance, is_accepted",
     [
+        # Referenced schemas use the resolved target's Cohere wrapper type.
+        pytest.param(
+            {"$ref": "#/$defs/Text"},
+            '<cofl:value name="value" type="raw">hello</cofl:value>',
+            True,
+        ),
+        pytest.param(
+            {"$ref": "#/$defs/Text"},
+            '<cofl:value name="value" type="json">hello</cofl:value>',
+            False,
+        ),
         # Mixed enum accepts the raw string branch and JSON scalar branch, but not mismatched tags.
         pytest.param(
             {"enum": ["ready", 7]}, '<cofl:value name="value" type="raw">ready</cofl:value>', True
@@ -636,6 +647,7 @@ def test_json_schema_style_cohere_xml_type_correlation(
         "type": "json_schema",
         "json_schema": {
             "type": "object",
+            "$defs": {"Text": {"type": "string"}},
             "properties": {"value": json_schema},
             "required": ["value"],
             "additionalProperties": False,
