@@ -3078,7 +3078,11 @@ int32_t JSONSchemaConverter::GenerateObject(
 
   int32_t result = need_braces ? Sequence({ByteString("{"), content, ByteString("}")}) : content;
   if (could_be_empty) {
-    int32_t empty_content = any_whitespace_ ? WhitespaceExpression() : Empty();
+    // Outside braces (XML parameter zones) an empty object must emit
+    // nothing: the surrounding tag template already supplies the whitespace,
+    // and a whitespace-only alternative would be a self-loop that burns the
+    // whole generation budget on tabs (issue #802).
+    int32_t empty_content = any_whitespace_ && need_braces ? WhitespaceExpression() : Empty();
     int32_t empty_result =
         need_braces ? Sequence({ByteString("{"), empty_content, ByteString("}")}) : empty_content;
     return has_content ? Choice({result, empty_result}) : empty_result;

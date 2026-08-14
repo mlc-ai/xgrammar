@@ -3531,6 +3531,27 @@ def test_prefix_items_no_additional_items_allows_shorter():
     check_schema_with_instance(schema, '["a"]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1, true]', is_accepted=False)
+def test_qwen_xml_empty_object_emits_nothing():
+    # Regression for issue #802: a qwen_xml tool-call object with no
+    # properties must emit nothing, letting the structural tag's end
+    # take over, instead of a whitespace-only self-loop that never
+    # leaves the parameter zone.
+    ebnf = _json_schema_to_ebnf(
+        {"type": "object", "properties": {}, "required": []}, json_format="qwen_xml"
+    )
+    root_lines = [line for line in ebnf.splitlines() if line.startswith("root ")]
+    assert len(root_lines) == 1
+    assert "[ \\n\\t]*" not in root_lines[0]
+
+
+def test_qwen_xml_nonempty_object_keeps_parameter_zone():
+    # Guard against over-fixing #802: a qwen_xml object with
+    # properties still emits the parameter-zone production.
+    ebnf = _json_schema_to_ebnf(
+        {"type": "object", "properties": {"a": {"type": "integer"}}, "required": []},
+        json_format="qwen_xml",
+    )
+    assert "<parameter=" in ebnf
 
 
 if __name__ == "__main__":
