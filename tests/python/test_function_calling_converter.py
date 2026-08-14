@@ -1568,26 +1568,12 @@ def test_cohere_additional_properties_support_nested_schema():
 
 _COHERE_PATTERN_WRAPPER_CASES = (
     # Primitive schemas use raw for strings and json for non-string scalars.
+    pytest.param({"type": "string"}, '<cofl:value name="value" type="raw">text</cofl:value>', True),
     pytest.param(
-        {"type": "string"},
-        '<cofl:value name="value" type="raw">text</cofl:value>',
-        True,
+        {"type": "string"}, '<cofl:value name="value" type="json">"text"</cofl:value>', False
     ),
-    pytest.param(
-        {"type": "string"},
-        '<cofl:value name="value" type="json">"text"</cofl:value>',
-        False,
-    ),
-    pytest.param(
-        {"type": "integer"},
-        '<cofl:value name="value" type="json">3</cofl:value>',
-        True,
-    ),
-    pytest.param(
-        {"type": "integer"},
-        '<cofl:value name="value" type="raw">3</cofl:value>',
-        False,
-    ),
+    pytest.param({"type": "integer"}, '<cofl:value name="value" type="json">3</cofl:value>', True),
+    pytest.param({"type": "integer"}, '<cofl:value name="value" type="raw">3</cofl:value>', False),
     # Composite schemas use recursive Cohere dict/list wrappers.
     pytest.param(
         {
@@ -2199,39 +2185,25 @@ def test_cohere_type_attribute_correlates_with_schema(schema: dict, instance: st
         ),
         # Referenced JSON scalars keep json wrappers and their underlying value grammar.
         pytest.param(
-            {"type": "integer"},
-            '<cofl:value name="value" type="json">7</cofl:value>',
-            True,
+            {"type": "integer"}, '<cofl:value name="value" type="json">7</cofl:value>', True
         ),
         pytest.param(
-            {"type": "integer"},
-            '<cofl:value name="value" type="raw">7</cofl:value>',
-            False,
+            {"type": "integer"}, '<cofl:value name="value" type="raw">7</cofl:value>', False
         ),
         pytest.param(
-            {"type": "integer"},
-            '<cofl:value name="value" type="json">1.5</cofl:value>',
-            False,
+            {"type": "integer"}, '<cofl:value name="value" type="json">1.5</cofl:value>', False
         ),
         pytest.param(
-            {"type": "number"},
-            '<cofl:value name="value" type="json">1.5</cofl:value>',
-            True,
+            {"type": "number"}, '<cofl:value name="value" type="json">1.5</cofl:value>', True
         ),
         pytest.param(
-            {"type": "number"},
-            '<cofl:value name="value" type="raw">1.5</cofl:value>',
-            False,
+            {"type": "number"}, '<cofl:value name="value" type="raw">1.5</cofl:value>', False
         ),
         pytest.param(
-            {"type": "boolean"},
-            '<cofl:value name="value" type="json">true</cofl:value>',
-            True,
+            {"type": "boolean"}, '<cofl:value name="value" type="json">true</cofl:value>', True
         ),
         pytest.param(
-            {"type": "null"},
-            '<cofl:value name="value" type="json">null</cofl:value>',
-            True,
+            {"type": "null"}, '<cofl:value name="value" type="json">null</cofl:value>', True
         ),
         # Referenced containers select recursive dict/list wrappers rather than serialized JSON.
         pytest.param(
@@ -2311,10 +2283,7 @@ def test_cohere_reuses_ref():
     schema = {
         "type": "object",
         "$defs": {"Text": {"type": "string"}},
-        "properties": {
-            "first": {"$ref": "#/$defs/Text"},
-            "second": {"$ref": "#/$defs/Text"},
-        },
+        "properties": {"first": {"$ref": "#/$defs/Text"}, "second": {"$ref": "#/$defs/Text"}},
         "required": ["first", "second"],
         "additionalProperties": False,
     }
@@ -2356,9 +2325,7 @@ def test_cohere_resolves_chained_recursive_ref():
     )
     _check_cohere_grammar(schema, accepted, True)
     _check_cohere_grammar(
-        schema,
-        accepted.replace('name="child" type="dict"', 'name="child" type="json"'),
-        False,
+        schema, accepted.replace('name="child" type="dict"', 'name="child" type="json"'), False
     )
 
 

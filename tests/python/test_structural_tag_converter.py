@@ -550,9 +550,7 @@ def test_json_schema_style_cohere_xml_nested_values():
     [
         # Referenced schemas use the resolved target's Cohere wrapper type.
         pytest.param(
-            {"$ref": "#/$defs/Text"},
-            '<cofl:value name="value" type="raw">hello</cofl:value>',
-            True,
+            {"$ref": "#/$defs/Text"}, '<cofl:value name="value" type="raw">hello</cofl:value>', True
         ),
         pytest.param(
             {"$ref": "#/$defs/Text"},
