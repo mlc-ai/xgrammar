@@ -2966,6 +2966,24 @@ int32_t JSONSchemaConverter::GenerateObject(
                )}
           ));
         }
+        // Merge with existing additionalProperties if present. Without this,
+        // a typed additionalProperties schema was silently dropped whenever
+        // patternProperties existed but no named properties did (issue #826,
+        // patternProperties manifestation).
+        if (additional_property) {
+          int32_t value_rule_id =
+              CreateRule(additional_property, rule_name + "_" + additional_suffix);
+          property_choices.push_back(Sequence(
+              {beginning_separator,
+               FormatOtherProperty(
+                   KeyPatternExpression(),
+                   value_rule_id,
+                   rule_name,
+                   additional_suffix,
+                   /*schema=*/nullptr
+               )}
+          ));
+        }
       } else {
         int32_t key_rule_id = CreateRule(spec.property_names, rule_name + "_name");
         int32_t value_rule_id = builder_.GetRuleId(GetBasicAnyRuleName());
