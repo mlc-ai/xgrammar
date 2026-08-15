@@ -294,11 +294,9 @@ class ThreadSafeLRUCache {
       // resetting the counter so that a late completion cannot add the size of an entry that has
       // already been removed.
       for (const auto& [_, entry] : cache_.GetMap()) {
-        try {
-          entry.value.get();
-        } catch (...) {
-          // Failed computations do not contribute to current_size_.
-        }
+        // Only wait for completion without retrieving the value: failed computations do not
+        // contribute to current_size_, and get() would require discarding a nodiscard result.
+        entry.value.wait();
       }
       cache_.GetMap().clear();
       current_size_ = 0;
