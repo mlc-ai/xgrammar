@@ -998,10 +998,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     int32_t sub_element_id;
     int32_t repeat_count;
     int32_t partial_codepoint;
-    int32_t active_temperature_rule_id;
+    int32_t runtime_constraint_context_id;
     int32_t char_budget_deadline;
-    int32_t json_string_length_deadline;
-    int32_t json_string_min_length_deadline;
 
     bool operator==(const CachedState& other) const {
       return rule_id == other.rule_id && sequence_id == other.sequence_id &&
@@ -1009,10 +1007,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
              row_ref_id == other.row_ref_id && budget_deadline == other.budget_deadline &&
              sub_element_id == other.sub_element_id && repeat_count == other.repeat_count &&
              partial_codepoint == other.partial_codepoint &&
-             active_temperature_rule_id == other.active_temperature_rule_id &&
-             char_budget_deadline == other.char_budget_deadline &&
-             json_string_length_deadline == other.json_string_length_deadline &&
-             json_string_min_length_deadline == other.json_string_min_length_deadline;
+             runtime_constraint_context_id == other.runtime_constraint_context_id &&
+             char_budget_deadline == other.char_budget_deadline;
     }
   };
 
@@ -1035,11 +1031,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
 
   struct JSONStringContext {
     JSONStringCharCounterState counter;
-    bool length_entered;
 
-    bool operator==(const JSONStringContext& other) const {
-      return counter == other.counter && length_entered == other.length_entered;
-    }
+    bool operator==(const JSONStringContext& other) const { return counter == other.counter; }
   };
 
   static uint32_t EncodeAccepted(int32_t row_id, int32_t configuration_id) {
@@ -1099,10 +1092,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
         state.sub_element_id,
         state.repeat_count,
         state.partial_codepoint,
-        state.active_temperature_rule_id,
-        state.char_budget_deadline,
-        state.json_string_length_deadline,
-        state.json_string_min_length_deadline
+        state.runtime_constraint_context_id,
+        state.char_budget_deadline
     };
   }
 
@@ -1131,10 +1122,8 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
         state.sub_element_id,
         state.repeat_count,
         state.partial_codepoint,
-        state.active_temperature_rule_id,
-        state.char_budget_deadline,
-        state.json_string_length_deadline,
-        state.json_string_min_length_deadline
+        state.runtime_constraint_context_id,
+        state.char_budget_deadline
     };
   }
 
@@ -1170,10 +1159,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     CanonicalConfiguration normalized{current_row_id, matcher_->is_completed_.back(), {}};
     std::optional<JSONStringContext> json_string_context;
     if (matcher_->has_json_string_length_rules_) {
-      json_string_context = JSONStringContext{
-          matcher_->json_string_char_count_history_.back(),
-          matcher_->json_string_length_entry_history_.back()
-      };
+      json_string_context = JSONStringContext{matcher_->json_string_char_count_history_.back()};
     }
     normalized.scanable_states.reserve(scanable_states.size());
     for (const auto& state : scanable_states) {
@@ -1211,7 +1197,7 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     absolute_rows_by_id_[row_id].push_back(absolute_row);
   }
 
-  void MaterializeTransition(int32_t row_id, int32_t configuration_id, uint8_t byte) {
+  void MaterializeTransition(int32_t row_id, int32_t configuration_id, uint8_t /*byte*/) {
     const int32_t current_row = matcher_->rule_id_to_completable_states_.size();
     const auto& cached_row = rows_[row_id];
     tmp_completable_states_.clear();
@@ -1238,12 +1224,10 @@ class GrammarMatcher::Impl::ContinuationTransitionCache {
     if (matcher_->has_json_string_length_rules_) {
       XGRAMMAR_DCHECK(configuration_id < static_cast<int32_t>(json_string_contexts_.size()));
       const auto& json_string_context = json_string_contexts_[configuration_id];
-      const auto next_counter = matcher_->AdvanceJSONStringCharCounter(
-          matcher_->json_string_char_count_history_.back(), byte
-      );
-      XGRAMMAR_DCHECK(next_counter == json_string_context.counter);
-      matcher_->json_string_char_count_history_.push_back(next_counter);
-      matcher_->json_string_length_entry_history_.push_back(json_string_context.length_entered);
+      // The cached output context is authoritative. It can intentionally retain the input count
+      // while a distant maximum is suspended, so recomputing unconditionally from the byte would
+      // both waste work and produce the wrong speculative context.
+      matcher_->json_string_char_count_history_.push_back(json_string_context.counter);
     }
   }
 
@@ -1384,11 +1368,7 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetStableCharacterClas
       );
       if (has_json_string_length_rules_) {
         key.insert(
-            key.end(),
-            {state.json_string_length_deadline,
-             parent.json_string_length_deadline,
-             state.json_string_min_length_deadline,
-             parent.json_string_min_length_deadline}
+            key.end(), {state.runtime_constraint_context_id, parent.runtime_constraint_context_id}
         );
       }
     } else {
@@ -1403,14 +1383,9 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetStableCharacterClas
            state.sub_element_id,
            state.repeat_count,
            state.partial_codepoint,
-           state.active_temperature_rule_id,
+           state.runtime_constraint_context_id,
            state.char_budget_deadline}
       );
-      if (has_json_string_length_rules_) {
-        key.insert(
-            key.end(), {state.json_string_length_deadline, state.json_string_min_length_deadline}
-        );
-      }
     }
   }
   return found_repeat ? std::optional<std::vector<int32_t>>(std::move(key)) : std::nullopt;
@@ -1494,7 +1469,7 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetContinuationMaskCac
       state.sub_element_id,
       state.repeat_count,
       state.partial_codepoint,
-      state.active_temperature_rule_id,
+      state.runtime_constraint_context_id,
       state.char_budget_deadline,
       IsCompleted()
   };
@@ -1516,7 +1491,7 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetContinuationMaskCac
            parent.sub_element_id,
            parent.repeat_count,
            parent.partial_codepoint,
-           parent.active_temperature_rule_id,
+           parent.runtime_constraint_context_id,
            parent.char_budget_deadline}
       );
     }
@@ -1579,7 +1554,7 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetContinuationMaskCac
           parent.sub_element_id,
           canonical_repeat_count,
           parent.partial_codepoint,
-          parent.active_temperature_rule_id,
+          parent.runtime_constraint_context_id,
           parent.char_budget_deadline
       };
       if (parent.rule_start_pos == ParserState::kNoPrevInputPos) {
@@ -2072,10 +2047,11 @@ std::optional<float> GrammarMatcher::Impl::GetTemperature() const {
   std::optional<float> syntax_temperature = std::nullopt;
   bool has_temperature_conflict = false;
   for (const auto& state : GetLatestScanableStates()) {
-    if (state.active_temperature_rule_id == -1) {
+    const int32_t active_temperature_rule_id = ActiveTemperatureRule(state);
+    if (active_temperature_rule_id == -1) {
       continue;
     }
-    const auto& temperature = grammar_->GetRule(state.active_temperature_rule_id).temperature;
+    const auto& temperature = grammar_->GetRule(active_temperature_rule_id).temperature;
     XGRAMMAR_DCHECK(temperature.has_value());
     if (syntax_temperature.has_value() && temperature.value() != syntax_temperature.value()) {
       has_temperature_conflict = true;
@@ -2820,8 +2796,9 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
   }
 
   const int32_t current_count = GetCurrentJSONStringCharIndex();
-  const bool minimum_active = state.json_string_min_length_deadline >= 0 &&
-                              current_count < state.json_string_min_length_deadline;
+  const int32_t min_deadline = JSONStringMinLengthDeadline(state);
+  const int32_t max_deadline = JSONStringLengthDeadline(state);
+  const bool minimum_active = min_deadline >= 0 && current_count < min_deadline;
   const auto& plain_quote_indices =
       tokenizer_impl->GetJSONStringPlainQuoteTokenIndicesByPrefixCount();
   const auto& escaped_quote_indices = tokenizer_impl->GetJSONStringEscapedQuoteTokenIndices();
@@ -2832,8 +2809,8 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
       tokenizer_impl->GetTokenIndicesByDescendingCharCount();
   auto too_long_end = descending_char_count_indices.begin();
   int64_t remaining = std::numeric_limits<int64_t>::max();
-  if (state.json_string_length_deadline >= 0) {
-    remaining = static_cast<int64_t>(state.json_string_length_deadline) - current_count;
+  if (max_deadline >= 0) {
+    remaining = static_cast<int64_t>(max_deadline) - current_count;
     too_long_end = std::partition_point(
         descending_char_count_indices.begin(),
         descending_char_count_indices.end(),
@@ -2841,7 +2818,7 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
     );
   }
   bool used_precomputed_maximum_filter = false;
-  if (state.json_string_length_deadline >= 0 && IsJSONStringCounterInside() &&
+  if (max_deadline >= 0 && IsJSONStringCounterInside() &&
       adaptive_token_mask.store_type != StoreType::kRejected &&
       adaptive_token_mask.GetAcceptedCount() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD) {
     if (const DynamicBitset* plain_within_limit =
@@ -2866,8 +2843,7 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
   auto early_plain_quote_end = plain_quote_indices.begin();
   if (minimum_active) {
     if (IsJSONStringCounterInside()) {
-      const int64_t remaining_minimum =
-          static_cast<int64_t>(state.json_string_min_length_deadline) - current_count;
+      const int64_t remaining_minimum = static_cast<int64_t>(min_deadline) - current_count;
       early_plain_quote_end = std::partition_point(
           plain_quote_indices.begin(),
           plain_quote_indices.end(),
@@ -2902,9 +2878,9 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
     }
     const int32_t plain_prefix_count = plain_prefix_char_counts[token_index];
     if (IsJSONStringCounterInside() && plain_prefix_count >= 0) {
-      return (may_close_too_early && static_cast<int64_t>(current_count) + plain_prefix_count <
-                                         state.json_string_min_length_deadline) ||
-             (state.json_string_length_deadline >= 0 && plain_prefix_count > remaining);
+      return (may_close_too_early &&
+              static_cast<int64_t>(current_count) + plain_prefix_count < min_deadline) ||
+             (max_deadline >= 0 && plain_prefix_count > remaining);
     }
     return !IsCachedAcceptedTokenWithinJSONStringLength(
         state, sorted_decoded_vocab[token_index].second
@@ -2970,15 +2946,15 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
 bool GrammarMatcher::Impl::NeedsJSONStringLengthTokenFilter(const ParserState& state) const {
   const auto* tokenizer_impl = tokenizer_info_.ImplPtr();
   const int32_t current_count = GetCurrentJSONStringCharIndex();
-  if (state.json_string_min_length_deadline >= 0 &&
-      current_count < state.json_string_min_length_deadline &&
+  const int32_t min_deadline = JSONStringMinLengthDeadline(state);
+  const int32_t max_deadline = JSONStringLengthDeadline(state);
+  if (min_deadline >= 0 && current_count < min_deadline &&
       (!tokenizer_impl->GetJSONStringPlainQuoteTokenIndicesByPrefixCount().empty() ||
        !tokenizer_impl->GetJSONStringEscapedQuoteTokenIndices().empty())) {
     const auto& plain_quote_indices =
         tokenizer_impl->GetJSONStringPlainQuoteTokenIndicesByPrefixCount();
     const auto& plain_prefix_char_counts = tokenizer_impl->GetJSONStringPlainPrefixCharCounts();
-    const int64_t remaining_minimum =
-        static_cast<int64_t>(state.json_string_min_length_deadline) - current_count;
+    const int64_t remaining_minimum = static_cast<int64_t>(min_deadline) - current_count;
     if (!tokenizer_impl->GetJSONStringEscapedQuoteTokenIndices().empty() ||
         (!plain_quote_indices.empty() &&
          (!IsJSONStringCounterInside() ||
@@ -2986,9 +2962,8 @@ bool GrammarMatcher::Impl::NeedsJSONStringLengthTokenFilter(const ParserState& s
       return true;
     }
   }
-  return state.json_string_length_deadline >= 0 &&
-         static_cast<int64_t>(state.json_string_length_deadline) - current_count <
-             tokenizer_impl->GetMaxTokenChars();
+  return max_deadline >= 0 &&
+         static_cast<int64_t>(max_deadline) - current_count < tokenizer_impl->GetMaxTokenChars();
 }
 
 void GrammarMatcher::Impl::FillBitmaskForStates(
@@ -3099,6 +3074,11 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         has_json_string_length_rules_ && IsJSONStringLengthConstraintActive(state);
     const bool json_string_length_filter_needed =
         json_string_length_active && NeedsJSONStringLengthTokenFilter(state);
+    const int32_t json_max_deadline = JSONStringLengthDeadline(state);
+    const int32_t json_min_deadline = JSONStringMinLengthDeadline(state);
+    const bool suspend_distant_json_string_maximum =
+        json_string_length_active && !json_string_length_filter_needed && json_max_deadline >= 0 &&
+        (json_min_deadline < 0 || GetCurrentJSONStringCharIndex() >= json_min_deadline);
     const CharacterClassRepeatTokenMask* repeat_token_mask = nullptr;
     if (json_string_length_filter_needed) {
       const auto repeat = GetCharacterClassRepeat(state);
@@ -3186,6 +3166,13 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       atomic_trial_base->capture_recording_ = false;
     }
     PushOneStateToCheck(state);
+    if (suspend_distant_json_string_maximum) {
+      // No token in the vocabulary can reach this maximum, and the minimum is already met. The
+      // speculative trie walk therefore need not update the decoded JSON counter for the current
+      // occurrence. EnterJSONStringLengthRule restores enforcement if a token crosses into a
+      // later constrained string; definitive AcceptToken scans never enable this suspension.
+      SuspendJSONStringLengthUntilRuleEntry();
+    }
     // The cache owns several 1024-entry scratch arrays. Keep that storage out of the stack frame
     // for common masks that do not meet the uncertain-token threshold.
     std::unique_ptr<ContinuationTransitionCache> continuation_cache;

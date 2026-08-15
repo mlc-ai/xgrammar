@@ -405,9 +405,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
         character_class_token_summary_cache_(character_class_token_summary_cache),
         enable_direct_character_class_mask_(enable_direct_character_class_mask) {
     if (has_json_string_length_rules_) {
-      XGRAMMAR_DCHECK(!json_string_length_entry_history_.empty());
-      json_string_length_entry_history_.back() = false;
-      tmp_json_string_length_entered_ = false;
+      XGRAMMAR_DCHECK(!json_string_char_count_history_.empty());
+      json_string_char_count_history_.back().length_entered = false;
     }
   }
   /*!

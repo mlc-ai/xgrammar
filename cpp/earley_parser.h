@@ -12,6 +12,7 @@
 #include <optional>
 #include <ostream>
 #include <queue>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -76,10 +77,8 @@ struct ParserState {
       const int32_t& sub_element_id = 0,
       const int32_t& repeat_count = 0,
       const int32_t& partial_codepoint = 0,
-      const int32_t& active_temperature_rule_id = -1,
-      const int32_t& char_budget_deadline = -1,
-      const int32_t& json_string_length_deadline = -1,
-      const int32_t& json_string_min_length_deadline = -1
+      const int32_t& runtime_constraint_context_id = -1,
+      const int32_t& char_budget_deadline = -1
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
@@ -89,10 +88,8 @@ struct ParserState {
         sub_element_id(sub_element_id),
         repeat_count(repeat_count),
         partial_codepoint(partial_codepoint),
-        active_temperature_rule_id(active_temperature_rule_id),
-        char_budget_deadline(char_budget_deadline),
-        json_string_length_deadline(json_string_length_deadline),
-        json_string_min_length_deadline(json_string_min_length_deadline) {}
+        runtime_constraint_context_id(runtime_constraint_context_id),
+        char_budget_deadline(char_budget_deadline) {}
 
   /*!
    * \brief A rule_start_pos value of kNoPrevInputPos means this ParserState is the root of the
@@ -129,20 +126,12 @@ struct ParserState {
   /*! \brief Partial codepoint accumulated during UTF-8 decoding for positive character classes. */
   int32_t partial_codepoint = 0;
 
-  /*! \brief The innermost active rule that specifies a sampling temperature. */
-  int32_t active_temperature_rule_id = -1;
+  /*! \brief Matcher-local handle for temperature and decoded-JSON-length constraints. */
+  int32_t runtime_constraint_context_id = -1;
 
   /*! \brief The number of Unicode codepoints this derivation may consume before its active
    * character budget expires; -1 means unlimited. Stored as an absolute input position. */
   int32_t char_budget_deadline = -1;
-
-  /*! \brief The decoded JSON character index at which this derivation's active string-length
-   * constraint expires; -1 means unlimited. */
-  int32_t json_string_length_deadline = -1;
-
-  /*! \brief The decoded JSON character index that must be reached before the active constrained
-   * string may complete; -1 means no active minimum. */
-  int32_t json_string_min_length_deadline = -1;
 
   /*!
    * \brief Lexicographic order over all fields. It is only used to sort the states for
@@ -159,16 +148,10 @@ struct ParserState {
     if (partial_codepoint != other.partial_codepoint) {
       return partial_codepoint < other.partial_codepoint;
     }
-    if (active_temperature_rule_id != other.active_temperature_rule_id) {
-      return active_temperature_rule_id < other.active_temperature_rule_id;
+    if (runtime_constraint_context_id != other.runtime_constraint_context_id) {
+      return runtime_constraint_context_id < other.runtime_constraint_context_id;
     }
-    if (char_budget_deadline != other.char_budget_deadline) {
-      return char_budget_deadline < other.char_budget_deadline;
-    }
-    if (json_string_length_deadline != other.json_string_length_deadline) {
-      return json_string_length_deadline < other.json_string_length_deadline;
-    }
-    return json_string_min_length_deadline < other.json_string_min_length_deadline;
+    return char_budget_deadline < other.char_budget_deadline;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
@@ -191,23 +174,18 @@ struct ParserState {
     if (budget_deadline != -1) {
       result += ", budget_deadline=" + std::to_string(budget_deadline);
     }
-    if (active_temperature_rule_id != -1) {
-      result += ", active_temperature_rule_id=" + std::to_string(active_temperature_rule_id);
+    if (runtime_constraint_context_id != -1) {
+      result += ", runtime_constraint_context_id=" + std::to_string(runtime_constraint_context_id);
     }
     if (char_budget_deadline != -1) {
       result += ", char_budget_deadline=" + std::to_string(char_budget_deadline);
-    }
-    if (json_string_length_deadline != -1) {
-      result += ", json_string_length_deadline=" + std::to_string(json_string_length_deadline);
-    }
-    if (json_string_min_length_deadline != -1) {
-      result +=
-          ", json_string_min_length_deadline=" + std::to_string(json_string_min_length_deadline);
     }
     result += ")";
     return result;
   }
 };
+
+static_assert(sizeof(ParserState) == 10 * sizeof(int32_t));
 
 XGRAMMAR_MEMBER_ARRAY(
     ParserState,
@@ -219,10 +197,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &ParserState::sub_element_id,
     &ParserState::repeat_count,
     &ParserState::partial_codepoint,
-    &ParserState::active_temperature_rule_id,
-    &ParserState::char_budget_deadline,
-    &ParserState::json_string_length_deadline,
-    &ParserState::json_string_min_length_deadline
+    &ParserState::runtime_constraint_context_id,
+    &ParserState::char_budget_deadline
 );
 
 /*!
@@ -261,10 +237,8 @@ class StateEqualForParsing {
            lhs.sub_element_id == rhs.sub_element_id && lhs.repeat_count == rhs.repeat_count &&
            lhs.partial_codepoint == rhs.partial_codepoint &&
            lhs.budget_deadline == rhs.budget_deadline &&
-           lhs.active_temperature_rule_id == rhs.active_temperature_rule_id &&
-           lhs.char_budget_deadline == rhs.char_budget_deadline &&
-           lhs.json_string_length_deadline == rhs.json_string_length_deadline &&
-           lhs.json_string_min_length_deadline == rhs.json_string_min_length_deadline;
+           lhs.runtime_constraint_context_id == rhs.runtime_constraint_context_id &&
+           lhs.char_budget_deadline == rhs.char_budget_deadline;
   }
 };
 
@@ -284,10 +258,8 @@ class StateHashForParsing {
         state.repeat_count,
         state.partial_codepoint,
         state.budget_deadline,
-        state.active_temperature_rule_id,
-        state.char_budget_deadline,
-        state.json_string_length_deadline,
-        state.json_string_min_length_deadline
+        state.runtime_constraint_context_id,
+        state.char_budget_deadline
     );
   }
 };
@@ -342,10 +314,8 @@ class RepeatDetector {
             existing.sub_element_id == state.sub_element_id &&
             existing.repeat_count == state.repeat_count &&
             existing.partial_codepoint == state.partial_codepoint &&
-            existing.active_temperature_rule_id == state.active_temperature_rule_id &&
-            existing.char_budget_deadline == state.char_budget_deadline &&
-            existing.json_string_length_deadline == state.json_string_length_deadline &&
-            existing.json_string_min_length_deadline == state.json_string_min_length_deadline) {
+            existing.runtime_constraint_context_id == state.runtime_constraint_context_id &&
+            existing.char_budget_deadline == state.char_budget_deadline) {
           return nullptr;
         }
       }
@@ -374,8 +344,7 @@ struct StateEqualForCompletionContext {
     return left.rule_id == right.rule_id && left.rule_start_pos == right.rule_start_pos &&
            left.budget_deadline == right.budget_deadline &&
            left.char_budget_deadline == right.char_budget_deadline &&
-           left.json_string_length_deadline == right.json_string_length_deadline &&
-           left.json_string_min_length_deadline == right.json_string_min_length_deadline;
+           left.runtime_constraint_context_id == right.runtime_constraint_context_id;
   }
 };
 
@@ -386,8 +355,7 @@ struct StateHashForCompletionContext {
         state.rule_start_pos,
         state.budget_deadline,
         state.char_budget_deadline,
-        state.json_string_length_deadline,
-        state.json_string_min_length_deadline
+        state.runtime_constraint_context_id
     );
   }
 };
@@ -562,29 +530,57 @@ class EarleyParser {
     uint32_t unicode_value = 0;
     uint8_t unicode_digits_remaining = 0;
     bool unicode_follows_high_surrogate = false;
+    bool length_entered = false;
+    bool length_suspended = false;
     Phase phase = Phase::kOutside;
 
     bool operator==(const JSONStringCharCounterState& other) const {
       return count == other.count && unicode_value == other.unicode_value &&
              unicode_digits_remaining == other.unicode_digits_remaining &&
              unicode_follows_high_surrogate == other.unicode_follows_high_surrogate &&
+             length_entered == other.length_entered && length_suspended == other.length_suspended &&
              phase == other.phase;
     }
   };
 
   /*! \brief Prefix history for decoded JSON string characters, active only when required. */
   std::vector<JSONStringCharCounterState> json_string_char_count_history_;
-  /*! \brief Whether matching since each history row entered a constrained JSON string rule. */
-  std::vector<bool> json_string_length_entry_history_;
   bool has_json_string_length_rules_ = false;
-  bool tmp_json_string_length_entered_ = false;
   bool tmp_json_string_length_entered_on_latest_advance_ = false;
+  bool tmp_json_string_length_suspended_ = false;
 
   /*! \brief Whether decoded-JSON-string length constraints are enforced by this parser.
    * Token-mask cache construction disables enforcement so its cached rejection set reflects only
    * the underlying grammar; accepted tokens are reclassified as uncertain where length can matter.
    */
   bool enforce_json_string_lengths_ = true;
+
+  struct RuntimeConstraintContext {
+    int32_t active_temperature_rule_id = -1;
+    int32_t json_string_length_deadline = -1;
+    int32_t json_string_min_length_deadline = -1;
+
+    bool operator==(const RuntimeConstraintContext& other) const {
+      return active_temperature_rule_id == other.active_temperature_rule_id &&
+             json_string_length_deadline == other.json_string_length_deadline &&
+             json_string_min_length_deadline == other.json_string_min_length_deadline;
+    }
+  };
+
+  struct RuntimeConstraintContextHash {
+    size_t operator()(const RuntimeConstraintContext& context) const {
+      return HashCombine(
+          context.active_temperature_rule_id,
+          context.json_string_length_deadline,
+          context.json_string_min_length_deadline
+      );
+    }
+  };
+
+  /*! \brief Canonical matcher-local contexts keep ParserState at its original 40-byte size. */
+  std::vector<RuntimeConstraintContext> runtime_constraint_contexts_;
+  std::unordered_map<RuntimeConstraintContext, int32_t, RuntimeConstraintContextHash>
+      runtime_constraint_context_ids_;
 
   /*! \brief Whether a character-budgeted occurrence was entered since the initial parser row. */
   std::vector<bool> char_budget_entry_history_;
@@ -622,41 +618,36 @@ class EarleyParser {
     return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
   }
 
-  /*! \brief The decoded JSON character deadline for a newly predicted rule occurrence. */
-  int32_t JSONStringLengthDeadlineForRule(int32_t rule_id, int32_t parent_deadline) const {
-    if (!has_json_string_length_rules_ || !enforce_json_string_lengths_) {
-      return parent_deadline;
-    }
-    const auto& rule = grammar_->GetRule(rule_id);
-    if (rule.json_string_min_length >= 0) {
-      int32_t json_max_length = rule.json_string_max_length;
-      if (json_max_length < 0) {
-        return parent_deadline;
-      }
-      int64_t deadline = static_cast<int64_t>(GetCurrentJSONStringCharIndex()) + json_max_length;
-      int32_t own_deadline = deadline > std::numeric_limits<int32_t>::max()
-                                 ? std::numeric_limits<int32_t>::max()
-                                 : static_cast<int32_t>(deadline);
-      return parent_deadline >= 0 ? std::min(own_deadline, parent_deadline) : own_deadline;
-    }
-    return parent_deadline;
+  int32_t InternRuntimeConstraintContext(const RuntimeConstraintContext& context);
+
+  /*! \brief Resolve temperature and JSON length constraints for a newly predicted rule. */
+  int32_t RuntimeConstraintContextForRule(int32_t rule_id, int32_t parent_context_id);
+
+  const RuntimeConstraintContext& GetRuntimeConstraintContext(const ParserState& state) const {
+    XGRAMMAR_DCHECK(state.runtime_constraint_context_id >= 0);
+    XGRAMMAR_DCHECK(
+        state.runtime_constraint_context_id <
+        static_cast<int32_t>(runtime_constraint_contexts_.size())
+    );
+    return runtime_constraint_contexts_[state.runtime_constraint_context_id];
   }
 
-  /*! \brief The decoded JSON character minimum for a newly predicted rule occurrence. */
-  int32_t JSONStringMinLengthDeadlineForRule(int32_t rule_id, int32_t parent_deadline) const {
-    if (!has_json_string_length_rules_ || !enforce_json_string_lengths_) {
-      return parent_deadline;
-    }
-    const auto& rule = grammar_->GetRule(rule_id);
-    if (rule.json_string_min_length < 0) {
-      return parent_deadline;
-    }
-    int64_t deadline =
-        static_cast<int64_t>(GetCurrentJSONStringCharIndex()) + rule.json_string_min_length;
-    int32_t own_deadline = deadline > std::numeric_limits<int32_t>::max()
-                               ? std::numeric_limits<int32_t>::max()
-                               : static_cast<int32_t>(deadline);
-    return parent_deadline >= 0 ? std::max(own_deadline, parent_deadline) : own_deadline;
+  int32_t ActiveTemperatureRule(const ParserState& state) const {
+    return state.runtime_constraint_context_id < 0
+               ? -1
+               : GetRuntimeConstraintContext(state).active_temperature_rule_id;
+  }
+
+  int32_t JSONStringLengthDeadline(const ParserState& state) const {
+    return state.runtime_constraint_context_id < 0
+               ? -1
+               : GetRuntimeConstraintContext(state).json_string_length_deadline;
+  }
+
+  int32_t JSONStringMinLengthDeadline(const ParserState& state) const {
+    return state.runtime_constraint_context_id < 0
+               ? -1
+               : GetRuntimeConstraintContext(state).json_string_min_length_deadline;
   }
 
   /*! \brief Whether completion under equal or tighter deadlines can advance the parent. */
@@ -666,20 +657,20 @@ class EarleyParser {
     if (!has_budget_rules_ && !has_char_budget_rules_ && !has_json_string_length_rules_) {
       return true;
     }
+    const int32_t parent_json_max = JSONStringLengthDeadline(parent_state);
+    const int32_t completed_json_max = JSONStringLengthDeadline(completed_state);
+    const int32_t parent_json_min = JSONStringMinLengthDeadline(parent_state);
+    const int32_t completed_json_min = JSONStringMinLengthDeadline(completed_state);
     return (!has_budget_rules_ || parent_state.budget_deadline < 0 ||
             (completed_state.budget_deadline >= 0 &&
              completed_state.budget_deadline <= parent_state.budget_deadline)) &&
            (!has_char_budget_rules_ || parent_state.char_budget_deadline < 0 ||
             (completed_state.char_budget_deadline >= 0 &&
              completed_state.char_budget_deadline <= parent_state.char_budget_deadline)) &&
-           (!has_json_string_length_rules_ || parent_state.json_string_length_deadline < 0 ||
-            (completed_state.json_string_length_deadline >= 0 &&
-             completed_state.json_string_length_deadline <= parent_state.json_string_length_deadline
-            )) &&
-           (!has_json_string_length_rules_ || parent_state.json_string_min_length_deadline < 0 ||
-            (completed_state.json_string_min_length_deadline >= 0 &&
-             completed_state.json_string_min_length_deadline >=
-                 parent_state.json_string_min_length_deadline));
+           (!has_json_string_length_rules_ || parent_json_max < 0 ||
+            (completed_json_max >= 0 && completed_json_max <= parent_json_max)) &&
+           (!has_json_string_length_rules_ || parent_json_min < 0 ||
+            (completed_json_min >= 0 && completed_json_min >= parent_json_min));
   }
 
   /*! \brief Whether the state's derivation may not consume another Unicode codepoint. */
@@ -688,17 +679,20 @@ class EarleyParser {
   }
 
   bool IsJSONStringLengthExpiredState(const ParserState& state, uint8_t next_byte) const {
-    if (!enforce_json_string_lengths_ || state.json_string_length_deadline < 0 ||
+    const int32_t deadline = JSONStringLengthDeadline(state);
+    if (!enforce_json_string_lengths_ || tmp_json_string_length_suspended_ || deadline < 0 ||
         !StartsNewJSONStringCharacter(next_byte)) {
       return false;
     }
-    return GetCurrentJSONStringCharIndex() >= state.json_string_length_deadline;
+    return GetCurrentJSONStringCharIndex() >= deadline;
   }
 
   bool IsJSONStringLengthConstraintActive(const ParserState& state) const {
-    return state.json_string_length_deadline >= 0 ||
-           (state.json_string_min_length_deadline >= 0 &&
-            GetCurrentJSONStringCharIndex() < state.json_string_min_length_deadline);
+    const int32_t max_deadline = JSONStringLengthDeadline(state);
+    const int32_t min_deadline = JSONStringMinLengthDeadline(state);
+    return !tmp_json_string_length_suspended_ &&
+           (max_deadline >= 0 ||
+            (min_deadline >= 0 && GetCurrentJSONStringCharIndex() < min_deadline));
   }
 
   JSONStringCharCounterState AdvanceJSONStringCharCounter(uint8_t byte) const;
@@ -820,10 +814,7 @@ class EarleyParser {
   std::pair<bool, bool> Predict(const ParserState& state, bool debug_print = false);
 
   /*! \brief The initial state expanded from the root rule of the grammar. */
-  ParserState RootInitialState() const;
-
-  /*! \brief Resolve the active temperature rule when entering a rule. */
-  int32_t ResolveActiveTemperatureRule(int32_t rule_id, int32_t inherited_rule_id) const;
+  ParserState RootInitialState();
 
   /*!
    * \brief Expand the rule, used for RuleRef and kTagDispatch.
@@ -1033,7 +1024,6 @@ class EarleyParser {
     }
     if (has_json_string_length_rules_) {
       json_string_char_count_history_.push_back(json_string_char_count_history_.back());
-      json_string_length_entry_history_.push_back(json_string_length_entry_history_.back());
     }
   }
 
@@ -1067,12 +1057,20 @@ class EarleyParser {
     }
   }
 
+  /*! \brief Ignore the current distant JSON length boundary during speculative token matching.
+   * EnterJSONStringLengthRule re-enables enforcement before a later constrained occurrence. */
+  void SuspendJSONStringLengthUntilRuleEntry() {
+    XGRAMMAR_DCHECK(has_json_string_length_rules_);
+    XGRAMMAR_DCHECK(!json_string_char_count_history_.empty());
+    json_string_char_count_history_.back().length_suspended = true;
+  }
+
   bool HasEnteredCharBudget() const {
     return has_char_budget_rules_ && char_budget_entry_history_.back();
   }
 
   bool HasEnteredJSONStringLengthRule() const {
-    return has_json_string_length_rules_ && json_string_length_entry_history_.back();
+    return has_json_string_length_rules_ && json_string_char_count_history_.back().length_entered;
   }
 
   bool EnteredJSONStringLengthRuleOnLatestAdvance() const {

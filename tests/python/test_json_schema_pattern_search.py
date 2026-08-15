@@ -62,6 +62,61 @@ def test_pattern_matches_decoded_json_string_characters(pattern: str, value: str
 
 
 @pytest.mark.parametrize(
+    "pattern,value,expected",
+    [
+        (r"^\d$", '"5"', True),
+        (r"^\d$", '"\\u0035"', True),
+        (r"^\d$", '"٣"', False),
+        (r"^\d$", '"\\u0663"', False),
+        (r"^\D$", '"٣"', True),
+        (r"^\w$", '"A"', True),
+        (r"^\w$", '"_"', True),
+        (r"^\w$", '"é"', False),
+        (r"^\W$", '"é"', True),
+        (r"^\s$", '"\u00a0"', True),
+        (r"^\s$", '"\u2028"', True),
+        (r"^\s$", '"\ufeff"', True),
+        (r"^\s$", '"\\uFEFF"', True),
+        (r"^\s$", '"\u0085"', False),
+        (r"^\s$", '"\\u0085"', False),
+        (r"^\S$", '"\u0085"', True),
+        (r"^\S$", '"\ufeff"', False),
+    ],
+)
+def test_pattern_uses_ecmascript_character_class_escapes(pattern: str, value: str, expected: bool):
+    assert _accepts(pattern, value) is expected
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_bounded_word_pattern_property_rejects_invalid_nested_value_token(
+    enable_dynamic_compilation: bool,
+):
+    schema = {
+        "type": "object",
+        "patternProperties": {
+            r"\w{1,15}": {
+                "type": "object",
+                "properties": {"x": {"type": "integer"}},
+                "required": ["x"],
+            }
+        },
+    }
+    vocabulary = ['{"q": {}}', '{"q": {"x": 1}}']
+    compiled = xgr.GrammarCompiler(
+        xgr.TokenizerInfo(vocabulary, stop_token_ids=[]),
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+
+    invalid_matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    valid_matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert not invalid_matcher.accept_token(0)
+    assert valid_matcher.accept_token(1)
+    assert valid_matcher.is_terminated()
+
+
+@pytest.mark.parametrize(
     "schema,value,expected",
     [
         ({"type": "string", "pattern": "foo", "maxLength": 2}, '"foo"', False),
@@ -164,6 +219,129 @@ def test_pattern_length_counter_resets_at_embedded_grammar_boundary():
     assert _is_grammar_accept_string(grammar, '""ab"')
     assert not _is_grammar_accept_string(grammar, '""b"')
     assert not _is_grammar_accept_string(grammar, '""abc"')
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_pattern_length_counter_restarts_across_token_and_rollback(
+    enable_dynamic_compilation: bool,
+):
+    grammar = xgr.Grammar.from_ebnf(
+        "root ::= first second\n"
+        'first[json_string_min_length=1] ::= "\\"" [a]* "\\""\n'
+        'second[json_string_min_length=2, json_string_max_length=2] ::= "\\"" [b]* "\\""'
+    )
+    vocabulary = ['"a', "aaaa", '"', '""b"', '""bb"']
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(1)  # The first minimum is already satisfied before this token.
+    matcher.rollback(1)
+    assert matcher.accept_token(1)
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[3])  # The token crosses into a new string but supplies only one b.
+    assert bool(allowed[4])
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_distant_maximum_mask_fast_path_preserves_definitive_count(
+    enable_dynamic_compilation: bool,
+):
+    grammar = xgr.Grammar.from_ebnf(
+        "root ::= constrained\nconstrained[json_string_min_length=0, "
+        'json_string_max_length=8] ::= "\\"" [a]* "\\""'
+    )
+    vocabulary = ['"a', "aaaaaa", "aa", '"']
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_token(0)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert bool(allowed[1])  # Remaining 7 exceeds every token's length, so the mask can fast-path.
+
+    # Mask computation is speculative: the definitive accept must still advance the true count.
+    assert matcher.accept_token(1)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[2])
+    assert bool(allowed[3])
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_distant_maximum_mask_fast_path_restarts_in_later_string(enable_dynamic_compilation: bool):
+    grammar = xgr.Grammar.from_ebnf(
+        "root ::= first second\n"
+        'first[json_string_min_length=0, json_string_max_length=100] ::= "\\"" [a]* "\\""\n'
+        'second[json_string_min_length=2, json_string_max_length=2] ::= "\\"" [b]* "\\""'
+    )
+    vocabulary = ['"a', '""b"', '""bb"', '""\\u0062"']
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_token(0)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert not bool(allowed[1])
+    assert bool(allowed[2])
+    assert not bool(allowed[3])  # A Unicode escape still represents only one decoded b.
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_pattern_length_counter_keeps_later_nondeterministic_minimum(
+    enable_dynamic_compilation: bool,
+):
+    grammar = xgr.Grammar.from_ebnf(
+        'root ::= short "x" | long "y"\n'
+        'short[json_string_min_length=1] ::= "\\"" [a]* "\\""\n'
+        'long[json_string_min_length=3] ::= "\\"" [a]* "\\""'
+    )
+    vocabulary = ['"a', "a", '"x', '"y']
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(1)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert bool(allowed[2])
+    assert not bool(allowed[3])
+
+    assert matcher.accept_token(1)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    assert bool(allowed[2])
+    assert bool(allowed[3])
 
 
 def test_pattern_length_completion_survives_tail_call_elision():

@@ -106,6 +106,7 @@ class RegexFSMBuilder {
    * \brief Converts a regex over decoded JSON string contents to an FSM over the encoded body.
    * Every logical code point accepts its raw JSON spelling where permitted, its applicable short
    * escape, and its Unicode escape spelling. Repetition therefore counts decoded code points.
+   * Character-class escapes use ECMA-262 semantics, as required by JSON Schema patterns.
    * \param regex The regex string.
    * \param builder See Build().
    * \param rule_hint See Build().

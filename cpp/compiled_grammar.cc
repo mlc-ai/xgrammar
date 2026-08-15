@@ -197,6 +197,57 @@ std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const 
 
 /************** CompiledGrammar::Impl **************/
 
+// ParserState keeps matcher-only runtime constraints behind a compact context handle, while the
+// v20 CompiledGrammar wire format retains the established 12-int layout. Adaptive mask cache keys
+// are context independent, so their temperature and JSON-length slots must always be inactive.
+picojson::value SerializeJSONValue(const ParserState& state) {
+  XGRAMMAR_DCHECK(state.runtime_constraint_context_id == -1);
+  return AutoSerializeJSONValue(std::vector<int32_t>{
+      state.rule_id,
+      state.sequence_id,
+      state.element_id,
+      state.rule_start_pos,
+      state.budget_deadline,
+      state.sub_element_id,
+      state.repeat_count,
+      state.partial_codepoint,
+      -1,
+      state.char_budget_deadline,
+      -1,
+      -1,
+  });
+}
+
+std::optional<SerializationError> DeserializeJSONValue(
+    ParserState* state, const picojson::value& json_value, const std::string& type_name
+) {
+  std::vector<int32_t> fields;
+  if (auto error = AutoDeserializeJSONValue(&fields, json_value, type_name)) {
+    return error;
+  }
+  if (fields.size() != 12) {
+    return ConstructDeserializeError("Expect a ParserState array of size 12", type_name);
+  }
+  if (fields[8] != -1 || fields[10] != -1 || fields[11] != -1) {
+    return ConstructDeserializeError(
+        "Serialized adaptive-token-mask states must not contain runtime constraints", type_name
+    );
+  }
+  *state = ParserState(
+      fields[0],
+      fields[1],
+      fields[2],
+      fields[3],
+      fields[4],
+      fields[5],
+      fields[6],
+      fields[7],
+      -1,
+      fields[9]
+  );
+  return std::nullopt;
+}
+
 picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   auto result = picojson::object{};
   result["grammar"] = AutoSerializeJSONValue(impl.grammar);

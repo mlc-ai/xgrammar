@@ -537,6 +537,48 @@ TEST(XGrammarFSMBuilderTest, TestRegexJSONStringSpellings) {
   EXPECT_TRUE(RegexFSMBuilder::BuildForJSONString(invalid_utf8_pattern).IsErr());
 }
 
+TEST(XGrammarFSMBuilderTest, TestRegexCharacterClassDialects) {
+  // Ordinary regexes (including Lark terminals) retain the Rust-compatible Unicode shorthands.
+  auto fsm_wse = RegexFSMBuilder::Build("\\d").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("5"));
+  EXPECT_TRUE(fsm_wse.AcceptString("٣"));
+  fsm_wse = RegexFSMBuilder::Build("\\w").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("é"));
+  fsm_wse = RegexFSMBuilder::Build("\\s").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\xC2\x85"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\uFEFF"));
+
+  // JSON Schema patterns use ECMA-262: \d and \w are ASCII-only, including when the decoded
+  // character is written as a JSON Unicode escape.
+  fsm_wse = RegexFSMBuilder::BuildForJSONString("\\d").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("5"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\\u0035"));
+  EXPECT_FALSE(fsm_wse.AcceptString("٣"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\\u0663"));
+  fsm_wse = RegexFSMBuilder::BuildForJSONString("\\D").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("٣"));
+
+  fsm_wse = RegexFSMBuilder::BuildForJSONString("\\w").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("A"));
+  EXPECT_TRUE(fsm_wse.AcceptString("_"));
+  EXPECT_FALSE(fsm_wse.AcceptString("é"));
+  fsm_wse = RegexFSMBuilder::BuildForJSONString("\\W").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("é"));
+
+  // ECMA-262 whitespace contains U+FEFF but not U+0085. Both raw and escaped JSON spellings
+  // represent the same decoded character.
+  fsm_wse = RegexFSMBuilder::BuildForJSONString("\\s").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\u00A0"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\u2028"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\uFEFF"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\\uFEFF"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\xC2\x85"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\\u0085"));
+  fsm_wse = RegexFSMBuilder::BuildForJSONString("\\S").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\xC2\x85"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\uFEFF"));
+}
+
 TEST(XGrammarFSMBuilderTest, TestRegexRepeatZero) {
   // {0} / {0,0} matches exactly the empty string (ECMA-262 semantics, and consistent
   // with the EBNF parser and the CFG fallback path).

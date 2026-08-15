@@ -345,6 +345,8 @@ def test_serialize_compiled_grammar():
     print(serialized)
     assert recovered_obj == expected_json
     AdaptiveTokenMaskCache.model_validate(adaptive_token_mask_cache)
+    assert all(len(state) == 12 for state, _ in adaptive_token_mask_cache)
+    assert all(state[8] == state[10] == state[11] == -1 for state, _ in adaptive_token_mask_cache)
 
 
 def test_serialize_compiled_grammar_roundtrip():

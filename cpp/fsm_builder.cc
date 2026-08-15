@@ -971,6 +971,46 @@ struct RegexEscapeItem {
   uint32_t codepoint = 0;
 };
 
+/*! \brief Character-class escape semantics used by the regex source language. */
+enum class RegexCharacterClassDialect {
+  // Rust/Lark-compatible Unicode shorthands.
+  kUnicode,
+  // ECMA-262 shorthands used by JSON Schema patterns.
+  kECMAScript,
+};
+
+std::vector<CodepointRange> RegexWhitespaceRanges(RegexCharacterClassDialect character_class_dialect
+) {
+  if (character_class_dialect == RegexCharacterClassDialect::kECMAScript) {
+    // ECMA-262 WhiteSpace and LineTerminator code points. Unlike the Unicode White_Space
+    // property this includes U+FEFF and excludes U+0085.
+    return {
+        {0x0009, 0x000D},
+        {0x0020, 0x0020},
+        {0x00A0, 0x00A0},
+        {0x1680, 0x1680},
+        {0x2000, 0x200A},
+        {0x2028, 0x2029},
+        {0x202F, 0x202F},
+        {0x205F, 0x205F},
+        {0x3000, 0x3000},
+        {0xFEFF, 0xFEFF},
+    };
+  }
+  return {
+      {0x0009, 0x000D},
+      {0x0020, 0x0020},
+      {0x0085, 0x0085},
+      {0x00A0, 0x00A0},
+      {0x1680, 0x1680},
+      {0x2000, 0x200A},
+      {0x2028, 0x2029},
+      {0x202F, 0x202F},
+      {0x205F, 0x205F},
+      {0x3000, 0x3000},
+  };
+}
+
 /*!
  * \brief Parse the escape sequence starting at regex[*pos] == '\\'. On success, *pos is advanced
  * past the escape sequence.
@@ -1079,7 +1119,10 @@ Result<RegexEscapeItem> ParseByteRegexEscape(const std::string& regex, size_t* p
 }
 
 Result<RegexEscapeItem> ParseCodepointRegexEscape(
-    const std::string& regex, size_t* pos, bool in_class
+    const std::string& regex,
+    size_t* pos,
+    bool in_class,
+    RegexCharacterClassDialect character_class_dialect
 ) {
   XGRAMMAR_DCHECK(regex[*pos] == '\\');
   if (*pos + 1 >= regex.size()) {
@@ -1131,46 +1174,40 @@ Result<RegexEscapeItem> ParseCodepointRegexEscape(
     case '9':
       return ResultErr("Backreference \\" + std::string(1, escaped) + " is not supported in regex");
     case 'd':
-      AppendUnicodeRegexDecimalRanges(&item.ranges);
+      if (character_class_dialect == RegexCharacterClassDialect::kECMAScript) {
+        item.ranges = {{'0', '9'}};
+      } else {
+        AppendUnicodeRegexDecimalRanges(&item.ranges);
+      }
       return ResultOk(std::move(item));
     case 'D':
-      AppendUnicodeRegexDecimalRanges(&item.ranges);
+      if (character_class_dialect == RegexCharacterClassDialect::kECMAScript) {
+        item.ranges = {{'0', '9'}};
+      } else {
+        AppendUnicodeRegexDecimalRanges(&item.ranges);
+      }
       item.negated = true;
       return ResultOk(std::move(item));
     case 'w':
-      AppendUnicodeRegexWordRanges(&item.ranges);
+      if (character_class_dialect == RegexCharacterClassDialect::kECMAScript) {
+        item.ranges = {{'0', '9'}, {'A', 'Z'}, {'_', '_'}, {'a', 'z'}};
+      } else {
+        AppendUnicodeRegexWordRanges(&item.ranges);
+      }
       return ResultOk(std::move(item));
     case 'W':
-      AppendUnicodeRegexWordRanges(&item.ranges);
+      if (character_class_dialect == RegexCharacterClassDialect::kECMAScript) {
+        item.ranges = {{'0', '9'}, {'A', 'Z'}, {'_', '_'}, {'a', 'z'}};
+      } else {
+        AppendUnicodeRegexWordRanges(&item.ranges);
+      }
       item.negated = true;
       return ResultOk(std::move(item));
     case 's':
-      item.ranges = {
-          {0x0009, 0x000D},
-          {0x0020, 0x0020},
-          {0x0085, 0x0085},
-          {0x00A0, 0x00A0},
-          {0x1680, 0x1680},
-          {0x2000, 0x200A},
-          {0x2028, 0x2029},
-          {0x202F, 0x202F},
-          {0x205F, 0x205F},
-          {0x3000, 0x3000},
-      };
+      item.ranges = RegexWhitespaceRanges(character_class_dialect);
       return ResultOk(std::move(item));
     case 'S':
-      item.ranges = {
-          {0x0009, 0x000D},
-          {0x0020, 0x0020},
-          {0x0085, 0x0085},
-          {0x00A0, 0x00A0},
-          {0x1680, 0x1680},
-          {0x2000, 0x200A},
-          {0x2028, 0x2029},
-          {0x202F, 0x202F},
-          {0x205F, 0x205F},
-          {0x3000, 0x3000},
-      };
+      item.ranges = RegexWhitespaceRanges(character_class_dialect);
       item.negated = true;
       return ResultOk(std::move(item));
     case 'x':
@@ -1254,10 +1291,14 @@ Result<RegexEscapeItem> ParseCodepointRegexEscape(
 }
 
 Result<RegexEscapeItem> ParseRegexEscape(
-    const std::string& regex, size_t* pos, bool in_class, bool byte_mode
+    const std::string& regex,
+    size_t* pos,
+    bool in_class,
+    bool byte_mode,
+    RegexCharacterClassDialect character_class_dialect
 ) {
   return byte_mode ? ParseByteRegexEscape(regex, pos, in_class)
-                   : ParseCodepointRegexEscape(regex, pos, in_class);
+                   : ParseCodepointRegexEscape(regex, pos, in_class, character_class_dialect);
 }
 
 enum class CharacterClassSetOp { kIntersection, kDifference, kSymmetricDifference };
@@ -1289,11 +1330,19 @@ std::optional<std::vector<CodepointRange>> ASCIICharacterClassRanges(const std::
 }
 
 Result<std::vector<CodepointRange>> ParseBracketedCharacterClass(
-    const std::string& regex, size_t* pos, bool case_insensitive, bool byte_mode
+    const std::string& regex,
+    size_t* pos,
+    bool case_insensitive,
+    bool byte_mode,
+    RegexCharacterClassDialect character_class_dialect
 );
 
 Result<CharacterClassUnit> ParseCharacterClassUnit(
-    const std::string& regex, size_t* pos, bool case_insensitive, bool byte_mode
+    const std::string& regex,
+    size_t* pos,
+    bool case_insensitive,
+    bool byte_mode,
+    RegexCharacterClassDialect character_class_dialect
 ) {
   XGRAMMAR_DCHECK(*pos < regex.size());
   if (regex[*pos] == '[') {
@@ -1323,7 +1372,9 @@ Result<CharacterClassUnit> ParseCharacterClassUnit(
       // regex-syntax treats a malformed or unknown `[:name:]` spelling as an ordinary nested
       // class instead of reporting a special POSIX-class error.
     }
-    auto nested = ParseBracketedCharacterClass(regex, pos, case_insensitive, byte_mode);
+    auto nested = ParseBracketedCharacterClass(
+        regex, pos, case_insensitive, byte_mode, character_class_dialect
+    );
     if (nested.IsErr()) {
       return ResultErr(std::move(nested).UnwrapErr());
     }
@@ -1332,7 +1383,8 @@ Result<CharacterClassUnit> ParseCharacterClassUnit(
 
   RegexEscapeItem item;
   if (regex[*pos] == '\\') {
-    auto parsed = ParseRegexEscape(regex, pos, /*in_class=*/true, byte_mode);
+    auto parsed =
+        ParseRegexEscape(regex, pos, /*in_class=*/true, byte_mode, character_class_dialect);
     if (parsed.IsErr()) {
       return ResultErr(std::move(parsed).UnwrapErr());
     }
@@ -1373,7 +1425,11 @@ Result<CharacterClassUnit> ParseCharacterClassUnit(
 }
 
 Result<std::vector<CodepointRange>> ParseBracketedCharacterClass(
-    const std::string& regex, size_t* pos, bool case_insensitive, bool byte_mode
+    const std::string& regex,
+    size_t* pos,
+    bool case_insensitive,
+    bool byte_mode,
+    RegexCharacterClassDialect character_class_dialect
 ) {
   XGRAMMAR_DCHECK(*pos < regex.size() && regex[*pos] == '[');
   ++*pos;
@@ -1470,7 +1526,8 @@ Result<std::vector<CodepointRange>> ParseBracketedCharacterClass(
       continue;
     }
 
-    auto unit_result = ParseCharacterClassUnit(regex, pos, case_insensitive, byte_mode);
+    auto unit_result =
+        ParseCharacterClassUnit(regex, pos, case_insensitive, byte_mode, character_class_dialect);
     if (unit_result.IsErr()) {
       return ResultErr(std::move(unit_result).UnwrapErr());
     }
@@ -1480,7 +1537,8 @@ Result<std::vector<CodepointRange>> ParseBracketedCharacterClass(
                     *pos + 1 < regex.size() && regex[*pos + 1] != '-' && regex[*pos + 1] != ']';
     if (is_range) {
       ++*pos;
-      auto high_result = ParseCharacterClassUnit(regex, pos, case_insensitive, byte_mode);
+      auto high_result =
+          ParseCharacterClassUnit(regex, pos, case_insensitive, byte_mode, character_class_dialect);
       if (high_result.IsErr()) {
         return ResultErr(std::move(high_result).UnwrapErr());
       }
@@ -1506,10 +1564,15 @@ Result<std::vector<CodepointRange>> ParseBracketedCharacterClass(
  * \brief Parse a character class leaf "[...]" into the final set of accepted codepoint ranges.
  */
 Result<std::vector<CodepointRange>> ParseCharacterClassLeaf(
-    const std::string& regex, bool case_insensitive, bool byte_mode
+    const std::string& regex,
+    bool case_insensitive,
+    bool byte_mode,
+    RegexCharacterClassDialect character_class_dialect
 ) {
   size_t pos = 0;
-  auto result = ParseBracketedCharacterClass(regex, &pos, case_insensitive, byte_mode);
+  auto result = ParseBracketedCharacterClass(
+      regex, &pos, case_insensitive, byte_mode, character_class_dialect
+  );
   if (result.IsErr()) {
     return result;
   }
@@ -2127,6 +2190,8 @@ int RegexIR::AddSingleCodepoint(
 Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(
     const std::string& regex, bool case_insensitive, bool leaf_byte_mode
 ) const {
+  const auto character_class_dialect =
+      json_string ? RegexCharacterClassDialect::kECMAScript : RegexCharacterClassDialect::kUnicode;
   FSM initial_fsm(1);
   FSMWithStartEnd result(initial_fsm, 0, {}, false);
   if (regex.empty()) {
@@ -2136,7 +2201,8 @@ Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(
   }
   if (regex[0] == '[') {
     // Character class.
-    auto ranges_result = ParseCharacterClassLeaf(regex, case_insensitive, leaf_byte_mode);
+    auto ranges_result =
+        ParseCharacterClassLeaf(regex, case_insensitive, leaf_byte_mode, character_class_dialect);
     if (ranges_result.IsErr()) {
       return ResultErr(std::move(ranges_result).UnwrapErr());
     }
@@ -2181,7 +2247,9 @@ Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(
       continue;
     }
     if (regex[pos] == '\\') {
-      auto item_result = ParseRegexEscape(regex, &pos, /*in_class=*/false, leaf_byte_mode);
+      auto item_result = ParseRegexEscape(
+          regex, &pos, /*in_class=*/false, leaf_byte_mode, character_class_dialect
+      );
       if (item_result.IsErr()) {
         return ResultErr(std::move(item_result).UnwrapErr());
       }
@@ -2351,6 +2419,8 @@ Result<RegexIR> ParseRegexToIR(
   bool case_insensitive = false;
   bool multiline = false;
   bool unicode = !byte_mode;
+  const auto character_class_dialect =
+      json_string ? RegexCharacterClassDialect::kECMAScript : RegexCharacterClassDialect::kUnicode;
 
   // Mirror the error format of the RegexConverter path: a 1-based position in the pattern.
   auto error_at = [&](int pos, const std::string& message) {
@@ -2420,7 +2490,9 @@ Result<RegexIR> ParseRegexToIR(
       leaf.case_insensitive = case_insensitive;
       leaf.byte_mode = !unicode;
       if (leaf.byte_mode) {
-        auto validation = ParseCharacterClassLeaf(leaf.regex, case_insensitive, leaf.byte_mode);
+        auto validation = ParseCharacterClassLeaf(
+            leaf.regex, case_insensitive, leaf.byte_mode, character_class_dialect
+        );
         if (validation.IsErr()) {
           return ResultErr(error_at(i, std::move(validation).UnwrapErr().what()));
         }
@@ -2792,7 +2864,9 @@ Result<RegexIR> ParseRegexToIR(
     RegexIR::Leaf leaf;
     if (current_char == '\\') {
       size_t escape_end = i;
-      auto escape_result = ParseRegexEscape(regex, &escape_end, /*in_class=*/false, !unicode);
+      auto escape_result = ParseRegexEscape(
+          regex, &escape_end, /*in_class=*/false, !unicode, character_class_dialect
+      );
       if (escape_result.IsErr()) {
         return ResultErr(error_at(i, std::move(escape_result).UnwrapErr().what()));
       }
