@@ -3186,7 +3186,9 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       atomic_trial_base->capture_recording_ = false;
     }
     PushOneStateToCheck(state);
-    std::optional<ContinuationTransitionCache> continuation_cache;
+    // The cache owns several 1024-entry scratch arrays. Keep that storage out of the stack frame
+    // for common masks that do not meet the uncertain-token threshold.
+    std::unique_ptr<ContinuationTransitionCache> continuation_cache;
     // The canonical configuration includes the complete JSON lexical counter, so transitions
     // inside a constrained string are reused only at the same decoded length and escape phase.
     // Materialized hits restore that counter, and the cache still stops exactly when a transition
@@ -3194,7 +3196,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     if (!has_budget_rules_ && !has_char_budget_rules_ && !capture_tracking_ &&
         adaptive_token_mask.store_type != StoreType::kRejected &&
         adaptive_token_mask.uncertain_indices.size() >= kMinUncertainTokensForContinuationCache) {
-      continuation_cache.emplace(this);
+      continuation_cache = std::make_unique<ContinuationTransitionCache>(this);
     }
     bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
     int32_t saved_temporary_input_start_row = -1;
