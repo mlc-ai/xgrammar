@@ -1375,6 +1375,13 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
             grammar_expr.type != GrammarExprType::kTokenTagDispatch
         ) << "TagDispatch rules should already exist in empty_rule_id_set";
 
+        if (Grammar::Impl::IsRegexExpressionType(grammar_expr.type)) {
+          // The nullability of regex-like rule bodies does not depend on referenced rules and
+          // was already determined in FindExplicitEmptyRules. Their children are operands, not
+          // choice sequences, so the generic loop below must not visit them.
+          continue;
+        }
+
         bool is_epsilon = std::any_of(grammar_expr.begin(), grammar_expr.end(), [&](int32_t i) {
           auto seq_expr = base_grammar_->GetGrammarExpr(i);
           return SeqExprIsEpsilon(seq_expr, *empty_rule_id_set);
