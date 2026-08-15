@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <future>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -249,5 +250,92 @@ namespace {
 //     EXPECT_EQ(futures[i].get(), std::to_string(-i));
 //   }
 // }
+
+struct CacheValue {
+  int payload;
+  std::size_t size;
+};
+
+struct CacheValueSizeEstimator {
+  std::size_t operator()(const CacheValue& value) const { return value.size; }
+};
+
+struct CountingCacheComputer {
+  std::shared_ptr<std::atomic_size_t> count;
+
+  CacheValue operator()(int key) const {
+    ++*count;
+    return CacheValue{key, static_cast<std::size_t>(key)};
+  }
+};
+
+TEST(XGrammarThreadSafeLRUCacheTest, UnlimitedClearResetsMemorySize) {
+  auto count = std::make_shared<std::atomic_size_t>(0);
+  auto cache = ThreadSafeLRUCache<int, CacheValue, CountingCacheComputer, CacheValueSizeEstimator>{
+      ThreadSafeLRUCache<int, CacheValue, CountingCacheComputer, CacheValueSizeEstimator>::
+          kUnlimitedSize,
+      CountingCacheComputer{count}
+  };
+
+  EXPECT_EQ(cache.Get(7).payload, 7);
+  EXPECT_EQ(cache.MemorySize(), 7);
+  EXPECT_EQ(*count, 1);
+  cache.Clear();
+  EXPECT_EQ(cache.MemorySize(), 0);
+
+  EXPECT_EQ(cache.Get(7).payload, 7);
+  EXPECT_EQ(cache.MemorySize(), 7);
+  EXPECT_EQ(*count, 2);
+}
+
+TEST(XGrammarThreadSafeLRUCacheTest, LimitedCacheEvictsAfterComputedValueCrossesLimit) {
+  auto count = std::make_shared<std::atomic_size_t>(0);
+  auto cache = ThreadSafeLRUCache<int, CacheValue, CountingCacheComputer, CacheValueSizeEstimator>{
+      5, CountingCacheComputer{count}
+  };
+
+  // The size is unknown until computation finishes. The returned value remains usable even when
+  // its own cache entry must be evicted to restore the configured limit.
+  EXPECT_EQ(cache.Get(7).payload, 7);
+  EXPECT_LE(cache.MemorySize(), 5);
+  EXPECT_EQ(*count, 1);
+  EXPECT_EQ(cache.Get(7).payload, 7);
+  EXPECT_LE(cache.MemorySize(), 5);
+  EXPECT_EQ(*count, 2);
+}
+
+struct BlockingCacheComputer {
+  std::shared_ptr<std::promise<void>> started;
+  std::shared_future<void> release;
+
+  CacheValue operator()(int key) const {
+    started->set_value();
+    release.wait();
+    return CacheValue{key, 1};
+  }
+};
+
+TEST(XGrammarThreadSafeLRUCacheTest, UnlimitedClearWaitsForInFlightValue) {
+  using namespace std::chrono_literals;
+
+  auto started = std::make_shared<std::promise<void>>();
+  auto started_future = started->get_future();
+  auto release = std::make_shared<std::promise<void>>();
+  auto cache = ThreadSafeLRUCache<int, CacheValue, BlockingCacheComputer, CacheValueSizeEstimator>{
+      ThreadSafeLRUCache<int, CacheValue, BlockingCacheComputer, CacheValueSizeEstimator>::
+          kUnlimitedSize,
+      BlockingCacheComputer{started, release->get_future().share()}
+  };
+
+  auto get_future = std::async(std::launch::async, [&cache] { return cache.Get(1).payload; });
+  started_future.wait();
+  auto clear_future = std::async(std::launch::async, [&cache] { cache.Clear(); });
+  EXPECT_EQ(clear_future.wait_for(10ms), std::future_status::timeout);
+
+  release->set_value();
+  EXPECT_EQ(get_future.get(), 1);
+  clear_future.get();
+  EXPECT_EQ(cache.MemorySize(), 0);
+}
 
 }  // namespace

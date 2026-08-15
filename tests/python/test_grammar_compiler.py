@@ -605,5 +605,40 @@ def test_sharded_rule_cache_concurrent_compilation():
     assert compiler.get_cache_size_bytes() == 0
 
 
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True], ids=["eager", "dynamic"])
+def test_unlimited_compiler_cache_clear_resets_memory_size(enable_dynamic_compilation: bool):
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c"], stop_token_ids=[])
+    compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=4,
+        cache_enabled=True,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    )
+    compiled = compiler.compile_grammar('root ::= ("a" | "b") "c"')
+    assert compiler.get_cache_size_bytes() > 0
+
+    compiler.clear_cache()
+    assert compiler.get_cache_size_bytes() == 0
+
+    # Objects returned before the clear remain independently usable.
+    assert _compiled_accepts(compiled, "ac")
+
+
+def test_limited_compiler_cache_evicts_value_that_crosses_limit():
+    tokenizer_info = xgr.TokenizerInfo([chr(value) for value in range(32, 127)], stop_token_ids=[])
+    cache_limit = 64 * 1024
+    compiler = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=4,
+        cache_enabled=True,
+        cache_limit_bytes=cache_limit,
+        enable_dynamic_compilation=False,
+    )
+
+    compiled = compiler.compile_builtin_json_grammar()
+    assert compiler.get_cache_size_bytes() <= cache_limit
+    assert _compiled_accepts(compiled, '{"a": 1}')
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

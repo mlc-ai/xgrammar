@@ -287,11 +287,22 @@ class ThreadSafeLRUCache {
   }
 
   void Clear() {
-    // Remove all the ready entries.
+    // Remove every entry after its size accounting has settled.
     const auto lock_map = std::lock_guard{map_mutex_};
-    if (this->max_size_ == kUnlimitedSize)
+    if (this->max_size_ == kUnlimitedSize) {
+      // Computation happens after releasing map_mutex_.  Wait for every in-flight value before
+      // resetting the counter so that a late completion cannot add the size of an entry that has
+      // already been removed.
+      for (const auto& [_, entry] : cache_.GetMap()) {
+        try {
+          entry.value.get();
+        } catch (...) {
+          // Failed computations do not contribute to current_size_.
+        }
+      }
       cache_.GetMap().clear();
-    else
+      current_size_ = 0;
+    } else {
       cache_.LRUEvict(
           [] { return true; },
           [&](const std::shared_future<SizedValue>& value) {
@@ -304,6 +315,7 @@ class ThreadSafeLRUCache {
             return true;
           }
       );
+    }
   }
 
  private:
@@ -357,6 +369,28 @@ class ThreadSafeLRUCache {
     // perform the costly computation outside all locks
     lock_map.unlock();
     task();
+
+    // The value size is only known after computation.  A cache miss can therefore cross the
+    // limit after the pre-computation eviction above, especially when one compiled value is
+    // larger than the remaining capacity.  Enforce the limit again now that its real size is
+    // available.  The returned shared_future keeps the value alive even if this evicts its own
+    // cache entry.
+    if (current_size_ > max_size_) {
+      lock_map.lock();
+      cache_.LRUEvict(
+          [&] { return current_size_ > max_size_; },
+          [&](const std::shared_future<SizedValue>& value) {
+            using namespace std::chrono_literals;
+            if (value.wait_for(0s) != std::future_status::ready) return false;
+            try {
+              current_size_ -= value.get().size;
+            } catch (...) {
+              // Failed computations do not contribute to current_size_.
+            }
+            return true;
+          }
+      );
+    }
     return future;
   }
 
