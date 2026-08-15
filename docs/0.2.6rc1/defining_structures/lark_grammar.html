@@ -1,0 +1,1452 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Building Docs" href="../developer_guide/building_docs.html"><link rel="prev" title="EBNF Grammar" href="ebnf_grammar.html">
+        <link rel="prefetch" href="../_static/img/logo.png" as="image">
+        <link rel="prefetch" href="../_static/img/logo_dark.svg" as="image">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>Lark Grammar - XGrammar 0.2.6rc1</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/autodoc_pydantic.css" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">XGrammar 0.2.6rc1</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  <div class="sidebar-logo-container">
+    <img class="sidebar-logo only-light" src="../_static/img/logo.png" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../_static/img/logo_dark.svg" alt="Dark Logo"/>
+  </div>
+  
+  <span class="sidebar-brand-text">XGrammar 0.2.6rc1</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/quick_start.html">Quick Start</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../start/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../structural_tag/structural_tag.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../structural_tag/tool_calling_and_reasoning.html">Tool Calling and Reasoning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../structural_tag/advanced_usage.html">Advanced Topics of Structural Tag</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Using XGrammar</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../using_xgrammar/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Defining Structures</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="ebnf_grammar.html">EBNF Grammar</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Lark Grammar</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../developer_guide/code_coverage.html">Code Coverage</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../api/python/index.html">XGrammar Python API</a><input aria-label="Toggle navigation of XGrammar Python API" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/grammar.html">xgr.Grammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/tokenizer_info.html">xgr.TokenizerInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/grammar_compiler.html">xgr.GrammarCompiler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/compiled_grammar.html">xgr.CompiledGrammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/grammar_matcher.html">xgr.GrammarMatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/testing.html">xgr.testing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/structural_tag.html">Structural Tag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/builtin_structural_tag.html">Builtin Structural Tag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/openai_tool_call_schema.html">OpenAI Tool Call Schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/bitmask_ops.html">Bitmask Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/config.html">Config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/python/exception.html">Exception</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page github-repository">
+  <a class="muted-link" href="https://github.com/mlc-ai/xgrammar" title="XGrammar on GitHub">
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path fill="currentColor" fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path>
+    </svg>
+    <span class="visually-hidden">XGrammar on GitHub</span>
+  </a>
+</div>
+<div class="view-this-page">
+  <a class="muted-link" href="https://github.com/mlc-ai/xgrammar/blob/main/docs/defining_structures/lark_grammar.md?plain=true" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="edit-this-page">
+  <a class="muted-link" href="https://github.com/mlc-ai/xgrammar/edit/main/docs/defining_structures/lark_grammar.md" rel="edit" title="Edit this page">
+    <svg><use href="#svg-pencil"></use></svg>
+    <span class="visually-hidden">Edit this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section class="tex2jax_ignore mathjax_ignore" id="lark-grammar">
+<h1>Lark Grammar<a class="headerlink" href="#lark-grammar" title="Link to this heading">¶</a></h1>
+<p>XGrammar can build grammars from a dialect of the
+<a class="reference external" href="https://lark-parser.readthedocs.io/en/latest/grammar.html">Lark grammar language</a> through
+<a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar.from_lark" title="xgrammar.Grammar.from_lark"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar.from_lark</span></code></span></a>. Lark is a compact, readable notation for
+describing structured text: fixed strings, alternatives, repetition, recursion, and regular
+expressions. The result is a normal <a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar</span></code></span></a>, so it works with the
+existing compiler, matcher, serialization, <code class="docutils literal notranslate"><span class="pre">Grammar.union</span></code> / <code class="docutils literal notranslate"><span class="pre">Grammar.concat</span></code>, and all engine
+integrations.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xgr</span>
+
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    %import common.INT</span>
+<span class="sd">    %import common.WS</span>
+<span class="sd">    %ignore WS</span>
+
+<span class="sd">    start: item (&quot;,&quot; item)*</span>
+<span class="sd">    item: &quot;id=&quot; INT</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>This grammar accepts strings such as <code class="docutils literal notranslate"><span class="pre">id=1</span></code>, <code class="docutils literal notranslate"><span class="pre">id=1,</span> <span class="pre">id=42</span></code>, or <code class="docutils literal notranslate"><span class="pre">id=1</span> <span class="pre">,id=2</span> <span class="pre">,</span> <span class="pre">id=3</span></code>.</p>
+<p>XGrammar’s Lark dialect is compatible with the dialect used by
+<a class="reference external" href="https://github.com/guidance-ai/llguidance">llguidance</a>.</p>
+<section id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+    <span class="n">lark_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">tokenizer_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">named_grammars</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">lark_string</span></code> is the grammar source. It must define a rule named <code class="docutils literal notranslate"><span class="pre">start</span></code>, which is the entry
+point of the grammar.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code> is only required when the grammar uses named special tokens (such as
+<code class="docutils literal notranslate"><span class="pre">&lt;|tool_call|&gt;</span></code>) or the all-token wildcard <code class="docutils literal notranslate"><span class="pre">&lt;[*]&gt;</span></code>. See <a class="reference internal" href="#special-tokens"><span class="std std-ref">Special Tokens</span></a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">named_grammars</span></code> supplies external grammars referenced with <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code> in the Lark source. See
+<a class="reference internal" href="#named-grammars"><span class="std std-ref">Named Grammars</span></a>.</p></li>
+</ul>
+<p>The returned grammar is compiled and matched like any other grammar:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">from_huggingface</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">)</span>
+<span class="n">compiler</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">)</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span><span class="s1">&#39;start: &quot;a&quot; | &quot;b&quot;&#39;</span><span class="p">))</span>
+<span class="n">matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarMatcher</span><span class="p">(</span><span class="n">compiled</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Errors in the grammar raise <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> with the line, the column, and the offending source
+line:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Lark error at line 3, column 6: expected &#39;:&#39; after rule name
+item missing
+     ^
+</pre></div>
+</div>
+</section>
+<section id="grammar-structure">
+<h2>Grammar Structure<a class="headerlink" href="#grammar-structure" title="Link to this heading">¶</a></h2>
+<p>A grammar is a sequence of items separated by newlines. Each item is one of:</p>
+<ul class="simple">
+<li><p>a rule definition: <code class="docutils literal notranslate"><span class="pre">name:</span> <span class="pre">expression</span></code></p></li>
+<li><p>a terminal definition: <code class="docutils literal notranslate"><span class="pre">NAME:</span> <span class="pre">expression</span></code></p></li>
+<li><p>a directive: <code class="docutils literal notranslate"><span class="pre">%import</span></code>, <code class="docutils literal notranslate"><span class="pre">%ignore</span></code>, or <code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code></p></li>
+</ul>
+<p>Comments start with <code class="docutils literal notranslate"><span class="pre">#</span></code> or <code class="docutils literal notranslate"><span class="pre">//</span></code> and run to the end of the line. Blank lines are ignored. An
+alternative may continue on the next line when that line starts with <code class="docutils literal notranslate"><span class="pre">|</span></code>:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &quot;a&quot;
+     | &quot;b&quot;
+     | &quot;c&quot;
+</pre></div>
+</div>
+<section id="rules-and-terminals">
+<h3>Rules and Terminals<a class="headerlink" href="#rules-and-terminals" title="Link to this heading">¶</a></h3>
+<p>Names consist of letters, digits, underscores, and hyphens. A definition whose name starts with a
+lowercase letter (ignoring a leading underscore) is a <strong>rule</strong>; one that starts with an uppercase
+letter is a <strong>terminal</strong>.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: value (&quot;;&quot; value)*     // rule
+value: INT | NAME             // rule referencing terminals
+INT: /[0-9]+/                 // terminal
+NAME: /[a-z]+/                // terminal
+</pre></div>
+</div>
+<p>Rules may reference each other freely, including forward references, direct recursion, and
+indirect recursion:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: value
+value: &quot;x&quot; | &quot;(&quot; value &quot;)&quot; | &quot;[&quot; (value (&quot;,&quot; value)*)? &quot;]&quot;
+</pre></div>
+</div>
+<p>Terminals are matched as one indivisible unit:</p>
+<ul class="simple">
+<li><p>A terminal may be composed of strings, character ranges, regular expressions, repetition, and
+other terminals, but it cannot reference rules and cannot be recursive.</p></li>
+<li><p>Content skipped by <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> is never inserted inside a terminal. In the first example above,
+with <code class="docutils literal notranslate"><span class="pre">%ignore</span> <span class="pre">WS</span></code>, spaces may appear around an <code class="docutils literal notranslate"><span class="pre">INT</span></code> but not between its digits.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">%json</span></code>, <code class="docutils literal notranslate"><span class="pre">%structural_tag</span></code>, <code class="docutils literal notranslate"><span class="pre">%lark</span></code>, special tokens, and <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code> references cannot appear inside
+terminals.</p></li>
+</ul>
+<p>For compatibility with grammars written for parse-tree-producing parsers, XGrammar accepts and
+ignores the rule prefixes <code class="docutils literal notranslate"><span class="pre">?</span></code> and <code class="docutils literal notranslate"><span class="pre">!</span></code> (as in <code class="docutils literal notranslate"><span class="pre">?value:</span> <span class="pre">...</span></code>) and alternative aliases
+(<code class="docutils literal notranslate"><span class="pre">&quot;a&quot;</span> <span class="pre">-&gt;</span> <span class="pre">first</span></code>). These constructs only affect parse-tree shaping and have no effect on which
+strings the grammar accepts.</p>
+</section>
+<section id="string-literals">
+<h3>String Literals<a class="headerlink" href="#string-literals" title="Link to this heading">¶</a></h3>
+<p>String literals use double quotes. They accept JSON escape syntax (<code class="docutils literal notranslate"><span class="pre">\&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">\\</span></code>, <code class="docutils literal notranslate"><span class="pre">\/</span></code>, <code class="docutils literal notranslate"><span class="pre">\b</span></code>, <code class="docutils literal notranslate"><span class="pre">\f</span></code>,
+<code class="docutils literal notranslate"><span class="pre">\n</span></code>, <code class="docutils literal notranslate"><span class="pre">\r</span></code>, <code class="docutils literal notranslate"><span class="pre">\t</span></code>, and <code class="docutils literal notranslate"><span class="pre">\uXXXX</span></code>) and the Lark/Python hexadecimal form <code class="docutils literal notranslate"><span class="pre">\xHH</span></code>. Non-ASCII characters
+may be written directly (<code class="docutils literal notranslate"><span class="pre">&quot;中文&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;😀&quot;</span></code>) or with Unicode escapes (<code class="docutils literal notranslate"><span class="pre">&quot;\u03bb&quot;</span></code> matches <code class="docutils literal notranslate"><span class="pre">λ</span></code>). A
+hexadecimal escape denotes the corresponding Unicode codepoint, so <code class="docutils literal notranslate"><span class="pre">&quot;\x41&quot;</span></code> matches <code class="docutils literal notranslate"><span class="pre">A</span></code> and
+<code class="docutils literal notranslate"><span class="pre">&quot;\xFF&quot;</span></code> matches <code class="docutils literal notranslate"><span class="pre">ÿ</span></code>.</p>
+<p>A trailing <code class="docutils literal notranslate"><span class="pre">i</span></code> makes the literal case-insensitive: <code class="docutils literal notranslate"><span class="pre">&quot;yes&quot;i</span></code> matches <code class="docutils literal notranslate"><span class="pre">yes</span></code>, <code class="docutils literal notranslate"><span class="pre">YES</span></code>, <code class="docutils literal notranslate"><span class="pre">Yes</span></code>, and so
+on. Folding uses Unicode simple case-fold equivalence classes, so <code class="docutils literal notranslate"><span class="pre">&quot;Σk&quot;i</span></code> also matches <code class="docutils literal notranslate"><span class="pre">σK</span></code>,
+<code class="docutils literal notranslate"><span class="pre">ςk</span></code>, and <code class="docutils literal notranslate"><span class="pre">ΣK</span></code>. Simple folding maps one codepoint to one codepoint; it does not expand <code class="docutils literal notranslate"><span class="pre">ß</span></code> into
+the two-character string <code class="docutils literal notranslate"><span class="pre">ss</span></code>. When <code class="docutils literal notranslate"><span class="pre">%grammar_options</span> <span class="pre">{&quot;allow_invalid_utf8&quot;:</span> <span class="pre">true}</span></code> enables byte
+mode, case-insensitive literals are restricted to ASCII.</p>
+</section>
+<section id="character-ranges">
+<h3>Character Ranges<a class="headerlink" href="#character-ranges" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">&quot;a&quot;..&quot;z&quot;</span></code> matches one character between the two endpoints, inclusive. Both endpoints must be
+exactly one character and may be any Unicode character: <code class="docutils literal notranslate"><span class="pre">&quot;α&quot;..&quot;γ&quot;</span></code> matches <code class="docutils literal notranslate"><span class="pre">α</span></code>, <code class="docutils literal notranslate"><span class="pre">β</span></code>, or <code class="docutils literal notranslate"><span class="pre">γ</span></code>. The
+<code class="docutils literal notranslate"><span class="pre">i</span></code> flag is not allowed on range endpoints.</p>
+</section>
+<section id="regular-expressions">
+<h3>Regular Expressions<a class="headerlink" href="#regular-expressions" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">/pattern/</span></code> matches text against a regular expression. The pattern is compiled through XGrammar’s
+regex converter (the same engine as <a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar.from_regex" title="xgrammar.Grammar.from_regex"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar.from_regex</span></code></span></a>) and
+implements the regular-expression language used by llguidance 1.8.0’s <code class="docutils literal notranslate"><span class="pre">regex-syntax</span></code> 0.8.5
+dependency. It supports character classes, alternation, groups, repetition (<code class="docutils literal notranslate"><span class="pre">*</span></code>, <code class="docutils literal notranslate"><span class="pre">+</span></code>, <code class="docutils literal notranslate"><span class="pre">?</span></code>,
+<code class="docutils literal notranslate"><span class="pre">{m,n}</span></code>), character-class set operations, and Rust-style escapes. A <code class="docutils literal notranslate"><span class="pre">/</span></code> inside the pattern is
+written <code class="docutils literal notranslate"><span class="pre">\/</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">.</span></code> matches one Unicode character. By default it does not match newline. Regular expressions
+support the following trailing flags, in any order:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">i</span></code>: use Unicode simple case folding for literals, escapes, and character classes.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">s</span></code>: make <code class="docutils literal notranslate"><span class="pre">.</span></code> match newline as well.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">m</span></code>: select multiline mode. It has no effect in a pattern without line anchors; patterns that
+combine <code class="docutils literal notranslate"><span class="pre">m</span></code> with <code class="docutils literal notranslate"><span class="pre">^</span></code> or <code class="docutils literal notranslate"><span class="pre">$</span></code> are rejected because llguidance 1.8.0 rejects them too.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">x</span></code>: ignore unescaped Unicode whitespace and <code class="docutils literal notranslate"><span class="pre">#</span></code> comments, including inside character classes.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">u</span></code>: explicitly select Unicode semantics. This is a no-op normally, but switches the whole
+literal back to Unicode when <code class="docutils literal notranslate"><span class="pre">allow_invalid_utf8</span></code> has selected byte mode.</p></li>
+</ul>
+<p>The <code class="docutils literal notranslate"><span class="pre">i</span></code>, <code class="docutils literal notranslate"><span class="pre">s</span></code>, <code class="docutils literal notranslate"><span class="pre">m</span></code>, <code class="docutils literal notranslate"><span class="pre">u</span></code>, and <code class="docutils literal notranslate"><span class="pre">x</span></code> flags may also be enabled within a pattern, either for the rest of
+the enclosing group (<code class="docutils literal notranslate"><span class="pre">(?i)</span></code>) or for one group (<code class="docutils literal notranslate"><span class="pre">(?i:...)</span></code>). Scoped forms may disable flags, as in
+<code class="docutils literal notranslate"><span class="pre">(?-i:...)</span></code> and <code class="docutils literal notranslate"><span class="pre">(?-u:...)</span></code>. The inline-only <code class="docutils literal notranslate"><span class="pre">R</span></code> flag makes a non-dotall <code class="docutils literal notranslate"><span class="pre">.</span></code> exclude both carriage
+return and line feed; <code class="docutils literal notranslate"><span class="pre">U</span></code> swaps greedy and non-greedy preference, which does not change the
+accepted language. Trailing <code class="docutils literal notranslate"><span class="pre">R</span></code> and <code class="docutils literal notranslate"><span class="pre">U</span></code> are not part of llguidance’s Lark literal syntax. Flag
+state is preserved when a large bounded repetition is lowered to a helper rule. The locale flag
+<code class="docutils literal notranslate"><span class="pre">l</span></code> is not supported.</p>
+<p>In Unicode mode, <code class="docutils literal notranslate"><span class="pre">\d</span></code> uses the Unicode <code class="docutils literal notranslate"><span class="pre">Decimal_Number</span></code> category, <code class="docutils literal notranslate"><span class="pre">\w</span></code> uses the Unicode Perl-word
+class, and <code class="docutils literal notranslate"><span class="pre">\s</span></code> uses the Unicode <code class="docutils literal notranslate"><span class="pre">White_Space</span></code> property. Their uppercase forms are complements
+within the valid Unicode scalar range. Byte mode deliberately keeps the ASCII definitions.</p>
+<p>Unicode property escapes (<code class="docutils literal notranslate"><span class="pre">\p</span></code> and <code class="docutils literal notranslate"><span class="pre">\P</span></code>) are not supported. Use the built-in Unicode shorthand
+classes <code class="docutils literal notranslate"><span class="pre">\d</span></code>, <code class="docutils literal notranslate"><span class="pre">\w</span></code>, and <code class="docutils literal notranslate"><span class="pre">\s</span></code>, explicit character ranges, or character-class set operations
+instead. Rejecting arbitrary properties avoids bundling the full Unicode property database.</p>
+<p>Character classes support nested classes; ASCII named classes such as <code class="docutils literal notranslate"><span class="pre">[[:alpha:]]</span></code>; and <code class="docutils literal notranslate"><span class="pre">&amp;&amp;</span></code>
+(intersection), <code class="docutils literal notranslate"><span class="pre">--</span></code> (difference), and <code class="docutils literal notranslate"><span class="pre">~~</span></code> (symmetric difference). The three set operators have
+equal precedence and associate from left to right. Case folding is applied to each operand before
+set operations and complement.</p>
+<p>The escapes <code class="docutils literal notranslate"><span class="pre">\A</span></code> and <code class="docutils literal notranslate"><span class="pre">\z</span></code> anchor the entire text, and <code class="docutils literal notranslate"><span class="pre">^</span></code> and <code class="docutils literal notranslate"><span class="pre">$</span></code> are accepted at branch
+boundaries. Rust codepoint spellings such as <code class="docutils literal notranslate"><span class="pre">\x{41}</span></code>, <code class="docutils literal notranslate"><span class="pre">\u0041</span></code>, <code class="docutils literal notranslate"><span class="pre">\U0001F600</span></code>, and <code class="docutils literal notranslate"><span class="pre">\U{1F600}</span></code>
+are supported. Named capturing groups accept Rust’s Unicode names and compile as ordinary groups;
+XGrammar does not expose their captured substrings. Word boundaries (<code class="docutils literal notranslate"><span class="pre">\b</span></code>, <code class="docutils literal notranslate"><span class="pre">\B</span></code>), backreferences,
+and lookaround assertions are rejected. Large bounded repetitions such as <code class="docutils literal notranslate"><span class="pre">{0,10000}</span></code> are
+compiled through the grammar-level repetition mechanism and do not expand the automaton.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: /a.b/      // accepts &quot;acb&quot;, &quot;a😀b&quot;; rejects &quot;a\nb&quot;
+line: /a.b/s      // also accepts &quot;a\nb&quot;
+word: /Σk+/i      // accepts &quot;Σk&quot;, &quot;σKK&quot;, and &quot;ςK&quot;
+consonants: /[a-z&amp;&amp;[^aeiou]]+/
+ascii_word: /(?-u:\w)+/
+compact: /(?x: a b \# c # comment
+                 d )/      // accepts &quot;ab#cd&quot;
+</pre></div>
+</div>
+</section>
+<section id="terminal-intersections">
+<h3>Terminal Intersections<a class="headerlink" href="#terminal-intersections" title="Link to this heading">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">&amp;</span></code> operator intersects two terminal expressions: the result accepts only strings accepted by
+both operands. Every operand must have a regular language that can be represented by a
+finite-state automaton: it may contain regexes, strings, character ranges, groups, repetitions,
+and uppercase terminal references, but no lowercase rule references. Intersections can be used in
+uppercase terminal definitions and directly in lowercase rules, where they behave like terminals.</p>
+<p><code class="docutils literal notranslate"><span class="pre">&amp;</span></code> binds more tightly than <code class="docutils literal notranslate"><span class="pre">|</span></code>, so <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">&amp;</span> <span class="pre">B</span> <span class="pre">|</span> <span class="pre">C</span></code> means <code class="docutils literal notranslate"><span class="pre">(A</span> <span class="pre">&amp;</span> <span class="pre">B)</span> <span class="pre">|</span> <span class="pre">C</span></code>. Use parentheses when an
+alternative should be one operand of an intersection.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: IDENTIFIER
+
+IDENTIFIER: ASCII_NAME &amp; NO_LEADING_DIGIT
+ASCII_NAME: /[A-Za-z0-9_]+/
+NO_LEADING_DIGIT: /[A-Za-z_][A-Za-z0-9_]*/
+</pre></div>
+</div>
+<p>Intersection can be more expensive to compile than an equivalent plain regular expression because
+the compiler constructs the product of the operands’ automata. Compilation fails instead of
+growing without bound if the built-in automaton state limit is exceeded.</p>
+</section>
+<section id="regular-expression-complements">
+<h3>Regular-Expression Complements<a class="headerlink" href="#regular-expression-complements" title="Link to this heading">¶</a></h3>
+<p>Prefix <code class="docutils literal notranslate"><span class="pre">~</span></code> complements one terminal expression: it accepts every valid Unicode string that the
+operand rejects, including the empty string when the operand does not match it. The operand
+follows the same rules as an intersection operand. Complements can be used in uppercase terminal
+definitions and directly in lowercase rules, and can be combined with <code class="docutils literal notranslate"><span class="pre">&amp;</span></code> (for example
+<code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">&amp;</span> <span class="pre">~B</span></code> matches the strings in <code class="docutils literal notranslate"><span class="pre">A</span></code> but not in <code class="docutils literal notranslate"><span class="pre">B</span></code>).</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: WITHOUT_CONTROL
+
+WITHOUT_CONTROL: ~/.*[\x00-\x1F].*/s
+</pre></div>
+</div>
+<p>Complement construction determinizes the operand’s automaton, which can be expensive; compilation
+fails instead of growing without bound if the built-in automaton state limit is exceeded.
+Lowercase rule references, special tokens, and subgrammars cannot be complemented because they
+are not regular terminal expressions.</p>
+</section>
+<section id="sequences-alternatives-and-groups">
+<h3>Sequences, Alternatives, and Groups<a class="headerlink" href="#sequences-alternatives-and-groups" title="Link to this heading">¶</a></h3>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Form</p></th>
+<th class="head"><p>Example</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Sequence</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;a&quot;</span> <span class="pre">&quot;b&quot;</span></code></p></td>
+<td><p>Match the elements in order.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Alternative</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;a&quot;</span> <span class="pre">|</span> <span class="pre">&quot;b&quot;</span></code></p></td>
+<td><p>Match any one branch.</p></td>
+</tr>
+<tr class="row-even"><td><p>Group</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(&quot;a&quot;</span> <span class="pre">|</span> <span class="pre">&quot;b&quot;)</span> <span class="pre">&quot;c&quot;</span></code></p></td>
+<td><p>Group a sub-expression; may carry repetition.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Optional group</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[&quot;a&quot;</span> <span class="pre">&quot;b&quot;]</span></code></p></td>
+<td><p>The whole group appears zero or one time.</p></td>
+</tr>
+<tr class="row-even"><td><p>Empty</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">start:</span></code> or <code class="docutils literal notranslate"><span class="pre">start:</span> <span class="pre">|</span> <span class="pre">&quot;a&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code></p></td>
+<td><p>Matches the empty string.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="repetition">
+<h3>Repetition<a class="headerlink" href="#repetition" title="Link to this heading">¶</a></h3>
+<p>Repetition operators follow an element (a literal, a name, or a group):</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Form</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">x?</span></code></p></td>
+<td><p>zero or one</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">x*</span></code></p></td>
+<td><p>zero or more</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">x+</span></code></p></td>
+<td><p>one or more</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">x~3</span></code></p></td>
+<td><p>exactly 3</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">x~2..4</span></code></p></td>
+<td><p>2 to 4, inclusive</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">x{3}</span></code></p></td>
+<td><p>exactly 3</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">x{2,4}</span></code></p></td>
+<td><p>2 to 4, inclusive</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">x{2,}</span></code></p></td>
+<td><p>2 or more</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">x{,4}</span></code></p></td>
+<td><p>0 to 4</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Zero counts such as <code class="docutils literal notranslate"><span class="pre">x{0}</span></code> are allowed and match the empty string. Ranges with the upper bound
+below the lower bound are rejected.</p>
+</section>
+</section>
+<section id="parametric-rules">
+<h2>Parametric Rules<a class="headerlink" href="#parametric-rules" title="Link to this heading">¶</a></h2>
+<p>A rule can carry one unsigned 64-bit parameter. Declare it with <code class="docutils literal notranslate"><span class="pre">::_</span></code>, pass an initial value from
+an ordinary rule, and use <code class="docutils literal notranslate"><span class="pre">%if</span></code> to enable alternatives based on the current value:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: permutation::0
+
+permutation::_: &quot;&quot; %if is_ones([0:3])
+               | &quot;a&quot; permutation::set_bit(0) %if bit_clear(0)
+               | &quot;b&quot; permutation::set_bit(1) %if bit_clear(1)
+               | &quot;c&quot; permutation::set_bit(2) %if bit_clear(2)
+</pre></div>
+</div>
+<p>This grammar accepts every permutation of <code class="docutils literal notranslate"><span class="pre">a</span></code>, <code class="docutils literal notranslate"><span class="pre">b</span></code>, and <code class="docutils literal notranslate"><span class="pre">c</span></code> exactly once. Parameters are compile-time
+state: <code class="docutils literal notranslate"><span class="pre">Grammar.from_lark</span></code> expands only reachable <code class="docutils literal notranslate"><span class="pre">(rule,</span> <span class="pre">value)</span></code> pairs into ordinary grammar rules.
+The resulting <code class="docutils literal notranslate"><span class="pre">Grammar</span></code> uses the existing matcher, optimizer, EBNF printer, and JSON serialization
+without a parameter-aware runtime.</p>
+<p>Parameter values may be decimal or hexadecimal (<code class="docutils literal notranslate"><span class="pre">15</span></code>, <code class="docutils literal notranslate"><span class="pre">0xf</span></code>, or
+<code class="docutils literal notranslate"><span class="pre">0xffffffffffffffff</span></code>). <code class="docutils literal notranslate"><span class="pre">_</span></code> means the current value. Bit slices use <code class="docutils literal notranslate"><span class="pre">[start:end]</span></code>, where <code class="docutils literal notranslate"><span class="pre">start</span></code> is
+inclusive, <code class="docutils literal notranslate"><span class="pre">end</span></code> is exclusive, and valid indices cover the complete range <code class="docutils literal notranslate"><span class="pre">[0:64]</span></code>.</p>
+<section id="parameter-expressions">
+<h3>Parameter Expressions<a class="headerlink" href="#parameter-expressions" title="Link to this heading">¶</a></h3>
+<p>An expression after <code class="docutils literal notranslate"><span class="pre">rule::</span></code> computes the parameter passed to that rule:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Expression</p></th>
+<th class="head"><p>Result for current value <code class="docutils literal notranslate"><span class="pre">p</span></code></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">value</span></code></p></td>
+<td><p>The decimal or hexadecimal constant <code class="docutils literal notranslate"><span class="pre">value</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">p</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">set_bit(k)</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">p</span></code> with bit <code class="docutils literal notranslate"><span class="pre">k</span></code> set</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">clear_bit(k)</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">p</span></code> with bit <code class="docutils literal notranslate"><span class="pre">k</span></code> cleared</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">bit_or(value)</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">p</span> <span class="pre">|</span> <span class="pre">value</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">bit_and(value)</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">p</span> <span class="pre">&amp;</span> <span class="pre">value</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">incr([start:end])</span></code></p></td>
+<td><p>Increment the selected field, saturating when all its bits are set</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">decr([start:end])</span></code></p></td>
+<td><p>Decrement the selected field, saturating when all its bits are clear</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>For example, this rule accepts exactly five <code class="docutils literal notranslate"><span class="pre">item</span></code> occurrences:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: list::0
+list::_: &quot;item&quot; list::incr([0:3]) %if lt([0:3], 5)
+      | &quot;&quot; %if eq([0:3], 5)
+</pre></div>
+</div>
+</section>
+<section id="conditions">
+<h3>Conditions<a class="headerlink" href="#conditions" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">%if</span> <span class="pre">condition</span></code> applies to one alternative. A false condition removes that alternative for the
+current rule instance.</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Condition</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">true</span></code> or <code class="docutils literal notranslate"><span class="pre">true()</span></code></p></td>
+<td><p>Always true</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">bit_clear(k)</span></code>, <code class="docutils literal notranslate"><span class="pre">bit_set(k)</span></code></p></td>
+<td><p>Bit <code class="docutils literal notranslate"><span class="pre">k</span></code> is clear or set</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">is_zeros(slice)</span></code>, <code class="docutils literal notranslate"><span class="pre">is_ones(slice)</span></code></p></td>
+<td><p>Every bit in the slice is clear or set</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">eq(slice,</span> <span class="pre">value)</span></code>, <code class="docutils literal notranslate"><span class="pre">ne(slice,</span> <span class="pre">value)</span></code></p></td>
+<td><p>Unsigned equality or inequality</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">lt(slice,</span> <span class="pre">value)</span></code>, <code class="docutils literal notranslate"><span class="pre">le(slice,</span> <span class="pre">value)</span></code></p></td>
+<td><p>Unsigned less-than or less-than-or-equal</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">gt(slice,</span> <span class="pre">value)</span></code>, <code class="docutils literal notranslate"><span class="pre">ge(slice,</span> <span class="pre">value)</span></code></p></td>
+<td><p>Unsigned greater-than or greater-than-or-equal</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">bit_count_eq(slice,</span> <span class="pre">k)</span></code>, <code class="docutils literal notranslate"><span class="pre">bit_count_ne(slice,</span> <span class="pre">k)</span></code></p></td>
+<td><p>Set-bit count equality or inequality</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">bit_count_lt(slice,</span> <span class="pre">k)</span></code>, <code class="docutils literal notranslate"><span class="pre">bit_count_le(slice,</span> <span class="pre">k)</span></code></p></td>
+<td><p>Set-bit count comparison</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">bit_count_gt(slice,</span> <span class="pre">k)</span></code>, <code class="docutils literal notranslate"><span class="pre">bit_count_ge(slice,</span> <span class="pre">k)</span></code></p></td>
+<td><p>Set-bit count comparison</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">and(left,</span> <span class="pre">right)</span></code>, <code class="docutils literal notranslate"><span class="pre">or(left,</span> <span class="pre">right)</span></code>, <code class="docutils literal notranslate"><span class="pre">not(condition)</span></code></p></td>
+<td><p>Boolean composition</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The comparison value <code class="docutils literal notranslate"><span class="pre">k</span></code> in a set-bit-count condition is an unsigned 64-bit integer. Values above
+the selected slice width are valid and follow ordinary mathematical comparison rules. For example,
+<code class="docutils literal notranslate"><span class="pre">bit_count_lt(_,</span> <span class="pre">65)</span></code> is always true, while <code class="docutils literal notranslate"><span class="pre">bit_count_eq(_,</span> <span class="pre">65)</span></code> is always false.</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">_</span></code> wherever a condition expects a slice to select all 64 bits:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: pick::0
+pick::_: &quot;&quot; %if bit_count_ge(_, 1)
+      | &quot;a&quot; pick::set_bit(0) %if and(bit_clear(0), bit_count_lt(_, 3))
+      | &quot;b&quot; pick::set_bit(1) %if and(bit_clear(1), bit_count_lt(_, 3))
+      | &quot;c&quot; pick::set_bit(2) %if and(bit_clear(2), bit_count_lt(_, 3))
+</pre></div>
+</div>
+<p>Parameterized calls are only valid for parametric rules, and a parametric rule must use its current
+parameter. Terminals cannot contain parameterized calls or <code class="docutils literal notranslate"><span class="pre">%if</span></code>. Stop-like behavior,
+<code class="docutils literal notranslate"><span class="pre">temperature</span></code>, and <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code> are not supported on parametric rules. The <code class="docutils literal notranslate"><span class="pre">capture</span></code> and
+<code class="docutils literal notranslate"><span class="pre">max_chars</span></code> attributes are supported and apply to every invocation of the parametric rule.</p>
+<p>Compilation is limited to 4096 reachable rule instances per Lark document. Here, “reachable” means
+reachable from any ordinary (non-parametric) rule in that document, not only from <code class="docutils literal notranslate"><span class="pre">start</span></code>. This
+preserves validation of ordinary helper rules even when <code class="docutils literal notranslate"><span class="pre">start</span></code> does not reference them. Grammars
+whose state transitions exceed that limit are rejected with a located error instead of consuming
+unbounded time or memory. Each nested <code class="docutils literal notranslate"><span class="pre">%lark</span></code> document has its own parameter namespace and instance
+limit.</p>
+</section>
+</section>
+<section id="directives">
+<h2>Directives<a class="headerlink" href="#directives" title="Link to this heading">¶</a></h2>
+<section id="import-common">
+<h3><code class="docutils literal notranslate"><span class="pre">%import</span> <span class="pre">common</span></code><a class="headerlink" href="#import-common" title="Link to this heading">¶</a></h3>
+<p>XGrammar provides a built-in library of common terminals. <code class="docutils literal notranslate"><span class="pre">%import</span></code> brings one of them into scope
+as a terminal definition:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%import common.INT                 // defines INT
+%import common.INT -&gt; NUMBER       // defines NUMBER with INT&#39;s pattern
+%import common (INT, WS, CNAME)    // multiple imports in one line
+</pre></div>
+</div>
+<p>Imports may appear anywhere in the grammar, including after the first use of the imported name.
+Importing a name that is already defined is an error. The available names:</p>
+<div class="table-wrapper colwidths-auto docutils container">
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Category</p></th>
+<th class="head"><p>Names</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Numbers</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">DIGIT</span></code>, <code class="docutils literal notranslate"><span class="pre">HEXDIGIT</span></code>, <code class="docutils literal notranslate"><span class="pre">INT</span></code>, <code class="docutils literal notranslate"><span class="pre">SIGNED_INT</span></code>, <code class="docutils literal notranslate"><span class="pre">DECIMAL</span></code>, <code class="docutils literal notranslate"><span class="pre">_EXP</span></code>, <code class="docutils literal notranslate"><span class="pre">FLOAT</span></code>, <code class="docutils literal notranslate"><span class="pre">SIGNED_FLOAT</span></code>, <code class="docutils literal notranslate"><span class="pre">NUMBER</span></code>, <code class="docutils literal notranslate"><span class="pre">SIGNED_NUMBER</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Strings and names</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ESCAPED_STRING</span></code>, <code class="docutils literal notranslate"><span class="pre">LCASE_LETTER</span></code>, <code class="docutils literal notranslate"><span class="pre">UCASE_LETTER</span></code>, <code class="docutils literal notranslate"><span class="pre">LETTER</span></code>, <code class="docutils literal notranslate"><span class="pre">WORD</span></code>, <code class="docutils literal notranslate"><span class="pre">CNAME</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Whitespace</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">WS_INLINE</span></code>, <code class="docutils literal notranslate"><span class="pre">WS</span></code>, <code class="docutils literal notranslate"><span class="pre">CR</span></code>, <code class="docutils literal notranslate"><span class="pre">LF</span></code>, <code class="docutils literal notranslate"><span class="pre">NEWLINE</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Comments</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SH_COMMENT</span></code>, <code class="docutils literal notranslate"><span class="pre">CPP_COMMENT</span></code>, <code class="docutils literal notranslate"><span class="pre">C_COMMENT</span></code>, <code class="docutils literal notranslate"><span class="pre">SQL_COMMENT</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Only the <code class="docutils literal notranslate"><span class="pre">common</span></code> library can be imported.</p>
+</section>
+<section id="ignore">
+<h3><code class="docutils literal notranslate"><span class="pre">%ignore</span></code><a class="headerlink" href="#ignore" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">%ignore</span></code> declares content that may appear between terminals, typically whitespace:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%import common.WS
+%ignore WS
+start: &quot;a&quot; DIGIT
+DIGIT: &quot;0&quot;..&quot;9&quot;
+</pre></div>
+</div>
+<p>This accepts <code class="docutils literal notranslate"><span class="pre">a1</span></code>, <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">1</span></code>, and <code class="docutils literal notranslate"><span class="pre">a\n1</span>&#160; </code>. The ignored content:</p>
+<ul class="simple">
+<li><p>may appear between any two lexemes (terminals, string literals, character ranges, regexes) in a
+rule, and after the last one;</p></li>
+<li><p>may <strong>not</strong> appear before the first lexeme, unless <code class="docutils literal notranslate"><span class="pre">allow_initial_skip</span></code> is enabled (see below);</p></li>
+<li><p>is never inserted inside a terminal.</p></li>
+</ul>
+<p>The <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> expression may be a terminal name, a string, a regex, or a combination. Multiple
+<code class="docutils literal notranslate"><span class="pre">%ignore</span></code> declarations are merged:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%import common (WS, CPP_COMMENT)
+%ignore WS
+%ignore CPP_COMMENT
+%ignore /;+/
+</pre></div>
+</div>
+</section>
+<section id="grammar-options">
+<h3><code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code><a class="headerlink" href="#grammar-options" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code> takes a JSON object that configures the whole grammar:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%grammar_options {&quot;allow_initial_skip&quot;: true, &quot;no_forcing&quot;: true}
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">allow_initial_skip</span></code> (boolean, default <code class="docutils literal notranslate"><span class="pre">false</span></code>) allows <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> content to appear before the
+first lexeme of the output.</p>
+<p><code class="docutils literal notranslate"><span class="pre">ignore_once</span></code> (boolean, default <code class="docutils literal notranslate"><span class="pre">false</span></code>) makes the combined <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> expression match at most once
+at each grammar position. By default it may match repeatedly. For example, <code class="docutils literal notranslate"><span class="pre">%ignore</span> <span class="pre">/[</span> <span class="pre">]{1,8}/</span></code>
+normally accepts any number of spaces between two lexemes because it can consume several groups
+of up to eight. With <code class="docutils literal notranslate"><span class="pre">ignore_once</span></code> enabled, each skipped span is limited to eight spaces.</p>
+<p><code class="docutils literal notranslate"><span class="pre">allow_invalid_utf8</span></code> (boolean, default <code class="docutils literal notranslate"><span class="pre">false</span></code>) changes regular expressions in this grammar from
+Unicode codepoints to individual bytes. It permits standalone bytes such as <code class="docutils literal notranslate"><span class="pre">0x80</span></code>; string
+literals continue to match their exact UTF-8 encoded bytes:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%grammar_options {&quot;allow_invalid_utf8&quot;: true}
+start: /[\x80-\xFF]+/ | &quot;é&quot;
+</pre></div>
+</div>
+<p>In byte mode, <code class="docutils literal notranslate"><span class="pre">.</span></code> consumes exactly one byte and still excludes newline unless the <code class="docutils literal notranslate"><span class="pre">s</span></code> flag is
+present. Outside a Unicode scope, case folding is ASCII-only; <code class="docutils literal notranslate"><span class="pre">\d</span></code>, <code class="docutils literal notranslate"><span class="pre">\w</span></code>, and <code class="docutils literal notranslate"><span class="pre">\s</span></code> use their ASCII
+definitions; and uppercase forms complement within all 256 bytes. Unicode escapes, non-ASCII
+characters inside classes, word boundaries, lookarounds, and backreferences are rejected there. A
+trailing <code class="docutils literal notranslate"><span class="pre">u</span></code> flag or inline <code class="docutils literal notranslate"><span class="pre">(?u:...)</span></code> scope switches back to Unicode, so constructs such as
+<code class="docutils literal notranslate"><span class="pre">/(?u:\w)/</span></code> use the Unicode word class inside a byte grammar. Unicode property escapes remain
+unsupported in either mode. Conversely, a Unicode grammar may use an ASCII-safe scope such as
+<code class="docutils literal notranslate"><span class="pre">(?-u:\w)</span></code>; a scope such as <code class="docutils literal notranslate"><span class="pre">(?-u:.)</span></code> is rejected because it could match bytes that are not valid
+UTF-8.</p>
+<p><code class="docutils literal notranslate"><span class="pre">no_forcing</span></code> (boolean, default <code class="docutils literal notranslate"><span class="pre">false</span></code>) makes
+<a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.find_jump_forward_string</span></code></span></a>
+return an empty string. It leaves token masks, accepted strings and tokens, captures, rollback, and
+reset behavior unchanged; only the optional jump-forward output is disabled.</p>
+<p><code class="docutils literal notranslate"><span class="pre">allow_invalid_utf8</span></code> and <code class="docutils literal notranslate"><span class="pre">ignore_once</span></code> apply only to the grammar that declares them. Nested <code class="docutils literal notranslate"><span class="pre">%lark</span></code>
+blocks and named grammars use their own values. An enabled <code class="docutils literal notranslate"><span class="pre">no_forcing</span></code> option in a nested or named
+grammar also disables jump-forward output for the containing matcher. Multiple declarations merge
+monotonically, so a later <code class="docutils literal notranslate"><span class="pre">false</span></code> does not disable an earlier <code class="docutils literal notranslate"><span class="pre">true</span></code>; unknown option names and
+non-boolean values are rejected.</p>
+</section>
+<section id="json">
+<h3><code class="docutils literal notranslate"><span class="pre">%json</span></code><a class="headerlink" href="#json" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">%json</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code> embeds a JSON Schema and behaves like a rule reference: the element matches any
+JSON value conforming to the schema, converted through XGrammar’s JSON Schema converter.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &quot;&lt;tool_call&gt;&quot; arguments &quot;&lt;/tool_call&gt;&quot;
+arguments: %json {
+  &quot;type&quot;: &quot;object&quot;,
+  &quot;properties&quot;: {&quot;city&quot;: {&quot;type&quot;: &quot;string&quot;}},
+  &quot;required&quot;: [&quot;city&quot;],
+  &quot;additionalProperties&quot;: false
+}
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">%json</span></code> may appear inside sequences, alternatives, and repetition. Whitespace outside the JSON
+value is controlled by the surrounding Lark grammar; whitespace inside the value follows the JSON
+Schema converter’s normal behavior. <code class="docutils literal notranslate"><span class="pre">%json</span></code> cannot be used inside terminals.</p>
+</section>
+<section id="structural-tag">
+<h3><code class="docutils literal notranslate"><span class="pre">%structural_tag</span></code><a class="headerlink" href="#structural-tag" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">%structural_tag</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code> embeds a complete
+<a class="reference internal" href="../structural_tag/structural_tag.html"><span class="std std-doc">Structural Tag</span></a> object as one rule element. The JSON object
+has the same shape and semantics accepted by <code class="docutils literal notranslate"><span class="pre">Grammar.from_structural_tag</span></code>: its optional top-level
+<code class="docutils literal notranslate"><span class="pre">type</span></code> field must be <code class="docutils literal notranslate"><span class="pre">&quot;structural_tag&quot;</span></code>, and its required <code class="docutils literal notranslate"><span class="pre">format</span></code> field may use any Structural
+Tag format.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &quot;prefix&quot; embedded &quot;suffix&quot;
+embedded: %structural_tag {
+  &quot;type&quot;: &quot;structural_tag&quot;,
+  &quot;format&quot;: {
+    &quot;type&quot;: &quot;tag&quot;,
+    &quot;begin&quot;: &quot;&lt;answer&gt;&quot;,
+    &quot;content&quot;: {&quot;type&quot;: &quot;regex&quot;, &quot;pattern&quot;: &quot;[0-9]+&quot;},
+    &quot;end&quot;: &quot;&lt;/answer&gt;&quot;
+  }
+}
+</pre></div>
+</div>
+<p>The directive is an expression and may appear in sequences, alternatives, groups, optional
+elements, repetition, nested <code class="docutils literal notranslate"><span class="pre">%lark</span></code> blocks, named Lark sources, and parameterized-rule branches.
+It cannot appear in an uppercase terminal or a <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> expression. Token-based formats and
+string token references use the <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code> passed to <code class="docutils literal notranslate"><span class="pre">Grammar.from_lark</span></code>.</p>
+<p>The embedded Structural Tag has its own rule namespace. Surrounding <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> content may occur at
+the element boundary but not inside the embedded grammar. Likewise, an outer
+<code class="docutils literal notranslate"><span class="pre">allow_invalid_utf8</span></code> option does not change the Unicode semantics of a Structural Tag <code class="docutils literal notranslate"><span class="pre">regex</span></code>
+format; a Structural Tag <code class="docutils literal notranslate"><span class="pre">grammar</span></code> format may explicitly use an EBNF
+<code class="docutils literal notranslate"><span class="pre">Regex(...,</span> <span class="pre">byte_mode=true)</span></code> expression when byte semantics are intended.</p>
+<p>Rules whose body is a <code class="docutils literal notranslate"><span class="pre">%structural_tag</span></code> may use <code class="docutils literal notranslate"><span class="pre">capture</span></code>, <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code>, <code class="docutils literal notranslate"><span class="pre">max_chars</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">temperature</span></code>. These options apply to the whole embedded match and do not rewrite its internal
+formats or metadata. <code class="docutils literal notranslate"><span class="pre">lazy</span></code>, <code class="docutils literal notranslate"><span class="pre">suffix</span></code>, and <code class="docutils literal notranslate"><span class="pre">stop</span></code> are intentionally unsupported because Structural
+Tags may contain recursion and string- or token-level dispatch. <code class="docutils literal notranslate"><span class="pre">stop_capture</span></code> therefore remains
+available only on other rules that also specify <code class="docutils literal notranslate"><span class="pre">suffix</span></code> or <code class="docutils literal notranslate"><span class="pre">stop</span></code>.</p>
+<p>The JSON is parsed during Lark lexing, so the directive stops at the end of exactly one JSON value
+and another expression may follow it immediately. Whitespace and object-key order do not affect
+the result. Repeated equivalent payloads in one Lark document reuse one imported subgrammar.</p>
+</section>
+<section id="substring">
+<h3>Substring<a class="headerlink" href="#substring" title="Link to this heading">¶</a></h3>
+<p>The substring extension matches any contiguous sequence of a fixed list of chunks, including the
+empty sequence. For compatibility with llguidance, it is written with the <code class="docutils literal notranslate"><span class="pre">%regex</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code>
+directive, although it is not a regular expression:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: %regex {&quot;substring_chunks&quot;: [&quot;abc&quot;, &quot;de&quot;, &quot;fg&quot;]}
+</pre></div>
+</div>
+<p>This example accepts <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;abc&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;de&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;abcde&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;defg&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">&quot;abcdefg&quot;</span></code>, but not
+<code class="docutils literal notranslate"><span class="pre">&quot;ab&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;cde&quot;</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">substring_chars</span></code> splits a string into Unicode codepoints before applying the same operation:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: %regex {&quot;substring_chars&quot;: &quot;abc&quot;}
+</pre></div>
+</div>
+<p>It therefore accepts every codepoint-aligned substring such as <code class="docutils literal notranslate"><span class="pre">&quot;a&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;bc&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">&quot;abc&quot;</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">substring_words</span></code> first splits a fixed source string whenever its Unicode character class changes,
+then accepts any contiguous sequence of those chunks, including the empty sequence:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: %regex {&quot;substring_words&quot;: &quot;The quick brown fox.&quot;}
+</pre></div>
+</div>
+<p>Letters, numbers, and underscore form word chunks; whitespace forms whitespace chunks; all
+remaining characters form punctuation chunks. Consecutive characters in the same class stay in
+one chunk. The example therefore accepts <code class="docutils literal notranslate"><span class="pre">&quot;The</span> <span class="pre">quick&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;quick</span> <span class="pre">brown&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">&quot;fox.&quot;</span></code>, but not
+<code class="docutils literal notranslate"><span class="pre">&quot;he</span> <span class="pre">quick&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;fo&quot;</span></code>.</p>
+<p>The classification follows Unicode 16.0.0 and is independent of the operating system locale.
+All three substring forms are supported in rules and terminal definitions.</p>
+</section>
+<section id="lark">
+<h3><code class="docutils literal notranslate"><span class="pre">%lark</span></code><a class="headerlink" href="#lark" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">%lark</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code> embeds a complete Lark grammar as one element. The nested grammar has its own
+independent namespace: it must define its own <code class="docutils literal notranslate"><span class="pre">start</span></code> rule, and it may declare its own imports,
+<code class="docutils literal notranslate"><span class="pre">%ignore</span></code>, and <code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code>. Rule names may be reused across the boundary. Initial-skip
+behavior remains local to the nested grammar; an enabled <code class="docutils literal notranslate"><span class="pre">no_forcing</span></code> option propagates to the
+containing matcher because jump-forward control is matcher-wide.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &quot;[&quot; %lark {
+  %import common.WS
+  %ignore WS
+  start: item &quot;:&quot; %json {&quot;type&quot;: &quot;integer&quot;}
+  item: &quot;x&quot; | &quot;(&quot; item &quot;)&quot;
+} &quot;]&quot;
+</pre></div>
+</div>
+<p>Multiple <code class="docutils literal notranslate"><span class="pre">%lark</span></code> blocks may appear in the same rule. Nested grammars may use every feature of the
+top-level grammar, including further nesting and <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code> references.</p>
+</section>
+</section>
+<section id="special-tokens">
+<h2>Special Tokens<a class="headerlink" href="#special-tokens" title="Link to this heading">¶</a></h2>
+<p>Special-token elements match exactly one token from the model’s vocabulary, rather than text.
+They may only be used in rules, not in terminals.</p>
+<p><strong>Numeric token sets</strong> reference tokens by ID and do not require tokenizer metadata (except for
+the wildcard):</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &lt;[128010]&gt;            // exactly token 128010
+start: &lt;[128000-128255]&gt;     // one token in the inclusive range
+start: &lt;[1,3-8,10]&gt;          // union of IDs and ranges (duplicates are merged)
+start: &lt;[^1,3-8]&gt;            // any token NOT in the set
+start: &lt;[*]&gt;                 // any token (requires tokenizer_info)
+</pre></div>
+</div>
+<p>A range whose endpoints differ by more than 1,000,000 is rejected, as is the negated wildcard
+<code class="docutils literal notranslate"><span class="pre">&lt;[^*]&gt;</span></code>.</p>
+<p><strong>Named special tokens</strong> are resolved against the tokenizer’s decoded vocabulary by exact string
+match and therefore require <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="p">([</span><span class="s2">&quot;a&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;|tool|&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span><span class="p">])</span>
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span><span class="s2">&quot;start: &lt;|tool|&gt;&quot;</span><span class="p">,</span> <span class="n">tokenizer_info</span><span class="o">=</span><span class="n">tokenizer_info</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The reference matches every vocabulary entry whose decoded text equals the written form,
+including the angle brackets. A name that matches no vocabulary entry is an error.</p>
+</section>
+<section id="named-grammars">
+<h2>Named Grammars<a class="headerlink" href="#named-grammars" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">named_grammars</span></code> passes external grammars into the Lark source, referenced with <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code>.
+Dictionary keys do not include the leading <code class="docutils literal notranslate"><span class="pre">&#64;</span></code>; values are either <code class="docutils literal notranslate"><span class="pre">Grammar</span></code> objects or Lark
+source strings.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">arguments</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_json_schema</span><span class="p">(</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;city&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+        <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;city&quot;</span><span class="p">],</span>
+        <span class="s2">&quot;additionalProperties&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">}</span>
+<span class="p">)</span>
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+    <span class="s1">&#39;start: &quot;&lt;tool_call&gt;&quot; @arguments &quot;&lt;/tool_call&gt;&quot; &quot;:&quot; @status&#39;</span><span class="p">,</span>
+    <span class="n">named_grammars</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="n">arguments</span><span class="p">,</span>
+        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s1">&#39;start: &quot;ok&quot; | &quot;cancelled&quot;&#39;</span><span class="p">,</span>
+    <span class="p">},</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>Names may contain letters, digits, underscores, and hyphens, and must be unique.</p></li>
+<li><p>String values are complete Lark grammars with their own <code class="docutils literal notranslate"><span class="pre">start</span></code> rule, their own terminals, and
+their own <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> declarations. They may reference other entries of the same mapping with
+<code class="docutils literal notranslate"><span class="pre">&#64;name</span></code>; circular references are reported as errors with the reference chain.</p></li>
+<li><p>The same named grammar may be referenced multiple times and from inside nested <code class="docutils literal notranslate"><span class="pre">%lark</span></code> blocks.
+Each named grammar is compiled once and shared.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;name</span></code> references may only appear in rules, not in terminals.</p></li>
+</ul>
+</section>
+<section id="rule-options">
+<h2>Rule Options<a class="headerlink" href="#rule-options" title="Link to this heading">¶</a></h2>
+<p>Rule options are written as a comma-separated list between a rule name and its colon:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>reasoning[max_tokens=512, capture=&quot;reasoning&quot;]: TEXT
+name[lazy]: /[a-z]+/
+field[suffix=&quot;!&quot;, stop_capture=&quot;marker&quot;]: /[a-z]*/
+value[temperature=0.7]: /[a-z]+/
+</pre></div>
+</div>
+<p>They are supported on lowercase rules only; uppercase terminals cannot carry options. The
+available options are:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">lazy</span></code>: commit the rule to its
+<a class="reference internal" href="#general-lazy-rules-committed-shortest-matching"><span class="std std-ref">earliest possible completion</span></a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">suffix=marker</span></code>: end lazily at a marker and exclude the marker from this rule’s own capture.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stop=marker</span></code>: end lazily at a marker and exclude the marker from this rule and all enclosing
+captures.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stop_capture=&quot;name&quot;</span></code>: capture a <code class="docutils literal notranslate"><span class="pre">suffix</span></code> or <code class="docutils literal notranslate"><span class="pre">stop</span></code> marker separately. See
+<a class="reference internal" href="#the-suffix-and-stop-attributes"><span class="std std-ref">The suffix and stop Attributes</span></a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">max_tokens=N</span></code>: give every occurrence a <a class="reference internal" href="#token-budgets"><span class="std std-ref">token budget</span></a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">max_chars=N</span></code>: give every occurrence a <a class="reference internal" href="#character-budgets"><span class="std std-ref">character budget</span></a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">capture</span></code> or <code class="docutils literal notranslate"><span class="pre">capture=&quot;name&quot;</span></code>: record the rule’s matched span as a
+<a class="reference internal" href="#capture-groups"><span class="std std-ref">capture group</span></a>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">temperature=N</span></code>: select the <a class="reference internal" href="#sampling-temperature"><span class="std std-ref">sampling temperature</span></a> while the rule is
+active.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">suffix</span></code> and <code class="docutils literal notranslate"><span class="pre">stop</span></code> cannot be used together, and <code class="docutils literal notranslate"><span class="pre">stop_capture</span></code> requires one of them. Other
+supported combinations and their boundary behavior are described below.</p>
+<section id="sampling-temperature">
+<h3>Sampling Temperature<a class="headerlink" href="#sampling-temperature" title="Link to this heading">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">temperature</span></code> rule attribute selects the sampling temperature while a terminal-like rule or
+named subgrammar is active:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    start: &quot;answer:&quot; value</span>
+<span class="sd">    value[temperature=0.7]: /[a-z]+/</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<span class="p">)</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">)</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">grammar</span><span class="p">)</span>
+<span class="n">matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarMatcher</span><span class="p">(</span><span class="n">compiled</span><span class="p">,</span> <span class="n">default_temperature</span><span class="o">=</span><span class="mf">0.2</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">temperature</span></code> must be a finite non-negative number. It is supported on rules that can be compiled
+as terminals and on rules whose body is a <code class="docutils literal notranslate"><span class="pre">%json</span></code>, <code class="docutils literal notranslate"><span class="pre">%structural_tag</span></code>, <code class="docutils literal notranslate"><span class="pre">%lark</span></code>, or <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code>
+subgrammar. An inner explicit temperature overrides an inherited outer temperature. When
+ambiguous parse paths have different active temperatures, <code class="docutils literal notranslate"><span class="pre">matcher.temperature</span></code> emits a warning
+once and returns the maximum. If no active rule has a temperature, it returns
+<code class="docutils literal notranslate"><span class="pre">default_temperature</span></code>; if neither is configured, it returns <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">temperature</span></code> can be combined with <code class="docutils literal notranslate"><span class="pre">capture</span></code> and <code class="docutils literal notranslate"><span class="pre">max_chars</span></code>. Combining it with <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code>,
+<code class="docutils literal notranslate"><span class="pre">lazy</span></code>, <code class="docutils literal notranslate"><span class="pre">suffix</span></code>, or <code class="docutils literal notranslate"><span class="pre">stop</span></code> is not supported.</p>
+<p><code class="docutils literal notranslate"><span class="pre">BatchGrammarMatcher.batch_fill_temperature</span></code> fills a pre-allocated one-dimensional CPU <code class="docutils literal notranslate"><span class="pre">float32</span></code>
+tensor with one temperature per matcher; the entry of a matcher without an effective temperature
+is set to <code class="docutils literal notranslate"><span class="pre">-1</span></code>. For speculative decoding, pass a one-dimensional CPU <code class="docutils literal notranslate"><span class="pre">float32</span></code> tensor through the
+<code class="docutils literal notranslate"><span class="pre">temperatures</span></code> argument of <code class="docutils literal notranslate"><span class="pre">GrammarMatcher.traverse_draft_tree</span></code>. The tensor receives one value per
+tree node; <code class="docutils literal notranslate"><span class="pre">-1</span></code> marks a node with no configured temperature or a node that was not visited.</p>
+</section>
+</section>
+<section id="dynamic-tool-call-dispatch">
+<h2>Dynamic Tool-Call Dispatch<a class="headerlink" href="#dynamic-tool-call-dispatch" title="Link to this heading">¶</a></h2>
+<p>A common pattern for tool calling lets the model produce free text until a trigger string (such
+as <code class="docutils literal notranslate"><span class="pre">&lt;tool_call&gt;</span></code>) appears, then switches to a strict argument grammar, and returns to free text
+after the call completes. XGrammar recognizes this pattern and compiles it into an efficient
+token-level dispatch structure:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    start: tool* tail</span>
+<span class="sd">    tail: TEXT</span>
+
+<span class="sd">    tool_head[lazy]: TEXT &quot;&lt;tool_call&gt;&quot;</span>
+<span class="sd">    tool: tool_head %json {</span>
+<span class="sd">      &quot;type&quot;: &quot;object&quot;,</span>
+<span class="sd">      &quot;properties&quot;: {&quot;x&quot;: {&quot;type&quot;: &quot;integer&quot;}},</span>
+<span class="sd">      &quot;required&quot;: [&quot;x&quot;],</span>
+<span class="sd">      &quot;additionalProperties&quot;: false</span>
+<span class="sd">    } &quot;&lt;/tool_call&gt;&quot;</span>
+
+<span class="sd">    TEXT: /(\n|.)*/</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>This accepts plain text with no tool call, one tool call, or several tool calls separated by free
+text. A partial trigger (for example a final <code class="docutils literal notranslate"><span class="pre">&lt;tool_cal</span></code>) still counts as free text. Once the
+complete trigger has been produced, the payload and the end tag become mandatory.</p>
+<section id="the-recognized-pattern">
+<h3>The Recognized Pattern<a class="headerlink" href="#the-recognized-pattern" title="Link to this heading">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">start</span></code> rule must have the shape</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: tool* tail            // or: start: (tool_a | tool_b | ...)* tail
+tail: TEXT
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">TEXT</span></code> is an <strong>any-text terminal</strong>: a terminal whose body is one of the regexes
+<code class="docutils literal notranslate"><span class="pre">/(.|\n)*/</span></code>, <code class="docutils literal notranslate"><span class="pre">/(\n|.)*/</span></code>, <code class="docutils literal notranslate"><span class="pre">/(?:.|\n)*/</span></code>, <code class="docutils literal notranslate"><span class="pre">/(?:\n|.)*/</span></code>, <code class="docutils literal notranslate"><span class="pre">/[\s\S]*/</span></code>, <code class="docutils literal notranslate"><span class="pre">/(?s:.*)/</span></code>, or <code class="docutils literal notranslate"><span class="pre">/.*/s</span></code>
+(possibly through another terminal name).</p>
+<p>Each tool rule starts with a trigger and continues with an ordinary grammar for the payload. The
+trigger is written in one of these equivalent head forms:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>head[lazy]: TEXT &quot;&lt;tool&gt;&quot;          // any text, then a fixed trigger string
+head[lazy]: TEXT &lt;|tool_token|&gt;    // any text, then a special token (requires tokenizer_info)
+head[lazy]: /(\n|.)*&lt;tool&gt;/        // the same trigger written as a regex suffix
+head[suffix=&quot;&lt;tool&gt;&quot;]: TEXT        // the same trigger written as a suffix attribute
+head[stop=&quot;&lt;tool&gt;&quot;]: TEXT          // mask-equivalent; differs only for captures
+tool: TEXT &lt;|tool_token|&gt; ...      // token trigger written inline, without a head rule
+</pre></div>
+</div>
+<p>For the regex-suffix form, the pattern must be one of the any-text regexes followed by a fixed
+literal (escapes such as <code class="docutils literal notranslate"><span class="pre">\n</span></code> or <code class="docutils literal notranslate"><span class="pre">\.</span></code> are allowed; alternation, repetition, and other variable
+constructs are not).</p>
+</section>
+<section id="multiple-tools">
+<h3>Multiple Tools<a class="headerlink" href="#multiple-tools" title="Link to this heading">¶</a></h3>
+<p>Different tools may use different triggers, or share one trigger and differentiate on the text
+that follows:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    start: (foo | bar)* tail</span>
+<span class="sd">    tail: TEXT</span>
+
+<span class="sd">    foo_head[lazy]: TEXT &quot;&lt;function&quot;</span>
+<span class="sd">    foo: foo_head &quot;=foo&gt;&quot; /[a-z]+/ &quot;&lt;/function&gt;&quot;</span>
+
+<span class="sd">    bar_head[lazy]: TEXT &quot;&lt;function&quot;</span>
+<span class="sd">    bar: bar_head &quot;=bar&gt;&quot; /[0-9]+/ &quot;&lt;/function&gt;&quot;</span>
+
+<span class="sd">    TEXT: /(\n|.)*/</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>After <code class="docutils literal notranslate"><span class="pre">&lt;function</span></code> is produced, the output must continue with <code class="docutils literal notranslate"><span class="pre">=foo&gt;</span></code> or <code class="docutils literal notranslate"><span class="pre">=bar&gt;</span></code> and the matching
+payload. All triggers within one grammar must be at the same level: either all trigger strings or
+all special tokens. Negated token sets cannot be used as triggers.</p>
+</section>
+<section id="standalone-lazy-rules">
+<h3>Standalone Lazy Rules<a class="headerlink" href="#standalone-lazy-rules" title="Link to this heading">¶</a></h3>
+<p>Outside of the dispatch pattern, a lazy head of the form <code class="docutils literal notranslate"><span class="pre">head[lazy]:</span> <span class="pre">TEXT</span> <span class="pre">&quot;&lt;end&gt;&quot;</span></code> (or with a
+special-token trigger) may also be used on its own:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: head
+head[lazy]: TEXT &quot;&lt;end&gt;&quot;
+TEXT: /(\n|.)*/
+</pre></div>
+</div>
+<p>This matches arbitrary text and completes as soon as the trigger appears; nothing may follow the
+trigger. Text that never produces the trigger is also accepted. The <code class="docutils literal notranslate"><span class="pre">suffix=&quot;...&quot;</span></code> and
+<code class="docutils literal notranslate"><span class="pre">stop=&quot;...&quot;</span></code> forms can also be used this way and retain this efficient TagDispatch lowering.
+The regex-suffix form is only accepted inside the full dispatch pattern.</p>
+</section>
+<section id="general-lazy-rules-committed-shortest-matching">
+<h3>General Lazy Rules (Committed-Shortest Matching)<a class="headerlink" href="#general-lazy-rules-committed-shortest-matching" title="Link to this heading">¶</a></h3>
+<p>Any other rule may also carry <code class="docutils literal notranslate"><span class="pre">[lazy]</span></code>, which gives it <strong>committed-shortest</strong> matching: at the
+first position where the rule’s body can end, it must end — the derivations in which this
+occurrence keeps consuming input are discarded.</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &quot;&lt;&quot; name &quot;&gt;&quot; rest
+name[lazy]: /[a-z]+/     // stops at the first position where it can end
+rest: /[a-z]+/
+</pre></div>
+</div>
+<p>Notes:</p>
+<ul class="simple">
+<li><p>The body must compile to a single terminal-like automaton: sequences and alternations of
+strings and character classes, and the <code class="docutils literal notranslate"><span class="pre">+</span></code>/<code class="docutils literal notranslate"><span class="pre">*</span></code> quantifiers over single-character elements
+(character classes, single-character strings, and alternations of these — directly or through
+terminal references like <code class="docutils literal notranslate"><span class="pre">TEXT*</span></code>). Bodies that need rule references (recursion, <code class="docutils literal notranslate"><span class="pre">?</span></code> in the
+middle of a sequence, quantifiers over multi-character strings, and repetition ranges like
+<code class="docutils literal notranslate"><span class="pre">{2,5}</span></code>) are rejected at compile time.</p></li>
+<li><p>A lazy rule that can match the empty string always matches the empty string (for example
+<code class="docutils literal notranslate"><span class="pre">foo[lazy]:</span> <span class="pre">/.*/</span></code>).</p></li>
+<li><p>Lazy rules are compiled as lexemes: <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> is not woven inside their bodies, and like
+terminals they take the ignored-token skip after them.</p></li>
+<li><p>Each occurrence of the rule commits independently, and the commit is exact for validation
+(<code class="docutils literal notranslate"><span class="pre">accept_string</span></code>) as well as mask generation. <code class="docutils literal notranslate"><span class="pre">rollback</span></code>/<code class="docutils literal notranslate"><span class="pre">fork</span></code>/<code class="docutils literal notranslate"><span class="pre">reset</span></code> restore the state
+across a commit exactly.</p></li>
+<li><p>The same attribute is available in the EBNF frontend: <code class="docutils literal notranslate"><span class="pre">name[lazy]</span> <span class="pre">::=</span> <span class="pre">...</span></code>, and it round-trips
+through <code class="docutils literal notranslate"><span class="pre">Grammar.__str__()</span></code> / <code class="docutils literal notranslate"><span class="pre">Grammar.from_ebnf()</span></code>.</p></li>
+</ul>
+</section>
+<section id="the-suffix-and-stop-attributes">
+<h3>The <code class="docutils literal notranslate"><span class="pre">suffix</span></code> and <code class="docutils literal notranslate"><span class="pre">stop</span></code> Attributes<a class="headerlink" href="#the-suffix-and-stop-attributes" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">suffix</span></code> and <code class="docutils literal notranslate"><span class="pre">stop</span></code> both match the rule body lazily through the first occurrence of a marker. Like
+llguidance, the marker may be a string literal, a regular expression, or an uppercase terminal
+name:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>field[suffix=&quot;&lt;end&gt;&quot;]: /[a-z]*/
+field[suffix=/&lt;\/?end&gt;/]: /[a-z]*/
+field[suffix=END]: /[a-z]*/
+END: &quot;&lt;/end&gt;&quot; | &quot;&lt;end&gt;&quot;
+</pre></div>
+</div>
+<p>At the mask and validation levels, these forms are equivalent to appending the marker to a lazy
+rule. A general body must itself be a terminal expression; strings, regexes (including bounded
+repetition), and uppercase terminal composition are compiled together into one automaton. The
+marker is required during ordinary validation, and committed-shortest matching prevents the body
+from continuing through an earlier match. <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> remains lexeme-scoped. For an any-text body
+with a fixed, case-sensitive string marker, XGrammar retains the TagDispatch fast path: the rule
+completes at the marker when one appears, while text that ends without a marker is also accepted.</p>
+<p>The distinction between the two attributes is capture scope:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start[capture=&quot;outer&quot;]: field &quot;z&quot;
+field[capture=&quot;inner&quot;, suffix=&quot;!&quot;]: /[a-z]*/
+# &quot;xy!z&quot; -&gt; inner=b&quot;xy&quot;, outer=b&quot;xy!z&quot;
+
+start[capture=&quot;outer&quot;]: field &quot;z&quot;
+field[capture=&quot;inner&quot;, stop=&quot;!&quot;]: /[a-z]*/
+# &quot;xy!z&quot; -&gt; inner=b&quot;xy&quot;, outer=b&quot;xyz&quot;
+
+start[capture=&quot;outer&quot;]: field &quot;z&quot;
+field[capture=&quot;inner&quot;, suffix=/!!+/, stop_capture=&quot;marker&quot;]: /[a-z]*/
+# &quot;xy!!z&quot; -&gt; marker=b&quot;!!&quot;, inner=b&quot;xy&quot;, outer=b&quot;xy!!z&quot;
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">suffix</span></code> excludes the marker from the annotated rule’s own capture, but enclosing captures
+retain it.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stop</span></code> excludes the marker from the annotated rule and every enclosing capture. This only
+changes capture materialization: the accepted marker bytes are not removed from the model
+context and the matcher performs no token rollback.</p></li>
+<li><p>A <code class="docutils literal notranslate"><span class="pre">stop</span></code> rule does not need its own <code class="docutils literal notranslate"><span class="pre">capture</span></code> attribute for the marker to be hidden from an
+enclosing capture. Multiple markers inside one enclosing capture are all removed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stop_capture=&quot;name&quot;</span></code> captures exactly the bytes matched by either <code class="docutils literal notranslate"><span class="pre">stop</span></code> or <code class="docutils literal notranslate"><span class="pre">suffix</span></code>, before
+the marker is hidden from other captures. It works even when the annotated rule has no
+<code class="docutils literal notranslate"><span class="pre">capture</span></code> attribute. Its name follows the same restrictions as <code class="docutils literal notranslate"><span class="pre">capture</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">suffix</span></code> and <code class="docutils literal notranslate"><span class="pre">stop</span></code> cannot be specified on the same rule, and <code class="docutils literal notranslate"><span class="pre">stop_capture</span></code> requires one of
+them.</p></li>
+<li><p>String flags and regex flags follow the same support as ordinary Lark terminals. In particular,
+Unicode case-insensitive string markers such as <code class="docutils literal notranslate"><span class="pre">suffix=&quot;ΣK&quot;i</span></code>, scoped inline flags, and dot-all
+regex markers such as <code class="docutils literal notranslate"><span class="pre">stop=/BEGIN.*END/s</span></code> are supported.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stop=&quot;&quot;</span></code> is the llguidance end-of-sequence (EOS) shorthand. It adds an optional grammar-level
+EOS boundary after the body: the rule can end normally, or an active matcher stop token can end
+it without contributing bytes and expose a following enclosing rule. Unlike a non-empty marker,
+it does not use committed-shortest matching. <code class="docutils literal notranslate"><span class="pre">override_stop_tokens</span></code> changes which tokens can
+take this boundary, while <code class="docutils literal notranslate"><span class="pre">terminate_without_stop_token=True</span></code> disables only the matcher’s usual
+root-stop requirement. If <code class="docutils literal notranslate"><span class="pre">stop_capture</span></code> is present, an EOS boundary records an empty byte span.
+Printed EBNF represents this boundary with <code class="docutils literal notranslate"><span class="pre">EOS()</span></code>.</p></li>
+<li><p>A regex or named terminal marker may be nullable. Empty <code class="docutils literal notranslate"><span class="pre">suffix</span></code> markers remain invalid.</p></li>
+<li><p>Adding an explicit <code class="docutils literal notranslate"><span class="pre">lazy</span></code> attribute is allowed but redundant.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">max_tokens</span></code> and <code class="docutils literal notranslate"><span class="pre">max_chars</span></code> may annotate the same rule as <code class="docutils literal notranslate"><span class="pre">lazy</span></code>, <code class="docutils literal notranslate"><span class="pre">suffix</span></code>, or <code class="docutils literal notranslate"><span class="pre">stop</span></code>. The first
+boundary wins: a marker that completes first keeps the normal committed-shortest and capture
+behavior; if a length budget expires first and the body can end there, the rule completes
+without a marker (and therefore produces no <code class="docutils literal notranslate"><span class="pre">stop_capture</span></code>). If the body cannot end, for example
+in the middle of a multi-token marker, the budget is relaxed until a valid boundary is reached.</p></li>
+</ul>
+</section>
+</section>
+<section id="token-budgets">
+<h2>Token Budgets<a class="headerlink" href="#token-budgets" title="Link to this heading">¶</a></h2>
+<p>A rule can be given a token budget with the <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code> attribute:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &lt;think&gt; reasoning &lt;/think&gt; answer
+reasoning[max_tokens=512]: TEXT
+answer: /[0-9]+/
+TEXT: /(\n|.)*/
+</pre></div>
+</div>
+<p>Each occurrence of the rule may then consume at most <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code> LLM tokens. Once the budget
+is exhausted, the token mask only allows leaving the rule, which bounds the length of free-text
+segments such as reasoning blocks while the rest of the output stays grammar-constrained.</p>
+<p>The budget is enforced by the matcher at generation time. The body compiles normally and
+every predicted occurrence of the rule carries a deadline: the index of the last token its
+derivation may consume. Once the deadline passes, each mask forces the rule to end if ending
+is possible at the current position; otherwise the budget is relaxed for one step and
+enforcement is retried, so the rule ends at the earliest possible position and the output
+always stays grammar-valid. When authoring a budgeted rule, prefer a body that can end at every
+possible budget boundary. For example, the arbitrary-text form above can end at any position, so
+its budget is exact; bodies that cannot end where the budget runs out remain best-effort.</p>
+<p><code class="docutils literal notranslate"><span class="pre">max_tokens</span></code> composes with committed-shortest matching. With <code class="docutils literal notranslate"><span class="pre">lazy</span></code>, whichever of the lazy
+completion and the token deadline is reached first closes the occurrence. With <code class="docutils literal notranslate"><span class="pre">suffix</span></code> or
+<code class="docutils literal notranslate"><span class="pre">stop</span></code>, a deadline may close through the already matched body without fabricating marker bytes;
+normal suffix/stop capture scope applies only when the marker was actually consumed.</p>
+<p>The budget applies <strong>per occurrence</strong>: in <code class="docutils literal notranslate"><span class="pre">(r</span> <span class="pre">&quot;,&quot;)*</span> <span class="pre">r</span></code> every element gets its own budget, and
+to bound a whole loop the budget goes on a wrapper rule (<code class="docutils literal notranslate"><span class="pre">list[max_tokens=N]:</span> <span class="pre">item+</span></code>). Nested
+budgets combine by taking the minimum. Rules inside a budgeted rule may also be used outside of
+it — the budget follows the derivation, not the rule.</p>
+<p>The first time a budget is exceeded (a token is consumed by a derivation past its budget), a
+warning is logged, once per matcher. The budget state lives in the parser state, so
+<code class="docutils literal notranslate"><span class="pre">rollback()</span></code> restores it exactly and speculative decoding keeps working. <code class="docutils literal notranslate"><span class="pre">accept_string</span></code>
+advances without token boundaries and is not counted (budgets constrain mask-driven
+generation, not validation/prefill).</p>
+<p><code class="docutils literal notranslate"><span class="pre">max_tokens</span></code> must be between 1 and 1,000,000, inclusive. It can be combined with <code class="docutils literal notranslate"><span class="pre">lazy</span></code>, <code class="docutils literal notranslate"><span class="pre">suffix</span></code>,
+and <code class="docutils literal notranslate"><span class="pre">stop</span></code>, but cannot be used on terminals or on rules consumed by the dynamic dispatch pattern.</p>
+</section>
+<section id="character-budgets">
+<h2>Character Budgets<a class="headerlink" href="#character-budgets" title="Link to this heading">¶</a></h2>
+<p>A rule can be limited by Unicode codepoints, the numeric values assigned to text units by the
+Unicode standard, with <code class="docutils literal notranslate"><span class="pre">max_chars</span></code>:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &lt;think&gt; reasoning &lt;/think&gt; answer
+reasoning[max_chars=2048]: TEXT
+answer: /[0-9]+/
+TEXT: /(\n|.)*/
+</pre></div>
+</div>
+<p>For example, <code class="docutils literal notranslate"><span class="pre">a</span></code>, <code class="docutils literal notranslate"><span class="pre">é</span></code>, and <code class="docutils literal notranslate"><span class="pre">中</span></code> each consume one character. A decomposed character such as <code class="docutils literal notranslate"><span class="pre">e</span></code>
+followed by a combining accent consumes two. The count does not depend on byte length in UTF-8, a
+variable-width Unicode encoding, or on model token boundaries, the units generated by the model.
+This also holds when one codepoint is split across multiple tokens.</p>
+<p>Once the budget is exhausted, the matcher forces the occurrence to end if its body can end at the
+current character boundary. Otherwise, the budget is relaxed until the earliest valid end, so the
+output remains grammar-valid. When authoring a character-budgeted rule, prefer a body that can end
+at every possible character boundary. For example, the arbitrary-text form above can end after
+every codepoint, so its budget is exact; bodies that cannot end where the budget runs out remain
+best-effort.</p>
+<p>The first time a character budget is exceeded (a codepoint is consumed by a derivation past its
+budget), a warning is logged, once per matcher. The budget applies per occurrence and nested
+budgets take the minimum. <code class="docutils literal notranslate"><span class="pre">max_chars</span></code> can be combined with <code class="docutils literal notranslate"><span class="pre">temperature</span></code>. It can also be combined
+with <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code>, <code class="docutils literal notranslate"><span class="pre">lazy</span></code>, <code class="docutils literal notranslate"><span class="pre">suffix</span></code>, and <code class="docutils literal notranslate"><span class="pre">stop</span></code>; the first applicable length or marker boundary
+wins. It applies to <code class="docutils literal notranslate"><span class="pre">accept_string</span></code>, unlike <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code>. Rollback, reset, forking, and speculative
+decoding restore the character count exactly.</p>
+<p><code class="docutils literal notranslate"><span class="pre">max_chars</span></code> must be between 0 and 2,147,483,647, inclusive. A zero budget closes the rule
+immediately when its body can end at the entry position. It cannot be used on terminals. On a
+dynamic dispatch start rule or a rule consumed by dynamic dispatch, it is ignored and a warning
+is logged.</p>
+</section>
+<section id="capture-groups">
+<h2>Capture Groups<a class="headerlink" href="#capture-groups" title="Link to this heading">¶</a></h2>
+<p>A rule can be marked with the <code class="docutils literal notranslate"><span class="pre">capture</span></code> attribute so that the matcher records the input span the
+rule matched:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: tool* tail
+tail: TEXT
+
+tool_head[lazy]: TEXT &quot;&lt;tool_call&gt;&quot;
+tool: tool_head arg &quot;&lt;/tool_call&gt;&quot;
+arg[capture]: /[0-9]+/
+
+TEXT: /(\n|.)*/
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">rule[capture]</span></code> uses the rule name as the capture name; <code class="docutils literal notranslate"><span class="pre">rule[capture=&quot;name&quot;]</span></code> sets an explicit
+name. Capture names may contain letters, digits, <code class="docutils literal notranslate"><span class="pre">_</span></code>, <code class="docutils literal notranslate"><span class="pre">-</span></code> and <code class="docutils literal notranslate"><span class="pre">.</span></code>. The recorded captures are
+retrieved from the matcher:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarMatcher</span><span class="p">(</span><span class="n">compiled</span><span class="p">)</span>
+<span class="n">matcher</span><span class="o">.</span><span class="n">accept_string</span><span class="p">(</span><span class="s1">&#39;x&lt;tool_call&gt;42&lt;/tool_call&gt;y&lt;tool_call&gt;7&lt;/tool_call&gt;&#39;</span><span class="p">)</span>
+<span class="n">matcher</span><span class="o">.</span><span class="n">get_captures</span><span class="p">()</span>  <span class="c1"># [(&quot;arg&quot;, b&quot;42&quot;), (&quot;arg&quot;, b&quot;7&quot;)]</span>
+</pre></div>
+</div>
+<p>Each completion of a captured rule records one capture, so a rule matched repeatedly (for
+example inside a loop or a dispatch pattern) yields one entry per match, in completion order.
+Captures are recorded when tokens or strings are accepted; <code class="docutils literal notranslate"><span class="pre">fill_next_token_bitmask</span></code> never
+records anything, and <code class="docutils literal notranslate"><span class="pre">rollback</span></code> also rolls back the recorded captures.</p>
+<p>Since the parser explores parse hypotheses in parallel, one occurrence of a captured rule may
+complete at several candidate end positions (a <code class="docutils literal notranslate"><span class="pre">/[0-9]+/</span></code> body completes after every digit). By
+default <code class="docutils literal notranslate"><span class="pre">get_captures</span></code> keeps only the longest completion of each occurrence, which is exact
+whenever the captured rule’s end is determined by a following delimiter that its body cannot
+match (closing tags, quotes, brackets). If the following context can also be matched by the
+rule body itself, the reported span may extend past the span of the finally accepted parse;
+<code class="docutils literal notranslate"><span class="pre">get_captures(deduplicate=False)</span></code> returns the raw completion events instead.</p>
+<p>Captures are supported on rules only (not terminals), and not on rules consumed by the dynamic
+dispatch pattern (the head, tool and tail rules themselves); rules referenced from a tool’s
+body, like <code class="docutils literal notranslate"><span class="pre">arg</span></code> above, work as expected. See the <code class="docutils literal notranslate"><span class="pre">suffix</span></code> and <code class="docutils literal notranslate"><span class="pre">stop</span></code> section for their marker
+exclusion rules.</p>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="../developer_guide/building_docs.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Building Docs</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="ebnf_grammar.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">EBNF Grammar</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2024-2026, XGrammar Contributors
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Lark Grammar</a><ul>
+<li><a class="reference internal" href="#usage">Usage</a></li>
+<li><a class="reference internal" href="#grammar-structure">Grammar Structure</a><ul>
+<li><a class="reference internal" href="#rules-and-terminals">Rules and Terminals</a></li>
+<li><a class="reference internal" href="#string-literals">String Literals</a></li>
+<li><a class="reference internal" href="#character-ranges">Character Ranges</a></li>
+<li><a class="reference internal" href="#regular-expressions">Regular Expressions</a></li>
+<li><a class="reference internal" href="#terminal-intersections">Terminal Intersections</a></li>
+<li><a class="reference internal" href="#regular-expression-complements">Regular-Expression Complements</a></li>
+<li><a class="reference internal" href="#sequences-alternatives-and-groups">Sequences, Alternatives, and Groups</a></li>
+<li><a class="reference internal" href="#repetition">Repetition</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#parametric-rules">Parametric Rules</a><ul>
+<li><a class="reference internal" href="#parameter-expressions">Parameter Expressions</a></li>
+<li><a class="reference internal" href="#conditions">Conditions</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#directives">Directives</a><ul>
+<li><a class="reference internal" href="#import-common"><code class="docutils literal notranslate"><span class="pre">%import</span> <span class="pre">common</span></code></a></li>
+<li><a class="reference internal" href="#ignore"><code class="docutils literal notranslate"><span class="pre">%ignore</span></code></a></li>
+<li><a class="reference internal" href="#grammar-options"><code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code></a></li>
+<li><a class="reference internal" href="#json"><code class="docutils literal notranslate"><span class="pre">%json</span></code></a></li>
+<li><a class="reference internal" href="#structural-tag"><code class="docutils literal notranslate"><span class="pre">%structural_tag</span></code></a></li>
+<li><a class="reference internal" href="#substring">Substring</a></li>
+<li><a class="reference internal" href="#lark"><code class="docutils literal notranslate"><span class="pre">%lark</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#special-tokens">Special Tokens</a></li>
+<li><a class="reference internal" href="#named-grammars">Named Grammars</a></li>
+<li><a class="reference internal" href="#rule-options">Rule Options</a><ul>
+<li><a class="reference internal" href="#sampling-temperature">Sampling Temperature</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#dynamic-tool-call-dispatch">Dynamic Tool-Call Dispatch</a><ul>
+<li><a class="reference internal" href="#the-recognized-pattern">The Recognized Pattern</a></li>
+<li><a class="reference internal" href="#multiple-tools">Multiple Tools</a></li>
+<li><a class="reference internal" href="#standalone-lazy-rules">Standalone Lazy Rules</a></li>
+<li><a class="reference internal" href="#general-lazy-rules-committed-shortest-matching">General Lazy Rules (Committed-Shortest Matching)</a></li>
+<li><a class="reference internal" href="#the-suffix-and-stop-attributes">The <code class="docutils literal notranslate"><span class="pre">suffix</span></code> and <code class="docutils literal notranslate"><span class="pre">stop</span></code> Attributes</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#token-budgets">Token Budgets</a></li>
+<li><a class="reference internal" href="#character-budgets">Character Budgets</a></li>
+<li><a class="reference internal" href="#capture-groups">Capture Groups</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=806dc8ca"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="../_static/version_switcher.js?v=14f276e4"></script>
+    
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>
