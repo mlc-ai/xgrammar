@@ -7,7 +7,7 @@
 (function () {
   // Matches e.g. "/docs/latest/start/install.html" ->
   //   docsBase="/docs/", currentVersion="latest", pagePath="/start/install.html"
-  const match = window.location.pathname.match(/^(.*\/docs\/)([^/]+)(\/.*)?$/);
+  const match = window.location.pathname.match(/^(.*?\/docs\/)([^/]+)(\/.*)?$/);
   if (match === null) {
     return;
   }

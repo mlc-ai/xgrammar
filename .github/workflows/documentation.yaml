@@ -35,7 +35,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.docs_ref || '' }}
+          # For manual dispatch, build docs_ref when given, else main (as documented).
+          ref: ${{ github.event_name == 'workflow_dispatch' && (inputs.docs_ref || 'main') || '' }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
