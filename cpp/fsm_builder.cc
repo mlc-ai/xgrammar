@@ -885,7 +885,10 @@ void AddJSONStringCodepointRangesToFSM(
     FSM* fsm, int from, int to, const std::vector<CodepointRange>& ranges
 ) {
   std::vector<CodepointRange> raw_ranges;
-  for (const auto& [low, high] : ranges) {
+  for (const auto& range : ranges) {
+    // Plain locals: lambdas cannot capture structured bindings before C++20.
+    uint32_t low = range.first;
+    uint32_t high = range.second;
     auto add_raw = [&](uint32_t raw_low, uint32_t raw_high) {
       raw_low = std::max(raw_low, low);
       raw_high = std::min(raw_high, high);
@@ -910,7 +913,10 @@ void AddJSONStringCodepointRangesToFSM(
       {'\r', 'r'},
       {'\t', 't'},
   };
-  for (const auto& [codepoint, escaped] : kShortEscapes) {
+  for (const auto& escape : kShortEscapes) {
+    // Plain locals: lambdas cannot capture structured bindings before C++20.
+    uint32_t codepoint = escape.first;
+    char escaped = escape.second;
     if (std::any_of(ranges.begin(), ranges.end(), [&](const CodepointRange& range) {
           return range.first <= codepoint && codepoint <= range.second;
         })) {
