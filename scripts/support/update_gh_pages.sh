@@ -52,7 +52,12 @@ elif [[ "$MODE" == "version" ]]; then
   VERSION=$3
   GH_PAGES=$4
 
-  [[ -n "$VERSION" ]]
+  # The version becomes a directory name under docs/; reject anything that
+  # is not a plain version-looking single path segment.
+  if [[ ! "$VERSION" =~ ^v?[0-9][A-Za-z0-9._+-]*$ ]]; then
+    echo "Invalid version: $VERSION" >&2
+    exit 1
+  fi
   rsync -a --delete "$DOCS_HTML"/ "$GH_PAGES/docs/$VERSION/"
 else
   echo "Unknown mode: $MODE" >&2
@@ -72,11 +77,15 @@ version_pattern = re.compile(r"^v?\d")
 
 def sort_key(name):
     core = name.lstrip("v")
-    numbers_match = re.match(r"^(\d+(?:\.\d+)*)", core)
-    numbers = tuple(int(part) for part in numbers_match.group(1).split("."))
+    match = re.match(r"^(\d+(?:\.\d+)*)(?:([a-z]+)(\d*))?", core)
+    numbers = tuple(int(part) for part in match.group(1).split("."))
     # A final release ("0.2.6") sorts above its pre-releases ("0.2.6rc1").
-    is_final = re.fullmatch(r"\d+(?:\.\d+)*", core) is not None
-    return (numbers, is_final, core)
+    # Pre-release kinds compare per PEP 440 ("a" < "b" < "rc") and their
+    # numbers compare numerically ("rc10" > "rc2").
+    is_final = match.group(2) is None
+    suffix_kind = match.group(2) or ""
+    suffix_number = int(match.group(3)) if match.group(3) else 0
+    return (numbers, is_final, suffix_kind, suffix_number)
 
 
 versions = sorted(
