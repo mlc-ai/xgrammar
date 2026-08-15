@@ -152,7 +152,7 @@ bool EarleyParser::IsCachedAcceptedTokenWithinJSONStringLength(
 }
 
 bool EarleyParser::IsJSONStringLengthCompletionAllowed(const ParserState& state) const {
-  if (!enforce_json_string_lengths_) return true;
+  if (!has_json_string_length_rules_ || !enforce_json_string_lengths_) return true;
   if (state.rule_id < 0) return true;
   const auto& rule = grammar_->GetRule(state.rule_id);
   if (rule.json_string_min_length < 0) return true;
@@ -169,7 +169,8 @@ bool EarleyParser::IsJSONStringLengthCompletionAllowed(const ParserState& state)
 }
 
 void EarleyParser::EnterJSONStringLengthRule(int32_t rule_id) {
-  if (rule_id < 0 || grammar_->GetRule(rule_id).json_string_min_length < 0) {
+  if (!has_json_string_length_rules_ || rule_id < 0 ||
+      grammar_->GetRule(rule_id).json_string_min_length < 0) {
     return;
   }
   tmp_json_string_length_entered_ = true;

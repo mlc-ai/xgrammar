@@ -624,7 +624,7 @@ class EarleyParser {
 
   /*! \brief The decoded JSON character deadline for a newly predicted rule occurrence. */
   int32_t JSONStringLengthDeadlineForRule(int32_t rule_id, int32_t parent_deadline) const {
-    if (!enforce_json_string_lengths_) {
+    if (!has_json_string_length_rules_ || !enforce_json_string_lengths_) {
       return parent_deadline;
     }
     const auto& rule = grammar_->GetRule(rule_id);
@@ -644,7 +644,7 @@ class EarleyParser {
 
   /*! \brief The decoded JSON character minimum for a newly predicted rule occurrence. */
   int32_t JSONStringMinLengthDeadlineForRule(int32_t rule_id, int32_t parent_deadline) const {
-    if (!enforce_json_string_lengths_) {
+    if (!has_json_string_length_rules_ || !enforce_json_string_lengths_) {
       return parent_deadline;
     }
     const auto& rule = grammar_->GetRule(rule_id);
@@ -764,7 +764,8 @@ class EarleyParser {
 
   /*! \brief Returns true if completing this rule must validate decoded JSON string length. */
   bool RuleHasJSONStringLength(int32_t rule_id) const {
-    return rule_id >= 0 && grammar_->GetRule(rule_id).json_string_min_length >= 0;
+    return has_json_string_length_rules_ && rule_id >= 0 &&
+           grammar_->GetRule(rule_id).json_string_min_length >= 0;
   }
 
   /*! \brief Record a capture or hidden-span event for a completed rule in the current row. */
