@@ -1,0 +1,995 @@
+
+
+
+
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Builtin Structural Tag &mdash; XGrammar 0.2.5 documentation</title>
+  
+
+  
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/copybutton.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/autodoc_pydantic.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/fix_text_selection.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/tlcpack_theme.css" type="text/css" />
+
+  
+  
+
+  
+  
+  
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+        <script src="../../_static/clipboard.min.js"></script>
+        <script src="../../_static/copybutton.js"></script>
+        <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+        <script src="../../_static/version_switcher.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+    <script type="text/javascript" src="../../_static/js/tlcpack_theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="OpenAI Tool Call Schema" href="openai_tool_call_schema.html" />
+    <link rel="prev" title="Structural Tag" href="structural_tag.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    
+<header class="header">
+    <div class="innercontainer">
+      <div class="headerInner d-flex justify-content-between align-items-center">
+          <div class="headerLogo">
+          </div>
+
+          <div id="headMenu" class="headerNav">
+            <button type="button" id="closeHeadMenu" class="navCloseBtn"><img src="../../_static/img/close-icon.svg" alt="Close"></button>
+             <ul class="nav">
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/>Home</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://xgrammar.mlc.ai/docs/>Docs</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://github.com/mlc-ai/xgrammar>Github</a>
+                </li>
+                <li class="nav-item">
+                   <a class="nav-link" href=https://blog.mlc.ai/>Blog</a>
+                </li>
+             </ul>
+          </div>
+          </div>
+       </div>
+    </div>
+ </header>
+ 
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side fixed">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html">
+          
+
+          
+            
+            <img src="../../_static/img/logo.png" class="logo" alt="Logo"/>
+          
+          </a>
+
+          
+            
+            
+                <div class="version">
+                  0.2.5
+                </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Get Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../start/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../start/quick_start.html">Quick Start</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Structural Tag</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../structural_tag/structural_tag_api.html">Structural Tag Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../structural_tag/tool_calling_and_reasoning.html">Tool Calling and Reasoning</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../structural_tag/advanced_usage.html">Advanced Topics of Structural Tag</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/constrained_decoding.html">Constrained Decoding</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/workflow_of_xgrammar.html">Workflow of XGrammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/advanced_topics.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/engine_integration.html">Integration with LLM Engine</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/json_generation.html">JSON Generation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/ebnf_guided_generation.html">EBNF-Guided Generation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">XGrammar Features</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/runtime_safeguards.html">Runtime Safeguards</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/serialization.html">Serialization</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/lark_grammar.html">Lark Grammar</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../xgrammar_features/javascript_api.html">JavaScript API</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/building_docs.html">Building Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developer_guide/code_coverage.html">Code Coverage</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">XGrammar Python API</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="grammar.html">xgr.Grammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tokenizer_info.html">xgr.TokenizerInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="grammar_compiler.html">xgr.GrammarCompiler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="compiled_grammar.html">xgr.CompiledGrammar</a></li>
+<li class="toctree-l2"><a class="reference internal" href="grammar_matcher.html">xgr.GrammarMatcher</a></li>
+<li class="toctree-l2"><a class="reference internal" href="testing.html">xgr.testing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="structural_tag.html">Structural Tag</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Builtin Structural Tag</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#global-functions">Global Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#all-apis">All APIs</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.normalize_tool_choice"><code class="docutils literal notranslate"><span class="pre">normalize_tool_choice()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.register_model_structural_tag"><code class="docutils literal notranslate"><span class="pre">register_model_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_llama_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_llama_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_kimi_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_kimi_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_deepseek_r1_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_deepseek_r1_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_deepseek_v3_1_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_deepseek_v3_1_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_qwen_3_5_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_qwen_3_coder_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_qwen_3_coder_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_qwen_3_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_qwen_3_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_harmony_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_harmony_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_deepseek_v3_2_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_deepseek_v3_2_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_minimax_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_minimax_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_glm_4_7_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_glm_4_7_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_deepseek_v4_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_deepseek_v4_structural_tag()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_builtin_structural_tag"><code class="docutils literal notranslate"><span class="pre">get_builtin_structural_tag()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="openai_tool_call_schema.html">OpenAI Tool Call Schema</a></li>
+<li class="toctree-l2"><a class="reference internal" href="bitmask_ops.html">Bitmask Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="config.html">Config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="exception.html">Exception</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+        
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      
+      <nav class="wy-nav-top" aria-label="top navigation" data-toggle="wy-nav-top">
+        
+            <div class="togglemenu">
+
+            </div>
+            <div class="nav-content">
+              <!-- XGrammar -->
+              Table of Contents
+            </div>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> <span class="br-arrow">></span></li>
+        
+          <li><a href="index.html">XGrammar Python API</a> <span class="br-arrow">></span></li>
+        
+      <li>Builtin Structural Tag</li>
+    
+    
+      
+      
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            
+              <a href="https://github.com/mlc-ai/xgrammar/edit/main/docs/api/python/builtin_structural_tag.rst" class="fa fa-github"> Edit on GitHub</a>
+            
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <section id="builtin-structural-tag">
+<h1>Builtin Structural Tag<a class="headerlink" href="#builtin-structural-tag" title="Permalink to this heading">¶</a></h1>
+<p>This page contains the API reference for the structural tag template function. For its usage, see
+<a class="reference internal" href="../../structural_tag/tool_calling_and_reasoning.html"><span class="doc">Tool Calling and Reasoning</span></a>.</p>
+<section id="global-functions">
+<h2>Global Functions<a class="headerlink" href="#global-functions" title="Permalink to this heading">¶</a></h2>
+<p>The main public entry points are:</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_model_structural_tag</span></code></a>(model[, tools, ...])</p></td>
+<td><p>Get a structural tag for a model's reasoning and tool-call output format.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.normalize_tool_choice" title="xgrammar.builtin_structural_tag.normalize_tool_choice"><code class="xref py py-obj docutils literal notranslate"><span class="pre">normalize_tool_choice</span></code></a>([tools, tool_choice])</p></td>
+<td><p>Normalize tools and tool choice for structural tag builders.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.register_model_structural_tag" title="xgrammar.builtin_structural_tag.register_model_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">register_model_structural_tag</span></code></a>(name)</p></td>
+<td><p>Register a model-specific structural tag function under <em>name</em>.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py function">
+<dt class="sig sig-object py">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_builtin_structural_tag</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span></dt>
+<dd><p>Deprecated alias for <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a>.</p>
+</dd></dl>
+
+</section>
+<section id="all-apis">
+<h2>All APIs<a class="headerlink" href="#all-apis" title="Permalink to this heading">¶</a></h2>
+<p>The remaining model-specific structural tag builders are generated from
+<code class="docutils literal notranslate"><span class="pre">xgrammar.builtin_structural_tag</span></code> automatically.</p>
+<span class="target" id="module-xgrammar.builtin_structural_tag"></span><p><strong>Functions:</strong></p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_model_structural_tag</span></code></a>(model[, tools, ...])</p></td>
+<td><p>Get a structural tag for a model's reasoning and tool-call output format.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.normalize_tool_choice" title="xgrammar.builtin_structural_tag.normalize_tool_choice"><code class="xref py py-obj docutils literal notranslate"><span class="pre">normalize_tool_choice</span></code></a>([tools, tool_choice])</p></td>
+<td><p>Normalize tools and tool choice for structural tag builders.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.register_model_structural_tag" title="xgrammar.builtin_structural_tag.register_model_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">register_model_structural_tag</span></code></a>(name)</p></td>
+<td><p>Register a model-specific structural tag function under <em>name</em>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_llama_structural_tag" title="xgrammar.builtin_structural_tag.get_llama_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_llama_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Get Llama style structural tag format.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_kimi_structural_tag" title="xgrammar.builtin_structural_tag.get_kimi_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_kimi_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Get Kimi-K2 style structural tag format.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_deepseek_r1_structural_tag" title="xgrammar.builtin_structural_tag.get_deepseek_r1_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_deepseek_r1_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Get DeepSeek-R1 style structural tag format.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_deepseek_v3_1_structural_tag" title="xgrammar.builtin_structural_tag.get_deepseek_v3_1_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_deepseek_v3_1_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Get DeepSeek-V3.1 style structural tag format.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag" title="xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_qwen_3_5_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Get Qwen XML tool-call structural tag format.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_qwen_3_coder_structural_tag" title="xgrammar.builtin_structural_tag.get_qwen_3_coder_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_qwen_3_coder_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Deprecated alias for <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag" title="xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_qwen_3_5_structural_tag()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_qwen_3_structural_tag" title="xgrammar.builtin_structural_tag.get_qwen_3_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_qwen_3_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Get Qwen3 style structural tag format.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_harmony_structural_tag" title="xgrammar.builtin_structural_tag.get_harmony_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_harmony_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Get harmony(gpt-oss) style structural tag format.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_deepseek_v3_2_structural_tag" title="xgrammar.builtin_structural_tag.get_deepseek_v3_2_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_deepseek_v3_2_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Get DeepSeek-V3.2 style structural tag format.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_minimax_structural_tag" title="xgrammar.builtin_structural_tag.get_minimax_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_minimax_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Get MiniMax-M2.5 style structural tag format.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_glm_4_7_structural_tag" title="xgrammar.builtin_structural_tag.get_glm_4_7_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_glm_4_7_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Get GLM-4.7/GLM-5 style structural tag format.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_deepseek_v4_structural_tag" title="xgrammar.builtin_structural_tag.get_deepseek_v4_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_deepseek_v4_structural_tag</span></code></a>([tools, ...])</p></td>
+<td><p>Get DeepSeek-V4 style structural tag format.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.builtin_structural_tag.get_builtin_structural_tag" title="xgrammar.builtin_structural_tag.get_builtin_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_builtin_structural_tag</span></code></a>(model[, tools, ...])</p></td>
+<td><p>Alias for <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a>.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_model_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_model_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#dict" title="(in Python v3.12)"><span class="pre">dict</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'none'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceParam" title="xgrammar.openai_tool_call_schema.NamedToolChoiceParam"><span class="pre">NamedToolChoiceParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam" title="xgrammar.openai_tool_call_schema.AllowedToolChoiceParam"><span class="pre">AllowedToolChoiceParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam" title="xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam"><span class="pre">BuiltinToolChoiceParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#dict" title="(in Python v3.12)"><span class="pre">dict</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_model_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get a structural tag for a model’s reasoning and tool-call output format.</p>
+<p>Use this function when a serving engine needs a structural tag that matches
+a model’s tool-call syntax. Pass the model format, the available tools, and
+the desired tool choice policy.</p>
+<p>This API is designed to resemble OpenAI Chat Completions API.</p>
+<p>Function tools use the OpenAI Chat Completions shape:
+<code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;function&quot;,</span> <span class="pre">&quot;function&quot;:</span> <span class="pre">{...}}</span></code>.</p>
+<p>Builtin tools use a compact shape:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">type</span></code> is the provider-level builtin tool type, such as
+<code class="docutils literal notranslate"><span class="pre">&quot;web_search_preview&quot;</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">name</span></code> is the exact tool name that may appear in model output. If it is
+omitted, <code class="docutils literal notranslate"><span class="pre">type</span></code> is used as the output name.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">parameters</span></code> is the JSON schema used to constrain the arguments emitted
+by the model.</p></li>
+</ul>
+<p class="rubric">Examples</p>
+<p>Ordinary function tool:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
+    <span class="s2">&quot;llama&quot;</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;location&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+                <span class="p">},</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+    <span class="p">],</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Harmony with a builtin web search tool:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
+    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;browser.search&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;query&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+                <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;query&quot;</span><span class="p">],</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+    <span class="p">],</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Force an ordinary function tool:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
+    <span class="s2">&quot;llama&quot;</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;location&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+                <span class="p">},</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+    <span class="p">],</span>
+    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">},</span>
+    <span class="p">},</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Force a builtin tool by type and output name:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
+    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>
+    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">},</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Allow only a subset of tools:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
+    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>
+    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;allowed_tools&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;allowed_tools&quot;</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">&quot;mode&quot;</span><span class="p">:</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;tools&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span> <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">}},</span>
+                <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">},</span>
+            <span class="p">],</span>
+        <span class="p">},</span>
+    <span class="p">},</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a>) – The model type of the structural tag template. It should be one of the registered values.</p></li>
+<li><p><strong>tools</strong> (<em>Optional</em><em>[</em><em>List</em><em>[</em><em>Union</em><em>[</em><em>ToolParam</em><em>, </em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#dict" title="(in Python v3.12)"><em>dict</em></a><em>]</em><em>]</em><em>]</em>) – Function and builtin tools available to the model. Function tools use
+the Chat Completions shape. Builtin tools use <code class="docutils literal notranslate"><span class="pre">type</span></code> plus optional
+<code class="docutils literal notranslate"><span class="pre">name</span></code> and <code class="docutils literal notranslate"><span class="pre">parameters</span></code> fields. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>, which is
+treated as an empty list.</p></li>
+<li><p><strong>tool_choice</strong> (<em>Union</em><em>[</em><em>ToolChoiceOptionParam</em><em>, </em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#dict" title="(in Python v3.12)"><em>dict</em></a><em>, </em><em>None</em><em>]</em>) – <p>Controls whether the model may or must call tools. Defaults to
+<code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code> lets the model choose between text output and tool calls.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">None</span></code> is treated the same as <code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;none&quot;</span></code> disables all tools.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;required&quot;</span></code> requires at least one available tool.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;function&quot;,</span> <span class="pre">&quot;function&quot;:</span> <span class="pre">{&quot;name&quot;:</span> <span class="pre">...}}</span></code> forces one
+function tool.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&lt;builtin_type&gt;}</span></code> forces one builtin tool. Builtin tool
+choices are matched by <code class="docutils literal notranslate"><span class="pre">type</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;allowed_tools&quot;,</span> <span class="pre">&quot;allowed_tools&quot;:</span> <span class="pre">...}</span></code> limits the
+available tools before applying its <code class="docutils literal notranslate"><span class="pre">mode</span></code>. Its <code class="docutils literal notranslate"><span class="pre">tools</span></code> list may
+contain both function refs and builtin refs. Builtin refs are matched
+by <code class="docutils literal notranslate"><span class="pre">type</span></code>.</p></li>
+</ul>
+</p></li>
+<li><p><strong>reasoning</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a>) – Whether to enable the reasoning part. Some models, such as Qwen 3.6
+and DeepSeek V4, support both reasoning and non-reasoning modes. If
+<code class="docutils literal notranslate"><span class="pre">False</span></code>, use the non-reasoning mode. For models that do not support
+reasoning, this has no effect. For models that only support reasoning,
+<code class="docutils literal notranslate"><span class="pre">False</span></code> means reasoning with empty content.</p></li>
+<li><p><strong>force_reasoning</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a>) – Deprecated. Control whether to keep the reasoning part but leave its content empty.
+Now we will embed the model’s specific behavior into the structural tag function, so
+only controlling <code class="docutils literal notranslate"><span class="pre">reasoning</span></code> is enough.</p></li>
+<li><p><strong>any_order</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a>) – Relax object property ordering for every tool-argument schema. When
+<code class="docutils literal notranslate"><span class="pre">True</span></code>, <code class="docutils literal notranslate"><span class="pre">any_order=True</span></code> is applied to every <code class="xref py py-class docutils literal notranslate"><span class="pre">JSONSchemaFormat</span></code>
+in the generated structural tag, so each tool’s arguments may be emitted
+in any property order (see <code class="xref py py-class docutils literal notranslate"><span class="pre">JSONSchemaFormat</span></code> for the exact
+semantics). When <code class="docutils literal notranslate"><span class="pre">False</span></code> (default), the declared property order is kept
+with full validation. Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><strong>exclude_special_tokens</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a>) – Whether to forbid model special tokens (such as <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;</span></code> and
+<code class="docutils literal notranslate"><span class="pre">&lt;/think&gt;</span></code>) from appearing inside the free-text and triggered-text
+spans of the structural tag. Defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>, which keeps the
+free-text spans constrained to exclude those tokens. Set to <code class="docutils literal notranslate"><span class="pre">False</span></code>
+to allow them to appear as plain text. For models that have no special
+tokens to exclude (such as <code class="docutils literal notranslate"><span class="pre">&quot;harmony&quot;</span></code>), this has no effect.</p></li>
+<li><p><strong>max_whitespace_cnt</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>]</em>) – Applied to every tool-argument <code class="xref py py-class docutils literal notranslate"><span class="pre">JSONSchemaFormat</span></code>. Caps the number
+of consecutive whitespace characters. Setting it (e.g. <code class="docutils literal notranslate"><span class="pre">2</span></code>) bounds runs
+of whitespace, which avoids the unbounded-whitespace outputs some models
+emit in bad cases that would otherwise blow up grammar
+compilation/matching. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>If a tool’s <code class="docutils literal notranslate"><span class="pre">parameters</span></code> field is omitted or <code class="docutils literal notranslate"><span class="pre">None</span></code>, its generated
+arguments are unconstrained JSON. If a function tool has <code class="docutils literal notranslate"><span class="pre">strict=False</span></code>,
+its <code class="docutils literal notranslate"><span class="pre">parameters</span></code> schema is also treated as unconstrained.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A structural tag for function calling format.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.StructuralTag">StructuralTag</a></p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#ValueError" title="(in Python v3.12)"><strong>ValueError</strong></a> – If tool lists, tool choices, or required tool availability are invalid.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.normalize_tool_choice">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">normalize_tool_choice</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#dict" title="(in Python v3.12)"><span class="pre">dict</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'none'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceParam" title="xgrammar.openai_tool_call_schema.NamedToolChoiceParam"><span class="pre">NamedToolChoiceParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam" title="xgrammar.openai_tool_call_schema.AllowedToolChoiceParam"><span class="pre">AllowedToolChoiceParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam" title="xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam"><span class="pre">BuiltinToolChoiceParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#dict" title="(in Python v3.12)"><span class="pre">dict</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Tuple" title="(in Python v3.12)"><span class="pre">Tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#normalize_tool_choice"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.normalize_tool_choice" title="Permalink to this definition">¶</a></dt>
+<dd><p>Normalize tools and tool choice for structural tag builders.</p>
+<p>This helper exposes the model-independent part of
+<a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a>. It is intended for serving engines that
+want to own their model-specific structural tag templates while reusing
+OpenAI-style tool and tool-choice handling.</p>
+<p>The return value is not a new public tool-calling protocol. It is a compact
+prepared form for structural tag builder functions:</p>
+<ul class="simple">
+<li><p>ordinary function tools are returned as <code class="docutils literal notranslate"><span class="pre">FunctionToolParam</span></code> objects;</p></li>
+<li><p>builtin/server tools are returned as <code class="docutils literal notranslate"><span class="pre">BuiltinToolParam</span></code> objects;</p></li>
+<li><p>public tool-choice values are simplified to <code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;required&quot;</span></code>,
+or <code class="docutils literal notranslate"><span class="pre">&quot;forced&quot;</span></code>.</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>tools</strong> (<em>Optional</em><em>[</em><em>List</em><em>[</em><em>Union</em><em>[</em><em>ToolParam</em><em>, </em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#dict" title="(in Python v3.12)"><em>dict</em></a><em>]</em><em>]</em><em>]</em>) – Function and builtin tools available to the model. Function tools use
+the OpenAI Chat Completions shape,
+<code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;function&quot;,</span> <span class="pre">&quot;function&quot;:</span> <span class="pre">{...}}</span></code>. Builtin tools use
+<code class="docutils literal notranslate"><span class="pre">type</span></code> plus optional <code class="docutils literal notranslate"><span class="pre">name</span></code> and <code class="docutils literal notranslate"><span class="pre">parameters</span></code> fields. <code class="docutils literal notranslate"><span class="pre">None</span></code> is
+treated as an empty list.</p></li>
+<li><p><strong>tool_choice</strong> (<em>Union</em><em>[</em><em>ToolChoiceOptionParam</em><em>, </em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#dict" title="(in Python v3.12)"><em>dict</em></a><em>, </em><em>None</em><em>]</em>) – <p>Controls whether the model may or must call tools. This accepts the
+same values as <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a>:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code> keeps all available tools and lets the builder allow text
+or tool calls.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">None</span></code> is treated as <code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;none&quot;</span></code> clears all tools and returns simplified choice
+<code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>. Builders already interpret auto with no tools as
+text-only.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;required&quot;</span></code> keeps all available tools and requires at least one
+function or builtin tool to remain available.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;function&quot;,</span> <span class="pre">&quot;function&quot;:</span> <span class="pre">{&quot;name&quot;:</span> <span class="pre">...}}</span></code> filters to the
+named function tool and returns simplified choice <code class="docutils literal notranslate"><span class="pre">&quot;forced&quot;</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&lt;builtin_type&gt;}</span></code> filters to exactly one builtin tool
+whose <code class="docutils literal notranslate"><span class="pre">type</span></code> matches and returns simplified choice <code class="docutils literal notranslate"><span class="pre">&quot;forced&quot;</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">{&quot;type&quot;:</span> <span class="pre">&quot;allowed_tools&quot;,</span> <span class="pre">&quot;allowed_tools&quot;:</span> <span class="pre">...}</span></code> filters to the
+referenced tools and returns the nested allowed-tools <code class="docutils literal notranslate"><span class="pre">mode</span></code> as the
+simplified choice.</p></li>
+</ul>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A tuple of <code class="docutils literal notranslate"><span class="pre">(function_tools,</span> <span class="pre">builtin_tools,</span> <span class="pre">simplified_tool_choice)</span></code>
+ready to pass to a model-specific structural tag builder.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Tuple[List[<a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam">FunctionToolParam</a>], List[<a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam">BuiltinToolParam</a>], SimplifiedToolChoice]</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/exceptions.html#ValueError" title="(in Python v3.12)"><strong>ValueError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">tools</span></code> is not a list, a referenced tool is missing, a builtin
+    tool choice does not match exactly one builtin tool, <code class="docutils literal notranslate"><span class="pre">required</span></code> leaves
+    no available tools, or <code class="docutils literal notranslate"><span class="pre">forced</span></code> does not resolve to exactly one tool.</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Build tool-choice handling with an external model-specific builder:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">function_tools</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="p">,</span> <span class="n">tool_choice</span> <span class="o">=</span> <span class="n">normalize_tool_choice</span><span class="p">(</span>
+    <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
+        <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;location&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+                <span class="p">},</span>
+            <span class="p">},</span>
+        <span class="p">}</span>
+    <span class="p">],</span>
+    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span>
+        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">},</span>
+    <span class="p">},</span>
+<span class="p">)</span>
+
+<span class="n">structural_tag</span> <span class="o">=</span> <span class="n">build_my_model_structural_tag</span><span class="p">(</span>
+    <span class="n">function_tools</span><span class="p">,</span>
+    <span class="n">builtin_tools</span><span class="p">,</span>
+    <span class="n">tool_choice</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.register_model_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">register_model_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#register_model_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.register_model_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Register a model-specific structural tag function under <em>name</em>.</p>
+<p>The decorated function is stored in the internal registry so that
+<a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a> can look it up by the <code class="docutils literal notranslate"><span class="pre">model</span></code>
+argument. Use this to add support for a new model format.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>name</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a>) – The model format key, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;llama&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;harmony&quot;</span></code>.</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;my_model&quot;</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_my_model_structural_tag</span><span class="p">(</span>
+    <span class="n">tools</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">tool_choice</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_llama_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_llama_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_llama_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_llama_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get Llama style structural tag format.</p>
+<p>Corresponding model key: <code class="docutils literal notranslate"><span class="pre">&quot;llama&quot;</span></code>.</p>
+<p>Reference: <a class="reference external" href="https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/">https://www.llama.com/docs/model-cards-and-prompt-formats/llama3_1/</a></p>
+<p>Parameters are normalized by <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a> before this
+function is called:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tools</span></code>: a list of function tools. Each tool should have a <code class="docutils literal notranslate"><span class="pre">function</span></code>
+object containing <code class="docutils literal notranslate"><span class="pre">name</span></code> and <code class="docutils literal notranslate"><span class="pre">parameters</span></code> fields.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reasoning</span></code>: ignored because this format has no reasoning part.</p></li>
+</ul>
+<p>Supported models:</p>
+<ul class="simple">
+<li><p>Meta-Llama-3</p></li>
+<li><p>Llama-3.1</p></li>
+<li><p>Llama-3.2</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A structural tag for function calling format.
+This format is used by Llama 3 and other models that follow the same style.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.StructuralTag">StructuralTag</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_kimi_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_kimi_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_kimi_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_kimi_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get Kimi-K2 style structural tag format.</p>
+<p>Corresponding model key: <code class="docutils literal notranslate"><span class="pre">&quot;kimi&quot;</span></code>.</p>
+<p>Reference: <a class="reference external" href="https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/docs/tool_call_guidance.md">https://huggingface.co/moonshotai/Kimi-K2-Instruct/blob/main/docs/tool_call_guidance.md</a></p>
+<p>Parameters are normalized by <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a> before this
+function is called:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tools</span></code>: a list of function tools. Each tool should have a <code class="docutils literal notranslate"><span class="pre">function</span></code>
+object containing <code class="docutils literal notranslate"><span class="pre">name</span></code> and <code class="docutils literal notranslate"><span class="pre">parameters</span></code> fields.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reasoning</span></code>: whether to enable reasoning mode. If <code class="docutils literal notranslate"><span class="pre">False</span></code>, remove
+the reasoning part and constrain only the following part.</p></li>
+</ul>
+<p>Supported models:</p>
+<ul class="simple">
+<li><p>Kimi-K2</p></li>
+<li><p>Kimi-K2.5</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A structural tag template.
+This format is used by Kimi-K2 and other models that follow the same style.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.StructuralTag">StructuralTag</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_deepseek_r1_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_deepseek_r1_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_deepseek_r1_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_deepseek_r1_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get DeepSeek-R1 style structural tag format.</p>
+<p>Corresponding model key: <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_r1&quot;</span></code>.</p>
+<p>Reference: <a class="reference external" href="https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/main/tokenizer_config.json">https://huggingface.co/deepseek-ai/DeepSeek-R1/blob/main/tokenizer_config.json</a></p>
+<p>Supported models:</p>
+<ul class="simple">
+<li><p>DeepSeek-R1</p></li>
+<li><p>DeepSeek-R1-0528</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_deepseek_v3_1_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_deepseek_v3_1_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_deepseek_v3_1_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_deepseek_v3_1_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get DeepSeek-V3.1 style structural tag format.</p>
+<p>Corresponding model key: <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v3_1&quot;</span></code>.</p>
+<p>Reference: <a class="reference external" href="https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json">https://huggingface.co/deepseek-ai/DeepSeek-V3.1/blob/main/tokenizer_config.json</a></p>
+<p>Supported models:</p>
+<ul class="simple">
+<li><p>DeepSeek-V3.1</p></li>
+<li><p>DeepSeek-V3.2-Exp</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_qwen_3_5_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_qwen_3_5_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get Qwen XML tool-call structural tag format.</p>
+<p>Corresponding model keys: <code class="docutils literal notranslate"><span class="pre">&quot;qwen_3_5&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;qwen_3_coder&quot;</span></code>.</p>
+<p>Reference: <a class="reference external" href="https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/blob/main/chat_template.jinja">https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/blob/main/chat_template.jinja</a></p>
+<p>Parameters are normalized by <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a> before this
+function is called:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tools</span></code>: a list of function tools. Each tool should have a <code class="docutils literal notranslate"><span class="pre">function</span></code>
+object containing <code class="docutils literal notranslate"><span class="pre">name</span></code> and <code class="docutils literal notranslate"><span class="pre">parameters</span></code> fields.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reasoning</span></code>: whether to add the <code class="docutils literal notranslate"><span class="pre">&lt;/think&gt;</span></code> reasoning prefix before
+the tool/text suffix.</p></li>
+</ul>
+<p>Supported models:</p>
+<ul class="simple">
+<li><p>Qwen3.5</p></li>
+<li><p>Qwen3.6</p></li>
+<li><p>Qwen3-Coder</p></li>
+<li><p>Qwen3-Coder-Next</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A structural tag for Qwen XML function calling format.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.StructuralTag">StructuralTag</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_qwen_3_coder_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_qwen_3_coder_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_qwen_3_coder_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Deprecated alias for <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag" title="xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_qwen_3_5_structural_tag()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_qwen_3_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_qwen_3_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_qwen_3_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_qwen_3_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get Qwen3 style structural tag format.</p>
+<p>Corresponding model key: <code class="docutils literal notranslate"><span class="pre">&quot;qwen_3&quot;</span></code>.</p>
+<p>Reference: <a class="reference external" href="https://qwen.readthedocs.io/en/latest/framework/function_call.html">https://qwen.readthedocs.io/en/latest/framework/function_call.html</a></p>
+<p>Parameters are normalized by <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a> before this
+function is called:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tools</span></code>: a list of function tools. Each tool should have a <code class="docutils literal notranslate"><span class="pre">function</span></code>
+object containing <code class="docutils literal notranslate"><span class="pre">name</span></code> and <code class="docutils literal notranslate"><span class="pre">parameters</span></code> fields.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reasoning</span></code>: whether to enable reasoning mode. If <code class="docutils literal notranslate"><span class="pre">False</span></code>, remove
+the reasoning part.</p></li>
+</ul>
+<p>Supported models:</p>
+<ul class="simple">
+<li><p>Qwen3</p></li>
+<li><p>Qwen3-Next</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A structural tag template.
+This format is used by Qwen3 and other models that follow the same style.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.StructuralTag">StructuralTag</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_harmony_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_harmony_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_harmony_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_harmony_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get harmony(gpt-oss) style structural tag format.</p>
+<p>Corresponding model key: <code class="docutils literal notranslate"><span class="pre">&quot;harmony&quot;</span></code>.</p>
+<p>Reference: <a class="reference external" href="https://developers.openai.com/cookbook/articles/openai-harmony">https://developers.openai.com/cookbook/articles/openai-harmony</a>
+Reference: <a class="reference external" href="https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja">https://huggingface.co/openai/gpt-oss-120b/blob/main/chat_template.jinja</a></p>
+<p>Parameters are normalized by <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a> before this
+function is called:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tools</span></code>: a list of function tools. Each tool should have a <code class="docutils literal notranslate"><span class="pre">function</span></code>
+object containing <code class="docutils literal notranslate"><span class="pre">name</span></code> and <code class="docutils literal notranslate"><span class="pre">parameters</span></code> fields.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">builtin_tools</span></code>: a list of builtin tools. Each builtin tool should
+provide <code class="docutils literal notranslate"><span class="pre">type</span></code>, optional <code class="docutils literal notranslate"><span class="pre">name</span></code>, and <code class="docutils literal notranslate"><span class="pre">parameters</span></code> fields.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reasoning</span></code>: whether to enable the analysis channel.</p></li>
+</ul>
+<p>Supported models:</p>
+<ul class="simple">
+<li><p>gpt-oss</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A structural tag template.
+This format is in OpenAI Harmony Response Format, which is used by GPT-oss
+and other models that follow the same style.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.StructuralTag">StructuralTag</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_deepseek_v3_2_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_deepseek_v3_2_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_deepseek_v3_2_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_deepseek_v3_2_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get DeepSeek-V3.2 style structural tag format.</p>
+<p>Corresponding model key: <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v3_2&quot;</span></code>.</p>
+<p>Supported models:</p>
+<ul class="simple">
+<li><p>DeepSeek-V3.2</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_minimax_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_minimax_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_minimax_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_minimax_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get MiniMax-M2.5 style structural tag format.</p>
+<p>Corresponding model key: <code class="docutils literal notranslate"><span class="pre">&quot;minimax&quot;</span></code>.</p>
+<p>Supported models:</p>
+<ul class="simple">
+<li><p>MiniMax-M2.5</p></li>
+<li><p>MiniMax-M2.7</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A structural tag for MiniMax function calling format.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.StructuralTag">StructuralTag</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_glm_4_7_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_glm_4_7_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_glm_4_7_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_glm_4_7_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get GLM-4.7/GLM-5 style structural tag format.</p>
+<p>The GLM tool calling format uses XML-like tags:
+<code class="docutils literal notranslate"><span class="pre">&lt;tool_call&gt;function_name</span></code>
+<code class="docutils literal notranslate"><span class="pre">&lt;arg_key&gt;key&lt;/arg_key&gt;&lt;arg_value&gt;value&lt;/arg_value&gt;</span></code>
+<code class="docutils literal notranslate"><span class="pre">&lt;/tool_call&gt;</span></code></p>
+<p>Corresponding model key: <code class="docutils literal notranslate"><span class="pre">&quot;glm_4_7&quot;</span></code>.</p>
+<p>Parameters are normalized by <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a> before this
+function is called:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tools</span></code>: a list of function tools. Each tool should have a <code class="docutils literal notranslate"><span class="pre">function</span></code>
+object containing <code class="docutils literal notranslate"><span class="pre">name</span></code> and <code class="docutils literal notranslate"><span class="pre">parameters</span></code> fields.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reasoning</span></code>: whether to enable reasoning mode. If <code class="docutils literal notranslate"><span class="pre">False</span></code>, use the
+non-reasoning mode.</p></li>
+</ul>
+<p>Supported models:</p>
+<ul class="simple">
+<li><p>GLM-5</p></li>
+<li><p>GLM-4.7</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A structural tag for GLM function calling format.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.StructuralTag">StructuralTag</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_deepseek_v4_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_deepseek_v4_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">builtin_tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'forced'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/builtin_structural_tag.html#get_deepseek_v4_structural_tag"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_deepseek_v4_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Get DeepSeek-V4 style structural tag format.</p>
+<p>Corresponding model key: <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v4&quot;</span></code>.</p>
+<p>Supported models:</p>
+<ul class="simple">
+<li><p>DeepSeek-V4</p></li>
+</ul>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="xgrammar.builtin_structural_tag.get_builtin_structural_tag">
+<span class="sig-prename descclassname"><span class="pre">xgrammar.builtin_structural_tag.</span></span><span class="sig-name descname"><span class="pre">get_builtin_structural_tag</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">tools</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.FunctionToolParam" title="xgrammar.openai_tool_call_schema.FunctionToolParam"><span class="pre">FunctionToolParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolParam" title="xgrammar.openai_tool_call_schema.BuiltinToolParam"><span class="pre">BuiltinToolParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#dict" title="(in Python v3.12)"><span class="pre">dict</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tool_choice</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Union" title="(in Python v3.12)"><span class="pre">Union</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'none'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'auto'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'required'</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.NamedToolChoiceParam" title="xgrammar.openai_tool_call_schema.NamedToolChoiceParam"><span class="pre">NamedToolChoiceParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.AllowedToolChoiceParam" title="xgrammar.openai_tool_call_schema.AllowedToolChoiceParam"><span class="pre">AllowedToolChoiceParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="openai_tool_call_schema.html#xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam" title="xgrammar.openai_tool_call_schema.BuiltinToolChoiceParam"><span class="pre">BuiltinToolChoiceParam</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#dict" title="(in Python v3.12)"><span class="pre">dict</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_reasoning</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">any_order</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exclude_special_tokens</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_whitespace_cnt</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Optional" title="(in Python v3.12)"><span class="pre">Optional</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="structural_tag.html#xgrammar.StructuralTag" title="xgrammar.structural_tag.StructuralTag"><span class="pre">StructuralTag</span></a></span></span><a class="headerlink" href="#xgrammar.builtin_structural_tag.get_builtin_structural_tag" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for <a class="reference internal" href="#xgrammar.builtin_structural_tag.get_model_structural_tag" title="xgrammar.builtin_structural_tag.get_model_structural_tag"><code class="xref py py-func docutils literal notranslate"><span class="pre">get_model_structural_tag()</span></code></a>. Deprecated.</p>
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+           
+          </div>
+          
+
+<footer>
+
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="openai_tool_call_schema.html" class="btn btn-neutral float-right" title="OpenAI Tool Call Schema" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="structural_tag.html" class="btn btn-neutral float-left" title="Structural Tag" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+
+<div id="button" class="backtop"><img src="../../_static/img/right.svg" alt="backtop"/> </div>
+<section class="footerSec">
+    <div class="footerHeader">
+      <div class="d-flex align-md-items-center justify-content-between flex-column flex-md-row">
+        <div class="copywrite d-flex align-items-center">
+          <h5 id="copy-right-info">© 2024 XGrammar</h5>
+        </div>
+      </div>
+
+    </div>
+
+    <div>
+      <div class="footernote"> </div>
+    </div>
+
+</section>
+</footer>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+  
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+
+    <!-- RunLLM Widget Script -->
+    <script type="module" id="runllm-widget-script" src="https://widget.runllm.com" crossorigin="true" version="stable" runllm-keyboard-shortcut="Mod+j" runllm-name="XGrammar Chatbot" runllm-position="BOTTOM_RIGHT" runllm-assistant-id="1041" async></script>
+    
+</body>
+</html>
