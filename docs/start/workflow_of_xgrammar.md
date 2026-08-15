@@ -122,6 +122,35 @@ compiled_grammar2 = grammar_compiler.compile_grammar(grammar)
 grammar_compiler.clear_cache()
 ```
 
+### Dynamic Compilation
+
+By default, grammar compilation precomputes the adaptive token mask cache for the whole grammar.
+For large grammars, such as a JSON schema describing many tools, this precomputation dominates the
+compilation time. Set `enable_dynamic_compilation` to `True` to defer it: token masks are
+generated the first time they are needed during decoding, then stored in the
+[`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object and reused by all later steps and
+requests.
+
+```python
+grammar_compiler = xgr.GrammarCompiler(tokenizer_info, enable_dynamic_compilation=True)
+compiled_grammar = grammar_compiler.compile_json_schema(json_schema_string)
+```
+
+Dynamic compilation produces exactly the same token masks as the default mode. It reduces the
+compilation time and the initial memory usage of the compiled grammar, in exchange for extra
+mask-generation work in the first decoding steps that reach each grammar position. It is
+suitable for workloads with many distinct or rarely reused grammars, such as agentic
+applications that construct grammars on the fly. Generating masks dynamically from multiple
+threads is safe.
+
+Two behaviors to note:
+
+- Serializing a compiled grammar with
+  [`serialize_json`](xgrammar.CompiledGrammar.serialize_json) first materializes all remaining
+  token masks, so the serialized result is equivalent to that of the default mode.
+- With dynamic compilation enabled, the compilation cache only works without a memory limit.
+  If `cache_limit_bytes` is set to a value other than `-1`, the cache is disabled.
+
 ## Compiled Grammar
 
 A [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object is associated with an [`xgr.Grammar`](xgrammar.Grammar) object and an [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) object. It contains the compiled grammar and the token mask cache. Use these methods to access the grammar and tokenizer info:

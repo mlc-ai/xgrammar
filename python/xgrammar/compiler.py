@@ -130,7 +130,11 @@ class GrammarCompiler(XGRObject):
             Note that the actual memory usage may slightly exceed this value.
 
         enable_dynamic_compilation : bool, default: False
-            Whether to generate token masks when they are first needed.
+            Whether to generate token masks when they are first needed during decoding,
+            instead of precomputing them at compile time. This reduces the compilation time
+            and the initial memory usage of the compiled grammar, while producing the same
+            masks. When enabled, the compilation cache only works with an unlimited
+            cache_limit_bytes.
         """
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise ValueError(

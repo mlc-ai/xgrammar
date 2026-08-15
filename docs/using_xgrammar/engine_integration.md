@@ -29,7 +29,10 @@ Compiling a complex grammar can take non-negligible time, so it should not block
 main loop. Compile the grammar asynchronously when the request arrives, so that compilation
 overlaps with the prefill phase of the request, as shown in the figure in the next section. See
 [Multi-threaded Compilation](../start/workflow_of_xgrammar.md#multi-threaded-compilation) for
-the asynchronous compilation API.
+the asynchronous compilation API. For large grammars, constructing the compiler with
+`enable_dynamic_compilation=True` further reduces the compilation latency by generating token
+masks on first use during decoding instead of at compile time; see
+[Dynamic Compilation](../start/workflow_of_xgrammar.md#dynamic-compilation).
 
 ## Integrating into the Engine Step
 
