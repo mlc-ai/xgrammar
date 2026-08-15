@@ -117,6 +117,9 @@ html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 html_static_path = ["_static"]
 
+# Version dropdown for the multi-version site.
+html_js_files = ["version_switcher.js"]
+
 # Add custom CSS files to fix text selection issues
 html_css_files = ["css/fix_text_selection.css"]
 
