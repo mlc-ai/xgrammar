@@ -164,6 +164,55 @@ def test_recursive_json_string_character_class_summary_matches_eager(cache_enabl
         torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
 
 
+@pytest.mark.parametrize("cache_enabled", [False, True], ids=["cache-off", "cache-on"])
+def test_email_local_part_direct_mask_matches_token_oracle(cache_enabled):
+    vocabulary = [
+        "a",
+        "abc",
+        ".doe",
+        ".doe@example",
+        "@example",
+        "@example.com",
+        ".com",
+        '.com"',
+        '.com"}',
+        "-",
+        "..",
+        ".-",
+        "@",
+        '"',
+        '",',
+        "é",
+        "中",
+        "a中",
+        b"\xe4",
+        b"\xe4\xb8",
+        b"\xff",
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=cache_enabled, enable_dynamic_compilation=True
+    ).compile_json_schema(
+        {
+            "type": "object",
+            "properties": {"email": {"type": "string", "format": "email"}},
+            "required": ["email"],
+            "additionalProperties": False,
+        },
+        any_whitespace=False,
+        strict_mode=True,
+    )
+
+    for prefix in ['{"email": "john', '{"email": "john.doe']:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert matcher.accept_string(prefix)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        mask = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+        for token_id in range(tokenizer_info.vocab_size):
+            assert bool(mask[token_id]) == matcher.fork().accept_token(token_id), token_id
+
+
 def test_dynamic_masks_are_cached():
     tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
     dynamic = _compile_builtin_json(
