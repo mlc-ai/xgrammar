@@ -370,6 +370,16 @@ def test_deserialize_compiled_grammar_rejects_legacy_version_before_layout():
         xgr.CompiledGrammar.deserialize_json(json.dumps(legacy_v17_object), tokenizer_info)
 
 
+def test_deserialize_compiled_grammar_rejects_malformed_token_mask_cache():
+    """A malformed token-mask cache must not be silently restored as an empty cache."""
+    compiled_grammar, tokenizer_info = construct_compiled_grammar()
+    serialized_object = json.loads(compiled_grammar.serialize_json())
+    serialized_object["adaptive_token_mask_cache"] = "not-a-cache"
+
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.CompiledGrammar.deserialize_json(json.dumps(serialized_object), tokenizer_info)
+
+
 def test_serialize_compiled_grammar_functional():
     """Test that deserialized CompiledGrammar object functions correctly."""
     original_compiled_grammar, tokenizer_info = construct_compiled_grammar()

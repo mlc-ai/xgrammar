@@ -234,7 +234,11 @@ std::optional<SerializationError> DeserializeJSONValue(
   if (object.find("adaptive_token_mask_cache") == object.end()) {
     return ConstructDeserializeError("Expect a 'adaptive_token_mask_cache' field", type_name);
   }
-  AutoDeserializeJSONValue(&(impl->adaptive_token_mask_cache), object["adaptive_token_mask_cache"]);
+  if (auto error = AutoDeserializeJSONValue(
+          &(impl->adaptive_token_mask_cache), object["adaptive_token_mask_cache"], type_name
+      )) {
+    return error;
+  }
   const size_t sorted_vocab_size = tokenizer_info.GetSortedDecodedVocab().size();
   for (auto& entry : impl->adaptive_token_mask_cache) {
     entry.second.RecomputeAcceptedCount(sorted_vocab_size);
