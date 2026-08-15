@@ -23,7 +23,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 ### Parameters
 
-- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"kimi_k3"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm_4_7"`, `"deepseek_v4"`, `"cohere"`.
+- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"kimi_k3"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm_4_7"`, `"deepseek_v4"`, `"cohere"`, `"exaone"`.
 - **tools** (`List[ToolParam | dict]`, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:
   - **Function tools** use the OpenAI Chat Completions shape:
     ```json
@@ -205,6 +205,7 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `"glm_4_7"` | GLM-5, GLM-4.7 |
 | `"deepseek_v4"` | DeepSeek-V4 |
 | `"cohere"` | Cohere Command models using XML tool calls |
+| `"exaone"` | EXAONE-4.0-32B, EXAONE-4.0-1.2B |
 
 ## Extending with custom models
 
