@@ -139,7 +139,7 @@ static void AddSameLengthCharacterRange(FSM& fsm, int from, int to, uint32_t min
     if ((max & 0x00FFFF) != 0xBFBF) {
       int tmp_state_max = fsm.AddState();
       fsm.AddEdge(from, tmp_state_max, byte_max[2], byte_max[2]);
-      AddSameLengthCharacterRange(fsm, tmp_state_max, to, 0x0080, (max & 0x00FFFF));
+      AddSameLengthCharacterRange(fsm, tmp_state_max, to, 0x008080, (max & 0x00FFFF));
     } else {
       byte_max[2]++;
     }

@@ -759,6 +759,15 @@ TEST(XGrammarFSMBuilderTest, TestRegexEscapes) {
   EXPECT_TRUE(fsm_wse.AcceptString("ABC"));
   EXPECT_FALSE(fsm_wse.AcceptString("D"));
 
+  // A partial three-byte UTF-8 range must retain the branch for its final lead byte. This range
+  // ends immediately before the Unicode surrogate interval and therefore exercises an upper
+  // suffix smaller than 0xBFBF.
+  fsm_wse = RegexFSMBuilder::Build("[\\u{D000}-\\u{D7FF}]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\uD000"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\uD7FF"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\uCFFF"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\uE000"));
+
   // A quantifier after a multi-byte character applies to the whole codepoint.
   fsm_wse = RegexFSMBuilder::Build("好*").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString(""));
