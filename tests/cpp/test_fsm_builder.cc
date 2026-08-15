@@ -389,6 +389,23 @@ TEST(XGrammarFSMBuilderTest, TestChoicesFSMBuilder) {
   EXPECT_EQ(fsm_rule2_result->ToString(), expected_fsm_rule2);
 }
 
+TEST(XGrammarFSMBuilderTest, TestByteStringChoicesBuildTrieDirectly) {
+  auto grammar = Grammar::FromEBNF(R"(
+    root ::= "" | "a" | "ab" | "ac" | "bcd" | "ab"
+  )");
+  auto fsm_result = GrammarFSMBuilder::Choices(
+      grammar->GetGrammarExpr(grammar->GetRootRule().body_expr_id), grammar
+  );
+  ASSERT_TRUE(fsm_result.has_value());
+
+  for (const char* accepted : {"", "a", "ab", "ac", "bcd"}) {
+    EXPECT_TRUE(fsm_result->AcceptString(accepted)) << accepted;
+  }
+  for (const char* rejected : {"b", "abc", "ad", "bc", "bcde"}) {
+    EXPECT_FALSE(fsm_result->AcceptString(rejected)) << rejected;
+  }
+}
+
 TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenChars) {
   // \S matches any non-whitespace byte. With the JSON forbidden characters removed, the
   // quote and the backslash must be rejected while other printable characters stay.
@@ -775,70 +792,17 @@ TEST(XGrammarFSMBuilderTest, TestRegexEscapes) {
   EXPECT_FALSE(fsm_wse.AcceptString("ł"));
 }
 
-TEST(XGrammarFSMBuilderTest, TestRegexUnicodeProperties) {
-  auto fsm_wse = RegexFSMBuilder::Build("\\pL").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("A"));
-  EXPECT_TRUE(fsm_wse.AcceptString("λ"));
-  EXPECT_FALSE(fsm_wse.AcceptString("1"));
+TEST(XGrammarFSMBuilderTest, TestRegexUnicodePropertiesUnsupported) {
+  constexpr const char* kExpected =
+      "Regex parsing error at position 1: Unicode property escapes \\p and \\P are not supported";
+  auto error_message = [](const std::string& regex, bool byte_mode = false) {
+    return std::string(RegexFSMBuilder::Build(regex, byte_mode).UnwrapErr().what());
+  };
 
-  fsm_wse = RegexFSMBuilder::Build("\\p{Letter}").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("字"));
-  EXPECT_FALSE(fsm_wse.AcceptString("_"));
-
-  fsm_wse = RegexFSMBuilder::Build("\\p{IsGreek}").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("Σ"));
-  EXPECT_FALSE(fsm_wse.AcceptString("A"));
-
-  fsm_wse = RegexFSMBuilder::Build("\\p{ General_Category : Uppercase_Letter }").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("A"));
-  EXPECT_FALSE(fsm_wse.AcceptString("a"));
-
-  fsm_wse = RegexFSMBuilder::Build("\\p{Script:Greek}").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("Ω"));
-  EXPECT_FALSE(fsm_wse.AcceptString("Ж"));
-
-  fsm_wse = RegexFSMBuilder::Build("\\p{scx=Hira}").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("あ"));
-  EXPECT_FALSE(fsm_wse.AcceptString("A"));
-
-  fsm_wse = RegexFSMBuilder::Build("\\p{Age=V1_1}").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("A"));
-  EXPECT_FALSE(fsm_wse.AcceptString("😀"));
-
-  fsm_wse = RegexFSMBuilder::Build("\\p{GCB=Extend}").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("\u0301"));
-  EXPECT_FALSE(fsm_wse.AcceptString("A"));
-
-  fsm_wse = RegexFSMBuilder::Build("\\p{WB=Katakana}").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("カ"));
-  EXPECT_FALSE(fsm_wse.AcceptString("A"));
-
-  fsm_wse = RegexFSMBuilder::Build("\\p{SB=ATerm}").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("."));
-  EXPECT_FALSE(fsm_wse.AcceptString("A"));
-
-  // regex-syntax 0.8.5 parses `!=` but translates it identically to `=`.
-  fsm_wse = RegexFSMBuilder::Build("\\p{gc!=Lu}").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("A"));
-  EXPECT_FALSE(fsm_wse.AcceptString("a"));
-
-  // Case folding is applied before property negation.
-  fsm_wse = RegexFSMBuilder::Build("(?i)\\P{Lu}").Unwrap();
-  EXPECT_FALSE(fsm_wse.AcceptString("A"));
-  EXPECT_FALSE(fsm_wse.AcceptString("a"));
-  EXPECT_TRUE(fsm_wse.AcceptString("1"));
-
-  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{Not_A_Property}").IsErr());
-  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{gc=Not_A_Value}").IsErr());
-  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{L", /*byte_mode=*/false).IsErr());
-  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{L}", /*byte_mode=*/true).IsErr());
-
-  // Unicode complements range over scalar values only and never admit invalid UTF-8.
-  fsm_wse = RegexFSMBuilder::Build("\\P{L}").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("1"));
-  EXPECT_FALSE(fsm_wse.AcceptString("A"));
-  EXPECT_FALSE(fsm_wse.AcceptString(std::string("\xED\xA0\x80", 3)));
-  EXPECT_FALSE(fsm_wse.AcceptString(std::string("\xFF", 1)));
+  EXPECT_EQ(error_message("\\pL"), kExpected);
+  EXPECT_EQ(error_message("\\p{Letter}"), kExpected);
+  EXPECT_EQ(error_message("\\P{Greek}"), kExpected);
+  EXPECT_EQ(error_message("\\p{L", /*byte_mode=*/true), kExpected);
 }
 
 TEST(XGrammarFSMBuilderTest, TestRegexCharacterClassSets) {
@@ -866,11 +830,6 @@ TEST(XGrammarFSMBuilderTest, TestRegexCharacterClassSets) {
   EXPECT_TRUE(fsm_wse.AcceptString("h"));
   EXPECT_FALSE(fsm_wse.AcceptString("b"));
   EXPECT_FALSE(fsm_wse.AcceptString("g"));
-
-  fsm_wse = RegexFSMBuilder::Build("[\\p{Greek}&&\\pL]").Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("Σ"));
-  EXPECT_FALSE(fsm_wse.AcceptString("A"));
-  EXPECT_FALSE(fsm_wse.AcceptString("\u0375"));
 
   fsm_wse = RegexFSMBuilder::Build("[x[^xyz]]").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("x"));
@@ -923,9 +882,6 @@ TEST(XGrammarFSMBuilderTest, TestRegexUnicodeModeFlagsAndAnchors) {
   fsm_wse = RegexFSMBuilder::Build("(?u:\\w)", /*byte_mode=*/true).Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("A"));
   EXPECT_TRUE(fsm_wse.AcceptString("é"));
-  fsm_wse = RegexFSMBuilder::Build("(?u:\\pL)", /*byte_mode=*/true).Unwrap();
-  EXPECT_TRUE(fsm_wse.AcceptString("λ"));
-  EXPECT_FALSE(fsm_wse.AcceptString("1"));
 
   fsm_wse = RegexFSMBuilder::Build("\\Aabc\\z").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("abc"));
@@ -961,8 +917,14 @@ TEST(XGrammarFSMBuilderTest, TestRegexUnsupportedFeatures) {
   EXPECT_TRUE(fsm_wse.AcceptString("abc"));
   fsm_wse = RegexFSMBuilder::Build("(?<λ.名[1]>ab)c").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+  fsm_wse = RegexFSMBuilder::Build("(?<λ²>a)").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  fsm_wse = RegexFSMBuilder::Build("(?<Ⅰ>a)").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
   fsm_wse = RegexFSMBuilder::Build("(?x:(?<λ.[> a b ) c)").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+  EXPECT_TRUE(RegexFSMBuilder::Build("(?<́name>a)").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("(?<²name>a)").IsErr());
   EXPECT_TRUE(RegexFSMBuilder::Build("(?<same>a)(?<same>b)").IsErr());
 
   // Mid-pattern anchors are ignored with a warning.

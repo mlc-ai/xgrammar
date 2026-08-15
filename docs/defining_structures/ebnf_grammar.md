@@ -498,10 +498,10 @@ character classes, word boundaries, lookarounds, and backreferences are rejected
 In Unicode mode, `\d`, `\w`, and `\s` use the same Unicode 16.0.0 classes as llguidance's
 `regex-syntax` 0.8.5 dependency; their uppercase forms are Unicode-domain complements. Inline
 `i`, `s`, `m`, `u`, `R`, `U`, and `x` flags and scoped disabling forms are accepted inside
-`pattern`. Unicode property escapes (`\pL`, `\p{...}`, and `\P{...}`), Rust codepoint escapes,
-nested character classes, ASCII named classes, and the class set operators `&&`, `--`, and `~~`
-are supported. Multiline line anchors, word boundaries, lookarounds, and backreferences remain
-unsupported.
+`pattern`. Rust codepoint escapes, nested character classes, ASCII named classes, and the class set
+operators `&&`, `--`, and `~~` are supported. Unicode property escapes (`\p` and `\P`) are not
+supported; use `\d`, `\w`, `\s`, explicit ranges, or set operations instead. Multiline line
+anchors, word boundaries, lookarounds, and backreferences remain unsupported.
 
 ### `EOS`
 

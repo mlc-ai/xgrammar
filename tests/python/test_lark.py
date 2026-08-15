@@ -859,42 +859,12 @@ def test_lark_core_languages(
 @pytest.mark.parametrize(
     "grammar, accepted, rejected",
     [
-        pytest.param(r"start: /\pL+/", ["Aλ字"], ["", "123", "A_"], id="property-one-letter"),
-        pytest.param(
-            r"start: /\p{Letter}+/", ["Aλ字"], ["", "123", "A_"], id="property-general-category"
-        ),
-        pytest.param(r"start: /\p{IsGreek}+/", ["Σλ"], ["A", "Ж"], id="property-script-bare"),
-        pytest.param(
-            r"start: /\p{ General_Category : Uppercase_Letter }/",
-            ["A", "Σ"],
-            ["a", "1"],
-            id="property-loose-matching",
-        ),
-        pytest.param(r"start: /\p{Script:Greek}/", ["Ω"], ["A", "Ж"], id="property-script"),
-        pytest.param(r"start: /\p{scx=Hira}/", ["あ"], ["A", "Σ"], id="property-script-extensions"),
-        pytest.param(r"start: /\p{Age=V1_1}/", ["A"], ["😀"], id="property-age"),
-        pytest.param(r"start: /\p{GCB=Extend}/", ["\u0301"], ["A"], id="property-grapheme-break"),
-        pytest.param(r"start: /\p{WB=Katakana}/", ["カ"], ["A"], id="property-word-break"),
-        pytest.param(r"start: /\p{SB=ATerm}/", ["."], ["A"], id="property-sentence-break"),
-        pytest.param(r"start: /\p{gc!=Lu}/", ["A", "Σ"], ["a", "1"], id="property-not-equal-0-8-5"),
-        pytest.param(
-            r"start: /\P{Lu}/i",
-            ["1", "_"],
-            ["A", "a", "Σ", "σ"],
-            id="property-negation-case-folding",
-        ),
         pytest.param("start: /[[:alpha:]]+/", ["Az"], ["", "1", "é"], id="ascii-named-class"),
         pytest.param("start: /[[:^digit:]]/", ["A", "é"], ["1"], id="ascii-named-class-negated"),
         pytest.param("start: /[a-y&&xyz]/", ["x", "y"], ["a", "z"], id="class-intersection"),
         pytest.param("start: /[0-9--4]/", ["3", "5"], ["4", "-"], id="class-difference"),
         pytest.param(
             "start: /[a-g~~b-h]/", ["a", "h"], ["b", "g"], id="class-symmetric-difference"
-        ),
-        pytest.param(
-            r"start: /[\p{Greek}&&\pL]/",
-            ["Σ", "λ"],
-            ["A", "\u0375"],
-            id="class-property-intersection",
         ),
         pytest.param("start: /[x[^xyz]]/", ["x", "a"], ["y", "z"], id="class-nested-complement"),
         pytest.param("start: /[a-z--b-y&&x-z]/", ["z"], ["a", "x"], id="class-left-associative"),
@@ -910,7 +880,7 @@ def test_lark_core_languages(
         pytest.param("start: /[[:loower:]]/", [":", "w"], ["a"], id="unknown-ascii-class-fallback"),
     ],
 )
-def test_lark_regex_unicode_properties_and_class_sets(
+def test_lark_regex_character_class_sets(
     grammar: str, accepted: Sequence[str], rejected: Sequence[str]
 ) -> None:
     _assert_language(grammar, accepted, rejected)
@@ -1788,9 +1758,6 @@ def test_lark_allow_invalid_utf8_dot_flags_and_unicode_default() -> None:
         rejected=[b" ", b"\x80", b"\xc2"],
     )
     _assert_byte_language(
-        option + r"start: /(?u:\pL)/", accepted=[b"A", "λ".encode()], rejected=[b"1", b"\x80"]
-    )
-    _assert_byte_language(
         "start: /./",
         accepted=[b"a", b"\xc2\xa2", "é".encode()],
         rejected=[b"", b"\n", b"\x80", b"\xc2"],
@@ -1922,8 +1889,8 @@ def test_lark_allow_invalid_utf8_round_trips_with_structured_regex() -> None:
 @pytest.mark.parametrize(
     "pattern, message",
     [
-        (r"\p{L}", "Unicode character classes are not available"),
-        (r"\P{Letter}", "Unicode character classes are not available"),
+        (r"\p{L}", r"Unicode property escapes \p and \P are not supported"),
+        (r"\P{Letter}", r"Unicode property escapes \p and \P are not supported"),
         (r"[é]", "non-ASCII characters are not available in byte character classes"),
         (r"a^b", "start anchor is only allowed at the beginning"),
         (r"a$b", "end anchor is only allowed at the end"),
@@ -1965,9 +1932,12 @@ def test_lark_byte_mode_parametric_branches_and_serialization() -> None:
             candidate, accepted=[b"\x80\xff"], rejected=[b"", b"\x80", b"\xff", b"\xc2\x80\xff"]
         )
 
-    # Byte-regex semantics are applied only after parameter expansion. The invalid byte-dialect
-    # property escape is harmless while its branch is dead, but is diagnosed when state 2 keeps it.
-    _assert_lark_error(source.replace("state::0", "state::2", 1), "Unicode character classes")
+    # Regex compilation is applied only after parameter expansion. The unsupported property escape
+    # is harmless while its branch is dead, but is diagnosed when state 2 keeps it.
+    _assert_lark_error(
+        source.replace("state::0", "state::2", 1),
+        r"Unicode property escapes \p and \P are not supported",
+    )
 
 
 def test_lark_byte_mode_parametric_exactly_4096_instances() -> None:
@@ -2809,14 +2779,14 @@ def test_lark_large_choice_grammar() -> None:
         pytest.param("start: /[abc/", "failed to compile regular expression", id="invalid-regex"),
         pytest.param(r"start: /a\b/i", "Word boundary assertion", id="regex-word-boundary-error"),
         pytest.param(
-            r"start: /\p{Not_A_Property}/i",
-            "Unicode property not found",
-            id="regex-unknown-unicode-property-error",
+            r"start: /\pL/i",
+            r"Unicode property escapes \p and \P are not supported",
+            id="regex-unicode-property-short-error",
         ),
         pytest.param(
-            r"start: /\p{gc=Not_A_Value}/i",
-            "Unicode property not found",
-            id="regex-unknown-unicode-property-value-error",
+            r"start: /\P{Greek}/i",
+            r"Unicode property escapes \p and \P are not supported",
+            id="regex-unicode-property-braced-error",
         ),
         pytest.param(
             r"start: /(a)\1/i",

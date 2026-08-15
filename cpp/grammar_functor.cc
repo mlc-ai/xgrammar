@@ -1568,6 +1568,12 @@ class GrammarFSMBuilderImpl {
       int start_state,
       std::vector<int32_t>* end_states
   );
+  bool BuildByteStringChoices(
+      const GrammarExpr& expr,
+      const Grammar& grammar,
+      int start_state,
+      std::vector<int32_t>* end_states
+  );
   bool BuildByteStringRuleRefChoices(
       const GrammarExpr& expr,
       const Grammar& grammar,
@@ -1580,6 +1586,11 @@ class GrammarFSMBuilderImpl {
   void AppendCachedFSM(
       const FSMWithStartEnd& fsm, int start_state, std::vector<int32_t>* end_states
   );
+  void AddEpsilonEdge(int from, int to) {
+    has_epsilon_edges_ = true;
+    can_skip_epsilon_simplification_ = false;
+    target_fsm_.AddEpsilonEdge(from, to);
+  }
   void AddCharacterRange(int from, int to, uint32_t min, uint32_t max);
 
   FSM& target_fsm_;
@@ -1588,6 +1599,8 @@ class GrammarFSMBuilderImpl {
   GrammarBuilder* grammar_builder_ = nullptr;
   // If not null, regex FSMs are looked up in and stored into this cache; see Apply().
   RegexFSMCache* regex_fsm_cache_ = nullptr;
+  bool has_epsilon_edges_{false};
+  bool can_skip_epsilon_simplification_{false};
   bool skip_equivalent_state_merge_{false};
 };
 
@@ -1706,8 +1719,33 @@ FSMWithStartEnd GrammarFSMBuilderImpl::BuildExpressionFSM(
   GrammarFSMBuilderImpl builder(result_fsm, rule_name, grammar_builder, regex_fsm_cache);
   builder.BuildExpression(expr, grammar, start_state, &end_states);
   FSMWithStartEnd result(result_fsm, start_state, std::move(end_states));
+
+  // These expression shapes construct an epsilon-free FSM directly. Running the generic
+  // normalization passes would only copy and rescan the same automaton. In particular, Lark often
+  // wraps a large literal or substring in one-element sequences, so peel those wrappers here.
+  GrammarExpr direct_expr = expr;
+  while (direct_expr.type == ExprType::kSequence && direct_expr.size() == 1) {
+    direct_expr = grammar->GetGrammarExpr(direct_expr[0]);
+  }
+  switch (direct_expr.type) {
+    case ExprType::kByteString:
+    case ExprType::kCharacterClass:
+    case ExprType::kCharacterClassStar:
+    case ExprType::kEmptyStr:
+    case ExprType::kRuleRef:
+    case ExprType::kRepeat:
+    case ExprType::kToken:
+    case ExprType::kExcludeToken:
+    case ExprType::kSubstring:
+    case ExprType::kEOS:
+      return result;
+    default:
+      break;
+  }
   if (expr.type != ExprType::kTagDispatch && expr.type != ExprType::kTokenTagDispatch) {
-    result = result.SimplifyEpsilon();
+    if (!builder.can_skip_epsilon_simplification_) {
+      result = result.SimplifyEpsilon();
+    }
     if (!builder.skip_equivalent_state_merge_) {
       result = result.MergeEquivalentStates();
     }
@@ -1917,7 +1955,7 @@ void GrammarFSMBuilderImpl::BuildSequence(
     int element_start = target_fsm_.AddState();
     BuildExpression(grammar->GetGrammarExpr(expr[index]), grammar, element_start, &next_end_states);
     for (int32_t previous_end_state : *end_states) {
-      target_fsm_.AddEpsilonEdge(previous_end_state, element_start);
+      AddEpsilonEdge(previous_end_state, element_start);
     }
     end_states->swap(next_end_states);
   }
@@ -1960,6 +1998,10 @@ void GrammarFSMBuilderImpl::BuildChoices(
     return;
   }
 
+  if (BuildByteStringChoices(expr, grammar, start_state, end_states)) {
+    return;
+  }
+
   if (non_empty_choice_count == 1 && !nullable) {
     for (int32_t choice_id : expr) {
       const auto& choice_expr = grammar->GetGrammarExpr(choice_id);
@@ -1983,15 +2025,75 @@ void GrammarFSMBuilderImpl::BuildChoices(
     }
     int branch_start_state = target_fsm_.AddState();
     BuildExpression(choice_expr, grammar, branch_start_state, &branch_end_states);
-    target_fsm_.AddEpsilonEdge(start_state, branch_start_state);
+    AddEpsilonEdge(start_state, branch_start_state);
     end_states->insert(end_states->end(), branch_end_states.begin(), branch_end_states.end());
   }
 
   if (nullable) {
     int nullable_branch_state = target_fsm_.AddState();
-    target_fsm_.AddEpsilonEdge(start_state, nullable_branch_state);
+    AddEpsilonEdge(start_state, nullable_branch_state);
     end_states->push_back(nullable_branch_state);
   }
+}
+
+bool GrammarFSMBuilderImpl::BuildByteStringChoices(
+    const GrammarExpr& expr,
+    const Grammar& grammar,
+    int start_state,
+    std::vector<int32_t>* end_states
+) {
+  // Validate the entire choice before mutating the target. Normalized grammar alternatives are
+  // sequences, but accepting a bare byte string as well keeps this helper useful to direct callers.
+  for (int32_t choice_id : expr) {
+    const auto choice = grammar->GetGrammarExpr(choice_id);
+    if (choice.type == ExprType::kEmptyStr || choice.type == ExprType::kByteString) {
+      continue;
+    }
+    if (choice.type != ExprType::kSequence) {
+      return false;
+    }
+    for (int32_t element_id : choice) {
+      if (grammar->GetGrammarExpr(element_id).type != ExprType::kByteString) {
+        return false;
+      }
+    }
+  }
+
+  end_states->clear();
+  auto add_end_state = [&](int32_t state) {
+    if (std::find(end_states->begin(), end_states->end(), state) == end_states->end()) {
+      end_states->push_back(state);
+    }
+  };
+  for (int32_t choice_id : expr) {
+    const auto choice = grammar->GetGrammarExpr(choice_id);
+    int32_t current_state = start_state;
+    if (choice.type == ExprType::kEmptyStr) {
+      add_end_state(current_state);
+      continue;
+    }
+    auto append_bytes = [&](const GrammarExpr& bytes) {
+      for (int32_t byte : bytes) {
+        int32_t next_state = target_fsm_.GetNextState(current_state, byte);
+        if (next_state == FSM::kNoNextState) {
+          next_state = target_fsm_.AddState();
+          target_fsm_.AddEdge(current_state, next_state, byte, byte);
+        }
+        current_state = next_state;
+      }
+    };
+    if (choice.type == ExprType::kByteString) {
+      append_bytes(choice);
+    } else {
+      for (int32_t element_id : choice) {
+        append_bytes(grammar->GetGrammarExpr(element_id));
+      }
+    }
+    add_end_state(current_state);
+  }
+  can_skip_epsilon_simplification_ = !has_epsilon_edges_;
+  skip_equivalent_state_merge_ = true;
+  return true;
 }
 
 bool GrammarFSMBuilderImpl::BuildByteStringRuleRefChoices(
@@ -2043,7 +2145,7 @@ bool GrammarFSMBuilderImpl::BuildByteStringRuleRefChoices(
 
   std::vector<int> state_mapping;
   target_fsm_.AddFSM(trie->GetFsm(), &state_mapping);
-  target_fsm_.AddEpsilonEdge(start_state, state_mapping[trie->GetStart()]);
+  AddEpsilonEdge(start_state, state_mapping[trie->GetStart()]);
 
   std::unordered_map<std::string, int32_t> suffix_start_states;
   suffix_start_states.reserve(branches.size());
@@ -2087,7 +2189,7 @@ void GrammarFSMBuilderImpl::AppendFSM(
 
   std::vector<int> state_mapping;
   target_fsm_.AddFSM(fsm.GetFsm(), &state_mapping);
-  target_fsm_.AddEpsilonEdge(start_state, state_mapping[fsm.GetStart()]);
+  AddEpsilonEdge(start_state, state_mapping[fsm.GetStart()]);
   end_states->clear();
   end_states->reserve(fsm.GetEnds().size());
   for (int end_state : fsm.GetEnds()) {
@@ -2100,7 +2202,7 @@ void GrammarFSMBuilderImpl::AppendCachedFSM(
 ) {
   std::vector<int> state_mapping;
   target_fsm_.AddFSM(fsm.GetFsm(), &state_mapping);
-  target_fsm_.AddEpsilonEdge(start_state, state_mapping[fsm.GetStart()]);
+  AddEpsilonEdge(start_state, state_mapping[fsm.GetStart()]);
   end_states->clear();
   end_states->reserve(fsm.GetEnds().size());
   for (int end_state : fsm.GetEnds()) {
@@ -3423,6 +3525,12 @@ class GrammarOptimizerImpl {
       bool expand_repetition_ranges,
       RegexFSMCache* supplied_regex_fsm_cache = nullptr
   ) {
+    // A freshly converted JSON Schema may already have built regex FSMs for validation. Keep the
+    // shared owner alive throughout optimization and reuse those FSMs during per-rule compilation.
+    std::shared_ptr<RegexFSMCache> retained_regex_fsm_cache = grammar->regex_fsm_cache;
+    if (supplied_regex_fsm_cache == nullptr && retained_regex_fsm_cache != nullptr) {
+      supplied_regex_fsm_cache = retained_regex_fsm_cache.get();
+    }
     // ByteStringFuser and RuleInliner rewrite the grammar in place, so work on a private copy: the
     // input grammar may be shared (e.g. a cached grammar) and must not be mutated. Copy the impl
     // directly (contiguous vector copies) instead of going through GrammarBuilder, which would

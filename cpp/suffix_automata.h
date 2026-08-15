@@ -24,7 +24,7 @@ class SuffixAutomata {
    * \details A suffix automaton is built over the chunk sequence (each chunk is one symbol), so
    * the number of automaton states grows linearly with the number of chunks. Every automaton
    * state is accepting. Each chunk-labeled transition is then expanded into a chain of byte
-   * transitions; an empty chunk becomes an epsilon transition.
+   * transitions. Empty chunks are removed because they do not change the accepted byte language.
    * \param chunks The list of byte string chunks. Chunks may be empty or repeated.
    * \return The FSM with start and end states.
    */

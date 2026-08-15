@@ -23,8 +23,6 @@ repos:
     rev: v5.0.0
     hooks:
       - id: check-added-large-files
-        # This generated Unicode 16 property table is intentionally checked in for offline builds.
-        exclude: ^cpp/support/unicode_regex_property\.cc$
       - id: check-case-conflict
       - id: check-merge-conflict
       - id: check-symlinks

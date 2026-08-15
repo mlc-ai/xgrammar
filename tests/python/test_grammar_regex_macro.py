@@ -167,16 +167,11 @@ ebnf_str__input_str__accepted__test_regex_macro_engine_features = [
     (r'root ::= Regex("(?i)\\x41")', "a", True),
     (r'root ::= Regex("(?i)\\x41")', "A", True),
     (r'root ::= Regex("(?i)\\x41")', "b", False),
-    # Unicode properties and character-class set operations use regex-syntax 0.8.5 semantics.
-    (r'root ::= Regex("\\p{Greek}+")', "Σλ", True),
-    (r'root ::= Regex("\\p{Greek}+")', "A", False),
-    (r'root ::= Regex("[\\p{Greek}&&\\pL]")', "Σ", True),
-    (r'root ::= Regex("[\\p{Greek}&&\\pL]")', "A", False),
     # Unicode mode can be changed for a scope, including from an outer byte-mode pattern.
     (r'root ::= Regex("(?-u:\\w)+")', "Az_9", True),
     (r'root ::= Regex("(?-u:\\w)+")', "é", False),
-    (r'root ::= Regex("(?u:\\pL)", byte_mode=true)', "λ", True),
-    (r'root ::= Regex("(?u:\\pL)", byte_mode=true)', "1", False),
+    (r'root ::= Regex("(?u:\\w)", byte_mode=true)', "λ", True),
+    (r'root ::= Regex("(?u:\\w)", byte_mode=true)', " ", False),
     # \cA is the control character U+0001.
     (r'root ::= Regex("x\\cAy")', "x\x01y", True),
     (r'root ::= Regex("x\\cAy")', "xy", False),
@@ -361,7 +356,7 @@ def test_regex_macro_large_repetition_serialization_roundtrip():
 ebnf_str__expected_error__test_regex_macro_unsupported_features = [
     (r'root ::= Regex("a\\b")', "Word boundary assertion"),
     (r'root ::= Regex("a\\B")', "Word boundary assertion"),
-    (r'root ::= Regex("\\p{Not_A_Property}")', "Unicode property not found"),
+    (r'root ::= Regex("\\pL")', r"Unicode property escapes \\p and \\P are not supported"),
     (r'root ::= Regex("(a)\\1")', "Backreference"),
     (r'root ::= Regex("(?<name>a)\\k<name>")', "Backreference"),
     ('root ::= Regex("(?<=a)b")', "Lookbehind assertion"),

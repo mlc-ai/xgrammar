@@ -86,10 +86,9 @@ def _regex_to_ebnf(regex: str, with_rule_name: bool = True) -> str:
     for a tutorial. Currently the following features are not supported:
     1. Backreference (\1)
     2. non-capturing group, naming capture groups and assertions ((?...))
-    3. Unicode character class escape (\p{...})
+    3. Unicode property escapes (\p{...})
     4. Word boundary (\b)
-    5. Unicode property escapes (\p{...})
-    6. Quantifier with range {x,y}. Now user can just repeat the element as a workaround.
+    5. Quantifier with range {x,y}. Now user can just repeat the element as a workaround.
 
     This method is primarily intended for testing and debugging purposes.
 

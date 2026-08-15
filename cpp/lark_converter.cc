@@ -32,6 +32,7 @@
 #include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_functor.h"
+#include "json_schema_converter.h"
 #include "support/encoding.h"
 #include "support/logging.h"
 #include "support/unicode_case_folding.h"
@@ -2183,7 +2184,10 @@ class LarkCompiler {
           builder_.AddRuleWithHint("start_with_skip", builder_.AddSequence(std::move(elements)));
     }
     builder_.SetNoForcing(no_forcing_);
-    return DeadCodeEliminator::Apply(GrammarNormalizer().Apply(builder_.Get(root_rule_id)));
+    Grammar result =
+        DeadCodeEliminator::Apply(GrammarNormalizer().Apply(builder_.Get(root_rule_id)));
+    result->regex_fsm_cache = regex_fsm_cache_;
+    return result;
   }
 
  private:
@@ -3392,7 +3396,18 @@ class LarkCompiler {
           RaiseLarkError(source_, node.location, "%json cannot be used in terminals");
         }
         try {
-          int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromJSONSchema(node.text));
+          Grammar json_grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
+              node.text,
+              /*any_whitespace=*/true,
+              /*indent=*/std::nullopt,
+              /*separators=*/std::nullopt,
+              /*strict_mode=*/true,
+              /*max_whitespace_cnt=*/std::nullopt,
+              /*any_order=*/false,
+              JSONFormat::kJSON,
+              regex_fsm_cache_.get()
+          ));
+          int32_t root = SubGrammarAdder::Apply(&builder_, json_grammar);
           int32_t result = builder_.AddRuleRef(root);
           return terminal_mode || !append_skip ? result : AppendSkip(result);
         } catch (const std::exception& error) {
@@ -4016,6 +4031,7 @@ class LarkCompiler {
   const std::optional<TokenizerInfo>& tokenizer_info_;
   NamedGrammarRegistry& named_grammars_;
   GrammarBuilder builder_;
+  std::shared_ptr<RegexFSMCache> regex_fsm_cache_ = std::make_shared<RegexFSMCache>();
   std::unordered_map<std::string, Definition*> definition_by_name_;
   std::unordered_map<std::string, int32_t> rule_ids_;
   std::unordered_map<std::string, int32_t> named_grammar_roots_;

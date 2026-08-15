@@ -26,7 +26,6 @@
 #include "support/unicode_case_folding.h"
 #include "support/unicode_char_class.h"
 #include "support/unicode_regex_char_class.h"
-#include "support/unicode_regex_property.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -735,17 +734,6 @@ std::vector<CodepointRange> SymmetricDifferenceRanges(
   return left_only;
 }
 
-bool UnicodeRegexPropertyContains(std::string_view query, uint32_t codepoint) {
-  const UnicodeRegexPropertyRange* ranges = nullptr;
-  size_t range_count = 0;
-  if (!LookupUnicodeRegexProperty(query, &ranges, &range_count)) {
-    return false;
-  }
-  return std::any_of(ranges, ranges + range_count, [&](const UnicodeRegexPropertyRange& range) {
-    return range.first <= codepoint && codepoint <= range.last;
-  });
-}
-
 bool IsRegexCaptureNameCodepoint(uint32_t codepoint, bool first) {
   if (codepoint == '_') {
     return true;
@@ -753,8 +741,7 @@ bool IsRegexCaptureNameCodepoint(uint32_t codepoint, bool first) {
   if (!first && (codepoint == '.' || codepoint == '[' || codepoint == ']')) {
     return true;
   }
-  return UnicodeRegexPropertyContains("Alphabetic", codepoint) ||
-         (!first && UnicodeRegexPropertyContains("N", codepoint));
+  return IsUnicodeAlphabetic(codepoint) || (!first && IsUnicodeAlphanumeric(codepoint));
 }
 
 /*! \brief Append the ASCII case-folded counterparts of every letter contained in the ranges. */
@@ -1034,7 +1021,7 @@ Result<RegexEscapeItem> ParseByteRegexEscape(const std::string& regex, size_t* p
     }
     case 'p':
     case 'P':
-      return ResultErr("Unicode character classes are not available in byte regular expressions");
+      return ResultErr("Unicode property escapes \\p and \\P are not supported");
     case 'u':
     case 'U':
       return ResultErr("Unicode character escapes are not available in byte regular expressions");
@@ -1123,45 +1110,8 @@ Result<RegexEscapeItem> ParseCodepointRegexEscape(
     case 'B':
       return ResultErr("Word boundary assertion \\B is not supported in regex");
     case 'p':
-    case 'P': {
-      bool negated = escaped == 'P';
-      std::string query;
-      if (*pos < regex.size() && regex[*pos] == '{') {
-        size_t close = regex.find('}', *pos + 1);
-        if (close == std::string::npos) {
-          return ResultErr("Unicode property escape is missing its closing '}'");
-        }
-        query = regex.substr(*pos + 1, close - *pos - 1);
-        size_t not_equal = query.find("!=");
-        if (not_equal != std::string::npos) {
-          // regex-syntax 0.8.5 parses `!=` but its HIR translation treats it like `=`.
-          query.erase(not_equal, 1);
-        }
-        *pos = close + 1;
-      } else {
-        if (*pos >= regex.size()) {
-          return ResultErr("Unicode property escape is missing its one-letter property name");
-        }
-        auto [property_codepoint, property_bytes] = ParseNextUTF8(regex.c_str() + *pos);
-        if (property_codepoint == CharHandlingError::kInvalidUTF8 ||
-            *pos + property_bytes > regex.size()) {
-          return ResultErr("Unicode property escape has an invalid property name");
-        }
-        query = regex.substr(*pos, property_bytes);
-        *pos += property_bytes;
-      }
-      const UnicodeRegexPropertyRange* property_ranges = nullptr;
-      size_t property_range_count = 0;
-      if (!LookupUnicodeRegexProperty(query, &property_ranges, &property_range_count)) {
-        return ResultErr("Unicode property not found: " + query);
-      }
-      item.ranges.reserve(property_range_count);
-      for (size_t index = 0; index < property_range_count; ++index) {
-        item.ranges.push_back({property_ranges[index].first, property_ranges[index].last});
-      }
-      item.negated = negated;
-      return ResultOk(std::move(item));
-    }
+    case 'P':
+      return ResultErr("Unicode property escapes \\p and \\P are not supported");
     case 'k':
       return ResultErr("Backreference \\k is not supported in regex");
     case '1':

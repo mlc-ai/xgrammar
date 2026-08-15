@@ -13,6 +13,9 @@ namespace xgrammar {
 /*! \brief Return whether a codepoint has the Unicode White_Space property. */
 bool IsUnicodeWhitespace(TCodepoint codepoint);
 
+/*! \brief Return whether a codepoint has the Unicode Alphabetic property. */
+bool IsUnicodeAlphabetic(TCodepoint codepoint);
+
 /*! \brief Return whether a codepoint is Unicode alphabetic or numeric. */
 bool IsUnicodeAlphanumeric(TCodepoint codepoint);
 

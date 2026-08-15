@@ -142,7 +142,8 @@ exactly one character and may be any Unicode character: `"α".."γ"` matches `α
 regex converter (the same engine as [`xgr.Grammar.from_regex`](xgrammar.Grammar.from_regex)) and
 implements the regular-expression language used by llguidance 1.8.0's `regex-syntax` 0.8.5
 dependency. It supports character classes, alternation, groups, repetition (`*`, `+`, `?`,
-`{m,n}`), Unicode properties, and Rust-style escapes. A `/` inside the pattern is written `\/`.
+`{m,n}`), character-class set operations, and Rust-style escapes. A `/` inside the pattern is
+written `\/`.
 
 `.` matches one Unicode character. By default it does not match newline. Regular expressions
 support the following trailing flags, in any order:
@@ -167,12 +168,9 @@ In Unicode mode, `\d` uses the Unicode `Decimal_Number` category, `\w` uses the 
 class, and `\s` uses the Unicode `White_Space` property. Their uppercase forms are complements
 within the valid Unicode scalar range. Byte mode deliberately keeps the ASCII definitions.
 
-Unicode property escapes accept the one-letter form `\pL`, braced forms such as `\p{Letter}` and
-`\p{Script=Greek}`, and complements with `\P`. General Category, Script, Script Extensions, Age,
-Grapheme Cluster Break, Word Break, and Sentence Break use the Unicode 16.0.0 tables bundled by
-`regex-syntax` 0.8.5. Property names and values use loose matching: case, spaces, underscores, and
-hyphens are ignored. `Is` prefixes, `=` and `:` separators, and aliases such as `gc`, `sc`, and
-`scx` are accepted.
+Unicode property escapes (`\p` and `\P`) are not supported. Use the built-in Unicode shorthand
+classes `\d`, `\w`, and `\s`, explicit character ranges, or character-class set operations
+instead. Rejecting arbitrary properties avoids bundling the full Unicode property database.
 
 Character classes support nested classes; ASCII named classes such as `[[:alpha:]]`; and `&&`
 (intersection), `--` (difference), and `~~` (symmetric difference). The three set operators have
@@ -190,7 +188,7 @@ compiled through the grammar-level repetition mechanism and do not expand the au
 start: /a.b/      // accepts "acb", "a😀b"; rejects "a\nb"
 line: /a.b/s      // also accepts "a\nb"
 word: /Σk+/i      // accepts "Σk", "σKK", and "ςK"
-greek: /[\p{Greek}&&\pL]+/
+consonants: /[a-z&&[^aeiou]]+/
 ascii_word: /(?-u:\w)+/
 compact: /(?x: a b \# c # comment
                  d )/      // accepts "ab#cd"
@@ -437,12 +435,13 @@ start: /[\x80-\xFF]+/ | "é"
 
 In byte mode, `.` consumes exactly one byte and still excludes newline unless the `s` flag is
 present. Outside a Unicode scope, case folding is ASCII-only; `\d`, `\w`, and `\s` use their ASCII
-definitions; and uppercase forms complement within all 256 bytes. Unicode escapes and properties,
-non-ASCII characters inside classes, word boundaries, lookarounds, and backreferences are rejected
-there. A trailing `u` flag or inline `(?u:...)` scope switches back to Unicode, so constructs such
-as `/(?u:\pL)/` remain available inside a byte grammar. Conversely, a Unicode grammar may use an
-ASCII-safe scope such as `(?-u:\w)`; a scope such as `(?-u:.)` is rejected because it could match
-bytes that are not valid UTF-8.
+definitions; and uppercase forms complement within all 256 bytes. Unicode escapes, non-ASCII
+characters inside classes, word boundaries, lookarounds, and backreferences are rejected there. A
+trailing `u` flag or inline `(?u:...)` scope switches back to Unicode, so constructs such as
+`/(?u:\w)/` use the Unicode word class inside a byte grammar. Unicode property escapes remain
+unsupported in either mode. Conversely, a Unicode grammar may use an ASCII-safe scope such as
+`(?-u:\w)`; a scope such as `(?-u:.)` is rejected because it could match bytes that are not valid
+UTF-8.
 
 `no_forcing` (boolean, default `false`) makes
 [`GrammarMatcher.find_jump_forward_string`](xgrammar.GrammarMatcher.find_jump_forward_string)

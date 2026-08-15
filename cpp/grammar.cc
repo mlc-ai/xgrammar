@@ -53,9 +53,19 @@ Grammar Grammar::FromJSONSchema(
     bool print_converted_ebnf,
     bool any_order
 ) {
+  auto regex_fsm_cache = std::make_shared<RegexFSMCache>();
   auto grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
-      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+      schema,
+      any_whitespace,
+      indent,
+      separators,
+      strict_mode,
+      max_whitespace_cnt,
+      any_order,
+      JSONFormat::kJSON,
+      regex_fsm_cache.get()
   ));
+  grammar->regex_fsm_cache = std::move(regex_fsm_cache);
   if (print_converted_ebnf) {
     XGRAMMAR_LOG(INFO) << "Converted EBNF: " << grammar.ToString() << std::endl;
   }

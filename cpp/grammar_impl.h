@@ -10,11 +10,13 @@
 #include <xgrammar/xgrammar.h>
 
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "fsm.h"
+#include "regex_fsm_cache.h"
 #include "support/logging.h"
 #include "support/reflection.h"
 #include "xgrammar/grammar.h"
@@ -455,6 +457,13 @@ class Grammar::Impl {
 
   /*! \brief Whether the grammar is optimized. */
   bool optimized = false;
+
+  /*! \brief Transient regex FSMs built while converting schemas embedded in this grammar.
+   *
+   * This cache is intentionally not serialized. It only avoids rebuilding the same validated FSM
+   * when a freshly converted Grammar is immediately passed to GrammarCompiler.
+   */
+  std::shared_ptr<RegexFSMCache> regex_fsm_cache;
 
   friend class GrammarBuilder;
   friend class GrammarCompiler;

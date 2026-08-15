@@ -30,15 +30,24 @@ TEST(UnicodeCharClassTest, Alphanumeric) {
   EXPECT_FALSE(IsUnicodeAlphanumeric('_'));
   EXPECT_FALSE(IsUnicodeAlphanumeric(0x0301));
   EXPECT_FALSE(IsUnicodeAlphanumeric(0x1f642));
+
+  EXPECT_TRUE(IsUnicodeAlphabetic('A'));
+  EXPECT_TRUE(IsUnicodeAlphabetic(0x03bb));
+  EXPECT_TRUE(IsUnicodeAlphabetic(0x2160));
+  EXPECT_FALSE(IsUnicodeAlphabetic(0x00b2));
+  EXPECT_FALSE(IsUnicodeAlphabetic('1'));
 }
 
 TEST(UnicodeCharClassTest, CompleteTableSizes) {
   int32_t whitespace_count = 0;
+  int32_t alphabetic_count = 0;
   int32_t alphanumeric_count = 0;
   for (TCodepoint codepoint = 0; codepoint <= 0x10ffff; ++codepoint) {
     whitespace_count += IsUnicodeWhitespace(codepoint);
+    alphabetic_count += IsUnicodeAlphabetic(codepoint);
     alphanumeric_count += IsUnicodeAlphanumeric(codepoint);
   }
   EXPECT_EQ(whitespace_count, 25);
+  EXPECT_EQ(alphabetic_count, 142759);
   EXPECT_EQ(alphanumeric_count, 144434);
 }
