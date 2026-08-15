@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page not found - XGrammar</title>
+<script>
+"use strict";
+// Redirect old pre-versioning docs links. Docs used to live at /docs/<page>;
+// they now live at /docs/latest/<page> with frozen copies at /docs/<version>/.
+(function () {
+  var match = window.location.pathname.match(/^\/docs\/([^/]+)(\/.*)?$/);
+  if (match === null) {
+    return;
+  }
+  var first = match[1];
+  var rest = match[2] || "";
+  var isVersionDir = first === "latest" || /^v?\d/.test(first);
+  if (!isVersionDir) {
+    // Old-style deep link: /docs/<page> -> /docs/latest/<page>
+    window.location.replace("/docs/latest/" + first + rest);
+  } else if (rest !== "" && rest !== "/") {
+    // Page missing in this version: fall back to that version's index.
+    window.location.replace("/docs/" + first + "/");
+  }
+})();
+</script>
+</head>
+<body>
+<h1>Page not found</h1>
+<p>The page you requested does not exist. Go to the
+<a href="/">XGrammar homepage</a> or the
+<a href="/docs/latest/">latest documentation</a>.</p>
+</body>
+</html>
