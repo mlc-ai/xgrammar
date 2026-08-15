@@ -127,6 +127,9 @@ html_title = f"XGrammar {__version__}"
 
 html_static_path = ["_static"]
 
+# Version dropdown for the multi-version site (see scripts/support/update_gh_pages.sh).
+html_js_files = ["version_switcher.js"]
+
 html_theme_options = {
     "light_logo": "img/logo.png",
     "dark_logo": "img/logo_dark.svg",
