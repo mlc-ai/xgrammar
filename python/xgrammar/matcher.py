@@ -431,7 +431,7 @@ class GrammarMatcher(XGRObject):
             temperatures,
         )
 
-    def find_jump_forward_string(self) -> str:
+    def find_jump_forward_string(self) -> Union[str, bytes]:
         """Find the jump-forward string for jump-forward decoding. This is the longest string that
         certainly conforms with the current grammar from the current matcher state. This string
         can become the output of the LLM without requiring LLM decoding.
@@ -440,10 +440,15 @@ class GrammarMatcher(XGRObject):
 
         Returns
         -------
-        jump_forward_string : str
-            The jump-forward string.
+        jump_forward_string : Union[str, bytes]
+            The jump-forward string. Valid UTF-8 is returned as ``str`` for compatibility. If a
+            byte-oriented grammar produces invalid UTF-8, the raw value is returned as ``bytes``.
         """
-        return str(self._handle.find_jump_forward_string())
+        raw_result = bytes(self._handle.find_jump_forward_string())
+        try:
+            return raw_result.decode("utf-8")
+        except UnicodeDecodeError:
+            return raw_result
 
     def rollback(self, num_tokens: int = 1) -> None:
         """Rollback the matcher to a previous state by several tokens.

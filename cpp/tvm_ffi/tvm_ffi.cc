@@ -762,7 +762,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       )
       .def(
           "find_jump_forward_string",
-          [](GrammarMatcherObj* o) { return ffi::String(o->value.FindJumpForwardString()); }
+          [](GrammarMatcherObj* o) { return ffi::Bytes(o->value.FindJumpForwardString()); }
       )
       .def(
           "rollback",

@@ -680,6 +680,21 @@ sub_rule ::= "b"
     assert matcher.find_jump_forward_string() == "bb"
 
 
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True], ids=["eager", "dynamic"])
+def test_get_jump_forward_string_returns_invalid_utf8_as_bytes(enable_dynamic_compilation: bool):
+    tokenizer_info = xgr.TokenizerInfo([b"\x80", b"x"], stop_token_ids=[])
+    grammar = xgr.Grammar.from_ebnf(r'root ::= Regex("\\x80", byte_mode=true) "x"')
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, cache_enabled=False, enable_dynamic_compilation=enable_dynamic_compilation
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+
+    jump = matcher.find_jump_forward_string()
+    assert jump == b"\x80x"
+    assert matcher.accept_string(jump)
+    assert matcher.is_terminated()
+
+
 def test_vocab_size():
     vocab = [
         # fmt: off
