@@ -394,12 +394,18 @@ class FSM {
    */
   void AddFSM(const FSM& fsm, std::vector<int>* state_mapping = nullptr);
 
+  /*! \brief Move a whole FSM into the current FSM when it is no longer needed by the caller. */
+  void AddFSM(FSM&& fsm, std::vector<int>* state_mapping = nullptr);
+
   /****************** FSM Construction Methods ******************/
 
   /*!
     \brief Return a copy of the FSM.
   */
   FSM Copy() const;
+
+  /*! \brief Whether this FSM is the sole owner of its mutable implementation. */
+  bool IsUnique() const;
 
   /*!
    * \brief Rebuild the FSM with the new state ids.
@@ -837,12 +843,18 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    */
   static FSMWithStartEnd Union(const std::vector<FSMWithStartEnd>& fsms);
 
+  /*! \brief Union FSMs while consuming the input vector. */
+  static FSMWithStartEnd Union(std::vector<FSMWithStartEnd>&& fsms);
+
   /*!
    * \brief Concatenate the FSMs.
    * \param fsms The FSMs to be concatenated, which should be in order.
    * \return The concatenation of the FSMs.
    */
   static FSMWithStartEnd Concat(const std::vector<FSMWithStartEnd>& fsms);
+
+  /*! \brief Concatenate FSMs while consuming the input vector. */
+  static FSMWithStartEnd Concat(std::vector<FSMWithStartEnd>&& fsms);
 
   /*!
    * \brief Check if the FSM is a DFA.
@@ -863,7 +875,10 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
    * 2) they are not pointed to by other edges, then we can merge them.
    * \example n0 --(c)--> n1, n0 --(c)--> n2, then we can merge n1 and n2.
    */
-  FSMWithStartEnd MergeEquivalentStates(int max_num_states = 1e5) const;
+  FSMWithStartEnd MergeEquivalentStates(int max_num_states = 1e5) const&;
+
+  /*! \brief Merge equivalent states while consuming an FSM that is no longer needed. */
+  FSMWithStartEnd MergeEquivalentStates(int max_num_states = 1e5) &&;
 
   /*!
    * \brief Transform the FSM to a DFA.

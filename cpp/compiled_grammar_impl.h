@@ -159,6 +159,16 @@ class CompiledGrammar::Impl {
   /*! \brief Whether each rule is independent of runtime parser context. */
   std::vector<uint8_t> rule_level_cacheable;
 
+  /*! \brief Whether rule hashes and context-independence metadata are needed. */
+  bool rule_level_metadata_enabled{false};
+
+  /*! \brief Initializes rule hashes and context-independence metadata at most once. */
+  mutable std::once_flag rule_level_metadata_once;
+
+  /*! \brief Immutable builtin masks used to seed a cache-disabled dynamic grammar. */
+  std::shared_ptr<RuleLevelCache> builtin_rule_level_cache_seed_source;
+  std::vector<uint64_t> builtin_rule_fsm_hashes;
+
   /*! \brief Character-class repeat masks shared by matchers using this grammar. */
   std::shared_ptr<CharacterClassTokenSummaryCache> character_class_token_summary_cache;
   std::unordered_map<uint64_t, std::shared_ptr<const CharacterClassRepeatTokenMask>>
@@ -171,6 +181,8 @@ class CompiledGrammar::Impl {
   std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
 
   const AdaptiveTokenMask& GetAdaptiveTokenMask(const ParserState& state, bool is_root_rule);
+
+  void EnsureRuleLevelMetadata();
 
   const CharacterClassRepeatTokenMask& GetCharacterClassRepeatTokenMask(
       int32_t character_class_expr_id, int32_t max_characters

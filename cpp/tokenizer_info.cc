@@ -416,6 +416,15 @@ TokenizerInfo::Impl::Impl(
 
 void TokenizerInfo::Impl::BuildTokenCharData() {
   constexpr int32_t kMaxPrecomputedJSONStringPrefixLimit = 32;
+  sorted_vocab_lcp_with_previous_.assign(sorted_decoded_vocab_.size(), 0);
+  for (int32_t index = 1; index < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++index) {
+    const auto& current = sorted_decoded_vocab_[index].second;
+    const auto& previous = sorted_decoded_vocab_[index - 1].second;
+    sorted_vocab_lcp_with_previous_[index] = static_cast<int32_t>(
+        std::mismatch(current.begin(), current.end(), previous.begin(), previous.end()).first -
+        current.begin()
+    );
+  }
   token_char_counts_.assign(sorted_decoded_vocab_.size(), 0);
   json_string_plain_quote_token_indices_by_prefix_count_.clear();
   json_string_escaped_quote_token_indices_.clear();

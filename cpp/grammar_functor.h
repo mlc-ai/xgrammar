@@ -515,6 +515,13 @@ class GrammarOptimizer {
   static Grammar Apply(
       const Grammar& grammar, bool expand_repetition_ranges, RegexFSMCache* regex_fsm_cache
   );
+
+  static Grammar Apply(
+      const Grammar& grammar,
+      bool expand_repetition_ranges,
+      RegexFSMCache* regex_fsm_cache,
+      bool merge_equivalent_states
+  );
 };
 
 /*!

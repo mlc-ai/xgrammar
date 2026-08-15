@@ -35,6 +35,93 @@
 
 namespace xgrammar {
 
+namespace {
+
+// A reusable union-find specialized for the dense state ids used by FSM algorithms. The set id
+// assignment scans state ids in ascending order, matching UnionFindSet::GetAllSets()'s
+// deterministic ordering without allocating and sorting a vector for every equivalence class.
+class DenseIntUnionFindSet {
+ public:
+  explicit DenseIntUnionFindSet(int universe_size) {
+    XGRAMMAR_CHECK(universe_size >= 0) << "Union-find universe size must be nonnegative.";
+    parent_.assign(universe_size, -1);
+    set_size_.resize(universe_size);
+  }
+
+  bool Add(int element) {
+    XGRAMMAR_DCHECK(element >= 0 && element < static_cast<int>(parent_.size()));
+    if (parent_[element] != -1) {
+      return false;
+    }
+    parent_[element] = element;
+    set_size_[element] = 1;
+    elements_.push_back(element);
+    return true;
+  }
+
+  void Clear() {
+    for (int element : elements_) {
+      parent_[element] = -1;
+    }
+    elements_.clear();
+  }
+
+  int Find(int element) {
+    XGRAMMAR_DCHECK(element >= 0 && element < static_cast<int>(parent_.size()));
+    XGRAMMAR_DCHECK(parent_[element] != -1);
+    int root = element;
+    while (parent_[root] != root) {
+      root = parent_[root];
+    }
+    while (parent_[element] != element) {
+      int next = parent_[element];
+      parent_[element] = root;
+      element = next;
+    }
+    return root;
+  }
+
+  void Union(int a, int b) {
+    int root_a = Find(a);
+    int root_b = Find(b);
+    if (root_a == root_b) {
+      return;
+    }
+    if (set_size_[root_a] < set_size_[root_b]) {
+      std::swap(root_a, root_b);
+    }
+    parent_[root_b] = root_a;
+    set_size_[root_a] += set_size_[root_b];
+  }
+
+  bool Count(int element) const {
+    return element >= 0 && element < static_cast<int>(parent_.size()) && parent_[element] != -1;
+  }
+
+  int AssignSetIds(std::vector<int>* element_to_set) {
+    element_to_set->assign(parent_.size(), -1);
+    int num_sets = 0;
+    for (int element = 0; element < static_cast<int>(parent_.size()); ++element) {
+      if (parent_[element] == -1) {
+        continue;
+      }
+      int root = Find(element);
+      if (set_size_[root] > 0) {
+        set_size_[root] = -(++num_sets);
+      }
+      (*element_to_set)[element] = -set_size_[root] - 1;
+    }
+    return num_sets;
+  }
+
+ private:
+  std::vector<int> parent_;
+  std::vector<int> set_size_;
+  std::vector<int> elements_;
+};
+
+}  // namespace
+
 /****************** FSMImplBase ******************/
 
 template <typename ContainerType>
@@ -315,6 +402,8 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
 
   void AddFSM(const FSM& fsm, std::vector<int>* state_mapping);
 
+  void AddFSM(FSM&& fsm, std::vector<int>* state_mapping);
+
   FSM RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const;
 
   void SortEdges();
@@ -438,18 +527,76 @@ void FSM::Impl::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
   edges_.resize(edges_.size() + fsm.NumStates());
 
   for (int i = 0; i < fsm.NumStates(); ++i) {
-    for (const auto& edge : fsm.GetEdges()[i]) {
+    const auto& source_edges = fsm.GetEdges()[i];
+    if constexpr (kInternalChecksEnabled) {
+      XGRAMMAR_DCHECK(
+          source_edges.empty() || !source_edges.front().IsRepeatRef() || source_edges.size() == 1
+      ) << "A state with a kRepeatRef edge must have no other outgoing edges.";
+    }
+    auto& target_edges = edges_[i + old_num_states];
+    target_edges.reserve(source_edges.size());
+    for (const auto& edge : source_edges) {
       int32_t max_val = edge.max;
       if (edge.IsAuxEdge() && aux_offset > 0) {
         max_val = static_cast<int32_t>(edge.max + aux_offset);
       }
-      AddEdge(i + old_num_states, edge.target + old_num_states, edge.min, max_val);
+      target_edges.emplace_back(edge.min, max_val, edge.target + old_num_states);
     }
   }
 }
 
+void FSM::Impl::AddFSM(FSM&& fsm, std::vector<int>* state_mapping) {
+  // A copied FSM shares its implementation. Mutating it in place would also mutate the other
+  // owners, so use the ordinary copy path unless this rvalue is the sole owner.
+  if (fsm.pimpl_.get() == this || fsm.pimpl_.use_count() != 1) {
+    AddFSM(static_cast<const FSM&>(fsm), state_mapping);
+    return;
+  }
+
+  int old_num_states = NumStates();
+  int32_t aux_offset = static_cast<int32_t>(edge_aux_data_.size());
+  auto& source_edges = fsm.pimpl_->edges_;
+  auto& source_aux_data = fsm.pimpl_->edge_aux_data_;
+
+  if (state_mapping != nullptr) {
+    state_mapping->clear();
+    state_mapping->reserve(source_edges.size());
+    for (int i = 0; i < static_cast<int>(source_edges.size()); ++i) {
+      state_mapping->push_back(i + old_num_states);
+    }
+  }
+
+  edge_aux_data_.insert(
+      edge_aux_data_.end(),
+      std::make_move_iterator(source_aux_data.begin()),
+      std::make_move_iterator(source_aux_data.end())
+  );
+  for (auto& row : source_edges) {
+    if constexpr (kInternalChecksEnabled) {
+      XGRAMMAR_DCHECK(row.empty() || !row.front().IsRepeatRef() || row.size() == 1)
+          << "A state with a kRepeatRef edge must have no other outgoing edges.";
+    }
+    for (auto& edge : row) {
+      edge.target += old_num_states;
+      if (edge.IsAuxEdge() && aux_offset > 0) {
+        edge.max += aux_offset;
+      }
+    }
+    edges_.push_back(std::move(row));
+  }
+  source_edges.clear();
+  source_aux_data.clear();
+}
+
 FSM FSM::Impl::RebuildWithMapping(const std::vector<int>& state_mapping, int new_num_states) const {
   std::vector<std::vector<FSMEdge>> new_edges(new_num_states);
+  std::vector<size_t> row_capacities(new_num_states, 0);
+  for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
+    row_capacities[state_mapping[i]] += edges_[i].size();
+  }
+  for (int i = 0; i < new_num_states; ++i) {
+    new_edges[i].reserve(row_capacities[i]);
+  }
   for (int i = 0; i < static_cast<int>(edges_.size()); ++i) {
     for (const auto& edge : edges_[i]) {
       if (edge.IsEpsilon() && state_mapping[i] == state_mapping[edge.target]) {
@@ -546,6 +693,10 @@ void FSM::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
   pimpl_->AddFSM(fsm, state_mapping);
 }
 
+void FSM::AddFSM(FSM&& fsm, std::vector<int>* state_mapping) {
+  pimpl_->AddFSM(std::move(fsm), state_mapping);
+}
+
 std::string FSM::EdgesToString(std::optional<std::vector<int>> states) const {
   return pimpl_->EdgesToString(states);
 }
@@ -561,6 +712,8 @@ const std::vector<std::vector<FSMEdge>>& FSM::GetEdges() const { return pimpl_->
 std::vector<FSMEdge>& FSM::GetEdges(int state) { return pimpl_->GetEdges(state); }
 
 FSM FSM::Copy() const { return FSM(std::make_shared<Impl>(*pimpl_)); }
+
+bool FSM::IsUnique() const { return pimpl_.use_count() == 1; }
 
 int FSM::GetNextState(int from, int value, FSMEdge::EdgeType edge_type) const {
   return pimpl_->GetNextState(from, value, edge_type);
@@ -1139,6 +1292,30 @@ FSMWithStartEnd FSMWithStartEnd::Union(const std::vector<FSMWithStartEnd>& fsms)
   return FSMWithStartEnd(fsm, start, std::move(ends));
 }
 
+FSMWithStartEnd FSMWithStartEnd::Union(std::vector<FSMWithStartEnd>&& fsms) {
+  if (fsms.size() == 1) {
+    return std::move(fsms[0]);
+  }
+  XGRAMMAR_DCHECK(fsms.size() > 1) << "Union of 0 FSMs is not allowed.";
+
+  FSM fsm(1);
+  int start = 0;
+  std::vector<int32_t> ends;
+  std::vector<int> state_mapping;
+
+  for (auto& fsm_with_se : fsms) {
+    const int child_start = fsm_with_se.GetStart();
+    auto child_ends = fsm_with_se.GetEnds();
+    fsm.AddFSM(std::move(fsm_with_se.GetFsm()), &state_mapping);
+    fsm.AddEpsilonEdge(start, state_mapping[child_start]);
+    for (auto end : child_ends) {
+      ends.push_back(state_mapping[end]);
+    }
+  }
+
+  return FSMWithStartEnd(fsm, start, std::move(ends));
+}
+
 FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms) {
   // For each FSM, link the end states to the start state of the next FSM.
   // Set the start state of the first FSM as the start state of the result.
@@ -1173,6 +1350,44 @@ FSMWithStartEnd FSMWithStartEnd::Concat(const std::vector<FSMWithStartEnd>& fsms
       previous_ends.clear();
       previous_ends.reserve(fsms[i].GetEnds().size());
       for (auto end : fsms[i].GetEnds()) {
+        previous_ends.push_back(state_mapping[end]);
+      }
+    }
+  }
+
+  return FSMWithStartEnd(fsm, start, std::move(ends));
+}
+
+FSMWithStartEnd FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>&& fsms) {
+  if (fsms.size() == 1) {
+    return std::move(fsms[0]);
+  }
+  XGRAMMAR_DCHECK(fsms.size() > 1) << "Concatenation of 0 FSMs is not allowed.";
+
+  auto& first = fsms[0];
+  int start = first.GetStart();
+  std::vector<int> previous_ends(first.GetEnds().begin(), first.GetEnds().end());
+  FSM fsm = std::move(first.GetFsm());
+  std::vector<int32_t> ends;
+  std::vector<int> state_mapping;
+
+  for (int i = 1; i < static_cast<int>(fsms.size()); ++i) {
+    auto& child = fsms[i];
+    const int child_start = child.GetStart();
+    auto child_ends = child.GetEnds();
+    fsm.AddFSM(std::move(child.GetFsm()), &state_mapping);
+    auto this_start = state_mapping[child_start];
+    for (const auto& end : previous_ends) {
+      fsm.AddEpsilonEdge(end, this_start);
+    }
+    if (i == static_cast<int>(fsms.size()) - 1) {
+      for (auto end : child_ends) {
+        ends.push_back(state_mapping[end]);
+      }
+    } else {
+      previous_ends.clear();
+      previous_ends.reserve(child_ends.size());
+      for (auto end : child_ends) {
         previous_ends.push_back(state_mapping[end]);
       }
     }
@@ -1320,7 +1535,7 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
     return *this;
   }
 
-  UnionFindSet<int> union_find_set;
+  DenseIntUnionFindSet union_find_set(NumStates());
   std::vector<int> in_degree(NumStates(), 0);
   std::vector<std::pair<int32_t, int32_t>> epsilon_edges;
 
@@ -1387,19 +1602,12 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   }
 
   // Merge the states.
-  auto eq_classes = union_find_set.GetAllSets();
-  if (eq_classes.empty()) {
+  std::vector<int> new_to_old;
+  int cnt = union_find_set.AssignSetIds(&new_to_old);
+  if (cnt == 0) {
     return *this;
   }
 
-  std::vector<int> new_to_old(NumStates(), -1);
-  for (size_t i = 0; i < eq_classes.size(); i++) {
-    for (const auto& state : eq_classes[i]) {
-      new_to_old[state] = i;
-    }
-  }
-
-  int cnt = eq_classes.size();
   for (int i = 0; i < NumStates(); i++) {
     if (new_to_old[i] == -1) {
       new_to_old[i] = cnt;
@@ -1413,22 +1621,34 @@ FSMWithStartEnd FSMWithStartEnd::SimplifyEpsilon(int max_num_states) const {
   return result;
 }
 
-FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states) const {
+FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states) const& {
   if constexpr (kInternalChecksEnabled) {
     fsm_->ValidateRepeatEdgeInvariant();
   }
   if (max_result_num_states < NumStates()) {
     return *this;
   }
+  return Copy().MergeEquivalentStates(max_result_num_states);
+}
+
+FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states) && {
+  if constexpr (kInternalChecksEnabled) {
+    fsm_->ValidateRepeatEdgeInvariant();
+  }
+  if (max_result_num_states < NumStates()) {
+    return std::move(*this);
+  }
   // No merge is possible with fewer than 4 states (need >=2 sources sharing a target,
   // or >=2 sinks sharing a source).
   if (NumStates() < 4) {
-    return Copy();
+    return std::move(*this);
   }
   bool changed = true;
-  FSMWithStartEnd result = Copy();
+  // An rvalue can still share its PImpl with a cached FSM. Mutate only a uniquely owned
+  // implementation; otherwise retain the ordinary deep-copy behavior.
+  FSMWithStartEnd result = fsm_.IsUnique() ? std::move(*this) : Copy();
   result.GetFsm()->SortEdges();
-  UnionFindSet<int> union_find_set;
+  DenseIntUnionFindSet union_find_set(result.NumStates());
 
   // A compact edge view used for incoming/outgoing CSR rows. `peer` means source state in
   // incoming_edges and target state in outgoing_edges.
@@ -1469,7 +1689,6 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
   std::vector<int32_t> no_successor_end_states;
   // Terminal non-end states collected for leaf-state merging.
   std::vector<int32_t> no_successor_non_end_states;
-
   while (changed) {
     int n = result.NumStates();
     union_find_set.Clear();
@@ -1672,14 +1891,8 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
     if (changed) {
       // Rebuild the FSM with the equivalent states merged, then repeat until no local merge
       // rule applies.
-      auto eq_classes = union_find_set.GetAllSets();
-      std::vector<int> old_to_new(result.NumStates(), -1);
-      for (size_t i = 0; i < eq_classes.size(); i++) {
-        for (const auto& state : eq_classes[i]) {
-          old_to_new[state] = i;
-        }
-      }
-      int cnt = eq_classes.size();
+      std::vector<int> old_to_new;
+      int cnt = union_find_set.AssignSetIds(&old_to_new);
       for (int i = 0; i < result.NumStates(); i++) {
         if (old_to_new[i] == -1) {
           old_to_new[i] = cnt;
@@ -1687,7 +1900,6 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
         }
       }
       result = result.RebuildWithMapping(old_to_new, cnt);
-      result.GetFsm()->SortEdges();
     }
   }
   if constexpr (kInternalChecksEnabled) {

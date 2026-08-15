@@ -1955,7 +1955,7 @@ Result<FSMWithStartEnd> RegexIR::Build() const {
     fsm_list.push_back(std::move(visited).Unwrap());
   }
   if (fsm_list.size() > 1) {
-    return ResultOk(FSMWithStartEnd::Concat(fsm_list));
+    return ResultOk(FSMWithStartEnd::Concat(std::move(fsm_list)));
   } else {
     // If there is only one FSM, return it directly.
     return ResultOk(std::move(fsm_list[0]));
@@ -1978,7 +1978,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Union& state) const {
   if (fsm_list.size() <= 1) {
     return ResultErr("Internal error: a union node in the regex IR has fewer than two branches");
   }
-  return ResultOk(FSMWithStartEnd::Union(fsm_list));
+  return ResultOk(FSMWithStartEnd::Union(std::move(fsm_list)));
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Symbol& state) const {
@@ -2024,7 +2024,7 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Bracket& state) const {
     }
     fsm_list.push_back(std::move(visited).Unwrap());
   }
-  return ResultOk(FSMWithStartEnd::Concat(fsm_list));
+  return ResultOk(FSMWithStartEnd::Concat(std::move(fsm_list)));
 }
 
 Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::RuleRefNode& state) const {

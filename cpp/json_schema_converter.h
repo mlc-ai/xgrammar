@@ -520,6 +520,7 @@ class JSONSchemaConverter {
   std::optional<std::string> BuildTrieNonterminalRegex(const TrieNode& node) const;
   std::optional<std::string> BuildTrieTerminalRegex(const TrieNode& node) const;
   std::string BuildTrieRegex(const TrieNode& node) const;
+  FSMWithStartEnd BuildTrieFSM(const TrieNode& node) const;
 
   // Reused grammar expression ids
   std::optional<int32_t> empty_expr_id_;
