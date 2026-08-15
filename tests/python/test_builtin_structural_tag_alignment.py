@@ -109,6 +109,13 @@ MODEL_CONFIGS = [
     # Cohere's official Melody renderer, which is the source of truth for CMD5.
     ("cohere", "MELODY:cmd5", True, {"reasoning": True}),
     ("cohere", "MELODY:cmd5", False, {"reasoning": False}),
+    ("exaone", "LGAI-EXAONE/EXAONE-4.0-1.2B", True, {"skip_think": False, "enable_thinking": True}),
+    (
+        "exaone",
+        "LGAI-EXAONE/EXAONE-4.0-1.2B",
+        False,
+        {"skip_think": True, "enable_thinking": False},
+    ),
 ]
 
 # Models whose renderer cannot produce a turn with an empty reasoning block: the DeepSeek
@@ -149,6 +156,7 @@ EOS_SUFFIXES = {
     "deepseek_v3_2": ["<｜end▁of▁sentence｜>"],
     "deepseek_v4": ["<｜end▁of▁sentence｜>"],
     "cohere": ["<|END_OF_TURN_TOKEN|>"],
+    "exaone": ["[|endofturn|]"],
 }
 
 

@@ -218,6 +218,7 @@ _tools_qwen_3_5_pair = make_tools(["run_sql", "run_py"])
 _tools_harmony_pair = make_tools(["comment_tool", "other_tool"])
 _tools_glm_4_7_pair = make_tools(["search", "alt"])
 _tools_cohere_pair = make_tools(["search", "alt"])
+_tools_exaone_pair = make_tools(["t1", "t2"])
 
 
 # ---------- Test: unknown format type ----------
@@ -1209,6 +1210,7 @@ _EXCLUDE_TOKEN_MODELS = [
     "minimax",
     "glm_4_7",
     "cohere",
+    "exaone",
 ]
 _EXPECTED_EXCLUDE_TOKENS = {"cohere": ["<|START_THINKING|>", "<|END_THINKING|>"]}
 
@@ -1337,6 +1339,8 @@ def test_exclude_special_tokens_passed_to_specific_function():
         ("qwen_3", 'text<tool_call>\n{"name": "t2", "arguments": {"q": "v"}}\n</tool_call>', False),
         ("qwen_3", 'text<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>', True),
         ("qwen_3", 'text<tool_call>\n{"name": "t2", "arguments": {"q": "v"}}\n</tool_call>', False),
+        ("exaone", 'text<tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>', True),
+        ("exaone", 'text<tool_call>{"name": "t2", "arguments": {"q": "v"}}</tool_call>', False),
         (
             "harmony",
             '<|channel|>commentary to=functions.t1<|constrain|>json<|message|>{"q": "v"}<|call|>',
@@ -1788,6 +1792,29 @@ _tool_choice_instance_cases = [
         ),
         id="cohere-forced",
     ),
+    pytest.param(
+        "exaone",
+        (
+            {"tools": _tools_exaone_pair, "tool_choice": "required"},
+            ["", '<tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>'],
+            False,
+            [False, True],
+        ),
+        id="exaone-required",
+    ),
+    pytest.param(
+        "exaone",
+        (
+            {"tools": _tools_exaone_pair, "tool_choice": "forced", "forced_function_name": "t1"},
+            [
+                '<tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>',
+                '<tool_call>{"name": "t2", "arguments": {"q": "v"}}</tool_call>',
+            ],
+            False,
+            [True, False],
+        ),
+        id="exaone-forced",
+    ),
 ]
 
 
@@ -2056,6 +2083,12 @@ _REQUIRED_TERMINATION_CASES = [
         "</function>\n</tool_call>\n<tool_call>\n<function=get_time>\n<parameter=timezone>\nUTC\n"
         "</parameter>\n</function>\n</tool_call>",
     ),
+    (
+        "exaone",
+        '<tool_call>{"name": "get_weather", "arguments": {"location": "Beijing"}}</tool_call>',
+        '<tool_call>{"name": "get_weather", "arguments": {"location": "Beijing"}}</tool_call>'
+        '<tool_call>{"name": "get_time", "arguments": {"timezone": "UTC"}}</tool_call>',
+    ),
 ]
 
 
@@ -2103,6 +2136,7 @@ _ANY_ORDER_MODELS = [
     "minimax",
     "glm_4_7",
     "harmony",
+    "exaone",
 ]
 
 

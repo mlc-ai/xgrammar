@@ -2345,6 +2345,118 @@ def get_cohere_structural_tag(
     return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
 
 
+@register_model_structural_tag("exaone")
+def get_exaone_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: bool = True,
+    any_order: bool = False,
+    exclude_special_tokens: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get EXAONE 4.0 style structural tag format.
+
+    Corresponding model key: ``"exaone"``.
+
+    Reference: https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-32B
+
+    Supported models:
+
+    - EXAONE-4.0-32B
+    - EXAONE-4.0-1.2B
+    """
+    TOOL_CALL_BEGIN_PREFIX = '<tool_call>{"name": "'
+    ARGUMENTS_FIELD_PREFIX = '", "arguments": '
+    TOOL_CALL_END = "}</tool_call>"
+    TOOL_CALL_TRIGGER = "<tool_call>"
+    THINK_TAG_END = "</think>"
+    THINK_SUFFIX = "\n\n"
+    THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
+
+    tools = tools or []
+    builtin_tools = builtin_tools or []
+    if tool_choice == "auto":
+        tags = []
+        for tool in tools:
+            function = tool.function
+            parameters = _get_function_parameters(function)
+            name = function.name
+            tags.append(
+                TagFormat(
+                    begin=(TOOL_CALL_BEGIN_PREFIX + name + ARGUMENTS_FIELD_PREFIX),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
+                    end=TOOL_CALL_END,
+                )
+            )
+
+        if len(tags) > 0:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[TOOL_CALL_TRIGGER],
+                tags=tags,
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+            )
+        else:
+            suffix_tag = AnyTextFormat(
+                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
+            )
+
+    elif tool_choice == "forced":
+        if not tools:
+            raise ValueError("Forced tool choice must resolve to exactly one tool.")
+        function = tools[0].function
+        suffix_tag = TagFormat(
+            begin=(TOOL_CALL_BEGIN_PREFIX + function.name + ARGUMENTS_FIELD_PREFIX),
+            content=JSONSchemaFormat(
+                json_schema=_get_function_parameters(function),
+                any_order=any_order,
+                max_whitespace_cnt=max_whitespace_cnt,
+            ),
+            end=TOOL_CALL_END,
+        )
+
+    elif tool_choice == "required":
+        tags = []
+        for tool in tools:
+            function = tool.function
+            parameters = _get_function_parameters(function)
+            name = function.name
+            tags.append(
+                TagFormat(
+                    begin=(TOOL_CALL_BEGIN_PREFIX + name + ARGUMENTS_FIELD_PREFIX),
+                    content=JSONSchemaFormat(
+                        json_schema=parameters,
+                        any_order=any_order,
+                        max_whitespace_cnt=max_whitespace_cnt,
+                    ),
+                    end=TOOL_CALL_END,
+                )
+            )
+        assert len(tags) > 0
+        suffix_tag = TriggeredTagsFormat(
+            triggers=[TOOL_CALL_TRIGGER],
+            tags=tags,
+            excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+            at_least_one=True,
+        )
+
+    if not reasoning:
+        return StructuralTag(format=suffix_tag)
+
+    prefix_tag = SequenceFormat(
+        elements=[
+            TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END),
+            ConstStringFormat(value=THINK_SUFFIX),
+        ]
+    )
+    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+
+
 # Backward-compatible alias
 get_builtin_structural_tag = get_model_structural_tag
 """Alias for :func:`get_model_structural_tag`. Deprecated."""
