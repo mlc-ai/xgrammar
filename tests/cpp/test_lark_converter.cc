@@ -105,11 +105,18 @@ TEST(LarkConverterTest, NumericAndNamedSpecialTokens) {
 }
 
 TEST(LarkConverterTest, StringAndRegexFlags) {
+  // The i flag folds ASCII letters; non-ASCII characters in the regex are matched literally.
   auto grammar = Grammar::FromLark(R"(
-    start: "Ab-1"i /a.b/s
+    start: "Case"i /Σ[^k].x/isu
   )");
   std::string printed = grammar.ToString();
   EXPECT_NE(printed.find("root"), std::string::npos);
+
+  XGRAMMAR_EXPECT_THROW(
+      Grammar::FromLark("start: \"Żółw\"i"),
+      XGrammarError,
+      "case-insensitive string literals currently support ASCII characters only"
+  );
 }
 
 TEST(LarkConverterTest, DynamicRegexSuffixAndSuffixAttribute) {
@@ -159,14 +166,9 @@ TEST(LarkConverterTest, ErrorsContainSourceLocations) {
       "intersection '&' is not supported"
   );
   XGRAMMAR_EXPECT_THROW(
-      Grammar::FromLark("start: /abc/i"),
+      Grammar::FromLark("start: /abc/m"),
       XGrammarError,
-      "only the regular-expression flag 's' is currently supported"
-  );
-  XGRAMMAR_EXPECT_THROW(
-      Grammar::FromLark("start: \"\\u00c4\"i"),
-      XGrammarError,
-      "currently support ASCII characters only"
+      "regular-expression flag 'm' is not supported"
   );
   XGRAMMAR_EXPECT_THROW(
       Grammar::FromLark("start: TOKEN\nTOKEN: %json {}"),

@@ -1,9 +1,9 @@
-"""Validate builtin structural tags against official chat templates.
+"""Validate builtin structural tags against official model renderers.
 
 Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4)
-to render model outputs, then checks that xgrammar structural tag grammars
-accept them. Requires encoding_dsv32.py and encoding_dsv4.py in the same
-directory.
+and Cohere Melody for CMD5 to render model outputs, then checks that xgrammar
+structural tag grammars accept them. Requires encoding_dsv32.py and
+encoding_dsv4.py in the same directory.
 """
 
 import json
@@ -81,6 +81,8 @@ MODEL_CONFIGS = [
     ("llama", "meta-llama/Llama-3.1-8B-Instruct", False, {}),
     ("kimi", "moonshotai/Kimi-K2-Thinking", True, {"thinking": True}),
     ("kimi", "moonshotai/Kimi-K2-Instruct", False, {}),
+    ("kimi_k3", "moonshotai/Kimi-K3", True, {"thinking": True}),
+    ("kimi_k3", "moonshotai/Kimi-K3", False, {"thinking": False}),
     ("deepseek_r1", "deepseek-ai/DeepSeek-R1", True, {}),
     ("deepseek_v3_1", "deepseek-ai/DeepSeek-V3.1", True, {"thinking": True}),
     ("deepseek_v3_1", "deepseek-ai/DeepSeek-V3.1", False, {"thinking": False}),
@@ -103,10 +105,22 @@ MODEL_CONFIGS = [
     ("glm_4_7", "zai-org/GLM-4.7-Flash", False, {"enable_thinking": False}),
     ("deepseek_v4", "ENCODER:dsv4", True, {"thinking_mode": "thinking"}),
     ("deepseek_v4", "ENCODER:dsv4", False, {"thinking_mode": "chat"}),
+    # Command A+'s Hugging Face template still emits CMD4 JSON action blocks. Use
+    # Cohere's official Melody renderer, which is the source of truth for CMD5.
+    ("cohere", "MELODY:cmd5", True, {"reasoning": True}),
+    ("cohere", "MELODY:cmd5", False, {"reasoning": False}),
+    ("exaone", "LGAI-EXAONE/EXAONE-4.0-1.2B", True, {"skip_think": False, "enable_thinking": True}),
+    (
+        "exaone",
+        "LGAI-EXAONE/EXAONE-4.0-1.2B",
+        False,
+        {"skip_think": True, "enable_thinking": False},
+    ),
 ]
 
-# DeepSeek V3.2 encoder rejects empty reasoning + no tool calls.
-SKIP_EMPTY_REASONING = {"ENCODER:dsv32", "MiniMaxAI/MiniMax-M2.5"}
+# Models whose renderer cannot produce a turn with an empty reasoning block: the DeepSeek
+# V3.2 encoder rejects it, the other templates drop the block entirely.
+SKIP_EMPTY_REASONING = {"ENCODER:dsv32", "MiniMaxAI/MiniMax-M2.5", "moonshotai/Kimi-K3"}
 
 # Models where tool call format in template doesn't match structural tag.
 SKIP_TOOLS = set()
@@ -130,6 +144,7 @@ STRIP_THINK_MODELS = {
 EOS_SUFFIXES = {
     "llama": ["<|eot_id|>"],
     "kimi": ["<|im_end|>"],
+    "kimi_k3": ["<|end_of_msg|>"],
     "deepseek_r1": ["<｜end▁of▁sentence｜>"],
     "deepseek_v3_1": ["<｜end▁of▁sentence｜>"],
     "qwen_3": ["<|im_end|>"],
@@ -140,6 +155,8 @@ EOS_SUFFIXES = {
     "glm_4_7": [],
     "deepseek_v3_2": ["<｜end▁of▁sentence｜>"],
     "deepseek_v4": ["<｜end▁of▁sentence｜>"],
+    "cohere": ["<|END_OF_TURN_TOKEN|>"],
+    "exaone": ["[|endofturn|]"],
 }
 
 
@@ -277,10 +294,72 @@ def extract_output_encoder(encoder_name, stag_key, assistant_msg, tools, templat
     return output
 
 
+def extract_output_melody_cmd5(assistant_msg, tools, template_kwargs):
+    from cohere_melody import render_cmd5
+
+    def content_block(content_type, text):
+        key = "thinking" if content_type == "thinking" else "text"
+        return {"type": content_type, key: text}
+
+    melody_tools = []
+    for tool in tools or []:
+        function = tool["function"]
+        melody_tools.append(
+            {
+                "name": function["name"],
+                "description": function.get("description", ""),
+                "parameters": function["parameters"],
+            }
+        )
+
+    melody_content = []
+    if "reasoning_content" in assistant_msg:
+        melody_content.append(content_block("thinking", assistant_msg["reasoning_content"]))
+    if assistant_msg.get("content"):
+        melody_content.append(content_block("text", assistant_msg["content"]))
+
+    melody_tool_calls = []
+    for tool_call in assistant_msg.get("tool_calls", []):
+        function = tool_call["function"]
+        arguments = function["arguments"]
+        if not isinstance(arguments, str):
+            arguments = json.dumps(arguments, ensure_ascii=False)
+        melody_tool_calls.append(
+            {"id": tool_call["id"], "name": function["name"], "parameters": arguments}
+        )
+
+    reasoning = template_kwargs["reasoning"]
+    rendered = render_cmd5(
+        {
+            "messages": [
+                {"role": "user", "content": [content_block("text", USER_MSG["content"])]},
+                {"role": "chatbot", "content": melody_content, "tool_calls": melody_tool_calls},
+            ],
+            "available_tools": melody_tools,
+            "grounding": "disabled",
+            "reasoning_type": "enabled" if reasoning else "disabled",
+            # CMD5 consults skip_thinking when rendering historical assistant turns.
+            "additional_template_fields": {"skip_thinking": not reasoning},
+        }
+    )
+
+    # Melody appends a fresh generation prompt after rendering message history. Extract
+    # the preceding, completed chatbot turn and remove its end-of-turn marker.
+    chatbot_prefix = "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>"
+    parts = rendered.rsplit(chatbot_prefix, 2)
+    assert len(parts) == 3, f"Expected one rendered and one pending chatbot turn:\n{rendered}"
+    output = parts[-2]
+    eos = "<|END_OF_TURN_TOKEN|>"
+    assert output.endswith(eos), f"Rendered chatbot turn has no end marker:\n{output}"
+    return output[: -len(eos)]
+
+
 def extract_model_output(stag_key, model_id, assistant_msg, tools, template_kwargs):
     if model_id.startswith("ENCODER:"):
         encoder_name = model_id.split(":")[1]
         return extract_output_encoder(encoder_name, stag_key, assistant_msg, tools, template_kwargs)
+    if model_id == "MELODY:cmd5":
+        return extract_output_melody_cmd5(assistant_msg, tools, template_kwargs)
     return extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_kwargs)
 
 
@@ -369,8 +448,18 @@ def case_id(case):
 TEST_CASES = generate_test_cases()
 
 
-@pytest.mark.hf_token_required
-@pytest.mark.parametrize("case", TEST_CASES, ids=[case_id(c) for c in TEST_CASES])
+def make_test_param(case):
+    model_id = case[1]
+    marks = []
+    if model_id.startswith("MELODY:"):
+        if sys.version_info < (3, 10):
+            marks.append(pytest.mark.skip(reason="cohere_melody requires Python >= 3.10"))
+    else:
+        marks.append(pytest.mark.hf_token_required)
+    return pytest.param(case, id=case_id(case), marks=marks)
+
+
+@pytest.mark.parametrize("case", [make_test_param(case) for case in TEST_CASES])
 def test_reasoning_stag(case):
     (
         stag_key,

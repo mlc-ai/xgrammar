@@ -71,6 +71,8 @@ class GrammarPrinter {
   std::string PrintTokenTagDispatch(const GrammarExpr& grammar_expr);
   /*! \brief Print a GrammarExpr for regex. */
   std::string PrintRegex(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for substring. */
+  std::string PrintSubstring(const GrammarExpr& grammar_expr);
   /*! \brief Print a string. */
   std::string PrintString(const std::string& str);
   /*! \brief Print a boolean. */

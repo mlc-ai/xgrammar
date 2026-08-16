@@ -9,12 +9,14 @@ from transformers import AutoTokenizer
 
 import xgrammar as xgr
 from xgrammar.builtin_structural_tag import (
+    get_cohere_structural_tag,
     get_deepseek_r1_structural_tag,
     get_deepseek_v3_1_structural_tag,
     get_deepseek_v3_2_structural_tag,
     get_deepseek_v4_structural_tag,
     get_glm_4_7_structural_tag,
     get_harmony_structural_tag,
+    get_kimi_k3_structural_tag,
     get_kimi_structural_tag,
     get_llama_structural_tag,
     get_minimax_structural_tag,
@@ -189,6 +191,7 @@ def make_tools(names: List[str], schema: Dict[str, Any] = SIMPLE_SCHEMA) -> List
 # Tool lists used by instance tests (all in one place)
 _tools_llama = make_tools(["t1"])
 _tools_kimi = make_tools(["get_weather"])
+_tools_kimi_k3 = make_tools(["get_weather"])
 _tools_deepseek = make_tools(["search"])
 _tools_qwen_3_coder = make_tools(["run_sql"])
 _tools_qwen_3 = make_tools(["t1"])
@@ -199,10 +202,12 @@ _tools_deepseek_v3_2 = make_tools(["search"])
 _tools_deepseek_v4 = make_tools(["search"])
 _tools_minimax = make_tools(["search"])
 _tools_glm_4_7 = make_tools(["search"])
+_tools_cohere = make_tools(["search"])
 
 # Two distinct tools for tool_choice=required / forced instance tests.
 _tools_llama_pair = make_tools(["t1", "t2"])
 _tools_kimi_pair = make_tools(["t1", "t2"])
+_tools_kimi_k3_pair = make_tools(["t1", "t2"])
 _tools_deepseek_pair = make_tools(["search", "alt"])
 _tools_deepseek_v3_2_pair = make_tools(["search", "alt"])
 _tools_deepseek_v4_pair = make_tools(["search", "alt"])
@@ -212,6 +217,8 @@ _tools_qwen_3_pair = make_tools(["t1", "t2"])
 _tools_qwen_3_5_pair = make_tools(["run_sql", "run_py"])
 _tools_harmony_pair = make_tools(["comment_tool", "other_tool"])
 _tools_glm_4_7_pair = make_tools(["search", "alt"])
+_tools_cohere_pair = make_tools(["search", "alt"])
+_tools_exaone_pair = make_tools(["t1", "t2"])
 
 
 # ---------- Test: unknown format type ----------
@@ -577,11 +584,530 @@ def test_kimi_auto_requires_tool_calls_section():
     )
 
 
+# ---------- Test: kimi_k3 ----------
+#
+# The chat template's generation prompt already ends with the opening marker of the first
+# block, so the constrained output starts *inside* that block's body:
+#   reasoning=True  -> prompt ends with <|open|>think<|sep|>
+#   reasoning=False -> prompt ends with <|open|>response<|sep|>
+# A full reasoning-mode output is therefore (one line, split here per block):
+#   ...reasoning...<|close|>think<|sep|>
+#   <|open|>response<|sep|>...<|close|>response<|sep|>
+#   <|open|>tools<|sep|>
+#     <|open|>call tool="NAME" index="1"<|sep|>
+#       <|open|>argument key="KEY" type="TYPE"<|sep|>VALUE<|close|>argument<|sep|>
+#     <|close|>call<|sep|>
+#   <|close|>tools<|sep|>
+#   <|close|>message<|sep|>
+
+_kimi_k3_auto_instances = [
+    # Reasoning then response, no tool calls.
+    pytest.param(
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|>Hello!<|close|>response<|sep|>"
+        "<|close|>message<|sep|>",
+        True,
+        id="no-tool-call",
+    ),
+    # An empty reasoning body is legal: the prompt already opened the block.
+    pytest.param(
+        "<|close|>think<|sep|>"
+        "<|open|>response<|sep|>Hello!<|close|>response<|sep|>"
+        "<|close|>message<|sep|>",
+        True,
+        id="empty-reasoning",
+    ),
+    # Single tool call with a single argument.
+    pytest.param(
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|><|close|>response<|sep|>"
+        "<|open|>tools<|sep|>"
+        '<|open|>call tool="get_weather" index="1"<|sep|>'
+        '<|open|>argument key="q" type="string"<|sep|>weather in SF<|close|>argument<|sep|>'
+        "<|close|>call<|sep|>"
+        "<|close|>tools<|sep|>"
+        "<|close|>message<|sep|>",
+        True,
+        id="single-call",
+    ),
+    # Multiple parallel tool calls are joined back to back with no separator.
+    pytest.param(
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|><|close|>response<|sep|>"
+        "<|open|>tools<|sep|>"
+        '<|open|>call tool="get_weather" index="1"<|sep|>'
+        '<|open|>argument key="q" type="string"<|sep|>SF<|close|>argument<|sep|>'
+        "<|close|>call<|sep|>"
+        '<|open|>call tool="get_weather" index="2"<|sep|>'
+        '<|open|>argument key="q" type="string"<|sep|>LA<|close|>argument<|sep|>'
+        "<|close|>call<|sep|>"
+        '<|open|>call tool="get_weather" index="3"<|sep|>'
+        "<|close|>call<|sep|>"
+        "<|close|>tools<|sep|>"
+        "<|close|>message<|sep|>",
+        True,
+        id="parallel-calls",
+    ),
+    # SIMPLE_SCHEMA has no required properties, so a call without arguments is legal.
+    pytest.param(
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|><|close|>response<|sep|>"
+        "<|open|>tools<|sep|>"
+        '<|open|>call tool="get_weather" index="1"<|sep|>'
+        "<|close|>call<|sep|>"
+        "<|close|>tools<|sep|>"
+        "<|close|>message<|sep|>",
+        True,
+        id="no-arg-call",
+    ),
+    # A single argument with an empty raw string value.
+    pytest.param(
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|><|close|>response<|sep|>"
+        "<|open|>tools<|sep|>"
+        '<|open|>call tool="get_weather" index="1"<|sep|>'
+        '<|open|>argument key="q" type="string"<|sep|><|close|>argument<|sep|>'
+        "<|close|>call<|sep|>"
+        "<|close|>tools<|sep|>"
+        "<|close|>message<|sep|>",
+        True,
+        id="empty-string-arg",
+    ),
+    # Raw string values may contain a partial close marker.
+    pytest.param(
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|><|close|>response<|sep|>"
+        "<|open|>tools<|sep|>"
+        '<|open|>call tool="get_weather" index="1"<|sep|>'
+        '<|open|>argument key="q" type="string"<|sep|>'
+        "a<|close|>argument text"
+        "<|close|>argument<|sep|>"
+        "<|close|>call<|sep|>"
+        "<|close|>tools<|sep|>"
+        "<|close|>message<|sep|>",
+        True,
+        id="partial-close-in-string",
+    ),
+    # The model must not re-emit the think block's opening marker: the prompt sent it
+    # already, so emitting it again would nest a second marker inside the reasoning text.
+    pytest.param(
+        "<|open|>think<|sep|>Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|>Hello!<|close|>response<|sep|>"
+        "<|close|>message<|sep|>",
+        False,
+        id="duplicate-think-open-marker",
+    ),
+    # The think block must be closed before the response block starts.
+    pytest.param(
+        "<|open|>response<|sep|>Hello!<|close|>response<|sep|><|close|>message<|sep|>",
+        False,
+        id="missing-think-close",
+    ),
+    # A tool call outside the <|open|>tools<|sep|> section is rejected.
+    pytest.param(
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|><|close|>response<|sep|>"
+        '<|open|>call tool="get_weather" index="1"<|sep|>'
+        '<|open|>argument key="q" type="string"<|sep|>v<|close|>argument<|sep|>'
+        "<|close|>call<|sep|>"
+        "<|close|>message<|sep|>",
+        False,
+        id="call-outside-section",
+    ),
+    # Unknown tool names are rejected.
+    pytest.param(
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|><|close|>response<|sep|>"
+        "<|open|>tools<|sep|>"
+        '<|open|>call tool="other_tool" index="1"<|sep|>'
+        '<|open|>argument key="q" type="string"<|sep|>v<|close|>argument<|sep|>'
+        "<|close|>call<|sep|>"
+        "<|close|>tools<|sep|>"
+        "<|close|>message<|sep|>",
+        False,
+        id="unknown-tool",
+    ),
+    # An empty tools section is rejected (at least one call).
+    pytest.param(
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|><|close|>response<|sep|>"
+        "<|open|>tools<|sep|>"
+        "<|close|>tools<|sep|>"
+        "<|close|>message<|sep|>",
+        False,
+        id="empty-tools-section",
+    ),
+    # The response block is mandatory even when empty.
+    pytest.param(
+        "Some reasoning.<|close|>think<|sep|><|close|>message<|sep|>", False, id="missing-response"
+    ),
+    # The message close marker is mandatory.
+    pytest.param(
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|>Hello!<|close|>response<|sep|>",
+        False,
+        id="missing-message-end",
+    ),
+]
+
+
+@pytest.mark.parametrize("instance, is_accepted", _kimi_k3_auto_instances)
+def test_kimi_k3_auto_instances(instance: str, is_accepted: bool):
+    """Kimi-K3 auto mode: think + response blocks plus an optional tools section."""
+
+    structural_tag = get_model_structural_tag("kimi_k3", tools=_tools_kimi_k3, reasoning=True)
+    check_stag_with_instance(structural_tag, instance, is_accepted)
+
+
+def test_kimi_k3_reasoning_false_starts_inside_the_response_block():
+    """reasoning=False: the prompt opens the response block, so no think block appears."""
+
+    structural_tag = get_model_structural_tag("kimi_k3", tools=_tools_kimi_k3, reasoning=False)
+    check_stag_with_instance(
+        structural_tag, "Hello!<|close|>response<|sep|><|close|>message<|sep|>", True
+    )
+    # The response block's opening marker came from the prompt; re-emitting it is invalid.
+    check_stag_with_instance(
+        structural_tag,
+        "<|open|>response<|sep|>Hello!<|close|>response<|sep|><|close|>message<|sep|>",
+        False,
+    )
+    # There is no think block in this mode.
+    check_stag_with_instance(
+        structural_tag,
+        "Some reasoning.<|close|>think<|sep|>"
+        "Hello!<|close|>response<|sep|>"
+        "<|close|>message<|sep|>",
+        False,
+    )
+
+
+def test_kimi_k3_no_tools_rejects_tools_section():
+    """Without tools the grammar must not admit a tools section at all."""
+
+    structural_tag = get_model_structural_tag("kimi_k3", tools=[], reasoning=True)
+    check_stag_with_instance(
+        structural_tag,
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|>Hello!<|close|>response<|sep|>"
+        "<|close|>message<|sep|>",
+        True,
+    )
+    check_stag_with_instance(
+        structural_tag,
+        "Some reasoning.<|close|>think<|sep|>"
+        "<|open|>response<|sep|><|close|>response<|sep|>"
+        "<|open|>tools<|sep|>"
+        '<|open|>call tool="get_weather" index="1"<|sep|>'
+        "<|close|>call<|sep|>"
+        "<|close|>tools<|sep|>"
+        "<|close|>message<|sep|>",
+        False,
+    )
+
+
+def test_kimi_k3_argument_type_attribute_is_pinned_to_the_schema_type():
+    """Each argument's type attribute is fixed to the type its value is rendered with.
+
+    The Kimi-K3 tool-call parser uses the attribute as a decoding switch
+    (``type="string"`` keeps the raw text, anything else JSON-decodes the body), so a
+    mismatched attribute would silently change the decoded argument's type. Only
+    ``"number"`` is legal for an integer property: the model's renderer maps every int
+    and float to ``"number"`` and never emits ``"integer"``.
+    """
+
+    tools = [
+        {
+            "function": {
+                "name": "get_weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"city": {"type": "string"}, "days": {"type": "integer"}},
+                    "required": ["city", "days"],
+                },
+            }
+        }
+    ]
+    structural_tag = get_model_structural_tag("kimi_k3", tools=tools, reasoning=False)
+
+    def instance(city_type: str, city_value: str, days_type: str) -> str:
+        return (
+            "<|close|>response<|sep|>"
+            "<|open|>tools<|sep|>"
+            '<|open|>call tool="get_weather" index="1"<|sep|>'
+            f'<|open|>argument key="city" type="{city_type}"<|sep|>'
+            f"{city_value}<|close|>argument<|sep|>"
+            f'<|open|>argument key="days" type="{days_type}"<|sep|>3<|close|>argument<|sep|>'
+            "<|close|>call<|sep|>"
+            "<|close|>tools<|sep|>"
+            "<|close|>message<|sep|>"
+        )
+
+    # string -> type="string", integer -> type="number".
+    check_stag_with_instance(structural_tag, instance("string", "SF", "number"), True)
+    # The integer property cannot claim any other type.
+    check_stag_with_instance(structural_tag, instance("string", "SF", "integer"), False)
+    check_stag_with_instance(structural_tag, instance("string", "SF", "string"), False)
+    check_stag_with_instance(structural_tag, instance("string", "SF", "bogus"), False)
+    # Nor can the string property: tagging a JSON-looking body as a non-string type would
+    # make the parser decode it into that type instead of a string.
+    check_stag_with_instance(structural_tag, instance("number", "123", "number"), False)
+    check_stag_with_instance(structural_tag, instance("object", '{"a":1}', "number"), False)
+    check_stag_with_instance(structural_tag, instance("null", "null", "number"), False)
+
+
+def test_kimi_k3_full_tool_call_with_nested_arguments_and_any_order():
+    """The full call keeps only outer arguments in XTML and nested values in JSON."""
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "options": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer"},
+                    "filters": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["limit", "filters"],
+                "additionalProperties": False,
+            },
+            "records": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"id": {"type": "integer"}, "active": {"type": "boolean"}},
+                    "required": ["id", "active"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["query", "options", "records"],
+        "additionalProperties": False,
+    }
+    tools = make_tools(["process"], schema)
+
+    def argument(key: str, type_attr: str, value: str) -> str:
+        return (
+            f'<|open|>argument key="{key}" type="{type_attr}"<|sep|>'
+            f"{value}<|close|>argument<|sep|>"
+        )
+
+    # Reverse both the outer arguments and the properties inside JSON objects. This mirrors an
+    # application supplying dictionaries in an order other than the schema declaration order.
+    arguments = (
+        argument("records", "array", '[{"active": true, "id": 1}]')
+        + argument("options", "object", '{"filters": ["a", "b"], "limit": 2}')
+        + argument("query", "string", "北京")
+    )
+
+    def full_call(args: str) -> str:
+        return (
+            "<|close|>response<|sep|>"
+            "<|open|>tools<|sep|>"
+            '<|open|>call tool="process" index="1"<|sep|>'
+            f"{args}<|close|>call<|sep|>"
+            "<|close|>tools<|sep|>"
+            "<|close|>message<|sep|>"
+        )
+
+    any_order_tag = get_model_structural_tag(
+        "kimi_k3", tools=tools, reasoning=False, any_order=True
+    )
+    ordered_tag = get_model_structural_tag("kimi_k3", tools=tools, reasoning=False)
+    assert _collect_json_schema_nodes(any_order_tag)[0].style == "kimi_k3_xml"
+    check_stag_with_instance(any_order_tag, full_call(arguments), True)
+    check_stag_with_instance(ordered_tag, full_call(arguments), False)
+
+    check_stag_with_instance(
+        any_order_tag,
+        full_call(arguments.replace('{"active": true, "id": 1}', '{"active": true}')),
+        False,
+    )
+    check_stag_with_instance(
+        any_order_tag,
+        full_call(arguments.replace('key="options" type="object"', 'key="options" type="array"')),
+        False,
+    )
+    # Even in the complete tools/call wrapper, nested fields must not become argument tags.
+    nested_xtml = argument("limit", "number", "2") + argument("filters", "array", '["a"]')
+    check_stag_with_instance(
+        any_order_tag,
+        full_call(arguments.replace('{"filters": ["a", "b"], "limit": 2}', nested_xtml)),
+        False,
+    )
+
+
+def test_kimi_k3_free_form_arguments_keep_every_type_attribute():
+    """Unconstrained arguments have no schema type, so every type attribute stays legal."""
+
+    tools = [{"function": {"name": "anything", "parameters": None}}]
+    structural_tag = get_model_structural_tag("kimi_k3", tools=tools, reasoning=False)
+
+    def instance(type_attr: str, value: str) -> str:
+        return (
+            "<|close|>response<|sep|>"
+            "<|open|>tools<|sep|>"
+            '<|open|>call tool="anything" index="1"<|sep|>'
+            f'<|open|>argument key="k" type="{type_attr}"<|sep|>{value}<|close|>argument<|sep|>'
+            "<|close|>call<|sep|>"
+            "<|close|>tools<|sep|>"
+            "<|close|>message<|sep|>"
+        )
+
+    check_stag_with_instance(structural_tag, instance("string", "text"), True)
+    check_stag_with_instance(structural_tag, instance("number", "42"), True)
+    check_stag_with_instance(structural_tag, instance("integer", "42"), True)
+    check_stag_with_instance(structural_tag, instance("boolean", "true"), True)
+    check_stag_with_instance(structural_tag, instance("object", '{"a":1}'), True)
+    check_stag_with_instance(structural_tag, instance("array", "[1]"), True)
+    check_stag_with_instance(structural_tag, instance("null", "null"), True)
+    check_stag_with_instance(structural_tag, instance("bogus", "x"), False)
+
+
+def test_kimi_k3_exclude_special_tokens():
+    """Free-text spans exclude the K3 structural tokens unless opted out."""
+
+    on = get_model_structural_tag("kimi_k3", tools=_tools_kimi_k3, reasoning=True)
+    flat = [token for excludes in _collect_excludes(on) for token in excludes]
+    assert "<|open|>" in flat
+    assert "<|close|>" in flat
+
+    off = get_model_structural_tag(
+        "kimi_k3", tools=_tools_kimi_k3, reasoning=True, exclude_special_tokens=False
+    )
+    assert all(excludes == [] for excludes in _collect_excludes(off))
+    xgr.Grammar.from_structural_tag(off)
+
+
+def test_cohere_required_accepts_multicall_shape():
+    """Cohere required tool calls accept the expected XML block with multiple calls."""
+
+    tools = [
+        {
+            "function": {
+                "name": "online_search",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+            }
+        },
+        {
+            "function": {
+                "name": "get_weather",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"location": {"type": "string"}},
+                    "required": ["location"],
+                },
+            }
+        },
+    ]
+    structural_tag = get_model_structural_tag(
+        "cohere", tools=tools, tool_choice="required", reasoning=False
+    )
+
+    valid_output = (
+        "<cofl:tool_calls>"
+        '<cofl:tool_call id="0" name="online_search">'
+        '<cofl:value name="query" type="raw">'
+        "Why did the 1940s see an influx of new names in the music of Sudan?"
+        "</cofl:value>"
+        "</cofl:tool_call>"
+        '<cofl:tool_call id="1" name="get_weather">'
+        '<cofl:value name="location" type="raw">London, UK</cofl:value>'
+        "</cofl:tool_call>"
+        "</cofl:tool_calls>"
+    )
+    wrong_tool_output = valid_output.replace('name="get_weather"', 'name="get_time"', 1)
+
+    check_stag_with_instance(structural_tag, valid_output, True)
+    check_stag_with_instance(structural_tag, wrong_tool_output, False)
+
+
+def test_cohere_required_accepts_nested_params():
+    """Cohere built-in tool calls accept nested dict and list parameter values."""
+
+    tools = [
+        {
+            "function": {
+                "name": "configure",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "config": {
+                            "type": "object",
+                            "properties": {
+                                "mode": {"type": "string"},
+                                "enabled": {"type": "boolean"},
+                            },
+                            "required": ["mode", "enabled"],
+                        },
+                        "items": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "minItems": 2,
+                            "maxItems": 2,
+                        },
+                    },
+                    "required": ["config", "items"],
+                },
+            }
+        }
+    ]
+    structural_tag = get_model_structural_tag(
+        "cohere", tools=tools, tool_choice="required", reasoning=False
+    )
+
+    valid_output = (
+        "<cofl:tool_calls>"
+        '<cofl:tool_call id="0" name="configure">'
+        '<cofl:value name="config" type="dict">'
+        '<cofl:value name="mode" type="raw">fast</cofl:value>'
+        '<cofl:value name="enabled" type="json">true</cofl:value>'
+        "</cofl:value>"
+        '<cofl:value name="items" type="list">'
+        '<cofl:value type="raw">first</cofl:value>'
+        '<cofl:value type="raw">second</cofl:value>'
+        "</cofl:value>"
+        "</cofl:tool_call>"
+        "</cofl:tool_calls>"
+    )
+    named_list_item_output = valid_output.replace(
+        '<cofl:value type="raw">first</cofl:value>',
+        '<cofl:value name="0" type="raw">first</cofl:value>',
+    )
+
+    check_stag_with_instance(structural_tag, valid_output, True)
+    check_stag_with_instance(structural_tag, named_list_item_output, False)
+
+
+def test_cohere_reasoning_prefix_uses_end_thinking_token():
+    """Cohere reasoning mode accepts reasoning text before the end-thinking token."""
+
+    structural_tag = get_model_structural_tag(
+        "cohere", tools=_tools_cohere, tool_choice="required", reasoning=True
+    )
+    output = (
+        "I should search first.<|END_THINKING|>"
+        "<cofl:tool_calls>"
+        '<cofl:tool_call id="0" name="search">'
+        '<cofl:value name="q" type="raw">v</cofl:value>'
+        "</cofl:tool_call>"
+        "</cofl:tool_calls>"
+    )
+
+    check_stag_with_instance(structural_tag, output, True)
+
+
 @pytest.mark.parametrize(
     "structural_tag_fn",
     [
         get_llama_structural_tag,
         get_kimi_structural_tag,
+        get_kimi_k3_structural_tag,
         get_deepseek_r1_structural_tag,
         get_deepseek_v3_1_structural_tag,
         get_qwen_3_5_structural_tag,
@@ -592,6 +1118,7 @@ def test_kimi_auto_requires_tool_calls_section():
         get_deepseek_v4_structural_tag,
         get_minimax_structural_tag,
         get_glm_4_7_structural_tag,
+        get_cohere_structural_tag,
     ],
 )
 @pytest.mark.parametrize(
@@ -682,7 +1209,10 @@ _EXCLUDE_TOKEN_MODELS = [
     "qwen_3_5",
     "minimax",
     "glm_4_7",
+    "cohere",
+    "exaone",
 ]
+_EXPECTED_EXCLUDE_TOKENS = {"cohere": ["<|START_THINKING|>", "<|END_THINKING|>"]}
 
 
 @pytest.mark.parametrize("model", _EXCLUDE_TOKEN_MODELS)
@@ -693,8 +1223,9 @@ def test_exclude_special_tokens_default_excludes_think_tokens(model, tools):
 
     structural_tag = get_model_structural_tag(model, tools=tools, reasoning=True)
     flat = [token for excludes in _collect_excludes(structural_tag) for token in excludes]
-    assert "<think>" in flat
-    assert "</think>" in flat
+    expected_tokens = _EXPECTED_EXCLUDE_TOKENS.get(model, ["<think>", "</think>"])
+    for token in expected_tokens:
+        assert token in flat
     xgr.Grammar.from_structural_tag(structural_tag)
 
 
@@ -808,6 +1339,8 @@ def test_exclude_special_tokens_passed_to_specific_function():
         ("qwen_3", 'text<tool_call>\n{"name": "t2", "arguments": {"q": "v"}}\n</tool_call>', False),
         ("qwen_3", 'text<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>', True),
         ("qwen_3", 'text<tool_call>\n{"name": "t2", "arguments": {"q": "v"}}\n</tool_call>', False),
+        ("exaone", 'text<tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>', True),
+        ("exaone", 'text<tool_call>{"name": "t2", "arguments": {"q": "v"}}</tool_call>', False),
         (
             "harmony",
             '<|channel|>commentary to=functions.t1<|constrain|>json<|message|>{"q": "v"}<|call|>',
@@ -816,6 +1349,24 @@ def test_exclude_special_tokens_passed_to_specific_function():
         (
             "harmony",
             '<|channel|>commentary to=functions.t2<|constrain|>json<|message|>{"q": "v"}<|call|>',
+            False,
+        ),
+        (
+            "cohere",
+            "<cofl:tool_calls>"
+            '<cofl:tool_call id="0" name="t1">'
+            '<cofl:value name="q" type="json">123</cofl:value>'
+            "</cofl:tool_call>"
+            "</cofl:tool_calls>",
+            True,
+        ),
+        (
+            "cohere",
+            "<cofl:tool_calls>"
+            '<cofl:tool_call id="0" name="t2">'
+            '<cofl:value name="q" type="json">123</cofl:value>'
+            "</cofl:tool_call>"
+            "</cofl:tool_calls>",
             False,
         ),
     ],
@@ -920,6 +1471,54 @@ _tool_choice_instance_cases = [
             [True, False],
         ),
         id="kimi-forced",
+    ),
+    pytest.param(
+        "kimi_k3",
+        (
+            {"tools": _tools_kimi_k3_pair, "tool_choice": "required"},
+            [
+                # No tools section: rejected, since at least one call is required.
+                "Hello!<|close|>response<|sep|><|close|>message<|sep|>",
+                # One call to t1: accepted.
+                "<|close|>response<|sep|>"
+                "<|open|>tools<|sep|>"
+                '<|open|>call tool="t1" index="1"<|sep|>'
+                '<|open|>argument key="q" type="string"<|sep|>v<|close|>argument<|sep|>'
+                "<|close|>call<|sep|>"
+                "<|close|>tools<|sep|>"
+                "<|close|>message<|sep|>",
+            ],
+            False,
+            [False, True],
+        ),
+        id="kimi_k3-required",
+    ),
+    pytest.param(
+        "kimi_k3",
+        (
+            {"tools": _tools_kimi_k3_pair, "tool_choice": "forced", "forced_function_name": "t1"},
+            [
+                # The forced tool t1: accepted.
+                "<|close|>response<|sep|>"
+                "<|open|>tools<|sep|>"
+                '<|open|>call tool="t1" index="1"<|sep|>'
+                '<|open|>argument key="q" type="string"<|sep|>v<|close|>argument<|sep|>'
+                "<|close|>call<|sep|>"
+                "<|close|>tools<|sep|>"
+                "<|close|>message<|sep|>",
+                # Any other tool: rejected.
+                "<|close|>response<|sep|>"
+                "<|open|>tools<|sep|>"
+                '<|open|>call tool="t2" index="1"<|sep|>'
+                '<|open|>argument key="q" type="string"<|sep|>v<|close|>argument<|sep|>'
+                "<|close|>call<|sep|>"
+                "<|close|>tools<|sep|>"
+                "<|close|>message<|sep|>",
+            ],
+            False,
+            [True, False],
+        ),
+        id="kimi_k3-forced",
     ),
     pytest.param(
         "deepseek_r1",
@@ -1151,6 +1750,71 @@ _tool_choice_instance_cases = [
         ),
         id="glm_4_7-forced",
     ),
+    pytest.param(
+        "cohere",
+        (
+            {"tools": _tools_cohere_pair, "tool_choice": "required"},
+            [
+                "",
+                "<cofl:tool_calls>"
+                '<cofl:tool_call id="0" name="search">'
+                '<cofl:value name="q" type="raw">v</cofl:value>'
+                "</cofl:tool_call>"
+                "</cofl:tool_calls>",
+            ],
+            False,
+            [False, True],
+        ),
+        id="cohere-required",
+    ),
+    pytest.param(
+        "cohere",
+        (
+            {
+                "tools": _tools_cohere_pair,
+                "tool_choice": "forced",
+                "forced_function_name": "search",
+            },
+            [
+                "<cofl:tool_calls>"
+                '<cofl:tool_call id="0" name="search">'
+                '<cofl:value name="q" type="raw">v</cofl:value>'
+                "</cofl:tool_call>"
+                "</cofl:tool_calls>",
+                "<cofl:tool_calls>"
+                '<cofl:tool_call id="0" name="alt">'
+                '<cofl:value name="q" type="raw">v</cofl:value>'
+                "</cofl:tool_call>"
+                "</cofl:tool_calls>",
+            ],
+            False,
+            [True, False],
+        ),
+        id="cohere-forced",
+    ),
+    pytest.param(
+        "exaone",
+        (
+            {"tools": _tools_exaone_pair, "tool_choice": "required"},
+            ["", '<tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>'],
+            False,
+            [False, True],
+        ),
+        id="exaone-required",
+    ),
+    pytest.param(
+        "exaone",
+        (
+            {"tools": _tools_exaone_pair, "tool_choice": "forced", "forced_function_name": "t1"},
+            [
+                '<tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>',
+                '<tool_call>{"name": "t2", "arguments": {"q": "v"}}</tool_call>',
+            ],
+            False,
+            [True, False],
+        ),
+        id="exaone-forced",
+    ),
 ]
 
 
@@ -1170,6 +1834,7 @@ _TOOLS: List[Dict[str, Any]] = [
     [
         ("llama", {"tools": _TOOLS}),
         ("kimi", {"tools": _TOOLS}),
+        ("kimi_k3", {"tools": _TOOLS}),
         ("deepseek_r1", {"tools": _TOOLS}),
         ("qwen_3_coder", {"tools": _TOOLS}),
         ("qwen_3", {"tools": _TOOLS}),
@@ -1418,6 +2083,12 @@ _REQUIRED_TERMINATION_CASES = [
         "</function>\n</tool_call>\n<tool_call>\n<function=get_time>\n<parameter=timezone>\nUTC\n"
         "</parameter>\n</function>\n</tool_call>",
     ),
+    (
+        "exaone",
+        '<tool_call>{"name": "get_weather", "arguments": {"location": "Beijing"}}</tool_call>',
+        '<tool_call>{"name": "get_weather", "arguments": {"location": "Beijing"}}</tool_call>'
+        '<tool_call>{"name": "get_time", "arguments": {"timezone": "UTC"}}</tool_call>',
+    ),
 ]
 
 
@@ -1455,6 +2126,7 @@ def _collect_any_order_flags(structural_tag: StructuralTag) -> List[bool]:
 _ANY_ORDER_MODELS = [
     "llama",
     "kimi",
+    "kimi_k3",
     "qwen_3",
     "qwen_3_5",
     "deepseek_r1",
@@ -1464,6 +2136,7 @@ _ANY_ORDER_MODELS = [
     "minimax",
     "glm_4_7",
     "harmony",
+    "exaone",
 ]
 
 

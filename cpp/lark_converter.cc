@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "support/encoding.h"
@@ -1196,38 +1197,6 @@ std::string Trim(std::string value) {
   return value.substr(begin, end - begin);
 }
 
-std::string RewriteRegexDots(const std::string& pattern, bool dot_matches_newline) {
-  if (dot_matches_newline) {
-    return pattern;
-  }
-  std::string result;
-  result.reserve(pattern.size());
-  bool escaped = false;
-  bool in_character_class = false;
-  for (char c : pattern) {
-    if (escaped) {
-      result.push_back(c);
-      escaped = false;
-      continue;
-    }
-    if (c == '\\') {
-      result.push_back(c);
-      escaped = true;
-    } else if (c == '[') {
-      result.push_back(c);
-      in_character_class = true;
-    } else if (c == ']' && in_character_class) {
-      result.push_back(c);
-      in_character_class = false;
-    } else if (c == '.' && !in_character_class) {
-      result += "[^\\n]";
-    } else {
-      result.push_back(c);
-    }
-  }
-  return result;
-}
-
 std::optional<std::string> ParseFixedRegexLiteral(const std::string& pattern) {
   std::string result;
   for (size_t i = 0; i < pattern.size();) {
@@ -1659,19 +1628,35 @@ class LarkCompiler {
     return elements.size() == 1 ? elements[0] : builder_.AddSequence(elements);
   }
 
+  struct RegexFlags {
+    bool case_insensitive = false;
+    bool dot_all = false;
+  };
+
+  RegexFlags ParseRegexFlags(const Node& node) const {
+    RegexFlags result;
+    for (char flag : node.flags) {
+      if (flag == 'i') {
+        result.case_insensitive = true;
+      } else if (flag == 's') {
+        result.dot_all = true;
+      } else if (flag == 'u') {
+        // XGrammar regular expressions use Unicode codepoint semantics by default.
+      } else if (flag == 'l') {
+        RaiseLarkError(source_, node.location, "regular-expression flag 'l' is not supported");
+      } else {
+        RaiseLarkError(
+            source_,
+            node.location,
+            "regular-expression flag '" + std::string(1, flag) + "' is not supported"
+        );
+      }
+    }
+    return result;
+  }
+
   std::string PrepareRegexPattern(const Node& node) const {
-    if (node.flags.empty()) {
-      return RewriteRegexDots(node.text, false);
-    }
-    if (node.flags == "s") {
-      return RewriteRegexDots(node.text, true);
-    }
-    if (node.flags.find('l') != std::string::npos) {
-      RaiseLarkError(source_, node.location, "regular-expression flag 'l' is not supported");
-    }
-    RaiseLarkError(
-        source_, node.location, "only the regular-expression flag 's' is currently supported"
-    );
+    return RewriteRegexDots(node.text, ParseRegexFlags(node).dot_all);
   }
 
   static std::string EscapeRegexLiteral(const std::string& value) {
@@ -1789,6 +1774,13 @@ class LarkCompiler {
       case Node::Kind::kString:
         return StringLiteralToRegex(node);
       case Node::Kind::kRegex:
+        if (ParseRegexFlags(node).case_insensitive) {
+          RaiseLarkError(
+              source_,
+              node.location,
+              "regular-expression flag 'i' is not supported with suffix or stop attributes"
+          );
+        }
         return "(?:" + PrepareRegexPattern(node) + ")";
       case Node::Kind::kRange: {
         std::vector<TCodepoint> begin = ParseUTF8(node.text.c_str());
@@ -1839,7 +1831,9 @@ class LarkCompiler {
       case Node::Kind::kNestedLark:
         RaiseLarkError(source_, node.location, "nested %lark cannot be used in terminals");
       case Node::Kind::kRegexExt:
-        RaiseLarkError(source_, node.location, "structured %regex is not supported");
+        RaiseLarkError(
+            source_, node.location, "structured %regex cannot be used with suffix or stop"
+        );
       case Node::Kind::kGrammarRef:
         RaiseLarkError(source_, node.location, "named grammars cannot be used in terminals");
       case Node::Kind::kNot:
@@ -1848,6 +1842,86 @@ class LarkCompiler {
         );
     }
     RaiseLarkError(source_, node.location, "unsupported terminal node");
+  }
+
+  std::vector<std::string> ParseStructuredRegexChunks(const Node& node) const {
+    picojson::value value;
+    std::string error = picojson::parse(value, node.text);
+    if (!error.empty()) {
+      RaiseLarkError(source_, node.location, "failed to parse %regex: " + error);
+    }
+    if (!value.is<picojson::object>()) {
+      RaiseLarkError(source_, node.location, "%regex value must be an object");
+    }
+
+    const auto& object = value.get<picojson::object>();
+    std::vector<std::string> fields;
+    for (const auto& [key, field_value] : object) {
+      if (key != "substring_chunks" && key != "substring_chars" && key != "substring_words") {
+        RaiseLarkError(source_, node.location, "unknown field '" + key + "' in %regex");
+      }
+      if (!field_value.is<picojson::null>()) {
+        fields.push_back(key);
+      }
+    }
+    if (fields.empty()) {
+      RaiseLarkError(source_, node.location, "no fields set on %regex");
+    }
+    if (fields.size() != 1) {
+      RaiseLarkError(source_, node.location, "only one field can be set on %regex");
+    }
+
+    const std::string& field = fields[0];
+    const picojson::value& field_value = object.at(field);
+    if (field == "substring_words") {
+      if (!field_value.is<std::string>()) {
+        RaiseLarkError(source_, node.location, "substring_words must be a string");
+      }
+      RaiseLarkError(source_, node.location, "substring_words is not supported yet");
+    }
+    if (field == "substring_chars") {
+      if (!field_value.is<std::string>()) {
+        RaiseLarkError(source_, node.location, "substring_chars must be a string");
+      }
+      const std::string& text = field_value.get<std::string>();
+      std::vector<std::string> chunks;
+      for (size_t offset = 0; offset < text.size();) {
+        if (text[offset] == '\0') {
+          chunks.emplace_back(1, '\0');
+          ++offset;
+          continue;
+        }
+        auto [codepoint, length] = ParseNextUTF8(text.c_str() + offset);
+        if (codepoint == CharHandlingError::kInvalidUTF8) {
+          RaiseLarkError(source_, node.location, "substring_chars must be valid UTF-8");
+        }
+        chunks.push_back(text.substr(offset, length));
+        offset += length;
+      }
+      return chunks;
+    }
+
+    if (!field_value.is<picojson::array>()) {
+      RaiseLarkError(source_, node.location, "substring_chunks must be an array of strings");
+    }
+    std::vector<std::string> chunks;
+    const auto& array = field_value.get<picojson::array>();
+    chunks.reserve(array.size());
+    for (const picojson::value& chunk : array) {
+      if (!chunk.is<std::string>()) {
+        RaiseLarkError(source_, node.location, "substring_chunks must be an array of strings");
+      }
+      chunks.push_back(chunk.get<std::string>());
+    }
+    return chunks;
+  }
+
+  int32_t CompileStructuredRegex(const Node& node, const std::string& rule_hint) {
+    std::vector<std::string> chunks = ParseStructuredRegexChunks(node);
+    // A substring expr can only be the body of a rule, so wrap it and return a reference.
+    int32_t substring_expr_id = builder_.AddSubstring(chunks);
+    int32_t rule_id = builder_.AddRuleWithHint(rule_hint + "_substring", substring_expr_id);
+    return builder_.AddRuleRef(rule_id);
   }
 
   const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {
@@ -1963,7 +2037,26 @@ class LarkCompiler {
         return terminal_mode || !append_skip ? result : AppendSkip(result);
       }
       case Node::Kind::kRegex: {
-        std::string pattern = PrepareRegexPattern(node);
+        RegexFlags flags = ParseRegexFlags(node);
+        std::string pattern = RewriteRegexDots(node.text, flags.dot_all);
+        if (flags.case_insensitive) {
+          // The FSM regex engine handles the (?i) prefix with ASCII case folding. Validate the
+          // pattern eagerly so that errors carry the source location.
+          std::string flagged_pattern = "(?i)" + pattern;
+          auto matches_empty = RegexFSMBuilder::MatchesEmpty(flagged_pattern);
+          if (matches_empty.IsErr()) {
+            RaiseLarkError(
+                source_,
+                node.location,
+                "failed to compile regular expression: " +
+                    std::string(std::move(matches_empty).UnwrapErr().what())
+            );
+          }
+          int32_t regex_rule_id =
+              builder_.AddRuleWithHint(rule_hint + "_regex", builder_.AddRegex(flagged_pattern));
+          int32_t result = builder_.AddRuleRef(regex_rule_id);
+          return terminal_mode || !append_skip ? result : AppendSkip(result);
+        }
         try {
           int32_t root = SubGrammarAdder::Apply(&builder_, Grammar::FromRegex(pattern));
           int32_t result = builder_.AddRuleRef(root);
@@ -2018,8 +2111,10 @@ class LarkCompiler {
                                             : builder_.AddTokenSet(token_set.token_ids);
         return append_skip ? AppendSkip(result) : result;
       }
-      case Node::Kind::kRegexExt:
-        RaiseLarkError(source_, node.location, "structured %regex is not supported");
+      case Node::Kind::kRegexExt: {
+        int32_t result = CompileStructuredRegex(node, rule_hint);
+        return terminal_mode || !append_skip ? result : AppendSkip(result);
+      }
       case Node::Kind::kGrammarRef: {
         if (terminal_mode) {
           RaiseLarkError(source_, node.location, "named grammars cannot be used in terminals");
@@ -2178,11 +2273,11 @@ class LarkCompiler {
           pattern.push_back(c);
         }
       }
-      if (node.flags == "s") {
-        return pattern == ".*";
-      }
-      if (!node.flags.empty()) {
+      if (node.flags.find_first_not_of("isu") != std::string::npos) {
         return false;
+      }
+      if (node.flags.find('s') != std::string::npos) {
+        return pattern == ".*";
       }
       return pattern == "(.|\\n)*" || pattern == "(\\n|.)*" || pattern == "(?s:.*)" ||
              pattern == "(?:.|\\n)*" || pattern == "(?:\\n|.)*" || pattern == "[\\s\\S]*";
@@ -2214,13 +2309,15 @@ class LarkCompiler {
     if (node.kind != Node::Kind::kRegex) {
       return std::nullopt;
     }
+    if (node.flags.find('i') != std::string::npos ||
+        node.flags.find_first_not_of("su") != std::string::npos) {
+      return std::nullopt;
+    }
     std::vector<std::string> prefixes;
-    if (node.flags.empty()) {
-      prefixes = {"(.|\\n)*", "(\\n|.)*", "(?:.|\\n)*", "(?:\\n|.)*", "[\\s\\S]*", "(?s:.*)"};
-    } else if (node.flags == "s") {
+    if (node.flags.find('s') != std::string::npos) {
       prefixes = {".*"};
     } else {
-      return std::nullopt;
+      prefixes = {"(.|\\n)*", "(\\n|.)*", "(?:.|\\n)*", "(?:\\n|.)*", "[\\s\\S]*", "(?s:.*)"};
     }
     for (const std::string& prefix : prefixes) {
       if (node.text.size() <= prefix.size() || node.text.compare(0, prefix.size(), prefix) != 0) {

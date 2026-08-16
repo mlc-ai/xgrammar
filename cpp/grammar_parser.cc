@@ -16,6 +16,7 @@
 #include <variant>
 #include <vector>
 
+#include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
 #include "support/encoding.h"
@@ -745,6 +746,7 @@ class EBNFParser {
   int32_t ParseExcludeToken();
   int32_t ParseTokenTagDispatch();
   int32_t ParseRegexMacro();
+  int32_t ParseSubstringMacro();
 
   // Helper functions
 
@@ -797,6 +799,7 @@ const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>>
         {"ExcludeToken", [](EBNFParser* parser) { return parser->ParseExcludeToken(); }},
         {"TokenTagDispatch", [](EBNFParser* parser) { return parser->ParseTokenTagDispatch(); }},
         {"Regex", [](EBNFParser* parser) { return parser->ParseRegexMacro(); }},
+        {"Substring", [](EBNFParser* parser) { return parser->ParseSubstringMacro(); }},
 };
 
 const EBNFParser::Token& EBNFParser::Peek(int delta) const { return *(current_token_ + delta); }
@@ -1279,7 +1282,7 @@ int32_t EBNFParser::ParseRegexMacro() {
 
   bool json_string = false;
   for (const auto& [name, _] : args.named_arguments) {
-    if (name != "json_string") {
+    if (name != "json_string" && name != "flags") {
       ReportParseError("Regex does not support the named argument " + name, delta_element);
     }
   }
@@ -1290,7 +1293,59 @@ int32_t EBNFParser::ParseRegexMacro() {
     }
     json_string = bool_node->value;
   }
-  return builder_.AddRegex(pattern_node->value, json_string);
+  std::string pattern = pattern_node->value;
+  if (auto it = args.named_arguments.find("flags"); it != args.named_arguments.end()) {
+    auto flags_node = std::get_if<MacroIR::StringNode>(it->second.get());
+    if (flags_node == nullptr) {
+      ReportParseError("flags must be a string", delta_element);
+    }
+    bool case_insensitive = false;
+    bool dot_all = false;
+    for (char flag : flags_node->value) {
+      if (flag == 'i') {
+        case_insensitive = true;
+      } else if (flag == 's') {
+        dot_all = true;
+      } else if (flag == 'u') {
+        // XGrammar regular expressions use Unicode codepoint semantics by default.
+      } else {
+        ReportParseError(
+            "regular-expression flag '" + std::string(1, flag) + "' is not supported", delta_element
+        );
+      }
+    }
+    // The flags argument opts into the standard dot semantics: '.' does not match '\n' unless
+    // the 's' flag is given. Without the argument the pattern is stored verbatim, where the
+    // engine's '.' matches every codepoint.
+    pattern = RewriteRegexDots(pattern, dot_all);
+    if (case_insensitive && pattern.compare(0, 4, "(?i)") != 0) {
+      pattern = "(?i)" + pattern;
+    }
+  }
+  return builder_.AddRegex(pattern, json_string);
+}
+
+int32_t EBNFParser::ParseSubstringMacro() {
+  Consume();  // Consume Substring identifier
+  auto start = current_token_;
+  auto args = ParseMacroArguments();
+  auto delta_element = start - current_token_;
+
+  if (!args.named_arguments.empty()) {
+    ReportParseError("Substring() does not accept named arguments", delta_element);
+  }
+
+  std::vector<std::string> chunks;
+  chunks.reserve(args.arguments.size());
+  for (const auto& arg : args.arguments) {
+    auto string_node = std::get_if<MacroIR::StringNode>(arg.get());
+    if (string_node == nullptr) {
+      ReportParseError("Substring() arguments must be strings", delta_element);
+    }
+    chunks.push_back(string_node->value);
+  }
+
+  return builder_.AddSubstring(chunks);
 }
 
 int32_t EBNFParser::ParseTokenSet() {

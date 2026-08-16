@@ -467,3 +467,190 @@ TEST(XGrammarFSMBuilderTest, TestRegexRepeatZero) {
   EXPECT_TRUE(RegexFSMBuilder::Build("a{3,1}").IsErr());
   EXPECT_TRUE(RegexFSMBuilder::Build("a{1,0}").IsErr());
 }
+
+TEST(XGrammarFSMBuilderTest, TestRegexCaseInsensitiveFlag) {
+  // The (?i) prefix folds ASCII letters in literals, alternations and repeats.
+  auto fsm_wse = RegexFSMBuilder::Build("(?i)abc").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+  EXPECT_TRUE(fsm_wse.AcceptString("ABC"));
+  EXPECT_TRUE(fsm_wse.AcceptString("aBc"));
+  EXPECT_FALSE(fsm_wse.AcceptString("abd"));
+
+  fsm_wse = RegexFSMBuilder::Build("(?i)(ab|cd)+").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("aBcD"));
+  EXPECT_FALSE(fsm_wse.AcceptString("ac"));
+
+  // Positive classes fold both the explicit letters and letter ranges.
+  fsm_wse = RegexFSMBuilder::Build("(?i)[a-dx]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("b"));
+  EXPECT_TRUE(fsm_wse.AcceptString("B"));
+  EXPECT_TRUE(fsm_wse.AcceptString("X"));
+  EXPECT_FALSE(fsm_wse.AcceptString("e"));
+  EXPECT_FALSE(fsm_wse.AcceptString("E"));
+
+  // Negated classes exclude both cases of the folded letters.
+  fsm_wse = RegexFSMBuilder::Build("(?i)[^k]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("k"));
+  EXPECT_FALSE(fsm_wse.AcceptString("K"));
+
+  // Only ASCII letters are folded; non-ASCII characters match literally.
+  fsm_wse = RegexFSMBuilder::Build("(?i)Σ").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("Σ"));
+  EXPECT_FALSE(fsm_wse.AcceptString("σ"));
+
+  // Without the prefix the match stays case-sensitive.
+  fsm_wse = RegexFSMBuilder::Build("abc").Unwrap();
+  EXPECT_FALSE(fsm_wse.AcceptString("ABC"));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexEscapes) {
+  // \xHH, \uHHHH and \u{...} escapes, both standalone and inside classes.
+  auto fsm_wse = RegexFSMBuilder::Build("\\x41\\u0042\\u{43}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("ABC"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\u{1F600}").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("😀"));
+  EXPECT_FALSE(fsm_wse.AcceptString("😁"));
+
+  fsm_wse = RegexFSMBuilder::Build("[\\u0041-\\u0043]+").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("ABC"));
+  EXPECT_FALSE(fsm_wse.AcceptString("D"));
+
+  // A quantifier after a multi-byte character applies to the whole codepoint.
+  fsm_wse = RegexFSMBuilder::Build("好*").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString(""));
+  EXPECT_TRUE(fsm_wse.AcceptString("好好"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\xbd"));
+
+  // \s matches exactly the standard whitespace characters [ \t\n\r\f\v].
+  fsm_wse = RegexFSMBuilder::Build("\\s+").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString(" \t\n\r\f\v"));
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string(1, '\0')));
+  EXPECT_FALSE(fsm_wse.AcceptString("\x01"));
+
+  // \S is the codepoint-domain complement, so non-ASCII characters are accepted.
+  fsm_wse = RegexFSMBuilder::Build("\\S").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("好"));
+  EXPECT_TRUE(fsm_wse.AcceptString(std::string(1, '\0')));
+  EXPECT_FALSE(fsm_wse.AcceptString(" "));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexUnsupportedFeatures) {
+  // Word boundaries, Unicode properties and backreferences raise errors.
+  EXPECT_TRUE(RegexFSMBuilder::Build("a\\b").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("a\\B").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\p{L}").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("(a)\\1").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("(?<name>a)\\k<name>").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("(?<=a)b").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("[]").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("[^]").IsErr());
+
+  // Lookahead assertions are ignored with a warning (treated as the empty string).
+  auto fsm_wse = RegexFSMBuilder::Build("a(?=b)c").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("ac"));
+  fsm_wse = RegexFSMBuilder::Build("a(?!b)c").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("ac"));
+
+  // Named groups compile like plain groups; the name is ignored.
+  fsm_wse = RegexFSMBuilder::Build("(?<name>ab)+").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("abab"));
+  fsm_wse = RegexFSMBuilder::Build("(?P<name>ab)c").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+
+  // Mid-pattern anchors are ignored with a warning.
+  fsm_wse = RegexFSMBuilder::Build("a^b$c").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("abc"));
+
+  // Non-greedy quantifiers behave like their greedy counterparts.
+  fsm_wse = RegexFSMBuilder::Build(
+                "a*?b+?c?"
+                "?(de){1,2}?"
+  )
+                .Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("aabbcde"));
+  EXPECT_TRUE(fsm_wse.AcceptString("bdede"));
+
+  // Empty alternatives match the empty string.
+  fsm_wse = RegexFSMBuilder::Build("(a|)b").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("ab"));
+  EXPECT_TRUE(fsm_wse.AcceptString("b"));
+  fsm_wse = RegexFSMBuilder::Build("a|").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString(""));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexErrorMessages) {
+  // Parse errors mirror the RegexConverter format and carry the 1-based position.
+  auto error_message = [](const std::string& regex) {
+    return std::string(RegexFSMBuilder::Build(regex).UnwrapErr().what());
+  };
+  EXPECT_EQ(
+      error_message("+a"),
+      "Regex parsing error at position 1: There is nothing to repeat before '+'"
+  );
+  EXPECT_EQ(error_message("ab)"), "Regex parsing error at position 3: Unmatched ')'");
+  EXPECT_EQ(error_message("a]"), "Regex parsing error at position 2: Unmatched ']'");
+  EXPECT_EQ(
+      error_message("a(bc"), "Regex parsing error at position 2: The parenthesis is not closed"
+  );
+  EXPECT_EQ(error_message("a[bc"), "Regex parsing error at position 2: Unclosed '['");
+  EXPECT_EQ(
+      error_message("a[]"),
+      "Regex parsing error at position 2: Empty character class is not allowed in regex"
+  );
+  EXPECT_EQ(
+      error_message("a{,2}"),
+      "Regex parsing error at position 2: Invalid repetition count: expected a number after '{'"
+  );
+  EXPECT_EQ(
+      error_message("a{3,1}"),
+      "Regex parsing error at position 2: Invalid repetition count: the lower bound 3 is larger "
+      "than the upper bound 1"
+  );
+  EXPECT_EQ(
+      error_message("a{1,9999999999}"),
+      "Regex parsing error at position 2: Invalid repetition count: the count 9999999999 is too "
+      "large"
+  );
+  EXPECT_EQ(
+      error_message("a\\b"),
+      "Regex parsing error at position 2: Word boundary assertion \\b is not supported in regex"
+  );
+  EXPECT_EQ(
+      error_message("(?<name)a"), "Regex parsing error at position 1: Invalid named capturing group"
+  );
+  // The position includes the "(?i)" prefix when present.
+  EXPECT_EQ(
+      error_message("(?i)+a"),
+      "Regex parsing error at position 5: There is nothing to repeat before '+'"
+  );
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexMatchesEmpty) {
+  EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("a*").Unwrap());
+  EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("(a|)").Unwrap());
+  EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("a{0,10}").Unwrap());
+  EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("(ab)?").Unwrap());
+  EXPECT_FALSE(RegexFSMBuilder::MatchesEmpty("a+").Unwrap());
+  EXPECT_FALSE(RegexFSMBuilder::MatchesEmpty("a{1,10}").Unwrap());
+  EXPECT_FALSE(RegexFSMBuilder::MatchesEmpty("ab|cd").Unwrap());
+  // No FSM is built, so huge bounded repetitions are cheap to check.
+  EXPECT_FALSE(RegexFSMBuilder::MatchesEmpty("(abc){2,1000000}").Unwrap());
+  EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("(abc){0,1000000}").Unwrap());
+  EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("(?i)A*").Unwrap());
+  EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("\\b").IsErr());
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexLargeRepeatWithoutBuilder) {
+  // Without a GrammarBuilder, moderate repetitions are unrolled physically.
+  auto fsm_wse = RegexFSMBuilder::Build("a{2,300}").Unwrap();
+  EXPECT_FALSE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("aa"));
+  EXPECT_TRUE(fsm_wse.AcceptString(std::string(300, 'a')));
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string(301, 'a')));
+
+  // Repetitions whose estimated state count is too large report an error instead of hanging.
+  EXPECT_TRUE(RegexFSMBuilder::Build("(abcdefghij){1,100000}").IsErr());
+}
