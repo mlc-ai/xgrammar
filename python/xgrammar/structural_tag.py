@@ -64,6 +64,15 @@ class AnyTextFormat(BaseModel):
     excludes: List[str] = []
     """List of strings that should not appear in the matched text."""
 
+    max_tokens: Optional[int] = Field(default=None, ge=0, le=2_147_483_647)
+    """Maximum number of LLM tokens this region may consume. None means unbounded. This is
+    enforced during token-mask-driven generation; ``GrammarMatcher.accept_string`` does not
+    consume the token budget."""
+
+    max_chars: Optional[int] = Field(default=None, ge=0, le=2_147_483_647)
+    """Maximum number of Unicode codepoints this region may consume. None means unbounded. This
+    also applies to ``GrammarMatcher.accept_string``."""
+
 
 class TokenFormat(BaseModel):
     """A format that matches a single token by ID or string representation."""
@@ -93,6 +102,10 @@ class AnyTokensFormat(BaseModel):
 
     exclude_tokens: List[Union[int, str]] = []
     """List of token IDs or strings to exclude."""
+
+    max_tokens: Optional[int] = Field(default=None, ge=0, le=2_147_483_647)
+    """Maximum number of tokens this region may consume. None means unbounded. This is enforced
+    during token-mask-driven generation."""
 
 
 class GrammarFormat(BaseModel):

@@ -108,7 +108,7 @@ I will call a tool now. <function=get_weather>{"city": "San Francisco"}</functio
 
 ### Unlimited Formats and End Detection
 
-Some formats can consume an unbounded amount of output:
+Without a length budget, some formats can consume an unbounded amount of output:
 
 - `any_text`
 - `any_tokens`
@@ -266,6 +266,8 @@ Matches arbitrary text.
 | Field | Type | Default |
 | --- | --- | --- |
 | `excludes` | `string[]` | `[]` |
+| `max_tokens` | `int \| null` | `null` |
+| `max_chars` | `int \| null` | `null` |
 
 - **Use it when**: the content should remain free-form until some enclosing boundary is reached
 
@@ -278,6 +280,33 @@ Matches arbitrary text.
 
 When `any_text` appears inside a string-level `tag`, the enclosing end string is automatically
 treated as a stop condition.
+
+`max_tokens` limits the region to at most that many complete LLM tokens. Once the budget is
+reached, generation must leave `any_text`; for content inside a `tag`, this forces the enclosing
+end string while still supporting end strings that span multiple tokens. The token budget is
+enforced during token-mask-driven generation. Calls to `GrammarMatcher.accept_string` do not
+consume it because they have no token boundaries.
+
+`max_chars` limits the region by Unicode codepoints rather than UTF-8 bytes. It also applies to
+`GrammarMatcher.accept_string`. Both limits are optional non-negative integers, and `0` allows
+only empty content. Values must be at most 2,147,483,647. When both are set, the first limit
+reached forces the region to end.
+
+For example, this bounds a reasoning section by both generated tokens and characters:
+
+```json
+{
+    "type": "tag",
+    "begin": "<think>",
+    "content": {
+        "type": "any_text",
+        "excludes": ["</think>"],
+        "max_tokens": 256,
+        "max_chars": 4096
+    },
+    "end": "</think>"
+}
+```
 
 ### Composition Formats
 
@@ -642,6 +671,7 @@ Matches zero or more tokens, excluding those in `exclude_tokens`.
 | Field | Type | Default |
 | --- | --- | --- |
 | `exclude_tokens` | `(int \| string)[]` | `[]` |
+| `max_tokens` | `int \| null` | `null` |
 
 - **Use it when**: content should remain unconstrained until a token-level boundary is reached
 
@@ -649,7 +679,11 @@ Matches zero or more tokens, excluding those in `exclude_tokens`.
 {"type": "any_tokens", "exclude_tokens": ["<|eos|>"]}
 ```
 
-Semantically, `any_tokens` is equivalent to `star(exclude_token(...))`.
+Without `max_tokens`, `any_tokens` is equivalent to `star(exclude_token(...))`. A non-negative
+`max_tokens` value limits it to at most that many tokens while preserving `exclude_tokens`; `0`
+matches empty content only. The region may still end before reaching the limit, and an enclosing
+token-level `tag` end remains available when the limit is reached. The maximum accepted value is
+2,147,483,647.
 
 #### `token_triggered_tags`
 

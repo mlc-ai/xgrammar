@@ -426,7 +426,10 @@ class EarleyParser {
     if (own < 0) {
       return parent_deadline;
     }
-    int32_t deadline = current_token_index_ + own;
+    int64_t uncapped_deadline = static_cast<int64_t>(current_token_index_) + own;
+    int32_t deadline = static_cast<int32_t>(
+        std::min<int64_t>(uncapped_deadline, std::numeric_limits<int32_t>::max())
+    );
     return parent_deadline >= 0 ? std::min(deadline, parent_deadline) : deadline;
   }
 
