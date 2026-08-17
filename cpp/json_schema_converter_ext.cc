@@ -285,6 +285,22 @@ int32_t XMLToolCallingConverter::GenerateString(
       }
     }
     if (spec.pattern.has_value()) {
+      // Same pattern-with-length merge as the JSON branch, but without the surrounding
+      // quotes (XML string form). See JSONSchemaConverter::GenerateString for why the
+      // element is CFG-expanded.
+      if (spec.min_length != 0 || spec.max_length != -1) {
+        std::string element_regex;
+        int lo, hi;
+        if (TryMergePatternLength(spec, &element_regex, &lo, &hi)) {
+          int32_t element =
+              RegexExpression(element_regex, /*json_string=*/false, /*force_cfg_expansion=*/true);
+          return Repeat(rule_name + "_pattern", element, lo, hi);
+        }
+        XGRAMMAR_LOG(WARNING) << "String schema combines pattern \"" << *spec.pattern
+                              << "\" with minLength/maxLength, but the pattern is not a recognized "
+                                 "shape for length merging; the length constraints will not be "
+                                 "enforced.";
+      }
       return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
     }
     return Repeat(
