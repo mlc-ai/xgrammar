@@ -1111,24 +1111,49 @@ Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object
 
 Result<StringSpec, SchemaError> SchemaParser::ParseString(const picojson::object& schema) {
   StringSpec spec;
+  bool has_generative = schema.count("format") || schema.count("pattern");
+  bool has_length = schema.count("minLength") || schema.count("maxLength");
+
+  if (has_generative && has_length) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "Combining pattern/format with minLength/maxLength is currently unsupported"
+    );
+  }
+
   if (schema.count("format")) spec.format = schema.at("format").get<std::string>();
   if (schema.count("pattern")) spec.pattern = schema.at("pattern").get<std::string>();
+
   if (schema.count("minLength")) {
     if (!schema.at("minLength").is<int64_t>()) {
       return ResultErr<SchemaError>(
           SchemaErrorType::kInvalidSchema, "minLength must be an integer"
       );
     }
-    spec.min_length = static_cast<int>(schema.at("minLength").get<int64_t>());
+    int64_t min_len = schema.at("minLength").get<int64_t>();
+    if (min_len < 0) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "minLength must be a non-negative integer"
+      );
+    }
+    spec.min_length = static_cast<int>(min_len);
   }
+
   if (schema.count("maxLength")) {
     if (!schema.at("maxLength").is<int64_t>()) {
       return ResultErr<SchemaError>(
           SchemaErrorType::kInvalidSchema, "maxLength must be an integer"
       );
     }
-    spec.max_length = static_cast<int>(schema.at("maxLength").get<int64_t>());
+    int64_t max_len = schema.at("maxLength").get<int64_t>();
+    if (max_len < 0) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "maxLength must be a non-negative integer"
+      );
+    }
+    spec.max_length = static_cast<int>(max_len);
   }
+
   if (spec.max_length != -1 && spec.min_length > spec.max_length) {
     return ResultErr<SchemaError>(
         SchemaErrorType::kUnsatisfiableSchema,
@@ -1136,6 +1161,7 @@ Result<StringSpec, SchemaError> SchemaParser::ParseString(const picojson::object
             std::to_string(spec.max_length)
     );
   }
+
   return ResultOk(std::move(spec));
 }
 
