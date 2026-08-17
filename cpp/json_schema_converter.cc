@@ -2368,8 +2368,10 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   }
   // Check for length constraints
   if (spec.min_length != 0 || spec.max_length != -1) {
-    int32_t character =
-        builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
+    int32_t unescaped_character =
+        builder_.AddCharacterClass({{0, 0x1f}, {'"', '"'}, {'\\', '\\'}}, true);
+    int32_t escaped_character = Sequence({ByteString("\\"), RuleRef(kBasicEscape)});
+    int32_t character = Choice({unescaped_character, escaped_character});
     int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
     return Sequence({ByteString("\""), body, ByteString("\"")});
   }
