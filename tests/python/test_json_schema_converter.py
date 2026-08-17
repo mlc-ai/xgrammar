@@ -1951,6 +1951,8 @@ instance__accepted__test_email_format = [
     (r"\"very.(),:;<>[]\\\".VERY.\\\"very@\\\\ \\\"very\\\".unusual\"@strange.example.com", True),
     (r"user%example.com@example.org", True),
     (r"user-@example.org", True),
+    (r"é@example.com", False),
+    (r"中@example.com", False),
     (r"abc.example.com", False),
     (r"a@b@c@example.com", False),
     (r'a"b(c)d,e:f;g<h>i[j\k]l@example.com', False),
@@ -1972,6 +1974,12 @@ def test_email_format(instance: str, accepted: bool):
     check_schema_with_grammar(schema, expected_grammar)
 
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
+
+
+def test_email_format_uses_regex_fsm():
+    grammar = _json_schema_to_ebnf({"type": "string", "format": "email"})
+    assert "Regex(" in grammar
+    assert "byte_mode=true" in grammar
 
 
 instance__accepted__test_date_format = [

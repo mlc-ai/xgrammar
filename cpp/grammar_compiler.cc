@@ -181,23 +181,6 @@ class CharacterClassTokenSummaryCache {
     std::vector<int32_t> unaccepted_indices;
   };
 
-  std::shared_ptr<const AdaptiveTokenMask> GetEmailLocalPartMask() {
-    std::lock_guard<std::mutex> lock(email_local_part_mutex_);
-    return email_local_part_mask_;
-  }
-
-  std::shared_ptr<const AdaptiveTokenMask> StoreEmailLocalPartMask(
-      AdaptiveTokenMask adaptive_token_mask
-  ) {
-    auto computed = std::make_shared<const AdaptiveTokenMask>(std::move(adaptive_token_mask));
-    std::lock_guard<std::mutex> lock(email_local_part_mutex_);
-    if (email_local_part_mask_ != nullptr) {
-      return email_local_part_mask_;
-    }
-    email_local_part_mask_ = computed;
-    return computed;
-  }
-
   std::shared_ptr<const Result> GetOrCreate(
       const Grammar::Impl::GrammarExpr& character_class,
       const std::vector<std::pair<int32_t, std::string>>& sorted_vocab,
@@ -377,10 +360,6 @@ class CharacterClassTokenSummaryCache {
       std::lock_guard<std::mutex> lock(ascii_byte_loop_mutex_);
       ascii_byte_loop_cache_.clear();
     }
-    {
-      std::lock_guard<std::mutex> lock(email_local_part_mutex_);
-      email_local_part_mask_.reset();
-    }
   }
 
  private:
@@ -397,8 +376,6 @@ class CharacterClassTokenSummaryCache {
       std::shared_ptr<const ASCIIByteLoopTokenMask>,
       ASCIIByteLoopKeyHash>
       ascii_byte_loop_cache_;
-  std::mutex email_local_part_mutex_;
-  std::shared_ptr<const AdaptiveTokenMask> email_local_part_mask_;
 };
 
 struct JSONStringSinkInfo {
@@ -490,14 +467,14 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   /*! \brief Classify one prefix of a delimiter-separated recursive ASCII label. */
   std::optional<AdaptiveTokenMask> GetDelimitedRecursiveLabelDirectMask(bool is_root_rule) const;
 
-  /*! \brief Classify the local-part run of an exact built-in email grammar. */
-  std::optional<AdaptiveTokenMask> GetEmailLocalPartDirectMask(bool is_root_rule) const;
-
   /*! \brief Classify the ASCII-safe subset of a fixed-width JSON wildcard path. */
   std::optional<AdaptiveTokenMask> GetFixedWidthJSONStringDirectMask(bool is_root_rule) const;
 
   /*! \brief Classify a broad absorbing accepting state with its local byte DFA. */
   std::optional<AdaptiveTokenMask> GetAbsorbingEndStateDirectMask(bool is_root_rule) const;
+
+  /*! \brief Classify a deterministic byte FSM state that has a stable character loop. */
+  std::optional<AdaptiveTokenMask> GetDeterministicByteLoopDirectMask(bool is_root_rule) const;
 
   /*! \brief Build a token mask directly for a deterministic byte path from the current state. */
   std::optional<AdaptiveTokenMask> GetDeterministicBytePathDirectMask(bool is_root_rule) const;
@@ -1443,493 +1420,6 @@ std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetSingleChara
   );
 }
 
-std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetEmailLocalPartDirectMask(
-    bool is_root_rule
-) const {
-  using GrammarExprType = Grammar::Impl::GrammarExprType;
-  const auto& initial_rule = grammar_->GetRule(init_rule_id_);
-  if (is_root_rule || initial_state_.sub_element_id != 0 || initial_rule.is_lazy ||
-      initial_rule.max_tokens != -1 || initial_rule.max_chars != -1 ||
-      initial_rule.json_string_min_length != -1 || initial_rule.json_string_max_length != -1 ||
-      !initial_rule.capture_name.empty() || !grammar_->per_rule_fsms[init_rule_id_].has_value() ||
-      initial_state_.element_id != grammar_->per_rule_fsms[init_rule_id_]->GetFsm().GetStart()) {
-    return std::nullopt;
-  }
-
-  const auto plain_rule = [&](int32_t rule_id) {
-    const auto& rule = grammar_->GetRule(rule_id);
-    return !rule.is_lazy && rule.max_tokens == -1 && rule.max_chars == -1 &&
-           rule.json_string_min_length == -1 && rule.json_string_max_length == -1 &&
-           rule.capture_name.empty();
-  };
-  const auto has_no_lookahead = [&](int32_t rule_id) {
-    return grammar_->GetRule(rule_id).lookahead_assertion_id == -1;
-  };
-  const auto get_rule_ref_lookahead = [&](int32_t rule_id) -> std::optional<int32_t> {
-    const auto& rule = grammar_->GetRule(rule_id);
-    const auto lookahead_id = rule.lookahead_assertion_id;
-    if (lookahead_id == -1 || !rule.is_exact_lookahead) {
-      return std::nullopt;
-    }
-    const auto& lookahead = grammar_->GetGrammarExpr(lookahead_id);
-    if (lookahead.type != GrammarExprType::kSequence || lookahead.size() != 1) {
-      return std::nullopt;
-    }
-    const auto& reference = grammar_->GetGrammarExpr(lookahead[0]);
-    if (reference.type != GrammarExprType::kRuleRef) {
-      return std::nullopt;
-    }
-    return reference[0];
-  };
-  const auto has_rule_ref_lookahead = [&](int32_t rule_id, int32_t referenced_rule_id) {
-    const auto reference = get_rule_ref_lookahead(rule_id);
-    return reference.has_value() && *reference == referenced_rule_id;
-  };
-  const auto has_byte_lookahead = [&](int32_t rule_id, uint8_t expected_byte) {
-    const auto& rule = grammar_->GetRule(rule_id);
-    const auto lookahead_id = rule.lookahead_assertion_id;
-    if (lookahead_id == -1 || !rule.is_exact_lookahead) {
-      return false;
-    }
-    const auto& lookahead = grammar_->GetGrammarExpr(lookahead_id);
-    if (lookahead.type != GrammarExprType::kSequence || lookahead.size() != 1) {
-      return false;
-    }
-    const auto& byte_string = grammar_->GetGrammarExpr(lookahead[0]);
-    return byte_string.type == GrammarExprType::kByteString && byte_string.size() == 1 &&
-           byte_string[0] == expected_byte;
-  };
-  const auto ascii_class = [&](int32_t expr_id, GrammarExprType expected_type
-                           ) -> std::optional<std::array<uint8_t, 128>> {
-    const auto& expr = grammar_->GetGrammarExpr(expr_id);
-    if (expr.type != expected_type || expr.size() < 3 || expr[0] != 0) {
-      return std::nullopt;
-    }
-    std::array<uint8_t, 128> result{};
-    for (int32_t index = 1; index < expr.size(); index += 2) {
-      if (index + 1 >= expr.size() || expr[index] < 0 || expr[index + 1] >= 128) {
-        return std::nullopt;
-      }
-      for (int32_t byte = expr[index]; byte <= expr[index + 1]; ++byte) {
-        result[byte] = true;
-      }
-    }
-    return result;
-  };
-  const auto match_recursive_run = [&](int32_t rule_id) -> std::optional<std::array<uint8_t, 128>> {
-    if (!plain_rule(rule_id)) {
-      return std::nullopt;
-    }
-    const auto& body = grammar_->GetGrammarExpr(grammar_->GetRule(rule_id).body_expr_id);
-    if (body.type != GrammarExprType::kChoices || body.size() != 2) {
-      return std::nullopt;
-    }
-    std::optional<std::array<uint8_t, 128>> recursive_class;
-    std::optional<std::array<uint8_t, 128>> terminal_class;
-    for (int32_t choice_id : body) {
-      const auto& choice = grammar_->GetGrammarExpr(choice_id);
-      if (choice.type != GrammarExprType::kSequence) {
-        return std::nullopt;
-      }
-      if (choice.size() == 1) {
-        terminal_class = ascii_class(choice[0], GrammarExprType::kCharacterClass);
-      } else if (choice.size() == 2) {
-        const auto& self_reference = grammar_->GetGrammarExpr(choice[1]);
-        if (self_reference.type != GrammarExprType::kRuleRef || self_reference[0] != rule_id) {
-          return std::nullopt;
-        }
-        recursive_class = ascii_class(choice[0], GrammarExprType::kCharacterClass);
-      } else {
-        return std::nullopt;
-      }
-    }
-    if (!recursive_class.has_value() || !terminal_class.has_value() ||
-        *recursive_class != *terminal_class) {
-      return std::nullopt;
-    }
-    return recursive_class;
-  };
-  const auto external_reference_count = [&](int32_t referenced_rule_id) {
-    int32_t count = 0;
-    for (int32_t owner_rule_id = 0; owner_rule_id < grammar_->NumRules(); ++owner_rule_id) {
-      if (owner_rule_id == referenced_rule_id) {
-        continue;
-      }
-      const auto& body = grammar_->GetGrammarExpr(grammar_->GetRule(owner_rule_id).body_expr_id);
-      if (body.type != GrammarExprType::kChoices) {
-        continue;
-      }
-      for (int32_t choice_id : body) {
-        const auto& choice = grammar_->GetGrammarExpr(choice_id);
-        if (choice.type != GrammarExprType::kSequence) {
-          continue;
-        }
-        for (int32_t element_id : choice) {
-          const auto& element = grammar_->GetGrammarExpr(element_id);
-          count += element.type == GrammarExprType::kRuleRef && element[0] == referenced_rule_id;
-        }
-      }
-    }
-    return count;
-  };
-
-  const auto local_bytes = match_recursive_run(init_rule_id_);
-  if (!local_bytes.has_value() || external_reference_count(init_rule_id_) != 1) {
-    return std::nullopt;
-  }
-
-  const auto initial_local_suffix = get_rule_ref_lookahead(init_rule_id_);
-  if (!initial_local_suffix.has_value()) {
-    return std::nullopt;
-  }
-  const int32_t local_suffix_rule_id = *initial_local_suffix;
-  if (!plain_rule(local_suffix_rule_id) || !has_no_lookahead(local_suffix_rule_id) ||
-      external_reference_count(local_suffix_rule_id) != 1) {
-    return std::nullopt;
-  }
-
-  const auto& local_suffix_body =
-      grammar_->GetGrammarExpr(grammar_->GetRule(local_suffix_rule_id).body_expr_id);
-  int32_t dotted_local_run_rule_id = -1;
-  bool local_suffix_has_empty = false;
-  if (local_suffix_body.type != GrammarExprType::kChoices || local_suffix_body.size() != 2) {
-    return std::nullopt;
-  }
-  for (int32_t choice_id : local_suffix_body) {
-    const auto& choice = grammar_->GetGrammarExpr(choice_id);
-    if (choice.type == GrammarExprType::kEmptyStr) {
-      local_suffix_has_empty = true;
-      continue;
-    }
-    if (choice.type != GrammarExprType::kSequence || choice.size() != 3) {
-      return std::nullopt;
-    }
-    const auto& delimiter = grammar_->GetGrammarExpr(choice[0]);
-    const auto& run_reference = grammar_->GetGrammarExpr(choice[1]);
-    const auto& self_reference = grammar_->GetGrammarExpr(choice[2]);
-    if (delimiter.type != GrammarExprType::kByteString || delimiter.size() != 1 ||
-        delimiter[0] != '.' || run_reference.type != GrammarExprType::kRuleRef ||
-        self_reference.type != GrammarExprType::kRuleRef ||
-        self_reference[0] != local_suffix_rule_id) {
-      return std::nullopt;
-    }
-    dotted_local_run_rule_id = run_reference[0];
-  }
-  const auto dotted_local_bytes = match_recursive_run(dotted_local_run_rule_id);
-  if (!local_suffix_has_empty || !dotted_local_bytes.has_value() ||
-      *dotted_local_bytes != *local_bytes ||
-      external_reference_count(dotted_local_run_rule_id) != 1 ||
-      !has_rule_ref_lookahead(dotted_local_run_rule_id, local_suffix_rule_id)) {
-    return std::nullopt;
-  }
-
-  int32_t local_container_rule_id = -1;
-  int32_t first_local_run_rule_id = -1;
-  for (int32_t rule_id = 0; rule_id < grammar_->NumRules(); ++rule_id) {
-    const auto& body = grammar_->GetGrammarExpr(grammar_->GetRule(rule_id).body_expr_id);
-    if (body.type != GrammarExprType::kChoices) {
-      continue;
-    }
-    for (int32_t choice_id : body) {
-      const auto& choice = grammar_->GetGrammarExpr(choice_id);
-      if (choice.type != GrammarExprType::kSequence || choice.size() != 2) {
-        continue;
-      }
-      const auto& local_reference = grammar_->GetGrammarExpr(choice[0]);
-      const auto& suffix_reference = grammar_->GetGrammarExpr(choice[1]);
-      if (local_reference.type != GrammarExprType::kRuleRef ||
-          suffix_reference.type != GrammarExprType::kRuleRef ||
-          suffix_reference[0] != local_suffix_rule_id) {
-        continue;
-      }
-      const auto first_local_bytes = match_recursive_run(local_reference[0]);
-      if (!first_local_bytes.has_value() || *first_local_bytes != *local_bytes ||
-          !has_rule_ref_lookahead(local_reference[0], local_suffix_rule_id)) {
-        continue;
-      }
-      if (local_container_rule_id != -1) {
-        return std::nullopt;
-      }
-      local_container_rule_id = rule_id;
-      first_local_run_rule_id = local_reference[0];
-    }
-  }
-  if (local_container_rule_id == -1 ||
-      (init_rule_id_ != first_local_run_rule_id && init_rule_id_ != dotted_local_run_rule_id) ||
-      !plain_rule(local_container_rule_id) ||
-      external_reference_count(local_container_rule_id) != 1 ||
-      external_reference_count(first_local_run_rule_id) != 1) {
-    return std::nullopt;
-  }
-
-  int32_t email_rule_id = -1;
-  int32_t domain_tail_rule_id = -1;
-  int32_t domain_suffix_rule_id = -1;
-  std::optional<std::array<uint8_t, 128>> domain_first_bytes;
-  for (int32_t rule_id = 0; rule_id < grammar_->NumRules(); ++rule_id) {
-    const auto& body = grammar_->GetGrammarExpr(grammar_->GetRule(rule_id).body_expr_id);
-    if (body.type != GrammarExprType::kChoices) {
-      continue;
-    }
-    for (int32_t choice_id : body) {
-      const auto& choice = grammar_->GetGrammarExpr(choice_id);
-      if (choice.type != GrammarExprType::kSequence || choice.size() != 5) {
-        continue;
-      }
-      const auto& local_container_reference = grammar_->GetGrammarExpr(choice[0]);
-      const auto& at_sign = grammar_->GetGrammarExpr(choice[1]);
-      const auto& tail_reference = grammar_->GetGrammarExpr(choice[3]);
-      const auto& suffix_reference = grammar_->GetGrammarExpr(choice[4]);
-      if (local_container_reference.type != GrammarExprType::kRuleRef ||
-          local_container_reference[0] != local_container_rule_id ||
-          at_sign.type != GrammarExprType::kByteString || at_sign.size() != 1 ||
-          at_sign[0] != '@' || tail_reference.type != GrammarExprType::kRuleRef ||
-          suffix_reference.type != GrammarExprType::kRuleRef) {
-        continue;
-      }
-      if (domain_tail_rule_id != -1) {
-        return std::nullopt;
-      }
-      domain_first_bytes = ascii_class(choice[2], GrammarExprType::kCharacterClass);
-      email_rule_id = rule_id;
-      domain_tail_rule_id = tail_reference[0];
-      domain_suffix_rule_id = suffix_reference[0];
-    }
-  }
-  if (email_rule_id == -1 || !domain_first_bytes.has_value() || !plain_rule(email_rule_id) ||
-      !has_byte_lookahead(email_rule_id, '"') || !plain_rule(domain_tail_rule_id) ||
-      !plain_rule(domain_suffix_rule_id) || external_reference_count(domain_tail_rule_id) != 1 ||
-      external_reference_count(domain_suffix_rule_id) != 1 ||
-      !has_no_lookahead(domain_suffix_rule_id)) {
-    return std::nullopt;
-  }
-
-  const auto has_domain_lookahead = [&]() {
-    const auto& rule = grammar_->GetRule(local_container_rule_id);
-    const auto lookahead_id = rule.lookahead_assertion_id;
-    if (lookahead_id == -1 || !rule.is_exact_lookahead) {
-      return false;
-    }
-    const auto& lookahead = grammar_->GetGrammarExpr(lookahead_id);
-    if (lookahead.type != GrammarExprType::kSequence || lookahead.size() != 4) {
-      return false;
-    }
-    const auto& at_sign = grammar_->GetGrammarExpr(lookahead[0]);
-    const auto lookahead_first_bytes = ascii_class(lookahead[1], GrammarExprType::kCharacterClass);
-    const auto& tail_reference = grammar_->GetGrammarExpr(lookahead[2]);
-    const auto& suffix_reference = grammar_->GetGrammarExpr(lookahead[3]);
-    return at_sign.type == GrammarExprType::kByteString && at_sign.size() == 1 &&
-           at_sign[0] == '@' && lookahead_first_bytes.has_value() &&
-           *lookahead_first_bytes == *domain_first_bytes &&
-           tail_reference.type == GrammarExprType::kRuleRef &&
-           tail_reference[0] == domain_tail_rule_id &&
-           suffix_reference.type == GrammarExprType::kRuleRef &&
-           suffix_reference[0] == domain_suffix_rule_id;
-  };
-  if (!has_domain_lookahead() ||
-      !has_rule_ref_lookahead(domain_tail_rule_id, domain_suffix_rule_id)) {
-    return std::nullopt;
-  }
-
-  std::array<uint8_t, 128> expected_local_bytes{};
-  for (int32_t byte = '0'; byte <= '9'; ++byte) expected_local_bytes[byte] = true;
-  for (int32_t byte = 'A'; byte <= 'Z'; ++byte) expected_local_bytes[byte] = true;
-  for (int32_t byte = 'a'; byte <= 'z'; ++byte) expected_local_bytes[byte] = true;
-  for (uint8_t byte : std::string("_!#$%&'*+/=?^`{|}~-")) expected_local_bytes[byte] = true;
-  std::array<uint8_t, 128> expected_alphanumeric{};
-  for (int32_t byte = '0'; byte <= '9'; ++byte) expected_alphanumeric[byte] = true;
-  for (int32_t byte = 'A'; byte <= 'Z'; ++byte) expected_alphanumeric[byte] = true;
-  for (int32_t byte = 'a'; byte <= 'z'; ++byte) expected_alphanumeric[byte] = true;
-  std::array<uint8_t, 128> expected_domain_middle = expected_alphanumeric;
-  expected_domain_middle['-'] = true;
-  if (*local_bytes != expected_local_bytes || *domain_first_bytes != expected_alphanumeric) {
-    return std::nullopt;
-  }
-
-  const auto& domain_tail_body =
-      grammar_->GetGrammarExpr(grammar_->GetRule(domain_tail_rule_id).body_expr_id);
-  bool domain_tail_has_empty = false;
-  std::optional<std::array<uint8_t, 128>> domain_middle_bytes;
-  std::optional<std::array<uint8_t, 128>> domain_final_bytes;
-  if (domain_tail_body.type != GrammarExprType::kChoices || domain_tail_body.size() != 2) {
-    return std::nullopt;
-  }
-  for (int32_t choice_id : domain_tail_body) {
-    const auto& choice = grammar_->GetGrammarExpr(choice_id);
-    if (choice.type == GrammarExprType::kEmptyStr) {
-      domain_tail_has_empty = true;
-    } else if (choice.type == GrammarExprType::kSequence && choice.size() == 2) {
-      domain_middle_bytes = ascii_class(choice[0], GrammarExprType::kCharacterClassStar);
-      domain_final_bytes = ascii_class(choice[1], GrammarExprType::kCharacterClass);
-    } else {
-      return std::nullopt;
-    }
-  }
-
-  const auto& domain_suffix_body =
-      grammar_->GetGrammarExpr(grammar_->GetRule(domain_suffix_rule_id).body_expr_id);
-  bool domain_suffix_has_empty = false;
-  std::optional<std::array<uint8_t, 128>> suffix_first_bytes;
-  std::optional<std::array<uint8_t, 128>> suffix_middle_bytes;
-  std::optional<std::array<uint8_t, 128>> suffix_final_bytes;
-  if (domain_suffix_body.type != GrammarExprType::kChoices || domain_suffix_body.size() != 2) {
-    return std::nullopt;
-  }
-  for (int32_t choice_id : domain_suffix_body) {
-    const auto& choice = grammar_->GetGrammarExpr(choice_id);
-    if (choice.type == GrammarExprType::kEmptyStr) {
-      domain_suffix_has_empty = true;
-      continue;
-    }
-    if (choice.type != GrammarExprType::kSequence || choice.size() != 5) {
-      return std::nullopt;
-    }
-    const auto& delimiter = grammar_->GetGrammarExpr(choice[0]);
-    const auto& self_reference = grammar_->GetGrammarExpr(choice[4]);
-    if (delimiter.type != GrammarExprType::kByteString || delimiter.size() != 1 ||
-        delimiter[0] != '.' || self_reference.type != GrammarExprType::kRuleRef ||
-        self_reference[0] != domain_suffix_rule_id) {
-      return std::nullopt;
-    }
-    suffix_first_bytes = ascii_class(choice[1], GrammarExprType::kCharacterClass);
-    suffix_middle_bytes = ascii_class(choice[2], GrammarExprType::kCharacterClassStar);
-    suffix_final_bytes = ascii_class(choice[3], GrammarExprType::kCharacterClass);
-  }
-  if (!domain_tail_has_empty || !domain_middle_bytes.has_value() ||
-      !domain_final_bytes.has_value() || *domain_middle_bytes != expected_domain_middle ||
-      *domain_final_bytes != expected_alphanumeric || !domain_suffix_has_empty ||
-      !suffix_first_bytes.has_value() || !suffix_middle_bytes.has_value() ||
-      !suffix_final_bytes.has_value() || *suffix_first_bytes != expected_alphanumeric ||
-      *suffix_middle_bytes != expected_domain_middle ||
-      *suffix_final_bytes != expected_alphanumeric) {
-    return std::nullopt;
-  }
-
-  if (auto cached = character_class_token_summary_cache_->GetEmailLocalPartMask()) {
-    return *cached;
-  }
-
-  enum class EmailPrefixState : uint8_t {
-    kLocal,
-    kLocalAfterDot,
-    kDomainFirst,
-    kDomainInitialValid,
-    kDomainInitialNeedsFinal,
-    kDomainSuffixFirst,
-    kDomainSuffixNeedsFinal,
-    kDomainSuffixValid,
-  };
-  const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
-  std::vector<int32_t> accepted_indices;
-  std::vector<int32_t> uncertain_indices;
-  accepted_indices.reserve(sorted_vocab.size() / 4);
-  uncertain_indices.reserve(sorted_vocab.size() / 128);
-  for (int32_t token_index = 0; token_index < static_cast<int32_t>(sorted_vocab.size());
-       ++token_index) {
-    const auto& token = sorted_vocab[token_index].second;
-    EmailPrefixState state = EmailPrefixState::kLocal;
-    bool consumed_local = false;
-    bool valid_prefix = !token.empty();
-    bool crosses_closing_quote = false;
-    for (uint8_t byte : token) {
-      if (byte == '"') {
-        crosses_closing_quote = state == EmailPrefixState::kDomainInitialValid ||
-                                state == EmailPrefixState::kDomainSuffixValid;
-        valid_prefix = false;
-        break;
-      }
-      if (byte >= 128) {
-        valid_prefix = false;
-        break;
-      }
-      switch (state) {
-        case EmailPrefixState::kLocal:
-          if ((*local_bytes)[byte]) {
-            consumed_local = true;
-          } else if (consumed_local && byte == '.') {
-            state = EmailPrefixState::kLocalAfterDot;
-          } else if (consumed_local && byte == '@') {
-            state = EmailPrefixState::kDomainFirst;
-          } else {
-            valid_prefix = false;
-          }
-          break;
-        case EmailPrefixState::kLocalAfterDot:
-          if ((*local_bytes)[byte]) {
-            consumed_local = true;
-            state = EmailPrefixState::kLocal;
-          } else {
-            valid_prefix = false;
-          }
-          break;
-        case EmailPrefixState::kDomainFirst:
-          if (expected_alphanumeric[byte]) {
-            state = EmailPrefixState::kDomainInitialValid;
-          } else {
-            valid_prefix = false;
-          }
-          break;
-        case EmailPrefixState::kDomainInitialValid:
-          if (expected_alphanumeric[byte]) {
-            break;
-          }
-          if (byte == '-') {
-            state = EmailPrefixState::kDomainInitialNeedsFinal;
-          } else if (byte == '.') {
-            state = EmailPrefixState::kDomainSuffixFirst;
-          } else {
-            valid_prefix = false;
-          }
-          break;
-        case EmailPrefixState::kDomainInitialNeedsFinal:
-          if (expected_alphanumeric[byte]) {
-            state = EmailPrefixState::kDomainInitialValid;
-          } else if (byte != '-') {
-            valid_prefix = false;
-          }
-          break;
-        case EmailPrefixState::kDomainSuffixFirst:
-          if (expected_alphanumeric[byte]) {
-            state = EmailPrefixState::kDomainSuffixNeedsFinal;
-          } else {
-            valid_prefix = false;
-          }
-          break;
-        case EmailPrefixState::kDomainSuffixNeedsFinal:
-          if (expected_alphanumeric[byte]) {
-            state = EmailPrefixState::kDomainSuffixValid;
-          } else if (byte != '-') {
-            valid_prefix = false;
-          }
-          break;
-        case EmailPrefixState::kDomainSuffixValid:
-          if (expected_alphanumeric[byte]) {
-            break;
-          }
-          if (byte == '-') {
-            state = EmailPrefixState::kDomainSuffixNeedsFinal;
-          } else if (byte == '.') {
-            state = EmailPrefixState::kDomainSuffixFirst;
-          } else {
-            valid_prefix = false;
-          }
-          break;
-      }
-      if (!valid_prefix) {
-        break;
-      }
-    }
-    if (valid_prefix) {
-      accepted_indices.push_back(token_index);
-    } else if (crosses_closing_quote) {
-      uncertain_indices.push_back(token_index);
-    }
-  }
-  return *character_class_token_summary_cache_->StoreEmailLocalPartMask(AdaptiveTokenMask(
-      tokenizer_info_.GetVocabSize(), sorted_vocab, accepted_indices, uncertain_indices
-  ));
-}
-
 std::optional<AdaptiveTokenMask>
 GrammarMatcherForTokenMaskCache::GetDelimitedRecursiveRunDirectMask(bool is_root_rule) const {
   using GrammarExprType = Grammar::Impl::GrammarExprType;
@@ -2595,6 +2085,166 @@ std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetAbsorbingEn
 }
 
 std::optional<AdaptiveTokenMask>
+GrammarMatcherForTokenMaskCache::GetDeterministicByteLoopDirectMask(bool is_root_rule) const {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  const auto& rule = grammar_->GetRule(init_rule_id_);
+  const auto& rule_body = grammar_->GetGrammarExpr(rule.body_expr_id);
+  if (!enable_direct_character_class_mask_ || is_root_rule || initial_state_.sub_element_id != 0 ||
+      rule.is_lazy || rule.max_tokens != -1 || rule.max_chars != -1 ||
+      rule.json_string_min_length != -1 || rule.json_string_max_length != -1 ||
+      !rule.capture_name.empty() || rule_body.type != GrammarExprType::kRegex ||
+      !grammar_->GetRegexIsByteMode(rule_body) ||
+      !grammar_->per_rule_fsms[init_rule_id_].has_value()) {
+    return std::nullopt;
+  }
+
+  const auto& rule_fsm = grammar_->per_rule_fsms[init_rule_id_]->GetFsm();
+  const auto& fsm = rule_fsm.GetFsm();
+  struct LocalState {
+    int32_t global_state;
+    std::array<int32_t, 256> transitions;
+  };
+  constexpr size_t kMaxDirectStates = 256;
+  std::vector<LocalState> local_states;
+  local_states.reserve(std::min<size_t>(kMaxDirectStates, grammar_->complete_fsm.NumStates()));
+  std::unordered_map<int32_t, int32_t> global_to_local;
+  global_to_local.reserve(local_states.capacity());
+  const auto find_or_add_state = [&](int32_t global_state) -> int32_t {
+    const auto existing = global_to_local.find(global_state);
+    if (existing != global_to_local.end()) {
+      return existing->second;
+    }
+    if (local_states.size() == kMaxDirectStates) {
+      return -1;
+    }
+    LocalState state;
+    state.global_state = global_state;
+    state.transitions.fill(-1);
+    const int32_t local_state = static_cast<int32_t>(local_states.size());
+    local_states.push_back(std::move(state));
+    global_to_local.emplace(global_state, local_state);
+    return local_state;
+  };
+
+  const int32_t initial_local_state = find_or_add_state(initial_state_.element_id);
+  for (size_t local_id = 0; local_id < local_states.size(); ++local_id) {
+    std::array<int32_t, 256> global_transitions;
+    global_transitions.fill(-1);
+    for (const auto& edge : fsm.GetEdges(local_states[local_id].global_state)) {
+      if (!edge.IsCharRange()) {
+        return std::nullopt;
+      }
+      for (int32_t byte = edge.min; byte <= edge.max; ++byte) {
+        if (global_transitions[byte] != -1 && global_transitions[byte] != edge.target) {
+          return std::nullopt;
+        }
+        global_transitions[byte] = edge.target;
+      }
+    }
+    for (int32_t byte = 0; byte < 256; ++byte) {
+      if (global_transitions[byte] == -1) {
+        continue;
+      }
+      const int32_t target_local_state = find_or_add_state(global_transitions[byte]);
+      if (target_local_state == -1) {
+        return std::nullopt;
+      }
+      local_states[local_id].transitions[byte] = target_local_state;
+    }
+  }
+
+  // Find the largest byte class that enters one state and then stays there. Tokens made entirely
+  // from this class are definitely accepted prefixes. This covers both an ordinary self-loop and
+  // the non-accepting entry state produced for `+` without recognizing any particular regex.
+  std::bitset<256> stable_loop_bytes;
+  for (int32_t target = 0; target < static_cast<int32_t>(local_states.size()); ++target) {
+    std::bitset<256> candidate;
+    for (int32_t byte = 0; byte < 256; ++byte) {
+      if (local_states[initial_local_state].transitions[byte] == target &&
+          local_states[target].transitions[byte] == target) {
+        candidate.set(byte);
+      }
+    }
+    if (candidate.count() > stable_loop_bytes.count()) {
+      stable_loop_bytes = candidate;
+    }
+  }
+  if (stable_loop_bytes.none()) {
+    return std::nullopt;
+  }
+
+  XGRAMMAR_DCHECK(character_class_token_summary_cache_ != nullptr);
+  const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  const auto loop_mask = character_class_token_summary_cache_->GetOrCreateASCIIByteLoopMask(
+      stable_loop_bytes, sorted_vocab, tokenizer_info_.GetVocabSize()
+  );
+  std::optional<std::string> exact_literal_lookahead;
+  if (rule.is_exact_lookahead && rule.lookahead_assertion_id != -1) {
+    const auto& lookahead = grammar_->GetGrammarExpr(rule.lookahead_assertion_id);
+    if (lookahead.type == GrammarExprType::kSequence && lookahead.size() == 1) {
+      const auto& literal = grammar_->GetGrammarExpr(lookahead[0]);
+      if (literal.type == GrammarExprType::kByteString && literal.size() != 0) {
+        exact_literal_lookahead.emplace();
+        exact_literal_lookahead->reserve(literal.size());
+        for (int32_t byte : literal) {
+          exact_literal_lookahead->push_back(static_cast<char>(byte));
+        }
+      }
+    }
+  }
+  const auto crosses_literal_lookahead = [&](const std::string& token, size_t offset) {
+    XGRAMMAR_DCHECK(exact_literal_lookahead.has_value());
+    if (offset == token.size()) {
+      return false;
+    }
+    const size_t compared = std::min(token.size() - offset, exact_literal_lookahead->size());
+    return token.compare(offset, compared, *exact_literal_lookahead, 0, compared) == 0;
+  };
+
+  std::vector<int32_t> additional_accepted_indices;
+  std::vector<int32_t> uncertain_indices;
+  additional_accepted_indices.reserve(loop_mask->unaccepted_indices.size() / 16);
+  uncertain_indices.reserve(loop_mask->unaccepted_indices.size() / 128);
+  const auto& subtree_nodes_range = tokenizer_info_.GetTrieSubtreeNodesRange();
+  for (size_t candidate = 0; candidate < loop_mask->unaccepted_indices.size(); ++candidate) {
+    const int32_t index = loop_mask->unaccepted_indices[candidate];
+    const auto& token = sorted_vocab[index].second;
+    int32_t state = initial_local_state;
+    bool reached_end = rule_fsm.IsEndState(local_states[state].global_state);
+    bool can_cross_lookahead = reached_end && exact_literal_lookahead.has_value() &&
+                               crosses_literal_lookahead(token, /*offset=*/0);
+    size_t matched = 0;
+    for (size_t offset = 0; offset < token.size(); ++offset) {
+      const int32_t next = local_states[state].transitions[static_cast<uint8_t>(token[offset])];
+      if (next == -1) {
+        break;
+      }
+      state = next;
+      ++matched;
+      reached_end = reached_end || rule_fsm.IsEndState(local_states[state].global_state);
+      can_cross_lookahead =
+          can_cross_lookahead ||
+          (rule_fsm.IsEndState(local_states[state].global_state) &&
+           exact_literal_lookahead.has_value() && crosses_literal_lookahead(token, offset + 1));
+    }
+    if (!token.empty() && matched == token.size()) {
+      additional_accepted_indices.push_back(index);
+    } else if (exact_literal_lookahead.has_value() ? can_cross_lookahead : reached_end) {
+      uncertain_indices.push_back(index);
+    } else {
+      const int32_t rejected_subtree_end = subtree_nodes_range[index];
+      while (candidate + 1 < loop_mask->unaccepted_indices.size() &&
+             loop_mask->unaccepted_indices[candidate + 1] < rejected_subtree_end) {
+        ++candidate;
+      }
+    }
+  }
+  return AdaptiveTokenMask(
+      loop_mask->accepted_bitset, sorted_vocab, additional_accepted_indices, uncertain_indices
+  );
+}
+
+std::optional<AdaptiveTokenMask>
 GrammarMatcherForTokenMaskCache::GetDeterministicBytePathDirectMask(bool is_root_rule) const {
   if (!enable_direct_character_class_mask_ || is_root_rule || initial_state_.sub_element_id != 0 ||
       grammar_->GetRule(init_rule_id_).is_lazy ||
@@ -3005,11 +2655,6 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
     return std::move(*direct_character_class_mask);
   }
 
-  auto direct_email_local_part_mask = GetEmailLocalPartDirectMask(is_root_rule);
-  if (direct_email_local_part_mask.has_value()) {
-    return std::move(*direct_email_local_part_mask);
-  }
-
   auto direct_delimited_recursive_run_mask = GetDelimitedRecursiveRunDirectMask(is_root_rule);
   if (direct_delimited_recursive_run_mask.has_value()) {
     return std::move(*direct_delimited_recursive_run_mask);
@@ -3033,6 +2678,21 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   auto direct_absorbing_end_mask = GetAbsorbingEndStateDirectMask(is_root_rule);
   if (direct_absorbing_end_mask.has_value()) {
     return std::move(*direct_absorbing_end_mask);
+  }
+
+  auto direct_deterministic_byte_loop_mask = GetDeterministicByteLoopDirectMask(is_root_rule);
+  if (direct_deterministic_byte_loop_mask.has_value()) {
+    if (rule_level_cache_is_available) {
+      const auto& fsm = grammar_->per_rule_fsms[init_rule_id_].value();
+      rule_level_cache_->AddCache(
+          fsm_hash.value(),
+          new_state_id,
+          fsm.GetNodeNum(),
+          fsm.GetEdgeNum(),
+          *direct_deterministic_byte_loop_mask
+      );
+    }
+    return std::move(*direct_deterministic_byte_loop_mask);
   }
 
   auto direct_byte_path_mask = GetDeterministicBytePathDirectMask(is_root_rule);

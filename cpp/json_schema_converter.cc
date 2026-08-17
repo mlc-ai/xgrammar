@@ -2827,12 +2827,13 @@ int32_t JSONSchemaConverter::GenerateFromSpec(
  * spellings. Fall back to the CFG expansion when the FSM regex engine does not support it.
  */
 int32_t JSONSchemaConverter::RegexExpression(
-    const std::string& regex, bool json_string, bool force_cfg_expansion
+    const std::string& regex, bool json_string, bool force_cfg_expansion, bool byte_mode
 ) {
   std::string cache_key;
-  cache_key.reserve(regex.size() + 2);
+  cache_key.reserve(regex.size() + 3);
   cache_key.push_back(static_cast<char>(json_string));
   cache_key.push_back(static_cast<char>(force_cfg_expansion));
+  cache_key.push_back(static_cast<char>(byte_mode));
   cache_key.append(regex);
   const auto cached = regex_expr_ids_.find(cache_key);
   if (cached != regex_expr_ids_.end()) {
@@ -2869,33 +2870,38 @@ int32_t JSONSchemaConverter::RegexExpression(
       }
     }
     if (may_have_large_json_repeat) {
-      auto can_defer =
-          RegexFSMBuilder::CanDeferLargeRepeat(regex, json_string, /*byte_mode=*/false);
+      auto can_defer = RegexFSMBuilder::CanDeferLargeRepeat(regex, json_string, byte_mode);
       defer_fsm_build = can_defer.IsOk() && std::move(can_defer).Unwrap();
     }
 
     std::string fsm_cache_key;
     if (!defer_fsm_build && regex_fsm_cache_ != nullptr) {
-      fsm_cache_key = MakeRegexFSMCacheKey(regex, json_string);
+      fsm_cache_key = MakeRegexFSMCacheKey(regex, json_string, byte_mode);
       const auto cached_fsm = regex_fsm_cache_->find(fsm_cache_key);
       if (cached_fsm != regex_fsm_cache_->end()) {
         fsm = &cached_fsm->second;
       }
     }
     if (!defer_fsm_build && fsm == nullptr) {
-      auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
+      auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string, byte_mode);
       if (fsm_result.IsOk()) {
+        auto built_fsm = std::move(fsm_result).Unwrap();
+        if (byte_mode) {
+          auto minimized_result = built_fsm.MinimizeDFA();
+          if (minimized_result.IsOk()) {
+            built_fsm = std::move(minimized_result).Unwrap();
+          }
+        }
         if (regex_fsm_cache_ != nullptr) {
           const auto inserted =
-              regex_fsm_cache_->emplace(std::move(fsm_cache_key), std::move(fsm_result).Unwrap());
+              regex_fsm_cache_->emplace(std::move(fsm_cache_key), std::move(built_fsm));
           fsm = &inserted.first->second;
         } else {
-          local_fsm.emplace(std::move(fsm_result).Unwrap());
+          local_fsm.emplace(std::move(built_fsm));
           fsm = &*local_fsm;
         }
       } else {
-        auto can_defer =
-            RegexFSMBuilder::CanDeferLargeRepeat(regex, json_string, /*byte_mode=*/false);
+        auto can_defer = RegexFSMBuilder::CanDeferLargeRepeat(regex, json_string, byte_mode);
         // The probe validates every atom and confirms that the real GrammarBuilder-backed path
         // can assemble this regex with compact repeat edges. Other build errors continue through
         // the ordinary fallback.
@@ -2910,13 +2916,13 @@ int32_t JSONSchemaConverter::RegexExpression(
             return fsm->IsEndState(state);
           });
       if (!language_is_empty) {
-        const int32_t result = builder_.AddRegex(regex, json_string);
+        const int32_t result = builder_.AddRegex(regex, json_string, byte_mode);
         regex_expr_ids_.emplace(std::move(cache_key), result);
         return result;
       }
     }
     if (defer_fsm_build) {
-      const int32_t result = builder_.AddRegex(regex, json_string);
+      const int32_t result = builder_.AddRegex(regex, json_string, byte_mode);
       regex_expr_ids_.emplace(std::move(cache_key), result);
       return result;
     }
@@ -3188,9 +3194,16 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   if (spec.format.has_value()) {
     auto regex = JSONFormatToRegexPattern(*spec.format);
     if (regex.has_value()) {
-      // The built-in format regexes use constructs that the FSM regex engine does not fully
-      // support yet (e.g. quoted email local parts), so they keep the CFG expansion.
-      return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
+      return Sequence(
+          {ByteString("\""),
+           RegexExpression(
+               *regex,
+               /*json_string=*/false,
+               /*force_cfg_expansion=*/false,
+               /*byte_mode=*/true
+           ),
+           ByteString("\"")}
+      );
     }
   }
   // Check for pattern

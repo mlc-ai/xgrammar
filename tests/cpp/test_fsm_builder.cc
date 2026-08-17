@@ -609,6 +609,21 @@ TEST(XGrammarFSMBuilderTest, TestRegexRepeatZero) {
   EXPECT_TRUE(RegexFSMBuilder::Build("a{1,0}").IsErr());
 }
 
+TEST(XGrammarFSMBuilderTest, TestRegexOptionalDoesNotAcceptPartialChildMatch) {
+  auto fsm_wse = RegexFSMBuilder::Build("a(-*a)?").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString("a--a"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a-"));
+  EXPECT_FALSE(fsm_wse.AcceptString("a--"));
+
+  // Optional must preserve every accepting state of a child with multiple alternatives.
+  fsm_wse = RegexFSMBuilder::Build("x(a|bc)?").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("x"));
+  EXPECT_TRUE(fsm_wse.AcceptString("xa"));
+  EXPECT_TRUE(fsm_wse.AcceptString("xbc"));
+  EXPECT_FALSE(fsm_wse.AcceptString("xb"));
+}
+
 TEST(XGrammarFSMBuilderTest, TestRegexByteMode) {
   auto fsm_wse = RegexFSMBuilder::Build("[^\\x00-\\x7F]+", /*byte_mode=*/true).Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("\x80"));
