@@ -322,13 +322,13 @@
 <li><p><strong>tools</strong> (<code class="docutils literal notranslate"><span class="pre">List[ToolParam</span> <span class="pre">|</span> <span class="pre">dict]</span></code>, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:</p>
 <ul>
 <li><p><strong>Function tools</strong> use the OpenAI Chat Completions shape:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;function&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;function&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;...&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;parameters&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">...</span><span class="p">}}}</span>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"function"</span><span class="p">,</span><span class="w"> </span><span class="nt">"function"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"parameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">...</span><span class="p">}}}</span>
 </pre></div>
 </div>
 <p>The <code class="docutils literal notranslate"><span class="pre">&quot;parameters&quot;</span></code> field accepts a JSON Schema dict, <code class="docutils literal notranslate"><span class="pre">True</span></code> (any JSON), or can be omitted (unconstrained). When <code class="docutils literal notranslate"><span class="pre">&quot;strict&quot;</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>, the parameters constraint is skipped.</p>
 </li>
 <li><p><strong>Builtin tools</strong> use a compact shape with XGrammar-specific fields:</p>
-<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;web_search_preview&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;browser.search&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;parameters&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">...</span><span class="p">}}</span>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"web_search_preview"</span><span class="p">,</span><span class="w"> </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"browser.search"</span><span class="p">,</span><span class="w"> </span><span class="nt">"parameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">...</span><span class="p">}}</span>
 </pre></div>
 </div>
 <ul class="simple">
@@ -370,25 +370,25 @@
 
 <span class="n">tools</span> <span class="o">=</span> <span class="p">[</span>
     <span class="p">{</span>
-        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;city&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+        <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"function"</span><span class="p">,</span>
+        <span class="s2">"function"</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">"name"</span><span class="p">:</span> <span class="s2">"get_weather"</span><span class="p">,</span>
+            <span class="s2">"parameters"</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span>
+                <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"city"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}},</span>
             <span class="p">},</span>
         <span class="p">},</span>
     <span class="p">},</span>
     <span class="p">{</span>
-        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_time&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{}},</span>
+        <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"function"</span><span class="p">,</span>
+        <span class="s2">"function"</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">"name"</span><span class="p">:</span> <span class="s2">"get_time"</span><span class="p">,</span>
+            <span class="s2">"parameters"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span> <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{}},</span>
         <span class="p">},</span>
     <span class="p">},</span>
 <span class="p">]</span>
 
-<span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;llama&quot;</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">)</span>
+<span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span><span class="s2">"llama"</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">)</span>
 <span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">structural_tag</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -397,22 +397,22 @@
 <h3>Builtin tools<a class="headerlink" href="#builtin-tools" title="Link to this heading">¶</a></h3>
 <p>For models that support builtin tools (e.g. Harmony / gpt-oss), include builtin tools in the same <code class="docutils literal notranslate"><span class="pre">tools</span></code> list:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
-    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="s2">"harmony"</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
         <span class="p">{</span>
-            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;user_tool&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span> <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;q&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}}},</span>
+            <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"function"</span><span class="p">,</span>
+            <span class="s2">"function"</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">"name"</span><span class="p">:</span> <span class="s2">"user_tool"</span><span class="p">,</span>
+                <span class="s2">"parameters"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span> <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"q"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}}},</span>
             <span class="p">},</span>
         <span class="p">},</span>
         <span class="p">{</span>
-            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;browser.search&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;query&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
-                <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;query&quot;</span><span class="p">],</span>
+            <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"web_search_preview"</span><span class="p">,</span>
+            <span class="s2">"name"</span><span class="p">:</span> <span class="s2">"browser.search"</span><span class="p">,</span>
+            <span class="s2">"parameters"</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span>
+                <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"query"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}},</span>
+                <span class="s2">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"query"</span><span class="p">],</span>
             <span class="p">},</span>
         <span class="p">},</span>
     <span class="p">],</span>
@@ -424,7 +424,7 @@
 <section id="reasoning-mode">
 <h3>Reasoning mode<a class="headerlink" href="#reasoning-mode" title="Link to this heading">¶</a></h3>
 <p>For formats that support reasoning (like Qwen3, DeepSeek-R1, Kimi-K2), pass <code class="docutils literal notranslate"><span class="pre">reasoning</span></code> to enable/disable:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;qwen_3&quot;</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span> <span class="n">reasoning</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span><span class="s2">"qwen_3"</span><span class="p">,</span> <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span> <span class="n">reasoning</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">structural_tag</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -434,31 +434,31 @@
 <h3>Tool choice<a class="headerlink" href="#tool-choice" title="Link to this heading">¶</a></h3>
 <p>Force a specific function tool:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
-    <span class="s2">&quot;llama&quot;</span><span class="p">,</span>
+    <span class="s2">"llama"</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
-    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span> <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">}},</span>
+    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"function"</span><span class="p">,</span> <span class="s2">"function"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"get_weather"</span><span class="p">}},</span>
 <span class="p">)</span>
 </pre></div>
 </div>
 <p>Force a builtin tool by type:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
-    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="s2">"harmony"</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>
-    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">},</span>
+    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"web_search_preview"</span><span class="p">},</span>
 <span class="p">)</span>
 </pre></div>
 </div>
 <p>Allow only a subset of tools:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
-    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="s2">"harmony"</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>
     <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;allowed_tools&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;allowed_tools&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">&quot;mode&quot;</span><span class="p">:</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;tools&quot;</span><span class="p">:</span> <span class="p">[</span>
-                <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span> <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">}},</span>
-                <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">},</span>
+        <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"allowed_tools"</span><span class="p">,</span>
+        <span class="s2">"allowed_tools"</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">"mode"</span><span class="p">:</span> <span class="s2">"auto"</span><span class="p">,</span>
+            <span class="s2">"tools"</span><span class="p">:</span> <span class="p">[</span>
+                <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"function"</span><span class="p">,</span> <span class="s2">"function"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"get_weather"</span><span class="p">}},</span>
+                <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"web_search_preview"</span><span class="p">},</span>
             <span class="p">],</span>
         <span class="p">},</span>
     <span class="p">},</span>
@@ -470,7 +470,7 @@
 <h3>Special tokens in text<a class="headerlink" href="#special-tokens-in-text" title="Link to this heading">¶</a></h3>
 <p>By default, special tokens like <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;</span></code> / <code class="docutils literal notranslate"><span class="pre">&lt;/think&gt;</span></code> are not allowed in free text. Pass <code class="docutils literal notranslate"><span class="pre">exclude_special_tokens=False</span></code> to allow them:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
-    <span class="s2">&quot;qwen_3&quot;</span><span class="p">,</span>
+    <span class="s2">"qwen_3"</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span>

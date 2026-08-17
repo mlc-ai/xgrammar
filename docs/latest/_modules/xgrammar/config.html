@@ -278,7 +278,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for xgrammar.config</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Global configuration for XGrammar.&quot;&quot;&quot;</span>
+<span></span><span class="sd">"""Global configuration for XGrammar."""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">contextlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">contextmanager</span>
 
@@ -288,7 +288,7 @@
 <div class="viewcode-block" id="get_max_recursion_depth">
 <a class="viewcode-back" href="../../api/python/config.html#xgrammar.get_max_recursion_depth">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_max_recursion_depth</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the maximum allowed recursion depth. The depth is shared per process.</span>
+<span class="w">    </span><span class="sd">"""Get the maximum allowed recursion depth. The depth is shared per process.</span>
 
 <span class="sd">    The maximum recursion depth is determined in the following order:</span>
 
@@ -300,7 +300,7 @@
 <span class="sd">    -------</span>
 <span class="sd">    max_recursion_depth : int</span>
 <span class="sd">        The maximum allowed recursion depth.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get_max_recursion_depth</span><span class="p">()</span></div>
 
 
@@ -308,14 +308,14 @@
 <div class="viewcode-block" id="set_max_recursion_depth">
 <a class="viewcode-back" href="../../api/python/config.html#xgrammar.set_max_recursion_depth">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">set_max_recursion_depth</span><span class="p">(</span><span class="n">max_recursion_depth</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Set the maximum allowed recursion depth. The depth is shared per process. This method is</span>
+<span class="w">    </span><span class="sd">"""Set the maximum allowed recursion depth. The depth is shared per process. This method is</span>
 <span class="sd">    thread-safe.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    max_recursion_depth : int</span>
 <span class="sd">        The maximum allowed recursion depth.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">_core</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">set_max_recursion_depth</span><span class="p">(</span><span class="n">max_recursion_depth</span><span class="p">)</span></div>
 
 
@@ -324,7 +324,7 @@
 <a class="viewcode-back" href="../../api/python/config.html#xgrammar.max_recursion_depth">[docs]</a>
 <span class="nd">@contextmanager</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">max_recursion_depth</span><span class="p">(</span><span class="n">temp_depth</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A context manager for temporarily setting recursion depth.</span>
+<span class="w">    </span><span class="sd">"""A context manager for temporarily setting recursion depth.</span>
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
@@ -332,7 +332,7 @@
 <span class="sd">    ...     # recursion depth is 1000 here</span>
 <span class="sd">    ...     pass</span>
 <span class="sd">    &gt;&gt;&gt; # recursion depth is restored to original value</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">prev_depth</span> <span class="o">=</span> <span class="n">get_max_recursion_depth</span><span class="p">()</span>
     <span class="n">set_max_recursion_depth</span><span class="p">(</span><span class="n">temp_depth</span><span class="p">)</span>
     <span class="k">try</span><span class="p">:</span>
@@ -345,13 +345,13 @@
 <div class="viewcode-block" id="get_serialization_version">
 <a class="viewcode-back" href="../../api/python/config.html#xgrammar.get_serialization_version">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_serialization_version</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the serialization version number.</span>
+<span class="w">    </span><span class="sd">"""Get the serialization version number.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    serialization_version : str</span>
 <span class="sd">        The serialization version number.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">get_serialization_version</span><span class="p">())</span></div>
 
 </pre></div>

@@ -308,14 +308,14 @@ integrations.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xgr</span>
 
 <span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
 <span class="sd">    %import common.INT</span>
 <span class="sd">    %import common.WS</span>
 <span class="sd">    %ignore WS</span>
 
-<span class="sd">    start: item (&quot;,&quot; item)*</span>
-<span class="sd">    item: &quot;id=&quot; INT</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    start: item ("," item)*</span>
+<span class="sd">    item: "id=" INT</span>
+<span class="sd">    """</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -343,13 +343,13 @@ point of the grammar.</p></li>
 <p>The returned grammar is compiled and matched like any other grammar:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">from_huggingface</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">)</span>
 <span class="n">compiler</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">)</span>
-<span class="n">compiled</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span><span class="s1">&#39;start: &quot;a&quot; | &quot;b&quot;&#39;</span><span class="p">))</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span><span class="s1">'start: "a" | "b"'</span><span class="p">))</span>
 <span class="n">matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarMatcher</span><span class="p">(</span><span class="n">compiled</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Errors in the grammar raise <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> with the line, the column, and the offending source
 line:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Lark error at line 3, column 6: expected &#39;:&#39; after rule name
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Lark error at line 3, column 6: expected ':' after rule name
 item missing
      ^
 </pre></div>
@@ -365,9 +365,9 @@ item missing
 </ul>
 <p>Comments start with <code class="docutils literal notranslate"><span class="pre">#</span></code> or <code class="docutils literal notranslate"><span class="pre">//</span></code> and run to the end of the line. Blank lines are ignored. An
 alternative may continue on the next line when that line starts with <code class="docutils literal notranslate"><span class="pre">|</span></code>:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &quot;a&quot;
-     | &quot;b&quot;
-     | &quot;c&quot;
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: "a"
+     | "b"
+     | "c"
 </pre></div>
 </div>
 <section id="rules-and-terminals">
@@ -375,7 +375,7 @@ alternative may continue on the next line when that line starts with <code class
 <p>Names consist of letters, digits, underscores, and hyphens. A definition whose name starts with a
 lowercase letter (ignoring a leading underscore) is a <strong>rule</strong>; one that starts with an uppercase
 letter is a <strong>terminal</strong>.</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: value (&quot;;&quot; value)*     // rule
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: value (";" value)*     // rule
 value: INT | NAME             // rule referencing terminals
 INT: /[0-9]+/                 // terminal
 NAME: /[a-z]+/                // terminal
@@ -384,7 +384,7 @@ NAME: /[a-z]+/                // terminal
 <p>Rules may reference each other freely, including forward references, direct recursion, and
 indirect recursion:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: value
-value: &quot;x&quot; | &quot;(&quot; value &quot;)&quot; | &quot;[&quot; (value (&quot;,&quot; value)*)? &quot;]&quot;
+value: "x" | "(" value ")" | "[" (value ("," value)*)? "]"
 </pre></div>
 </div>
 <p>Terminals are matched as one indivisible unit:</p>
@@ -435,9 +435,9 @@ expression used with a <code class="docutils literal notranslate"><span class="p
 <p>Word boundaries (<code class="docutils literal notranslate"><span class="pre">\b</span></code>, <code class="docutils literal notranslate"><span class="pre">\B</span></code>), Unicode property escapes (<code class="docutils literal notranslate"><span class="pre">\p{…}</span></code>), backreferences, and lookaround
 assertions are not supported. Large bounded repetitions such as <code class="docutils literal notranslate"><span class="pre">{0,10000}</span></code> are compiled through
 the grammar-level repetition mechanism and do not expand the automaton.</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: /a.b/      // accepts &quot;acb&quot;, &quot;a😀b&quot;; rejects &quot;a\nb&quot;
-line: /a.b/s      // also accepts &quot;a\nb&quot;
-word: /Σk+/i      // accepts &quot;Σk&quot;, &quot;ΣKK&quot;; only ASCII letters fold, &quot;Σ&quot; matches literally
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: /a.b/      // accepts "acb", "a😀b"; rejects "a\nb"
+line: /a.b/s      // also accepts "a\nb"
+word: /Σk+/i      // accepts "Σk", "ΣKK"; only ASCII letters fold, "Σ" matches literally
 </pre></div>
 </div>
 </section>
@@ -528,7 +528,7 @@ below the lower bound are rejected.</p>
 <p>XGrammar provides a built-in library of common terminals. <code class="docutils literal notranslate"><span class="pre">%import</span></code> brings one of them into scope
 as a terminal definition:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%import common.INT                 // defines INT
-%import common.INT -&gt; NUMBER       // defines NUMBER with INT&#39;s pattern
+%import common.INT -&gt; NUMBER       // defines NUMBER with INT's pattern
 %import common (INT, WS, CNAME)    // multiple imports in one line
 </pre></div>
 </div>
@@ -564,8 +564,8 @@ Importing a name that is already defined is an error. The available names:</p>
 <p><code class="docutils literal notranslate"><span class="pre">%ignore</span></code> declares content that may appear between terminals, typically whitespace:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%import common.WS
 %ignore WS
-start: &quot;a&quot; DIGIT
-DIGIT: &quot;0&quot;..&quot;9&quot;
+start: "a" DIGIT
+DIGIT: "0".."9"
 </pre></div>
 </div>
 <p>This accepts <code class="docutils literal notranslate"><span class="pre">a1</span></code>, <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">1</span></code>, and <code class="docutils literal notranslate"><span class="pre">a\n1</span>&#160; </code>. The ignored content:</p>
@@ -587,7 +587,7 @@ rule, and after the last one;</p></li>
 <section id="grammar-options">
 <h3><code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code><a class="headerlink" href="#grammar-options" title="Link to this heading">¶</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code> takes a JSON object that configures the whole grammar:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%grammar_options {&quot;allow_initial_skip&quot;: true}
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>%grammar_options {"allow_initial_skip": true}
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">allow_initial_skip</span></code> (boolean, default <code class="docutils literal notranslate"><span class="pre">false</span></code>) allows <code class="docutils literal notranslate"><span class="pre">%ignore</span></code> content to appear before the
@@ -598,12 +598,12 @@ names are rejected.</p>
 <h3><code class="docutils literal notranslate"><span class="pre">%json</span></code><a class="headerlink" href="#json" title="Link to this heading">¶</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">%json</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code> embeds a JSON Schema and behaves like a rule reference: the element matches any
 JSON value conforming to the schema, converted through XGrammar’s JSON Schema converter.</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &quot;&lt;tool_call&gt;&quot; arguments &quot;&lt;/tool_call&gt;&quot;
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: "&lt;tool_call&gt;" arguments "&lt;/tool_call&gt;"
 arguments: %json {
-  &quot;type&quot;: &quot;object&quot;,
-  &quot;properties&quot;: {&quot;city&quot;: {&quot;type&quot;: &quot;string&quot;}},
-  &quot;required&quot;: [&quot;city&quot;],
-  &quot;additionalProperties&quot;: false
+  "type": "object",
+  "properties": {"city": {"type": "string"}},
+  "required": ["city"],
+  "additionalProperties": false
 }
 </pre></div>
 </div>
@@ -616,13 +616,13 @@ Schema converter’s normal behavior. <code class="docutils literal notranslate"
 <p>The substring extension matches any contiguous sequence of a fixed list of chunks, including the
 empty sequence. For compatibility with llguidance, it is written with the <code class="docutils literal notranslate"><span class="pre">%regex</span> <span class="pre">{</span> <span class="pre">...</span> <span class="pre">}</span></code>
 directive, although it is not a regular expression:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: %regex {&quot;substring_chunks&quot;: [&quot;abc&quot;, &quot;de&quot;, &quot;fg&quot;]}
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: %regex {"substring_chunks": ["abc", "de", "fg"]}
 </pre></div>
 </div>
 <p>This example accepts <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;abc&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;de&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;abcde&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;defg&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">&quot;abcdefg&quot;</span></code>, but not
 <code class="docutils literal notranslate"><span class="pre">&quot;ab&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;cde&quot;</span></code>.</p>
 <p><code class="docutils literal notranslate"><span class="pre">substring_chars</span></code> splits a string into Unicode codepoints before applying the same operation:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: %regex {&quot;substring_chars&quot;: &quot;abc&quot;}
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: %regex {"substring_chars": "abc"}
 </pre></div>
 </div>
 <p>It therefore accepts every codepoint-aligned substring such as <code class="docutils literal notranslate"><span class="pre">&quot;a&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;bc&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">&quot;abc&quot;</span></code>.
@@ -635,12 +635,12 @@ directive, although it is not a regular expression:</p>
 independent namespace: it must define its own <code class="docutils literal notranslate"><span class="pre">start</span></code> rule, and it may declare its own imports,
 <code class="docutils literal notranslate"><span class="pre">%ignore</span></code>, and <code class="docutils literal notranslate"><span class="pre">%grammar_options</span></code> without affecting the outer grammar. Rule names may be reused
 across the boundary.</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &quot;[&quot; %lark {
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: "[" %lark {
   %import common.WS
   %ignore WS
-  start: item &quot;:&quot; %json {&quot;type&quot;: &quot;integer&quot;}
-  item: &quot;x&quot; | &quot;(&quot; item &quot;)&quot;
-} &quot;]&quot;
+  start: item ":" %json {"type": "integer"}
+  item: "x" | "(" item ")"
+} "]"
 </pre></div>
 </div>
 <p>Multiple <code class="docutils literal notranslate"><span class="pre">%lark</span></code> blocks may appear in the same rule. Nested grammars may use every feature of the
@@ -664,8 +664,8 @@ start: &lt;[*]&gt;                 // any token (requires tokenizer_info)
 <code class="docutils literal notranslate"><span class="pre">&lt;[^*]&gt;</span></code>.</p>
 <p><strong>Named special tokens</strong> are resolved against the tokenizer’s decoded vocabulary by exact string
 match and therefore require <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="p">([</span><span class="s2">&quot;a&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;|tool|&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span><span class="p">])</span>
-<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span><span class="s2">&quot;start: &lt;|tool|&gt;&quot;</span><span class="p">,</span> <span class="n">tokenizer_info</span><span class="o">=</span><span class="n">tokenizer_info</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="p">([</span><span class="s2">"a"</span><span class="p">,</span> <span class="s2">"&lt;|tool|&gt;"</span><span class="p">,</span> <span class="s2">"b"</span><span class="p">])</span>
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span><span class="s2">"start: &lt;|tool|&gt;"</span><span class="p">,</span> <span class="n">tokenizer_info</span><span class="o">=</span><span class="n">tokenizer_info</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>The reference matches every vocabulary entry whose decoded text equals the written form,
@@ -678,17 +678,17 @@ Dictionary keys do not include the leading <code class="docutils literal notrans
 source strings.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">arguments</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_json_schema</span><span class="p">(</span>
     <span class="p">{</span>
-        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;city&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
-        <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;city&quot;</span><span class="p">],</span>
-        <span class="s2">&quot;additionalProperties&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span>
+        <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"city"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}},</span>
+        <span class="s2">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"city"</span><span class="p">],</span>
+        <span class="s2">"additionalProperties"</span><span class="p">:</span> <span class="kc">False</span><span class="p">,</span>
     <span class="p">}</span>
 <span class="p">)</span>
 <span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
-    <span class="s1">&#39;start: &quot;&lt;tool_call&gt;&quot; @arguments &quot;&lt;/tool_call&gt;&quot; &quot;:&quot; @status&#39;</span><span class="p">,</span>
+    <span class="s1">'start: "&lt;tool_call&gt;" @arguments "&lt;/tool_call&gt;" ":" @status'</span><span class="p">,</span>
     <span class="n">named_grammars</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="n">arguments</span><span class="p">,</span>
-        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="s1">&#39;start: &quot;ok&quot; | &quot;cancelled&quot;&#39;</span><span class="p">,</span>
+        <span class="s2">"arguments"</span><span class="p">:</span> <span class="n">arguments</span><span class="p">,</span>
+        <span class="s2">"status"</span><span class="p">:</span> <span class="s1">'start: "ok" | "cancelled"'</span><span class="p">,</span>
     <span class="p">},</span>
 <span class="p">)</span>
 </pre></div>
@@ -706,9 +706,9 @@ Each named grammar is compiled once and shared.</p></li>
 <section id="rule-options">
 <h2>Rule Options<a class="headerlink" href="#rule-options" title="Link to this heading">¶</a></h2>
 <p>Rule options are written as a comma-separated list between a rule name and its colon:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>reasoning[max_tokens=512, capture=&quot;reasoning&quot;]: TEXT
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>reasoning[max_tokens=512, capture="reasoning"]: TEXT
 name[lazy]: /[a-z]+/
-field[suffix=&quot;!&quot;, stop_capture=&quot;marker&quot;]: /[a-z]*/
+field[suffix="!", stop_capture="marker"]: /[a-z]*/
 value[temperature=0.7]: /[a-z]+/
 </pre></div>
 </div>
@@ -736,10 +736,10 @@ supported combinations and their boundary behavior are described below.</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">temperature</span></code> rule attribute selects the sampling temperature while a terminal-like rule or
 named subgrammar is active:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    start: &quot;answer:&quot; value</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    start: "answer:" value</span>
 <span class="sd">    value[temperature=0.7]: /[a-z]+/</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 <span class="p">)</span>
 <span class="n">compiled</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">)</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">grammar</span><span class="p">)</span>
 <span class="n">matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarMatcher</span><span class="p">(</span><span class="n">compiled</span><span class="p">,</span> <span class="n">default_temperature</span><span class="o">=</span><span class="mf">0.2</span><span class="p">)</span>
@@ -767,20 +767,20 @@ as <code class="docutils literal notranslate"><span class="pre">&lt;tool_call&gt
 after the call completes. XGrammar recognizes this pattern and compiles it into an efficient
 token-level dispatch structure:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
 <span class="sd">    start: tool* tail</span>
 <span class="sd">    tail: TEXT</span>
 
-<span class="sd">    tool_head[lazy]: TEXT &quot;&lt;tool_call&gt;&quot;</span>
+<span class="sd">    tool_head[lazy]: TEXT "&lt;tool_call&gt;"</span>
 <span class="sd">    tool: tool_head %json {</span>
-<span class="sd">      &quot;type&quot;: &quot;object&quot;,</span>
-<span class="sd">      &quot;properties&quot;: {&quot;x&quot;: {&quot;type&quot;: &quot;integer&quot;}},</span>
-<span class="sd">      &quot;required&quot;: [&quot;x&quot;],</span>
-<span class="sd">      &quot;additionalProperties&quot;: false</span>
-<span class="sd">    } &quot;&lt;/tool_call&gt;&quot;</span>
+<span class="sd">      "type": "object",</span>
+<span class="sd">      "properties": {"x": {"type": "integer"}},</span>
+<span class="sd">      "required": ["x"],</span>
+<span class="sd">      "additionalProperties": false</span>
+<span class="sd">    } "&lt;/tool_call&gt;"</span>
 
 <span class="sd">    TEXT: /(\n|.)*/</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -799,11 +799,11 @@ tail: TEXT
 (possibly through another terminal name).</p>
 <p>Each tool rule starts with a trigger and continues with an ordinary grammar for the payload. The
 trigger is written in one of these equivalent head forms:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>head[lazy]: TEXT &quot;&lt;tool&gt;&quot;          // any text, then a fixed trigger string
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>head[lazy]: TEXT "&lt;tool&gt;"          // any text, then a fixed trigger string
 head[lazy]: TEXT &lt;|tool_token|&gt;    // any text, then a special token (requires tokenizer_info)
 head[lazy]: /(\n|.)*&lt;tool&gt;/        // the same trigger written as a regex suffix
-head[suffix=&quot;&lt;tool&gt;&quot;]: TEXT        // the same trigger written as a suffix attribute
-head[stop=&quot;&lt;tool&gt;&quot;]: TEXT          // mask-equivalent; differs only for captures
+head[suffix="&lt;tool&gt;"]: TEXT        // the same trigger written as a suffix attribute
+head[stop="&lt;tool&gt;"]: TEXT          // mask-equivalent; differs only for captures
 tool: TEXT &lt;|tool_token|&gt; ...      // token trigger written inline, without a head rule
 </pre></div>
 </div>
@@ -816,18 +816,18 @@ constructs are not).</p>
 <p>Different tools may use different triggers, or share one trigger and differentiate on the text
 that follows:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""</span>
 <span class="sd">    start: (foo | bar)* tail</span>
 <span class="sd">    tail: TEXT</span>
 
-<span class="sd">    foo_head[lazy]: TEXT &quot;&lt;function&quot;</span>
-<span class="sd">    foo: foo_head &quot;=foo&gt;&quot; /[a-z]+/ &quot;&lt;/function&gt;&quot;</span>
+<span class="sd">    foo_head[lazy]: TEXT "&lt;function"</span>
+<span class="sd">    foo: foo_head "=foo&gt;" /[a-z]+/ "&lt;/function&gt;"</span>
 
-<span class="sd">    bar_head[lazy]: TEXT &quot;&lt;function&quot;</span>
-<span class="sd">    bar: bar_head &quot;=bar&gt;&quot; /[0-9]+/ &quot;&lt;/function&gt;&quot;</span>
+<span class="sd">    bar_head[lazy]: TEXT "&lt;function"</span>
+<span class="sd">    bar: bar_head "=bar&gt;" /[0-9]+/ "&lt;/function&gt;"</span>
 
 <span class="sd">    TEXT: /(\n|.)*/</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 <span class="p">)</span>
 </pre></div>
 </div>
@@ -840,7 +840,7 @@ all special tokens. Negated token sets cannot be used as triggers.</p>
 <p>Outside of the dispatch pattern, a lazy head of the form <code class="docutils literal notranslate"><span class="pre">head[lazy]:</span> <span class="pre">TEXT</span> <span class="pre">&quot;&lt;end&gt;&quot;</span></code> (or with a
 special-token trigger) may also be used on its own:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: head
-head[lazy]: TEXT &quot;&lt;end&gt;&quot;
+head[lazy]: TEXT "&lt;end&gt;"
 TEXT: /(\n|.)*/
 </pre></div>
 </div>
@@ -854,7 +854,7 @@ The regex-suffix form is only accepted inside the full dispatch pattern.</p>
 <p>Any other rule may also carry <code class="docutils literal notranslate"><span class="pre">[lazy]</span></code>, which gives it <strong>committed-shortest</strong> matching: at the
 first position where the rule’s body can end, it must end — the derivations in which this
 occurrence keeps consuming input are discarded.</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: &quot;&lt;&quot; name &quot;&gt;&quot; rest
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: "&lt;" name "&gt;" rest
 name[lazy]: /[a-z]+/     // stops at the first position where it can end
 rest: /[a-z]+/
 </pre></div>
@@ -883,10 +883,10 @@ through <code class="docutils literal notranslate"><span class="pre">Grammar.__s
 <p><code class="docutils literal notranslate"><span class="pre">suffix</span></code> and <code class="docutils literal notranslate"><span class="pre">stop</span></code> both match the rule body lazily through the first occurrence of a marker. Like
 llguidance, the marker may be a string literal, a regular expression, or an uppercase terminal
 name:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>field[suffix=&quot;&lt;end&gt;&quot;]: /[a-z]*/
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>field[suffix="&lt;end&gt;"]: /[a-z]*/
 field[suffix=/&lt;\/?end&gt;/]: /[a-z]*/
 field[suffix=END]: /[a-z]*/
-END: &quot;&lt;/end&gt;&quot; | &quot;&lt;end&gt;&quot;
+END: "&lt;/end&gt;" | "&lt;end&gt;"
 </pre></div>
 </div>
 <p>At the mask and validation levels, these forms are equivalent to appending the marker to a lazy
@@ -897,17 +897,17 @@ from continuing through an earlier match. <code class="docutils literal notransl
 with a fixed, case-sensitive string marker, XGrammar retains the TagDispatch fast path: the rule
 completes at the marker when one appears, while text that ends without a marker is also accepted.</p>
 <p>The distinction between the two attributes is capture scope:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start[capture=&quot;outer&quot;]: field &quot;z&quot;
-field[capture=&quot;inner&quot;, suffix=&quot;!&quot;]: /[a-z]*/
-# &quot;xy!z&quot; -&gt; inner=b&quot;xy&quot;, outer=b&quot;xy!z&quot;
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start[capture="outer"]: field "z"
+field[capture="inner", suffix="!"]: /[a-z]*/
+# "xy!z" -&gt; inner=b"xy", outer=b"xy!z"
 
-start[capture=&quot;outer&quot;]: field &quot;z&quot;
-field[capture=&quot;inner&quot;, stop=&quot;!&quot;]: /[a-z]*/
-# &quot;xy!z&quot; -&gt; inner=b&quot;xy&quot;, outer=b&quot;xyz&quot;
+start[capture="outer"]: field "z"
+field[capture="inner", stop="!"]: /[a-z]*/
+# "xy!z" -&gt; inner=b"xy", outer=b"xyz"
 
-start[capture=&quot;outer&quot;]: field &quot;z&quot;
-field[capture=&quot;inner&quot;, suffix=/!!+/, stop_capture=&quot;marker&quot;]: /[a-z]*/
-# &quot;xy!!z&quot; -&gt; marker=b&quot;!!&quot;, inner=b&quot;xy&quot;, outer=b&quot;xy!!z&quot;
+start[capture="outer"]: field "z"
+field[capture="inner", suffix=/!!+/, stop_capture="marker"]: /[a-z]*/
+# "xy!!z" -&gt; marker=b"!!", inner=b"xy", outer=b"xy!!z"
 </pre></div>
 </div>
 <ul class="simple">
@@ -1011,8 +1011,8 @@ rule matched:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>start: tool* tail
 tail: TEXT
 
-tool_head[lazy]: TEXT &quot;&lt;tool_call&gt;&quot;
-tool: tool_head arg &quot;&lt;/tool_call&gt;&quot;
+tool_head[lazy]: TEXT "&lt;tool_call&gt;"
+tool: tool_head arg "&lt;/tool_call&gt;"
 arg[capture]: /[0-9]+/
 
 TEXT: /(\n|.)*/
@@ -1022,8 +1022,8 @@ TEXT: /(\n|.)*/
 name. Capture names may contain letters, digits, <code class="docutils literal notranslate"><span class="pre">_</span></code>, <code class="docutils literal notranslate"><span class="pre">-</span></code> and <code class="docutils literal notranslate"><span class="pre">.</span></code>. The recorded captures are
 retrieved from the matcher:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarMatcher</span><span class="p">(</span><span class="n">compiled</span><span class="p">)</span>
-<span class="n">matcher</span><span class="o">.</span><span class="n">accept_string</span><span class="p">(</span><span class="s1">&#39;x&lt;tool_call&gt;42&lt;/tool_call&gt;y&lt;tool_call&gt;7&lt;/tool_call&gt;&#39;</span><span class="p">)</span>
-<span class="n">matcher</span><span class="o">.</span><span class="n">get_captures</span><span class="p">()</span>  <span class="c1"># [(&quot;arg&quot;, b&quot;42&quot;), (&quot;arg&quot;, b&quot;7&quot;)]</span>
+<span class="n">matcher</span><span class="o">.</span><span class="n">accept_string</span><span class="p">(</span><span class="s1">'x&lt;tool_call&gt;42&lt;/tool_call&gt;y&lt;tool_call&gt;7&lt;/tool_call&gt;'</span><span class="p">)</span>
+<span class="n">matcher</span><span class="o">.</span><span class="n">get_captures</span><span class="p">()</span>  <span class="c1"># [("arg", b"42"), ("arg", b"7")]</span>
 </pre></div>
 </div>
 <p>Each completion of a captured rule records one capture, so a rule matched repeatedly (for

@@ -300,7 +300,10 @@
 <h1>Advanced Topics of Structural Tag<a class="headerlink" href="#advanced-topics-of-structural-tag" title="Link to this heading">¶</a></h1>
 <section id="automatic-end-detection">
 <h2>Automatic End Detection<a class="headerlink" href="#automatic-end-detection" title="Link to this heading">¶</a></h2>
-<p>Certain “unlimited” formats — <code class="docutils literal notranslate"><span class="pre">any_text</span></code>, <code class="docutils literal notranslate"><span class="pre">any_tokens</span></code>, <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>, and <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code> — can consume an unbounded amount of output. To know when to stop, the structural tag compiler automatically detects the <strong>end condition</strong> of the enclosing <code class="docutils literal notranslate"><span class="pre">tag</span></code> and adds it to the format’s internal exclude set.</p>
+<p>Without an explicit length budget, certain “unlimited” formats — <code class="docutils literal notranslate"><span class="pre">any_text</span></code>, <code class="docutils literal notranslate"><span class="pre">any_tokens</span></code>,
+<code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>, and <code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code> — can consume an unbounded amount of output. To know
+when to stop, the structural tag compiler automatically detects the <strong>end condition</strong> of the
+enclosing <code class="docutils literal notranslate"><span class="pre">tag</span></code> and adds it to the format’s internal exclude set.</p>
 <p>The detection works by walking up to the nearest enclosing <code class="docutils literal notranslate"><span class="pre">tag</span></code>:</p>
 <ul class="simple">
 <li><p>If the tag’s <code class="docutils literal notranslate"><span class="pre">end</span></code> is a <strong>string</strong> (or list of strings), the end strings are added to the exclude set of string-level unlimited formats (<code class="docutils literal notranslate"><span class="pre">any_text</span></code>, <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>).</p></li>
@@ -348,10 +351,10 @@ This pattern consists of three parts: a begin tag (<code class="docutils literal
     <span class="n">arg4</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
 
 <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;function=f&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema1</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
-    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">&quot;&lt;function=g&gt;&quot;</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema2</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;&lt;/function&gt;&quot;</span><span class="p">),</span>
+    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">"&lt;function=f&gt;"</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema1</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">"&lt;/function&gt;"</span><span class="p">),</span>
+    <span class="n">StructuralTagItem</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">"&lt;function=g&gt;"</span><span class="p">,</span> <span class="n">schema</span><span class="o">=</span><span class="n">Schema2</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">"&lt;/function&gt;"</span><span class="p">),</span>
 <span class="p">]</span>
-<span class="n">triggers</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&lt;function=&quot;</span><span class="p">]</span>
+<span class="n">triggers</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;function="</span><span class="p">]</span>
 <span class="n">grammar</span> <span class="o">=</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">,</span> <span class="n">triggers</span><span class="p">)</span>
 </pre></div>
 </div>

@@ -415,15 +415,15 @@ by the model.</p></li>
 <p class="rubric">Examples</p>
 <p>Ordinary function tool:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
-    <span class="s2">&quot;llama&quot;</span><span class="p">,</span>
+    <span class="s2">"llama"</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
         <span class="p">{</span>
-            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;location&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+            <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"function"</span><span class="p">,</span>
+            <span class="s2">"function"</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">"name"</span><span class="p">:</span> <span class="s2">"get_weather"</span><span class="p">,</span>
+                <span class="s2">"parameters"</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span>
+                    <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"location"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}},</span>
                 <span class="p">},</span>
             <span class="p">},</span>
         <span class="p">}</span>
@@ -433,15 +433,15 @@ by the model.</p></li>
 </div>
 <p>Harmony with a builtin web search tool:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
-    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="s2">"harmony"</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
         <span class="p">{</span>
-            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;browser.search&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;query&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
-                <span class="s2">&quot;required&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;query&quot;</span><span class="p">],</span>
+            <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"web_search_preview"</span><span class="p">,</span>
+            <span class="s2">"name"</span><span class="p">:</span> <span class="s2">"browser.search"</span><span class="p">,</span>
+            <span class="s2">"parameters"</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span>
+                <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"query"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}},</span>
+                <span class="s2">"required"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"query"</span><span class="p">],</span>
             <span class="p">},</span>
         <span class="p">}</span>
     <span class="p">],</span>
@@ -450,45 +450,45 @@ by the model.</p></li>
 </div>
 <p>Force an ordinary function tool:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
-    <span class="s2">&quot;llama&quot;</span><span class="p">,</span>
+    <span class="s2">"llama"</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
         <span class="p">{</span>
-            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;location&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+            <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"function"</span><span class="p">,</span>
+            <span class="s2">"function"</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">"name"</span><span class="p">:</span> <span class="s2">"get_weather"</span><span class="p">,</span>
+                <span class="s2">"parameters"</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span>
+                    <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"location"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}},</span>
                 <span class="p">},</span>
             <span class="p">},</span>
         <span class="p">}</span>
     <span class="p">],</span>
     <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">},</span>
+        <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"function"</span><span class="p">,</span>
+        <span class="s2">"function"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"get_weather"</span><span class="p">},</span>
     <span class="p">},</span>
 <span class="p">)</span>
 </pre></div>
 </div>
 <p>Force a builtin tool by type and output name:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
-    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="s2">"harmony"</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>
-    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">},</span>
+    <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"web_search_preview"</span><span class="p">},</span>
 <span class="p">)</span>
 </pre></div>
 </div>
 <p>Allow only a subset of tools:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
-    <span class="s2">&quot;harmony&quot;</span><span class="p">,</span>
+    <span class="s2">"harmony"</span><span class="p">,</span>
     <span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="o">...</span><span class="p">],</span>
     <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;allowed_tools&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;allowed_tools&quot;</span><span class="p">:</span> <span class="p">{</span>
-            <span class="s2">&quot;mode&quot;</span><span class="p">:</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;tools&quot;</span><span class="p">:</span> <span class="p">[</span>
-                <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span> <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">}},</span>
-                <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;web_search_preview&quot;</span><span class="p">},</span>
+        <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"allowed_tools"</span><span class="p">,</span>
+        <span class="s2">"allowed_tools"</span><span class="p">:</span> <span class="p">{</span>
+            <span class="s2">"mode"</span><span class="p">:</span> <span class="s2">"auto"</span><span class="p">,</span>
+            <span class="s2">"tools"</span><span class="p">:</span> <span class="p">[</span>
+                <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"function"</span><span class="p">,</span> <span class="s2">"function"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"get_weather"</span><span class="p">}},</span>
+                <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"web_search_preview"</span><span class="p">},</span>
             <span class="p">],</span>
         <span class="p">},</span>
     <span class="p">},</span>
@@ -629,19 +629,19 @@ ready to pass to a model-specific structural tag builder.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">function_tools</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="p">,</span> <span class="n">tool_choice</span> <span class="o">=</span> <span class="n">normalize_tool_choice</span><span class="p">(</span>
     <span class="n">tools</span><span class="o">=</span><span class="p">[</span>
         <span class="p">{</span>
-            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
-            <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span>
-                <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">,</span>
-                <span class="s2">&quot;parameters&quot;</span><span class="p">:</span> <span class="p">{</span>
-                    <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;object&quot;</span><span class="p">,</span>
-                    <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;location&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+            <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"function"</span><span class="p">,</span>
+            <span class="s2">"function"</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s2">"name"</span><span class="p">:</span> <span class="s2">"get_weather"</span><span class="p">,</span>
+                <span class="s2">"parameters"</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"object"</span><span class="p">,</span>
+                    <span class="s2">"properties"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"location"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"string"</span><span class="p">}},</span>
                 <span class="p">},</span>
             <span class="p">},</span>
         <span class="p">}</span>
     <span class="p">],</span>
     <span class="n">tool_choice</span><span class="o">=</span><span class="p">{</span>
-        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;function&quot;</span><span class="p">,</span>
-        <span class="s2">&quot;function&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;get_weather&quot;</span><span class="p">},</span>
+        <span class="s2">"type"</span><span class="p">:</span> <span class="s2">"function"</span><span class="p">,</span>
+        <span class="s2">"function"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"get_weather"</span><span class="p">},</span>
     <span class="p">},</span>
 <span class="p">)</span>
 
@@ -668,9 +668,9 @@ argument. Use this to add support for a new model format.</p>
 </dd>
 </dl>
 <p class="rubric">Examples</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">&quot;my_model&quot;</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"my_model"</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_my_model_structural_tag</span><span class="p">(</span>
-    <span class="n">tools</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">tool_choice</span><span class="o">=</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">tool_choice</span><span class="o">=</span><span class="s2">"auto"</span><span class="p">,</span>
     <span class="n">reasoning</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
 <span class="p">):</span>
     <span class="o">...</span>
@@ -748,8 +748,8 @@ assistant message looks like:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">&lt;|</span><span class="nb">open</span><span class="o">|&gt;</span><span class="n">think</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;...&lt;|</span><span class="n">close</span><span class="o">|&gt;</span><span class="n">think</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;</span>
 <span class="o">&lt;|</span><span class="nb">open</span><span class="o">|&gt;</span><span class="n">response</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;...&lt;|</span><span class="n">close</span><span class="o">|&gt;</span><span class="n">response</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;</span>
 <span class="o">&lt;|</span><span class="nb">open</span><span class="o">|&gt;</span><span class="n">tools</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;</span>
-    <span class="o">&lt;|</span><span class="nb">open</span><span class="o">|&gt;</span><span class="n">call</span> <span class="n">tool</span><span class="o">=</span><span class="s2">&quot;NAME&quot;</span> <span class="n">index</span><span class="o">=</span><span class="s2">&quot;1&quot;</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;</span>
-        <span class="o">&lt;|</span><span class="nb">open</span><span class="o">|&gt;</span><span class="n">argument</span> <span class="n">key</span><span class="o">=</span><span class="s2">&quot;KEY&quot;</span> <span class="nb">type</span><span class="o">=</span><span class="s2">&quot;TYPE&quot;</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;</span><span class="n">VALUE</span><span class="o">&lt;|</span><span class="n">close</span><span class="o">|&gt;</span><span class="n">argument</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;</span>
+    <span class="o">&lt;|</span><span class="nb">open</span><span class="o">|&gt;</span><span class="n">call</span> <span class="n">tool</span><span class="o">=</span><span class="s2">"NAME"</span> <span class="n">index</span><span class="o">=</span><span class="s2">"1"</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;</span>
+        <span class="o">&lt;|</span><span class="nb">open</span><span class="o">|&gt;</span><span class="n">argument</span> <span class="n">key</span><span class="o">=</span><span class="s2">"KEY"</span> <span class="nb">type</span><span class="o">=</span><span class="s2">"TYPE"</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;</span><span class="n">VALUE</span><span class="o">&lt;|</span><span class="n">close</span><span class="o">|&gt;</span><span class="n">argument</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;</span>
         <span class="o">...</span>
     <span class="o">&lt;|</span><span class="n">close</span><span class="o">|&gt;</span><span class="n">call</span><span class="o">&lt;|</span><span class="n">sep</span><span class="o">|&gt;</span>
     <span class="o">...</span>

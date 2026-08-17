@@ -278,7 +278,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for xgrammar.grammar</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;This module provides classes representing grammars.&quot;&quot;&quot;</span>
+<span></span><span class="sd">"""This module provides classes representing grammars."""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">overload</span>
@@ -294,8 +294,8 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_convert_instance_to_str</span><span class="p">(</span><span class="n">instance</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">StructuralTag</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a instance to a string representation. It returns the schema in string format because</span>
-<span class="sd">    it&#39;s faster to send to C++.</span>
+<span class="w">    </span><span class="sd">"""Convert a instance to a string representation. It returns the schema in string format because</span>
+<span class="sd">    it's faster to send to C++.</span>
 
 <span class="sd">    This function handles different instance input types and converts them to a JSON string:</span>
 <span class="sd">    - StructuralTag.</span>
@@ -319,7 +319,7 @@
 <span class="sd">        When the instance type is not supported.</span>
 <span class="sd">    TypeError</span>
 <span class="sd">        When he dictionary is not serializable.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">instance</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
@@ -327,12 +327,12 @@
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">StructuralTag</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">instance</span><span class="o">.</span><span class="n">model_dump_json</span><span class="p">()</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid instance type&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Invalid instance type"</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_convert_schema_to_str</span><span class="p">(</span><span class="n">schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Type</span><span class="p">[</span><span class="n">BaseModel</span><span class="p">],</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a schema to a string representation. It returns the schema in string format because</span>
-<span class="sd">    it&#39;s faster to send to C++.</span>
+<span class="w">    </span><span class="sd">"""Convert a schema to a string representation. It returns the schema in string format because</span>
+<span class="sd">    it's faster to send to C++.</span>
 
 <span class="sd">    This function handles different schema input types and converts them to a JSON string:</span>
 <span class="sd">    - Pydantic models are converted using their schema methods</span>
@@ -356,25 +356,25 @@
 <span class="sd">        When the schema type is not supported.</span>
 <span class="sd">    TypeError</span>
 <span class="sd">        When the dictionary is not serializable.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">issubclass</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="n">BaseModel</span><span class="p">):</span>
-        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="s2">&quot;model_json_schema&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="s2">"model_json_schema"</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">schema</span><span class="o">.</span><span class="n">model_json_schema</span><span class="p">())</span>
-        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="s2">&quot;schema_json&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="s2">"schema_json"</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">schema</span><span class="o">.</span><span class="n">schema_json</span><span class="p">())</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The schema should have a model_json_schema or json_schema method.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The schema should have a model_json_schema or json_schema method."</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">schema</span>
     <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">schema</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The schema should be a string or a Pydantic model.&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The schema should be a string or a Pydantic model."</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_structural_tag_str_from_args</span><span class="p">(</span><span class="n">args</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">kwargs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the structural tag string from the arguments. It returns the structural tag in string</span>
-<span class="sd">    format because it&#39;s faster to send to C++.</span>
+<span class="w">    </span><span class="sd">"""Get the structural tag string from the arguments. It returns the structural tag in string</span>
+<span class="sd">    format because it's faster to send to C++.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -392,30 +392,30 @@
 <span class="sd">    ------</span>
 <span class="sd">    TypeError</span>
 <span class="sd">        When the arguments are invalid.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="n">StructuralTag</span><span class="p">)):</span>
             <span class="k">return</span> <span class="n">_convert_instance_to_str</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Invalid argument type for from_structural_tag&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"Invalid argument type for from_structural_tag"</span><span class="p">)</span>
     <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="nb">list</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="nb">list</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">StructuralTag</span><span class="o">.</span><span class="n">from_legacy_structural_tag</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">model_dump_json</span><span class="p">(</span>
             <span class="n">indent</span><span class="o">=</span><span class="kc">None</span>
         <span class="p">)</span>
-    <span class="k">elif</span> <span class="s2">&quot;structural_tag&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">_convert_instance_to_str</span><span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;structural_tag&quot;</span><span class="p">])</span>
-    <span class="k">elif</span> <span class="s2">&quot;tags&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="s2">&quot;triggers&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="s2">"structural_tag"</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">_convert_instance_to_str</span><span class="p">(</span><span class="n">kwargs</span><span class="p">[</span><span class="s2">"structural_tag"</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="s2">"tags"</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="s2">"triggers"</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">StructuralTag</span><span class="o">.</span><span class="n">from_legacy_structural_tag</span><span class="p">(</span>
-            <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;tags&quot;</span><span class="p">],</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;triggers&quot;</span><span class="p">]</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s2">"tags"</span><span class="p">],</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">"triggers"</span><span class="p">]</span>
         <span class="p">)</span><span class="o">.</span><span class="n">model_dump_json</span><span class="p">(</span><span class="n">indent</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Invalid arguments for from_structural_tag&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"Invalid arguments for from_structural_tag"</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="Grammar">
 <a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Grammar</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;This class represents a grammar object in XGrammar, and can be used later in the</span>
+<span class="w">    </span><span class="sd">"""This class represents a grammar object in XGrammar, and can be used later in the</span>
 <span class="sd">    grammar-guided generation.</span>
 
 <span class="sd">    The Grammar object supports context-free grammar (CFG). EBNF (extended Backus-Naur Form) is</span>
@@ -424,26 +424,26 @@
 <span class="sd">    https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.</span>
 
 <span class="sd">    When printed, the grammar will be converted to GBNF format.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
 <div class="viewcode-block" id="Grammar.__str__">
 <a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.__str__">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Print the BNF grammar to a string, in EBNF format.</span>
+<span class="w">        </span><span class="sd">"""Print the BNF grammar to a string, in EBNF format.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        grammar_string : str</span>
 <span class="sd">            The BNF grammar string.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">to_string</span><span class="p">())</span></div>
 
 
 <div class="viewcode-block" id="Grammar.from_ebnf">
 <a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.from_ebnf">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">from_ebnf</span><span class="p">(</span><span class="n">ebnf_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;root&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct a grammar from EBNF string. The EBNF string should follow the format</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_ebnf</span><span class="p">(</span><span class="n">ebnf_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"root"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Grammar"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Construct a grammar from EBNF string. The EBNF string should follow the format</span>
 <span class="sd">        in https://github.com/ggerganov/llama.cpp/blob/master/grammars/README.md.</span>
 
 <span class="sd">        Parameters</span>
@@ -451,14 +451,14 @@
 <span class="sd">        ebnf_string : str</span>
 <span class="sd">            The grammar string in EBNF format.</span>
 
-<span class="sd">        root_rule_name : str, default: &quot;root&quot;</span>
+<span class="sd">        root_rule_name : str, default: "root"</span>
 <span class="sd">            The name of the root rule in the grammar.</span>
 
 <span class="sd">        Raises</span>
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            When converting the regex pattern fails, with details about the parsing error.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_ebnf</span><span class="p">(</span><span class="n">ebnf_string</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">))</span></div>
 
 
@@ -475,8 +475,8 @@
         <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">print_converted_ebnf</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct a grammar from JSON schema. Pydantic model or JSON schema string can be</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Grammar"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Construct a grammar from JSON schema. Pydantic model or JSON schema string can be</span>
 <span class="sd">        used to specify the schema.</span>
 
 <span class="sd">        It allows any whitespace by default. If user want to specify the format of the JSON,</span>
@@ -505,9 +505,9 @@
 <span class="sd">            details.</span>
 
 <span class="sd">        separators : Optional[Tuple[str, str]], default: None</span>
-<span class="sd">            Two separators used in the schema: comma and colon. Examples: (&quot;,&quot;, &quot;:&quot;), (&quot;, &quot;, &quot;: &quot;).</span>
-<span class="sd">            If None, the default separators will be used: (&quot;,&quot;, &quot;: &quot;) when the indent is not None,</span>
-<span class="sd">            and (&quot;, &quot;, &quot;: &quot;) otherwise.</span>
+<span class="sd">            Two separators used in the schema: comma and colon. Examples: (",", ":"), (", ", ": ").</span>
+<span class="sd">            If None, the default separators will be used: (",", ": ") when the indent is not None,</span>
+<span class="sd">            and (", ", ": ") otherwise.</span>
 
 <span class="sd">        strict_mode : bool, default: True</span>
 <span class="sd">            Whether to use strict mode. In strict mode, the generated grammar will not allow</span>
@@ -529,9 +529,9 @@
 <span class="sd">        any_order : bool, default: False</span>
 <span class="sd">            Whether object properties may appear in any order.</span>
 
-<span class="sd">            - False: properties follow the schema&#39;s declared order, fully validated (required</span>
+<span class="sd">            - False: properties follow the schema's declared order, fully validated (required</span>
 <span class="sd">              keys present, no duplicates).</span>
-<span class="sd">            - True: properties may appear in any order; only key validity and each key&#39;s value</span>
+<span class="sd">            - True: properties may appear in any order; only key validity and each key's value</span>
 <span class="sd">              schema are enforced. Key presence and uniqueness are not checked, so required keys</span>
 <span class="sd">              may be missing and keys may repeat. The entry count is bounded to</span>
 <span class="sd">              ``[max(minProperties, n_required), maxProperties]`` (unbounded when maxProperties</span>
@@ -548,7 +548,7 @@
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            When converting the json schema fails, with details about the parsing error.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">schema_str</span> <span class="o">=</span> <span class="n">_convert_schema_to_str</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_json_schema</span><span class="p">(</span>
@@ -567,8 +567,8 @@
 <div class="viewcode-block" id="Grammar.from_regex">
 <a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.from_regex">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">from_regex</span><span class="p">(</span><span class="n">regex_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">print_converted_ebnf</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a grammar from a regular expression string.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_regex</span><span class="p">(</span><span class="n">regex_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">print_converted_ebnf</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Grammar"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a grammar from a regular expression string.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -588,7 +588,7 @@
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            When parsing the regex pattern fails, with details about the parsing error.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_regex</span><span class="p">(</span><span class="n">regex_string</span><span class="p">,</span> <span class="n">print_converted_ebnf</span><span class="p">)</span>
         <span class="p">)</span></div>
@@ -600,10 +600,10 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">from_lark</span><span class="p">(</span>
         <span class="n">lark_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="o">*</span><span class="p">,</span>
-        <span class="n">tokenizer_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">&quot;TokenizerInfo&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">named_grammars</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;Grammar&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a grammar from Lark syntax.</span>
+        <span class="n">tokenizer_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="s2">"TokenizerInfo"</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">named_grammars</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="s2">"Grammar"</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Grammar"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a grammar from Lark syntax.</span>
 
 <span class="sd">        The grammar must define a ``start`` rule. Core rules, terminals, regular</span>
 <span class="sd">        expressions, repetition, ``%ignore``, ``%import common``, inline ``%json``,</span>
@@ -622,23 +622,23 @@
 <span class="sd">            Grammars referenced by ``@name`` in the Lark source. String values</span>
 <span class="sd">            contain Lark grammar sources with their own ``start`` rules. Dictionary</span>
 <span class="sd">            keys are passed without the leading ``@``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">tokenizer_handle</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">tokenizer_info</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">_handle</span>
         <span class="k">if</span> <span class="n">named_grammars</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">named_grammars</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">named_grammars</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;named_grammars must be a dictionary&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"named_grammars must be a dictionary"</span><span class="p">)</span>
         <span class="n">names</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">values</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">grammar_or_source</span> <span class="ow">in</span> <span class="n">named_grammars</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;named grammar names must be strings&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"named grammar names must be strings"</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">grammar_or_source</span><span class="p">,</span> <span class="n">Grammar</span><span class="p">):</span>
                 <span class="n">value</span> <span class="o">=</span> <span class="n">grammar_or_source</span><span class="o">.</span><span class="n">_handle</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">grammar_or_source</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
                 <span class="n">value</span> <span class="o">=</span> <span class="n">grammar_or_source</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;named grammar values must be Grammar instances or Lark strings&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"named grammar values must be Grammar instances or Lark strings"</span><span class="p">)</span>
             <span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
             <span class="n">values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
@@ -650,21 +650,21 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_structural_tag</span><span class="p">(</span>
         <span class="n">structural_tag</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">StructuralTag</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span> <span class="o">...</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Grammar"</span><span class="p">:</span> <span class="o">...</span>
 
     <span class="nd">@overload</span>
     <span class="nd">@staticmethod</span>
     <span class="nd">@deprecated</span><span class="p">(</span>
-        <span class="s2">&quot;from_structural_tag(tags, triggers) is deprecated. Construct structural tag with the &quot;</span>
-        <span class="s2">&quot;StructuralTag class instead.&quot;</span>
+        <span class="s2">"from_structural_tag(tags, triggers) is deprecated. Construct structural tag with the "</span>
+        <span class="s2">"StructuralTag class instead."</span>
     <span class="p">)</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">from_structural_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span> <span class="o">...</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_structural_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">StructuralTagItem</span><span class="p">],</span> <span class="n">triggers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">"Grammar"</span><span class="p">:</span> <span class="o">...</span>
 
 <div class="viewcode-block" id="Grammar.from_structural_tag">
 <a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.from_structural_tag">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">from_structural_tag</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a grammar from a structural tag. See the Structural Tag Usage in XGrammar</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">from_structural_tag</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Grammar"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a grammar from a structural tag. See the Structural Tag Usage in XGrammar</span>
 <span class="sd">        documentation for its usage.</span>
 
 <span class="sd">        This method supports two calling patterns:</span>
@@ -711,7 +711,7 @@
 <span class="sd">        grammar will allow any following output, until the next trigger is encountered. See the</span>
 <span class="sd">        Advanced Topics of the Structural Tag in XGrammar documentation for its semantic.</span>
 <span class="sd">        Structural Tag in XGrammar documentation for its semantic.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">structural_tag_str</span> <span class="o">=</span> <span class="n">_get_structural_tag_str_from_args</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_structural_tag</span><span class="p">(</span><span class="n">structural_tag_str</span><span class="p">))</span></div>
 
@@ -719,23 +719,23 @@
 <div class="viewcode-block" id="Grammar.builtin_json_grammar">
 <a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.builtin_json_grammar">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">builtin_json_grammar</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the grammar of standard JSON. This is compatible with the official JSON grammar</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">builtin_json_grammar</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="s2">"Grammar"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Get the grammar of standard JSON. This is compatible with the official JSON grammar</span>
 <span class="sd">        specification in https://www.json.org/json-en.html.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        grammar : Grammar</span>
 <span class="sd">            The JSON grammar.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">builtin_json_grammar</span><span class="p">())</span></div>
 
 
 <div class="viewcode-block" id="Grammar.concat">
 <a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.concat">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">concat</span><span class="p">(</span><span class="o">*</span><span class="n">grammars</span><span class="p">:</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a grammar that matches the concatenation of the grammars in the list. That is</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">concat</span><span class="p">(</span><span class="o">*</span><span class="n">grammars</span><span class="p">:</span> <span class="s2">"Grammar"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Grammar"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a grammar that matches the concatenation of the grammars in the list. That is</span>
 <span class="sd">        equivalent to using the `+` operator to concatenate the grammars in the list.</span>
 
 <span class="sd">        Parameters</span>
@@ -747,7 +747,7 @@
 <span class="sd">        -------</span>
 <span class="sd">        grammar : Grammar</span>
 <span class="sd">            The concatenation of the grammars.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">grammar_handles</span> <span class="o">=</span> <span class="p">[</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span> <span class="k">for</span> <span class="n">grammar</span> <span class="ow">in</span> <span class="n">grammars</span><span class="p">]</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">concat</span><span class="p">(</span><span class="n">grammar_handles</span><span class="p">))</span></div>
 
@@ -755,8 +755,8 @@
 <div class="viewcode-block" id="Grammar.union">
 <a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.union">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">union</span><span class="p">(</span><span class="o">*</span><span class="n">grammars</span><span class="p">:</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a grammar that matches any of the grammars in the list. That is equivalent to</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">union</span><span class="p">(</span><span class="o">*</span><span class="n">grammars</span><span class="p">:</span> <span class="s2">"Grammar"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Grammar"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a grammar that matches any of the grammars in the list. That is equivalent to</span>
 <span class="sd">        using the `|` operator to concatenate the grammars in the list.</span>
 
 <span class="sd">        Parameters</span>
@@ -768,7 +768,7 @@
 <span class="sd">        -------</span>
 <span class="sd">        grammar : Grammar</span>
 <span class="sd">            The union of the grammars.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">grammar_handles</span> <span class="o">=</span> <span class="p">[</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span> <span class="k">for</span> <span class="n">grammar</span> <span class="ow">in</span> <span class="n">grammars</span><span class="p">]</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="n">grammar_handles</span><span class="p">))</span></div>
 
@@ -776,21 +776,21 @@
 <div class="viewcode-block" id="Grammar.serialize_json">
 <a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.serialize_json">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">serialize_json</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Serialize the grammar to a JSON string.</span>
+<span class="w">        </span><span class="sd">"""Serialize the grammar to a JSON string.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        json_string : str</span>
 <span class="sd">            The JSON string.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">())</span></div>
 
 
 <div class="viewcode-block" id="Grammar.deserialize_json">
 <a class="viewcode-back" href="../../api/python/grammar.html#xgrammar.Grammar.deserialize_json">[docs]</a>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">deserialize_json</span><span class="p">(</span><span class="n">json_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Grammar&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Deserialize a grammar from a JSON string.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">deserialize_json</span><span class="p">(</span><span class="n">json_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Grammar"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Deserialize a grammar from a JSON string.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -810,7 +810,7 @@
 <span class="sd">            When the JSON string does not follow the serialization format of the grammar.</span>
 <span class="sd">        DeserializeVersionError</span>
 <span class="sd">            When the __VERSION__ field in the JSON string is not the same as the current version.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">deserialize_json</span><span class="p">(</span><span class="n">json_string</span><span class="p">))</span></div>
 </div>
 

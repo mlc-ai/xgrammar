@@ -278,7 +278,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for xgrammar.exception</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Exceptions in XGrammar.&quot;&quot;&quot;</span>
+<span></span><span class="sd">"""Exceptions in XGrammar."""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">tvm_ffi</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_error</span>
 
@@ -286,35 +286,35 @@
 <div class="viewcode-block" id="DeserializeFormatError">
 <a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.DeserializeFormatError">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">DeserializeFormatError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when the deserialization format is invalid.&quot;&quot;&quot;</span></div>
+<span class="w">    </span><span class="sd">"""Raised when the deserialization format is invalid."""</span></div>
 
 
 
 <div class="viewcode-block" id="DeserializeVersionError">
 <a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.DeserializeVersionError">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">DeserializeVersionError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when the serialization format is invalid.&quot;&quot;&quot;</span></div>
+<span class="w">    </span><span class="sd">"""Raised when the serialization format is invalid."""</span></div>
 
 
 
 <div class="viewcode-block" id="InvalidStructuralTagError">
 <a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.InvalidStructuralTagError">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">InvalidStructuralTagError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when the structural tag is invalid.&quot;&quot;&quot;</span></div>
+<span class="w">    </span><span class="sd">"""Raised when the structural tag is invalid."""</span></div>
 
 
 
 <div class="viewcode-block" id="InvalidJSONError">
 <a class="viewcode-back" href="../../api/python/exception.html#xgrammar.exception.InvalidJSONError">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">InvalidJSONError</span><span class="p">(</span><span class="ne">RuntimeError</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when the JSON is invalid.&quot;&quot;&quot;</span></div>
+<span class="w">    </span><span class="sd">"""Raised when the JSON is invalid."""</span></div>
 
 
 
-<span class="n">register_error</span><span class="p">(</span><span class="s2">&quot;DeserializeFormatError&quot;</span><span class="p">,</span> <span class="n">DeserializeFormatError</span><span class="p">)</span>
-<span class="n">register_error</span><span class="p">(</span><span class="s2">&quot;DeserializeVersionError&quot;</span><span class="p">,</span> <span class="n">DeserializeVersionError</span><span class="p">)</span>
-<span class="n">register_error</span><span class="p">(</span><span class="s2">&quot;InvalidStructuralTagError&quot;</span><span class="p">,</span> <span class="n">InvalidStructuralTagError</span><span class="p">)</span>
-<span class="n">register_error</span><span class="p">(</span><span class="s2">&quot;InvalidJSONError&quot;</span><span class="p">,</span> <span class="n">InvalidJSONError</span><span class="p">)</span>
+<span class="n">register_error</span><span class="p">(</span><span class="s2">"DeserializeFormatError"</span><span class="p">,</span> <span class="n">DeserializeFormatError</span><span class="p">)</span>
+<span class="n">register_error</span><span class="p">(</span><span class="s2">"DeserializeVersionError"</span><span class="p">,</span> <span class="n">DeserializeVersionError</span><span class="p">)</span>
+<span class="n">register_error</span><span class="p">(</span><span class="s2">"InvalidStructuralTagError"</span><span class="p">,</span> <span class="n">InvalidStructuralTagError</span><span class="p">)</span>
+<span class="n">register_error</span><span class="p">(</span><span class="s2">"InvalidJSONError"</span><span class="p">,</span> <span class="n">InvalidJSONError</span><span class="p">)</span>
 </pre></div>
         </article>
       </div>

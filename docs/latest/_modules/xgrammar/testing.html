@@ -278,10 +278,10 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for xgrammar.testing</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Testing utilities.</span>
+<span></span><span class="sd">"""Testing utilities.</span>
 
 <span class="sd">The APIs in this module are used for testing and debugging and are prone to</span>
-<span class="sd">change. Don&#39;t use them in production.&quot;&quot;&quot;</span>
+<span class="sd">change. Don't use them in production."""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Type</span><span class="p">,</span> <span class="n">Union</span>
@@ -307,11 +307,11 @@
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">strict_mode</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">json_format</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span>
-        <span class="s2">&quot;json&quot;</span><span class="p">,</span> <span class="s2">&quot;qwen_xml&quot;</span><span class="p">,</span> <span class="s2">&quot;minimax_xml&quot;</span><span class="p">,</span> <span class="s2">&quot;deepseek_xml&quot;</span><span class="p">,</span> <span class="s2">&quot;glm_xml&quot;</span><span class="p">,</span> <span class="s2">&quot;cohere_xml&quot;</span><span class="p">,</span> <span class="s2">&quot;kimi_k3_xml&quot;</span>
-    <span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;json&quot;</span><span class="p">,</span>
+        <span class="s2">"json"</span><span class="p">,</span> <span class="s2">"qwen_xml"</span><span class="p">,</span> <span class="s2">"minimax_xml"</span><span class="p">,</span> <span class="s2">"deepseek_xml"</span><span class="p">,</span> <span class="s2">"glm_xml"</span><span class="p">,</span> <span class="s2">"cohere_xml"</span><span class="p">,</span> <span class="s2">"kimi_k3_xml"</span>
+    <span class="p">]</span> <span class="o">=</span> <span class="s2">"json"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert JSON schema string to BNF grammar string. For test purposes.</span>
+<span class="w">    </span><span class="sd">"""Convert JSON schema string to BNF grammar string. For test purposes.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -322,9 +322,9 @@
 <span class="sd">        The number of spaces for indentation. If None, the output will be in one line.</span>
 
 <span class="sd">    separators : Optional[Tuple[str, str]], default: None</span>
-<span class="sd">        Two separators used in the schema: comma and colon. Examples: (&quot;,&quot;, &quot;:&quot;), (&quot;, &quot;, &quot;: &quot;).</span>
-<span class="sd">        If None, the default separators will be used: (&quot;,&quot;, &quot;: &quot;) when the indent is not None,</span>
-<span class="sd">        and (&quot;, &quot;, &quot;: &quot;) otherwise.</span>
+<span class="sd">        Two separators used in the schema: comma and colon. Examples: (",", ":"), (", ", ": ").</span>
+<span class="sd">        If None, the default separators will be used: (",", ": ") when the indent is not None,</span>
+<span class="sd">        and (", ", ": ") otherwise.</span>
 
 <span class="sd">    strict_mode : bool, default: True</span>
 <span class="sd">        Whether to use strict mode. In strict mode, the generated grammar will not allow</span>
@@ -340,16 +340,16 @@
 <span class="sd">        If specified, it will limit the number of whitespace characters to at most max_whitespace_cnt.</span>
 <span class="sd">        It should be a positive integer.</span>
 
-<span class="sd">    json_format : str, default: &quot;json&quot;</span>
-<span class="sd">        The root format of the generated grammar. One of &quot;json&quot;, &quot;qwen_xml&quot;, &quot;minimax_xml&quot;,</span>
-<span class="sd">        &quot;deepseek_xml&quot;, &quot;glm_xml&quot;, &quot;cohere_xml&quot;, &quot;kimi_k3_xml&quot;. Formats other than &quot;json&quot; generate an</span>
+<span class="sd">    json_format : str, default: "json"</span>
+<span class="sd">        The root format of the generated grammar. One of "json", "qwen_xml", "minimax_xml",</span>
+<span class="sd">        "deepseek_xml", "glm_xml", "cohere_xml", "kimi_k3_xml". Formats other than "json" generate an</span>
 <span class="sd">        XML-style root object for tool calling, while the inner values remain JSON-style.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
 <span class="sd">    bnf_string : str</span>
 <span class="sd">        The BNF grammar string.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">schema_str</span> <span class="o">=</span> <span class="n">_convert_schema_to_str</span><span class="p">(</span><span class="n">schema</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_json_schema_to_ebnf</span><span class="p">(</span>
         <span class="n">schema_str</span><span class="p">,</span>
@@ -367,7 +367,7 @@
 <div class="viewcode-block" id="_regex_to_ebnf">
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing._regex_to_ebnf">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">_regex_to_ebnf</span><span class="p">(</span><span class="n">regex</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">with_rule_name</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sa">r</span><span class="sd">&quot;&quot;&quot;Convert a regex string to BNF grammar string. For test purposes. The regex grammar</span>
+<span class="w">    </span><span class="sa">r</span><span class="sd">"""Convert a regex string to BNF grammar string. For test purposes. The regex grammar</span>
 <span class="sd">    follows the syntax in JavaScript (ECMA 262). Check</span>
 <span class="sd">    https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Regular_expressions</span>
 <span class="sd">    for a tutorial. Currently the following features are not supported:</span>
@@ -389,15 +389,15 @@
 <span class="sd">    -------</span>
 <span class="sd">    bnf_string : str</span>
 <span class="sd">        The BNF grammar string converted from the input regex.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_regex_to_ebnf</span><span class="p">(</span><span class="n">regex</span><span class="p">,</span> <span class="n">with_rule_name</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="_ebnf_to_grammar_no_normalization">
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing._ebnf_to_grammar_no_normalization">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">_ebnf_to_grammar_no_normalization</span><span class="p">(</span><span class="n">ebnf_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;root&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Convert a BNF grammar string to a Grammar object without normalization. For test</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_ebnf_to_grammar_no_normalization</span><span class="p">(</span><span class="n">ebnf_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"root"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Convert a BNF grammar string to a Grammar object without normalization. For test</span>
 <span class="sd">    purposes. The result grammar cannot be compiled / used in GrammarMatcher.</span>
 
 <span class="sd">    Parameters</span>
@@ -409,7 +409,7 @@
 <span class="sd">    -------</span>
 <span class="sd">    grammar : Grammar</span>
 <span class="sd">        The unnormalized Grammar object converted from the input BNF grammar string.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
         <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_ebnf_to_grammar_no_normalization</span><span class="p">(</span><span class="n">ebnf_string</span><span class="p">,</span> <span class="n">root_rule_name</span><span class="p">)</span>
     <span class="p">)</span></div>
@@ -419,7 +419,7 @@
 <div class="viewcode-block" id="_get_matcher_from_grammar">
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing._get_matcher_from_grammar">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_matcher_from_grammar</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Grammar</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GrammarMatcher</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a GrammarMatcher from a grammar. The tokenizer info will be set to an empty</span>
+<span class="w">    </span><span class="sd">"""Create a GrammarMatcher from a grammar. The tokenizer info will be set to an empty</span>
 <span class="sd">    TokenizerInfo. The result matcher can only accept strings, and cannot accept tokens.</span>
 
 <span class="sd">    Parameters</span>
@@ -432,7 +432,7 @@
 <span class="sd">    -------</span>
 <span class="sd">    matcher : GrammarMatcher</span>
 <span class="sd">        The created grammar matcher.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">TokenizerInfo</span><span class="p">([])</span>
     <span class="n">grammar_compiler</span> <span class="o">=</span> <span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">,</span> <span class="n">cache_enabled</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="n">compiled_grammar</span> <span class="o">=</span> <span class="n">grammar_compiler</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">grammar</span><span class="p">)</span>
@@ -450,7 +450,7 @@
     <span class="n">print_time</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">require_termination</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Check if a grammar accepts a string. For test purposes.</span>
+<span class="w">    </span><span class="sd">"""Check if a grammar accepts a string. For test purposes.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -467,7 +467,7 @@
 <span class="sd">    -------</span>
 <span class="sd">    bool</span>
 <span class="sd">        True if the grammar accepts the string, False otherwise.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">grammar_matcher</span> <span class="o">=</span> <span class="n">_get_matcher_from_grammar</span><span class="p">(</span><span class="n">grammar</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">print_time</span><span class="p">:</span>
@@ -477,7 +477,7 @@
 
     <span class="k">if</span> <span class="n">print_time</span><span class="p">:</span>
         <span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">monotonic_ns</span><span class="p">()</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Accepting </span><span class="si">{</span><span class="n">input_str</span><span class="si">}</span><span class="s2">, result: </span><span class="si">{</span><span class="n">accepted</span><span class="si">}</span><span class="s2">, time: </span><span class="si">{</span><span class="p">(</span><span class="n">end</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e3</span><span class="si">}</span><span class="s2"> us&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Accepting </span><span class="si">{</span><span class="n">input_str</span><span class="si">}</span><span class="s2">, result: </span><span class="si">{</span><span class="n">accepted</span><span class="si">}</span><span class="s2">, time: </span><span class="si">{</span><span class="p">(</span><span class="n">end</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e3</span><span class="si">}</span><span class="s2"> us"</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="ow">not</span> <span class="n">accepted</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">False</span>
@@ -492,7 +492,7 @@
 <div class="viewcode-block" id="_is_rule_fsm_accept_string">
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing._is_rule_fsm_accept_string">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">_is_rule_fsm_accept_string</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">,</span> <span class="n">rule_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">input_str</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Check whether a rule&#39;s already-built FSM accepts a string.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Check whether a rule's already-built FSM accepts a string."""</span>
     <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_is_rule_fsm_accept_string</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">,</span> <span class="n">rule_id</span><span class="p">,</span> <span class="n">input_str</span><span class="p">))</span></div>
 
 
@@ -502,7 +502,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_masked_tokens_from_bitmask</span><span class="p">(</span>
     <span class="n">bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the ids of the rejected tokens from the bitmask. Mainly for debug purposes.</span>
+<span class="w">    </span><span class="sd">"""Get the ids of the rejected tokens from the bitmask. Mainly for debug purposes.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -518,11 +518,11 @@
 <span class="sd">    -------</span>
 <span class="sd">    rejected_token_ids : List[int]</span>
 <span class="sd">        A list of rejected token ids.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;bitmask should be on CPU.&quot;</span><span class="p">)</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="s2">"cpu"</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"bitmask should be on CPU."</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">bitmask_dtype</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;bitmask should be of type </span><span class="si">{</span><span class="n">bitmask_dtype</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"bitmask should be of type </span><span class="si">{</span><span class="n">bitmask_dtype</span><span class="si">}</span><span class="s2">."</span><span class="p">)</span>
     <span class="k">return</span> <span class="nb">list</span><span class="p">(</span>
         <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_get_masked_tokens_from_bitmask</span><span class="p">(</span>
             <span class="n">bitmask</span><span class="o">.</span><span class="n">data_ptr</span><span class="p">(),</span> <span class="nb">list</span><span class="p">(</span><span class="n">bitmask</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">index</span>
@@ -536,7 +536,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_is_single_token_bitmask</span><span class="p">(</span>
     <span class="n">bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Check if the bitmask is a single token bitmask.</span>
+<span class="w">    </span><span class="sd">"""Check if the bitmask is a single token bitmask.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -553,7 +553,7 @@
 <span class="sd">        True if the bitmask is a single token bitmask, False otherwise.</span>
 <span class="sd">    token_id : int</span>
 <span class="sd">        The id of the token if the bitmask is a single token bitmask, -1 otherwise.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">result</span> <span class="o">=</span> <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_is_single_token_bitmask</span><span class="p">(</span>
         <span class="n">bitmask</span><span class="o">.</span><span class="n">data_ptr</span><span class="p">(),</span> <span class="nb">list</span><span class="p">(</span><span class="n">bitmask</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">index</span>
     <span class="p">)</span>
@@ -564,7 +564,7 @@
 <div class="viewcode-block" id="bool_mask_to_bitmask">
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.bool_mask_to_bitmask">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">bool_mask_to_bitmask</span><span class="p">(</span><span class="n">bool_mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get the bitmask from bool mask. If the bool mask does not align with the 32-bit block</span>
+<span class="w">    </span><span class="sd">"""Get the bitmask from bool mask. If the bool mask does not align with the 32-bit block</span>
 <span class="sd">    size, it will add extra 1 paddings.</span>
 
 <span class="sd">    Parameters</span>
@@ -577,7 +577,7 @@
 <span class="sd">    -------</span>
 <span class="sd">    bitmask : torch.Tensor</span>
 <span class="sd">        The rejected token bitmask.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">bool_mask_int32</span> <span class="o">=</span> <span class="n">bool_mask</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
     <span class="c1"># Pad to multiple of 32</span>
     <span class="n">pad_size</span> <span class="o">=</span> <span class="p">(</span><span class="mi">32</span> <span class="o">-</span> <span class="n">bool_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">%</span> <span class="mi">32</span><span class="p">)</span> <span class="o">%</span> <span class="mi">32</span>
@@ -596,7 +596,7 @@
 <div class="viewcode-block" id="bitmask_to_bool_mask">
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.bitmask_to_bool_mask">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">bitmask_to_bool_mask</span><span class="p">(</span><span class="n">bit_mask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Convert a bitmask tensor to a boolean mask tensor.</span>
 
 <span class="sd">    Parameters</span>
@@ -610,19 +610,19 @@
 <span class="sd">    -------</span>
 <span class="sd">    bool_mask : torch.Tensor</span>
 <span class="sd">        The converted boolean mask tensor.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="c1"># Validate input.</span>
-    <span class="k">if</span> <span class="n">bit_mask</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;bit_mask should be on CPU.&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">bit_mask</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">!=</span> <span class="s2">"cpu"</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"bit_mask should be on CPU."</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">bit_mask</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">bitmask_dtype</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;bit_mask should be of type torch.int32.&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"bit_mask should be of type torch.int32."</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">vocab_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">vocab_size</span> <span class="o">=</span> <span class="n">bit_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">32</span>
     <span class="k">if</span> <span class="n">vocab_size</span> <span class="o">&gt;</span> <span class="n">bit_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">32</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="s2">&quot;vocab_size should be less than or equal to the size represented by bit_mask.&quot;</span>
+            <span class="s2">"vocab_size should be less than or equal to the size represented by bit_mask."</span>
         <span class="p">)</span>
 
     <span class="n">bool_mask</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">bit_mask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">vocab_size</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
@@ -637,7 +637,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_get_matcher_from_grammar_and_tokenizer_info</span><span class="p">(</span>
     <span class="n">grammar</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">Grammar</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="n">tokenizer_info</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">TokenizerInfo</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">GrammarMatcher</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a GrammarMatcher from a grammar and tokenizer info.</span>
+<span class="w">    </span><span class="sd">"""Create a GrammarMatcher from a grammar and tokenizer info.</span>
 
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
@@ -654,7 +654,7 @@
 <span class="sd">    -------</span>
 <span class="sd">    matcher : GrammarMatcher</span>
 <span class="sd">        The created grammar matcher.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">tokenizer_info</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">TokenizerInfo</span><span class="p">([])</span>
     <span class="n">grammar_compiler</span> <span class="o">=</span> <span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">,</span> <span class="n">cache_enabled</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -692,8 +692,8 @@
 <div class="viewcode-block" id="_print_grammar_fsms">
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing._print_grammar_fsms">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">_print_grammar_fsms</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Print the FSMs of the grammar. Now the fsms are initialized in the grammar compilation</span>
-<span class="sd">    process.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Print the FSMs of the grammar. Now the fsms are initialized in the grammar compilation</span>
+<span class="sd">    process."""</span>
     <span class="k">return</span> <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">_print_grammar_fsms</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span></div>
 
 
@@ -704,14 +704,14 @@
     <span class="n">retrieve_next_token</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
     <span class="n">retrieve_next_sibling</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
     <span class="n">draft_tokens</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
-    <span class="n">matcher</span><span class="p">:</span> <span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">,</span>
+    <span class="n">matcher</span><span class="p">:</span> <span class="s2">"GrammarMatcher"</span><span class="p">,</span>
     <span class="n">allocate_token_bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
     <span class="n">time_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Backward-compatible wrapper for :meth:`GrammarMatcher.traverse_draft_tree`.</span>
+<span class="w">    </span><span class="sd">"""Backward-compatible wrapper for :meth:`GrammarMatcher.traverse_draft_tree`.</span>
 
 <span class="sd">    Prefer :meth:`xgrammar.GrammarMatcher.traverse_draft_tree` in new code.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="n">matcher</span><span class="o">.</span><span class="n">traverse_draft_tree</span><span class="p">(</span>
         <span class="n">retrieve_next_token</span><span class="p">,</span>
         <span class="n">retrieve_next_sibling</span><span class="p">,</span>
@@ -725,14 +725,14 @@
 <div class="viewcode-block" id="GrammarFunctor">
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">GrammarFunctor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A utility class for transforming grammars. These methods are called during grammar parsing.</span>
-<span class="sd">    For test purposes.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""A utility class for transforming grammars. These methods are called during grammar parsing.</span>
+<span class="sd">    For test purposes."""</span>
 
 <div class="viewcode-block" id="GrammarFunctor.structure_normalizer">
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor.structure_normalizer">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">structure_normalizer</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Normalize the structure of the grammar.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Normalize the structure of the grammar."""</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">grammar_functor</span><span class="o">.</span><span class="n">structure_normalizer</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
         <span class="p">)</span></div>
@@ -742,7 +742,7 @@
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor.rule_inliner">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">rule_inliner</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Inline some rule references in the grammar.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Inline some rule references in the grammar."""</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">grammar_functor</span><span class="o">.</span><span class="n">rule_inliner</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
         <span class="p">)</span></div>
@@ -752,7 +752,7 @@
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor.byte_string_fuser">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">byte_string_fuser</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fuse the byte string elements in the grammar.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Fuse the byte string elements in the grammar."""</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">grammar_functor</span><span class="o">.</span><span class="n">byte_string_fuser</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
         <span class="p">)</span></div>
@@ -762,7 +762,7 @@
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor.dead_code_eliminator">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">dead_code_eliminator</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Eliminate the not referenced rules in the grammar.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Eliminate the not referenced rules in the grammar."""</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">grammar_functor</span><span class="o">.</span><span class="n">dead_code_eliminator</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
         <span class="p">)</span></div>
@@ -772,7 +772,7 @@
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor.lookahead_assertion_analyzer">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">lookahead_assertion_analyzer</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Analyze and add lookahead assertions in the grammar.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Analyze and add lookahead assertions in the grammar."""</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">grammar_functor</span><span class="o">.</span><span class="n">lookahead_assertion_analyzer</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
         <span class="p">)</span></div>
@@ -782,7 +782,7 @@
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor.grammar_optimizer">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">grammar_optimizer</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Optimize the grammar.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Optimize the grammar."""</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">grammar_functor</span><span class="o">.</span><span class="n">grammar_optimizer</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
         <span class="p">)</span></div>
@@ -792,7 +792,7 @@
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor.fsm_builder">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">fsm_builder</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build rule FSMs without running other grammar passes.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Build rule FSMs without running other grammar passes."""</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">grammar_functor</span><span class="o">.</span><span class="n">fsm_builder</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
         <span class="p">)</span></div>
@@ -802,7 +802,7 @@
 <a class="viewcode-back" href="../../api/python/testing.html#xgrammar.testing.GrammarFunctor.repetition_normalizer">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">repetition_normalizer</span><span class="p">(</span><span class="n">grammar</span><span class="p">:</span> <span class="n">Grammar</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Grammar</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Normalize the repetition expression.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Normalize the repetition expression."""</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">grammar_functor</span><span class="o">.</span><span class="n">repetition_normalizer</span><span class="p">(</span><span class="n">grammar</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span>
         <span class="p">)</span></div>

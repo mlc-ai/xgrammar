@@ -278,9 +278,9 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for xgrammar.matcher</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Match the output of the LLM to the specified grammar, then generate the mask for the next</span>
+<span></span><span class="sd">"""Match the output of the LLM to the specified grammar, then generate the mask for the next</span>
 <span class="sd">token.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
@@ -293,13 +293,13 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">.compiler</span><span class="w"> </span><span class="kn">import</span> <span class="n">CompiledGrammar</span>
 
 <span class="n">bitmask_dtype</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">int32</span>
-<span class="sd">&quot;&quot;&quot;The dtype of the bitmask: int32.&quot;&quot;&quot;</span>
+<span class="sd">"""The dtype of the bitmask: int32."""</span>
 
 
 <div class="viewcode-block" id="get_bitmask_shape">
 <a class="viewcode-back" href="../../api/python/bitmask_ops.html#xgrammar.get_bitmask_shape">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_bitmask_shape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the shape of the bitmask: (batch_size, ceil(vocab_size / 32)).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Return the shape of the bitmask: (batch_size, ceil(vocab_size / 32))."""</span>
     <span class="k">return</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">vocab_size</span> <span class="o">/</span> <span class="mi">32</span><span class="p">))</span></div>
 
 
@@ -310,7 +310,7 @@
 <div class="viewcode-block" id="allocate_token_bitmask">
 <a class="viewcode-back" href="../../api/python/bitmask_ops.html#xgrammar.allocate_token_bitmask">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">allocate_token_bitmask</span><span class="p">(</span><span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on</span>
+<span class="w">    </span><span class="sd">"""Allocate the bitmask for the next token prediction. The bitmask is an int32 tensor on</span>
 <span class="sd">    CPU with shape (batch_size, ceil(vocab_size / 32)). Users who have their own needs to</span>
 <span class="sd">    manage CUDA memory can construct the tensor with get_bitmask_shape and bitmask_dtype</span>
 <span class="sd">    themselves.</span>
@@ -330,7 +330,7 @@
 <span class="sd">    -------</span>
 <span class="sd">    bitmask : torch.Tensor</span>
 <span class="sd">        The allocated bitmask.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="c1"># In CUDA, use pinned memory to speed up data transfer from CPU to GPU</span>
     <span class="k">return</span> <span class="n">torch</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">get_bitmask_shape</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">),</span> <span class="n">_FULL_MASK</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">bitmask_dtype</span><span class="p">)</span></div>
 
@@ -339,7 +339,7 @@
 <div class="viewcode-block" id="reset_token_bitmask">
 <a class="viewcode-back" href="../../api/python/bitmask_ops.html#xgrammar.reset_token_bitmask">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">reset_token_bitmask</span><span class="p">(</span><span class="n">bitmask</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Reset the bitmask to the full mask.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Reset the bitmask to the full mask."""</span>
     <span class="n">bitmask</span><span class="o">.</span><span class="n">fill_</span><span class="p">(</span><span class="n">_FULL_MASK</span><span class="p">)</span></div>
 
 
@@ -352,9 +352,9 @@
     <span class="o">*</span><span class="p">,</span>
     <span class="n">vocab_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">indices</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="n">backend</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">,</span> <span class="s2">&quot;cpu&quot;</span><span class="p">,</span> <span class="s2">&quot;cuda&quot;</span><span class="p">,</span> <span class="s2">&quot;triton&quot;</span><span class="p">,</span> <span class="s2">&quot;torch_compile&quot;</span><span class="p">,</span> <span class="s2">&quot;torch_native&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">,</span>
+    <span class="n">backend</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"cpu"</span><span class="p">,</span> <span class="s2">"cuda"</span><span class="p">,</span> <span class="s2">"triton"</span><span class="p">,</span> <span class="s2">"torch_compile"</span><span class="p">,</span> <span class="s2">"torch_native"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply the bitmask to the logits in-place. The bitmask is a 01 bitwise compressed tensor,</span>
+<span class="w">    </span><span class="sd">"""Apply the bitmask to the logits in-place. The bitmask is a 01 bitwise compressed tensor,</span>
 <span class="sd">    where 0 means the token is masked and 1 means the token is not masked. It can be generated by</span>
 <span class="sd">    allocate_token_bitmask and filled by fill_next_token_bitmask. After applying the bitmask, the</span>
 <span class="sd">    masked logits will be set to -inf.</span>
@@ -382,7 +382,7 @@
 <span class="sd">        bitmask.shape[-1] * 32). In this case, if the bitmask covers fewer tokens than</span>
 <span class="sd">        logits.shape[-1], the trailing logits are left unmasked and out-of-grammar tokens there</span>
 <span class="sd">        (e.g. padded/reserved vocabulary ids) can still be sampled, which may cause the sampled</span>
-<span class="sd">        token to be rejected downstream. Allocate the bitmask with the model&#39;s full (padded)</span>
+<span class="sd">        token to be rejected downstream. Allocate the bitmask with the model's full (padded)</span>
 <span class="sd">        vocabulary size to avoid this. A warning is emitted when this mismatch is detected.</span>
 
 <span class="sd">    Indices:</span>
@@ -425,8 +425,8 @@
 <span class="sd">        A list of indices to specify which logits in the batch to apply the bitmask to. Should be</span>
 <span class="sd">        unique. If None, apply the bitmask to all logits in the batch.</span>
 
-<span class="sd">    backend : Literal[&quot;auto&quot;, &quot;cpu&quot;, &quot;cuda&quot;, &quot;triton&quot;, &quot;torch_compile&quot;, &quot;torch_native&quot;], default: &quot;auto&quot;</span>
-<span class="sd">        The backend where the token bitmask should be applied inplace. If the value is &quot;auto&quot;, then it will</span>
+<span class="sd">    backend : Literal["auto", "cpu", "cuda", "triton", "torch_compile", "torch_native"], default: "auto"</span>
+<span class="sd">        The backend where the token bitmask should be applied inplace. If the value is "auto", then it will</span>
 <span class="sd">        choose the backend according to the type of the logits.</span>
 
 <span class="sd">        * CPU: CPU implementation</span>
@@ -434,62 +434,62 @@
 <span class="sd">        * Torch Compile: If the hardware is not the above, use this. This supports multiple backends, including CPU/CUDA/TPU/ROCm</span>
 <span class="sd">        * CUDA: CUDA native implementation, helpful for C++-based inference engines</span>
 <span class="sd">        * Torch Native: Support more backends such as Kunlun. Its performance may be worse than torch compile.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="s2">&quot;logits and bitmask should be on the same device. &quot;</span>
-            <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;But got logits.device: </span><span class="si">{</span><span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, bitmask.device: </span><span class="si">{</span><span class="n">bitmask</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="s2">"logits and bitmask should be on the same device. "</span>
+            <span class="o">+</span> <span class="sa">f</span><span class="s2">"But got logits.device: </span><span class="si">{</span><span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">, bitmask.device: </span><span class="si">{</span><span class="n">bitmask</span><span class="o">.</span><span class="n">device</span><span class="si">}</span><span class="s2">"</span>
         <span class="p">)</span>
 
     <span class="k">if</span> <span class="n">vocab_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">masked_width</span> <span class="o">=</span> <span class="n">bitmask</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">32</span>
         <span class="k">if</span> <span class="n">masked_width</span> <span class="o">&lt;</span> <span class="n">logits</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
             <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;The bitmask covers only </span><span class="si">{</span><span class="n">masked_width</span><span class="si">}</span><span class="s2"> tokens but logits have &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">logits</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">, so logits[..., </span><span class="si">{</span><span class="n">masked_width</span><span class="si">}</span><span class="s2">:] are left unmasked. &quot;</span>
-                <span class="s2">&quot;Allocate the bitmask with the full vocab size, or pass vocab_size explicitly.&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">"The bitmask covers only </span><span class="si">{</span><span class="n">masked_width</span><span class="si">}</span><span class="s2"> tokens but logits have "</span>
+                <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">logits</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">, so logits[..., </span><span class="si">{</span><span class="n">masked_width</span><span class="si">}</span><span class="s2">:] are left unmasked. "</span>
+                <span class="s2">"Allocate the bitmask with the full vocab size, or pass vocab_size explicitly."</span><span class="p">,</span>
                 <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
             <span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;auto&quot;</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
-            <span class="n">backend</span> <span class="o">=</span> <span class="s2">&quot;cpu&quot;</span>
-        <span class="k">elif</span> <span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">&quot;cuda&quot;</span><span class="p">:</span>
-            <span class="n">backend</span> <span class="o">=</span> <span class="s2">&quot;triton&quot;</span>
+    <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"cpu"</span><span class="p">:</span>
+            <span class="n">backend</span> <span class="o">=</span> <span class="s2">"cpu"</span>
+        <span class="k">elif</span> <span class="n">logits</span><span class="o">.</span><span class="n">device</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s2">"cuda"</span><span class="p">:</span>
+            <span class="n">backend</span> <span class="o">=</span> <span class="s2">"triton"</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">backend</span> <span class="o">=</span> <span class="s2">&quot;torch_compile&quot;</span>
+            <span class="n">backend</span> <span class="o">=</span> <span class="s2">"torch_compile"</span>
 
     <span class="c1"># dispatch to different implementations based on the device</span>
-    <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;cpu&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">"cpu"</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.kernels.apply_token_bitmask_inplace_cpu</span><span class="w"> </span><span class="kn">import</span> <span class="n">apply_token_bitmask_inplace_cpu</span>
 
         <span class="n">apply_token_bitmask_inplace_cpu</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span>
 
-    <span class="k">elif</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;torch_native&quot;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">"torch_native"</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.kernels.apply_token_bitmask_inplace_torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">apply_token_bitmask_inplace_torch</span>
 
         <span class="n">apply_token_bitmask_inplace_torch</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span>
 
-    <span class="k">elif</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;triton&quot;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">"triton"</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.kernels.apply_token_bitmask_inplace_triton</span><span class="w"> </span><span class="kn">import</span> <span class="n">apply_token_bitmask_inplace_triton</span>
 
         <span class="n">apply_token_bitmask_inplace_triton</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span>
 
-    <span class="k">elif</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;torch_compile&quot;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">"torch_compile"</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.kernels.apply_token_bitmask_inplace_torch_compile</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
             <span class="n">apply_token_bitmask_inplace_torch_compile</span><span class="p">,</span>
         <span class="p">)</span>
 
         <span class="n">apply_token_bitmask_inplace_torch_compile</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">vocab_size</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span>
 
-    <span class="k">elif</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">&quot;cuda&quot;</span><span class="p">:</span>
+    <span class="k">elif</span> <span class="n">backend</span> <span class="o">==</span> <span class="s2">"cuda"</span><span class="p">:</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.kernels.apply_token_bitmask_inplace_cuda</span><span class="w"> </span><span class="kn">import</span> <span class="n">apply_token_bitmask_inplace_cuda</span>
 
         <span class="n">apply_token_bitmask_inplace_cuda</span><span class="p">(</span><span class="n">logits</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span>
 
     <span class="k">else</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s1">&#39;Unknown backend: </span><span class="si">{</span><span class="n">backend</span><span class="si">}</span><span class="s1">. The value should be one of them: [&quot;auto&quot;, &quot;cpu&quot;, &quot;cuda&quot;, &quot;triton&quot;, &quot;torch_compile&quot;, &quot;torch_native&quot;]&#39;</span>
+            <span class="sa">f</span><span class="s1">'Unknown backend: </span><span class="si">{</span><span class="n">backend</span><span class="si">}</span><span class="s1">. The value should be one of them: ["auto", "cpu", "cuda", "triton", "torch_compile", "torch_native"]'</span>
         <span class="p">)</span></div>
 
 
@@ -497,7 +497,7 @@
 <div class="viewcode-block" id="GrammarMatcher">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">GrammarMatcher</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Match the output of the LLM to the specified grammar, then generate the mask for the next</span>
+<span class="w">    </span><span class="sd">"""Match the output of the LLM to the specified grammar, then generate the mask for the next</span>
 <span class="sd">    token. This is the core class in the grammar-guided generation.</span>
 
 <span class="sd">    This class maintains a stateful matcher that can accept tokens and strings, then match them</span>
@@ -512,7 +512,7 @@
 
 <span class="sd">    Under the hood, it utilizes a pushdown automaton with backtracking to match the grammar,</span>
 <span class="sd">    with optimizations specific to LLM token mask generation.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
 <div class="viewcode-block" id="GrammarMatcher.__init__">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.__init__">[docs]</a>
@@ -525,7 +525,7 @@
         <span class="n">max_rollback_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
         <span class="n">default_temperature</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct the grammar matcher.</span>
+<span class="w">        </span><span class="sd">"""Construct the grammar matcher.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -539,7 +539,7 @@
 <span class="sd">            Whether to terminate the matcher without accepting a stop token.</span>
 
 <span class="sd">        max_rollback_tokens : int, default: -1</span>
-<span class="sd">            Deprecated. You don&#39;t need to set it and it&#39;s always unlimited (-1).</span>
+<span class="sd">            Deprecated. You don't need to set it and it's always unlimited (-1).</span>
 <span class="sd">            The new Earley parser significantly reduces the number of states, so we can allow</span>
 <span class="sd">            unlimited rollback.</span>
 
@@ -548,14 +548,14 @@
 
 <span class="sd">        default_temperature : Optional[float], default: None</span>
 <span class="sd">            The sampling temperature used when the active grammar rule does not specify one.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">compiled_grammar</span><span class="p">,</span> <span class="n">CompiledGrammar</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The grammar should be compiled before passing it to GrammarMatcher.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The grammar should be compiled before passing it to GrammarMatcher."</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">max_rollback_tokens</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
             <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                <span class="s2">&quot;max_rollback_tokens is deprecated. You don&#39;t need to set it and it&#39;s always &quot;</span>
-                <span class="s2">&quot;unlimited (-1).&quot;</span><span class="p">,</span>
+                <span class="s2">"max_rollback_tokens is deprecated. You don't need to set it and it's always "</span>
+                <span class="s2">"unlimited (-1)."</span><span class="p">,</span>
                 <span class="ne">DeprecationWarning</span><span class="p">,</span>
             <span class="p">)</span>
 
@@ -576,7 +576,7 @@
 <div class="viewcode-block" id="GrammarMatcher.accept_token">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">accept_token</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Accept one token and update the state of the matcher.</span>
+<span class="w">        </span><span class="sd">"""Accept one token and update the state of the matcher.</span>
 
 <span class="sd">        In the following cases, the matcher will not accept the token and return False:</span>
 
@@ -602,14 +602,14 @@
 <span class="sd">        -------</span>
 <span class="sd">        accepted : bool</span>
 <span class="sd">            Whether the token is accepted.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">accept_token</span><span class="p">(</span><span class="n">token_id</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="GrammarMatcher.accept_string">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_string">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">accept_string</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_str</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Accept a string and update the state of the matcher. The whole string is considered</span>
+<span class="w">        </span><span class="sd">"""Accept a string and update the state of the matcher. The whole string is considered</span>
 <span class="sd">        as one step in rollback. It is used to complement the functionality of accept_token, and</span>
 <span class="sd">        accept_token should always be used to accept tokens.</span>
 
@@ -626,7 +626,7 @@
 <span class="sd">        -------</span>
 <span class="sd">        accepted : bool</span>
 <span class="sd">            Whether the string is accepted.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">accept_string</span><span class="p">(</span><span class="n">input_str</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
 
 
@@ -635,7 +635,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">fill_next_token_bitmask</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">:</span> <span class="n">ArrayLike</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fill the bitmask for the next token prediction. The input bitmask can be generated</span>
+<span class="w">        </span><span class="sd">"""Fill the bitmask for the next token prediction. The input bitmask can be generated</span>
 <span class="sd">        by allocate_token_bitmask, and must be on CPU. bitmask[index] will be filled with the</span>
 <span class="sd">        next token bitmask.</span>
 
@@ -663,7 +663,7 @@
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            If the bitmask is invalid (not on CPU, not int32, shape mismatch).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">fill_next_token_bitmask</span><span class="p">(</span><span class="n">bitmask</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
 
 
@@ -678,7 +678,7 @@
         <span class="n">time_threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="o">-</span><span class="mf">1.0</span><span class="p">,</span>
         <span class="n">temperatures</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Traverse a draft token tree and fill the token bitmask for each node.</span>
+<span class="w">        </span><span class="sd">"""Traverse a draft token tree and fill the token bitmask for each node.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -705,7 +705,7 @@
 <span class="sd">        -------</span>
 <span class="sd">        completed : bool</span>
 <span class="sd">            True if the traversal completed successfully, False if it timed out.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">traverse_draft_tree</span><span class="p">(</span>
             <span class="n">retrieve_next_token</span><span class="p">,</span>
             <span class="n">retrieve_next_sibling</span><span class="p">,</span>
@@ -719,7 +719,7 @@
 <div class="viewcode-block" id="GrammarMatcher.find_jump_forward_string">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_string">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">find_jump_forward_string</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Find the jump-forward string for jump-forward decoding. This is the longest string that</span>
+<span class="w">        </span><span class="sd">"""Find the jump-forward string for jump-forward decoding. This is the longest string that</span>
 <span class="sd">        certainly conforms with the current grammar from the current matcher state. This string</span>
 <span class="sd">        can become the output of the LLM without requiring LLM decoding.</span>
 
@@ -729,31 +729,31 @@
 <span class="sd">        -------</span>
 <span class="sd">        jump_forward_string : str</span>
 <span class="sd">            The jump-forward string.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">find_jump_forward_string</span><span class="p">())</span></div>
 
 
 <div class="viewcode-block" id="GrammarMatcher.rollback">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.rollback">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Rollback the matcher to a previous state by several tokens.</span>
+<span class="w">        </span><span class="sd">"""Rollback the matcher to a previous state by several tokens.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        num_tokens : int, default: 1</span>
 <span class="sd">            The number of tokens to rollback. It cannot exceed the current number of steps, nor can</span>
 <span class="sd">            it exceed the specified maximum number of rollback tokens.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">rollback</span><span class="p">(</span><span class="n">num_tokens</span><span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="GrammarMatcher.get_captures">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.get_captures">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_captures</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">deduplicate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">]]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the capture groups recorded so far, ordered by completion position.</span>
+<span class="w">        </span><span class="sd">"""Get the capture groups recorded so far, ordered by completion position.</span>
 
 <span class="sd">        A rule gains a capture name via the Lark attribute ``rule[capture]`` or</span>
-<span class="sd">        ``rule[capture=&quot;name&quot;]``. Each time a captured rule is completed while accepting tokens</span>
+<span class="sd">        ``rule[capture="name"]``. Each time a captured rule is completed while accepting tokens</span>
 <span class="sd">        or strings, the matched input span is recorded. Rollback also rolls back the recorded</span>
 <span class="sd">        captures. Mask computation (fill_next_token_bitmask) never records captures.</span>
 
@@ -771,14 +771,14 @@
 <span class="sd">        -------</span>
 <span class="sd">        captures : List[Tuple[str, bytes]]</span>
 <span class="sd">            A list of (capture_name, matched_bytes) pairs.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="p">[(</span><span class="nb">str</span><span class="p">(</span><span class="n">pair</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">pair</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span> <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">get_captures</span><span class="p">(</span><span class="n">deduplicate</span><span class="p">)]</span></div>
 
 
 <div class="viewcode-block" id="GrammarMatcher.is_terminated">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.is_terminated">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">is_terminated</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if the matcher has terminated. If terminate_without_stop_token is False, the</span>
+<span class="w">        </span><span class="sd">"""Check if the matcher has terminated. If terminate_without_stop_token is False, the</span>
 <span class="sd">        matcher will terminate if it has accepted the stop token. Otherwise, the matcher will</span>
 <span class="sd">        terminate after matching the whole grammar.</span>
 
@@ -786,49 +786,49 @@
 <span class="sd">        -------</span>
 <span class="sd">        terminated : bool</span>
 <span class="sd">            Whether the matcher has terminated.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">is_terminated</span><span class="p">()</span></div>
 
 
 <div class="viewcode-block" id="GrammarMatcher.is_completed">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.is_completed">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">is_completed</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if the input accepted so far forms a complete valid string according to the</span>
+<span class="w">        </span><span class="sd">"""Check if the input accepted so far forms a complete valid string according to the</span>
 <span class="sd">        grammar. Unlike :meth:`is_terminated`, this does not require the stop token to have</span>
 <span class="sd">        been accepted.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        completed : bool</span>
-<span class="sd">            Whether the grammar&#39;s root rule is fully matched.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">            Whether the grammar's root rule is fully matched.</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">is_completed</span><span class="p">()</span></div>
 
 
 <div class="viewcode-block" id="GrammarMatcher.reset">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.reset">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Reset the matcher to the initial state.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Reset the matcher to the initial state."""</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span></div>
 
 
 <div class="viewcode-block" id="GrammarMatcher.fork">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fork">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">fork</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fork the matcher. Returns a new GrammarMatcher sharing the same compiled grammar and</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">fork</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"GrammarMatcher"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Fork the matcher. Returns a new GrammarMatcher sharing the same compiled grammar and</span>
 <span class="sd">        tokenizer info, with a deep copy of all other state (parsing state, token history, etc.).</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        forked : GrammarMatcher</span>
 <span class="sd">            A new matcher with the same grammar but independent parsing state.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="n">GrammarMatcher</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">fork</span><span class="p">())</span></div>
 
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">max_rollback_tokens</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Depracated. Now max_rollback_tokens is always unlimited (-1).</span>
+<span class="w">        </span><span class="sd">"""Depracated. Now max_rollback_tokens is always unlimited (-1).</span>
 
 <span class="sd">        Get the maximum number of rollback tokens allowed.</span>
 
@@ -836,36 +836,36 @@
 <span class="sd">        -------</span>
 <span class="sd">        max_rollback_tokens : int</span>
 <span class="sd">            The maximum number of rollback tokens.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="o">-</span><span class="mi">1</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">temperature</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The effective sampling temperature for the next token.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""The effective sampling temperature for the next token."""</span>
         <span class="n">result</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">temperature</span><span class="p">()</span>
         <span class="k">return</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">stop_token_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The ids of the stop tokens used in the matcher. If specified, the provided stop tokens</span>
+<span class="w">        </span><span class="sd">"""The ids of the stop tokens used in the matcher. If specified, the provided stop tokens</span>
 <span class="sd">        will be used. Otherwise, the stop tokens will be detected from the vocabulary.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        stop_token_ids : List[int]</span>
 <span class="sd">            The ids of the stop tokens.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">stop_token_ids</span><span class="p">())</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_debug_print_internal_state</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Print the internal state of the matcher. This is used for debugging. The</span>
+<span class="w">        </span><span class="sd">"""Print the internal state of the matcher. This is used for debugging. The</span>
 <span class="sd">        representation of the internal state is subject to change.</span>
 
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        internal_state : str</span>
 <span class="sd">            The internal state of the matcher.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">_debug_print_internal_state</span><span class="p">())</span></div>
 
 
@@ -873,22 +873,22 @@
 <div class="viewcode-block" id="BatchGrammarMatcher">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">BatchGrammarMatcher</span><span class="p">(</span><span class="n">XGRObject</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A batch version of GrammarMatcher that can fill the next token bitmask for multiple</span>
+<span class="w">    </span><span class="sd">"""A batch version of GrammarMatcher that can fill the next token bitmask for multiple</span>
 <span class="sd">    matchers in parallel. It utilizes multiple threads to speed up the computation. It is</span>
 <span class="sd">    especially useful when the batch size is large.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
 <div class="viewcode-block" id="BatchGrammarMatcher.__init__">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher.__init__">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">max_threads</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;auto&quot;</span><span class="p">]]</span> <span class="o">=</span> <span class="s2">&quot;auto&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct the batch grammar matcher.</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">max_threads</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">]]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Construct the batch grammar matcher.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
-<span class="sd">        max_threads : Union[int, Literal[&quot;auto&quot;]], default: &quot;auto&quot;</span>
-<span class="sd">            The maximum number of threads to use for parallel processing. If set to &quot;auto&quot;, the</span>
+<span class="sd">        max_threads : Union[int, Literal["auto"]], default: "auto"</span>
+<span class="sd">            The maximum number of threads to use for parallel processing. If set to "auto", the</span>
 <span class="sd">            max_threads will be set to std::thread::hardware_concurrency() / 2.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_init_handle</span><span class="p">(</span><span class="n">_core</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="p">(</span><span class="n">max_threads</span><span class="p">))</span></div>
 
@@ -897,12 +897,12 @@
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher.batch_fill_next_token_bitmask">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">batch_fill_next_token_bitmask</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
-        <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">],</span>
+        <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">"GrammarMatcher"</span><span class="p">],</span>
         <span class="n">bitmask</span><span class="p">:</span> <span class="n">ArrayLike</span><span class="p">,</span>
         <span class="n">indices</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fill the next token bitmask for multiple matchers.</span>
+<span class="w">        </span><span class="sd">"""Fill the next token bitmask for multiple matchers.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -926,7 +926,7 @@
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            If the bitmask is invalid (not on CPU, not int32, shape mismatch).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">matcher_handles</span> <span class="o">=</span> <span class="p">[</span><span class="n">matcher</span><span class="o">.</span><span class="n">_handle</span> <span class="k">for</span> <span class="n">matcher</span> <span class="ow">in</span> <span class="n">matchers</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">batch_fill_next_token_bitmask</span><span class="p">(</span><span class="n">matcher_handles</span><span class="p">,</span> <span class="n">bitmask</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span></div>
 
@@ -935,11 +935,11 @@
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher.batch_fill_temperature">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">batch_fill_temperature</span><span class="p">(</span>
-        <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">],</span>
+        <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">"GrammarMatcher"</span><span class="p">],</span>
         <span class="n">temperatures</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
         <span class="n">indices</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fill the effective sampling temperature of multiple matchers into a tensor.</span>
+<span class="w">        </span><span class="sd">"""Fill the effective sampling temperature of multiple matchers into a tensor.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -959,7 +959,7 @@
 <span class="sd">        RuntimeError</span>
 <span class="sd">            If the temperatures tensor is invalid (not on CPU, not float32, not 1D, or too</span>
 <span class="sd">            small), or if the sizes of matchers and indices do not match.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">matcher_handles</span> <span class="o">=</span> <span class="p">[</span><span class="n">matcher</span><span class="o">.</span><span class="n">_handle</span> <span class="k">for</span> <span class="n">matcher</span> <span class="ow">in</span> <span class="n">matchers</span><span class="p">]</span>
         <span class="n">_core</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="o">.</span><span class="n">batch_fill_temperature</span><span class="p">(</span><span class="n">matcher_handles</span><span class="p">,</span> <span class="n">temperatures</span><span class="p">,</span> <span class="n">indices</span><span class="p">)</span></div>
 
@@ -968,9 +968,9 @@
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher.batch_accept_token">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">batch_accept_token</span><span class="p">(</span>
-        <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">],</span> <span class="n">tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">"GrammarMatcher"</span><span class="p">],</span> <span class="n">tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">bool</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Accept a batch of tokens for multiple matchers.</span>
+<span class="w">        </span><span class="sd">"""Accept a batch of tokens for multiple matchers.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -992,7 +992,7 @@
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            If the sizes of matchers and tokens do not match.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">matcher_handles</span> <span class="o">=</span> <span class="p">[</span><span class="n">matcher</span><span class="o">.</span><span class="n">_handle</span> <span class="k">for</span> <span class="n">matcher</span> <span class="ow">in</span> <span class="n">matchers</span><span class="p">]</span>
         <span class="n">result</span> <span class="o">=</span> <span class="n">_core</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="o">.</span><span class="n">batch_accept_token</span><span class="p">(</span><span class="n">matcher_handles</span><span class="p">,</span> <span class="n">tokens</span><span class="p">,</span> <span class="n">debug_print</span><span class="p">)</span>
         <span class="k">return</span> <span class="p">[</span><span class="nb">bool</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="p">))]</span></div>
@@ -1002,11 +1002,11 @@
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher.batch_accept_string">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">batch_accept_string</span><span class="p">(</span>
-        <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">],</span>
+        <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">"GrammarMatcher"</span><span class="p">],</span>
         <span class="n">strings</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">]],</span>
         <span class="n">debug_print</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">bool</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Accept a batch of strings for multiple matchers.</span>
+<span class="w">        </span><span class="sd">"""Accept a batch of strings for multiple matchers.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -1028,7 +1028,7 @@
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            If the sizes of matchers and strings do not match.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">matcher_handles</span> <span class="o">=</span> <span class="p">[</span><span class="n">matcher</span><span class="o">.</span><span class="n">_handle</span> <span class="k">for</span> <span class="n">matcher</span> <span class="ow">in</span> <span class="n">matchers</span><span class="p">]</span>
         <span class="n">result</span> <span class="o">=</span> <span class="n">_core</span><span class="o">.</span><span class="n">BatchGrammarMatcher</span><span class="o">.</span><span class="n">batch_accept_string</span><span class="p">(</span>
             <span class="n">matcher_handles</span><span class="p">,</span> <span class="n">strings</span><span class="p">,</span> <span class="n">debug_print</span>
@@ -1040,9 +1040,9 @@
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.BatchGrammarMatcher.batch_rollback">[docs]</a>
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">batch_rollback</span><span class="p">(</span>
-        <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">&quot;GrammarMatcher&quot;</span><span class="p">],</span> <span class="n">num_tokens</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">matchers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="s2">"GrammarMatcher"</span><span class="p">],</span> <span class="n">num_tokens</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Rollback a batch of matchers by the given number of tokens.</span>
+<span class="w">        </span><span class="sd">"""Rollback a batch of matchers by the given number of tokens.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
@@ -1057,7 +1057,7 @@
 <span class="sd">        ------</span>
 <span class="sd">        RuntimeError</span>
 <span class="sd">            If the sizes of matchers and num_tokens do not match.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">num_tokens</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
             <span class="n">num_tokens</span> <span class="o">=</span> <span class="p">[</span><span class="n">num_tokens</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">matchers</span><span class="p">)</span>
 

@@ -312,12 +312,12 @@ format that can be parsed again.</p>
 extensions, such as repetition ranges and macros.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xgr</span>
 
-<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_ebnf</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;&quot;&quot;</span>
-<span class="s2">root ::= expr (&quot;=&quot; expr)*</span>
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_ebnf</span><span class="p">(</span><span class="sa">r</span><span class="s2">"""</span>
+<span class="s2">root ::= expr ("=" expr)*</span>
 <span class="s2">expr ::= term ([-+*/] term)*</span>
-<span class="s2">term ::= num | &quot;(&quot; expr &quot;)&quot;</span>
+<span class="s2">term ::= num | "(" expr ")"</span>
 <span class="s2">num  ::= [0-9]+</span>
-<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+<span class="s2">"""</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>This grammar accepts strings such as <code class="docutils literal notranslate"><span class="pre">1+2</span></code>, <code class="docutils literal notranslate"><span class="pre">(3*4)-5=7</span></code>, or <code class="docutils literal notranslate"><span class="pre">2=2=2</span></code>.</p>
@@ -326,7 +326,7 @@ extensions, such as repetition ranges and macros.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_ebnf</span><span class="p">(</span>
     <span class="n">ebnf_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
-    <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;root&quot;</span><span class="p">,</span>
+    <span class="n">root_rule_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"root"</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span>
 </pre></div>
 </div>
@@ -344,12 +344,12 @@ extensions, such as repetition ranges and macros.</p>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">compile_grammar</span></code> also accepts the EBNF string directly, in which case the string is used as the
 cache key of the compiler’s cache:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">compiled</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="s1">&#39;root ::= &quot;a&quot; | &quot;b&quot;&#39;</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">compiled</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="s1">'root ::= "a" | "b"'</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Errors in the grammar raise <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> with the line and the column of the offending
 construct:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>EBNF parser error at line 1, column 10: Rule &quot;a&quot; is not defined
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>EBNF parser error at line 1, column 10: Rule "a" is not defined
 </pre></div>
 </div>
 </section>
@@ -363,9 +363,9 @@ construct:</p>
 <li><p>A rule name must be the first token on its line. Apart from this requirement, whitespace and
 line breaks are insignificant, so a rule body may span multiple lines:</p></li>
 </ul>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= &quot;a&quot; |
-         &quot;b&quot; |
-         &quot;c&quot;
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= "a" |
+         "b" |
+         "c"
 </pre></div>
 </div>
 <ul class="simple">
@@ -376,7 +376,7 @@ concept, and every definition is a rule.</p></li>
 <li><p>Each rule name may be defined only once. Rules may reference each other in any order, including
 forward references. Both right recursion and left recursion are supported:</p></li>
 </ul>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= root &quot;a&quot; | &quot;a&quot;     # left recursion: accepts &quot;a&quot;, &quot;aa&quot;, &quot;aaa&quot;, ...
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= root "a" | "a"     # left recursion: accepts "a", "aa", "aaa", ...
 </pre></div>
 </div>
 </section>
@@ -386,7 +386,7 @@ forward references. Both right recursion and left recursion are supported:</p></
 <h3>String Literals<a class="headerlink" href="#string-literals" title="Link to this heading">¶</a></h3>
 <p>String literals use double quotes: <code class="docutils literal notranslate"><span class="pre">&quot;hello&quot;</span></code>. Matching is case-sensitive and exact. The empty
 literal <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code> matches the empty string, which is useful for making an alternative optional:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>sign ::= &quot;&quot; | &quot;+&quot; | &quot;-&quot;
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>sign ::= "" | "+" | "-"
 </pre></div>
 </div>
 <p>Supported escape sequences:</p>
@@ -439,7 +439,7 @@ classes and are rejected. Write the ranges explicitly (<code class="docutils lit
 <section id="rule-references">
 <h3>Rule References<a class="headerlink" href="#rule-references" title="Link to this heading">¶</a></h3>
 <p>Using a rule name inside an expression matches that rule:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root  ::= value (&quot;,&quot; value)*
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root  ::= value ("," value)*
 value ::= [0-9]+
 </pre></div>
 </div>
@@ -513,7 +513,7 @@ or a parenthesized group:</p>
 <p>The lower bound is required: <code class="docutils literal notranslate"><span class="pre">x{,4}</span></code> is not accepted (use <code class="docutils literal notranslate"><span class="pre">x{0,4}</span></code>). <code class="docutils literal notranslate"><span class="pre">x{0}</span></code> is allowed and
 matches the empty string. Two operators cannot be applied directly to the same element (<code class="docutils literal notranslate"><span class="pre">&quot;a&quot;++</span></code>
 is an error); wrap the element in parentheses instead: <code class="docutils literal notranslate"><span class="pre">(&quot;a&quot;+)+</span></code>.</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root       ::= identifier (&quot;,&quot; identifier){0,4}
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root       ::= identifier ("," identifier){0,4}
 identifier ::= [a-zA-Z_] [a-zA-Z0-9_]*
 </pre></div>
 </div>
@@ -521,7 +521,7 @@ identifier ::= [a-zA-Z_] [a-zA-Z0-9_]*
 <section id="rule-options">
 <h2>Rule Options<a class="headerlink" href="#rule-options" title="Link to this heading">¶</a></h2>
 <p>A rule may carry a comma-separated option list between its name and <code class="docutils literal notranslate"><span class="pre">::=</span></code>:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>value[max_tokens=32, max_chars=128, capture=&quot;answer&quot;, lazy, temperature=0.7] ::= [a-z]+
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>value[max_tokens=32, max_chars=128, capture="answer", lazy, temperature=0.7] ::= [a-z]+
 </pre></div>
 </div>
 <p>Each option may appear at most once. Options without a value, such as <code class="docutils literal notranslate"><span class="pre">capture</span></code> and <code class="docutils literal notranslate"><span class="pre">lazy</span></code>, are
@@ -529,7 +529,7 @@ written as bare names; the other options use <code class="docutils literal notra
 <section id="token-budgets">
 <h3>Token Budgets<a class="headerlink" href="#token-budgets" title="Link to this heading">¶</a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">max_tokens</span></code> option gives each occurrence of a rule a token budget:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= &quot;&lt;think&gt;&quot; reasoning &quot;&lt;/think&gt;&quot; answer
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= "&lt;think&gt;" reasoning "&lt;/think&gt;" answer
 reasoning[max_tokens=512] ::= [^]*
 answer ::= [0-9]+
 </pre></div>
@@ -552,7 +552,7 @@ preserve the budget state.</p>
 <h3>Character Budgets<a class="headerlink" href="#character-budgets" title="Link to this heading">¶</a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">max_chars</span></code> option limits each rule occurrence by Unicode codepoints, the numeric values
 assigned to text units by the Unicode standard:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= &quot;&lt;think&gt;&quot; reasoning &quot;&lt;/think&gt;&quot; answer
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= "&lt;think&gt;" reasoning "&lt;/think&gt;" answer
 reasoning[max_chars=2048] ::= [^]*
 answer ::= [0-9]+
 </pre></div>
@@ -578,19 +578,19 @@ position.</p>
 <section id="capture-groups">
 <h3>Capture Groups<a class="headerlink" href="#capture-groups" title="Link to this heading">¶</a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">capture</span></code> option records the input span matched by a rule:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= item (&quot;,&quot; item)*
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= item ("," item)*
 item[capture] ::= [0-9]+
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">capture</span></code> uses the rule name as the capture name. Use <code class="docutils literal notranslate"><span class="pre">capture=&quot;name&quot;</span></code> to choose a different,
 non-empty name:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>item[capture=&quot;number&quot;] ::= [0-9]+
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>item[capture="number"] ::= [0-9]+
 </pre></div>
 </div>
 <p>Retrieve completed captures from the matcher:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">matcher</span><span class="o">.</span><span class="n">accept_string</span><span class="p">(</span><span class="s2">&quot;1,22,333&quot;</span><span class="p">)</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">matcher</span><span class="o">.</span><span class="n">accept_string</span><span class="p">(</span><span class="s2">"1,22,333"</span><span class="p">)</span>
 <span class="n">matcher</span><span class="o">.</span><span class="n">get_captures</span><span class="p">()</span>
-<span class="c1"># [(&quot;number&quot;, b&quot;1&quot;), (&quot;number&quot;, b&quot;22&quot;), (&quot;number&quot;, b&quot;333&quot;)]</span>
+<span class="c1"># [("number", b"1"), ("number", b"22"), ("number", b"333")]</span>
 </pre></div>
 </div>
 <p>Captures are recorded when tokens or strings are accepted. Filling a token mask does not record
@@ -605,7 +605,7 @@ event.</p>
 <section id="committed-shortest-matching">
 <h3>Committed-Shortest Matching<a class="headerlink" href="#committed-shortest-matching" title="Link to this heading">¶</a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">lazy</span></code> option makes a rule commit to its earliest possible completion:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= &quot;&lt;&quot; name &quot;&gt;&quot; rest
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= "&lt;" name "&gt;" rest
 name[lazy] ::= [a-z]+
 rest ::= [a-z]+
 </pre></div>
@@ -622,7 +622,7 @@ commits independently, and <code class="docutils literal notranslate"><span clas
 <section id="sampling-temperature">
 <h3>Sampling Temperature<a class="headerlink" href="#sampling-temperature" title="Link to this heading">¶</a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">temperature</span></code> rule option selects the sampling temperature while a rule is active:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= &quot;answer:&quot; value
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= "answer:" value
 value[temperature=0.7] ::= [a-z]+
 </pre></div>
 </div>
@@ -665,14 +665,14 @@ suffix and stop behavior through the
 <section id="macros">
 <h2>Macros<a class="headerlink" href="#macros" title="Link to this heading">¶</a></h2>
 <p>Macros look like function calls inside a grammar rule. For example:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= Regex(&quot;[0-9]{5}&quot;, json_string=false)
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= Regex("[0-9]{5}", json_string=false)
 </pre></div>
 </div>
 <p>Here, <code class="docutils literal notranslate"><span class="pre">Regex</span></code> is the macro name, <code class="docutils literal notranslate"><span class="pre">&quot;[0-9]{5}&quot;</span></code> is a positional argument, and
 <code class="docutils literal notranslate"><span class="pre">json_string=false</span></code> is a named argument. This macro matches exactly five digits.</p>
 <p>Macros can also take rule names and tuples:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= TagDispatch((&quot;&lt;tool&gt;&quot;, tool), loop_after_dispatch=false)
-tool ::= &quot;get_weather&quot;
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= TagDispatch(("&lt;tool&gt;", tool), loop_after_dispatch=false)
+tool ::= "get_weather"
 </pre></div>
 </div>
 <p>In this example, <code class="docutils literal notranslate"><span class="pre">(&quot;&lt;tool&gt;&quot;,</span> <span class="pre">tool)</span></code> pairs the trigger string <code class="docutils literal notranslate"><span class="pre">&quot;&lt;tool&gt;&quot;</span></code> with the <code class="docutils literal notranslate"><span class="pre">tool</span></code> rule.
@@ -701,7 +701,7 @@ point numbers, lists, and objects cannot be passed as values.</p>
 <section id="regex">
 <h3><code class="docutils literal notranslate"><span class="pre">Regex</span></code><a class="headerlink" href="#regex" title="Link to this heading">¶</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">Regex</span></code> matches text described by a regular expression.</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= &quot;ID-&quot; Regex(&quot;[0-9]{5}&quot;)
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= "ID-" Regex("[0-9]{5}")
 </pre></div>
 </div>
 <p>This grammar accepts <code class="docutils literal notranslate"><span class="pre">ID-12345</span></code>.</p>
@@ -721,7 +721,7 @@ argument, the pattern is used verbatim and <code class="docutils literal notrans
 <a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar.from_regex" title="xgrammar.Grammar.from_regex"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.Grammar.from_regex</span></code></span></a>. Backslashes must be escaped for the
 surrounding EBNF string literal, so the regular expression <code class="docutils literal notranslate"><span class="pre">\d+\.\d+</span></code> is written as
 <code class="docutils literal notranslate"><span class="pre">Regex(&quot;\\d+\\.\\d+&quot;)</span></code>.</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= Regex(&quot;hello, world.&quot;, flags=&quot;is&quot;)
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= Regex("hello, world.", flags="is")
 </pre></div>
 </div>
 <p>This grammar matches <code class="docutils literal notranslate"><span class="pre">hello,</span> <span class="pre">world</span></code> in any ASCII case, followed by any character including a
@@ -729,7 +729,7 @@ newline.</p>
 <p>When <code class="docutils literal notranslate"><span class="pre">json_string=true</span></code>, the regular expression is intended to match the body of a JSON string.
 Control characters, <code class="docutils literal notranslate"><span class="pre">&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">\</span></code> are then excluded from every character match, preventing the
 expression from consuming characters that must be escaped in JSON:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>string_body ::= Regex(&quot;\\S+&quot;, json_string=true)
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>string_body ::= Regex("\\S+", json_string=true)
 </pre></div>
 </div>
 </section>
@@ -737,7 +737,7 @@ expression from consuming characters that must be escaped in JSON:</p>
 <h3><code class="docutils literal notranslate"><span class="pre">Substring</span></code><a class="headerlink" href="#substring" title="Link to this heading">¶</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">Substring</span></code> matches every contiguous subsequence of a fixed list of chunks, including the empty
 one.</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= Substring(&quot;abc&quot;, &quot;de&quot;, &quot;fg&quot;)
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= Substring("abc", "de", "fg")
 </pre></div>
 </div>
 <p>This grammar accepts <code class="docutils literal notranslate"><span class="pre">&quot;&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;abc&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;de&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;abcde&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;defg&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">&quot;abcdefg&quot;</span></code>, but not <code class="docutils literal notranslate"><span class="pre">&quot;ab&quot;</span></code>
@@ -758,13 +758,13 @@ linearly with the number of chunks. This is also the compiled form of the Lark
 trigger tag appears, then the output must follow the grammar associated with that tag, and
 afterwards the model returns to free text.</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= TagDispatch(
-    (&quot;&lt;tool_call&gt;&quot;, tool_call_body),
-    (&quot;&lt;code&gt;&quot;, code_body),
+    ("&lt;tool_call&gt;", tool_call_body),
+    ("&lt;code&gt;", code_body),
     loop_after_dispatch=true,
     excludes=()
 )
-tool_call_body ::= &quot;{&quot; [^}]* &quot;}&quot;
-code_body ::= &quot;```&quot; [^`]* &quot;```&quot;
+tool_call_body ::= "{" [^}]* "}"
+code_body ::= "```" [^`]* "```"
 </pre></div>
 </div>
 <p><strong>Arguments</strong></p>
@@ -789,7 +789,7 @@ the free-text state and more dispatches may follow. If <code class="docutils lit
 immediately after the first dispatched rule completes.</p></li>
 </ul>
 <p>With the grammar above, all of the following are accepted:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>I will call a tool. &lt;tool_call&gt;{&quot;name&quot;: &quot;get_weather&quot;}&lt;/tool_call&gt; Done.
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>I will call a tool. &lt;tool_call&gt;{"name": "get_weather"}&lt;/tool_call&gt; Done.
 no tool call at all
 &lt;code&gt;```print(1)```&lt;tool_call&gt;{}
 </pre></div>
@@ -797,12 +797,12 @@ no tool call at all
 <p><code class="docutils literal notranslate"><span class="pre">excludes</span></code> lists strings that must not appear in the free-text portion. This is typically used
 together with an outer stop tag, so that the stop tag reliably terminates the dispatch loop
 instead of being swallowed as free text:</p>
-<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= body &quot;&lt;/answer&gt;&quot;
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= body "&lt;/answer&gt;"
 body ::= TagDispatch(
-    (&quot;&lt;tool_call&gt;&quot;, tool_call_body),
-    excludes=(&quot;&lt;/answer&gt;&quot;,)
+    ("&lt;tool_call&gt;", tool_call_body),
+    excludes=("&lt;/answer&gt;",)
 )
-tool_call_body ::= &quot;{&quot; [^}]* &quot;}&quot;
+tool_call_body ::= "{" [^}]* "}"
 </pre></div>
 </div>
 <p>An excluded string must not be a prefix of any trigger tag.</p>
@@ -848,7 +848,7 @@ of free text, and each trigger is a single token ID.</p>
     loop_after_dispatch=true,
     excludes=(128020,)
 )
-tool_call_body ::= &quot;{&quot; [^}]* &quot;}&quot;
+tool_call_body ::= "{" [^}]* "}"
 </pre></div>
 </div>
 <p><strong>Arguments</strong></p>
@@ -909,11 +909,11 @@ grammar elements with different runtime behavior.</p>
 recursion working together:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">xgrammar</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">xgr</span>
 
-<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_ebnf</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;&quot;&quot;</span>
-<span class="s2">root   ::= &quot;\&quot;&quot; char* &quot;\&quot;&quot;</span>
-<span class="s2">char   ::= [^&quot;\\\x00-\x1f] | &quot;\\&quot; escape</span>
-<span class="s2">escape ::= [&quot;\\/bfnrt] | &quot;u&quot; [0-9A-Fa-f]</span><span class="si">{4}</span>
-<span class="s2">&quot;&quot;&quot;</span><span class="p">)</span>
+<span class="n">grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_ebnf</span><span class="p">(</span><span class="sa">r</span><span class="s2">"""</span>
+<span class="s2">root   ::= "\"" char* "\""</span>
+<span class="s2">char   ::= [^"\\\x00-\x1f] | "\\" escape</span>
+<span class="s2">escape ::= ["\\/bfnrt] | "u" [0-9A-Fa-f]</span><span class="si">{4}</span>
+<span class="s2">"""</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>This accepts <code class="docutils literal notranslate"><span class="pre">&quot;hello&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;line1\nline2&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">&quot;\u00e9&quot;</span></code>, and rejects unterminated or badly
@@ -921,15 +921,15 @@ escaped strings.</p>
 <p>As a larger example, the grammar below describes free-form JSON:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>root ::= basic_array | basic_object
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= (&quot;0&quot; | &quot;-&quot;? [1-9] [0-9]*) &quot;.0&quot;?
-basic_number ::= (&quot;0&quot; | &quot;-&quot;? [1-9] [0-9]*) (&quot;.&quot; [0-9]+)? ([eE] [+-]? [0-9]+)?
-basic_string ::= (([\&quot;] basic_string_1 [\&quot;]))
-basic_string_1 ::= &quot;&quot; | [^&quot;\\\x00-\x1F] basic_string_1 | &quot;\\&quot; escape basic_string_1
-escape ::= [&quot;\\/bfnrt] | &quot;u&quot; [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_boolean ::= &quot;true&quot; | &quot;false&quot;
-basic_null ::= &quot;null&quot;
-basic_array ::= &quot;[&quot; (&quot;&quot; | ws basic_any (ws &quot;,&quot; ws basic_any)*) ws &quot;]&quot;
-basic_object ::= &quot;{&quot; (&quot;&quot; | ws basic_string ws &quot;:&quot; ws basic_any ( ws &quot;,&quot; ws basic_string ws &quot;:&quot; ws basic_any)*) ws &quot;}&quot;
+basic_integer ::= ("0" | "-"? [1-9] [0-9]*) ".0"?
+basic_number ::= ("0" | "-"? [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+basic_string ::= (([\"] basic_string_1 [\"]))
+basic_string_1 ::= "" | [^"\\\x00-\x1F] basic_string_1 | "\\" escape basic_string_1
+escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
+basic_boolean ::= "true" | "false"
+basic_null ::= "null"
+basic_array ::= "[" ("" | ws basic_any (ws "," ws basic_any)*) ws "]"
+basic_object ::= "{" ("" | ws basic_string ws ":" ws basic_any ( ws "," ws basic_string ws ":" ws basic_any)*) ws "}"
 ws ::= [ \n\t]*
 </pre></div>
 </div>

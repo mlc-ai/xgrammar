@@ -331,11 +331,11 @@ current version.</p></li>
 
 <span class="c1"># Serialize to JSON</span>
 <span class="n">grammar_json</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">grammar</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">()</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Serialized Grammar: </span><span class="si">{</span><span class="n">grammar_json</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Serialized Grammar: </span><span class="si">{</span><span class="n">grammar_json</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 <span class="c1"># Deserialize from JSON</span>
 <span class="n">grammar_deserialized</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">deserialize_json</span><span class="p">(</span><span class="n">grammar_json</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Deserialized Grammar: </span><span class="si">{</span><span class="n">grammar_deserialized</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Deserialized Grammar: </span><span class="si">{</span><span class="n">grammar_deserialized</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
@@ -343,18 +343,18 @@ current version.</p></li>
 <h2><a class="reference internal" href="../api/python/tokenizer_info.html#xgrammar.TokenizerInfo" title="xgrammar.TokenizerInfo"><span class="xref myst py py-class"><code class="docutils literal notranslate"><span class="pre">xgr.TokenizerInfo</span></code></span></a><a class="headerlink" href="#xgr-tokenizerinfo" title="Link to this heading">¶</a></h2>
 <p>The tokenizer information class.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Construct TokenizerInfo</span>
-<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">&quot;meta-llama/Llama-3.1-8B-Instruct&quot;</span><span class="p">)</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="s2">"meta-llama/Llama-3.1-8B-Instruct"</span><span class="p">)</span>
 <span class="n">tokenizer_info</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">from_huggingface</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">)</span>
 
 <span class="c1"># Serialize to JSON</span>
 <span class="n">tokenizer_info_json</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">()</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Serialized TokenizerInfo&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Serialized TokenizerInfo"</span><span class="p">)</span>
 
 <span class="c1"># Deserialize from JSON</span>
 <span class="n">tokenizer_info_deserialized</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">deserialize_json</span><span class="p">(</span>
     <span class="n">tokenizer_info_json</span>
 <span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Deserialized TokenizerInfo&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Deserialized TokenizerInfo"</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
@@ -372,13 +372,13 @@ deserialization will raise a <a class="reference internal" href="../api/python/e
 
 <span class="c1"># Serialize to JSON</span>
 <span class="n">compiled_grammar_json</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">compiled_grammar</span><span class="o">.</span><span class="n">serialize_json</span><span class="p">()</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Serialized CompiledGrammar&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Serialized CompiledGrammar"</span><span class="p">)</span>
 
 <span class="c1"># Deserialize from JSON</span>
 <span class="n">compiled_grammar_deserialized</span><span class="p">:</span> <span class="n">xgr</span><span class="o">.</span><span class="n">CompiledGrammar</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">deserialize_json</span><span class="p">(</span>
     <span class="n">compiled_grammar_json</span><span class="p">,</span> <span class="n">tokenizer_info_deserialized</span>
 <span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Deserialized CompiledGrammar&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Deserialized CompiledGrammar"</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>
