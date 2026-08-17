@@ -915,6 +915,279 @@ def test_anyof_integer_number_unchanged():
     check_schema_with_instance(schema, 1.5, any_whitespace=False)
 
 
+@pytest.mark.parametrize(
+    "schema, instances",
+    [
+        (
+            {"type": "integer", "maximum": 8, "allOf": [{"minimum": 2}, {"exclusiveMaximum": 6}]},
+            [(1, False), (2, True), (5, True), (6, False), (8, False)],
+        ),
+        (
+            {"allOf": [{"minimum": -1.5}, {"type": "number", "exclusiveMaximum": 2.5}]},
+            [(-2, False), (-1.5, True), (2.4, True), (2.5, False)],
+        ),
+        (
+            {"allOf": [{"type": "string", "minLength": 2}, {"maxLength": 4}]},
+            [('""', False), ('"ab"', True), ('"abcd"', True), ('"abcde"', False)],
+        ),
+        (
+            {
+                "allOf": [
+                    {"type": "array", "items": {"type": "integer"}, "minItems": 1},
+                    {"maxItems": 2},
+                ]
+            },
+            [([], False), ([1], True), ([1, 2], True), ([1, 2, 3], False), (["1"], False)],
+        ),
+    ],
+)
+def test_allof_intersects_typed_constraints(schema, instances):
+    for instance, accepted in instances:
+        check_schema_with_instance(schema, instance, is_accepted=accepted)
+
+
+def test_allof_intersects_object_properties_and_references():
+    schema = {
+        "$defs": {
+            "identity": {
+                "type": "object",
+                "properties": {"id": {"type": "integer", "minimum": 1}},
+                "required": ["id"],
+                "additionalProperties": True,
+            }
+        },
+        "allOf": [
+            {"$ref": "#/$defs/identity"},
+            {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer", "maximum": 10},
+                    "name": {"type": "string"},
+                },
+                "required": ["name"],
+                "additionalProperties": True,
+            },
+        ],
+    }
+    check_schema_with_instance(schema, {"id": 1, "name": "Ada"})
+    check_schema_with_instance(schema, {"id": 10, "name": "Ada", "active": True})
+    check_schema_with_instance(schema, {"id": 0, "name": "Ada"}, is_accepted=False)
+    check_schema_with_instance(schema, {"id": 11, "name": "Ada"}, is_accepted=False)
+    check_schema_with_instance(schema, {"id": 1}, is_accepted=False)
+    check_schema_with_instance(schema, {"name": "Ada"}, is_accepted=False)
+
+
+def test_allof_distributes_over_union_and_filters_finite_values():
+    union_schema = {
+        "allOf": [
+            {"anyOf": [{"type": "integer"}, {"type": "string"}]},
+            {"type": ["integer", "boolean"]},
+        ]
+    }
+    check_schema_with_instance(union_schema, 7)
+    check_schema_with_instance(union_schema, '"seven"', is_accepted=False)
+    check_schema_with_instance(union_schema, True, is_accepted=False)
+
+    conditional_schema = {
+        "allOf": [{"anyOf": [{"type": "integer"}, {"type": "string"}]}, {"minimum": 2}]
+    }
+    check_schema_with_instance(conditional_schema, 1, is_accepted=False)
+    check_schema_with_instance(conditional_schema, 2)
+    check_schema_with_instance(conditional_schema, '"one"')
+
+    enum_schema = {"allOf": [{"enum": [1, 2, 3, "3"]}, {"enum": [2, 3, 4]}]}
+    check_schema_with_instance(enum_schema, 2)
+    check_schema_with_instance(enum_schema, 3)
+    check_schema_with_instance(enum_schema, 1, is_accepted=False)
+    check_schema_with_instance(enum_schema, '"3"', is_accepted=False)
+
+    string_enum_schema = {"allOf": [{"enum": ["a", "long"]}, {"maxLength": 1}]}
+    check_schema_with_instance(string_enum_schema, '"a"')
+    check_schema_with_instance(string_enum_schema, '"long"', is_accepted=False)
+
+
+def test_allof_empty_numeric_cross_type_and_multiple_of():
+    empty_schema = {"type": "integer", "minimum": 2, "allOf": []}
+    check_schema_with_instance(empty_schema, 2)
+    check_schema_with_instance(empty_schema, 1, is_accepted=False)
+
+    unconstrained_schema = {"allOf": []}
+    check_schema_with_instance(unconstrained_schema, {"anything": [1, True, None]})
+
+    cross_type_schema = {
+        "allOf": [{"type": "number", "minimum": 1.2}, {"type": "integer", "maximum": 3}]
+    }
+    check_schema_with_instance(cross_type_schema, 1, is_accepted=False)
+    check_schema_with_instance(cross_type_schema, 2)
+    check_schema_with_instance(cross_type_schema, 3)
+    check_schema_with_instance(cross_type_schema, 3.5, is_accepted=False)
+
+    multiple_schema = {
+        "type": "integer",
+        "allOf": [{"multipleOf": 4}, {"minimum": 0, "maximum": 10}],
+    }
+    for instance, accepted in [(-4, False), (0, True), (4, True), (8, True), (10, False)]:
+        check_schema_with_instance(multiple_schema, instance, is_accepted=accepted)
+
+
+def test_allof_aligns_differently_sized_prefix_items():
+    schema = {
+        "allOf": [
+            {"type": "array", "prefixItems": [{"type": "string"}], "items": {"type": "integer"}},
+            {
+                "type": "array",
+                "prefixItems": [{"type": "string"}, {"type": "integer"}],
+                "items": False,
+            },
+        ]
+    }
+    check_schema_with_instance(schema, ["first", 2])
+    check_schema_with_instance(schema, ["first", "second"], is_accepted=False)
+    check_schema_with_instance(schema, ["first", 2, 3], is_accepted=False)
+
+
+def test_allof_removes_impossible_optional_object_properties():
+    schema = {
+        "allOf": [
+            {
+                "type": "object",
+                "properties": {"value": {"type": "string"}},
+                "additionalProperties": False,
+            },
+            {
+                "type": "object",
+                "properties": {"value": {"type": "integer"}},
+                "additionalProperties": False,
+            },
+        ]
+    }
+    check_schema_with_instance(schema, {})
+    check_schema_with_instance(schema, {"value": 1}, is_accepted=False)
+    check_schema_with_instance(schema, {"value": "one"}, is_accepted=False)
+
+    open_schema = {
+        "allOf": [
+            {
+                "type": "object",
+                "properties": {"value": {"type": "string"}},
+                "additionalProperties": True,
+            },
+            {
+                "type": "object",
+                "properties": {"value": {"type": "integer"}},
+                "additionalProperties": True,
+            },
+        ]
+    }
+    check_schema_with_instance(open_schema, {})
+    check_schema_with_instance(open_schema, {"other": True})
+    check_schema_with_instance(open_schema, {"value": 1}, is_accepted=False)
+    check_schema_with_instance(open_schema, {"value": "one"}, is_accepted=False)
+
+
+def test_allof_applies_unevaluated_constraints_after_intersection():
+    object_schema = {
+        "allOf": [
+            {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]},
+            {"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
+        ],
+        "unevaluatedProperties": False,
+    }
+    check_schema_with_instance(object_schema, {"id": 1, "name": "Ada"})
+    check_schema_with_instance(
+        object_schema, {"id": 1, "name": "Ada", "active": True}, is_accepted=False
+    )
+
+    typed_extra_schema = {
+        "allOf": [
+            {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]}
+        ],
+        "unevaluatedProperties": {"type": "integer"},
+    }
+    check_schema_with_instance(typed_extra_schema, {"id": 1, "rank": 2})
+    check_schema_with_instance(typed_extra_schema, {"id": 1, "rank": "second"}, is_accepted=False)
+
+    union_object_schema = {
+        "allOf": [
+            {"type": ["object", "null"]},
+            {"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]},
+        ],
+        "unevaluatedProperties": False,
+    }
+    check_schema_with_instance(union_object_schema, {"id": 1})
+    check_schema_with_instance(union_object_schema, {"id": 1, "extra": 2}, is_accepted=False)
+    check_schema_with_instance(union_object_schema, None, is_accepted=False)
+
+    array_schema = {
+        "allOf": [
+            {"type": "array", "prefixItems": [{"type": "string"}]},
+            {"type": "array", "prefixItems": [{"type": "string"}]},
+        ],
+        "unevaluatedItems": False,
+    }
+    check_schema_with_instance(array_schema, ["first"])
+    check_schema_with_instance(array_schema, ["first", "second"], is_accepted=False)
+
+    union_array_schema = {
+        "allOf": [
+            {"type": ["array", "null"]},
+            {"type": "array", "prefixItems": [{"type": "string"}]},
+        ],
+        "unevaluatedItems": False,
+    }
+    check_schema_with_instance(union_array_schema, ["first"])
+    check_schema_with_instance(union_array_schema, ["first", "second"], is_accepted=False)
+    check_schema_with_instance(union_array_schema, None, is_accepted=False)
+
+
+@pytest.mark.parametrize(
+    "schema, message",
+    [
+        (
+            {"allOf": [{"type": "integer", "minimum": 5}, {"type": "integer", "maximum": 4}]},
+            "allOf intersection is unsatisfiable",
+        ),
+        (
+            {"allOf": [{"type": "string"}, {"type": "boolean"}]},
+            "allOf intersection is unsatisfiable",
+        ),
+        (
+            {"allOf": [{"type": "string", "pattern": "^a"}, {"type": "string", "pattern": "z$"}]},
+            "cannot combine distinct string patterns",
+        ),
+        (
+            {"allOf": [{"type": "string", "pattern": "^a", "minLength": 2}]},
+            "cannot combine string match and length constraints",
+        ),
+        (
+            {"allOf": [{"type": "string", "pattern": "^a", "format": "email"}]},
+            "cannot combine string format and pattern",
+        ),
+        (
+            {
+                "allOf": [
+                    {
+                        "type": "object",
+                        "properties": {"value": {"type": "string"}},
+                        "required": ["value"],
+                        "additionalProperties": False,
+                    },
+                    {
+                        "type": "object",
+                        "properties": {"value": {"type": "integer"}},
+                        "additionalProperties": False,
+                    },
+                ]
+            },
+            "allOf intersection is unsatisfiable",
+        ),
+    ],
+)
+def test_allof_rejects_inexact_or_unsatisfiable_intersections(schema, message):
+    with pytest.raises(RuntimeError, match=message):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
 def test_alias():
     class MainModel(BaseModel):
         test: str = Field(..., alias="name")

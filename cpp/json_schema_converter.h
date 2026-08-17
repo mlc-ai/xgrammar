@@ -73,6 +73,10 @@ struct AnySpec {
   std::string ToString() const;
 };
 
+struct NeverSpec {
+  std::string ToString() const;
+};
+
 // Complex Type Specs
 struct ArraySpec {
   std::vector<SchemaSpecPtr> prefix_items;
@@ -165,6 +169,7 @@ using SchemaSpecVariant = std::variant<
     ArraySpec,
     ObjectSpec,
     AnySpec,
+    NeverSpec,
     ConstSpec,
     EnumSpec,
     RefSpec,
@@ -312,6 +317,7 @@ class JSONSchemaConverter {
       const ObjectSpec& spec, const std::string& rule_name, bool need_brace = true
   );
   virtual int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name);
+  virtual int32_t GenerateNever(const NeverSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateRef(const RefSpec& spec, const std::string& rule_name);
