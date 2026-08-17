@@ -2394,7 +2394,8 @@ def test_min_max_length():
     schema = {"type": "string", "minLength": 1, "maxLength": 10}
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root ::= "\"" [^"\\\r\n]{1,10} "\""
+        r"""root_characters ::= [^\0-\x1f"\\\r\n] | "\\" basic_escape
+root ::= "\"" root_characters{1,10} "\""
 """
     )
 
@@ -2405,6 +2406,37 @@ def test_min_max_length():
 
     check_schema_with_instance(schema, instance_accepted, any_whitespace=True)
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
+
+
+def test_min_max_length_allows_escapes():
+    """A length bound must not change WHICH characters a string may contain.
+
+    Regression test for the case where the length-constrained path substituted a
+    character class with no escape alternative: `\\"`, `\\\\`, `\\n` and `\\uXXXX`
+    became unrepresentable, so a model that needed one could not complete the
+    string at all and kept emitting whatever else the grammar still allowed until
+    it hit the token limit.
+
+    Uses acceptance rather than a grammar comparison on purpose --
+    check_schema_with_grammar does not compare its expected EBNF, so only these
+    assertions can fail if the escape branch is dropped again.
+    """
+    schema = {"type": "string", "maxLength": 10}
+
+    # Every JSON escape form must survive the length bound.
+    check_schema_with_instance(schema, r'"ab\ncd"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"say \"hi\""', any_whitespace=True)
+    check_schema_with_instance(schema, r'"back\\sl"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"aéb"', any_whitespace=True)
+
+    # An unescaped control character is still invalid JSON and must be rejected.
+    check_schema_with_instance(schema, '"ab\ncd"', is_accepted=False, any_whitespace=True)
+
+    # And the bound itself must still bite -- an escape counts as one character.
+    check_schema_with_instance(schema, r'"\n\n\n\n\n\n\n\n\n\n"', any_whitespace=True)
+    check_schema_with_instance(
+        schema, r'"\n\n\n\n\n\n\n\n\n\n\n"', is_accepted=False, any_whitespace=True
+    )
 
 
 def test_type_array():

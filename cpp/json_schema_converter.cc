@@ -2368,8 +2368,19 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   }
   // Check for length constraints
   if (spec.min_length != 0 || spec.max_length != -1) {
+    // One JSON character is either an unescaped byte or a backslash escape. Both
+    // alternatives are required: a length-bounded string must accept exactly the
+    // characters an unbounded one accepts, only fewer of them. Omitting the escape
+    // branch makes \", \\, \n and \uXXXX unrepresentable, so a model that needs one
+    // cannot proceed -- it is left emitting whatever else the grammar still permits
+    // until it hits the token limit. The character class also excludes the C0
+    // controls, which RFC 8259 forbids unescaped inside a string; it matches the
+    // class basic_string_sub uses, so the two paths stay in sync.
+    int32_t normal_character = builder_.AddCharacterClass(
+        {{0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true
+    );
     int32_t character =
-        builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
+        Choice({normal_character, Sequence({ByteString("\\"), RuleRef(kBasicEscape)})});
     int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
     return Sequence({ByteString("\""), body, ByteString("\"")});
   }
