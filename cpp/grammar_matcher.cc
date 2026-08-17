@@ -504,6 +504,8 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   std::string FindJumpForwardString();
 
+  std::vector<int32_t> FindJumpForwardTokens();
+
   void Rollback(int num_tokens);
 
   bool IsTerminated() const;
@@ -2111,6 +2113,129 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
   return result;
 }
 
+std::vector<int32_t> GrammarMatcher::Impl::FindJumpForwardTokens() {
+  const std::string jump_forward = FindJumpForwardString();
+  if (jump_forward.empty()) {
+    return {};
+  }
+
+  const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  const size_t max_token_bytes = tokenizer_info_.ImplPtr()->GetMaxTokenBytes();
+
+  constexpr int kUnreachable = std::numeric_limits<int>::max();
+  const size_t no_position = std::numeric_limits<size_t>::max();
+  std::vector<int> token_counts(jump_forward.size() + 1, kUnreachable);
+  std::vector<size_t> previous_positions(jump_forward.size() + 1, no_position);
+  std::vector<int32_t> previous_tokens(jump_forward.size() + 1, -1);
+  token_counts[0] = 0;
+  size_t farthest_position = 0;
+
+  for (size_t position = 0; position < jump_forward.size(); ++position) {
+    if (token_counts[position] == kUnreachable) {
+      continue;
+    }
+
+    std::string candidate;
+    candidate.reserve(std::min(max_token_bytes, jump_forward.size() - position));
+    const size_t end_limit = std::min(jump_forward.size(), position + max_token_bytes);
+    for (size_t end = position + 1; end <= end_limit; ++end) {
+      candidate.push_back(jump_forward[end - 1]);
+      auto match = std::lower_bound(
+          sorted_vocab.begin(),
+          sorted_vocab.end(),
+          candidate,
+          [](const std::pair<int32_t, std::string>& token, const std::string& value) {
+            return token.second < value;
+          }
+      );
+      if (match == sorted_vocab.end() || match->second != candidate) {
+        continue;
+      }
+
+      int32_t token_id = match->first;
+      for (++match; match != sorted_vocab.end() && match->second == candidate; ++match) {
+        token_id = std::min(token_id, match->first);
+      }
+      if (token_counts[position] + 1 < token_counts[end]) {
+        token_counts[end] = token_counts[position] + 1;
+        previous_positions[end] = position;
+        previous_tokens[end] = token_id;
+        farthest_position = std::max(farthest_position, end);
+      }
+    }
+  }
+
+  std::vector<std::pair<size_t, int32_t>> token_steps;
+  for (size_t position = farthest_position; position != 0;
+       position = previous_positions[position]) {
+    XGRAMMAR_DCHECK(previous_positions[position] != no_position);
+    token_steps.emplace_back(previous_positions[position], previous_tokens[position]);
+  }
+  std::reverse(token_steps.begin(), token_steps.end());
+
+  // Keep only token boundaries that cannot be changed by a grammar-valid continuation. For
+  // example, if "ab" is forced, "c" can follow, and "abc" is a vocabulary token, emitting an
+  // "ab" token now would choose a non-stable tokenization.
+  Impl after_jump_forward(*this);
+  after_jump_forward.capture_recording_ = false;
+  for (uint8_t byte : jump_forward) {
+    bool accepted = after_jump_forward.Advance(byte);
+    XGRAMMAR_DCHECK(accepted);
+  }
+  size_t stable_token_count = token_steps.size();
+  for (size_t index = 0; index < token_steps.size(); ++index) {
+    const size_t token_start = token_steps[index].first;
+    const std::string forced_suffix = jump_forward.substr(token_start);
+    auto candidate = std::lower_bound(
+        sorted_vocab.begin(),
+        sorted_vocab.end(),
+        forced_suffix,
+        [](const std::pair<int32_t, std::string>& token, const std::string& value) {
+          return token.second < value;
+        }
+    );
+    while (candidate != sorted_vocab.end() &&
+           candidate->second.compare(0, forced_suffix.size(), forced_suffix) == 0) {
+      if (candidate->second.size() > forced_suffix.size()) {
+        Impl extension_trial(after_jump_forward);
+        bool extension_is_valid = true;
+        for (size_t byte_index = forced_suffix.size(); byte_index < candidate->second.size();
+             ++byte_index) {
+          if (!extension_trial.Advance(
+                  static_cast<uint8_t>(candidate->second[byte_index]), /*debug_print=*/false
+              )) {
+            extension_is_valid = false;
+            break;
+          }
+        }
+        if (extension_is_valid) {
+          stable_token_count = index;
+          break;
+        }
+      }
+      ++candidate;
+    }
+    if (stable_token_count != token_steps.size()) {
+      break;
+    }
+  }
+
+  std::vector<int32_t> tokens;
+  tokens.reserve(stable_token_count);
+  for (size_t index = 0; index < stable_token_count; ++index) {
+    tokens.push_back(token_steps[index].second);
+  }
+
+  Impl trial(*this);
+  trial.capture_recording_ = false;
+  size_t accepted_count = 0;
+  while (accepted_count < tokens.size() && trial.AcceptToken(tokens[accepted_count])) {
+    ++accepted_count;
+  }
+  tokens.resize(accepted_count);
+  return tokens;
+}
+
 void GrammarMatcher::Impl::Rollback(int num_tokens) {
   XGRAMMAR_CHECK(num_tokens <= static_cast<int>(token_length_history.size()))
       << "Intended to rollback " << num_tokens << " tokens, but only the last "
@@ -2682,6 +2807,10 @@ bool GrammarMatcher::TraverseDraftTree(
 }
 
 std::string GrammarMatcher::FindJumpForwardString() { return pimpl_->FindJumpForwardString(); }
+
+std::vector<int32_t> GrammarMatcher::FindJumpForwardTokens() {
+  return pimpl_->FindJumpForwardTokens();
+}
 
 void GrammarMatcher::Rollback(int num_tokens) { pimpl_->Rollback(num_tokens); }
 
