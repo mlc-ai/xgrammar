@@ -3410,5 +3410,21 @@ def test_compile_json_schema_any_order(cache_enabled: bool):
     assert ordered != any_order
 
 
+def test_pattern_properties_preserves_additional_properties_value_schema():
+    # Regression for issue #826 (patternProperties manifestation): without
+    # named properties, a typed additionalProperties schema was dropped,
+    # so keys outside the patterns were rejected entirely. Keys matching
+    # a pattern keep their pattern value schema (choice semantics, the
+    # same as the named-properties case).
+    schema = {
+        "type": "object",
+        "patternProperties": {"^x[0-9]+$": {"type": "integer"}},
+        "additionalProperties": {"type": "string"},
+    }
+    check_schema_with_instance(schema, '{"x1": 1}', is_accepted=True)
+    check_schema_with_instance(schema, '{"y": "hello"}', is_accepted=True)
+    check_schema_with_instance(schema, '{"y": 1}', is_accepted=False)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
