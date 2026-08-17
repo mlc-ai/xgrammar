@@ -2,7 +2,10 @@
 
 ## Automatic End Detection
 
-Certain "unlimited" formats — `any_text`, `any_tokens`, `triggered_tags`, and `token_triggered_tags` — can consume an unbounded amount of output. To know when to stop, the structural tag compiler automatically detects the **end condition** of the enclosing `tag` and adds it to the format's internal exclude set.
+Without an explicit length budget, certain "unlimited" formats — `any_text`, `any_tokens`,
+`triggered_tags`, and `token_triggered_tags` — can consume an unbounded amount of output. To know
+when to stop, the structural tag compiler automatically detects the **end condition** of the
+enclosing `tag` and adds it to the format's internal exclude set.
 
 The detection works by walking up to the nearest enclosing `tag`:
 

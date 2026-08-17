@@ -1419,6 +1419,33 @@ def test_any_text_only_format(
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+def test_any_text_length_budgets():
+    check_stag_with_grammar(
+        {
+            "type": "tag",
+            "begin": "<think>",
+            "content": {"type": "any_text", "max_tokens": 2, "max_chars": 4},
+            "end": "</think>",
+        },
+        r"""any_text[max_tokens=2, max_chars=4] ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</think>")
+)
+tag ::= (("<think>" any_text "</think>"))
+root ::= ((tag))
+""",
+    )
+
+
+def test_any_text_zero_token_budget_is_empty():
+    check_stag_with_grammar(
+        {"type": "any_text", "max_tokens": 0},
+        r"""any_text[max_tokens=0] ::= ("")
+root ::= ((any_text))
+""",
+    )
+
+
 test_no_end_anytext_format_with_excludes_instance_is_accepted = [
     ("<TOOL>hello world", True),
     ("<TOOL>hello world<END>", True),
@@ -4236,6 +4263,26 @@ root ::= ((any_tokens))
     )
 
 
+def test_any_tokens_format_max_tokens():
+    check_stag_with_grammar(
+        {"type": "any_tokens", "exclude_tokens": [5, 10], "max_tokens": 3},
+        r"""any_tokens_inner ::= ((ExcludeToken(5, 10)))
+any_tokens[max_tokens=3] ::= ("" | (any_tokens_inner any_tokens))
+root ::= ((any_tokens))
+""",
+    )
+
+
+def test_any_tokens_format_zero_token_budget_is_empty():
+    check_stag_with_grammar(
+        {"type": "any_tokens", "exclude_tokens": [5], "max_tokens": 0},
+        r"""any_tokens_inner ::= ((ExcludeToken(5)))
+any_tokens[max_tokens=0] ::= ("")
+root ::= ((any_tokens))
+""",
+    )
+
+
 def test_any_tokens_detects_end_from_parent_tag():
     """AnyTokensFormat inside a tag with token end should auto-detect end token IDs."""
     check_stag_with_grammar(
@@ -4426,6 +4473,61 @@ def test_any_tokens_format_invalid_exclude_type():
     stag = {"type": "structural_tag", "format": {"type": "any_tokens", "exclude_tokens": "bad"}}
     with pytest.raises(Exception, match="Invalid structural tag error"):
         xgr.Grammar.from_structural_tag(stag)
+
+
+@pytest.mark.parametrize("format_type", ["any_text", "any_tokens"])
+@pytest.mark.parametrize("bad_value", [-1, 1.5, "invalid", 2**31])
+def test_length_budget_invalid(format_type: str, bad_value: Any):
+    field = "max_tokens"
+    stag = {"type": "structural_tag", "format": {"type": format_type, field: bad_value}}
+    with pytest.raises(Exception, match="non-negative 32-bit integer"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+@pytest.mark.parametrize("bad_value", [-1, 1.5, "invalid", 2**31])
+def test_any_text_max_chars_invalid(bad_value: Any):
+    stag = {"type": "structural_tag", "format": {"type": "any_text", "max_chars": bad_value}}
+    with pytest.raises(Exception, match="non-negative 32-bit integer"):
+        xgr.Grammar.from_structural_tag(stag)
+
+
+def test_length_budget_pydantic_roundtrip():
+    from xgrammar.structural_tag import AnyTextFormat, AnyTokensFormat
+
+    any_text = AnyTextFormat(excludes=["END"], max_tokens=3, max_chars=7)
+    any_text_roundtrip = AnyTextFormat.model_validate_json(any_text.model_dump_json())
+    assert any_text_roundtrip == any_text
+    assert AnyTextFormat().max_tokens is None
+    assert AnyTextFormat().max_chars is None
+    assert "any_text[max_tokens=3, max_chars=7]" in str(
+        xgr.Grammar.from_structural_tag(StructuralTag(format=any_text))
+    )
+
+    any_tokens = AnyTokensFormat(exclude_tokens=[5, "END"], max_tokens=3)
+    any_tokens_roundtrip = AnyTokensFormat.model_validate_json(any_tokens.model_dump_json())
+    assert any_tokens_roundtrip == any_tokens
+    assert AnyTokensFormat().max_tokens is None
+    assert "any_tokens[max_tokens=3]" in str(
+        xgr.Grammar.from_structural_tag(
+            StructuralTag(format=AnyTokensFormat(exclude_tokens=[5], max_tokens=3))
+        )
+    )
+    assert "any_tokens[max_tokens=" not in str(
+        xgr.Grammar.from_structural_tag(StructuralTag(format=AnyTokensFormat(exclude_tokens=[5])))
+    )
+
+    with pytest.raises(Exception):
+        AnyTextFormat(max_tokens=-1)
+    with pytest.raises(Exception):
+        AnyTextFormat(max_chars=-1)
+    with pytest.raises(Exception):
+        AnyTokensFormat(max_tokens=-1)
+    with pytest.raises(Exception):
+        AnyTextFormat(max_tokens=2**31)
+    with pytest.raises(Exception):
+        AnyTextFormat(max_chars=2**31)
+    with pytest.raises(Exception):
+        AnyTokensFormat(max_tokens=2**31)
 
 
 def test_token_triggered_tags_missing_triggers():

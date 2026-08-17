@@ -120,7 +120,12 @@ struct RegexFormat {
 struct AnyTextFormat {
   static constexpr const char* type = "any_text";
   std::vector<std::string> excludes;
-  AnyTextFormat(std::vector<std::string> excluded_strs) : excludes(std::move(excluded_strs)) {}
+  int32_t max_tokens = -1;
+  int32_t max_chars = -1;
+  AnyTextFormat(
+      std::vector<std::string> excluded_strs, int32_t max_tokens = -1, int32_t max_chars = -1
+  )
+      : excludes(std::move(excluded_strs)), max_tokens(max_tokens), max_chars(max_chars) {}
   picojson::value ToJSON() const;
 
  private:
@@ -164,8 +169,11 @@ struct ExcludeTokenFormat {
 struct AnyTokensFormat {
   static constexpr const char* type = "any_tokens";
   std::vector<std::variant<int32_t, std::string>> exclude_tokens;
-  AnyTokensFormat(std::vector<std::variant<int32_t, std::string>> exclude_tokens)
-      : exclude_tokens(std::move(exclude_tokens)) {}
+  int32_t max_tokens = -1;
+  AnyTokensFormat(
+      std::vector<std::variant<int32_t, std::string>> exclude_tokens, int32_t max_tokens = -1
+  )
+      : exclude_tokens(std::move(exclude_tokens)), max_tokens(max_tokens) {}
   picojson::value ToJSON() const;
 
  private:
