@@ -1439,38 +1439,39 @@ void GrammarFSMBuilderImpl::BuildNegativeCharacterClass(
       expr.type == ExprType::kCharacterClass || expr.type == ExprType::kCharacterClassStar
   );
   XGRAMMAR_DCHECK(expr[0]);  // Negative character class should be true.
-  std::bitset<128> char_set;
+  std::vector<GrammarBuilder::CharacterClassElement> ranges;
   for (int i = 1; i < static_cast<int>(expr.size()); i += 2) {
-    uint8_t byte_min = static_cast<uint8_t>(expr[i]);
-    uint8_t byte_max = static_cast<uint8_t>(expr[i + 1]);
-    if (byte_max > 128) {
-      XGRAMMAR_LOG(WARNING) << "Negative Character class contains byte greater than 127, "
-                            << "clamping to 127.";
-      byte_max = 127;
-    }
-    for (uint8_t j = byte_min; j <= byte_max; ++j) {
-      char_set.set(j);
+    ranges.push_back({expr[i], expr[i + 1]});
+  }
+  std::sort(ranges.begin(), ranges.end(), [](const auto& a, const auto& b) {
+    return a.lower < b.lower;
+  });
+  std::vector<GrammarBuilder::CharacterClassElement> merged;
+  for (const auto& range : ranges) {
+    if (!merged.empty() && range.lower <= merged.back().upper + 1) {
+      merged.back().upper = std::max(merged.back().upper, range.upper);
+    } else {
+      merged.push_back(range);
     }
   }
 
-  int left_bound = -1;
-  for (int i = 0; i < 128; ++i) {
-    if (!char_set[i]) {
-      left_bound = i;
-      int right_bound = i + 1;
-      while (right_bound < 128 && !char_set[right_bound]) {
-        right_bound++;
-      }
-      target_fsm_.AddEdge(
+  int32_t next = 0;
+  for (const auto& range : merged) {
+    if (range.lower > next) {
+      AddCharacterRange(
           start_state,
           end_state,
-          static_cast<uint8_t>(left_bound),
-          static_cast<uint8_t>(right_bound - 1)
+          CodepointToPackedUTF8(next),
+          CodepointToPackedUTF8(range.lower - 1)
       );
-      i = right_bound;
     }
+    next = std::max(next, range.upper + 1);
   }
-  AddCharacterRange(start_state, end_state, kMin2BytesUnicode, kMax4BytesUnicode);
+  if (next <= 0x10FFFF) {
+    AddCharacterRange(
+        start_state, end_state, CodepointToPackedUTF8(next), CodepointToPackedUTF8(0x10FFFF)
+    );
+  }
 }
 
 void GrammarFSMBuilderImpl::AddCharacterClassTransitions(
