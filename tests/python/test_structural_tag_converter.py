@@ -197,7 +197,7 @@ xml_string ::= TagDispatch(
   excludes=("</parameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))
-xml_object ::= (([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_properties{0, -1} [ \n\t]*) | ([ \n\t]*))
+xml_object ::= ("" | ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_properties{0, -1} [ \n\t]*))
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 basic_number_digits ::= (([0-9]))
 basic_array_items ::= (([ \n\t]* "," [ \n\t]* basic_any))
@@ -308,7 +308,7 @@ xml_string ::= TagDispatch(
   excludes=("</parameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))
-xml_object ::= (([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_properties{0, -1} [ \n\t]*) | ([ \n\t]*))
+xml_object ::= ("" | ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" xml_object_properties{0, -1} [ \n\t]*))
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 basic_number_digits ::= (([0-9]))
 basic_array_items ::= (([ \n\t]* "," [ \n\t]* basic_any))
@@ -390,7 +390,7 @@ xml_string ::= TagDispatch(
   excludes=("</\uff5cDSML\uff5cparameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))
-xml_object ::= (([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_1 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_properties{0, -1} [ \n\t]*) | ([ \n\t]*))
+xml_object ::= ("" | ([ \n\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_1 "\">" [ \n\t]* xml_any [ \n\t]* "</\uff5cDSML\uff5cparameter>" xml_object_properties{0, -1} [ \n\t]*))
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 basic_number_digits ::= (([0-9]))
 basic_array_items ::= (([ \n\t]* "," [ \n\t]* basic_any))
@@ -737,7 +737,10 @@ def test_json_schema_style_kimi_k3_xml_empty_object():
         "style": "kimi_k3_xml",
     }
     check_stag_with_instance(stag_format, "", True)
-    check_stag_with_instance(stag_format, "\n", True)
+    # No whitespace-only self-loop in the empty parameter zone (issue #802):
+    # the zone must emit nothing and hand control to the tag end.
+    check_stag_with_instance(stag_format, "\n", False)
+    check_stag_with_instance(stag_format, "\t", False)
 
 
 def test_json_schema_style_kimi_k3_xml_object_argument_uses_json():
