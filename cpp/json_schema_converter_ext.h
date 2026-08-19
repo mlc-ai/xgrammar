@@ -7,6 +7,8 @@
 #ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 #define XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 
+#include <picojson.h>
+
 #include <map>
 #include <optional>
 #include <string>
@@ -19,11 +21,10 @@
 namespace xgrammar {
 
 /*!
- * \brief Converter for XML Tool Calling format (e.g., Qwen style).
+ * \brief Converter for XML Tool Calling formats.
  *
- * This converter generates a grammar where:
- * - The outermost object uses XML format: <parameter=name>value</parameter>
- * - Inner values use standard JSON format
+ * The concrete dialect controls whether only the outermost object is XML-encoded or objects and
+ * arrays are encoded recursively.
  */
 class XMLToolCallingConverter : public JSONSchemaConverter {
  public:
@@ -37,8 +38,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       bool any_order = false
   );
 
-  /*! \brief Convert SchemaSpec to grammar with XML format for root object. Note that this function
-   * is not thread-safe.*/
+  /*! \brief Convert SchemaSpec to a grammar. This function is not thread-safe. */
   Grammar Convert(const SchemaSpecPtr& spec);
 
  protected:
@@ -68,6 +68,15 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       const std::string& rule_name_suffix,
       const SchemaSpecPtr& schema
   ) override;
+  int32_t FormatPatternProperty(
+      const std::string& key_regex,
+      int32_t value_rule_id,
+      const std::string& rule_name,
+      const std::string& rule_name_suffix,
+      const SchemaSpecPtr& schema
+  ) override;
+  int32_t CreatePropertyNameRule(const SchemaSpecPtr& spec, const std::string& rule_name_hint)
+      override;
 
   std::string GetKeyPattern() const override;
   std::string GetBasicAnyRuleName() const override;
@@ -81,22 +90,34 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
 
   void AddCache(const std::string& key, int32_t rule_id) override;
   std::optional<int32_t> GetCache(const std::string& key) const override;
+  int GetRefCacheDomain() const override;
 
  protected:
-  // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
-  struct XMLWrapper {
-    std::string key_wrapper_prefix;
-    std::string key_wrapper_suffix;
-    std::string value_wrapper_prefix;
-    std::string parameter_suffix;
+  struct ElementSyntax {
+    std::string open_prefix;
+    std::string open_suffix;
+    std::string value_prefix;
+    std::string close_prefix;
+    std::string close_suffix;
+    bool close_repeats_key = false;
   };
 
-  static const std::unordered_map<JSONFormat, XMLWrapper> kKeyWrapperMap;
+  struct XMLDialectConfig {
+    ElementSyntax property;
+    bool recursive = false;
+    std::string array_item_name;
+    bool pad_values_with_whitespace = true;
+    std::string string_terminator;
+  };
+
+  static const std::unordered_map<JSONFormat, XMLDialectConfig> kDialectConfigMap;
   static const std::string kXMLString;
   static const std::string kXMLAny;
   static const std::string kXMLObject;
   static const std::string kXMLVariableName;
 
+  bool IsXMLLayer() const;
+  bool IsInnerCacheLayer() const;
   std::string XMLValue(const std::string& json_value) const;
   std::string EscapeAttrValue(const std::string& value) const;
 
@@ -120,11 +141,33 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
    * (additionalProperties / patternProperties) need.
    */
   int32_t XMLKeySuffix(const std::optional<std::string>& pinned_type = std::nullopt);
+  int32_t FormatElement(
+      const ElementSyntax& syntax,
+      const std::string& key,
+      int32_t value_rule_id,
+      const SchemaSpecPtr& schema = nullptr
+  );
+  int32_t FormatElementValueAndClose(
+      const ElementSyntax& syntax, int32_t value_rule_id, int32_t close_expr
+  );
+  int32_t GenerateRepeatedElementArray(const ArraySpec& spec, const std::string& rule_name);
+  int32_t GenerateLiteral(const picojson::value& value);
+  void AddRootOnlyXMLBasicRules();
+  void AddRecursiveXMLBasicRules();
+  void ValidateRecursiveObject(const ObjectSpec& spec) const;
+  void ValidateElementName(const std::string& name) const;
+
+  struct UniqueKeyScopeContext {
+    int32_t rule_id = -1;
+    std::vector<std::string> reserved_names;
+  };
 
   JSONFormat json_format_;
   // Track if we're at the root object level
   int nested_object_level_ = 0;
-  const XMLWrapper xml_wrapper_;
+  bool generating_property_name_ = false;
+  const XMLDialectConfig& dialect_;
+  std::vector<UniqueKeyScopeContext> unique_key_scope_stack_;
 };
 
 /*!
@@ -164,6 +207,13 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   ) override;
   int32_t FormatOtherProperty(
       int32_t key_pattern_expr,
+      int32_t value_rule_id,
+      const std::string& rule_name,
+      const std::string& rule_name_suffix,
+      const SchemaSpecPtr& schema
+  ) override;
+  int32_t FormatPatternProperty(
+      const std::string& key_regex,
       int32_t value_rule_id,
       const std::string& rule_name,
       const std::string& rule_name_suffix,

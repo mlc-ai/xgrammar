@@ -93,13 +93,15 @@ struct ParserState {
    * is predicted and inherited by the states inside it. */
   int32_t budget_deadline = -1;
 
-  /*! \brief The id of the sub element in the current element of the sequence. */
+  /*! \brief The id of the sub element in the current element of the sequence. In a DynamicTag
+   * FSM, this stores the parser row at the start of the captured opening name. */
   int32_t sub_element_id = 0;
 
   /*! \brief The number of times the element is repeated. It will be used in kRepeat.*/
   int32_t repeat_count = 0;
 
-  /*! \brief Partial codepoint accumulated during UTF-8 decoding for positive character classes. */
+  /*! \brief Partial codepoint accumulated during UTF-8 decoding. In a DynamicTag FSM, this
+   * stores the parser row at the end of the captured opening name; the two uses cannot overlap. */
   int32_t partial_codepoint = 0;
 
   /*! \brief The innermost active rule that specifies a sampling temperature. */
@@ -176,9 +178,12 @@ XGRAMMAR_MEMBER_ARRAY(
 );
 
 /*!
- * \brief Hash of a state used as the key of the adaptive token mask cache. The token mask of a
- * state does not depend on rule_start_pos, repeat_count or partial_codepoint, so they are
- * ignored. Pairs with StateEqualForCache.
+ * \brief Hash of a state used as the key of the adaptive token mask cache.
+ *
+ * The reusable cache is keyed only by grammar position. Runtime-dependent fields are ignored:
+ * character budgets are handled by boundary checks, and DynamicTag backreferences and scoped
+ * key uniqueness use a conservative cache plus matcher-local exact checks. Pairs with
+ * StateEqualForCache.
  */
 class StateHashForCache {
  public:
@@ -468,6 +473,58 @@ class EarleyParser {
    */
   bool capture_recording_ = false;
 
+  /*! \brief Whether the optimized grammar contains a DynamicTag rule. */
+  bool has_dynamic_tag_rules_ = false;
+
+  /*! \brief Rules whose concrete occurrences delimit DynamicTag key-uniqueness scopes. */
+  std::vector<uint8_t> unique_key_scope_rules_;
+
+  /*! \brief Scope rule id for each scoped DynamicTag rule, or -1. Empty if none exist. */
+  std::vector<int32_t> dynamic_tag_unique_key_scope_rule_ids_;
+
+  bool IsDynamicTagRule(int32_t rule_id) const {
+    return rule_id >= 0 && grammar_->GetGrammarExpr(grammar_->GetRule(rule_id).body_expr_id).type ==
+                               Grammar::Impl::GrammarExprType::kDynamicTag;
+  }
+
+  bool IsUniqueKeyDynamicTagRule(int32_t rule_id) const {
+    return rule_id >= 0 &&
+           rule_id < static_cast<int32_t>(dynamic_tag_unique_key_scope_rule_ids_.size()) &&
+           dynamic_tag_unique_key_scope_rule_ids_[rule_id] >= 0;
+  }
+
+  int32_t GetDynamicTagUniqueKeyScopeRuleId(int32_t rule_id) const {
+    XGRAMMAR_DCHECK(IsUniqueKeyDynamicTagRule(rule_id));
+    return dynamic_tag_unique_key_scope_rule_ids_[rule_id];
+  }
+
+  bool IsUniqueKeyScopeRule(int32_t rule_id) const {
+    return rule_id >= 0 && rule_id < static_cast<int32_t>(unique_key_scope_rules_.size()) &&
+           unique_key_scope_rules_[rule_id] != 0;
+  }
+
+  struct BackReferenceProgress {
+    uint8_t next_byte;
+    bool is_last_byte;
+  };
+
+  /*! \brief Get the next byte required by a backreference state. GrammarMatcher overrides this
+   * using its matcher-local committed and speculative byte history. */
+  virtual std::optional<BackReferenceProgress> GetBackReferenceProgress(const ParserState& state
+  ) const {
+    return std::nullopt;
+  }
+
+  /*! \brief Whether a backreference should be over-approximated as one or more arbitrary bytes.
+   * Used only while compiling a conservative token mask; normal matching always returns false. */
+  virtual bool AllowWildcardBackReference() const { return false; }
+
+  /*! \brief Validate a scoped DynamicTag name after its opening suffix is fully matched. */
+  virtual bool AllowDynamicTagContent(const ParserState& state) { return true; }
+
+  /*! \brief Notify subclasses after parser history is rolled back to remaining_rows rows. */
+  virtual void OnPopLastStates(int32_t remaining_rows) {}
+
   /*!
    * \brief The history of capture events. capture_event_history_[i] stores the events recorded
    * when input position i was created. Kept aligned with scanable_state_history_ row-by-row
@@ -674,6 +731,8 @@ class EarleyParser {
   explicit EarleyParser(
       const Grammar& grammar, std::optional<ParserState> initial_state = std::nullopt
   );
+
+  virtual ~EarleyParser() = default;
 
   /*!
    * \brief From the current states, advance to the next state.

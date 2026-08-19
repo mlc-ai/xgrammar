@@ -3,6 +3,15 @@
  */
 
 export type JSONSchemaValue = boolean | Record<string, unknown>;
+export type JSONSchemaStyle =
+  | "json"
+  | "qwen_xml"
+  | "minimax_xml"
+  | "minimax_m3_xml"
+  | "deepseek_xml"
+  | "glm_xml"
+  | "cohere_xml"
+  | "kimi_k3_xml";
 
 export interface ConstStringFormat {
   type: "const_string";
@@ -12,7 +21,9 @@ export interface ConstStringFormat {
 export interface JSONSchemaFormat {
   type: "json_schema";
   json_schema: JSONSchemaValue;
-  style?: "json" | "qwen_xml" | "minimax_xml" | "deepseek_xml" | "glm_xml" | "cohere_xml";
+  style?: JSONSchemaStyle;
+  any_order?: boolean;
+  max_whitespace_cnt?: number | null;
 }
 
 export interface QwenXMLParameterFormat {

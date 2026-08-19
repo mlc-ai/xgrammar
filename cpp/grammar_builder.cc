@@ -208,6 +208,40 @@ int32_t GrammarBuilder::AddTokenTagDispatch(
   );
 }
 
+int32_t GrammarBuilder::AddDynamicTag(const Grammar::Impl::DynamicTag& dynamic_tag) {
+  XGRAMMAR_CHECK(dynamic_tag.name_rule_id >= 0 && dynamic_tag.name_rule_id < NumRules())
+      << "DynamicTag name_rule_id is out of range";
+  XGRAMMAR_CHECK(dynamic_tag.content_rule_id >= 0 && dynamic_tag.content_rule_id < NumRules())
+      << "DynamicTag content_rule_id is out of range";
+  XGRAMMAR_CHECK(
+      (dynamic_tag.unique_key_scope_rule_id == -1 && dynamic_tag.reserved_names.empty()) ||
+      (dynamic_tag.unique_key_scope_rule_id >= 0 &&
+       dynamic_tag.unique_key_scope_rule_id < NumRules())
+  ) << "DynamicTag unique-key metadata requires a valid scope rule";
+  XGRAMMAR_CHECK(dynamic_tag.unique_key_scope_rule_id == -1 || !dynamic_tag.open_suffix.empty())
+      << "A unique-key DynamicTag requires a non-empty opening suffix";
+  std::vector<int32_t> data = {
+      AddByteString(dynamic_tag.open_prefix),
+      dynamic_tag.name_rule_id,
+      AddByteString(dynamic_tag.open_suffix),
+      dynamic_tag.content_rule_id,
+      AddByteString(dynamic_tag.close_prefix),
+      AddByteString(dynamic_tag.close_suffix)
+  };
+  if (dynamic_tag.unique_key_scope_rule_id >= 0) {
+    data.push_back(dynamic_tag.unique_key_scope_rule_id);
+    std::vector<int32_t> reserved_name_expr_ids;
+    reserved_name_expr_ids.reserve(dynamic_tag.reserved_names.size());
+    for (const auto& name : dynamic_tag.reserved_names) {
+      reserved_name_expr_ids.push_back(AddByteString(name));
+    }
+    data.push_back(AddChoices(reserved_name_expr_ids));
+  }
+  return AddGrammarExpr(
+      {GrammarExprType::kDynamicTag, data.data(), static_cast<int32_t>(data.size())}
+  );
+}
+
 int32_t GrammarBuilder::AddRepeat(
     int32_t ref_rule_id, int32_t min_repeat_count, int32_t max_repeat_count
 ) {

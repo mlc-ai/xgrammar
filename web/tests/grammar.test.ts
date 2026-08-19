@@ -4,7 +4,15 @@
  * thoroughly since that is done in `tests/python`.
  */
 import { describe, expect, test } from "@jest/globals";
-import { Grammar, GrammarCompiler, TokenizerInfo, GrammarMatcher, Testings, StructuralTagItem } from "..";
+import {
+  Grammar,
+  GrammarCompiler,
+  TokenizerInfo,
+  GrammarMatcher,
+  Testings,
+  StructuralTagItem,
+} from "..";
+import type { StructuralTag } from "..";
 import { Tokenizer } from "@mlc-ai/web-tokenizers";
 
 async function getTokenizerInfoFromUrl(tokenizerUrl: string, vocabType: string, prependSpace: boolean): Promise<TokenizerInfo> {
@@ -78,6 +86,20 @@ d_1 ::= ("" | ("d"))
     expect(grammar).toEqual(ebnf_grammar);
   });
 
+  test("Test MiniMax M3 _jsonSchemaToEBNF", async () => {
+    const schema = JSON.stringify({
+      type: "object",
+      properties: { city: { type: "string" } },
+      required: ["city"],
+      additionalProperties: false,
+    });
+    const grammar = await Testings._jsonSchemaToEBNF(
+      schema, true, -1, undefined, true, undefined, "minimax_m3_xml"
+    );
+    expect(grammar).toContain("]<]minimax[>[<city>");
+    expect(grammar).toContain("]<]minimax[>[</city>");
+  });
+
   test("Test indent _jsonSchemaToEBNF", async () => {
     const grammar0 = await Testings._jsonSchemaToEBNF(schema, false, -1);
     const grammar1 = await Testings._jsonSchemaToEBNF(schema, false);
@@ -110,7 +132,7 @@ d_1 ::= ("" | ("d"))
       required: ["city"],
       additionalProperties: false,
     };
-    const structuralTag = {
+    const structuralTag: StructuralTag = {
       type: "structural_tag" as const,
       format: {
         type: "triggered_tags" as const,
@@ -252,6 +274,61 @@ d_1 ::= ("" | ("d"))
     compiledGrammar1.dispose();
     compiledGrammar2.dispose();
     compiler.dispose();
+  });
+
+  test("Test MiniMax M3 structural tag runtime key equality", async () => {
+    const ns = "]<]minimax[>[";
+    const structuralTag: StructuralTag = {
+      type: "structural_tag",
+      format: {
+        type: "tag",
+        begin: `${ns}<tool_call>\n`,
+        content: {
+          type: "tag",
+          begin: `${ns}<invoke name="search">`,
+          content: {
+            type: "json_schema",
+            json_schema: {
+              type: "object",
+              additionalProperties: { type: "string" },
+            },
+            style: "minimax_m3_xml",
+          },
+          end: `${ns}</invoke>\n`,
+        },
+        end: `${ns}</tool_call>`,
+      },
+    };
+    const element = (openName: string, closeName: string) =>
+      `${ns}<${openName}>value${ns}</${closeName}>`;
+    const wrap = (body: string) =>
+      `${ns}<tool_call>\n${ns}<invoke name="search">${body}` +
+      `${ns}</invoke>\n${ns}</tool_call>`;
+
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(["x"], "byte_level", false);
+    const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+    const compiledGrammar = await compiler.compileStructuralTag(structuralTag);
+
+    const matching = await GrammarMatcher.createGrammarMatcher(
+      compiledGrammar,
+      undefined,
+      true,
+    );
+    expect(matching._acceptString(wrap(element("runtime_key", "runtime_key")))).toEqual(true);
+    expect(matching.isCompleted()).toEqual(true);
+
+    const mismatching = await GrammarMatcher.createGrammarMatcher(
+      compiledGrammar,
+      undefined,
+      true,
+    );
+    expect(mismatching._acceptString(wrap(element("runtime_key", "wrong_key")))).toEqual(false);
+
+    matching.dispose();
+    mismatching.dispose();
+    compiledGrammar.dispose();
+    compiler.dispose();
+    tokenizerInfo.dispose();
   });
 });
 

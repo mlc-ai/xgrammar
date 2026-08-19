@@ -3263,7 +3263,8 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "style": "not_string"}}',
-        'style must be "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml", "cohere_xml", or "kimi_k3_xml"',
+        'style must be "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", '
+        '"deepseek_xml", "glm_xml", "cohere_xml", or "kimi_k3_xml"',
     ),
     # RepeatFormat Errors - illegal min/max
     (
@@ -3497,6 +3498,45 @@ basic_structural_tags_instance_is_accepted = [
             style="minimax_xml",
         ),
         '<parameter name="name">value</param>',
+        False,
+    ),
+    # JSONSchemaFormat with style="minimax_m3_xml"
+    (
+        xgr.structural_tag.JSONSchemaFormat(
+            json_schema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "meta": {
+                        "type": "object",
+                        "properties": {"count": {"type": "integer"}},
+                        "required": ["count"],
+                        "additionalProperties": False,
+                    },
+                },
+                "required": ["name", "meta"],
+                "additionalProperties": False,
+            },
+            style="minimax_m3_xml",
+        ),
+        (
+            "]<]minimax[>[<name>value]<]minimax[>[</name>"
+            "]<]minimax[>[<meta>]<]minimax[>[<count>1]<]minimax[>[</count>"
+            "]<]minimax[>[</meta>"
+        ),
+        True,
+    ),
+    (
+        xgr.structural_tag.JSONSchemaFormat(
+            json_schema={
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                "required": ["name"],
+                "additionalProperties": False,
+            },
+            style="minimax_m3_xml",
+        ),
+        "]<]minimax[>[<name>value]<]minimax[>[</wrong>",
         False,
     ),
     # JSONSchemaFormat with style="deepseek_xml"

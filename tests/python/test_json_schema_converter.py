@@ -3149,6 +3149,23 @@ def test_property_names_with_properties():
     check_schema_with_instance(schema, {"Name": "John"}, is_accepted=False, any_whitespace=False)
 
 
+def test_property_names_preserves_explicit_additional_properties_policy():
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z]+$"},
+        "additionalProperties": {"type": "string"},
+    }
+    check_schema_with_instance(schema, {"name": "John"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"name": 42}, is_accepted=False, any_whitespace=False)
+
+    schema["additionalProperties"] = False
+    check_schema_with_instance(schema, {}, any_whitespace=False)
+    check_schema_with_instance(schema, {"name": "John"}, is_accepted=False, any_whitespace=False)
+    schema["minProperties"] = 1
+    with pytest.raises(RuntimeError, match="minProperties"):
+        xgr.Grammar.from_json_schema(json.dumps(schema), strict_mode=True)
+
+
 def test_multiple_pattern_properties_with_properties():
     """Regression test for #487: multiple patternProperties + properties coexistence."""
     schema = {
