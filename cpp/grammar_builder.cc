@@ -241,7 +241,7 @@ int32_t GrammarBuilder::AddRule(const Rule& rule) {
   EnsureRuleNameMap();
   int32_t id = static_cast<int32_t>(grammar_->rules_.size());
   grammar_->rules_.push_back(rule);
-  XGRAMMAR_CHECK(rule_name_to_id_.count(rule.name) == 0);
+  XGRAMMAR_CHECK(GetRuleId(rule.name) == -1);
   rule_name_to_id_[rule.name] = id;
   return id;
 }
@@ -404,6 +404,12 @@ std::string GrammarBuilder::GetNewRuleName(const std::string& name_hint) {
     ++(*cnt);
   }
   return name_hint + "_" + std::to_string(*cnt);
+}
+
+void GrammarBuilder::ReserveRuleName(const std::string& name) {
+  EnsureRuleNameMap();
+  XGRAMMAR_CHECK(rule_name_to_id_.count(name) == 0) << "Rule name " << name << " is already used.";
+  rule_name_to_id_[name] = -1;
 }
 
 int32_t GrammarBuilder::GetRuleId(const std::string& name) const {

@@ -55,8 +55,16 @@ std::vector<GrammarBuilder::CharacterClassElement> XMLIdentifierContinuationChar
   return {{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}};
 }
 
+constexpr const char* kIntegerCacheKey = "{\"type\":\"integer\"}";
+constexpr const char* kNumberCacheKey = "{\"type\":\"number\"}";
 constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
+constexpr const char* kBooleanCacheKey = "{\"type\":\"boolean\"}";
+constexpr const char* kNullCacheKey = "{\"type\":\"null\"}";
+constexpr const char* kArrayCacheKey = "{\"type\":\"array\"}";
 constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
+
+constexpr int32_t kInvalidExprId = -1;
+constexpr int32_t kInvalidRuleId = -1;
 
 }  // namespace
 
@@ -73,7 +81,7 @@ const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
          {"<｜DSML｜parameter name=\"",
           "",
           "",
-          // TODO(Linzhang): We do not validate the string's value, and we accept both.
+          // The key suffix is generated in DeepSeekXMLToolCallingConverter.
           "</｜DSML｜parameter>"}},
         {JSONFormat::kGlmXML, {"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"}},
         {JSONFormat::kCohereXML, {"<cofl:value", ">", "", "</cofl:value>"}},
@@ -116,13 +124,7 @@ std::string XMLToolCallingConverter::XMLValue(const std::string& json_value) con
 }
 
 int32_t XMLToolCallingConverter::XMLKeySuffix(const std::optional<std::string>& pinned_type) {
-  if (json_format_ == JSONFormat::kDeepSeekXML) {
-    return Sequence(
-        {ByteString("\" string=\""),
-         Choice({ByteString("true"), ByteString("false")}),
-         ByteString("\">")}
-    );
-  }
+  XGRAMMAR_DCHECK(json_format_ != JSONFormat::kDeepSeekXML);
   if (json_format_ == JSONFormat::kKimiK3XML) {
     // A declared property carries exactly the type its value grammar is rendered with, so the
     // parser decodes the value back to the schema's type. Free-form keys have no single schema
@@ -201,24 +203,22 @@ std::optional<std::string> XMLToolCallingConverter::KimiK3TypeAttr(const SchemaS
   );
 }
 
-void XMLToolCallingConverter::AddBasicRules() {
+void XMLToolCallingConverter::AddBasicRules() { AddBasicRules({kXMLString, kXMLAny}); }
+
+void XMLToolCallingConverter::AddBasicRules(const std::vector<std::string>& additional_rule_names) {
   // First add JSON basic rules. These should be in the inner layer of the XML format.
   XGRAMMAR_DCHECK(nested_object_level_ == 0);
   // The nested part, true json format, is at level 2.
   nested_object_level_ = 2;
-  JSONSchemaConverter::AddBasicRules({kXMLString, kXMLAny, kXMLObject, kXMLVariableName});
+  std::vector<std::string> xml_basic_rule_names = additional_rule_names;
+  xml_basic_rule_names.insert(xml_basic_rule_names.end(), {kXMLObject, kXMLVariableName});
+  JSONSchemaConverter::AddBasicRules(xml_basic_rule_names);
 
   auto any_spec = SchemaSpec::Make(AnySpec{}, "{}", kBasicAny);
 
   // The outer part, xml format, is at level 1.
   nested_object_level_ = 1;
-  // Add XML string rule
-  builder_.UpdateRuleBody(kXMLString, TagDispatch(false, {xml_wrapper_.parameter_suffix}));
-  AddCache(kStringCacheKey, builder_.GetRuleId(kXMLString));
-
-  // Add XML any rule
-  builder_.UpdateRuleBody(kXMLAny, GenerateAny(AnySpec{}, kXMLAny));
-  AddCache("{}", builder_.GetRuleId(kXMLAny));
+  AddXMLBasicRulesLevel1();
 
   // Reset the nested object level to 0, which is the root level.
   nested_object_level_ = 0;
@@ -238,6 +238,16 @@ void XMLToolCallingConverter::AddBasicRules() {
            builder_.AddCharacterClassStar({{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}})}
       )
   );
+}
+
+void XMLToolCallingConverter::AddXMLBasicRulesLevel1() {
+  // Add XML string rule
+  builder_.UpdateRuleBody(kXMLString, TagDispatch(false, {xml_wrapper_.parameter_suffix}));
+  AddCache(kStringCacheKey, builder_.GetRuleId(kXMLString));
+
+  // Add XML any rule
+  builder_.UpdateRuleBody(kXMLAny, GenerateAny(AnySpec{}, kXMLAny));
+  AddCache("{}", builder_.GetRuleId(kXMLAny));
 }
 
 std::string XMLToolCallingConverter::GetKeyPattern() const {
@@ -465,6 +475,355 @@ std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key)
     return rule_cache_manager_.GetCache(key, true);
   }
   return rule_cache_manager_.GetCache(key, nested_object_level_ > 1);
+}
+
+const std::string DeepSeekXMLToolCallingConverter::kXMLAnyJSON = "xml_any_json";
+
+DeepSeekXMLToolCallingConverter::DeepSeekXMLToolCallingConverter(
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool any_whitespace,
+    std::optional<int> max_whitespace_cnt,
+    RefResolver ref_resolver,
+    bool any_order
+)
+    : XMLToolCallingConverter(
+          indent,
+          separators,
+          any_whitespace,
+          max_whitespace_cnt,
+          ref_resolver,
+          JSONFormat::kDeepSeekXML,
+          any_order
+      ) {}
+
+void DeepSeekXMLToolCallingConverter::AddBasicRules() {
+  XMLToolCallingConverter::AddBasicRules({kXMLString, kXMLAnyJSON});
+}
+
+void DeepSeekXMLToolCallingConverter::AddXMLBasicRulesLevel1() {
+  // Add XML string rule
+  builder_.UpdateRuleBody(kXMLString, TagDispatch(false, {xml_wrapper_.parameter_suffix}));
+  int32_t xml_string_rule_id = builder_.GetRuleId(kXMLString);
+  AddCache(kStringCacheKey, xml_string_rule_id);
+
+  // Add rules for string branch
+  AddCache("{}", xml_string_rule_id, GenerateMode::kString);
+  AddCache(kStringCacheKey, xml_string_rule_id, GenerateMode::kString);
+
+  // Add rules for JSON branch
+  builder_.UpdateRuleBody(
+      kXMLAnyJSON, GenerateAnyConstrained(AnySpec{}, kXMLAnyJSON, GenerateMode::kJSON)
+  );
+  AddCache("{}", builder_.GetRuleId(kXMLAnyJSON), GenerateMode::kJSON);
+  AddCache(kIntegerCacheKey, builder_.GetRuleId(kBasicInteger), GenerateMode::kJSON);
+  AddCache(kNumberCacheKey, builder_.GetRuleId(kBasicNumber), GenerateMode::kJSON);
+  AddCache(kBooleanCacheKey, builder_.GetRuleId(kBasicBoolean), GenerateMode::kJSON);
+  AddCache(kNullCacheKey, builder_.GetRuleId(kBasicNull), GenerateMode::kJSON);
+  AddCache(kArrayCacheKey, builder_.GetRuleId(kBasicArray), GenerateMode::kJSON);
+  AddCache(kObjectCacheKey, builder_.GetRuleId(kBasicObject), GenerateMode::kJSON);
+}
+
+int32_t DeepSeekXMLToolCallingConverter::FormatProperty(
+    const std::string& key,
+    const SchemaSpecPtr& value_spec,
+    const std::string& rule_name,
+    int64_t idx
+) {
+  if (nested_object_level_ > 1) {
+    return JSONSchemaConverter::FormatProperty(key, value_spec, rule_name, idx);
+  }
+
+  static constexpr const char* kRuleSuffixes[] = {
+      "_string_prop_",
+      "_json_prop_",
+  };
+
+  std::vector<int32_t> elements;
+  for (auto mode : {GenerateMode::kString, GenerateMode::kJSON}) {
+    int32_t value_rule_id = CreateRuleConstrained(
+        value_spec, rule_name + kRuleSuffixes[static_cast<int>(mode)] + std::to_string(idx), mode
+    );
+    if (value_rule_id == kInvalidRuleId) {
+      continue;
+    }
+
+    std::vector<int32_t> prop_elements = {
+        ByteString(xml_wrapper_.key_wrapper_prefix + key + kKeySuffixes[static_cast<int>(mode)])
+    };
+    if (mode == GenerateMode::kJSON) {
+      prop_elements.push_back(WhitespaceExpression());
+    }
+    prop_elements.push_back(RuleRef(value_rule_id));
+    if (mode == GenerateMode::kJSON) {
+      prop_elements.push_back(WhitespaceExpression());
+    }
+    prop_elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
+    elements.push_back(Sequence(prop_elements));
+  }
+
+  XGRAMMAR_ICHECK(!elements.empty());
+  return Choice(elements);
+}
+
+int32_t DeepSeekXMLToolCallingConverter::FormatOtherProperty(
+    int32_t key_pattern_expr,
+    const SchemaSpecPtr& value_spec,
+    const std::string& rule_name,
+    const std::string& rule_name_suffix
+) {
+  if (nested_object_level_ > 1) {
+    return JSONSchemaConverter::FormatOtherProperty(
+        key_pattern_expr, value_spec, rule_name, rule_name_suffix
+    );
+  }
+
+  static constexpr const char* kRuleSuffixes[] = {
+      "_string_",
+      "_json_",
+  };
+
+  std::vector<int32_t> elements;
+  for (auto mode : {GenerateMode::kString, GenerateMode::kJSON}) {
+    int32_t value_rule_id = CreateRuleConstrained(
+        value_spec, rule_name + kRuleSuffixes[static_cast<int>(mode)] + rule_name_suffix, mode
+    );
+    if (value_rule_id == kInvalidRuleId) {
+      continue;
+    }
+
+    std::vector<int32_t> prop_elements = {
+        ByteString(xml_wrapper_.key_wrapper_prefix),
+        key_pattern_expr,
+        ByteString(kKeySuffixes[static_cast<int>(mode)])
+    };
+    if (mode == GenerateMode::kJSON) {
+      prop_elements.push_back(WhitespaceExpression());
+    }
+    prop_elements.push_back(RuleRef(value_rule_id));
+    if (mode == GenerateMode::kJSON) {
+      prop_elements.push_back(WhitespaceExpression());
+    }
+    prop_elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
+    elements.push_back(Sequence(prop_elements));
+  }
+
+  XGRAMMAR_ICHECK(!elements.empty());
+  return Choice(elements);
+}
+
+int32_t DeepSeekXMLToolCallingConverter::CreateRuleConstrained(
+    const SchemaSpecPtr& spec, const std::string& rule_name_hint, GenerateMode mode
+) {
+  auto cached = GetCache(spec->cache_key, mode);
+  if (cached.has_value()) {
+    return cached.value();
+  }
+  std::string rule_name = builder_.GetNewRuleName(rule_name_hint);
+  builder_.ReserveRuleName(rule_name);
+  int32_t body_expr = GenerateFromSpecConstrained(spec, rule_name, mode);
+  if (body_expr == kInvalidExprId) {
+    return kInvalidRuleId;
+  }
+  return builder_.AddRule(rule_name, body_expr);
+}
+
+int32_t DeepSeekXMLToolCallingConverter::GenerateFromSpecConstrained(
+    const SchemaSpecPtr& spec, const std::string& rule_name_hint, GenerateMode mode
+) {
+  return std::visit(
+      [this, &rule_name_hint, mode](const auto& s) -> int32_t {
+        using T = std::decay_t<decltype(s)>;
+        if constexpr (std::is_same_v<T, IntegerSpec>) {
+          return mode == GenerateMode::kJSON ? GenerateInteger(s, rule_name_hint) : kInvalidExprId;
+        } else if constexpr (std::is_same_v<T, NumberSpec>) {
+          return mode == GenerateMode::kJSON ? GenerateNumber(s, rule_name_hint) : kInvalidExprId;
+        } else if constexpr (std::is_same_v<T, StringSpec>) {
+          return mode == GenerateMode::kString ? GenerateString(s, rule_name_hint) : kInvalidExprId;
+        } else if constexpr (std::is_same_v<T, BooleanSpec>) {
+          return mode == GenerateMode::kJSON ? GenerateBoolean(s, rule_name_hint) : kInvalidExprId;
+        } else if constexpr (std::is_same_v<T, NullSpec>) {
+          return mode == GenerateMode::kJSON ? GenerateNull(s, rule_name_hint) : kInvalidExprId;
+        } else if constexpr (std::is_same_v<T, ArraySpec>) {
+          return mode == GenerateMode::kJSON ? GenerateArray(s, rule_name_hint) : kInvalidExprId;
+        } else if constexpr (std::is_same_v<T, ObjectSpec>) {
+          return mode == GenerateMode::kJSON ? GenerateObject(s, rule_name_hint) : kInvalidExprId;
+        } else if constexpr (std::is_same_v<T, AnySpec>) {
+          return GenerateAnyConstrained(s, rule_name_hint, mode);
+        } else if constexpr (std::is_same_v<T, ConstSpec>) {
+          return GenerateConstConstrained(s, rule_name_hint, mode);
+        } else if constexpr (std::is_same_v<T, EnumSpec>) {
+          return GenerateEnumConstrained(s, rule_name_hint, mode);
+        } else if constexpr (std::is_same_v<T, RefSpec>) {
+          return GenerateRefConstrained(s, rule_name_hint, mode);
+        } else if constexpr (std::is_same_v<T, AnyOfSpec>) {
+          return GenerateAnyOfConstrained(s, rule_name_hint, mode);
+        } else if constexpr (std::is_same_v<T, OneOfSpec>) {
+          return GenerateOneOfConstrained(s, rule_name_hint, mode);
+        } else if constexpr (std::is_same_v<T, AllOfSpec>) {
+          return GenerateAllOfConstrained(s, rule_name_hint, mode);
+        } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
+          return GenerateTypeArrayConstrained(s, rule_name_hint, mode);
+        } else {
+          XGRAMMAR_LOG(FATAL) << "Unknown spec type";
+        }
+      },
+      spec->spec
+  );
+}
+
+int32_t DeepSeekXMLToolCallingConverter::GenerateAnyConstrained(
+    const AnySpec& spec, const std::string& rule_name, GenerateMode mode
+) {
+  switch (mode) {
+    case GenerateMode::kString:
+      return RuleRef(kXMLString);
+    case GenerateMode::kJSON:
+      return Choice(
+          {RuleRef(kBasicNumber),
+           RuleRef(kBasicBoolean),
+           RuleRef(kBasicNull),
+           RuleRef(kBasicArray),
+           RuleRef(kBasicObject)}
+      );
+  }
+  XGRAMMAR_ICHECK(false) << "Invalid GenerateMode";
+}
+
+int32_t DeepSeekXMLToolCallingConverter::GenerateConstConstrained(
+    const ConstSpec& spec, const std::string& rule_name, GenerateMode mode
+) {
+  picojson::value value;
+  std::string error = picojson::parse(value, spec.json_value);
+  if (error.empty() && value.is<std::string>()) {
+    return mode == GenerateMode::kString ? ByteString(value.get<std::string>()) : kInvalidExprId;
+  }
+  return mode == GenerateMode::kJSON ? ByteString(spec.json_value) : kInvalidExprId;
+}
+
+int32_t DeepSeekXMLToolCallingConverter::GenerateEnumConstrained(
+    const EnumSpec& spec, const std::string& rule_name, GenerateMode mode
+) {
+  XGRAMMAR_DCHECK(!spec.json_values.empty())
+      << "GenerateEnum called with empty enum spec for rule: " << rule_name;
+  std::vector<int32_t> values;
+  values.reserve(spec.json_values.size());
+  for (const auto& json_value : spec.json_values) {
+    picojson::value value;
+    std::string error = picojson::parse(value, json_value);
+    if (error.empty() && value.is<std::string>()) {
+      if (mode == GenerateMode::kString) {
+        values.push_back(ByteString(value.get<std::string>()));
+      }
+    } else {
+      if (mode == GenerateMode::kJSON) {
+        values.push_back(ByteString(json_value));
+      }
+    }
+  }
+  return values.empty() ? kInvalidExprId : Choice(values);
+}
+
+int32_t DeepSeekXMLToolCallingConverter::GenerateRefConstrained(
+    const RefSpec& spec, const std::string& rule_name, GenerateMode mode
+) {
+  // First check if we have a direct URI mapping.
+  std::pair uri_cache_key{spec.uri, mode};
+  if (uri_to_constrained_rule_name_.count(uri_cache_key)) {
+    int32_t rule_id = builder_.GetRuleId(uri_to_constrained_rule_name_[uri_cache_key]);
+    // kInvalidRuleId is possible only in case of self-loop (which is invalid JSON schema), other
+    // cycles would not get here and will be handled by JSONSchemaConverter::GenerateRef.
+    return rule_id == kInvalidRuleId ? kInvalidExprId : RuleRef(rule_id);
+  }
+
+  std::string rule_name_hint = GetRuleNameHintFromURI(spec.uri);
+  std::string allocated_rule_name = builder_.GetNewRuleName(rule_name_hint);
+  builder_.ReserveRuleName(allocated_rule_name);
+  uri_to_constrained_rule_name_[uri_cache_key] = allocated_rule_name;
+
+  SchemaSpecPtr resolved = ResolveRefSchema(spec, allocated_rule_name);
+  int32_t body_expr = GenerateFromSpecConstrained(resolved, allocated_rule_name, mode);
+  if (body_expr == kInvalidExprId) {
+    return kInvalidExprId;
+  }
+  int32_t allocated_rule_id = builder_.AddRule(allocated_rule_name, body_expr);
+  if (!resolved->cache_key.empty()) {
+    AddCache(resolved->cache_key, allocated_rule_id, mode);
+  }
+  return RuleRef(allocated_rule_id);
+}
+
+int32_t DeepSeekXMLToolCallingConverter::GenerateAnyOfConstrained(
+    const AnyOfSpec& spec, const std::string& rule_name, GenerateMode mode
+) {
+  std::vector<int32_t> choices;
+  for (size_t index = 0; index < spec.options.size(); ++index) {
+    int32_t rule_id = CreateRuleConstrained(
+        spec.options[index], rule_name + "_case_" + std::to_string(index), mode
+    );
+    if (rule_id != kInvalidRuleId) {
+      choices.push_back(RuleRef(rule_id));
+    }
+  }
+  return choices.empty() ? kInvalidExprId : Choice(choices);
+}
+
+int32_t DeepSeekXMLToolCallingConverter::GenerateOneOfConstrained(
+    const OneOfSpec& spec, const std::string& rule_name, GenerateMode mode
+) {
+  std::vector<int32_t> choices;
+  for (size_t index = 0; index < spec.options.size(); ++index) {
+    int32_t rule_id = CreateRuleConstrained(
+        spec.options[index], rule_name + "_case_" + std::to_string(index), mode
+    );
+    if (rule_id != kInvalidRuleId) {
+      choices.push_back(RuleRef(rule_id));
+    }
+  }
+  return choices.empty() ? kInvalidExprId : Choice(choices);
+}
+
+int32_t DeepSeekXMLToolCallingConverter::GenerateAllOfConstrained(
+    const AllOfSpec& spec, const std::string& rule_name, GenerateMode mode
+) {
+  if (spec.schemas.size() == 1) {
+    return GenerateFromSpecConstrained(spec.schemas[0], rule_name + "_case_0", mode);
+  }
+  XGRAMMAR_LOG(WARNING) << "Support for allOf with multiple options is still ongoing";
+  return GenerateFromSpecConstrained(SchemaSpec::Make(AnySpec{}, "", "any"), rule_name, mode);
+}
+
+int32_t DeepSeekXMLToolCallingConverter::GenerateTypeArrayConstrained(
+    const TypeArraySpec& spec, const std::string& rule_name, GenerateMode mode
+) {
+  std::vector<int32_t> choices;
+  for (size_t index = 0; index < spec.type_schemas.size(); ++index) {
+    int32_t rule_id = CreateRuleConstrained(
+        spec.type_schemas[index], rule_name + "_type_" + std::to_string(index), mode
+    );
+    if (rule_id != kInvalidRuleId) {
+      choices.push_back(RuleRef(rule_id));
+    }
+  }
+  return choices.empty() ? kInvalidExprId : Choice(choices);
+}
+
+void DeepSeekXMLToolCallingConverter::AddCache(
+    const std::string& key, int32_t rule_id, GenerateMode mode
+) {
+  if (key.empty()) {
+    return;
+  }
+  constrained_rule_cache_manager_.AddCache(key, mode == GenerateMode::kString, rule_id);
+}
+
+std::optional<int32_t> DeepSeekXMLToolCallingConverter::GetCache(
+    const std::string& key, GenerateMode mode
+) const {
+  if (key.empty()) {
+    return std::nullopt;
+  }
+  return constrained_rule_cache_manager_.GetCache(key, mode == GenerateMode::kString);
 }
 
 CohereXMLToolCallingConverter::CohereXMLToolCallingConverter(
@@ -834,14 +1193,17 @@ int32_t CohereXMLToolCallingConverter::FormatOtherProperty(
     const SchemaSpecPtr& schema
 ) {
   SchemaSpecPtr value_schema = schema;
-  if (!value_schema && !additional_property_stack_.empty()) {
+  bool is_original_any = value_schema && std::holds_alternative<AnySpec>(value_schema->spec);
+  if ((!value_schema || is_original_any) && !additional_property_stack_.empty()) {
+    is_original_any = false;
     value_schema = additional_property_stack_.back();
   }
-  if (!value_schema && InCohereValueContext()) {
+  if ((!value_schema || is_original_any) && InCohereValueContext()) {
+    is_original_any = false;
     value_schema = SchemaSpec::Make(AnySpec{}, "", "any");
     value_rule_id = CreateRule(value_schema, rule_name + "_" + rule_name_suffix + "_cohere_any");
   }
-  if (value_schema) {
+  if (value_schema && !is_original_any) {
     return FormatCohereParam(std::nullopt, key_pattern_expr, value_schema, value_rule_id);
   }
   return XMLToolCallingConverter::FormatOtherProperty(
