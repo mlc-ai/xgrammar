@@ -10,7 +10,7 @@ from pydantic import BaseModel, RootModel
 from transformers import AutoTokenizer  # type: ignore
 
 import xgrammar as xgr
-from xgrammar.testing import _is_grammar_accept_string
+from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
 
 
 def construct_grammar():
@@ -44,7 +44,7 @@ def construct_compiled_grammar():
 
 def test_get_serialization_version():
     """Test the version of the serialized JSON string."""
-    assert xgr.get_serialization_version() == "v16"
+    assert xgr.get_serialization_version() == "v17"
 
 
 def test_serialize_grammar():
@@ -68,7 +68,7 @@ def test_serialize_grammar():
         "per_rule_fsms": [],
         "allow_empty_rule_ids": [],
         "optimized": False,
-        "__VERSION__": "v16",
+        "__VERSION__": "v17",
     }
     # The fsms are the same one, but the start state and end states are different.
     assert json.loads(serialized) == expected_json
@@ -92,14 +92,14 @@ def test_serialize_grammar_exception():
         "allow_empty_rule_ids": [],
         "complete_fsm": None,
         "per_rule_fsms": [],
-        "__VERSION__": "v16",
+        "__VERSION__": "v17",
     }
 
     expected_json["__VERSION__"] = "v1"  # Change version to trigger error
     with pytest.raises(xgr.DeserializeVersionError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
 
-    expected_json["__VERSION__"] = "v16"
+    expected_json["__VERSION__"] = "v17"
     expected_json.pop("rules")  # Remove required field to trigger error
     with pytest.raises(xgr.DeserializeFormatError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
@@ -151,7 +151,7 @@ def test_serialize_tokenizer_info():
         '"decoded_vocab":["1","212","a","A","b","\\u00e4\\u00b8\\u0080","-","aBc","abc"],'
         '"sorted_decoded_vocab":[[6,"-"],[3,"A"],[2,"a"],[7,"aBc"],[8,"abc"],[4,"b"],[5,"\\u00e4\\u00b8\\u0080"]],'
         '"trie_subtree_nodes_range":[1,2,5,4,5,6,7],'
-        '"__VERSION__":"v16"}'
+        '"__VERSION__":"v17"}'
     )
     assert json.loads(serialized) == json.loads(expected_json)
 
@@ -270,7 +270,7 @@ def test_serialize_compiled_grammar():
             "add_prefix_space": True,
             "stop_token_ids": [0, 1],
         },
-        "__VERSION__": "v16",
+        "__VERSION__": "v17",
     }
 
     class AdaptiveTokenMask(BaseModel):
@@ -382,6 +382,92 @@ def test_serialize_grammar_utf8():
     assert _is_grammar_accept_string(recovered_grammar, "你好")
     assert _is_grammar_accept_string(recovered_grammar, "hello")
     assert _is_grammar_accept_string(recovered_grammar, "\n")
+
+
+def _construct_minimax_m3_dynamic_grammar():
+    return xgr.Grammar.from_structural_tag(
+        xgr.structural_tag.StructuralTag(
+            format=xgr.structural_tag.JSONSchemaFormat(
+                json_schema={"type": "object", "additionalProperties": {"type": "string"}},
+                style="minimax_m3_xml",
+            )
+        )
+    )
+
+
+def test_minimax_m3_dynamic_constraint_survives_grammar_serialization():
+    """Grammar serialization must retain runtime opening/closing-name equality."""
+
+    original = _construct_minimax_m3_dynamic_grammar()
+    serialized = original.serialize_json()
+    assert "DynamicTag(" in str(original)
+    recovered = xgr.Grammar.deserialize_json(serialized)
+    assert recovered.serialize_json() == serialized
+
+    namespace = "]<]minimax[>["
+    matching = f"{namespace}<runtime>value{namespace}</runtime>"
+    mismatching = f"{namespace}<runtime>value{namespace}</wrong>"
+    duplicate = matching + matching
+    assert _is_grammar_accept_string(recovered, matching)
+    assert not _is_grammar_accept_string(recovered, mismatching)
+    assert not _is_grammar_accept_string(recovered, duplicate)
+
+
+@pytest.mark.parametrize("operation", ["union", "concat"])
+def test_minimax_m3_dynamic_constraint_survives_grammar_composition(operation: str):
+    """Grammar composition and optimizer rebuilds must retain runtime metadata."""
+
+    dynamic = _construct_minimax_m3_dynamic_grammar()
+    plain = xgr.Grammar.from_ebnf('root ::= "plain"')
+    namespace = "]<]minimax[>["
+    matching = f"{namespace}<runtime>value{namespace}</runtime>"
+    mismatching = f"{namespace}<runtime>value{namespace}</wrong>"
+    duplicate = matching + matching
+
+    if operation == "union":
+        combined = xgr.Grammar.union(plain, dynamic)
+        assert _is_grammar_accept_string(combined, "plain")
+        valid, invalid = matching, mismatching
+    else:
+        combined = xgr.Grammar.concat(plain, dynamic)
+        valid, invalid = "plain" + matching, "plain" + mismatching
+
+    assert _is_grammar_accept_string(combined, valid)
+    assert not _is_grammar_accept_string(combined, invalid)
+    assert not _is_grammar_accept_string(
+        combined, duplicate if operation == "union" else "plain" + duplicate
+    )
+
+
+def test_minimax_m3_dynamic_constraint_survives_compiled_grammar_serialization():
+    """CompiledGrammar round-trips retain native DynamicTag FSM semantics."""
+
+    # The valid and invalid tokens both cross the dynamic closing-name / `>` boundary. This makes
+    # the post-load bitmask depend on the rebuilt tokenizer indexes, rather than only exercising
+    # accept_string() on the restored runtime matcher.
+    tokenizer_info = xgr.TokenizerInfo(["runtime>", "wrong>"])
+    original = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(
+        _construct_minimax_m3_dynamic_grammar()
+    )
+    serialized = original.serialize_json()
+    recovered = xgr.CompiledGrammar.deserialize_json(serialized, tokenizer_info)
+    assert recovered.serialize_json() == serialized
+
+    namespace = "]<]minimax[>["
+    matching = xgr.GrammarMatcher(recovered, terminate_without_stop_token=True)
+    assert matching.accept_string(f"{namespace}<runtime>value{namespace}</")
+
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matching.fill_next_token_bitmask(bitmask)
+    masked = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert 0 not in masked
+    assert 1 in masked
+
+    assert matching.accept_token(0)
+    assert matching.is_completed()
+
+    mismatching = xgr.GrammarMatcher(recovered, terminate_without_stop_token=True)
+    assert not mismatching.accept_string(f"{namespace}<runtime>value{namespace}</wrong>")
 
 
 def test_serialized_output_survives_pickle():

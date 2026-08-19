@@ -121,6 +121,9 @@ void EarleyParser::PopLastStates(int32_t cnt) {
         char_budget_entry_history_.end() - cnt, char_budget_entry_history_.end()
     );
   }
+  if (!unique_key_scope_rules_.empty()) {
+    OnPopLastStates(static_cast<int32_t>(rule_id_to_completable_states_.size()));
+  }
 }
 
 void EarleyParser::Complete(const ParserState& state, bool debug_print, bool marker_present) {
@@ -171,9 +174,9 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             parent_state.element_id + 1,
             parent_state.rule_start_pos,
             parent_state.budget_deadline,
+            parent_state.sub_element_id,
             0,
-            0,
-            0,
+            parent_state.partial_codepoint,
             parent_state.active_temperature_rule_id,
             parent_state.char_budget_deadline
         });
@@ -194,9 +197,9 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             parent_state.element_id + 1,
             parent_state.rule_start_pos,
             parent_state.budget_deadline,
+            parent_state.sub_element_id,
             0,
-            0,
-            0,
+            parent_state.partial_codepoint,
             parent_state.active_temperature_rule_id,
             parent_state.char_budget_deadline
         });
@@ -228,9 +231,9 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             edge.target,
             parent_state.rule_start_pos,
             parent_state.budget_deadline,
+            parent_state.sub_element_id,
             0,
-            0,
-            0,
+            parent_state.partial_codepoint,
             parent_state.active_temperature_rule_id,
             parent_state.char_budget_deadline
         });
@@ -242,9 +245,9 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             parent_state.element_id,
             parent_state.rule_start_pos,
             parent_state.budget_deadline,
-            0,
+            parent_state.sub_element_id,
             new_count,
-            0,
+            parent_state.partial_codepoint,
             parent_state.active_temperature_rule_id,
             parent_state.char_budget_deadline
         });
@@ -431,6 +434,18 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   if (!tmp_completed_lazy_occurrences_.empty()) {
     RemoveCommittedLazyStates();
   }
+  if (!unique_key_scope_rules_.empty() && tmp_states_to_be_added_.empty() &&
+      !tmp_accept_stop_token_) {
+    rule_id_to_completable_states_.PopBack(1);
+    if (capture_tracking_) {
+      capture_event_history_.PopBack(1);
+    }
+    if (has_char_budget_rules_) {
+      char_count_history_.pop_back();
+    }
+    OnPopLastStates(static_cast<int32_t>(rule_id_to_completable_states_.size()));
+    return false;
+  }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);
   if (has_char_budget_rules_) {
@@ -463,14 +478,9 @@ EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> in
                            "the Earley parser.";
   }
   for (int32_t i = 0; i < grammar_->NumRules(); ++i) {
-    has_budget_rules_ = has_budget_rules_ || grammar_->GetRule(i).max_tokens >= 0;
-    has_char_budget_rules_ = has_char_budget_rules_ || grammar_->GetRule(i).max_chars >= 0;
-    if (has_budget_rules_ && has_char_budget_rules_) {
-      break;
-    }
-  }
-  for (int32_t i = 0; i < grammar_->NumRules(); ++i) {
     const auto& rule = grammar_->GetRule(i);
+    has_budget_rules_ = has_budget_rules_ || rule.max_tokens >= 0;
+    has_char_budget_rules_ = has_char_budget_rules_ || rule.max_chars >= 0;
     const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(i);
     capture_tracking_ =
         capture_tracking_ || !rule.capture_name.empty() ||
@@ -479,8 +489,19 @@ EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> in
         has_hidden_capture_rules_ ||
         (suffix_stop_info != nullptr &&
          (suffix_stop_info->hidden_suffix_bytes > 0 || suffix_stop_info->hidden_stop_bytes > 0));
-    if (capture_tracking_ && has_hidden_capture_rules_) {
-      break;
+    if (IsDynamicTagRule(i)) {
+      has_dynamic_tag_rules_ = true;
+      const auto body = grammar_->GetGrammarExpr(rule.body_expr_id);
+      int32_t scope_rule_id = grammar_->GetDynamicTagUniqueKeyScopeRuleId(body);
+      if (scope_rule_id >= 0) {
+        XGRAMMAR_DCHECK(scope_rule_id < grammar_->NumRules());
+        if (unique_key_scope_rules_.empty()) {
+          unique_key_scope_rules_.assign(grammar_->NumRules(), 0);
+          dynamic_tag_unique_key_scope_rule_ids_.assign(grammar_->NumRules(), -1);
+        }
+        unique_key_scope_rules_[scope_rule_id] = 1;
+        dynamic_tag_unique_key_scope_rule_ids_[i] = scope_rule_id;
+      }
     }
   }
   for (int32_t rule_id : grammar_->allow_empty_rule_ids) {
@@ -511,9 +532,10 @@ uint8_t EarleyParser::InitializeFsmStateFlags(int32_t rule_id, int32_t state_id)
     flags |= kFsmStateHasEdges;
   }
   for (const auto& edge : edges) {
-    if (edge.IsCharRange() || edge.IsToken() || edge.IsExcludeToken()) {
+    if (edge.IsCharRange() || edge.IsToken() || edge.IsExcludeToken() || edge.IsBackReference()) {
       flags |= kFsmStateScanable;
-    } else if (edge.IsRuleRef() || edge.IsEpsilon() || edge.IsRepeatRef()) {
+    } else if (edge.IsRuleRef() || edge.IsCaptureStart() || edge.IsCaptureEnd() ||
+               edge.IsEpsilon() || edge.IsRepeatRef()) {
       flags |= kFsmStateNonTerminal;
     }
   }
@@ -613,7 +635,8 @@ void EarleyParser::ExpandNextRuleRefElement(
   if (state.element_id != grammar_expr.size() - 1 ||
       sub_grammar_expr->type == GrammarExprType::kRepeat ||
       (state.rule_start_pos == rule_id_to_completable_states_.size() - 1) ||
-      RuleNeedsCaptureEvent(state.rule_id) || RuleNeedsCaptureEvent(ref_rule_id)) {
+      RuleNeedsCaptureEvent(state.rule_id) || RuleNeedsCaptureEvent(ref_rule_id) ||
+      IsUniqueKeyScopeRule(state.rule_id)) {
     // It's not the right recursion, or it's the root rule.
     rule_id_to_completable_states_.PushBackInLatestRow(std::make_pair(ref_rule_id, state));
   } else {
@@ -698,12 +721,30 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           edge.target,
           state.rule_start_pos,
           state.budget_deadline,
+          state.sub_element_id,
           0,
-          0,
-          0,
+          state.partial_codepoint,
           state.active_temperature_rule_id,
           state.char_budget_deadline
       });
+      continue;
+    }
+    if (edge.IsCaptureStart()) {
+      XGRAMMAR_DCHECK(IsDynamicTagRule(state.rule_id));
+      auto capture_started = state;
+      capture_started.element_id = edge.target;
+      capture_started.sub_element_id =
+          static_cast<int32_t>(rule_id_to_completable_states_.size()) - 1;
+      Enqueue(std::move(capture_started));
+      continue;
+    }
+    if (edge.IsCaptureEnd()) {
+      XGRAMMAR_DCHECK(IsDynamicTagRule(state.rule_id));
+      auto capture_ended = state;
+      capture_ended.element_id = edge.target;
+      capture_ended.partial_codepoint =
+          static_cast<int32_t>(rule_id_to_completable_states_.size()) - 1;
+      Enqueue(std::move(capture_ended));
       continue;
     }
 
@@ -713,6 +754,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
     RepeatEdgeRef repeat_info{nullptr};
 
     if (edge.IsRuleRef()) {
+      if (IsUniqueKeyDynamicTagRule(state.rule_id) && !AllowDynamicTagContent(state)) {
+        continue;
+      }
       target = edge.target;
       ref_rule_id = edge.GetRefRuleId();
     } else if (edge.IsRepeatRef()) {
@@ -728,9 +772,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
             target,
             state.rule_start_pos,
             state.budget_deadline,
+            state.sub_element_id,
             0,
-            0,
-            0,
+            state.partial_codepoint,
             state.active_temperature_rule_id,
             state.char_budget_deadline
         });
@@ -750,7 +794,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
     const uint8_t target_flags = GetFsmStateFlags(state.rule_id, target);
     if (!is_repeat && !(target_flags & kFsmStateHasEdges) && (target_flags & kFsmStateEnd) &&
         state.rule_start_pos != static_cast<int32_t>(rule_id_to_completable_states_.size() - 1) &&
-        !RuleNeedsCaptureEvent(state.rule_id) && !RuleNeedsCaptureEvent(ref_rule_id)) {
+        !RuleNeedsCaptureEvent(state.rule_id) && !RuleNeedsCaptureEvent(ref_rule_id) &&
+        !IsUniqueKeyScopeRule(state.rule_id)) {
       // It's a right recursion. We can optimize it. The optimization elides the completion of
       // the parent rule, so it is disabled when either rule produces capture-history events.
       // If it's the right recursion, we need to add the ancestors of the parent state.
@@ -791,9 +836,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  state.element_id,
                  state.rule_start_pos,
                  state.budget_deadline,
-                 0,
+                 state.sub_element_id,
                  state.repeat_count,
-                 0,
+                 state.partial_codepoint,
                  state.active_temperature_rule_id,
                  state.char_budget_deadline
              }}
@@ -808,9 +853,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  target,
                  state.rule_start_pos,
                  state.budget_deadline,
+                 state.sub_element_id,
                  0,
-                 0,
-                 0,
+                 state.partial_codepoint,
                  state.active_temperature_rule_id,
                  state.char_budget_deadline
              }}
@@ -826,9 +871,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           target,
           state.rule_start_pos,
           state.budget_deadline,
+          state.sub_element_id,
           0,
-          0,
-          0,
+          state.partial_codepoint,
           state.active_temperature_rule_id,
           state.char_budget_deadline
       });
@@ -1145,6 +1190,36 @@ void EarleyParser::AdvanceFsm(const ParserState& state, const uint8_t ch) {
   XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
   const auto& current_fsm = grammar_->per_rule_fsms[state.rule_id].value();
   for (const auto& edge : current_fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
+    if (edge.IsBackReference()) {
+      auto progress = GetBackReferenceProgress(state);
+      if (!progress.has_value()) {
+        if (AllowWildcardBackReference()) {
+          EnqueueWithoutProcessing(state);
+          auto completed = state;
+          completed.element_id = edge.target;
+          completed.sub_element_id = 0;
+          completed.repeat_count = 0;
+          completed.partial_codepoint = 0;
+          Enqueue(std::move(completed));
+        }
+        continue;
+      }
+      if (progress->next_byte != ch) {
+        continue;
+      }
+      auto new_state = state;
+      if (progress->is_last_byte) {
+        new_state.element_id = edge.target;
+        new_state.sub_element_id = 0;
+        new_state.repeat_count = 0;
+        new_state.partial_codepoint = 0;
+        Enqueue(std::move(new_state));
+      } else {
+        ++new_state.repeat_count;
+        EnqueueWithoutProcessing(std::move(new_state));
+      }
+      continue;
+    }
     if ((!edge.IsCharRange()) || ch < edge.min || ch > edge.max) {
       continue;
     }
@@ -1227,6 +1302,18 @@ bool EarleyParser::AdvanceAtomicToken(
   }
   if (!tmp_completed_lazy_occurrences_.empty()) {
     RemoveCommittedLazyStates();
+  }
+  if (!unique_key_scope_rules_.empty() && tmp_states_to_be_added_.empty() &&
+      !tmp_accept_stop_token_) {
+    rule_id_to_completable_states_.PopBack(1);
+    if (capture_tracking_) {
+      capture_event_history_.PopBack(1);
+    }
+    if (has_char_budget_rules_) {
+      char_count_history_.pop_back();
+    }
+    OnPopLastStates(static_cast<int32_t>(rule_id_to_completable_states_.size()));
+    return false;
   }
   is_completed_.push_back(tmp_accept_stop_token_);
   scanable_state_history_.PushBack(tmp_states_to_be_added_);

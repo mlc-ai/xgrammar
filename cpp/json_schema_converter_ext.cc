@@ -8,6 +8,7 @@
 #include <picojson.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <map>
 #include <type_traits>
 #include <unordered_map>
@@ -15,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "support/encoding.h"
 #include "support/logging.h"
 
 namespace xgrammar {
@@ -58,6 +60,53 @@ std::vector<GrammarBuilder::CharacterClassElement> XMLIdentifierContinuationChar
 constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
 constexpr const char* kObjectCacheKey = "{\"type\":\"object\"}";
 
+struct ElementNameTrieNode {
+  bool is_terminal = false;
+  std::map<TCodepoint, ElementNameTrieNode> children;
+};
+
+bool IsASCIIWhitespace(uint8_t byte) {
+  return byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r' || byte == '\f' ||
+         byte == '\v';
+}
+
+bool IsCanonicalUTF8(const std::string& text) {
+  for (size_t offset = 0; offset < text.size();) {
+    auto [codepoint, num_bytes] = ParseNextUTF8(text.data() + offset);
+    if (codepoint == CharHandlingError::kInvalidUTF8 || num_bytes <= 0 ||
+        offset + num_bytes > text.size() || (codepoint >= 0xd800 && codepoint <= 0xdfff) ||
+        codepoint > 0x10ffff || text.compare(offset, num_bytes, CharToUTF8(codepoint)) != 0) {
+      return false;
+    }
+    offset += num_bytes;
+  }
+  return true;
+}
+
+std::vector<GrammarBuilder::CharacterClassElement> CodepointComplement(
+    std::vector<TCodepoint> excluded
+) {
+  constexpr TCodepoint kMaxCodepoint = 0x10ffff;
+  std::sort(excluded.begin(), excluded.end());
+  excluded.erase(std::unique(excluded.begin(), excluded.end()), excluded.end());
+
+  std::vector<GrammarBuilder::CharacterClassElement> result;
+  int64_t range_begin = 0;
+  for (TCodepoint codepoint : excluded) {
+    XGRAMMAR_DCHECK(codepoint >= 0 && codepoint <= kMaxCodepoint);
+    if (range_begin < codepoint) {
+      result.push_back(
+          {static_cast<TCodepoint>(range_begin), static_cast<TCodepoint>(codepoint - 1)}
+      );
+    }
+    range_begin = static_cast<int64_t>(codepoint) + 1;
+  }
+  if (range_begin <= kMaxCodepoint) {
+    result.push_back({static_cast<TCodepoint>(range_begin), kMaxCodepoint});
+  }
+  return result;
+}
+
 }  // namespace
 
 // Static constants
@@ -65,24 +114,62 @@ const std::string XMLToolCallingConverter::kXMLString = "xml_string";
 const std::string XMLToolCallingConverter::kXMLAny = "xml_any";
 const std::string XMLToolCallingConverter::kXMLObject = "xml_object";
 const std::string XMLToolCallingConverter::kXMLVariableName = "xml_variable_name";
-const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
-    XMLToolCallingConverter::kKeyWrapperMap = {
-        {JSONFormat::kQwenXML, {"<parameter=", ">", "", "</parameter>"}},
-        {JSONFormat::kMiniMaxXML, {"<parameter name=\"", "\">", "", "</parameter>"}},
+const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLDialectConfig>
+    XMLToolCallingConverter::kDialectConfigMap = {
+        {JSONFormat::kQwenXML,
+         {{"<parameter=", ">", "", "</parameter>", "", false},
+          /*recursive=*/false,
+          /*array_item_name=*/"",
+          /*pad_values_with_whitespace=*/true,
+          /*string_terminator=*/"</parameter>"}},
+        {JSONFormat::kMiniMaxXML,
+         {{"<parameter name=\"", "\">", "", "</parameter>", "", false},
+          /*recursive=*/false,
+          /*array_item_name=*/"",
+          /*pad_values_with_whitespace=*/true,
+          /*string_terminator=*/"</parameter>"}},
         {JSONFormat::kDeepSeekXML,
-         {"<｜DSML｜parameter name=\"",
-          "",
-          "",
-          // TODO(Linzhang): We do not validate the string's value, and we accept both.
-          "</｜DSML｜parameter>"}},
-        {JSONFormat::kGlmXML, {"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"}},
-        {JSONFormat::kCohereXML, {"<cofl:value", ">", "", "</cofl:value>"}},
+         {{"<｜DSML｜parameter name=\"",
+           "",
+           "",
+           // TODO(Linzhang): We do not validate the string's value, and we accept both.
+           "</｜DSML｜parameter>",
+           "",
+           false},
+          /*recursive=*/false,
+          /*array_item_name=*/"",
+          /*pad_values_with_whitespace=*/true,
+          /*string_terminator=*/"</｜DSML｜parameter>"}},
+        {JSONFormat::kGlmXML,
+         {{"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>", "", false},
+          /*recursive=*/false,
+          /*array_item_name=*/"",
+          /*pad_values_with_whitespace=*/true,
+          /*string_terminator=*/"</arg_value>"}},
+        {JSONFormat::kCohereXML,
+         {{"<cofl:value", ">", "", "</cofl:value>", "", false},
+          /*recursive=*/false,
+          /*array_item_name=*/"",
+          /*pad_values_with_whitespace=*/true,
+          /*string_terminator=*/"</cofl:value>"}},
         {JSONFormat::kKimiK3XML,
-         {"<|open|>argument key=\"",
-          "",
-          "",
-          // The key suffix (type attribute and <|sep|>) is generated in XMLKeySuffix.
-          "<|close|>argument<|sep|>"}},
+         {{"<|open|>argument key=\"",
+           "",
+           "",
+           // The key suffix (type attribute and <|sep|>) is generated in XMLKeySuffix.
+           "<|close|>argument<|sep|>",
+           "",
+           false},
+          /*recursive=*/false,
+          /*array_item_name=*/"",
+          /*pad_values_with_whitespace=*/true,
+          /*string_terminator=*/"<|close|>argument<|sep|>"}},
+        {JSONFormat::kMiniMaxM3XML,
+         {{"]<]minimax[>[<", ">", "", "]<]minimax[>[</", ">", true},
+          /*recursive=*/true,
+          /*array_item_name=*/"item",
+          /*pad_values_with_whitespace=*/false,
+          /*string_terminator=*/"]<]minimax[>["}},
 };
 
 XMLToolCallingConverter::XMLToolCallingConverter(
@@ -99,10 +186,12 @@ XMLToolCallingConverter::XMLToolCallingConverter(
       ),
       json_format_(json_format),
       nested_object_level_(0),
-      xml_wrapper_(kKeyWrapperMap.at(json_format)) {}
+      dialect_(kDialectConfigMap.at(json_format)) {}
 
 Grammar XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
   nested_object_level_ = 0;
+  generating_property_name_ = false;
+  unique_key_scope_stack_.clear();
   return JSONSchemaConverter::Convert(spec);
 }
 
@@ -139,7 +228,7 @@ int32_t XMLToolCallingConverter::XMLKeySuffix(const std::optional<std::string>& 
                                                   );
     return Sequence({ByteString("\" type=\""), type_expr, ByteString("\"<|sep|>")});
   }
-  return ByteString(xml_wrapper_.key_wrapper_suffix);
+  return ByteString(dialect_.property.open_suffix);
 }
 
 std::optional<std::string> XMLToolCallingConverter::KimiK3TypeAttr(const SchemaSpecPtr& spec) {
@@ -202,6 +291,14 @@ std::optional<std::string> XMLToolCallingConverter::KimiK3TypeAttr(const SchemaS
 }
 
 void XMLToolCallingConverter::AddBasicRules() {
+  if (dialect_.recursive) {
+    AddRecursiveXMLBasicRules();
+  } else {
+    AddRootOnlyXMLBasicRules();
+  }
+}
+
+void XMLToolCallingConverter::AddRootOnlyXMLBasicRules() {
   // First add JSON basic rules. These should be in the inner layer of the XML format.
   XGRAMMAR_DCHECK(nested_object_level_ == 0);
   // The nested part, true json format, is at level 2.
@@ -213,7 +310,7 @@ void XMLToolCallingConverter::AddBasicRules() {
   // The outer part, xml format, is at level 1.
   nested_object_level_ = 1;
   // Add XML string rule
-  builder_.UpdateRuleBody(kXMLString, TagDispatch(false, {xml_wrapper_.parameter_suffix}));
+  builder_.UpdateRuleBody(kXMLString, TagDispatch(false, {dialect_.string_terminator}));
   AddCache(kStringCacheKey, builder_.GetRuleId(kXMLString));
 
   // Add XML any rule
@@ -240,15 +337,87 @@ void XMLToolCallingConverter::AddBasicRules() {
   );
 }
 
-std::string XMLToolCallingConverter::GetKeyPattern() const {
-  if (nested_object_level_ <= 1) {
-    return kXMLVariableName;
+void XMLToolCallingConverter::AddRecursiveXMLBasicRules() {
+  XGRAMMAR_DCHECK(nested_object_level_ == 0);
+  const std::vector<std::string> rule_names = {
+      kBasicInteger,
+      kBasicNumber,
+      kBasicBoolean,
+      kBasicNull,
+      kXMLString,
+      kXMLAny,
+      kXMLVariableName,
+      "xml_dynamic_element",
+      "xml_dynamic_children",
+  };
+  for (const auto& name : rule_names) {
+    builder_.AddEmptyRule(name);
   }
-  return kBasicString;
+
+  constexpr const char* kIntegerCacheKey = "{\"type\":\"integer\"}";
+  constexpr const char* kNumberCacheKey = "{\"type\":\"number\"}";
+  constexpr const char* kBooleanCacheKey = "{\"type\":\"boolean\"}";
+  constexpr const char* kNullCacheKey = "{\"type\":\"null\"}";
+
+  nested_object_level_ = 1;
+  builder_.UpdateRuleBody(kBasicInteger, GenerateInteger(IntegerSpec{}, kBasicInteger));
+  AddCache(kIntegerCacheKey, builder_.GetRuleId(kBasicInteger));
+  builder_.UpdateRuleBody(kBasicNumber, GenerateNumber(NumberSpec{}, kBasicNumber));
+  AddCache(kNumberCacheKey, builder_.GetRuleId(kBasicNumber));
+  builder_.UpdateRuleBody(kXMLString, TagDispatch(false, {dialect_.string_terminator}));
+  AddCache(kStringCacheKey, builder_.GetRuleId(kXMLString));
+  builder_.UpdateRuleBody(kBasicBoolean, GenerateBoolean(BooleanSpec{}, kBasicBoolean));
+  AddCache(kBooleanCacheKey, builder_.GetRuleId(kBasicBoolean));
+  builder_.UpdateRuleBody(kBasicNull, GenerateNull(NullSpec{}, kBasicNull));
+  AddCache(kNullCacheKey, builder_.GetRuleId(kBasicNull));
+
+  builder_.UpdateRuleBody(
+      kXMLVariableName,
+      Sequence(
+          {builder_.AddCharacterClass({{'/', '/'}, {'>', '>'}}, /*is_negative=*/true),
+           builder_.AddCharacterClassStar({{'>', '>'}}, /*is_negative=*/true)}
+      )
+  );
+  builder_.UpdateRuleBody(
+      "xml_dynamic_element",
+      builder_.AddDynamicTag(
+          {dialect_.property.open_prefix,
+           builder_.GetRuleId(kXMLVariableName),
+           dialect_.property.open_suffix,
+           builder_.GetRuleId(kXMLAny),
+           dialect_.property.close_prefix,
+           dialect_.property.close_suffix,
+           builder_.GetRuleId("xml_dynamic_children")}
+      )
+  );
+  builder_.UpdateRuleBody(
+      "xml_dynamic_children", Repeat("xml_dynamic_elements", RuleRef("xml_dynamic_element"), 1, -1)
+  );
+  builder_.UpdateRuleBody(kXMLAny, Choice({RuleRef(kXMLString), RuleRef("xml_dynamic_children")}));
+  AddCache("{}", builder_.GetRuleId(kXMLAny));
+
+  nested_object_level_ = 0;
+  AddCache(kIntegerCacheKey, builder_.GetRuleId(kBasicInteger));
+  AddCache(kNumberCacheKey, builder_.GetRuleId(kBasicNumber));
+  AddCache(kStringCacheKey, builder_.GetRuleId(kXMLString));
+  AddCache(kBooleanCacheKey, builder_.GetRuleId(kBasicBoolean));
+  AddCache(kNullCacheKey, builder_.GetRuleId(kBasicNull));
+}
+
+bool XMLToolCallingConverter::IsXMLLayer() const {
+  return dialect_.recursive || nested_object_level_ <= 1;
+}
+
+bool XMLToolCallingConverter::IsInnerCacheLayer() const {
+  return dialect_.recursive ? nested_object_level_ > 0 : nested_object_level_ > 1;
+}
+
+std::string XMLToolCallingConverter::GetKeyPattern() const {
+  return IsXMLLayer() ? kXMLVariableName : kBasicString;
 }
 
 std::string XMLToolCallingConverter::GetBasicAnyRuleName() const {
-  if (nested_object_level_ <= 1) {
+  if (IsXMLLayer()) {
     return kXMLAny;
   }
   return kBasicAny;
@@ -257,14 +426,60 @@ std::string XMLToolCallingConverter::GetBasicAnyRuleName() const {
 int32_t XMLToolCallingConverter::GetKeyPatternExcluding(
     const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
 ) {
-  if (nested_object_level_ <= 1) {
+  if (IsXMLLayer() && !dialect_.recursive) {
     return RuleRef(GetKeyPattern());
+  }
+  if (dialect_.recursive) {
+    if (properties.empty()) {
+      return RuleRef(GetKeyPattern());
+    }
+
+    ElementNameTrieNode root;
+    for (const auto& property : properties) {
+      ElementNameTrieNode* node = &root;
+      for (size_t offset = 0; offset < property.name.size();) {
+        auto [codepoint, num_bytes] = ParseNextUTF8(property.name.data() + offset);
+        XGRAMMAR_CHECK(codepoint != CharHandlingError::kInvalidUTF8 && num_bytes > 0)
+            << "Recursive XML element names must be valid UTF-8";
+        node = &node->children[codepoint];
+        offset += num_bytes;
+      }
+      node->is_terminal = true;
+    }
+
+    const int32_t arbitrary_tail =
+        builder_.AddCharacterClassStar({{'>', '>'}}, /*is_negative=*/true);
+    auto build_trie = [&](auto&& self, const ElementNameTrieNode& node, bool is_root) -> int32_t {
+      std::vector<int32_t> choices;
+      if (!is_root && !node.is_terminal) {
+        choices.push_back(Empty());
+      }
+
+      std::vector<TCodepoint> excluded = {'>'};
+      if (is_root) {
+        excluded.push_back('/');
+      }
+      for (const auto& [codepoint, child] : node.children) {
+        static_cast<void>(child);
+        excluded.push_back(codepoint);
+      }
+      choices.push_back(Sequence(
+          {builder_.AddCharacterClass(CodepointComplement(std::move(excluded))), arbitrary_tail}
+      ));
+      for (const auto& [codepoint, child] : node.children) {
+        choices.push_back(Sequence(
+            {builder_.AddCharacterClass({{codepoint, codepoint}}), self(self, child, false)}
+        ));
+      }
+      return Choice(choices);
+    };
+    return build_trie(build_trie, root, true);
   }
   return JSONSchemaConverter::GetKeyPatternExcluding(properties, rule_name);
 }
 
 std::string XMLToolCallingConverter::NextSeparator(bool is_end) {
-  if (nested_object_level_ <= 1) {
+  if (IsXMLLayer()) {
     return GetWhitespacePattern();
   }
   return JSONSchemaConverter::NextSeparator(is_end);
@@ -273,7 +488,47 @@ std::string XMLToolCallingConverter::NextSeparator(bool is_end) {
 int32_t XMLToolCallingConverter::GenerateString(
     const StringSpec& spec, const std::string& rule_name
 ) {
-  if (nested_object_level_ <= 1) {
+  if (dialect_.recursive && generating_property_name_) {
+    if (spec.pattern.has_value()) {
+      return RegexExpression(*spec.pattern);
+    }
+    if (spec.format.has_value()) {
+      auto regex = JSONFormatToRegexPattern(*spec.format);
+      if (regex.has_value()) {
+        return RegexExpression(*regex, false, true);
+      }
+    }
+    if (spec.min_length != 0 || spec.max_length != -1) {
+      XGRAMMAR_CHECK(spec.max_length == -1 || spec.max_length >= 1)
+          << "Recursive XML element names cannot be empty";
+      const int min_length = std::max(spec.min_length, 1);
+      const int max_tail = spec.max_length == -1 ? -1 : spec.max_length - 1;
+      return Sequence(
+          {builder_.AddCharacterClass({{'/', '/'}, {'>', '>'}}, /*is_negative=*/true),
+           Repeat(
+               rule_name + "_characters",
+               builder_.AddCharacterClass({{'>', '>'}}, /*is_negative=*/true),
+               min_length - 1,
+               max_tail
+           )}
+      );
+    }
+    return RuleRef(kXMLVariableName);
+  }
+
+  if (IsXMLLayer()) {
+    if (dialect_.recursive) {
+      const bool has_known_format =
+          spec.format.has_value() && JSONFormatToRegexPattern(*spec.format).has_value();
+      XGRAMMAR_CHECK(
+          !spec.pattern.has_value() && !has_known_format && spec.min_length == 0 &&
+          spec.max_length == -1
+      ) << "String pattern, recognized format, and length constraints are not supported by "
+           "recursive XML dialects because they cannot be combined with the namespace-marker "
+           "exclusion";
+      return RuleRef(kXMLString);
+    }
+
     if (!spec.pattern.has_value() && !spec.format.has_value() && spec.min_length == 0 &&
         spec.max_length == -1) {
       return RuleRef(kXMLString);
@@ -281,7 +536,7 @@ int32_t XMLToolCallingConverter::GenerateString(
     if (spec.format.has_value()) {
       auto regex = JSONFormatToRegexPattern(*spec.format);
       if (regex.has_value()) {
-        return RegexExpression(*regex, false, true);
+        return RegexExpression(*regex, false, /*force_cfg_expansion=*/true);
       }
     }
     if (spec.pattern.has_value()) {
@@ -298,6 +553,12 @@ int32_t XMLToolCallingConverter::GenerateString(
 }
 
 int32_t XMLToolCallingConverter::GenerateAny(const AnySpec& spec, const std::string& rule_name) {
+  if (dialect_.recursive && generating_property_name_) {
+    return RuleRef(kXMLVariableName);
+  }
+  if (dialect_.recursive) {
+    return RuleRef(kXMLAny);
+  }
   if (nested_object_level_ == 0) {
     return RuleRef(kXMLObject);
   }
@@ -311,16 +572,128 @@ int32_t XMLToolCallingConverter::GenerateArray(
     const ArraySpec& spec, const std::string& rule_name
 ) {
   nested_object_level_++;
-  auto result = JSONSchemaConverter::GenerateArray(spec, rule_name);
+  int32_t result = dialect_.array_item_name.empty()
+                       ? JSONSchemaConverter::GenerateArray(spec, rule_name)
+                       : GenerateRepeatedElementArray(spec, rule_name);
   nested_object_level_--;
   return result;
+}
+
+int32_t XMLToolCallingConverter::GenerateRepeatedElementArray(
+    const ArraySpec& spec, const std::string& rule_name
+) {
+  std::vector<int32_t> prefix_items;
+  prefix_items.reserve(spec.prefix_items.size());
+  for (size_t index = 0; index < spec.prefix_items.size(); ++index) {
+    int32_t item_rule_id =
+        CreateRule(spec.prefix_items[index], rule_name + "_item_" + std::to_string(index));
+    prefix_items.push_back(FormatElement(dialect_.property, dialect_.array_item_name, item_rule_id)
+    );
+  }
+
+  std::optional<int32_t> additional_item;
+  if (spec.allow_additional_items && spec.additional_items) {
+    int32_t item_rule_id = CreateRule(spec.additional_items, rule_name + "_additional");
+    additional_item = FormatElement(dialect_.property, dialect_.array_item_name, item_rule_id);
+  }
+
+  int32_t empty = Empty();
+  int32_t whitespace = WhitespaceExpression();
+  if (prefix_items.empty()) {
+    if (!additional_item.has_value() || spec.max_items == 0) {
+      return empty;
+    }
+    int32_t min_items = static_cast<int32_t>(spec.min_items);
+    int32_t max_items = spec.max_items == -1 ? -1 : static_cast<int32_t>(spec.max_items);
+    int32_t nonempty = Sequence(
+        {whitespace,
+         *additional_item,
+         Repeat(
+             rule_name + "_items",
+             Sequence({whitespace, *additional_item}),
+             std::max(0, min_items - 1),
+             max_items == -1 ? -1 : std::max(0, max_items - 1)
+         ),
+         whitespace}
+    );
+    return min_items == 0 ? Choice({nonempty, empty}) : nonempty;
+  }
+
+  std::vector<int32_t> elements = {whitespace};
+  for (size_t index = 0; index < prefix_items.size(); ++index) {
+    if (index != 0) {
+      elements.push_back(whitespace);
+    }
+    elements.push_back(prefix_items[index]);
+  }
+  if (additional_item.has_value()) {
+    int32_t prefix_count = static_cast<int32_t>(prefix_items.size());
+    int32_t min_additional = std::max(0, static_cast<int32_t>(spec.min_items) - prefix_count);
+    int32_t max_additional = spec.max_items == -1
+                                 ? -1
+                                 : std::max(0, static_cast<int32_t>(spec.max_items) - prefix_count);
+    elements.push_back(Repeat(
+        rule_name + "_additional_items",
+        Sequence({whitespace, *additional_item}),
+        min_additional,
+        max_additional
+    ));
+  }
+  elements.push_back(whitespace);
+  return Sequence(elements);
+}
+
+int32_t XMLToolCallingConverter::GenerateLiteral(const picojson::value& value) {
+  if (value.is<std::string>()) {
+    const std::string& text = value.get<std::string>();
+    XGRAMMAR_CHECK(text.find(dialect_.string_terminator) == std::string::npos)
+        << "A recursive XML string literal cannot contain the dialect namespace marker";
+    return ByteString(text);
+  }
+  if (value.is<picojson::object>()) {
+    const auto& object = value.get<picojson::object>();
+    std::vector<int32_t> properties;
+    properties.reserve(object.size());
+    for (const auto& key : object.ordered_keys()) {
+      int32_t value_expr = GenerateLiteral(object.at(key));
+      int32_t value_rule_id = builder_.AddRuleWithHint("literal_" + key, value_expr);
+      properties.push_back(FormatElement(dialect_.property, key, value_rule_id));
+    }
+    return Sequence(properties);
+  }
+  if (value.is<picojson::array>()) {
+    const auto& array = value.get<picojson::array>();
+    std::vector<int32_t> items;
+    items.reserve(array.size());
+    for (size_t index = 0; index < array.size(); ++index) {
+      int32_t value_expr = GenerateLiteral(array[index]);
+      int32_t value_rule_id =
+          builder_.AddRuleWithHint("literal_item_" + std::to_string(index), value_expr);
+      items.push_back(FormatElement(dialect_.property, dialect_.array_item_name, value_rule_id));
+    }
+    return Sequence(items);
+  }
+  return ByteString(value.serialize());
 }
 
 int32_t XMLToolCallingConverter::GenerateConst(
     const ConstSpec& spec, const std::string& rule_name
 ) {
-  if (nested_object_level_ <= 1) {
-    return ByteString(XMLValue(spec.json_value));
+  if (!dialect_.recursive) {
+    return IsXMLLayer() ? ByteString(XMLValue(spec.json_value))
+                        : JSONSchemaConverter::GenerateConst(spec, rule_name);
+  }
+  picojson::value value;
+  std::string error = picojson::parse(value, spec.json_value);
+  if (dialect_.recursive && generating_property_name_) {
+    XGRAMMAR_CHECK(error.empty() && value.is<std::string>())
+        << "propertyNames const must be a string";
+    ValidateElementName(value.get<std::string>());
+    return ByteString(value.get<std::string>());
+  }
+  if (dialect_.recursive && IsXMLLayer()) {
+    XGRAMMAR_CHECK(error.empty()) << "Invalid const JSON value: " << error;
+    return GenerateLiteral(value);
   }
   return JSONSchemaConverter::GenerateConst(spec, rule_name);
 }
@@ -328,13 +701,30 @@ int32_t XMLToolCallingConverter::GenerateConst(
 int32_t XMLToolCallingConverter::GenerateEnum(const EnumSpec& spec, const std::string& rule_name) {
   XGRAMMAR_DCHECK(!spec.json_values.empty())
       << "GenerateEnum called with empty enum spec for rule: " << rule_name;
-  if (nested_object_level_ <= 1) {
+  if (IsXMLLayer() && !dialect_.recursive) {
     std::vector<int32_t> values;
     values.reserve(spec.json_values.size());
     for (const auto& value : spec.json_values) {
       values.push_back(ByteString(XMLValue(value)));
     }
     return Choice(values);
+  }
+  if (dialect_.recursive && IsXMLLayer()) {
+    std::vector<int32_t> alternatives;
+    alternatives.reserve(spec.json_values.size());
+    for (const auto& json_value : spec.json_values) {
+      picojson::value value;
+      std::string error = picojson::parse(value, json_value);
+      XGRAMMAR_CHECK(error.empty()) << "Invalid enum JSON value: " << error;
+      if (dialect_.recursive && generating_property_name_) {
+        XGRAMMAR_CHECK(value.is<std::string>()) << "propertyNames enum values must be strings";
+        ValidateElementName(value.get<std::string>());
+        alternatives.push_back(ByteString(value.get<std::string>()));
+      } else {
+        alternatives.push_back(GenerateLiteral(value));
+      }
+    }
+    return Choice(alternatives);
   }
   return JSONSchemaConverter::GenerateEnum(spec, rule_name);
 }
@@ -361,7 +751,8 @@ std::string XMLToolCallingConverter::EscapeAttrValue(const std::string& value) c
 int32_t XMLToolCallingConverter::FormatPropertyKey(
     const std::string& key, const SchemaSpecPtr& schema
 ) {
-  if (nested_object_level_ <= 1) {
+  if (IsXMLLayer()) {
+    ValidateElementName(key);
     // Only kimi_k3_xml encodes the value's type next to the key; the other formats would
     // discard the result, so don't walk the schema for them.
     std::optional<std::string> pinned_type;
@@ -369,11 +760,50 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
       pinned_type = KimiK3TypeAttr(schema);
     }
     return Sequence(
-        {ByteString(xml_wrapper_.key_wrapper_prefix + EscapeAttrValue(key)),
-         XMLKeySuffix(pinned_type)}
+        {ByteString(dialect_.property.open_prefix + EscapeAttrValue(key)), XMLKeySuffix(pinned_type)
+        }
     );
   }
   return JSONSchemaConverter::FormatPropertyKey(key, schema);
+}
+
+int32_t XMLToolCallingConverter::FormatElementValueAndClose(
+    const ElementSyntax& syntax, int32_t value_rule_id, int32_t close_expr
+) {
+  std::vector<int32_t> elements;
+  if (!syntax.value_prefix.empty()) {
+    elements.push_back(WhitespaceExpression());
+    elements.push_back(ByteString(syntax.value_prefix));
+  }
+  // When wrapper padding is enabled, xml_string already accepts whitespace. Adding whitespace
+  // repetitions around it preserves the language but creates an Earley state for every possible
+  // split with the string body.
+  if (!dialect_.pad_values_with_whitespace || value_rule_id == builder_.GetRuleId(kXMLString)) {
+    elements.push_back(RuleRef(value_rule_id));
+  } else {
+    elements.push_back(WhitespaceExpression());
+    elements.push_back(RuleRef(value_rule_id));
+    elements.push_back(WhitespaceExpression());
+  }
+  elements.push_back(close_expr);
+  return Sequence(elements);
+}
+
+int32_t XMLToolCallingConverter::FormatElement(
+    const ElementSyntax& syntax,
+    const std::string& key,
+    int32_t value_rule_id,
+    const SchemaSpecPtr& schema
+) {
+  ValidateElementName(key);
+  const auto pinned_type =
+      json_format_ == JSONFormat::kKimiK3XML ? KimiK3TypeAttr(schema) : std::nullopt;
+  int32_t open =
+      Sequence({ByteString(syntax.open_prefix + EscapeAttrValue(key)), XMLKeySuffix(pinned_type)});
+  int32_t close = ByteString(
+      syntax.close_prefix + std::string(syntax.close_repeats_key ? key : "") + syntax.close_suffix
+  );
+  return Sequence({open, FormatElementValueAndClose(syntax, value_rule_id, close)});
 }
 
 int32_t XMLToolCallingConverter::FormatProperty(
@@ -383,23 +813,8 @@ int32_t XMLToolCallingConverter::FormatProperty(
     int64_t idx,
     const SchemaSpecPtr& schema
 ) {
-  if (nested_object_level_ <= 1) {
-    std::vector<int32_t> elements = {FormatPropertyKey(key, schema)};
-    if (!xml_wrapper_.value_wrapper_prefix.empty()) {
-      elements.push_back(WhitespaceExpression());
-      elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
-    }
-    // xml_string already accepts whitespace. Adding whitespace repetitions around it preserves the
-    // language but creates one Earley state for every possible split with the string body.
-    if (value_rule_id == builder_.GetRuleId(kXMLString)) {
-      elements.push_back(RuleRef(value_rule_id));
-    } else {
-      elements.push_back(WhitespaceExpression());
-      elements.push_back(RuleRef(value_rule_id));
-      elements.push_back(WhitespaceExpression());
-    }
-    elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
-    return Sequence(elements);
+  if (IsXMLLayer()) {
+    return FormatElement(dialect_.property, key, value_rule_id, schema);
   }
   return JSONSchemaConverter::FormatProperty(key, value_rule_id, rule_name, idx, schema);
 }
@@ -411,46 +826,149 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
     const std::string& rule_name_suffix,
     const SchemaSpecPtr& schema
 ) {
-  if (nested_object_level_ <= 1) {
-    std::vector<int32_t> elements = {
-        ByteString(xml_wrapper_.key_wrapper_prefix),
-        key_pattern_expr,
-        XMLKeySuffix(json_format_ == JSONFormat::kKimiK3XML ? KimiK3TypeAttr(schema) : std::nullopt)
-    };
-    if (!xml_wrapper_.value_wrapper_prefix.empty()) {
-      elements.push_back(WhitespaceExpression());
-      elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
+  if (IsXMLLayer()) {
+    const auto& syntax = dialect_.property;
+    if (syntax.close_repeats_key) {
+      int32_t name_rule_id =
+          builder_.AddRuleWithHint(rule_name + "_" + rule_name_suffix + "_name", key_pattern_expr);
+      int32_t content_rule_id = value_rule_id;
+      if (!syntax.value_prefix.empty() || (dialect_.pad_values_with_whitespace &&
+                                           value_rule_id != builder_.GetRuleId(kXMLString))) {
+        std::vector<int32_t> content;
+        if (!syntax.value_prefix.empty()) {
+          content.push_back(WhitespaceExpression());
+          content.push_back(ByteString(syntax.value_prefix));
+        }
+        if (dialect_.pad_values_with_whitespace &&
+            value_rule_id != builder_.GetRuleId(kXMLString)) {
+          content.push_back(WhitespaceExpression());
+          content.push_back(RuleRef(value_rule_id));
+          content.push_back(WhitespaceExpression());
+        } else {
+          content.push_back(RuleRef(value_rule_id));
+        }
+        content_rule_id = builder_.AddRuleWithHint(
+            rule_name + "_" + rule_name_suffix + "_value", Sequence(content)
+        );
+      }
+      Grammar::Impl::DynamicTag dynamic_tag{
+          syntax.open_prefix,
+          name_rule_id,
+          syntax.open_suffix,
+          content_rule_id,
+          syntax.close_prefix,
+          syntax.close_suffix
+      };
+      if (dialect_.recursive) {
+        XGRAMMAR_DCHECK(!unique_key_scope_stack_.empty());
+        auto& scope = unique_key_scope_stack_.back();
+        if (scope.rule_id < 0) {
+          scope.rule_id = builder_.AddEmptyRuleWithHint(rule_name + "_unique_keys");
+        }
+        dynamic_tag.unique_key_scope_rule_id = scope.rule_id;
+        dynamic_tag.reserved_names = scope.reserved_names;
+      }
+      return builder_.AddDynamicTag(dynamic_tag);
     }
-    if (value_rule_id == builder_.GetRuleId(kXMLString)) {
-      elements.push_back(RuleRef(value_rule_id));
-    } else {
-      elements.push_back(WhitespaceExpression());
-      elements.push_back(RuleRef(value_rule_id));
-      elements.push_back(WhitespaceExpression());
-    }
-    elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
-    return Sequence(elements);
+    const auto pinned_type =
+        json_format_ == JSONFormat::kKimiK3XML ? KimiK3TypeAttr(schema) : std::nullopt;
+    int32_t open =
+        Sequence({ByteString(syntax.open_prefix), key_pattern_expr, XMLKeySuffix(pinned_type)});
+    int32_t close = ByteString(syntax.close_prefix + syntax.close_suffix);
+    return Sequence({open, FormatElementValueAndClose(syntax, value_rule_id, close)});
   }
   return JSONSchemaConverter::FormatOtherProperty(
       key_pattern_expr, value_rule_id, rule_name, rule_name_suffix, schema
   );
 }
 
+int32_t XMLToolCallingConverter::FormatPatternProperty(
+    const std::string& key_regex,
+    int32_t value_rule_id,
+    const std::string& rule_name,
+    const std::string& rule_name_suffix,
+    const SchemaSpecPtr& schema
+) {
+  if (IsXMLLayer()) {
+    return FormatOtherProperty(
+        RegexExpression(key_regex), value_rule_id, rule_name, rule_name_suffix, schema
+    );
+  }
+  return JSONSchemaConverter::FormatPatternProperty(
+      key_regex, value_rule_id, rule_name, rule_name_suffix, schema
+  );
+}
+
+int32_t XMLToolCallingConverter::CreatePropertyNameRule(
+    const SchemaSpecPtr& spec, const std::string& rule_name_hint
+) {
+  if (!dialect_.recursive) {
+    return JSONSchemaConverter::CreatePropertyNameRule(spec, rule_name_hint);
+  }
+  int32_t rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
+  std::string rule_name = builder_.GetRule(rule_id).name;
+  bool old_generating_property_name = generating_property_name_;
+  generating_property_name_ = true;
+  builder_.UpdateRuleBody(rule_id, GenerateFromSpec(spec, rule_name));
+  generating_property_name_ = old_generating_property_name;
+  return rule_id;
+}
+
 int32_t XMLToolCallingConverter::GenerateObject(
     const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces
 ) {
+  if (dialect_.recursive) {
+    ValidateRecursiveObject(spec);
+    UniqueKeyScopeContext scope;
+    scope.reserved_names.reserve(spec.properties.size());
+    for (const auto& property : spec.properties) {
+      scope.reserved_names.push_back(property.name);
+    }
+    unique_key_scope_stack_.push_back(std::move(scope));
+  }
   nested_object_level_++;
-  bool need_brace = nested_object_level_ > 1;
-  auto result = JSONSchemaConverter::GenerateObject(spec, rule_name, need_brace);
+  bool need_braces = !dialect_.recursive && nested_object_level_ > 1;
+  bool saved_any_whitespace = any_whitespace_;
+  if (dialect_.recursive) {
+    any_whitespace_ = false;
+  }
+  int32_t result = JSONSchemaConverter::GenerateObject(spec, rule_name, need_braces);
+  any_whitespace_ = saved_any_whitespace;
   nested_object_level_--;
+  if (dialect_.recursive) {
+    auto scope = std::move(unique_key_scope_stack_.back());
+    unique_key_scope_stack_.pop_back();
+    if (scope.rule_id >= 0) {
+      builder_.UpdateRuleBody(scope.rule_id, result);
+      result = RuleRef(scope.rule_id);
+    }
+  }
   return result;
+}
+
+void XMLToolCallingConverter::ValidateRecursiveObject(const ObjectSpec& spec) const {
+  for (const auto& property : spec.properties) {
+    ValidateElementName(property.name);
+  }
+}
+
+void XMLToolCallingConverter::ValidateElementName(const std::string& name) const {
+  if (!dialect_.recursive) {
+    return;
+  }
+  XGRAMMAR_CHECK(!name.empty() && name.front() != '/' && name.find('>') == std::string::npos)
+      << "Invalid recursive XML element name: " << name;
+  XGRAMMAR_CHECK(IsCanonicalUTF8(name)) << "Recursive XML element names must be valid UTF-8";
+  XGRAMMAR_CHECK(std::any_of(name.begin(), name.end(), [](unsigned char byte) {
+    return !IsASCIIWhitespace(byte);
+  })) << "Recursive XML element names cannot be blank";
 }
 
 void XMLToolCallingConverter::AddCache(const std::string& key, int32_t rule_id) {
   if (key.empty()) {
     return;
   }
-  rule_cache_manager_.AddCache(key, nested_object_level_ > 1, rule_id);
+  rule_cache_manager_.AddCache(key, IsInnerCacheLayer(), rule_id);
 }
 
 std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key) const {
@@ -461,10 +979,17 @@ std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key)
   // tags. At level 1 it is the value of one such parameter and must use the inner JSON object
   // rule, including braces. Without this distinction, the outer XML object cache is reused for
   // the value before GenerateObject() can advance nested_object_level_.
-  if (nested_object_level_ == 1 && key == kObjectCacheKey) {
+  if (!dialect_.recursive && nested_object_level_ == 1 && key == kObjectCacheKey) {
     return rule_cache_manager_.GetCache(key, true);
   }
-  return rule_cache_manager_.GetCache(key, nested_object_level_ > 1);
+  return rule_cache_manager_.GetCache(key, IsInnerCacheLayer());
+}
+
+int XMLToolCallingConverter::GetRefCacheDomain() const {
+  if (dialect_.recursive) {
+    return generating_property_name_ ? 1 : 0;
+  }
+  return std::min(nested_object_level_, 2);
 }
 
 CohereXMLToolCallingConverter::CohereXMLToolCallingConverter(
@@ -594,7 +1119,8 @@ int32_t CohereXMLToolCallingConverter::FormatSingleCohereParam(
     const SchemaSpecPtr& schema,
     int32_t value_rule_id
 ) {
-  std::vector<int32_t> elements = {ByteString(xml_wrapper_.key_wrapper_prefix)};
+  const auto& syntax = dialect_.property;
+  std::vector<int32_t> elements = {ByteString(syntax.open_prefix)};
   if (name.has_value()) {
     elements.push_back(ByteString(" name=\"" + *name + "\""));
   } else if (key_pattern_expr.has_value()) {
@@ -604,13 +1130,13 @@ int32_t CohereXMLToolCallingConverter::FormatSingleCohereParam(
   }
   elements.push_back(ByteString(" type=\""));
   elements.push_back(GetCohereTypePattern(schema));
-  elements.push_back(ByteString("\"" + xml_wrapper_.key_wrapper_suffix));
+  elements.push_back(ByteString("\"" + syntax.open_suffix));
 
-  if (!xml_wrapper_.value_wrapper_prefix.empty()) {
-    elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
+  if (!syntax.value_prefix.empty()) {
+    elements.push_back(ByteString(syntax.value_prefix));
   }
   elements.push_back(FormatCohereValue(value_rule_id));
-  elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
+  elements.push_back(ByteString(syntax.close_prefix + syntax.close_suffix));
   return Sequence(elements);
 }
 
@@ -846,6 +1372,27 @@ int32_t CohereXMLToolCallingConverter::FormatOtherProperty(
   }
   return XMLToolCallingConverter::FormatOtherProperty(
       key_pattern_expr, value_rule_id, rule_name, rule_name_suffix, schema
+  );
+}
+
+int32_t CohereXMLToolCallingConverter::FormatPatternProperty(
+    const std::string& key_regex,
+    int32_t value_rule_id,
+    const std::string& rule_name,
+    const std::string& rule_name_suffix,
+    const SchemaSpecPtr& schema
+) {
+  if (InCohereValueContext()) {
+    return FormatOtherProperty(
+        RegexExpression(key_regex, /*json_string=*/false, /*force_cfg_expansion=*/true),
+        value_rule_id,
+        rule_name,
+        rule_name_suffix,
+        schema
+    );
+  }
+  return XMLToolCallingConverter::FormatPatternProperty(
+      key_regex, value_rule_id, rule_name, rule_name_suffix, schema
   );
 }
 

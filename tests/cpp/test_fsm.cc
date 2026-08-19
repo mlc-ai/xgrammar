@@ -282,6 +282,35 @@ TEST(XGrammarFSMTest, FunctionTest) {
   std::cout << "--------- Function Test Passed! -----------" << std::endl;
 }
 
+TEST(XGrammarFSMTest, IntersectRejectsTokenDependentEdges) {
+  FSM token_fsm(2);
+  token_fsm.AddTokenEdge(0, 1, {7});
+  FSM byte_fsm(2);
+  byte_fsm.AddEdge(0, 1, 'a', 'z');
+
+  auto result = FSMWithStartEnd::Intersect(
+      FSMWithStartEnd(std::move(token_fsm), 0, {1}), FSMWithStartEnd(std::move(byte_fsm), 0, {1})
+  );
+  ASSERT_TRUE(result.IsErr());
+  EXPECT_EQ(
+      std::string(std::move(result).UnwrapErr().what()), "Intersect only supports byte-regular FSMs"
+  );
+}
+
+TEST(XGrammarFSMTest, ToDFAEnforcesResultStateLimit) {
+  // This three-state NFA has four reachable DFA subsets: {0}, {0, 1}, {0, 2}, and {0, 1, 2}.
+  FSM nfa(3);
+  nfa.AddEdge(0, 0, 'a', 'b');
+  nfa.AddEdge(0, 1, 'a', 'a');
+  nfa.AddEdge(1, 2, 'a', 'b');
+  FSMWithStartEnd grammar(std::move(nfa), 0, {2});
+
+  EXPECT_TRUE(grammar.ToDFA(/*max_num_states=*/3).IsErr());
+  auto dfa = grammar.ToDFA(/*max_num_states=*/4);
+  ASSERT_TRUE(dfa.IsOk()) << std::move(dfa).UnwrapErr().what();
+  EXPECT_EQ(std::move(dfa).Unwrap().NumStates(), 4);
+}
+
 TEST(XGrammarFSMTest, EfficiencyTest) {
   std::cout << "--------- Efficiency Test Starts! -----------" << std::endl;
   // i.e ([a-z]0123456789){10}. Use this way to test the performance.

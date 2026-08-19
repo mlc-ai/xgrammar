@@ -100,8 +100,10 @@ struct ObjectSpec {
   std::unordered_set<std::string> required;
 
   bool allow_additional_properties = false;
+  bool has_explicit_additional_properties = false;
   SchemaSpecPtr additional_properties_schema;
   bool allow_unevaluated_properties = true;
+  bool has_explicit_unevaluated_properties = false;
   SchemaSpecPtr unevaluated_properties_schema;
   SchemaSpecPtr property_names;
 
@@ -201,12 +203,13 @@ enum class JSONFormat : int {
   kGlmXML = 4,
   kCohereXML = 5,
   kKimiK3XML = 6,
+  kMiniMaxM3XML = 7,
 };
 
 /*!
  * \brief Convert a format name to JSONFormat.
- * \param format One of "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml",
- * "cohere_xml", or "kimi_k3_xml".
+ * \param format One of "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml",
+ * "glm_xml", "cohere_xml", or "kimi_k3_xml".
  * \return The corresponding JSONFormat, or std::nullopt if the name is not recognized.
  */
 std::optional<JSONFormat> JSONFormatFromString(const std::string& format);
@@ -351,6 +354,20 @@ class JSONSchemaConverter {
       const SchemaSpecPtr& schema
   );
 
+  /*! \brief Format a property selected by a patternProperties regex. */
+  virtual int32_t FormatPatternProperty(
+      const std::string& key_regex,
+      int32_t value_rule_id,
+      const std::string& rule_name,
+      const std::string& rule_name_suffix,
+      const SchemaSpecPtr& schema
+  );
+
+  /*! \brief Create the grammar used for a propertyNames schema. */
+  virtual int32_t CreatePropertyNameRule(
+      const SchemaSpecPtr& spec, const std::string& rule_name_hint
+  );
+
   /*! \brief Get the basic string rule name. Override for different formats. */
   virtual std::string GetKeyPattern() const;
 
@@ -371,6 +388,13 @@ class JSONSchemaConverter {
 
   /*! \brief Get cached value by key. Returns std::nullopt if not found. */
   virtual std::optional<int32_t> GetCache(const std::string& key) const;
+
+  /*! \brief Get the generation domain used to cache resolved references.
+   *
+   * Most formats have one encoding domain. Hybrid formats can override this so the same ``$ref``
+   * target is generated independently when its wire encoding changes with nesting depth.
+   */
+  virtual int GetRefCacheDomain() const;
 
   // ==================== Helper methods (for subclasses to use) ====================
 
@@ -480,8 +504,10 @@ class JSONSchemaConverter {
 
  private:
   void AddHelperRules();
+  std::string GetRefCacheKey(const std::string& uri) const;
 
-  std::unordered_map<std::string, int32_t> uri_to_rule_id_;  // For circular reference handling
+  // Domain-qualified URI mappings for circular reference handling.
+  std::unordered_map<std::string, int32_t> uri_to_rule_id_;
   RefResolver ref_resolver_;  // Resolves $ref URI to SchemaSpecPtr at generate time
 
   // Trie over property names, for key patterns that exclude specific properties
@@ -559,10 +585,8 @@ Grammar JSONSchemaToGrammar(
  * \param max_whitespace_cnt The maximum number of whitespace characters for the whitespace
  * which is used for indentation or JSON elements separation when any_whitespace is True. If
  * std::nullopt, it means unlimited. Default: std::nullopt.
- * \param json_format Define the root
- * format of the object. If it's JSONFormat::kJSON, then it will generate a fully JSON-style
- * grammar. If it's JSONFormat::kXML, then it will generate a grammar with the root format is
- * XML-style, while the inner format is JSON-style. Default: JSONFormat::kJSON.
+ * \param json_format The output format. XML dialects may encode only the root object or recurse
+ * into nested objects and arrays, depending on the selected dialect. Default: JSONFormat::kJSON.
  * \returns The EBNF grammar string.
  */
 
@@ -596,10 +620,8 @@ std::string JSONSchemaToEBNF(
  * \param max_whitespace_cnt The maximum number of whitespace characters for the whitespace
  * which is used for indentation or JSON elements separation when any_whitespace is True. If
  * std::nullopt, it means unlimited. Default: std::nullopt.
- * \param json_format Define the root format of the object. If it's JSONFormat::kJSON,
- * then it will generate a fully JSON-style grammar. If it's JSONFormat::kXML, then it will
- * generate a grammar with the root format is XML-style, while the inner format is JSON-style.
- * Default: JSONFormat::kJSON.
+ * \param json_format The output format. XML dialects may encode only the root object or recurse
+ * into nested objects and arrays, depending on the selected dialect. Default: JSONFormat::kJSON.
  * \returns The EBNF grammar string.
  */
 std::string JSONSchemaToEBNF(

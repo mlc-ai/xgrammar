@@ -133,6 +133,12 @@ std::string FSMImplBase<ContainerType>::EdgesToString(std::optional<std::vector<
           result += std::to_string(info.TokenIds()[k]);
         }
         result += ")->" + std::to_string(edge.target);
+      } else if (edge.min == FSMEdge::EdgeType::kCaptureStart) {
+        result += "CaptureStart->" + std::to_string(edge.target);
+      } else if (edge.min == FSMEdge::EdgeType::kCaptureEnd) {
+        result += "CaptureEnd->" + std::to_string(edge.target);
+      } else if (edge.min == FSMEdge::EdgeType::kBackReference) {
+        result += "BackReference->" + std::to_string(edge.target);
       }
       if (j < static_cast<int>(edges.size()) - 1) {
         result += ", ";
@@ -248,6 +254,16 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
 
   void AddRuleEdge(int from, int to, int32_t rule_id) {
     AddEdge(from, to, FSMEdge::EdgeType::kRuleRef, rule_id);
+  }
+
+  void AddCaptureEndEdge(int from, int to) { AddEdge(from, to, FSMEdge::EdgeType::kCaptureEnd, 0); }
+
+  void AddBackReferenceEdge(int from, int to) {
+    AddEdge(from, to, FSMEdge::EdgeType::kBackReference, 0);
+  }
+
+  void AddCaptureStartEdge(int from, int to) {
+    AddEdge(from, to, FSMEdge::EdgeType::kCaptureStart, 0);
   }
 
   void AddEpsilonEdge(int from, int to) { AddEdge(from, to, FSMEdge::EdgeType::kEpsilon, 0); }
@@ -484,6 +500,12 @@ void FSM::AddEdge(int from, int to, FSMEdge::EdgeType type, int32_t value) {
 void FSM::AddEpsilonEdge(int from, int to) { pimpl_->AddEpsilonEdge(from, to); }
 
 void FSM::AddRuleEdge(int from, int to, int32_t rule_id) { pimpl_->AddRuleEdge(from, to, rule_id); }
+
+void FSM::AddCaptureEndEdge(int from, int to) { pimpl_->AddCaptureEndEdge(from, to); }
+
+void FSM::AddBackReferenceEdge(int from, int to) { pimpl_->AddBackReferenceEdge(from, to); }
+
+void FSM::AddCaptureStartEdge(int from, int to) { pimpl_->AddCaptureStartEdge(from, to); }
 
 void FSM::AddEOSEdge(int from, int to) { pimpl_->AddEOSEdge(from, to); }
 
@@ -1152,10 +1174,25 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
     const FSMWithStartEnd& lhs, const FSMWithStartEnd& rhs, int max_result_num_states
 ) {
   if (!lhs.IsLeaf() || !rhs.IsLeaf()) {
-    return ResultErr("Intersect only support leaf fsm!");
+    return ResultErr("Intersect only supports FSMs without rule references");
   }
-  auto lhs_dfa_raw = lhs.ToDFA();
-  auto rhs_dfa_raw = rhs.ToDFA();
+  auto is_byte_regular = [](const FSMWithStartEnd& fsm) {
+    std::unordered_set<int> reachable_states;
+    fsm.GetReachableStates(&reachable_states);
+    for (int state : reachable_states) {
+      for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+        if (!edge.IsCharRange() && !edge.IsEpsilon()) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+  if (!is_byte_regular(lhs) || !is_byte_regular(rhs)) {
+    return ResultErr("Intersect only supports byte-regular FSMs");
+  }
+  auto lhs_dfa_raw = lhs.ToDFA(max_result_num_states);
+  auto rhs_dfa_raw = rhs.ToDFA(max_result_num_states);
 
   if (lhs_dfa_raw.IsErr()) {
     return lhs_dfa_raw;
@@ -1191,6 +1228,9 @@ Result<FSMWithStartEnd> FSMWithStartEnd::Intersect(
         int min_value = std::max(lhs_edge.min, rhs_edge.min);
         int max_value = std::min(lhs_edge.max, rhs_edge.max);
         if (state_map.find(std::make_pair(lhs_edge.target, rhs_edge.target)) == state_map.end()) {
+          if (result.NumStates() >= max_result_num_states) {
+            return ResultErr("The number of states exceeds the limit.");
+          }
           state_map[{lhs_edge.target, rhs_edge.target}] = result.AddState();
           queue.push({lhs_edge.target, rhs_edge.target});
         }
@@ -1213,6 +1253,9 @@ bool FSMWithStartEnd::IsDFA() {
   for (const auto& edges : fsm_->GetEdges()) {
     character_transitions.reset();
     rule_transitions.clear();
+    bool has_capture_start = false;
+    bool has_capture_end = false;
+    bool has_backreference = false;
     for (const auto& edge : edges) {
       if (edge.IsEpsilon()) {
         return false;  // Epsilon transitions are not allowed in DFA.
@@ -1231,6 +1274,27 @@ bool FSMWithStartEnd::IsDFA() {
           return false;  // Duplicate rule transition.
         }
         rule_transitions.insert(edge.GetRefRuleId());
+        continue;
+      }
+      if (edge.IsCaptureStart()) {
+        if (has_capture_start) {
+          return false;
+        }
+        has_capture_start = true;
+        continue;
+      }
+      if (edge.IsCaptureEnd()) {
+        if (has_capture_end) {
+          return false;
+        }
+        has_capture_end = true;
+        continue;
+      }
+      if (edge.IsBackReference()) {
+        if (has_backreference) {
+          return false;
+        }
+        has_backreference = true;
       }
       // kRepeatRef: by invariant, a state with kRepeatRef has exactly one edge, always
       // deterministic.
@@ -1728,16 +1792,45 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
   }
   FSMWithStartEnd dfa(FSM(0), 0, std::vector<int32_t>(), true);
   std::vector<std::unordered_set<int>> closures;
+  const auto closure_hash = [](const std::vector<int>& key) {
+    uint64_t seed = 0;
+    for (int state : key) {
+      HashCombineBinary(seed, std::hash<int>{}(state));
+    }
+    return static_cast<size_t>(seed);
+  };
+  std::unordered_map<std::vector<int>, int32_t, decltype(closure_hash)> closure_ids(
+      0, closure_hash
+  );
+  auto find_or_add_closure = [&](std::unordered_set<int> closure) -> std::optional<int32_t> {
+    std::vector<int> key(closure.begin(), closure.end());
+    std::sort(key.begin(), key.end());
+    if (auto it = closure_ids.find(key); it != closure_ids.end()) {
+      return it->second;
+    }
+    if (closures.size() >= static_cast<size_t>(max_num_states)) {
+      return std::nullopt;
+    }
+    int32_t id = static_cast<int32_t>(closures.size());
+    closures.push_back(std::move(closure));
+    closure_ids.emplace(std::move(key), id);
+    return id;
+  };
   std::unordered_set<int> rules;
   std::unordered_set<int32_t> repeat_aux_indices;
   int now_process = 0;
   std::unordered_set<int> closure;
   closure.insert(start_);
   fsm_.GetEpsilonClosure(&closure);
-  closures.push_back(closure);
+  if (!find_or_add_closure(std::move(closure)).has_value()) {
+    return ResultErr("The number of states exceeds the limit.");
+  }
   while (now_process < static_cast<int>(closures.size())) {
     rules.clear();
     repeat_aux_indices.clear();
+    bool has_capture_start = false;
+    bool has_capture_end = false;
+    bool has_backreference = false;
     std::unordered_set<int32_t> token_aux_indices;
     std::unordered_set<int32_t> exclude_token_aux_indices;
     std::set<int> interval_ends;
@@ -1759,6 +1852,12 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
           continue;
         } else if (edge.IsRuleRef()) {
           rules.insert(edge.GetRefRuleId());
+        } else if (edge.IsCaptureStart()) {
+          has_capture_start = true;
+        } else if (edge.IsCaptureEnd()) {
+          has_capture_end = true;
+        } else if (edge.IsBackReference()) {
+          has_backreference = true;
         } else if (edge.IsRepeatRef()) {
           repeat_aux_indices.insert(edge.GetAuxIndex());
         } else if (edge.IsToken()) {
@@ -1808,18 +1907,11 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
           }
         }
       }
-      bool flag = false;
-      for (int j = 0; j < static_cast<int>(closures.size()); j++) {
-        if (closures[j] == next_closure) {
-          dfa.GetFsm().AddEdge(now_process, j, interval.first, interval.second);
-          flag = true;
-          break;
-        }
+      auto target = find_or_add_closure(std::move(next_closure));
+      if (!target.has_value()) {
+        return ResultErr("The number of states exceeds the limit.");
       }
-      if (!flag) {
-        dfa.GetFsm().AddEdge(now_process, closures.size(), interval.first, interval.second);
-        closures.push_back(next_closure);
-      }
+      dfa.GetFsm().AddEdge(now_process, *target, interval.first, interval.second);
     }
     for (auto rule : rules) {
       std::unordered_set<int> next_closure;
@@ -1838,18 +1930,65 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
           }
         }
       }
-      bool flag = false;
-      for (int j = 0; j < static_cast<int>(closures.size()); j++) {
-        if (closures[j] == next_closure) {
-          dfa.GetFsm().AddRuleEdge(now_process, j, rule);
-          flag = true;
-          break;
+      auto target = find_or_add_closure(std::move(next_closure));
+      if (!target.has_value()) {
+        return ResultErr("The number of states exceeds the limit.");
+      }
+      dfa.GetFsm().AddRuleEdge(now_process, *target, rule);
+    }
+
+    if (has_capture_start) {
+      std::unordered_set<int> next_closure;
+      for (const auto& state : closures[now_process]) {
+        for (const auto& edge : fsm_->GetEdges(state)) {
+          if (edge.IsCaptureStart()) {
+            std::unordered_set<int> epsilon_closure{edge.target};
+            fsm_.GetEpsilonClosure(&epsilon_closure);
+            next_closure.insert(epsilon_closure.begin(), epsilon_closure.end());
+          }
         }
       }
-      if (!flag) {
-        dfa.GetFsm().AddRuleEdge(now_process, closures.size(), rule);
-        closures.push_back(next_closure);
+      auto target = find_or_add_closure(std::move(next_closure));
+      if (!target.has_value()) {
+        return ResultErr("The number of states exceeds the limit.");
       }
+      dfa.GetFsm().AddCaptureStartEdge(now_process, *target);
+    }
+
+    if (has_capture_end) {
+      std::unordered_set<int> next_closure;
+      for (const auto& state : closures[now_process]) {
+        for (const auto& edge : fsm_->GetEdges(state)) {
+          if (edge.IsCaptureEnd()) {
+            std::unordered_set<int> epsilon_closure{edge.target};
+            fsm_.GetEpsilonClosure(&epsilon_closure);
+            next_closure.insert(epsilon_closure.begin(), epsilon_closure.end());
+          }
+        }
+      }
+      auto target = find_or_add_closure(std::move(next_closure));
+      if (!target.has_value()) {
+        return ResultErr("The number of states exceeds the limit.");
+      }
+      dfa.GetFsm().AddCaptureEndEdge(now_process, *target);
+    }
+
+    if (has_backreference) {
+      std::unordered_set<int> next_closure;
+      for (const auto& state : closures[now_process]) {
+        for (const auto& edge : fsm_->GetEdges(state)) {
+          if (edge.IsBackReference()) {
+            std::unordered_set<int> epsilon_closure{edge.target};
+            fsm_.GetEpsilonClosure(&epsilon_closure);
+            next_closure.insert(epsilon_closure.begin(), epsilon_closure.end());
+          }
+        }
+      }
+      auto target = find_or_add_closure(std::move(next_closure));
+      if (!target.has_value()) {
+        return ResultErr("The number of states exceeds the limit.");
+      }
+      dfa.GetFsm().AddBackReferenceEdge(now_process, *target);
     }
 
     for (auto aux_idx : repeat_aux_indices) {
@@ -1867,18 +2006,11 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
           }
         }
       }
-      bool flag = false;
-      for (int j = 0; j < static_cast<int>(closures.size()); j++) {
-        if (closures[j] == next_closure) {
-          dfa.GetFsm().AddEdge(now_process, j, FSMEdge::EdgeType::kRepeatRef, aux_idx);
-          flag = true;
-          break;
-        }
+      auto target = find_or_add_closure(std::move(next_closure));
+      if (!target.has_value()) {
+        return ResultErr("The number of states exceeds the limit.");
       }
-      if (!flag) {
-        dfa.GetFsm().AddEdge(now_process, closures.size(), FSMEdge::EdgeType::kRepeatRef, aux_idx);
-        closures.push_back(next_closure);
-      }
+      dfa.GetFsm().AddEdge(now_process, *target, FSMEdge::EdgeType::kRepeatRef, aux_idx);
     }
 
     for (auto aux_idx : token_aux_indices) {
@@ -1896,18 +2028,11 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
           }
         }
       }
-      bool flag = false;
-      for (int j = 0; j < static_cast<int>(closures.size()); j++) {
-        if (closures[j] == next_closure) {
-          dfa.GetFsm().AddEdge(now_process, j, FSMEdge::EdgeType::kToken, aux_idx);
-          flag = true;
-          break;
-        }
+      auto target = find_or_add_closure(std::move(next_closure));
+      if (!target.has_value()) {
+        return ResultErr("The number of states exceeds the limit.");
       }
-      if (!flag) {
-        dfa.GetFsm().AddEdge(now_process, closures.size(), FSMEdge::EdgeType::kToken, aux_idx);
-        closures.push_back(next_closure);
-      }
+      dfa.GetFsm().AddEdge(now_process, *target, FSMEdge::EdgeType::kToken, aux_idx);
     }
 
     for (auto aux_idx : exclude_token_aux_indices) {
@@ -1925,20 +2050,11 @@ Result<FSMWithStartEnd> FSMWithStartEnd::ToDFA(int max_num_states) const {
           }
         }
       }
-      bool flag = false;
-      for (int j = 0; j < static_cast<int>(closures.size()); j++) {
-        if (closures[j] == next_closure) {
-          dfa.GetFsm().AddEdge(now_process, j, FSMEdge::EdgeType::kExcludeToken, aux_idx);
-          flag = true;
-          break;
-        }
+      auto target = find_or_add_closure(std::move(next_closure));
+      if (!target.has_value()) {
+        return ResultErr("The number of states exceeds the limit.");
       }
-      if (!flag) {
-        dfa.GetFsm().AddEdge(
-            now_process, closures.size(), FSMEdge::EdgeType::kExcludeToken, aux_idx
-        );
-        closures.push_back(next_closure);
-      }
+      dfa.GetFsm().AddEdge(now_process, *target, FSMEdge::EdgeType::kExcludeToken, aux_idx);
     }
 
     now_process++;
