@@ -840,6 +840,42 @@ def test_continuation_transition_cache_filters_active_json_length(
             assert bool(allowed_tokens[token_id]) == oracle.accept_token(token_id), token_id
 
 
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_continuation_mask_cache_separates_json_string_lengths(enable_dynamic_compilation: bool):
+    pairs = [
+        chr(first) + chr(second)
+        for first in range(ord("a"), ord("n"))
+        for second in range(ord("a"), ord("n"))
+    ]
+    vocabulary = (
+        ['"', 'a"', "a", "abcd", r"\u0061", r'\u0061"', r'\u0061a"', r'\u0061aa"']
+        + pairs
+        + [pair + '"' for pair in pairs]
+    )
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info,
+        max_threads=1,
+        cache_enabled=False,
+        enable_dynamic_compilation=enable_dynamic_compilation,
+    ).compile_grammar(
+        'root[json_string_min_length=2, json_string_max_length=3] ::= "\\"" body "\\""\n'
+        'body ::= [a-m] body | "\\\\u0061" body | ""'
+    )
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    assert matcher.accept_string('"')
+    assert matcher.fill_next_token_bitmask(bitmask)
+
+    assert matcher.accept_token(vocabulary.index("a"))
+    xgr.reset_token_bitmask(bitmask)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    allowed_tokens = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    for token_id in range(tokenizer_info.vocab_size):
+        assert bool(allowed_tokens[token_id]) == matcher.fork().accept_token(token_id), token_id
+
+
 def test_continuation_mask_cache_classifies_tokens_independently_of_other_states(capfd):
     suffixes = [
         chr(first) + chr(second)
