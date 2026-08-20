@@ -27,6 +27,7 @@
 #include "grammar_functor.h"
 #include "grammar_impl.h"
 #include "json_schema_converter.h"
+#include "json_string_rule.h"
 #include "structural_tag.h"
 #include "support/dynamic_bitset.h"
 #include "support/int_set.h"
@@ -493,6 +494,9 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
  private:
   /*! \brief Build a token mask directly for a context-independent single character class. */
   std::optional<AdaptiveTokenMask> GetSingleCharacterClassDirectMask(bool is_root_rule) const;
+
+  /*! \brief Reuse tokenizer JSON-boundary metadata for a generic recursive string body. */
+  std::optional<AdaptiveTokenMask> GetJSONStringBodyDirectMask(bool is_root_rule) const;
 
   /*! \brief Reuse tokenizer metadata for a deterministic ASCII alphanumeric run. */
   std::optional<AdaptiveTokenMask> GetAsciiAlphanumericRunDirectMask(bool is_root_rule);
@@ -1537,6 +1541,28 @@ std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetSingleChara
       std::move(accepted_indices),
       std::move(uncertain_indices)
   );
+}
+
+std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetJSONStringBodyDirectMask(
+    bool is_root_rule
+) const {
+  if (is_root_rule || initial_state_.sub_element_id != 0 ||
+      !IsGenericJSONStringBodyDirectMaskRule(grammar_.operator->(), init_rule_id_) ||
+      initial_state_.element_id != grammar_->per_rule_fsms[init_rule_id_]->GetFsm().GetStart()) {
+    return std::nullopt;
+  }
+
+  const auto* tokenizer_impl = tokenizer_info_.ImplPtr();
+  AdaptiveTokenMask result(
+      tokenizer_impl->GetJSONStringContentPrefixBitset(),
+      tokenizer_info_.GetSortedDecodedVocab(),
+      /*additional_accepted_indices=*/{},
+      tokenizer_impl->GetJSONStringCrossingIndices()
+  );
+  result.all_uncertain_tokens_are_json_string_crossing =
+      !tokenizer_impl->GetJSONStringCrossingIndices().empty();
+  result.uncertain_token_bitset = tokenizer_impl->GetJSONStringCrossingBitset();
+  return result;
 }
 
 std::optional<AdaptiveTokenMask>
@@ -2931,6 +2957,11 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   // the rule when matching until this character. Store it in a stack for later rollback.
   tmp_can_reach_end_stack_.push_back(false);
   tmp_can_reach_end_prefix_or_stack_.push_back(false);
+
+  auto direct_json_string_body_mask = GetJSONStringBodyDirectMask(is_root_rule);
+  if (direct_json_string_body_mask.has_value()) {
+    return std::move(*direct_json_string_body_mask);
+  }
 
   // Try to get the crossing cache.
   bool rule_level_cache_is_available = !has_char_budget_rules_ && rule_level_cache_.has_value() &&

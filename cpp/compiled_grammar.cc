@@ -100,6 +100,12 @@ void AdaptiveTokenMask::RecomputeAcceptedCount(size_t sorted_vocab_size) {
 }
 
 void AdaptiveTokenMask::RecomputeJSONStringMetadata(const TokenizerInfo& tokenizer_info) {
+  // Direct JSON-string masks copy this tokenizer-owned metadata when they are built. Avoid
+  // walking a large crossing-token vocabulary again on the first dynamic mask fill.
+  if (all_uncertain_tokens_are_json_string_crossing &&
+      uncertain_token_bitset.Size() == tokenizer_info.GetVocabSize()) {
+    return;
+  }
   const auto& sorted_vocab = tokenizer_info.GetSortedDecodedVocab();
   const auto& crossing_flags = tokenizer_info.ImplPtr()->GetJSONStringCrossingFlags();
   all_uncertain_tokens_are_json_string_crossing = !uncertain_indices.empty();
