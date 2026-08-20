@@ -236,6 +236,7 @@ class CharacterClassTokenSummaryCache {
       const std::vector<std::pair<int32_t, std::string>>& sorted_vocab,
       const std::vector<int32_t>& lcp_with_previous,
       const std::vector<int32_t>& ascii_string_safe_indices,
+      const std::vector<uint8_t>& json_string_crossing_flags,
       size_t vocab_size,
       int32_t max_characters
   ) {
@@ -270,9 +271,16 @@ class CharacterClassTokenSummaryCache {
                     summaries->small_consumed_whole_token_indices,
                     summaries->completed_prefix_unconsumed_indices
                 );
-      auto computed = std::make_shared<const CharacterClassRepeatTokenMask>(
-          CharacterClassRepeatTokenMask{std::move(adaptive_token_mask), DynamicBitset(vocab_size)}
-      );
+      auto computed =
+          std::make_shared<const CharacterClassRepeatTokenMask>(CharacterClassRepeatTokenMask{
+              std::move(adaptive_token_mask),
+              DynamicBitset(vocab_size),
+              std::all_of(
+                  summaries->completed_prefix_unconsumed_indices.begin(),
+                  summaries->completed_prefix_unconsumed_indices.end(),
+                  [&](int32_t index) { return json_string_crossing_flags[index]; }
+              )
+          });
       std::lock_guard<std::mutex> lock(repeat_mutex_);
       auto& cached = repeat_cache_[std::move(key)];
       if (auto retained = cached.lock()) {
@@ -296,7 +304,12 @@ class CharacterClassTokenSummaryCache {
     auto computed =
         std::make_shared<const CharacterClassRepeatTokenMask>(CharacterClassRepeatTokenMask{
             AdaptiveTokenMask(vocab_size, sorted_vocab, accepted_indices, uncertain_indices),
-            std::move(accepted_prefix_tokens)
+            std::move(accepted_prefix_tokens),
+            std::all_of(
+                uncertain_indices.begin(),
+                uncertain_indices.end(),
+                [&](int32_t index) { return json_string_crossing_flags[index]; }
+            )
         });
     std::lock_guard<std::mutex> lock(repeat_mutex_);
     auto& cached = repeat_cache_[std::move(key)];
@@ -3283,6 +3296,7 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(
                                earley_parser_grammar_features
   )
                                .GetAdaptiveTokenMask(is_root_rule);
+  mask.RecomputeJSONStringMetadata(tokenizer_info);
   return adaptive_token_mask_cache.emplace(cache_state, std::move(mask)).first->second;
 }
 
@@ -3304,6 +3318,7 @@ const CharacterClassRepeatTokenMask& CompiledGrammar::Impl::GetCharacterClassRep
       sorted_vocab,
       tokenizer_info.ImplPtr()->GetSortedVocabLCPWithPrevious(),
       tokenizer_info.ImplPtr()->GetAsciiStringSafeIndices(),
+      tokenizer_info.ImplPtr()->GetJSONStringCrossingFlags(),
       tokenizer_info.GetVocabSize(),
       max_characters
   );

@@ -65,6 +65,11 @@ struct AdaptiveTokenMask {
 
   std::vector<int32_t> uncertain_indices;
 
+  /*! \brief Token-id membership for uncertain_indices. Derived, not serialized. */
+  DynamicBitset uncertain_token_bitset;
+  /*! \brief Whether every uncertain token crosses an unescaped JSON closing quote. */
+  bool all_uncertain_tokens_are_json_string_crossing{false};
+
   /*! \brief Number of definitely accepted decoded-vocabulary tokens. Derived, not serialized. */
   int32_t accepted_count{-1};
 
@@ -100,11 +105,14 @@ struct AdaptiveTokenMask {
 
   void RecomputeAcceptedCount(size_t sorted_vocab_size);
 
+  void RecomputeJSONStringMetadata(const TokenizerInfo& tokenizer_info);
+
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask) {
     return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
-           MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset);
+           MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset) +
+           MemorySize(mask.uncertain_token_bitset);
   }
 };
 
@@ -125,6 +133,8 @@ XGRAMMAR_MEMBER_TABLE(
 struct CharacterClassRepeatTokenMask {
   AdaptiveTokenMask adaptive_token_mask;
   DynamicBitset accepted_prefix_tokens;
+  /*! \brief Whether every uncertain token crosses an unescaped JSON closing quote. */
+  bool all_uncertain_tokens_are_json_string_crossing;
 };
 
 /*!

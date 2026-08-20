@@ -300,6 +300,93 @@ def test_plain_json_string_length_masks_match_eager_and_token_oracle(cache_enabl
             assert bool(mask[token_id]) == dynamic_matcher.fork().accept_token(token_id), token_id
 
 
+def test_json_string_length_quote_suffix_index_matches_eager_and_token_oracle(capfd):
+    safe_content_tokens = ["q" * length for length in range(1, 1101)]
+    quote_crossing_tokens = [
+        'a"}',
+        'aa"}',
+        'aaa"}',
+        'aaaa"}',
+        r'\u0061a"}',
+        r'\ud83d\ude00a"}',
+        r'a\"b"}',
+        'aa"',
+        'aa"}x',
+        'aa"},',
+    ]
+    quote_crossing_tokens += [f'aa"}}invalid{index:03d}' for index in range(256)]
+    vocabulary = safe_content_tokens + quote_crossing_tokens + [b"\xff"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    schema = {
+        "type": "object",
+        "properties": {"value": {"type": "string", "minLength": 2, "maxLength": 3}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    compiler_options = {"tokenizer_info": tokenizer_info, "max_threads": 1, "cache_enabled": False}
+    eager = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=False
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+    dynamic = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=True
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+
+    prefix = '{"value": "'
+
+    def fill(compiled_grammar, debug_print=False):
+        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        assert matcher.accept_string(prefix)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert matcher.fill_next_token_bitmask(bitmask, debug_print=debug_print)
+        return matcher, bitmask
+
+    _, eager_bitmask = fill(eager)
+    dynamic_matcher, dynamic_bitmask = fill(dynamic, debug_print=True)
+    assert "ContinuationTransitionCache(" not in capfd.readouterr().err
+    torch.testing.assert_close(dynamic_bitmask, eager_bitmask, rtol=0, atol=0)
+
+    allowed = bitmask_to_bool_mask(dynamic_bitmask, tokenizer_info.vocab_size)[0]
+    for token in quote_crossing_tokens:
+        token_id = vocabulary.index(token)
+        assert bool(allowed[token_id]) == dynamic_matcher.fork().accept_token(token_id), token
+
+    restored = xgr.CompiledGrammar.deserialize_json(dynamic.serialize_json(), tokenizer_info)
+    _, restored_bitmask = fill(restored)
+    torch.testing.assert_close(restored_bitmask, dynamic_bitmask, rtol=0, atol=0)
+
+
+def test_json_string_length_custom_basic_string_sub_does_not_use_suffix_index():
+    vocabulary = ['"}', 'a"]}', 'a"}', '"]}', 'aa"]}', "a", 'x"}']
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    grammar = xgr.Grammar.from_ebnf(
+        r"""root ::= constrained "}"
+constrained[json_string_min_length=1, json_string_max_length=1] ::= "\"" basic_string_sub
+basic_string_sub ::= ("\"" | "a" "\"" "]")"""
+    )
+    compiler_options = {"tokenizer_info": tokenizer_info, "max_threads": 1, "cache_enabled": False}
+    eager = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=False
+    ).compile_grammar(grammar)
+    dynamic = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+
+    def fill(compiled_grammar):
+        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        assert matcher.accept_string('"')
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        return matcher, bitmask
+
+    _, eager_bitmask = fill(eager)
+    dynamic_matcher, dynamic_bitmask = fill(dynamic)
+    torch.testing.assert_close(dynamic_bitmask, eager_bitmask, rtol=0, atol=0)
+
+    allowed = bitmask_to_bool_mask(dynamic_bitmask, tokenizer_info.vocab_size)[0]
+    for token_id in range(tokenizer_info.vocab_size):
+        assert bool(allowed[token_id]) == dynamic_matcher.fork().accept_token(token_id), token_id
+
+
 @pytest.mark.parametrize("cache_enabled", [False, True], ids=["cache-off", "cache-on"])
 def test_email_format_regex_fsm_masks_match_eager_and_token_oracle(cache_enabled):
     shared_prefix = "a" * 64
