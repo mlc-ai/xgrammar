@@ -29,6 +29,7 @@
 #include "compiled_grammar_impl.h"
 #include "earley_parser.h"
 #include "grammar_impl.h"
+#include "json_string_rule.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
 #include "support/int_set.h"
@@ -458,103 +459,6 @@ void ApplyTokenBitmaskInplaceCPU(
  * process.
  */
 
-namespace {
-
-int32_t UnwrapSingleElementSequences(const Grammar::Impl* grammar, int32_t grammar_expr_id) {
-  for (int32_t depth = 0; depth < 8; ++depth) {
-    const auto expr = grammar->GetGrammarExpr(grammar_expr_id);
-    if (expr.type != GrammarExprType::kSequence || expr.size() != 1) {
-      break;
-    }
-    grammar_expr_id = expr[0];
-  }
-  return grammar_expr_id;
-}
-
-bool IsByteString(
-    const Grammar::Impl* grammar, int32_t grammar_expr_id, std::string_view expected
-) {
-  grammar_expr_id = UnwrapSingleElementSequences(grammar, grammar_expr_id);
-  const auto expr = grammar->GetGrammarExpr(grammar_expr_id);
-  if (expr.type != GrammarExprType::kByteString ||
-      expr.size() != static_cast<int32_t>(expected.size())) {
-    return false;
-  }
-  for (int32_t i = 0; i < expr.size(); ++i) {
-    if (static_cast<uint8_t>(expr[i]) != static_cast<uint8_t>(expected[i])) {
-      return false;
-    }
-  }
-  return true;
-}
-
-bool IsRuleRef(const Grammar::Impl* grammar, int32_t grammar_expr_id, int32_t rule_id) {
-  grammar_expr_id = UnwrapSingleElementSequences(grammar, grammar_expr_id);
-  const auto expr = grammar->GetGrammarExpr(grammar_expr_id);
-  return expr.type == GrammarExprType::kRuleRef && expr.size() == 1 && expr[0] == rule_id;
-}
-
-bool IsJSONNormalCharacterClass(const Grammar::Impl* grammar, int32_t grammar_expr_id) {
-  grammar_expr_id = UnwrapSingleElementSequences(grammar, grammar_expr_id);
-  const auto expr = grammar->GetGrammarExpr(grammar_expr_id);
-  if (expr.type != GrammarExprType::kCharacterClass || expr.size() < 1 || expr[0] == 0 ||
-      (expr.size() - 1) % 2 != 0) {
-    return false;
-  }
-  for (int32_t codepoint = 0; codepoint < 128; ++codepoint) {
-    bool excluded = false;
-    for (int32_t i = 1; i < expr.size(); i += 2) {
-      if (expr[i] < 0 || expr[i] > expr[i + 1] || expr[i + 1] >= 128) {
-        return false;
-      }
-      excluded = excluded || (codepoint >= expr[i] && codepoint <= expr[i + 1]);
-    }
-    const bool should_be_excluded = codepoint <= 0x1f || codepoint == '"' || codepoint == '\\';
-    if (excluded != should_be_excluded) {
-      return false;
-    }
-  }
-  return true;
-}
-
-bool SupportsJSONStringQuoteSuffixIndex(const Grammar::Impl* grammar, int32_t rule_id) {
-  if (rule_id < 0 || rule_id >= grammar->NumRules()) {
-    return false;
-  }
-  const auto body = grammar->GetGrammarExpr(grammar->GetRule(rule_id).body_expr_id);
-  if (body.type != GrammarExprType::kChoices || body.size() != 3) {
-    return false;
-  }
-  bool found_quote = false;
-  bool found_normal_character = false;
-  bool found_escape = false;
-  for (int32_t choice_id : body) {
-    if (IsByteString(grammar, choice_id, "\"")) {
-      found_quote = true;
-      continue;
-    }
-    const auto choice = grammar->GetGrammarExpr(choice_id);
-    if (choice.type == GrammarExprType::kSequence && choice.size() == 2 &&
-        IsJSONNormalCharacterClass(grammar, choice[0]) && IsRuleRef(grammar, choice[1], rule_id)) {
-      found_normal_character = true;
-      continue;
-    }
-    if (choice.type == GrammarExprType::kSequence && choice.size() == 3 &&
-        IsByteString(grammar, choice[0], "\\") && IsRuleRef(grammar, choice[2], rule_id)) {
-      const auto escape_ref = grammar->GetGrammarExpr(choice[1]);
-      if (escape_ref.type != GrammarExprType::kRuleRef || escape_ref.size() != 1) {
-        return false;
-      }
-      found_escape = true;
-      continue;
-    }
-    return false;
-  }
-  return found_quote && found_normal_character && found_escape;
-}
-
-}  // namespace
-
 /* \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcher::Impl : public EarleyParser {
  public:
@@ -606,11 +510,11 @@ class GrammarMatcher::Impl : public EarleyParser {
     repeat_mask_cache_enabled_ = compiled_grammar_->enable_dynamic_compilation;
     if (has_json_string_length_rules_) {
       tmp_state_accepted_bitset_ = DynamicBitset(tokenizer_info_.GetVocabSize());
-      json_string_quote_suffix_index_rules_.resize(grammar_->NumRules(), false);
-      for (int32_t rule_id = 0; rule_id < grammar_->NumRules(); ++rule_id) {
-        json_string_quote_suffix_index_rules_[rule_id] =
-            SupportsJSONStringQuoteSuffixIndex(grammar_.operator->(), rule_id);
-      }
+    }
+    json_string_quote_suffix_index_rules_.resize(grammar_->NumRules(), false);
+    for (int32_t rule_id = 0; rule_id < grammar_->NumRules(); ++rule_id) {
+      json_string_quote_suffix_index_rules_[rule_id] =
+          IsGenericJSONStringBodyRule(grammar_.operator->(), rule_id);
     }
   }
 
@@ -906,6 +810,8 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::vector<int32_t> tmp_json_length_invalid_indices_;
   std::vector<int32_t> tmp_json_length_valid_escaped_indices_;
   std::vector<int32_t> tmp_repeat_quote_crossing_indices_;
+  std::vector<int32_t> tmp_json_string_suffix_accepted_token_ids_;
+  std::vector<std::pair<size_t, size_t>> tmp_json_string_accepted_suffix_ranges_;
   std::vector<uint8_t> json_string_quote_suffix_index_rules_;
   std::vector<ParserState> tmp_latest_states_;
   std::vector<std::pair<const ParserState*, const AdaptiveTokenMask*>>
@@ -3063,6 +2969,8 @@ void GrammarMatcher::Impl::AddJSONStringQuoteCrossingTokensFromSuffixIndex(
     const std::vector<int32_t>& uncertain_indices,
     const DynamicBitset& uncertain_tokens
 ) {
+  tmp_json_string_suffix_accepted_token_ids_.clear();
+  tmp_json_string_accepted_suffix_ranges_.clear();
   const auto* tokenizer_impl = tokenizer_info_.ImplPtr();
   const auto& suffix_indices = tokenizer_impl->GetJSONStringCrossingIndicesBySuffix();
   if (suffix_indices.empty()) {
@@ -3072,17 +2980,31 @@ void GrammarMatcher::Impl::AddJSONStringQuoteCrossingTokensFromSuffixIndex(
   const int32_t current_count = GetCurrentJSONStringCharIndex();
   const int32_t min_deadline = JSONStringMinLengthDeadline(state);
   const int32_t max_deadline = JSONStringLengthDeadline(state);
+  const bool has_length_context = min_deadline >= 0 || max_deadline >= 0;
+  const bool all_lengths_are_valid =
+      (min_deadline < 0 || current_count >= min_deadline) && max_deadline < 0;
+  if (!all_lengths_are_valid) {
+    tmp_json_string_suffix_accepted_token_ids_.reserve(uncertain_indices.size());
+  }
   const int32_t synthetic_count = std::max(current_count, min_deadline);
   if (max_deadline >= 0 && synthetic_count > max_deadline) {
     return;
   }
 
   PushOneStateToCheck(state);
-  const JSONStringCharCounterState initial_counter = json_string_char_count_history_.back();
-  json_string_char_count_history_.back().count = synthetic_count;
+  JSONStringCharCounterState initial_counter;
+  if (has_length_context) {
+    XGRAMMAR_DCHECK(IsJSONStringCounterInside());
+    initial_counter = json_string_char_count_history_.back();
+    json_string_char_count_history_.back().count = synthetic_count;
+  }
   int32_t representative_prefix_bytes = 0;
   bool quote_accepted = Advance('"');
   if (!quote_accepted) {
+    if (!has_length_context) {
+      PopLastStates(1);
+      return;
+    }
     XGRAMMAR_DCHECK(!uncertain_indices.empty());
     const int32_t representative_index = uncertain_indices.front();
     const int32_t closing_quote_offset =
@@ -3134,15 +3056,30 @@ void GrammarMatcher::Impl::AddJSONStringQuoteCrossingTokensFromSuffixIndex(
 
   int32_t previous_token_index = -1;
   int32_t previous_matched_size = 0;
+  bool all_suffixes_accepted = true;
+  const bool all_indexed_tokens_are_uncertain = uncertain_indices.size() == suffix_indices.size();
   for (size_t position = 0; position < suffix_indices.size();) {
-    const int32_t token_index = suffix_indices[position];
-    const int32_t token_id = sorted_vocab[token_index].first;
-    if (!uncertain_tokens[token_id]) {
-      ++position;
-      continue;
+    const std::string_view current_suffix = suffix(suffix_indices[position]);
+    const auto group_end_it = std::partition_point(
+        suffix_indices.begin() + position + 1,
+        suffix_indices.end(),
+        [&](int32_t candidate_index) { return suffix(candidate_index) == current_suffix; }
+    );
+    const size_t group_end = static_cast<size_t>(group_end_it - suffix_indices.begin());
+    size_t representative_position = position;
+    if (!all_indexed_tokens_are_uncertain) {
+      while (representative_position < group_end &&
+             !uncertain_tokens[sorted_vocab[suffix_indices[representative_position]].first]) {
+        ++representative_position;
+      }
+      if (representative_position == group_end) {
+        position = group_end;
+        continue;
+      }
     }
-
-    const std::string_view current_suffix = suffix(token_index);
+    const int32_t token_index = suffix_indices[representative_position];
+    const int32_t token_id = sorted_vocab[token_index].first;
+    XGRAMMAR_DCHECK(uncertain_tokens[token_id]);
     int32_t common_prefix_length = 0;
     if (previous_token_index >= 0) {
       const std::string_view previous_suffix = suffix(previous_token_index);
@@ -3180,16 +3117,41 @@ void GrammarMatcher::Impl::AddJSONStringQuoteCrossingTokensFromSuffixIndex(
       );
       position = static_cast<size_t>(next - suffix_indices.begin());
       accepted = false;
+      all_suffixes_accepted = false;
       break;
     }
     if (accepted) {
-      if (length_is_valid(token_index)) {
-        tmp_accepted_bitset_.Set(token_id);
+      if (all_lengths_are_valid) {
+        tmp_json_string_accepted_suffix_ranges_.emplace_back(position, group_end);
+      } else {
+        for (size_t candidate_position = position; candidate_position < group_end;
+             ++candidate_position) {
+          const int32_t candidate_index = suffix_indices[candidate_position];
+          const int32_t candidate_id = sorted_vocab[candidate_index].first;
+          if (uncertain_tokens[candidate_id] && length_is_valid(candidate_index)) {
+            tmp_json_string_suffix_accepted_token_ids_.push_back(candidate_id);
+          }
+        }
       }
-      ++position;
+      position = group_end;
     }
     previous_token_index = token_index;
     previous_matched_size = matched_size;
+  }
+  if (all_lengths_are_valid && all_indexed_tokens_are_uncertain && all_suffixes_accepted) {
+    tmp_accepted_bitset_ |= uncertain_tokens;
+  } else {
+    for (const auto& [begin, end] : tmp_json_string_accepted_suffix_ranges_) {
+      for (size_t position = begin; position < end; ++position) {
+        const int32_t token_id = sorted_vocab[suffix_indices[position]].first;
+        if (uncertain_tokens[token_id]) {
+          tmp_accepted_bitset_.Set(token_id);
+        }
+      }
+    }
+    for (int32_t token_id : tmp_json_string_suffix_accepted_token_ids_) {
+      tmp_accepted_bitset_.Set(token_id);
+    }
   }
   // Remove the suffix, quote, representative content prefix, and temporary state row.
   PopLastStates(previous_matched_size + representative_prefix_bytes + 2);
@@ -3413,9 +3375,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     }
 
     const bool supports_json_string_quote_suffix_index =
-        json_string_length_filter_needed && state.rule_id >= 0 &&
-        json_string_quote_suffix_index_rules_[state.rule_id];
-    if (supports_json_string_quote_suffix_index && IsJSONStringCounterInside() &&
+        state.rule_id >= 0 && json_string_quote_suffix_index_rules_[state.rule_id];
+    if (supports_json_string_quote_suffix_index &&
         adaptive_token_mask.store_type != StoreType::kRejected &&
         adaptive_token_mask.all_uncertain_tokens_are_json_string_crossing && !has_budget_rules_ &&
         !has_char_budget_rules_ && !capture_tracking_) {

@@ -89,6 +89,7 @@ class TokenizerInfo::Impl {
   const std::vector<int32_t>& GetJSONStringCrossingIndices() const {
     return json_string_crossing_indices_;
   }
+  const DynamicBitset& GetJSONStringCrossingBitset() const { return json_string_crossing_bitset_; }
   const std::vector<uint8_t>& GetJSONStringCrossingFlags() const {
     return json_string_crossing_flags_;
   }
@@ -171,6 +172,8 @@ class TokenizerInfo::Impl {
   std::array<std::vector<int32_t>, 256> json_string_content_prefix_indices_by_first_byte_;
   /*! \brief Sorted-vocabulary tokens that can cross an unescaped closing quote. */
   std::vector<int32_t> json_string_crossing_indices_;
+  /*! \brief Token-id bitset for tokens that can cross an unescaped closing quote. */
+  DynamicBitset json_string_crossing_bitset_;
   /*! \brief Whether each sorted-vocabulary token crosses an unescaped closing quote. */
   std::vector<uint8_t> json_string_crossing_flags_;
   /*! \brief Byte offset of the first unescaped closing quote, or -1 when absent. */

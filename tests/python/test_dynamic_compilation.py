@@ -1,6 +1,7 @@
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from functools import cache
 
 import pytest
 import torch
@@ -287,6 +288,233 @@ def test_json_string_length_quote_suffix_index_matches_eager_and_token_oracle(ca
     restored = xgr.CompiledGrammar.deserialize_json(dynamic.serialize_json(), tokenizer_info)
     _, restored_bitmask = fill(restored)
     torch.testing.assert_close(restored_bitmask, dynamic_bitmask, rtol=0, atol=0)
+
+
+def _json_string_length_boundary_cases():
+    cases = []
+    boundary_values = (
+        0,
+        1,
+        2,
+        3,
+        31,
+        32,
+        33,
+        63,
+        64,
+        65,
+        127,
+        128,
+        129,
+        200,
+        255,
+        256,
+        257,
+        4095,
+        4096,
+        4097,
+        16383,
+        16384,
+        16385,
+        32768,
+        65536,
+    )
+    for boundary in boundary_values:
+        prefix_lengths = (0, 1) if boundary == 0 else (boundary - 1, boundary, boundary + 1)
+        for prefix_length in prefix_lengths:
+            cases.extend(
+                [
+                    pytest.param(
+                        boundary, None, prefix_length, id=f"min-{boundary}-seq-{prefix_length}"
+                    ),
+                    pytest.param(
+                        None, boundary, prefix_length, id=f"max-{boundary}-seq-{prefix_length}"
+                    ),
+                ]
+            )
+    for exact in (0, 1, 32, 64, 128, 256, 4096, 16384, 65536):
+        for prefix_length in sorted({max(0, exact - 1), exact, exact + 1}):
+            cases.append(
+                pytest.param(exact, exact, prefix_length, id=f"exact-{exact}-seq-{prefix_length}")
+            )
+    for minimum, maximum in ((0, 1), (31, 33), (63, 65), (127, 129), (4095, 4097)):
+        for prefix_length in range(max(0, minimum - 1), maximum + 2):
+            cases.append(
+                pytest.param(
+                    minimum,
+                    maximum,
+                    prefix_length,
+                    id=f"range-{minimum}-{maximum}-seq-{prefix_length}",
+                )
+            )
+    return cases
+
+
+@cache
+def _json_string_length_boundary_fixture(minimum, maximum):
+    boundary_lengths = [
+        1,
+        2,
+        3,
+        31,
+        32,
+        33,
+        63,
+        64,
+        65,
+        126,
+        127,
+        128,
+        129,
+        255,
+        256,
+        257,
+        4095,
+        4096,
+        4097,
+        16383,
+        16384,
+        16385,
+    ]
+    suffixes = ['"', '"}', '"}x', '"]', '":', '"   ']
+    quote_crossing_tokens = [
+        "a" * content_length + suffix for content_length in boundary_lengths for suffix in suffixes
+    ]
+    quote_crossing_tokens += [r'\u0061"}', r'\ud83d\ude00"}', r'a\"b"}']
+    vocabulary = ["a", '"', "}", "]", ":", " "] + quote_crossing_tokens + [b"\xff"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    string_schema = {"type": "string"}
+    if minimum is not None:
+        string_schema["minLength"] = minimum
+    if maximum is not None:
+        string_schema["maxLength"] = maximum
+    schema = {
+        "type": "object",
+        "properties": {"value": string_schema},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    compiler_options = {"tokenizer_info": tokenizer_info, "max_threads": 1, "cache_enabled": False}
+    eager = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=False
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+    dynamic = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=True
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+    return tokenizer_info, eager, dynamic
+
+
+@pytest.mark.parametrize("minimum,maximum,prefix_length", _json_string_length_boundary_cases())
+def test_json_string_length_quote_suffix_index_boundaries(minimum, maximum, prefix_length):
+    tokenizer_info, eager, dynamic = _json_string_length_boundary_fixture(minimum, maximum)
+
+    prefix = '{"value": "' + "a" * prefix_length
+
+    if maximum is not None and prefix_length > maximum:
+        for compiled_grammar in (eager, dynamic):
+            matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+            assert not matcher.accept_string(prefix)
+        return
+
+    def fill(compiled_grammar):
+        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        assert matcher.accept_string(prefix)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        return matcher, bitmask
+
+    _, eager_bitmask = fill(eager)
+    dynamic_matcher, dynamic_bitmask = fill(dynamic)
+    torch.testing.assert_close(dynamic_bitmask, eager_bitmask, rtol=0, atol=0)
+
+    allowed = bitmask_to_bool_mask(dynamic_bitmask, tokenizer_info.vocab_size)[0]
+    if prefix_length <= 4097:
+        oracle_token_ids = range(tokenizer_info.vocab_size)
+    else:
+        # Forking a matcher copies its parse history. Keep full token-oracle coverage on all
+        # short/medium boundaries and sample every vocabulary region for very long histories.
+        last_token_id = tokenizer_info.vocab_size - 1
+        oracle_token_ids = sorted(
+            {
+                0,
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                tokenizer_info.vocab_size // 4,
+                tokenizer_info.vocab_size // 2,
+                3 * tokenizer_info.vocab_size // 4,
+                last_token_id - 1,
+                last_token_id,
+            }
+        )
+    for token_id in oracle_token_ids:
+        assert bool(allowed[token_id]) == dynamic_matcher.fork().accept_token(token_id), token_id
+
+
+@pytest.mark.parametrize("with_other_length_rule", [False, True], ids=["no-counter", "counter"])
+def test_unbounded_json_string_quote_suffix_index_matches_eager_and_token_oracle(
+    with_other_length_rule,
+):
+    safe_content_tokens = ["q" * length for length in range(1, 1101)]
+    suffixes = ['"', '"}', '"}x', '"]', '":', '"   ']
+    quote_crossing_tokens = [
+        "a" * content_length + suffix
+        for content_length in (1, 2, 63, 64, 127, 128, 129, 255, 256, 4095, 4096, 4097)
+        for suffix in suffixes
+    ]
+    quote_crossing_tokens += [rf'aa"}}invalid{index:03d}' for index in range(256)] + [
+        r'\u0061"}',
+        r'\ud83d\ude00"}',
+        r'a\"b"}',
+    ]
+    vocabulary = safe_content_tokens + quote_crossing_tokens + ["a", '"', "}", "]", ":", " "]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    properties = {"value": {"type": "string"}}
+    if with_other_length_rule:
+        properties["optional_bounded"] = {"type": "string", "minLength": 1, "maxLength": 2}
+    schema = {
+        "type": "object",
+        "properties": properties,
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    compiler_options = {"tokenizer_info": tokenizer_info, "max_threads": 1, "cache_enabled": False}
+    eager = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=False
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+    dynamic = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=True
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+
+    for prefix_length in (0, 16384):
+        prefix = '{"value": "' + "a" * prefix_length
+
+        def fill(compiled_grammar):
+            matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+            assert matcher.accept_string(prefix)
+            bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+            assert matcher.fill_next_token_bitmask(bitmask)
+            return matcher, bitmask
+
+        _, eager_bitmask = fill(eager)
+        dynamic_matcher, dynamic_bitmask = fill(dynamic)
+        torch.testing.assert_close(dynamic_bitmask, eager_bitmask, rtol=0, atol=0)
+
+        allowed = bitmask_to_bool_mask(dynamic_bitmask, tokenizer_info.vocab_size)[0]
+        for token_id in range(tokenizer_info.vocab_size):
+            assert bool(allowed[token_id]) == dynamic_matcher.fork().accept_token(
+                token_id
+            ), token_id
+
+        repeated_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert dynamic_matcher.fill_next_token_bitmask(repeated_bitmask)
+        torch.testing.assert_close(repeated_bitmask, dynamic_bitmask, rtol=0, atol=0)
+        assert dynamic_matcher.accept_string("a")
 
 
 def test_json_string_length_custom_basic_string_sub_does_not_use_suffix_index():

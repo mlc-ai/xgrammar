@@ -456,6 +456,7 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
     indices.clear();
   }
   json_string_crossing_indices_.clear();
+  json_string_crossing_bitset_ = DynamicBitset(vocab_size_);
   json_string_crossing_flags_.assign(sorted_decoded_vocab_.size(), false);
   json_string_closing_quote_offsets_.assign(sorted_decoded_vocab_.size(), -1);
   json_string_crossing_indices_by_suffix_.clear();
@@ -486,6 +487,7 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
       }
     } else if (json_string_kind == JSONStringTokenKind::kCrossing) {
       json_string_crossing_indices_.push_back(index);
+      json_string_crossing_bitset_.Set(sorted_decoded_vocab_[index].first, true);
       json_string_crossing_flags_[index] = true;
       json_string_closing_quote_offsets_[index] = closing_quote_offset;
     }
