@@ -165,6 +165,9 @@ class CompiledGrammar::Impl {
   /*! \brief Initializes rule hashes and context-independence metadata at most once. */
   mutable std::once_flag rule_level_metadata_once;
 
+  /*! \brief Protects lazy rule metadata from concurrent memory-size inspection. */
+  mutable std::mutex rule_level_metadata_mutex;
+
   /*! \brief Immutable builtin masks used to seed a cache-disabled dynamic grammar. */
   std::shared_ptr<RuleLevelCache> builtin_rule_level_cache_seed_source;
   std::vector<uint64_t> builtin_rule_fsm_hashes;

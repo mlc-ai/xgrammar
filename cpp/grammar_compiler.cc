@@ -2871,6 +2871,7 @@ void CompiledGrammar::Impl::EnsureRuleLevelMetadata() {
     return;
   }
   std::call_once(rule_level_metadata_once, [this]() {
+    std::lock_guard<std::mutex> lock(rule_level_metadata_mutex);
     GrammarFSMHasher().Apply(&grammar);
     rule_level_cacheable = GetRuleLevelCacheableRules(grammar);
 

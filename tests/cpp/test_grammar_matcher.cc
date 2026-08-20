@@ -1,10 +1,14 @@
 #include <gtest/gtest.h>
 #include <xgrammar/xgrammar.h>
 
+#include <atomic>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
+
+#include "compiled_grammar_impl.h"
 
 namespace xgrammar {
 namespace {
@@ -83,6 +87,54 @@ TEST(GrammarMatcherTest, EOSExpressionConsumesStopTokenInsideGrammar) {
   EXPECT_FALSE(matcher.IsCompleted());
   EXPECT_FALSE(matcher.IsTerminated());
   EXPECT_TRUE(matcher.AcceptToken(2));
+}
+
+TEST(GrammarMatcherTest, MemorySizeIsSafeDuringLazyMetadataInitialization) {
+  std::string grammar = "root ::= r0\n";
+  constexpr int kRules = 512;
+  for (int i = 0; i < kRules; ++i) {
+    grammar += "r" + std::to_string(i) + " ::= [ab]";
+    if (i + 1 < kRules) {
+      grammar += " r" + std::to_string(i + 1);
+    }
+    grammar += " | \"\"\n";
+  }
+
+  TokenizerInfo tokenizer_info({"a", "b", "ab", "ba"});
+  GrammarCompiler compiler(
+      tokenizer_info,
+      /*max_threads=*/1,
+      /*cache_enabled=*/false,
+      /*max_memory_bytes=*/-1,
+      /*enable_dynamic_compilation=*/true
+  );
+  auto compiled = compiler.CompileGrammar(grammar);
+
+  std::atomic<bool> reader_ready{false};
+  std::atomic<bool> start{false};
+  std::atomic<bool> done{false};
+  std::atomic<bool> observed_zero_size{false};
+  std::thread reader([&]() {
+    reader_ready.store(true, std::memory_order_release);
+    while (!start.load(std::memory_order_acquire)) {
+    }
+    while (!done.load(std::memory_order_acquire)) {
+      if (compiled.MemorySizeBytes() == 0) {
+        observed_zero_size.store(true, std::memory_order_relaxed);
+      }
+    }
+  });
+  while (!reader_ready.load(std::memory_order_acquire)) {
+  }
+  start.store(true, std::memory_order_release);
+  compiled.ImplPtr()->EnsureRuleLevelMetadata();
+  done.store(true, std::memory_order_release);
+  reader.join();
+
+  EXPECT_FALSE(observed_zero_size.load(std::memory_order_relaxed));
+  EXPECT_EQ(
+      compiled.ImplPtr()->rule_level_cacheable.size(), compiled.ImplPtr()->grammar->NumRules()
+  );
 }
 
 }  // namespace
