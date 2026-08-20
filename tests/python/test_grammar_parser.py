@@ -344,13 +344,13 @@ def test_repetition_range_unbounded_roundtrip():
 
 
 def test_repetition_range_unbounded_json_schema():
-    """JSON schema minLength produces {n, -1} which round-trips through the parser."""
+    """JSON schema minLength uses runtime metadata that round-trips through the parser."""
     import json
 
     schema = json.dumps({"type": "string", "minLength": 2})
     grammar_1 = xgr.Grammar.from_json_schema(schema)
     output_1 = str(grammar_1)
-    assert "{2, -1}" in output_1
+    assert "root_length[json_string_min_length=2]" in output_1
     output_2 = str(xgr.Grammar.from_ebnf(output_1))
     assert output_1 == output_2
 

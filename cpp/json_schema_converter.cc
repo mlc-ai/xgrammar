@@ -3190,19 +3190,31 @@ int32_t JSONSchemaConverter::GenerateNumber(const NumberSpec& spec, const std::s
 }
 
 int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::string& rule_name) {
+  auto apply_length_constraint = [&](int32_t string_expr, const char* rule_suffix) {
+    if (spec.min_length == 0 && spec.max_length == -1) {
+      return string_expr;
+    }
+    int32_t length_rule_id = builder_.AddRuleWithHint(rule_name + rule_suffix, string_expr);
+    builder_.UpdateJSONStringLength(length_rule_id, spec.min_length, spec.max_length);
+    return RuleRef(length_rule_id);
+  };
+
   // Check for format
   if (spec.format.has_value()) {
     auto regex = JSONFormatToRegexPattern(*spec.format);
     if (regex.has_value()) {
-      return Sequence(
-          {ByteString("\""),
-           RegexExpression(
-               *regex,
-               /*json_string=*/false,
-               /*force_cfg_expansion=*/false,
-               /*byte_mode=*/true
-           ),
-           ByteString("\"")}
+      return apply_length_constraint(
+          Sequence(
+              {ByteString("\""),
+               RegexExpression(
+                   *regex,
+                   /*json_string=*/false,
+                   /*force_cfg_expansion=*/false,
+                   /*byte_mode=*/true
+               ),
+               ByteString("\"")}
+          ),
+          "_length"
       );
     }
   }
@@ -3213,23 +3225,9 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
          JSONSchemaPatternExpression(*spec.pattern, spec.min_length, spec.max_length),
          ByteString("\"")}
     );
-    if (spec.min_length == 0 && spec.max_length == -1) {
-      return pattern_string;
-    }
-    int32_t length_rule_id =
-        builder_.AddRuleWithHint(rule_name + "_pattern_length", pattern_string);
-    builder_.UpdateJSONStringLength(length_rule_id, spec.min_length, spec.max_length);
-    return RuleRef(length_rule_id);
+    return apply_length_constraint(pattern_string, "_pattern_length");
   }
-  // Check for length constraints
-  if (spec.min_length != 0 || spec.max_length != -1) {
-    int32_t character =
-        builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
-    int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
-    return Sequence({ByteString("\""), body, ByteString("\"")});
-  }
-  // Default string
-  return Sequence({ByteString("\""), RuleRef(kBasicStringSub)});
+  return apply_length_constraint(Sequence({ByteString("\""), RuleRef(kBasicStringSub)}), "_length");
 }
 
 int32_t JSONSchemaConverter::GenerateBoolean(
