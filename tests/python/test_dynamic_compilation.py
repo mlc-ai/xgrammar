@@ -164,6 +164,74 @@ def test_recursive_json_string_character_class_summary_matches_eager(cache_enabl
         torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
 
 
+@pytest.mark.parametrize("cache_enabled", [False, True], ids=["cache-off", "cache-on"])
+def test_email_format_regex_fsm_masks_match_eager_and_token_oracle(cache_enabled):
+    vocabulary = [
+        "a",
+        "abc",
+        ".doe",
+        ".doe@example",
+        "@example",
+        "@example.com",
+        ".com",
+        '.com"',
+        '.com"}',
+        "-",
+        "..",
+        ".-",
+        "@",
+        '"',
+        '\\"',
+        "\\\\",
+        '",',
+        "é",
+        "中",
+        "a中",
+        b"\xe4",
+        b"\xe4\xb8",
+        b"\xff",
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiler_options = {
+        "tokenizer_info": tokenizer_info,
+        "max_threads": 1,
+        "cache_enabled": cache_enabled,
+    }
+    schema = {
+        "type": "object",
+        "properties": {"email": {"type": "string", "format": "email"}},
+        "required": ["email"],
+        "additionalProperties": False,
+    }
+    eager = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=False
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+    dynamic = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=True
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+
+    prefixes = []
+    for email_source in ["john.doe@example-domain.com", r"\"john..doe\"@example.org"]:
+        prefixes.extend(
+            '{"email": "' + email_source[:length] for length in range(len(email_source) + 1)
+        )
+
+    for prefix in prefixes:
+        eager_matcher = xgr.GrammarMatcher(eager, terminate_without_stop_token=True)
+        dynamic_matcher = xgr.GrammarMatcher(dynamic, terminate_without_stop_token=True)
+        assert eager_matcher.accept_string(prefix)
+        assert dynamic_matcher.accept_string(prefix)
+        eager_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        dynamic_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert eager_matcher.fill_next_token_bitmask(eager_bitmask)
+        assert dynamic_matcher.fill_next_token_bitmask(dynamic_bitmask)
+        torch.testing.assert_close(dynamic_bitmask, eager_bitmask, rtol=0, atol=0)
+
+        mask = bitmask_to_bool_mask(dynamic_bitmask, tokenizer_info.vocab_size)[0]
+        for token_id in range(tokenizer_info.vocab_size):
+            assert bool(mask[token_id]) == dynamic_matcher.fork().accept_token(token_id), token_id
+
+
 def test_dynamic_masks_are_cached():
     tokenizer_info = xgr.TokenizerInfo(VOCABULARY, stop_token_ids=[])
     dynamic = _compile_builtin_json(

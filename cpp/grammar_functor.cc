@@ -1412,7 +1412,11 @@ class GrammarFSMBuilderImpl {
         grammar_builder_(grammar_builder),
         regex_fsm_cache_(regex_fsm_cache) {}
 
-  static void Apply(Grammar* grammar, RegexFSMCache* supplied_regex_fsm_cache = nullptr) {
+  static void Apply(
+      Grammar* grammar,
+      RegexFSMCache* supplied_regex_fsm_cache = nullptr,
+      bool merge_equivalent_states = true
+  ) {
     FSM complete_fsm;
     std::vector<std::optional<FSMWithStartEndWithSize>> per_rule_fsms;
     std::vector<int> state_mapping;
@@ -1426,7 +1430,8 @@ class GrammarFSMBuilderImpl {
     int32_t num_original_rules = (*grammar)->NumRules();
     GrammarBuilder grammar_builder = GrammarBuilder::FromMutableGrammar(grammar);
     for (int i = 0; i < (*grammar)->NumRules(); ++i) {
-      auto rule_fsm = BuildRuleFSM(*grammar, i, &grammar_builder, regex_fsm_cache);
+      auto rule_fsm =
+          BuildRuleFSM(*grammar, i, &grammar_builder, regex_fsm_cache, merge_equivalent_states);
       per_rule_fsms.push_back(rule_fsm.AddToCompleteFSM(&complete_fsm, &state_mapping));
     }
 
@@ -1501,14 +1506,16 @@ class GrammarFSMBuilderImpl {
       const Grammar& grammar,
       int rule_id,
       GrammarBuilder* grammar_builder = nullptr,
-      RegexFSMCache* regex_fsm_cache = nullptr
+      RegexFSMCache* regex_fsm_cache = nullptr,
+      bool merge_equivalent_states = true
   );
   static FSMWithStartEnd BuildExpressionFSM(
       const GrammarExpr& expr,
       const Grammar& grammar,
       const std::string* rule_name = nullptr,
       GrammarBuilder* grammar_builder = nullptr,
-      RegexFSMCache* regex_fsm_cache = nullptr
+      RegexFSMCache* regex_fsm_cache = nullptr,
+      bool merge_equivalent_states = true
   );
   /*!
    * \brief Build the leaf FSM of an intersection operand. Regexes are compiled through the
@@ -1714,7 +1721,8 @@ FSMWithStartEnd GrammarFSMBuilderImpl::BuildRuleFSM(
     const Grammar& grammar,
     int rule_id,
     GrammarBuilder* grammar_builder,
-    RegexFSMCache* regex_fsm_cache
+    RegexFSMCache* regex_fsm_cache,
+    bool merge_equivalent_states
 ) {
   const auto& rule = grammar->GetRule(rule_id);
   return BuildExpressionFSM(
@@ -1722,7 +1730,8 @@ FSMWithStartEnd GrammarFSMBuilderImpl::BuildRuleFSM(
       grammar,
       &rule.name,
       grammar_builder,
-      regex_fsm_cache
+      regex_fsm_cache,
+      merge_equivalent_states
   );
 }
 
@@ -1731,7 +1740,8 @@ FSMWithStartEnd GrammarFSMBuilderImpl::BuildExpressionFSM(
     const Grammar& grammar,
     const std::string* rule_name,
     GrammarBuilder* grammar_builder,
-    RegexFSMCache* regex_fsm_cache
+    RegexFSMCache* regex_fsm_cache,
+    bool merge_equivalent_states
 ) {
   FSM result_fsm;
   int start_state = result_fsm.AddState();
@@ -1766,8 +1776,8 @@ FSMWithStartEnd GrammarFSMBuilderImpl::BuildExpressionFSM(
     if (!builder.can_skip_epsilon_simplification_) {
       result = result.SimplifyEpsilon();
     }
-    if (!builder.skip_equivalent_state_merge_) {
-      result = result.MergeEquivalentStates();
+    if (merge_equivalent_states && !builder.skip_equivalent_state_merge_) {
+      result = std::move(result).MergeEquivalentStates();
     }
   }
   return result;
@@ -2432,7 +2442,7 @@ Result<FSMWithStartEnd> GrammarFSMBuilderImpl::Regex(
   }
   auto result = std::move(build_result).Unwrap();
   result = result.SimplifyEpsilon();
-  result = result.MergeEquivalentStates();
+  result = std::move(result).MergeEquivalentStates();
   return ResultOk(std::move(result));
 }
 
@@ -2618,7 +2628,7 @@ Result<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildLeafExprFSM(
         }
         elements.push_back(std::move(element_result).Unwrap());
       }
-      return ResultOk(FSMWithStartEnd::Concat(elements));
+      return ResultOk(FSMWithStartEnd::Concat(std::move(elements)));
     }
     case ExprType::kChoices: {
       std::vector<FSMWithStartEnd> choices;
@@ -2630,7 +2640,7 @@ Result<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildLeafExprFSM(
         }
         choices.push_back(std::move(choice_result).Unwrap());
       }
-      return ResultOk(FSMWithStartEnd::Union(choices));
+      return ResultOk(FSMWithStartEnd::Union(std::move(choices)));
     }
     case ExprType::kEmptyStr:
     case ExprType::kByteString:
@@ -3549,7 +3559,8 @@ class GrammarOptimizerImpl {
   static Grammar Apply(
       const Grammar& grammar,
       bool expand_repetition_ranges,
-      RegexFSMCache* supplied_regex_fsm_cache = nullptr
+      RegexFSMCache* supplied_regex_fsm_cache = nullptr,
+      bool merge_equivalent_states = true
   ) {
     // A freshly converted JSON Schema may already have built regex FSMs for validation. Keep the
     // shared owner alive throughout optimization and reuse those FSMs during per-rule compilation.
@@ -3576,7 +3587,7 @@ class GrammarOptimizerImpl {
     result->allow_empty_rule_ids = AllowEmptyRuleAnalyzerImpl().Apply(result, regex_fsm_cache);
     ValidateLazyRules(result);
     RepetitionNormalizer::Apply(&result);
-    GrammarFSMBuilderImpl::Apply(&result, regex_fsm_cache);
+    GrammarFSMBuilderImpl::Apply(&result, regex_fsm_cache, merge_equivalent_states);
     result->optimized = true;
     return result;
   }
@@ -4696,6 +4707,17 @@ Grammar GrammarOptimizer::Apply(
     const Grammar& grammar, bool expand_repetition_ranges, RegexFSMCache* regex_fsm_cache
 ) {
   return GrammarOptimizerImpl::Apply(grammar, expand_repetition_ranges, regex_fsm_cache);
+}
+
+Grammar GrammarOptimizer::Apply(
+    const Grammar& grammar,
+    bool expand_repetition_ranges,
+    RegexFSMCache* regex_fsm_cache,
+    bool merge_equivalent_states
+) {
+  return GrammarOptimizerImpl::Apply(
+      grammar, expand_repetition_ranges, regex_fsm_cache, merge_equivalent_states
+  );
 }
 
 void ByteStringFuser::Apply(Grammar* grammar) { ByteStringFuserImpl().Apply(grammar); }

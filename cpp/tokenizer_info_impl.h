@@ -38,6 +38,9 @@ class TokenizerInfo::Impl {
     return sorted_decoded_vocab_;
   }
   const std::vector<int32_t>& GetTrieSubtreeNodesRange() const { return trie_subtree_nodes_range_; }
+  const std::vector<int32_t>& GetSortedVocabLCPWithPrevious() const {
+    return sorted_vocab_lcp_with_previous_;
+  }
   const std::vector<int32_t>& GetTokenIdToSortedVocabIndex() const {
     return token_id_to_sorted_vocab_index_;
   }
@@ -119,6 +122,8 @@ class TokenizerInfo::Impl {
   /*! \brief A pesudo-trie. trie_subtree_nodes_range[i] stores how many nodes there are in the
    * subtree. */
   std::vector<int32_t> trie_subtree_nodes_range_;
+  /*! \brief Common-prefix byte count between each sorted token and its predecessor. */
+  std::vector<int32_t> sorted_vocab_lcp_with_previous_;
   /*! \brief The stop tokens. When the GrammarMatcher can reach the end of the grammar,
    * stop tokens can be accepted. */
   std::vector<int32_t> stop_token_ids_;

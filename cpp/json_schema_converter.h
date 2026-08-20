@@ -424,7 +424,10 @@ class JSONSchemaConverter {
   int32_t KeyPatternExpression();
 
   int32_t RegexExpression(
-      const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
+      const std::string& regex,
+      bool json_string = false,
+      bool force_cfg_expansion = false,
+      bool byte_mode = false
   );
 
   /*! \brief Compile a JSON Schema pattern with search, anchor, and string-length semantics. */
@@ -520,6 +523,7 @@ class JSONSchemaConverter {
   std::optional<std::string> BuildTrieNonterminalRegex(const TrieNode& node) const;
   std::optional<std::string> BuildTrieTerminalRegex(const TrieNode& node) const;
   std::string BuildTrieRegex(const TrieNode& node) const;
+  FSMWithStartEnd BuildTrieFSM(const TrieNode& node) const;
 
   // Reused grammar expression ids
   std::optional<int32_t> empty_expr_id_;

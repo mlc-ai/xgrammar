@@ -480,6 +480,7 @@ class GrammarMatcher::Impl : public EarleyParser {
         terminate_without_stop_token_(terminate_without_stop_token),
         default_temperature_(default_temperature),
         tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
+    compiled_grammar_->EnsureRuleLevelMetadata();
     XGRAMMAR_CHECK(!override_stop_tokens.has_value() || !override_stop_tokens->empty())
         << "The override_stop_tokens should not be empty";
     for (int token_id : stop_token_ids_) {
@@ -560,6 +561,7 @@ class GrammarMatcher::Impl : public EarleyParser {
     int32_t max_characters;
     ParserState parent;
     int32_t lower;
+    int32_t continuation_state;
     bool has_stable_upper;
   };
 
@@ -793,6 +795,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::vector<int32_t> tmp_json_length_candidate_indices_;
   std::vector<int32_t> tmp_json_length_invalid_indices_;
   std::vector<int32_t> tmp_json_length_valid_escaped_indices_;
+  std::vector<int32_t> tmp_repeat_quote_crossing_indices_;
   std::vector<ParserState> tmp_latest_states_;
   std::vector<std::pair<const ParserState*, const AdaptiveTokenMask*>>
       tmp_latest_states_with_masks_;
@@ -1321,6 +1324,7 @@ GrammarMatcher::Impl::GetCharacterClassRepeat(const ParserState& state) const {
             std::min(remaining, max_token_characters),
             parent,
             repeat.Lower(),
+            edge.target,
             repeat.Upper() == -1 || remaining >= max_token_characters
         };
       }
@@ -2971,6 +2975,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 ) {
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
+  const auto& lcp_with_previous = tokenizer_info_.ImplPtr()->GetSortedVocabLCPWithPrevious();
   // We need to have a copy, because scanable_state_history_ will be modified during the
   // FillNextTokenBitmask process, which can lead to undefined behavior.
   auto& latest_states = tmp_latest_states_;
@@ -3091,7 +3096,37 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     }
 
     const std::vector<int32_t>* indices_to_check = &adaptive_token_mask.uncertain_indices;
-
+    const CharacterClassRepeatTokenMask* quote_boundary_repeat_token_mask = nullptr;
+    bool repeat_continuation_requires_quote = false;
+    if (const auto repeat = GetCharacterClassRepeat(state); repeat.has_value()) {
+      const auto& continuation_edges = grammar_->complete_fsm.GetEdges(repeat->continuation_state);
+      repeat_continuation_requires_quote =
+          continuation_edges.size() != 0 && std::all_of(
+                                                continuation_edges.begin(),
+                                                continuation_edges.end(),
+                                                [](const FSMEdge& edge) {
+                                                  return edge.IsCharRange() && edge.min == '"' &&
+                                                         edge.max == '"';
+                                                }
+                                            );
+      if (repeat_continuation_requires_quote) {
+        quote_boundary_repeat_token_mask = &compiled_grammar_->GetCharacterClassRepeatTokenMask(
+            repeat->character_class_expr_id, repeat->has_stable_upper ? -1 : repeat->max_characters
+        );
+        if (!repeat->has_stable_upper) {
+          tmp_accepted_bitset_ |= quote_boundary_repeat_token_mask->accepted_prefix_tokens;
+        }
+        const auto& quote_flags = tokenizer_info_.ImplPtr()->GetJSONStringQuoteTokenFlags();
+        tmp_repeat_quote_crossing_indices_.clear();
+        tmp_repeat_quote_crossing_indices_.reserve(adaptive_token_mask.uncertain_indices.size());
+        for (int32_t token_index : adaptive_token_mask.uncertain_indices) {
+          if (quote_flags[token_index]) {
+            tmp_repeat_quote_crossing_indices_.push_back(token_index);
+          }
+        }
+        indices_to_check = &tmp_repeat_quote_crossing_indices_;
+      }
+    }
     // For each ParserState, we will check every uncertain token and put them into the accepted or
     // rejected list.
 
@@ -3111,6 +3146,17 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       tmp_accepted_bitset_ |= tmp_state_accepted_bitset_;
       if (adaptive_token_mask.store_type == StoreType::kRejected) {
         tmp_rejected_indices_delta_ = tmp_json_length_invalid_indices_;
+      }
+    }
+    if (repeat_continuation_requires_quote &&
+        adaptive_token_mask.store_type == StoreType::kRejected) {
+      const auto& quote_flags = tokenizer_info_.ImplPtr()->GetJSONStringQuoteTokenFlags();
+      for (int32_t token_index : adaptive_token_mask.uncertain_indices) {
+        const int32_t token_id = sorted_decoded_vocab[token_index].first;
+        if (!quote_flags[token_index] &&
+            !quote_boundary_repeat_token_mask->accepted_prefix_tokens[token_id]) {
+          tmp_rejected_indices_delta_.push_back(token_index);
+        }
       }
     }
 
@@ -3157,6 +3203,17 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     if (continuation_mask_key.has_value()) {
       continuation_accepted_indices.reserve(adaptive_token_mask.uncertain_indices.size());
       continuation_rejected_indices.reserve(adaptive_token_mask.uncertain_indices.size());
+      if (repeat_continuation_requires_quote &&
+          adaptive_token_mask.store_type == StoreType::kRejected) {
+        const auto& quote_flags = tokenizer_info_.ImplPtr()->GetJSONStringQuoteTokenFlags();
+        for (int32_t token_index : adaptive_token_mask.uncertain_indices) {
+          const int32_t token_id = sorted_decoded_vocab[token_index].first;
+          if (!quote_flags[token_index] &&
+              !quote_boundary_repeat_token_mask->accepted_prefix_tokens[token_id]) {
+            continuation_rejected_indices.push_back(token_index);
+          }
+        }
+      }
     }
 
     // Examine only the current one ParserState
@@ -3196,6 +3253,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     }
 
     const std::string* prev_token = nullptr;
+    int32_t prev_token_idx = -1;
     int prev_matched_size = 0;
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "The ParserState is " << state << ", the mask is "
@@ -3229,11 +3287,16 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
       // We can reuse the previous matched size to avoid unnecessary matching.
       if (prev_token) {
-        int lcp_len = std::mismatch(
+        int lcp_len =
+            cur_token_idx == prev_token_idx + 1
+                ? lcp_with_previous[cur_token_idx]
+                : static_cast<int>(
+                      std::mismatch(
                           cur_token.begin(), cur_token.end(), prev_token->begin(), prev_token->end()
                       )
                           .first -
-                      cur_token.begin();
+                      cur_token.begin()
+                  );
         if (lcp_len > prev_matched_size) {
           last_rejected_uncertain_range = subtree_range[cur_token_idx];
           accepted = false;
@@ -3303,6 +3366,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       }
 
       prev_token = &cur_token;
+      prev_token_idx = cur_token_idx;
     }
 
     if (continuation_cache) {
@@ -3317,6 +3381,10 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     constexpr size_t kMaxContinuationMaskCacheEntries = 64;
     if (continuation_mask_key.has_value() &&
         continuation_mask_cache_.size() < kMaxContinuationMaskCacheEntries) {
+      if (repeat_continuation_requires_quote &&
+          adaptive_token_mask.store_type == StoreType::kRejected) {
+        std::sort(continuation_rejected_indices.begin(), continuation_rejected_indices.end());
+      }
       continuation_mask_cache_.push_back(ContinuationMaskCacheEntry{
           std::move(*continuation_mask_key),
           &adaptive_token_mask,
@@ -3328,7 +3396,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     if (adaptive_token_mask.store_type == StoreType::kRejected) {
       // Length-invalid cached tokens are collected before uncertain tokens are walked, so only
       // that combined path can disturb the naturally sorted uncertain-token order.
-      if (json_string_length_filter_needed) {
+      if (json_string_length_filter_needed || repeat_continuation_requires_quote) {
         std::sort(tmp_rejected_indices_delta_.begin(), tmp_rejected_indices_delta_.end());
         tmp_rejected_indices_delta_.erase(
             std::unique(tmp_rejected_indices_delta_.begin(), tmp_rejected_indices_delta_.end()),

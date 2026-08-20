@@ -989,6 +989,7 @@ class SchemaParser {
   );
 
   std::string ComputeCacheKey(const picojson::value& schema);
+  void AppendCacheKey(const picojson::value& schema, std::string* result);
 
   static void WarnUnsupportedKeywords(
       const picojson::object& schema, const std::vector<std::string>& keywords, bool verbose = false
@@ -1001,6 +1002,13 @@ class SchemaParser {
 };
 
 std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
+  std::string result;
+  result.reserve(256);
+  AppendCacheKey(schema, &result);
+  return result;
+}
+
+void SchemaParser::AppendCacheKey(const picojson::value& schema, std::string* result) {
   static const std::unordered_set<std::string> kSkippedKeys = {
       "title",
       "default",
@@ -1014,7 +1022,7 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
   };
 
   if (schema.is<picojson::object>()) {
-    std::string result = "{";
+    result->push_back('{');
     std::vector<std::pair<const std::string*, const picojson::value*>> sorted_kv;
     for (const auto& kv : schema.get<picojson::object>()) {
       if (kSkippedKeys.count(kv.first) == 0) {
@@ -1027,25 +1035,29 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
     int64_t idx = 0;
     for (const auto& [key, value] : sorted_kv) {
       if (idx != 0) {
-        result += ",";
+        result->push_back(',');
       }
       ++idx;
-      result += "\"" + *key + "\":" + ComputeCacheKey(*value);
+      result->push_back('"');
+      result->append(*key);
+      result->append("\":");
+      AppendCacheKey(*value, result);
     }
-    return result + "}";
+    result->push_back('}');
   } else if (schema.is<picojson::array>()) {
-    std::string result = "[";
+    result->push_back('[');
     int64_t idx = 0;
     for (const auto& item : schema.get<picojson::array>()) {
       if (idx != 0) {
-        result += ",";
+        result->push_back(',');
       }
       ++idx;
-      result += ComputeCacheKey(item);
+      AppendCacheKey(item, result);
     }
-    return result + "]";
+    result->push_back(']');
+  } else {
+    result->append(schema.serialize(false));
   }
-  return schema.serialize(false);
 }
 
 void SchemaParser::WarnUnsupportedKeywords(
@@ -1067,8 +1079,8 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     std::optional<std::string> default_type
 ) {
   std::string cache_key = ComputeCacheKey(schema);
-  if (schema_cache_.count(cache_key)) {
-    return ResultOk(schema_cache_[cache_key]);
+  if (const auto cached = schema_cache_.find(cache_key); cached != schema_cache_.end()) {
+    return ResultOk(cached->second);
   }
 
   if (schema.is<bool>()) {
@@ -1077,8 +1089,8 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
           SchemaErrorType::kUnsatisfiableSchema, "Schema 'false' cannot accept any value"
       );
     }
-    auto spec = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
-    schema_cache_[cache_key] = spec;
+    auto spec = SchemaSpec::Make(AnySpec{}, std::move(cache_key), rule_name_hint);
+    schema_cache_[spec->cache_key] = spec;
     return ResultOk(spec);
   }
 
@@ -1100,19 +1112,22 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     auto ref_result = ParseRef(schema_obj);
     if (ref_result.IsErr()) return ResultErr(std::move(ref_result).UnwrapErr());
     auto ref_spec = std::move(ref_result).Unwrap();
-    result = SchemaSpec::Make(std::move(ref_spec), cache_key, rule_name_hint);
+    result = SchemaSpec::Make(std::move(ref_spec), std::move(cache_key), rule_name_hint);
   } else if (schema_obj.count("const")) {
     auto const_result = ParseConst(schema_obj);
     if (const_result.IsErr()) return ResultErr(std::move(const_result).UnwrapErr());
-    result = SchemaSpec::Make(std::move(const_result).Unwrap(), cache_key, rule_name_hint);
+    result =
+        SchemaSpec::Make(std::move(const_result).Unwrap(), std::move(cache_key), rule_name_hint);
   } else if (schema_obj.count("enum")) {
     auto enum_result = ParseEnum(schema_obj);
     if (enum_result.IsErr()) return ResultErr(std::move(enum_result).UnwrapErr());
-    result = SchemaSpec::Make(std::move(enum_result).Unwrap(), cache_key, rule_name_hint);
+    result =
+        SchemaSpec::Make(std::move(enum_result).Unwrap(), std::move(cache_key), rule_name_hint);
   } else if (schema_obj.count("anyOf")) {
     auto anyof_result = ParseAnyOf(schema_obj, "anyOf");
     if (anyof_result.IsErr()) return ResultErr(std::move(anyof_result).UnwrapErr());
-    result = SchemaSpec::Make(std::move(anyof_result).Unwrap(), cache_key, rule_name_hint);
+    result =
+        SchemaSpec::Make(std::move(anyof_result).Unwrap(), std::move(cache_key), rule_name_hint);
   } else if (schema_obj.count("oneOf")) {
     auto oneof_result = ParseOneOf(schema_obj);
     if (oneof_result.IsErr()) {
@@ -1122,19 +1137,24 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
       XGRAMMAR_LOG(WARNING) << oneof_result.ErrRef().what();
       auto anyof_result = ParseAnyOf(schema_obj, "oneOf");
       if (anyof_result.IsErr()) return ResultErr(std::move(anyof_result).UnwrapErr());
-      result = SchemaSpec::Make(std::move(anyof_result).Unwrap(), cache_key, rule_name_hint);
+      result =
+          SchemaSpec::Make(std::move(anyof_result).Unwrap(), std::move(cache_key), rule_name_hint);
     } else {
-      result = SchemaSpec::Make(std::move(oneof_result).Unwrap(), cache_key, rule_name_hint);
+      result =
+          SchemaSpec::Make(std::move(oneof_result).Unwrap(), std::move(cache_key), rule_name_hint);
     }
   } else if (schema_obj.count("allOf")) {
     auto allof_result = ParseAllOf(schema_obj);
     if (allof_result.IsErr()) return ResultErr(std::move(allof_result).UnwrapErr());
-    result = SchemaSpec::Make(std::move(allof_result).Unwrap(), cache_key, rule_name_hint);
+    result =
+        SchemaSpec::Make(std::move(allof_result).Unwrap(), std::move(cache_key), rule_name_hint);
   } else if (schema_obj.count("type") || default_type.has_value()) {
     if (schema_obj.count("type") && schema_obj.at("type").is<picojson::array>()) {
       auto type_array_result = ParseTypeArray(schema_obj, rule_name_hint);
       if (type_array_result.IsErr()) return ResultErr(std::move(type_array_result).UnwrapErr());
-      result = SchemaSpec::Make(std::move(type_array_result).Unwrap(), cache_key, rule_name_hint);
+      result = SchemaSpec::Make(
+          std::move(type_array_result).Unwrap(), std::move(cache_key), rule_name_hint
+      );
     } else {
       if (schema_obj.count("type") && !schema_obj.at("type").is<std::string>()) {
         return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Type should be a string");
@@ -1144,31 +1164,39 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
       if (type == "integer") {
         auto int_result = ParseInteger(schema_obj);
         if (int_result.IsErr()) return ResultErr(std::move(int_result).UnwrapErr());
-        result = SchemaSpec::Make(std::move(int_result).Unwrap(), cache_key, rule_name_hint);
+        result =
+            SchemaSpec::Make(std::move(int_result).Unwrap(), std::move(cache_key), rule_name_hint);
       } else if (type == "number") {
         auto num_result = ParseNumber(schema_obj);
         if (num_result.IsErr()) return ResultErr(std::move(num_result).UnwrapErr());
-        result = SchemaSpec::Make(std::move(num_result).Unwrap(), cache_key, rule_name_hint);
+        result =
+            SchemaSpec::Make(std::move(num_result).Unwrap(), std::move(cache_key), rule_name_hint);
       } else if (type == "string") {
         auto str_result = ParseString(schema_obj);
         if (str_result.IsErr()) return ResultErr(std::move(str_result).UnwrapErr());
-        result = SchemaSpec::Make(std::move(str_result).Unwrap(), cache_key, rule_name_hint);
+        result =
+            SchemaSpec::Make(std::move(str_result).Unwrap(), std::move(cache_key), rule_name_hint);
       } else if (type == "boolean") {
         auto bool_result = ParseBoolean(schema_obj);
         if (bool_result.IsErr()) return ResultErr(std::move(bool_result).UnwrapErr());
-        result = SchemaSpec::Make(std::move(bool_result).Unwrap(), cache_key, rule_name_hint);
+        result =
+            SchemaSpec::Make(std::move(bool_result).Unwrap(), std::move(cache_key), rule_name_hint);
       } else if (type == "null") {
         auto null_result = ParseNull(schema_obj);
         if (null_result.IsErr()) return ResultErr(std::move(null_result).UnwrapErr());
-        result = SchemaSpec::Make(std::move(null_result).Unwrap(), cache_key, rule_name_hint);
+        result =
+            SchemaSpec::Make(std::move(null_result).Unwrap(), std::move(cache_key), rule_name_hint);
       } else if (type == "array") {
         auto array_result = ParseArray(schema_obj);
         if (array_result.IsErr()) return ResultErr(std::move(array_result).UnwrapErr());
-        result = SchemaSpec::Make(std::move(array_result).Unwrap(), cache_key, rule_name_hint);
+        result = SchemaSpec::Make(
+            std::move(array_result).Unwrap(), std::move(cache_key), rule_name_hint
+        );
       } else if (type == "object") {
         auto obj_result = ParseObject(schema_obj);
         if (obj_result.IsErr()) return ResultErr(std::move(obj_result).UnwrapErr());
-        result = SchemaSpec::Make(std::move(obj_result).Unwrap(), cache_key, rule_name_hint);
+        result =
+            SchemaSpec::Make(std::move(obj_result).Unwrap(), std::move(cache_key), rule_name_hint);
       } else {
         return ResultErr<SchemaError>(
             SchemaErrorType::kInvalidSchema, "Unsupported type \"" + type + "\""
@@ -1179,17 +1207,18 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
              schema_obj.count("unevaluatedProperties")) {
     auto obj_result = ParseObject(schema_obj);
     if (obj_result.IsErr()) return ResultErr(std::move(obj_result).UnwrapErr());
-    result = SchemaSpec::Make(std::move(obj_result).Unwrap(), cache_key, rule_name_hint);
+    result = SchemaSpec::Make(std::move(obj_result).Unwrap(), std::move(cache_key), rule_name_hint);
   } else if (schema_obj.count("items") || schema_obj.count("prefixItems") ||
              schema_obj.count("unevaluatedItems")) {
     auto array_result = ParseArray(schema_obj);
     if (array_result.IsErr()) return ResultErr(std::move(array_result).UnwrapErr());
-    result = SchemaSpec::Make(std::move(array_result).Unwrap(), cache_key, rule_name_hint);
+    result =
+        SchemaSpec::Make(std::move(array_result).Unwrap(), std::move(cache_key), rule_name_hint);
   } else {
-    result = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
+    result = SchemaSpec::Make(AnySpec{}, std::move(cache_key), rule_name_hint);
   }
 
-  schema_cache_[cache_key] = result;
+  schema_cache_[result->cache_key] = result;
   return ResultOk(result);
 }
 
@@ -2506,6 +2535,115 @@ std::string JSONSchemaConverter::BuildTrieRegex(const TrieNode& node) const {
   return result;
 }
 
+FSMWithStartEnd JSONSchemaConverter::BuildTrieFSM(const TrieNode& root) const {
+  FSM fsm;
+  const int32_t start = fsm.AddState();
+  const int32_t sink = fsm.AddState();
+  const int32_t end = fsm.AddState();
+
+  // A mismatch from the raw ASCII property-name trie enters one shared JSON-string tail. The
+  // following states validate one escaped or UTF-8 encoded source character before reaching the
+  // sink; sharing them avoids copying the generic tail at every trie node.
+  const int32_t escape = fsm.AddState();
+  const int32_t escape_u = fsm.AddState();
+  const int32_t escape_hex_2 = fsm.AddState();
+  const int32_t escape_hex_3 = fsm.AddState();
+  const int32_t escape_hex_4 = fsm.AddState();
+  for (uint8_t escaped : std::string("\"/\\bfnrt")) {
+    fsm.AddEdge(escape, sink, escaped, escaped);
+  }
+  fsm.AddEdge(escape, escape_u, 'u', 'u');
+  auto add_hex_edges = [&](int32_t from, int32_t to) {
+    fsm.AddEdge(from, to, '0', '9');
+    fsm.AddEdge(from, to, 'A', 'F');
+    fsm.AddEdge(from, to, 'a', 'f');
+  };
+  add_hex_edges(escape_u, escape_hex_2);
+  add_hex_edges(escape_hex_2, escape_hex_3);
+  add_hex_edges(escape_hex_3, escape_hex_4);
+  add_hex_edges(escape_hex_4, sink);
+
+  const int32_t utf8_2_last = fsm.AddState();
+  const int32_t utf8_3_e0_second = fsm.AddState();
+  const int32_t utf8_3_general_second = fsm.AddState();
+  const int32_t utf8_3_ed_second = fsm.AddState();
+  const int32_t utf8_3_last = fsm.AddState();
+  const int32_t utf8_4_f0_second = fsm.AddState();
+  const int32_t utf8_4_general_second = fsm.AddState();
+  const int32_t utf8_4_f4_second = fsm.AddState();
+  const int32_t utf8_4_third = fsm.AddState();
+  const int32_t utf8_4_last = fsm.AddState();
+  fsm.AddEdge(utf8_2_last, sink, 0x80, 0xbf);
+  fsm.AddEdge(utf8_3_e0_second, utf8_3_last, 0xa0, 0xbf);
+  fsm.AddEdge(utf8_3_general_second, utf8_3_last, 0x80, 0xbf);
+  fsm.AddEdge(utf8_3_ed_second, utf8_3_last, 0x80, 0x9f);
+  fsm.AddEdge(utf8_3_last, sink, 0x80, 0xbf);
+  fsm.AddEdge(utf8_4_f0_second, utf8_4_third, 0x90, 0xbf);
+  fsm.AddEdge(utf8_4_general_second, utf8_4_third, 0x80, 0xbf);
+  fsm.AddEdge(utf8_4_f4_second, utf8_4_third, 0x80, 0x8f);
+  fsm.AddEdge(utf8_4_third, utf8_4_last, 0x80, 0xbf);
+  fsm.AddEdge(utf8_4_last, sink, 0x80, 0xbf);
+
+  std::unordered_map<const TrieNode*, int32_t> trie_states;
+  std::vector<const TrieNode*> trie_nodes;
+  trie_states.emplace(&root, fsm.AddState());
+  trie_nodes.push_back(&root);
+  for (size_t node_index = 0; node_index < trie_nodes.size(); ++node_index) {
+    const TrieNode* node = trie_nodes[node_index];
+    for (const auto& [byte, child] : node->children) {
+      if (trie_states.emplace(&child, fsm.AddState()).second) {
+        trie_nodes.push_back(&child);
+      }
+    }
+  }
+  fsm.AddEdge(start, trie_states.at(&root), '"', '"');
+
+  auto add_content_transitions = [&](int32_t state, const TrieNode* node) {
+    fsm.AddEdge(state, escape, '\\', '\\');
+    fsm.AddEdge(state, utf8_2_last, 0xc2, 0xdf);
+    fsm.AddEdge(state, utf8_3_e0_second, 0xe0, 0xe0);
+    fsm.AddEdge(state, utf8_3_general_second, 0xe1, 0xec);
+    fsm.AddEdge(state, utf8_3_ed_second, 0xed, 0xed);
+    fsm.AddEdge(state, utf8_3_general_second, 0xee, 0xef);
+    fsm.AddEdge(state, utf8_4_f0_second, 0xf0, 0xf0);
+    fsm.AddEdge(state, utf8_4_general_second, 0xf1, 0xf3);
+    fsm.AddEdge(state, utf8_4_f4_second, 0xf4, 0xf4);
+
+    std::array<bool, 128> reserved{};
+    reserved['"'] = true;
+    reserved['\\'] = true;
+    if (node != nullptr) {
+      for (const auto& [byte, child] : node->children) {
+        reserved[byte] = true;
+        fsm.AddEdge(state, trie_states.at(&child), byte, byte);
+      }
+      if (!node->is_terminal) {
+        fsm.AddEdge(state, end, '"', '"');
+      }
+    } else {
+      fsm.AddEdge(state, end, '"', '"');
+    }
+    for (int32_t byte = 0x20; byte <= 0x7f;) {
+      if (reserved[byte]) {
+        ++byte;
+        continue;
+      }
+      int32_t range_end = byte;
+      while (range_end + 1 <= 0x7f && !reserved[range_end + 1]) {
+        ++range_end;
+      }
+      fsm.AddEdge(state, sink, byte, range_end);
+      byte = range_end + 1;
+    }
+  };
+
+  for (const TrieNode* node : trie_nodes) {
+    add_content_transitions(trie_states.at(node), node);
+  }
+  add_content_transitions(sink, nullptr);
+  return FSMWithStartEnd(fsm, start, {end}, /*is_dfa=*/true);
+}
+
 int32_t JSONSchemaConverter::GetKeyPatternExcluding(
     const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
 ) {
@@ -2532,10 +2670,16 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
   int32_t key_rule_id = builder_.AddEmptyRuleWithHint(rule_name + "_addl_key");
   std::string key_rule_name = builder_.GetRule(key_rule_id).name;
   if (can_use_regex_fsm) {
+    std::string regex = "\\x22" + BuildTrieRegex(root);
+    if (regex_fsm_cache_ != nullptr) {
+      regex_fsm_cache_->emplace(
+          MakeRegexFSMCacheKey(regex, /*json_string=*/false), BuildTrieFSM(root)
+      );
+    }
     builder_.UpdateRuleBody(
         key_rule_id,
         builder_.AddRegex(
-            "\\x22" + BuildTrieRegex(root),
+            regex,
             /*json_string=*/false,
             /*byte_mode=*/false,
             /*has_json_string_normal_sink=*/true
@@ -2683,12 +2827,13 @@ int32_t JSONSchemaConverter::GenerateFromSpec(
  * spellings. Fall back to the CFG expansion when the FSM regex engine does not support it.
  */
 int32_t JSONSchemaConverter::RegexExpression(
-    const std::string& regex, bool json_string, bool force_cfg_expansion
+    const std::string& regex, bool json_string, bool force_cfg_expansion, bool byte_mode
 ) {
   std::string cache_key;
-  cache_key.reserve(regex.size() + 2);
+  cache_key.reserve(regex.size() + 3);
   cache_key.push_back(static_cast<char>(json_string));
   cache_key.push_back(static_cast<char>(force_cfg_expansion));
+  cache_key.push_back(static_cast<char>(byte_mode));
   cache_key.append(regex);
   const auto cached = regex_expr_ids_.find(cache_key);
   if (cached != regex_expr_ids_.end()) {
@@ -2725,33 +2870,38 @@ int32_t JSONSchemaConverter::RegexExpression(
       }
     }
     if (may_have_large_json_repeat) {
-      auto can_defer =
-          RegexFSMBuilder::CanDeferLargeRepeat(regex, json_string, /*byte_mode=*/false);
+      auto can_defer = RegexFSMBuilder::CanDeferLargeRepeat(regex, json_string, byte_mode);
       defer_fsm_build = can_defer.IsOk() && std::move(can_defer).Unwrap();
     }
 
     std::string fsm_cache_key;
     if (!defer_fsm_build && regex_fsm_cache_ != nullptr) {
-      fsm_cache_key = MakeRegexFSMCacheKey(regex, json_string);
+      fsm_cache_key = MakeRegexFSMCacheKey(regex, json_string, byte_mode);
       const auto cached_fsm = regex_fsm_cache_->find(fsm_cache_key);
       if (cached_fsm != regex_fsm_cache_->end()) {
         fsm = &cached_fsm->second;
       }
     }
     if (!defer_fsm_build && fsm == nullptr) {
-      auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
+      auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string, byte_mode);
       if (fsm_result.IsOk()) {
+        auto built_fsm = std::move(fsm_result).Unwrap();
+        if (byte_mode) {
+          auto minimized_result = built_fsm.MinimizeDFA();
+          if (minimized_result.IsOk()) {
+            built_fsm = std::move(minimized_result).Unwrap();
+          }
+        }
         if (regex_fsm_cache_ != nullptr) {
           const auto inserted =
-              regex_fsm_cache_->emplace(std::move(fsm_cache_key), std::move(fsm_result).Unwrap());
+              regex_fsm_cache_->emplace(std::move(fsm_cache_key), std::move(built_fsm));
           fsm = &inserted.first->second;
         } else {
-          local_fsm.emplace(std::move(fsm_result).Unwrap());
+          local_fsm.emplace(std::move(built_fsm));
           fsm = &*local_fsm;
         }
       } else {
-        auto can_defer =
-            RegexFSMBuilder::CanDeferLargeRepeat(regex, json_string, /*byte_mode=*/false);
+        auto can_defer = RegexFSMBuilder::CanDeferLargeRepeat(regex, json_string, byte_mode);
         // The probe validates every atom and confirms that the real GrammarBuilder-backed path
         // can assemble this regex with compact repeat edges. Other build errors continue through
         // the ordinary fallback.
@@ -2766,13 +2916,13 @@ int32_t JSONSchemaConverter::RegexExpression(
             return fsm->IsEndState(state);
           });
       if (!language_is_empty) {
-        const int32_t result = builder_.AddRegex(regex, json_string);
+        const int32_t result = builder_.AddRegex(regex, json_string, byte_mode);
         regex_expr_ids_.emplace(std::move(cache_key), result);
         return result;
       }
     }
     if (defer_fsm_build) {
-      const int32_t result = builder_.AddRegex(regex, json_string);
+      const int32_t result = builder_.AddRegex(regex, json_string, byte_mode);
       regex_expr_ids_.emplace(std::move(cache_key), result);
       return result;
     }
@@ -3044,9 +3194,16 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   if (spec.format.has_value()) {
     auto regex = JSONFormatToRegexPattern(*spec.format);
     if (regex.has_value()) {
-      // The built-in format regexes use constructs that the FSM regex engine does not fully
-      // support yet (e.g. quoted email local parts), so they keep the CFG expansion.
-      return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
+      return Sequence(
+          {ByteString("\""),
+           RegexExpression(
+               *regex,
+               /*json_string=*/false,
+               /*force_cfg_expansion=*/false,
+               /*byte_mode=*/true
+           ),
+           ByteString("\"")}
+      );
     }
   }
   // Check for pattern
