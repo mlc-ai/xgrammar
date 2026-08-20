@@ -1477,6 +1477,20 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetContinuationMaskCac
       state.char_budget_deadline,
       IsCompleted()
   };
+  if (has_json_string_length_rules_) {
+    XGRAMMAR_DCHECK(!json_string_char_count_history_.empty());
+    const auto& counter = json_string_char_count_history_.back();
+    key.insert(
+        key.end(),
+        {counter.count,
+         static_cast<int32_t>(counter.unicode_value),
+         counter.unicode_digits_remaining,
+         counter.unicode_follows_high_surrogate,
+         counter.length_entered,
+         counter.length_suspended,
+         static_cast<int32_t>(counter.phase)}
+    );
+  }
   if (!canonicalize_context) {
     const auto parent_row = rule_id_to_completable_states_[state.rule_start_pos];
     if (parent_row.size() > kMaxParentStatesForContinuationMaskCache) {
@@ -3187,7 +3201,14 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       );
       if (cached != continuation_mask_cache_.end()) {
         if (adaptive_token_mask.store_type == StoreType::kRejected) {
-          tmp_rejected_indices_delta_ = cached->rejected_indices;
+          if (json_string_length_filter_needed || repeat_continuation_requires_quote) {
+            std::sort(tmp_rejected_indices_delta_.begin(), tmp_rejected_indices_delta_.end());
+            tmp_rejected_indices_delta_.erase(
+                std::unique(tmp_rejected_indices_delta_.begin(), tmp_rejected_indices_delta_.end()),
+                tmp_rejected_indices_delta_.end()
+            );
+          }
+          IntsetUnion(&tmp_rejected_indices_delta_, cached->rejected_indices);
           IntsetUnion(&tmp_rejected_indices_delta_, adaptive_token_mask.rejected_indices);
           IntsetIntersection(&tmp_rejected_indices_, tmp_rejected_indices_delta_);
         } else {
