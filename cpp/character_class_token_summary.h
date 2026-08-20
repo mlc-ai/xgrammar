@@ -28,6 +28,7 @@ template <typename CharacterClass>
 std::vector<CharacterClassTokenSummary> BuildCharacterClassTokenSummaries(
     const CharacterClass& character_class,
     const std::vector<std::pair<int32_t, std::string>>& sorted_vocab,
+    const std::vector<int32_t>& lcp_with_previous,
     const std::vector<int32_t>& ascii_string_safe_indices
 ) {
   const bool is_negative = static_cast<bool>(character_class[0]);
@@ -65,6 +66,60 @@ std::vector<CharacterClassTokenSummary> BuildCharacterClassTokenSummaries(
         }
         return false;
       };
+
+  // Positive ASCII-only classes can reuse the lexicographic vocabulary's common prefixes.
+  // This makes classification proportional to the decoded-vocabulary trie rather than to the
+  // sum of all token lengths. Tokenizers often contain many long tokens with the same prefix.
+  bool is_positive_ascii_only = !is_negative;
+  std::array<uint8_t, 128> accepted_ascii_bytes{};
+  for (int32_t range_index = 1; range_index < character_class.size(); range_index += 2) {
+    if (range_index + 1 >= character_class.size() || character_class[range_index] < 0 ||
+        character_class[range_index + 1] >= 128) {
+      is_positive_ascii_only = false;
+      break;
+    }
+    for (int32_t byte = character_class[range_index]; byte <= character_class[range_index + 1];
+         ++byte) {
+      accepted_ascii_bytes[byte] = true;
+    }
+  }
+  if (is_positive_ascii_only) {
+    std::vector<CharacterClassTokenSummary> summaries;
+    summaries.reserve(sorted_vocab.size());
+    int32_t previous_mismatch_offset = -1;
+    for (int32_t sorted_vocab_index = 0;
+         sorted_vocab_index < static_cast<int32_t>(sorted_vocab.size());
+         ++sorted_vocab_index) {
+      const auto& token = sorted_vocab[sorted_vocab_index].second;
+      const int32_t common_prefix = lcp_with_previous[sorted_vocab_index];
+      int32_t completed_characters = common_prefix;
+      int32_t byte_offset = common_prefix;
+      bool mismatch = false;
+      if (previous_mismatch_offset >= 0 && common_prefix > previous_mismatch_offset) {
+        completed_characters = previous_mismatch_offset;
+        byte_offset = previous_mismatch_offset;
+        mismatch = true;
+      } else {
+        for (; byte_offset < static_cast<int32_t>(token.size()); ++byte_offset) {
+          const uint8_t byte = static_cast<uint8_t>(token[byte_offset]);
+          if (byte >= accepted_ascii_bytes.size() || !accepted_ascii_bytes[byte]) {
+            mismatch = true;
+            break;
+          }
+          ++completed_characters;
+        }
+      }
+      previous_mismatch_offset = mismatch ? byte_offset : -1;
+      const bool consumed_whole_token =
+          byte_offset == static_cast<int32_t>(token.size()) && !mismatch;
+      if (consumed_whole_token || completed_characters > 0) {
+        summaries.push_back(CharacterClassTokenSummary{
+            sorted_vocab_index, completed_characters, consumed_whole_token, completed_characters > 0
+        });
+      }
+    }
+    return summaries;
+  }
 
   // TokenizerInfo already records tokens made entirely from the printable ASCII bytes that are
   // safe inside a JSON string. When this character class accepts that complete byte alphabet,
