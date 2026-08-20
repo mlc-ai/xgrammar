@@ -548,7 +548,15 @@ void FSM::Impl::AddFSM(const FSM& fsm, std::vector<int>* state_mapping) {
 void FSM::Impl::AddFSM(FSM&& fsm, std::vector<int>* state_mapping) {
   // A copied FSM shares its implementation. Mutating it in place would also mutate the other
   // owners, so use the ordinary copy path unless this rvalue is the sole owner.
-  if (fsm.pimpl_.get() == this || fsm.pimpl_.use_count() != 1) {
+  // If the source is this FSM itself, first make an independent snapshot. The ordinary copy path
+  // cannot read from and append to the same vectors: resizing the destination would also change
+  // the source being iterated.
+  if (fsm.pimpl_.get() == this) {
+    FSM independent = fsm.Copy();
+    AddFSM(independent, state_mapping);
+    return;
+  }
+  if (fsm.pimpl_.use_count() != 1) {
     AddFSM(static_cast<const FSM&>(fsm), state_mapping);
     return;
   }
@@ -1372,6 +1380,12 @@ FSMWithStartEnd FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>&& fsms) {
   int start = first.GetStart();
   std::vector<int> previous_ends(first.GetEnds().begin(), first.GetEnds().end());
   FSM fsm = std::move(first.GetFsm());
+  // Moving the handle does not make its shared implementation unique.  If another input (or an
+  // external copy) aliases the first FSM, appending to fsm would mutate that not-yet-consumed
+  // source as well.  Detach the destination once before the concatenation loop.
+  if (!fsm.IsUnique()) {
+    fsm = fsm.Copy();
+  }
   std::vector<int32_t> ends;
   std::vector<int> state_mapping;
 

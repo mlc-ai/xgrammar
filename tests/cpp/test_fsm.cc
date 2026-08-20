@@ -116,6 +116,21 @@ TEST(XGrammarFSMTest, ConnectionTest) {
   std::cout << "Connection Test Passed!" << std::endl;
 }
 
+TEST(XGrammarFSMTest, MoveConcatHandlesSharedInputFSM) {
+  FSM fsm(2);
+  fsm.AddEdge(0, 1, 'a', 'a');
+  FSMWithStartEnd shared(fsm, 0, {1});
+  std::vector<FSMWithStartEnd> inputs{shared, shared, shared};
+
+  auto concatenated = FSMWithStartEnd::Concat(std::move(inputs));
+
+  EXPECT_TRUE(concatenated.AcceptString("aaa"));
+  EXPECT_FALSE(concatenated.AcceptString("a"));
+  EXPECT_FALSE(concatenated.AcceptString("aa"));
+  EXPECT_FALSE(concatenated.AcceptString("aaaa"));
+  EXPECT_TRUE(shared.AcceptString("a"));
+}
+
 TEST(XGrammarFSMTest, SymbolTest) {
   std::cout << "--------- Symbol Test Starts! -----------" << std::endl;
   std::cout << "--------- Symbol Test1 -----------" << std::endl;
