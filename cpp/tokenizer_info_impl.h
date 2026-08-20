@@ -89,6 +89,16 @@ class TokenizerInfo::Impl {
   const std::vector<int32_t>& GetJSONStringCrossingIndices() const {
     return json_string_crossing_indices_;
   }
+  const DynamicBitset& GetJSONStringCrossingBitset() const { return json_string_crossing_bitset_; }
+  const std::vector<uint8_t>& GetJSONStringCrossingFlags() const {
+    return json_string_crossing_flags_;
+  }
+  const std::vector<int32_t>& GetJSONStringClosingQuoteOffsets() const {
+    return json_string_closing_quote_offsets_;
+  }
+  const std::vector<int32_t>& GetJSONStringCrossingIndicesBySuffix() const {
+    return json_string_crossing_indices_by_suffix_;
+  }
   void BuildTokenCharData();
 
   std::string DumpMetadata() const;
@@ -162,6 +172,14 @@ class TokenizerInfo::Impl {
   std::array<std::vector<int32_t>, 256> json_string_content_prefix_indices_by_first_byte_;
   /*! \brief Sorted-vocabulary tokens that can cross an unescaped closing quote. */
   std::vector<int32_t> json_string_crossing_indices_;
+  /*! \brief Token-id bitset for tokens that can cross an unescaped closing quote. */
+  DynamicBitset json_string_crossing_bitset_;
+  /*! \brief Whether each sorted-vocabulary token crosses an unescaped closing quote. */
+  std::vector<uint8_t> json_string_crossing_flags_;
+  /*! \brief Byte offset of the first unescaped closing quote, or -1 when absent. */
+  std::vector<int32_t> json_string_closing_quote_offsets_;
+  /*! \brief Crossing-token indices ordered by the bytes after their closing quote. */
+  std::vector<int32_t> json_string_crossing_indices_by_suffix_;
 
   /*!
    * \brief The tokens used to detect stop tokens from the vocabulary.

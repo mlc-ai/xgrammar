@@ -2438,7 +2438,8 @@ def test_min_max_length():
     schema = {"type": "string", "minLength": 1, "maxLength": 10}
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root ::= "\"" [^"\\\r\n]{1,10} "\""
+        r"""root ::= root_length
+root_length[json_string_min_length=1, json_string_max_length=10] ::= "\"" basic_string_sub
 """
     )
 
@@ -2449,6 +2450,33 @@ def test_min_max_length():
 
     check_schema_with_instance(schema, instance_accepted, any_whitespace=True)
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
+
+
+@pytest.mark.parametrize(
+    "instance,accepted",
+    [
+        ('"a"', False),
+        ('"ab"', True),
+        ('"abc"', True),
+        ('"abcd"', False),
+        ('"é中"', True),
+        (r'"\u0061b"', True),
+        (r'"\ud83d\ude00a"', True),
+        (r'"\"a"', True),
+        (r'"\\a"', True),
+    ],
+)
+def test_min_max_length_counts_decoded_json_characters(instance: str, accepted: bool):
+    schema = {"type": "string", "minLength": 2, "maxLength": 3}
+    check_schema_with_instance(schema, instance, is_accepted=accepted, any_whitespace=False)
+
+
+def test_format_and_length_constraints_are_both_enforced():
+    schema = {"type": "string", "format": "email", "maxLength": 8}
+    check_schema_with_instance(schema, '"a@b.co"', any_whitespace=False)
+    check_schema_with_instance(
+        schema, '"verylong@example.com"', is_accepted=False, any_whitespace=False
+    )
 
 
 def test_type_array():
@@ -2462,7 +2490,8 @@ def test_type_array():
 
     ebnf_grammar = basic_json_rules_ebnf + (
         r"""root_type_0 ::= ( ( [1-9] | "1" "0" ) )
-root_type_1 ::= "\"" [^"\\\r\n]{1,10} "\""
+root_type_1 ::= root_type_1_length
+root_type_1_length[json_string_min_length=1, json_string_max_length=10] ::= "\"" basic_string_sub
 root ::= root_type_0 | root_type_1
 """
     )

@@ -99,6 +99,32 @@ void AdaptiveTokenMask::RecomputeAcceptedCount(size_t sorted_vocab_size) {
   }
 }
 
+void AdaptiveTokenMask::RecomputeJSONStringMetadata(const TokenizerInfo& tokenizer_info) {
+  // Direct JSON-string masks copy this tokenizer-owned metadata when they are built. Avoid
+  // walking a large crossing-token vocabulary again on the first dynamic mask fill.
+  if (all_uncertain_tokens_are_json_string_crossing &&
+      uncertain_token_bitset.Size() == tokenizer_info.GetVocabSize()) {
+    return;
+  }
+  const auto& sorted_vocab = tokenizer_info.GetSortedDecodedVocab();
+  const auto& crossing_flags = tokenizer_info.ImplPtr()->GetJSONStringCrossingFlags();
+  all_uncertain_tokens_are_json_string_crossing = !uncertain_indices.empty();
+  for (int32_t index : uncertain_indices) {
+    if (!crossing_flags[index]) {
+      all_uncertain_tokens_are_json_string_crossing = false;
+      break;
+    }
+  }
+  uncertain_token_bitset = all_uncertain_tokens_are_json_string_crossing
+                               ? DynamicBitset(tokenizer_info.GetVocabSize())
+                               : DynamicBitset();
+  if (all_uncertain_tokens_are_json_string_crossing) {
+    for (int32_t index : uncertain_indices) {
+      uncertain_token_bitset.Set(sorted_vocab[index].first);
+    }
+  }
+}
+
 std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const {
   constexpr int kMaxPrintTokens = 100;
   std::stringstream ss;
@@ -293,6 +319,7 @@ std::optional<SerializationError> DeserializeJSONValue(
   const size_t sorted_vocab_size = tokenizer_info.GetSortedDecodedVocab().size();
   for (auto& entry : impl->adaptive_token_mask_cache) {
     entry.second.RecomputeAcceptedCount(sorted_vocab_size);
+    entry.second.RecomputeJSONStringMetadata(tokenizer_info);
   }
   return std::nullopt;
 }
