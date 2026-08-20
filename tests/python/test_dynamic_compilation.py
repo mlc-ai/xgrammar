@@ -1,7 +1,7 @@
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from functools import cache
+from functools import lru_cache
 
 import pytest
 import torch
@@ -350,7 +350,7 @@ def _json_string_length_boundary_cases():
     return cases
 
 
-@cache
+@lru_cache(maxsize=None)
 def _json_string_length_boundary_fixture(minimum, maximum):
     boundary_lengths = [
         1,
