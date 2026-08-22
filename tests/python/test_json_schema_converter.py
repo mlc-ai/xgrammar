@@ -3489,6 +3489,32 @@ def test_allof_multiple_options_fused():
     check_schema_with_instance(schema, {}, is_accepted=False, any_whitespace=False)
 
 
+def test_empty_allof_with_structural_siblings():
+    # allOf: [] is vacuously true (the spec requires a non-empty array, but tolerate it):
+    # the structural siblings must still apply instead of being dropped.
+    schema = {
+        "type": "object",
+        "properties": {"modifier": {"enum": ["", "dark"]}},
+        "allOf": [],
+        "additionalProperties": False,
+    }
+    check_schema_with_instance(schema, {"modifier": "dark"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"zzz": [1, 2, 3]}, is_accepted=False, any_whitespace=False)
+
+
+def test_merged_required_with_non_string_elements_raises():
+    # The conjunctive merge must validate required element types instead of failing with an
+    # opaque picojson type error downstream.
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "string"}},
+        "anyOf": [{"required": [123]}],
+        "additionalProperties": False,
+    }
+    with pytest.raises(Exception, match="required must be an array of strings"):
+        xgr.Grammar.from_json_schema(json.dumps(schema), any_whitespace=False)
+
+
 def test_combinator_sibling_merge_conflict_raises():
     """When an equivalent merge cannot be constructed, compilation must fail loudly instead of
     silently dropping constraints."""

@@ -839,8 +839,22 @@ Result<picojson::object, SchemaError> MergeConjunctiveSchemaObjects(
         "present on both sides of the conjunction"
     );
   }
+  auto is_string_array = [](const picojson::value& v) {
+    if (!v.is<picojson::array>()) {
+      return false;
+    }
+    const auto& arr = v.get<picojson::array>();
+    return std::all_of(arr.begin(), arr.end(), [](const picojson::value& element) {
+      return element.is<std::string>();
+    });
+  };
   picojson::object merged = lhs;
   for (const auto& [key, value] : rhs) {
+    if (key == "required" && !is_string_array(value)) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "required must be an array of strings"
+      );
+    }
     auto it = merged.find(key);
     if (it == merged.end()) {
       merged[key] = value;
@@ -850,7 +864,7 @@ Result<picojson::object, SchemaError> MergeConjunctiveSchemaObjects(
       continue;  // keep lhs annotation
     }
     if (key == "required") {
-      if (!it->second.is<picojson::array>() || !value.is<picojson::array>()) {
+      if (!is_string_array(it->second)) {
         return ResultErr<SchemaError>(
             SchemaErrorType::kInvalidSchema, "required must be an array of strings"
         );
@@ -949,7 +963,9 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     if (primary == "allOf") {
       // Fold every branch and the siblings into one equivalent schema object. This also fixes
       // allOf with multiple options, which previously degraded to an unconstrained grammar.
-      bool fused_ok = !branches.empty();
+      // An empty allOf constrains nothing (vacuous truth), so with siblings present it desugars
+      // to the siblings alone; without siblings it keeps the existing dispatch path.
+      bool fused_ok = !branches.empty() || !siblings.empty();
       picojson::object fused = siblings;
       for (const auto& branch : branches) {
         if (branch.is<bool>()) {
