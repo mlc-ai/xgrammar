@@ -767,6 +767,135 @@ void SchemaParser::WarnUnsupportedKeywords(
   }
 }
 
+/*!
+ * \brief Keywords that only annotate a schema and impose no constraint on instances.
+ */
+inline bool IsAnnotationKeyword(const std::string& key) {
+  static const std::unordered_set<std::string> kAnnotationKeywords = {
+      "$schema",
+      "$id",
+      "$comment",
+      "title",
+      "description",
+      "default",
+      "examples",
+      "deprecated",
+      "readOnly",
+      "writeOnly",
+      "$defs",
+      "definitions",
+  };
+  return kAnnotationKeywords.count(key) > 0;
+}
+
+/*!
+ * \brief Merge two conjoined schema objects into a single object with the same meaning.
+ *
+ * JSON Schema keywords at one node are conjunctive, so two schema objects that must hold
+ * simultaneously can be merged by taking the union of their keywords, as long as no keyword's
+ * meaning changes by being placed next to the other object's keywords. Returns
+ * kUnsupportedSchema when an equivalent merge cannot be constructed, so the caller can fail
+ * loudly instead of dropping constraints.
+ */
+Result<picojson::object, SchemaError> MergeConjunctiveSchemaObjects(
+    const picojson::object& lhs, const picojson::object& rhs
+) {
+  // $ref cannot be merged textually without resolving it first.
+  static const std::unordered_set<std::string> kUnmergeableKeywords = {"$ref"};
+  // Keywords whose meaning depends on sibling keywords in the same schema object (e.g.
+  // additionalProperties is scoped by the properties/patternProperties beside it). They may all
+  // come from one side only; splitting them across sides would change their meaning.
+  static const std::unordered_set<std::string> kStructuralKeywords = {
+      "properties",
+      "patternProperties",
+      "additionalProperties",
+      "unevaluatedProperties",
+      "propertyNames",
+      "items",
+      "prefixItems",
+      "unevaluatedItems",
+      "contains",
+      "minContains",
+      "maxContains",
+  };
+  auto has_any = [](const picojson::object& obj, const std::unordered_set<std::string>& keys) {
+    for (const auto& [key, value] : obj) {
+      if (keys.count(key) > 0) {
+        return true;
+      }
+    }
+    return false;
+  };
+  if (has_any(lhs, kUnmergeableKeywords) || has_any(rhs, kUnmergeableKeywords)) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "Cannot merge combinator siblings: $ref cannot be merged with other keywords"
+    );
+  }
+  if (has_any(lhs, kStructuralKeywords) && has_any(rhs, kStructuralKeywords)) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "Cannot merge combinator siblings: structural keywords (properties/items/...) are "
+        "present on both sides of the conjunction"
+    );
+  }
+  auto is_string_array = [](const picojson::value& v) {
+    if (!v.is<picojson::array>()) {
+      return false;
+    }
+    const auto& arr = v.get<picojson::array>();
+    return std::all_of(arr.begin(), arr.end(), [](const picojson::value& element) {
+      return element.is<std::string>();
+    });
+  };
+  picojson::object merged = lhs;
+  for (const auto& [key, value] : rhs) {
+    if (key == "required" && !is_string_array(value)) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "required must be an array of strings"
+      );
+    }
+    auto it = merged.find(key);
+    if (it == merged.end()) {
+      merged[key] = value;
+      continue;
+    }
+    if (IsAnnotationKeyword(key)) {
+      continue;  // keep lhs annotation
+    }
+    if (key == "required") {
+      if (!is_string_array(it->second)) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "required must be an array of strings"
+        );
+      }
+      picojson::array result = it->second.get<picojson::array>();
+      for (const auto& item : value.get<picojson::array>()) {
+        bool found = false;
+        for (const auto& existing : result) {
+          if (existing.serialize(false) == item.serialize(false)) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          result.push_back(item);
+        }
+      }
+      it->second = picojson::value(result);
+      continue;
+    }
+    if (it->second.serialize(false) == value.serialize(false)) {
+      continue;  // identical constraints collapse
+    }
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "Cannot merge combinator siblings: conflicting values for keyword \"" + key + "\""
+    );
+  }
+  return ResultOk(std::move(merged));
+}
+
 Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     const picojson::value& schema,
     const std::string& rule_name_hint,
@@ -799,6 +928,119 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
   WarnUnsupportedKeywords(
       schema_obj, {"not", "if", "then", "else", "dependentRequired", "dependentSchemas"}
   );
+
+  // JSON Schema keywords are conjunctive: every keyword present at a node applies
+  // simultaneously. The dispatch chain below handles exactly one keyword group per node, so a
+  // combinator (anyOf/oneOf/allOf) would shadow its structural siblings: e.g.
+  // {"properties": ..., "additionalProperties": false, "anyOf": [...]} used to compile as if
+  // only the anyOf were present, silently producing an under-constrained grammar. Desugar such
+  // nodes before dispatching:
+  //   {K..., anyOf: [B1..Bn]}  ->  {anyOf: [merge(K,B1) .. merge(K,Bn)]}
+  //     (sound by distributivity of conjunction over disjunction; same for oneOf)
+  //   {K..., allOf: [B1..Bn]}  ->  merge(K, B1, .., Bn)
+  // and fail with kUnsupportedSchema when an equivalent merge cannot be constructed, rather
+  // than dropping constraints.
+  if (schema_obj.count("anyOf") || schema_obj.count("oneOf") || schema_obj.count("allOf")) {
+    // Non-annotation keywords beside the primary combinator (may include other combinators;
+    // those are desugared recursively).
+    const std::string primary = schema_obj.count("allOf")   ? "allOf"
+                                : schema_obj.count("anyOf") ? "anyOf"
+                                                            : "oneOf";
+    picojson::object siblings;
+    for (const auto& [key, value] : schema_obj) {
+      if (key == primary || IsAnnotationKeyword(key)) {
+        continue;
+      }
+      siblings[key] = value;
+    }
+    if (!schema_obj.at(primary).is<picojson::array>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, primary + " must be an array"
+      );
+    }
+    const auto& branches = schema_obj.at(primary).get<picojson::array>();
+
+    if (primary == "allOf") {
+      // Fold every branch and the siblings into one equivalent schema object. This also fixes
+      // allOf with multiple options, which previously degraded to an unconstrained grammar.
+      // An empty allOf constrains nothing (vacuous truth), so with siblings present it desugars
+      // to the siblings alone; without siblings it keeps the existing dispatch path.
+      bool fused_ok = !branches.empty() || !siblings.empty();
+      picojson::object fused = siblings;
+      for (const auto& branch : branches) {
+        if (branch.is<bool>()) {
+          if (branch.get<bool>()) {
+            continue;  // {} constrains nothing
+          }
+          return ResultErr<SchemaError>(
+              SchemaErrorType::kUnsatisfiableSchema, "allOf contains a 'false' schema"
+          );
+        }
+        if (!branch.is<picojson::object>()) {
+          fused_ok = false;
+          break;
+        }
+        auto merge_result = MergeConjunctiveSchemaObjects(fused, branch.get<picojson::object>());
+        if (merge_result.IsErr()) {
+          if (!siblings.empty()) {
+            return ResultErr(std::move(merge_result).UnwrapErr());
+          }
+          fused_ok = false;  // pure allOf: fall back to the existing ParseAllOf path
+          break;
+        }
+        fused = std::move(merge_result).Unwrap();
+      }
+      if (fused_ok) {
+        auto sub_result = Parse(picojson::value(fused), rule_name_hint, default_type);
+        if (sub_result.IsErr()) {
+          return sub_result;
+        }
+        auto spec = std::move(sub_result).Unwrap();
+        schema_cache_[cache_key] = spec;
+        return ResultOk(spec);
+      }
+    } else if (!siblings.empty()) {
+      // anyOf/oneOf with structural siblings: distribute the siblings into every branch.
+      picojson::array merged_branches;
+      bool distributed_ok = true;
+      for (const auto& branch : branches) {
+        if (branch.is<bool>()) {
+          if (branch.get<bool>()) {
+            merged_branches.push_back(picojson::value(siblings));
+          }
+          // a 'false' branch can never be satisfied and is dropped
+          continue;
+        }
+        if (!branch.is<picojson::object>()) {
+          distributed_ok = false;
+          break;
+        }
+        auto merge_result =
+            MergeConjunctiveSchemaObjects(siblings, branch.get<picojson::object>());
+        if (merge_result.IsErr()) {
+          return ResultErr(std::move(merge_result).UnwrapErr());
+        }
+        merged_branches.push_back(picojson::value(std::move(merge_result).Unwrap()));
+      }
+      if (distributed_ok) {
+        if (merged_branches.empty()) {
+          return ResultErr<SchemaError>(
+              SchemaErrorType::kUnsatisfiableSchema,
+              primary + " contains no satisfiable branch"
+          );
+        }
+        picojson::object rewritten;
+        rewritten[primary] = picojson::value(merged_branches);
+        auto sub_result = Parse(picojson::value(rewritten), rule_name_hint, default_type);
+        if (sub_result.IsErr()) {
+          return sub_result;
+        }
+        auto spec = std::move(sub_result).Unwrap();
+        schema_cache_[cache_key] = spec;
+        return ResultOk(spec);
+      }
+    }
+  }
 
   SchemaSpecPtr result;
 

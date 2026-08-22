@@ -3410,5 +3410,134 @@ def test_compile_json_schema_any_order(cache_enabled: bool):
     assert ordered != any_order
 
 
+def test_anyof_with_structural_siblings():
+    """Regression test for https://github.com/mlc-ai/xgrammar/issues/858: a combinator used to
+    shadow its structural siblings (properties/additionalProperties/...), silently compiling to
+    an under-constrained grammar."""
+    schema = {
+        "type": "object",
+        "properties": {"modifier": {"enum": ["", "dark"]}},
+        "anyOf": [{"required": ["modifier"]}],
+        "additionalProperties": False,
+    }
+    check_schema_with_instance(schema, {"modifier": "dark"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"modifier": ""}, any_whitespace=False)
+    # additionalProperties: false must survive the sibling anyOf
+    check_schema_with_instance(schema, {"zzz": [1, 2, 3]}, is_accepted=False, any_whitespace=False)
+    # the property subschema must survive as well
+    check_schema_with_instance(schema, {"modifier": 42}, is_accepted=False, any_whitespace=False)
+    # the distributed required from the anyOf branch must apply
+    check_schema_with_instance(schema, {}, is_accepted=False, any_whitespace=False)
+    # non-objects must be rejected
+    check_schema_with_instance(schema, [1, "two"], is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema, '"just a string"', is_accepted=False, any_whitespace=False)
+
+
+def test_oneof_with_structural_siblings():
+    schema = {
+        "type": "object",
+        "properties": {"modifier": {"enum": ["", "dark"]}},
+        "oneOf": [{"required": ["modifier"]}],
+        "additionalProperties": False,
+    }
+    check_schema_with_instance(schema, {"modifier": "dark"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"zzz": [1, 2, 3]}, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema, {}, is_accepted=False, any_whitespace=False)
+
+
+def test_anyof_siblings_distributed_over_multiple_branches():
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "string"}, "b": {"type": "integer"}},
+        "additionalProperties": False,
+        "anyOf": [{"required": ["a"]}, {"required": ["b"]}],
+    }
+    check_schema_with_instance(schema, {"a": "x"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"b": 1}, any_whitespace=False)
+    check_schema_with_instance(schema, {"a": "x", "b": 1}, any_whitespace=False)
+    check_schema_with_instance(schema, {}, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema, {"c": 1}, is_accepted=False, any_whitespace=False)
+
+
+def test_allof_with_structural_siblings():
+    schema = {
+        "type": "object",
+        "properties": {"modifier": {"enum": ["", "dark"]}},
+        "allOf": [{"required": ["modifier"]}],
+        "additionalProperties": False,
+    }
+    check_schema_with_instance(schema, {"modifier": "dark"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"zzz": [1, 2, 3]}, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema, {}, is_accepted=False, any_whitespace=False)
+
+
+def test_allof_multiple_options_fused():
+    """allOf with multiple mergeable options used to degrade to an unconstrained grammar
+    ("Support for allOf with multiple options is still ongoing")."""
+    schema = {
+        "allOf": [
+            {
+                "type": "object",
+                "properties": {"modifier": {"enum": ["", "dark"]}},
+                "additionalProperties": False,
+            },
+            {"required": ["modifier"]},
+        ]
+    }
+    check_schema_with_instance(schema, {"modifier": ""}, any_whitespace=False)
+    check_schema_with_instance(schema, {"zzz": [1, 2, 3]}, is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema, {}, is_accepted=False, any_whitespace=False)
+
+
+def test_empty_allof_with_structural_siblings():
+    # allOf: [] is vacuously true (the spec requires a non-empty array, but tolerate it):
+    # the structural siblings must still apply instead of being dropped.
+    schema = {
+        "type": "object",
+        "properties": {"modifier": {"enum": ["", "dark"]}},
+        "allOf": [],
+        "additionalProperties": False,
+    }
+    check_schema_with_instance(schema, {"modifier": "dark"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"zzz": [1, 2, 3]}, is_accepted=False, any_whitespace=False)
+
+
+def test_merged_required_with_non_string_elements_raises():
+    # The conjunctive merge must validate required element types instead of failing with an
+    # opaque picojson type error downstream.
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "string"}},
+        "anyOf": [{"required": [123]}],
+        "additionalProperties": False,
+    }
+    with pytest.raises(Exception, match="required must be an array of strings"):
+        xgr.Grammar.from_json_schema(json.dumps(schema), any_whitespace=False)
+
+
+def test_combinator_sibling_merge_conflict_raises():
+    """When an equivalent merge cannot be constructed, compilation must fail loudly instead of
+    silently dropping constraints."""
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "string"}},
+        "anyOf": [{"properties": {"a": {"type": "integer"}}}],
+    }
+    with pytest.raises(Exception):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
+def test_anyof_with_annotation_siblings_unchanged():
+    # Annotation-only siblings (title/description/...) must not trigger desugaring.
+    schema = {
+        "title": "A union",
+        "description": "desc",
+        "anyOf": [{"type": "integer"}, {"type": "string"}],
+    }
+    check_schema_with_instance(schema, 1, any_whitespace=False)
+    check_schema_with_instance(schema, '"x"', any_whitespace=False)
+    check_schema_with_instance(schema, [1], is_accepted=False, any_whitespace=False)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
