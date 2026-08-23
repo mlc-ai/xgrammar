@@ -1069,7 +1069,18 @@ schema__err_message__test_array_schema_error_cases = [
         "prefixItems must be an array of objects or booleans",
     ),
     ({"type": "array", "prefixItems": [False]}, "prefixItems contains false"),
-    ({"type": "array", "items": "not an object"}, "items must be a boolean or an object"),
+    (
+        {"type": "array", "items": "not an object"},
+        "items must be a boolean, an object or an array",
+    ),
+    (
+        {"type": "array", "items": ["not an object"]},
+        "items array must only contain objects or booleans",
+    ),
+    (
+        {"type": "array", "prefixItems": [{"type": "integer"}], "additionalItems": "bad"},
+        "additionalItems must be a boolean or an object",
+    ),
     (
         {"type": "array", "unevaluatedItems": "not an object"},
         "unevaluatedItems must be a boolean or an object",
@@ -1346,6 +1357,72 @@ def test_array_with_only_items_keyword():
     check_schema_with_instance(schema_unevaluated_items, instance_accepted, any_whitespace=False)
     check_schema_with_instance(
         schema_unevaluated_items, instance_rejected, is_accepted=False, any_whitespace=False
+    )
+
+
+def test_draft07_positional_items_and_additional_items():
+    # draft-07: "items" may be an array of schemas applied positionally, with
+    # "additionalItems" governing the elements beyond that list.
+    schema_positional = {
+        "type": "array",
+        "items": [{"type": "integer"}, {"type": "string"}],
+        "additionalItems": False,
+    }
+    check_schema_with_instance(schema_positional, [1, "x"], any_whitespace=False)
+    check_schema_with_instance(schema_positional, [1, "x", 2], is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema_positional, [1], is_accepted=False, any_whitespace=False)
+
+    # additionalItems: true (or absent) allows extra elements of any type.
+    schema_positional_loose = {"type": "array", "items": [{"type": "integer"}], "additionalItems": True}
+    check_schema_with_instance(schema_positional_loose, [1, "x", 2], any_whitespace=False)
+    check_schema_with_instance(schema_positional_loose, ["x"], is_accepted=False, any_whitespace=False)
+    # Without an explicit additionalItems the strict-mode default applies,
+    # matching prefixItems: extra elements are rejected in strict mode...
+    check_schema_with_instance(
+        {"type": "array", "items": [{"type": "integer"}]}, [1, 2, 3], is_accepted=False, any_whitespace=False
+    )
+    # ...and accepted in non-strict mode (draft-07 default is true).
+    check_schema_with_instance(
+        {"type": "array", "items": [{"type": "integer"}]}, [1, 2, 3], any_whitespace=False, strict_mode=False
+    )
+
+    # additionalItems as a schema constrains every element beyond the positional list.
+    schema_positional_schema = {
+        "type": "array",
+        "items": [{"type": "integer"}],
+        "additionalItems": {"type": "string"},
+    }
+    check_schema_with_instance(schema_positional_schema, [1, "a", "b"], any_whitespace=False)
+    check_schema_with_instance(schema_positional_schema, [1, 2], is_accepted=False, any_whitespace=False)
+
+    # The same keyword also applies after prefixItems (draft-07 semantics).
+    schema_prefix_additional = {
+        "type": "array",
+        "prefixItems": [{"type": "integer"}],
+        "additionalItems": True,
+    }
+    check_schema_with_instance(schema_prefix_additional, [1, 2], any_whitespace=False)
+    schema_prefix_additional_schema = {
+        "type": "array",
+        "prefixItems": [{"type": "integer"}],
+        "additionalItems": {"type": "string"},
+    }
+    check_schema_with_instance(schema_prefix_additional_schema, [1, "x"], any_whitespace=False)
+    check_schema_with_instance(schema_prefix_additional_schema, [1, 2], is_accepted=False, any_whitespace=False)
+    check_schema_with_instance(schema_prefix_additional_schema, [1], any_whitespace=False)
+
+    # draft-07: when items is a boolean/schema (not an array), additionalItems
+    # has no meaning and is ignored — items: true accepts every element.
+    check_schema_with_instance(
+        {"type": "array", "items": True, "additionalItems": False},
+        [1, "x"],
+        any_whitespace=False,
+    )
+    check_schema_with_instance(
+        {"type": "array", "items": True, "additionalItems": True}, [1, "x"], any_whitespace=False
+    )
+    check_schema_with_instance(
+        {"type": "array", "items": False, "additionalItems": False}, [], any_whitespace=False
     )
 
 
