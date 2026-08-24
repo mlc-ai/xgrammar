@@ -2406,7 +2406,7 @@ def test_min_max_length():
     schema = {"type": "string", "minLength": 1, "maxLength": 10}
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root_characters ::= [^\0-\x1f"\\\r\n] | "\\" basic_escape
+        r"""root_characters ::= [^\0-\x1f"\\\r\n] | "\\" [\"\\/bfnrt] | "\\" "u" ([0-9A-CE-Fa-ce-f] [0-9A-Fa-f]{3} | [Dd] [0-7] [0-9A-Fa-f]{2}) | "\\" "u" [Dd] [89ABab] [0-9A-Fa-f]{2} "\\u" [Dd] [C-Fc-f] [0-9A-Fa-f]{2}
 root ::= "\"" root_characters{1,10} "\""
 """
     )
@@ -2441,6 +2441,34 @@ def test_min_max_length_allows_escapes():
     check_schema_with_instance(
         schema, r'"\n\n\n\n\n\n\n\n\n\n\n"', is_accepted=False, any_whitespace=True
     )
+
+
+def test_min_max_length_counts_surrogate_pair_as_one_character():
+    # U+1F600 is ONE code point, so it costs one repetition however it is spelled.
+    schema = {"type": "string", "maxLength": 1}
+
+    check_schema_with_instance(schema, r'"\ud83d\ude00"', any_whitespace=True)
+    check_schema_with_instance(schema, '"\U0001f600"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"\uD83D\uDE00"', any_whitespace=True)
+
+    # Two of them exceed the bound.
+    check_schema_with_instance(
+        schema, r'"\ud83d\ude00\ud83d\ude00"', is_accepted=False, any_whitespace=True
+    )
+
+
+def test_min_max_length_rejects_lone_surrogate():
+    # A lone surrogate does not decode to valid UTF-8, so it is not a character
+    # the bound could count.
+    schema = {"type": "string", "maxLength": 4}
+
+    check_schema_with_instance(schema, r'"\ud800"', is_accepted=False, any_whitespace=True)
+    check_schema_with_instance(schema, r'"\udc00"', is_accepted=False, any_whitespace=True)
+    # Wrong order is not a pair either.
+    check_schema_with_instance(schema, r'"\ude00\ud83d"', is_accepted=False, any_whitespace=True)
+    # Non-surrogate \uXXXX is unaffected.
+    check_schema_with_instance(schema, r'"\ud7ff"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"\ue000"', any_whitespace=True)
 
 
 def test_type_array():

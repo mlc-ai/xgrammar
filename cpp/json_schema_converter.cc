@@ -2368,14 +2368,46 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   }
   // Check for length constraints
   if (spec.min_length != 0 || spec.max_length != -1) {
-    // A length bound limits HOW MANY characters a string has, not which ones.
-    // Without the escape branch \", \\, \n and \uXXXX are unrepresentable, so a
-    // model that needs one cannot close the string and runs to the token limit.
+    // A length bound counts characters, so each repetition must be exactly one
+    // character: an unescaped code point, a short escape, a non-surrogate
+    // \uXXXX, or a surrogate PAIR -- one code point spelled as two escapes.
+    // kBasicEscape cannot be reused here: it treats every \uXXXX alike, which
+    // would make a pair cost two and admit unpaired surrogates.
     int32_t normal_character = builder_.AddCharacterClass(
         {{0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true
     );
-    int32_t character =
-        Choice({normal_character, Sequence({ByteString("\\"), RuleRef(kBasicEscape)})});
+    int32_t short_escape = builder_.AddCharacterClass(
+        {{'"', '"'},
+         {'\\', '\\'},
+         {'/', '/'},
+         {'b', 'b'},
+         {'f', 'f'},
+         {'n', 'n'},
+         {'r', 'r'},
+         {'t', 't'}}
+    );
+    int32_t hex = builder_.AddCharacterClass({{'0', '9'}, {'A', 'F'}, {'a', 'f'}});
+    // Surrogates are U+D800-U+DFFF, i.e. "D" followed by 8-F.
+    int32_t hex_but_d =
+        builder_.AddCharacterClass({{'0', '9'}, {'A', 'C'}, {'E', 'F'}, {'a', 'c'}, {'e', 'f'}});
+    int32_t d = builder_.AddCharacterClass({{'D', 'D'}, {'d', 'd'}});
+    int32_t below_surrogates = builder_.AddCharacterClass({{'0', '7'}});
+    int32_t high_surrogate = builder_.AddCharacterClass({{'8', '9'}, {'A', 'B'}, {'a', 'b'}});
+    int32_t low_surrogate = builder_.AddCharacterClass({{'C', 'F'}, {'c', 'f'}});
+    int32_t bmp_escape = Sequence(
+        {ByteString("u"),
+         Choice({Sequence({hex_but_d, hex, hex, hex}), Sequence({d, below_surrogates, hex, hex})})}
+    );
+    int32_t surrogate_pair_escape = Sequence(
+        {ByteString("u"), d, high_surrogate, hex, hex, ByteString("\\u"), d, low_surrogate, hex, hex
+        }
+    );
+    int32_t character = Choice(
+        {normal_character,
+         Sequence({ByteString("\\"), short_escape}),
+         Sequence({ByteString("\\"), bmp_escape}),
+         Sequence({ByteString("\\"), surrogate_pair_escape})}
+    );
     int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
     return Sequence({ByteString("\""), body, ByteString("\"")});
   }
