@@ -2406,7 +2406,8 @@ def test_min_max_length():
     schema = {"type": "string", "minLength": 1, "maxLength": 10}
 
     ebnf_grammar = basic_json_rules_ebnf + (
-        r"""root ::= "\"" [^"\\\r\n]{1,10} "\""
+        r"""root_characters ::= [^\0-\x1f"\\\r\n] | "\\" basic_escape
+root ::= "\"" root_characters{1,10} "\""
 """
     )
 
@@ -2417,6 +2418,29 @@ def test_min_max_length():
 
     check_schema_with_instance(schema, instance_accepted, any_whitespace=True)
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
+
+
+def test_min_max_length_allows_escapes():
+    # A length bound must not change WHICH characters a string may contain. The
+    # length-bounded path used a class with no escape alternative, so \", \\, \n
+    # and \uXXXX were unrepresentable and a model needing one could not close the
+    # string -- it kept emitting until it hit the token limit.
+    schema = {"type": "string", "maxLength": 10}
+
+    check_schema_with_instance(schema, r'"ab\ncd"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"say \"hi\""', any_whitespace=True)
+    check_schema_with_instance(schema, r'"back\\sl"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"a\u0062c"', any_whitespace=True)
+    check_schema_with_instance(schema, '"a\u00e9b"', any_whitespace=True)
+
+    # An unescaped control character is still invalid JSON.
+    check_schema_with_instance(schema, '"ab\ncd"', is_accepted=False, any_whitespace=True)
+
+    # The bound still bites: one escape is one character.
+    check_schema_with_instance(schema, r'"\n\n\n\n\n\n\n\n\n\n"', any_whitespace=True)
+    check_schema_with_instance(
+        schema, r'"\n\n\n\n\n\n\n\n\n\n\n"', is_accepted=False, any_whitespace=True
+    )
 
 
 def test_type_array():

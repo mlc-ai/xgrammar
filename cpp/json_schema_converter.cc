@@ -2368,8 +2368,14 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   }
   // Check for length constraints
   if (spec.min_length != 0 || spec.max_length != -1) {
+    // A length bound limits HOW MANY characters a string has, not which ones.
+    // Without the escape branch \", \\, \n and \uXXXX are unrepresentable, so a
+    // model that needs one cannot close the string and runs to the token limit.
+    int32_t normal_character = builder_.AddCharacterClass(
+        {{0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true
+    );
     int32_t character =
-        builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
+        Choice({normal_character, Sequence({ByteString("\\"), RuleRef(kBasicEscape)})});
     int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
     return Sequence({ByteString("\""), body, ByteString("\"")});
   }
