@@ -2370,7 +2370,56 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   if (spec.min_length != 0 || spec.max_length != -1) {
     int32_t unescaped_character =
         builder_.AddCharacterClass({{0, 0x1f}, {'"', '"'}, {'\\', '\\'}}, true);
-    int32_t escaped_character = Sequence({ByteString("\\"), RuleRef(kBasicEscape)});
+    int32_t hexadecimal_character =
+        builder_.AddCharacterClass({{'A', 'F'}, {'a', 'f'}, {'0', '9'}});
+    int32_t non_surrogate_leading_hex =
+        builder_.AddCharacterClass({{'0', '9'}, {'A', 'C'}, {'E', 'F'}, {'a', 'c'}, {'e', 'f'}});
+    int32_t surrogate_leading_hex = builder_.AddCharacterClass({{'D', 'D'}, {'d', 'd'}});
+
+    int32_t short_escape = Sequence(
+        {ByteString("\\"),
+         builder_.AddCharacterClass(
+             {{'"', '"'},
+              {'\\', '\\'},
+              {'/', '/'},
+              {'b', 'b'},
+              {'f', 'f'},
+              {'n', 'n'},
+              {'r', 'r'},
+              {'t', 't'}}
+         )}
+    );
+    int32_t non_surrogate_unicode_escape = Sequence(
+        {ByteString("\\u"),
+         Choice(
+             {Sequence(
+                  {non_surrogate_leading_hex,
+                   hexadecimal_character,
+                   hexadecimal_character,
+                   hexadecimal_character}
+              ),
+              Sequence(
+                  {surrogate_leading_hex,
+                   builder_.AddCharacterClass({{'0', '7'}}),
+                   hexadecimal_character,
+                   hexadecimal_character}
+              )}
+         )}
+    );
+    int32_t surrogate_pair_escape = Sequence(
+        {ByteString("\\u"),
+         surrogate_leading_hex,
+         builder_.AddCharacterClass({{'8', '9'}, {'A', 'B'}, {'a', 'b'}}),
+         hexadecimal_character,
+         hexadecimal_character,
+         ByteString("\\u"),
+         surrogate_leading_hex,
+         builder_.AddCharacterClass({{'C', 'F'}, {'c', 'f'}}),
+         hexadecimal_character,
+         hexadecimal_character}
+    );
+    int32_t escaped_character =
+        Choice({short_escape, non_surrogate_unicode_escape, surrogate_pair_escape});
     int32_t character = Choice({unescaped_character, escaped_character});
     int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
     return Sequence({ByteString("\""), body, ByteString("\"")});
