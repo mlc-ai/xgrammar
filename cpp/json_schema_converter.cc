@@ -2426,13 +2426,9 @@ int32_t JSONSchemaConverter::GenerateArray(const ArraySpec& spec, const std::str
     return spec.min_items == 0 ? Choice({nonempty, empty_array}) : nonempty;
   }
 
-  // Per JSON Schema Draft 2020-12, prefixItems entries are positional: an
-  // instance may validly end after any prefix position (subject to minItems),
-  // but every element inside the prefix range must match its prefix schema —
-  // additional items are only allowed after the full prefix. Build the array
-  // content as an alternation of the full prefix (plus the additional tail)
-  // and every shorter truncation, so shorter arrays are accepted without
-  // letting the additional tail absorb prefix positions (issue #824).
+  // Per Draft 2020-12, prefixItems entries are positional: the instance may
+  // end after any prefix position (subject to minItems), and additional items
+  // are only allowed after the full prefix (issue #824).
   size_t mandatory_count = static_cast<size_t>(std::min<int64_t>(
       std::max<int64_t>(0, spec.min_items), static_cast<int64_t>(item_rule_ids.size())
   ));
@@ -2446,48 +2442,42 @@ int32_t JSONSchemaConverter::GenerateArray(const ArraySpec& spec, const std::str
     prefix_elements.push_back(RuleRef(item_rule_ids[index]));
   }
 
-  // Full-prefix suffix: items mandatory..n-1 followed by the additional tail.
-  std::vector<int32_t> full_suffix;
-  for (size_t index = mandatory_count; index < item_rule_ids.size(); ++index) {
-    if (index > 0) {
-      full_suffix.push_back(middle_separator);
-    }
-    full_suffix.push_back(RuleRef(item_rule_ids[index]));
-  }
-  int64_t minimum_additional =
-      std::max(int64_t{0}, spec.min_items - static_cast<int64_t>(item_rule_ids.size()));
+  // Suffix after the mandatory head, flattened into a right-recursive chain
+  // of rules   suffix_k ::= "" | sep item_k suffix_{k+1}   so each position
+  // is encoded once instead of once per truncation length. The chain ends
+  // with the additional-items tail. Positions from index 1 on are separated
+  // by middle_separator; position 0, when it is not part of the mandatory
+  // head, gets its own rule without the separator.
+  int32_t suffix = Empty();
   if (spec.allow_additional_items && spec.additional_items) {
-    full_suffix.push_back(Repeat(
+    int64_t minimum_additional =
+        std::max(int64_t{0}, spec.min_items - static_cast<int64_t>(item_rule_ids.size()));
+    suffix = Repeat(
         rule_name + "_additional_items",
         Sequence({middle_separator, RuleRef(additional_rule_id)}),
         static_cast<int32_t>(minimum_additional),
         spec.max_items == -1
             ? -1
             : static_cast<int32_t>(spec.max_items - static_cast<int64_t>(item_rule_ids.size()))
-    ));
+    );
+  }
+  size_t chain_start = std::max<size_t>(mandatory_count, 1);
+  for (size_t k = item_rule_ids.size(); k-- > chain_start;) {
+    int32_t with_item = Sequence({middle_separator, RuleRef(item_rule_ids[k]), suffix});
+    int32_t suffix_rule_id = builder_.AddRuleWithHint(
+        rule_name + "_suffix_" + std::to_string(k), Choice({Empty(), with_item})
+    );
+    suffix = RuleRef(suffix_rule_id);
+  }
+  if (mandatory_count == 0) {
+    int32_t with_first = Sequence({RuleRef(item_rule_ids[0]), suffix});
+    int32_t suffix_rule_id =
+        builder_.AddRuleWithHint(rule_name + "_suffix_0", Choice({Empty(), with_first}));
+    suffix = RuleRef(suffix_rule_id);
   }
 
-  // Truncation alternatives: the prefix may end at exactly k items for
-  // k in [mandatory, n). The full-prefix alternative above covers k == n.
-  std::vector<int32_t> content_choices = {Sequence(full_suffix)};
-  for (size_t k = item_rule_ids.size() - 1; k > mandatory_count; --k) {
-    std::vector<int32_t> truncation_suffix;
-    for (size_t index = mandatory_count; index < k; ++index) {
-      if (index > 0) {
-        truncation_suffix.push_back(middle_separator);
-      }
-      truncation_suffix.push_back(RuleRef(item_rule_ids[index]));
-    }
-    content_choices.push_back(Sequence(truncation_suffix));
-  }
-  if (mandatory_count < item_rule_ids.size()) {
-    // Truncation at the mandatory head itself (k == mandatory): no suffix.
-    content_choices.push_back(Empty());
-  }
-  // Array content = mandatory head followed by one of the suffix
-  // alternatives (full prefix + tail, or a truncation).
   std::vector<int32_t> content_elements = prefix_elements;
-  content_elements.push_back(Choice(content_choices));
+  content_elements.push_back(suffix);
   int32_t prefix = Sequence(content_elements);
   return Sequence({left_bracket, start_separator, prefix, end_separator, right_bracket});
 }
