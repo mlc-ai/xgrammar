@@ -2999,11 +2999,8 @@ int32_t JSONSchemaConverter::GenerateObject(
         }
       } else {
         int32_t key_rule_id = CreateRule(spec.property_names, rule_name + "_name");
-        // propertyNames constrains only the key; a typed
-        // additionalProperties schema must still constrain the value.
-        // Previously the value was hardcoded to basic_any, silently dropping
-        // the additionalProperties value schema (issue #826). When additional
-        // properties are unconstrained (or absent), values stay unconstrained.
+        // propertyNames constrains only the key, so a typed additionalProperties
+        // schema still applies to the value (issue #826).
         int32_t value_rule_id;
         if (additional_property) {
           value_rule_id = CreateRule(additional_property, rule_name + "_" + additional_suffix);
