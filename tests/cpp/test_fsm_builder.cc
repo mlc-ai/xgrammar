@@ -10,6 +10,7 @@
 
 #include "fsm.h"
 #include "fsm_builder.h"
+#include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "xgrammar/grammar.h"
 
@@ -409,6 +410,34 @@ TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenChars) {
   // Multi-byte UTF-8 characters (bytes >= 0x80) are not affected by the JSON exclusion.
   fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars(".+", forbidden).Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("你好"));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenCharsPreservesRepeatAuxData) {
+  const auto& forbidden = GrammarFSMBuilder::JSONStringForbiddenChars();
+  GrammarBuilder builder;
+
+  auto fsm_wse =
+      RegexFSMBuilder::BuildWithForbiddenChars("[^\\n\\r]{1,129}", forbidden, &builder).Unwrap();
+  const auto& fsm = fsm_wse.GetFsm();
+  const auto& aux_data = fsm.GetEdgeAuxData();
+  ASSERT_FALSE(aux_data.empty());
+
+  bool found_repeat_edge = false;
+  for (int state = 0; state < fsm.NumStates(); ++state) {
+    for (const auto& edge : fsm.GetEdges(state)) {
+      if (!edge.IsRepeatRef()) {
+        continue;
+      }
+      found_repeat_edge = true;
+      ASSERT_GE(edge.GetAuxIndex(), 0);
+      ASSERT_LT(edge.GetAuxIndex() + 2, static_cast<int32_t>(aux_data.size()));
+
+      auto repeat_info = fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+      EXPECT_EQ(repeat_info.Lower(), 1);
+      EXPECT_EQ(repeat_info.Upper(), 129);
+    }
+  }
+  EXPECT_TRUE(found_repeat_edge);
 }
 
 TEST(XGrammarFSMBuilderTest, TestGrammarFSMBuilderRegex) {
