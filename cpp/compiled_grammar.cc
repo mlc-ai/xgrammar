@@ -100,8 +100,8 @@ void AdaptiveTokenMask::RecomputeAcceptedCount(size_t sorted_vocab_size) {
 }
 
 void AdaptiveTokenMask::RecomputeJSONStringMetadata(const TokenizerInfo& tokenizer_info) {
-  // Direct JSON-string masks copy this tokenizer-owned metadata when they are built. Avoid
-  // walking a large crossing-token vocabulary again on the first dynamic mask fill.
+  // Direct local-completion masks carry this derived metadata when they are built. Avoid walking
+  // a large crossing-token vocabulary again on the first dynamic mask fill.
   if (all_uncertain_tokens_are_json_string_crossing &&
       uncertain_token_bitset.Size() == tokenizer_info.GetVocabSize()) {
     return;
@@ -316,10 +316,29 @@ std::optional<SerializationError> DeserializeJSONValue(
       )) {
     return error;
   }
+  impl->local_completion_summaries =
+      BuildLocalCompletionTokenSummaries(impl->grammar, tokenizer_info);
   const size_t sorted_vocab_size = tokenizer_info.GetSortedDecodedVocab().size();
   for (auto& entry : impl->adaptive_token_mask_cache) {
-    entry.second.RecomputeAcceptedCount(sorted_vocab_size);
-    entry.second.RecomputeJSONStringMetadata(tokenizer_info);
+    const ParserState& state = entry.first;
+    AdaptiveTokenMask& mask = entry.second;
+    mask.RecomputeAcceptedCount(sorted_vocab_size);
+    mask.RecomputeJSONStringMetadata(tokenizer_info);
+    if (state.rule_id < 0 ||
+        state.rule_id >= static_cast<int32_t>(impl->local_completion_summaries.size()) ||
+        state.sub_element_id != 0) {
+      continue;
+    }
+    const auto& summary = impl->local_completion_summaries[state.rule_id];
+    if (summary == nullptr ||
+        state.element_id != impl->grammar->per_rule_fsms[state.rule_id]->GetFsm().GetStart() ||
+        mask.store_type != AdaptiveTokenMask::StoreType::kAcceptedBitset ||
+        !(mask.accepted_bitset == summary->accepted_prefix_tokens) ||
+        mask.uncertain_indices != summary->crossing_indices) {
+      continue;
+    }
+    mask.local_completion_summary = summary;
+    mask.uncertain_token_bitset = summary->crossing_tokens;
   }
   return std::nullopt;
 }
@@ -328,9 +347,17 @@ std::optional<SerializationError> DeserializeJSONValue(
 
 std::size_t MemorySize(const CompiledGrammar::Impl& impl) {
   std::scoped_lock lock(impl.adaptive_token_mask_cache_mutex, impl.rule_level_metadata_mutex);
+  std::size_t local_completion_summary_size =
+      impl.local_completion_summaries.size() *
+      sizeof(decltype(impl.local_completion_summaries)::value_type);
+  for (const auto& summary : impl.local_completion_summaries) {
+    if (summary != nullptr) {
+      local_completion_summary_size += sizeof(*summary) + MemorySize(*summary);
+    }
+  }
   return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache) +
          MemorySize(impl.tag_dispatch_rule_id_to_second_slicing_bitset) +
-         MemorySize(impl.rule_level_cacheable) +
+         MemorySize(impl.rule_level_cacheable) + local_completion_summary_size +
          (impl.earley_parser_grammar_features == nullptr
               ? 0
               : MemorySize(*impl.earley_parser_grammar_features));

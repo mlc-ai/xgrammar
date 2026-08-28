@@ -13,7 +13,6 @@
 #include <optional>
 #include <stack>
 #include <string>
-#include <string_view>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -458,10 +457,8 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
     indices.clear();
   }
   json_string_crossing_indices_.clear();
-  json_string_crossing_bitset_ = DynamicBitset(vocab_size_);
   json_string_crossing_flags_.assign(sorted_decoded_vocab_.size(), false);
   json_string_closing_quote_offsets_.assign(sorted_decoded_vocab_.size(), -1);
-  json_string_crossing_indices_by_suffix_.clear();
   int32_t max_chars = 0;
   int32_t max_bytes = 0;
   for (int32_t index = 0; index < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++index) {
@@ -489,7 +486,6 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
       }
     } else if (json_string_kind == JSONStringTokenKind::kCrossing) {
       json_string_crossing_indices_.push_back(index);
-      json_string_crossing_bitset_.Set(sorted_decoded_vocab_[index].first, true);
       json_string_crossing_flags_[index] = true;
       json_string_closing_quote_offsets_[index] = closing_quote_offset;
     }
@@ -534,17 +530,6 @@ void TokenizerInfo::Impl::BuildTokenCharData() {
       [&](int32_t lhs, int32_t rhs) {
         return json_string_plain_prefix_char_counts_[lhs] <
                json_string_plain_prefix_char_counts_[rhs];
-      }
-  );
-  json_string_crossing_indices_by_suffix_ = json_string_crossing_indices_;
-  std::stable_sort(
-      json_string_crossing_indices_by_suffix_.begin(),
-      json_string_crossing_indices_by_suffix_.end(),
-      [&](int32_t lhs, int32_t rhs) {
-        const std::string_view lhs_token = sorted_decoded_vocab_[lhs].second;
-        const std::string_view rhs_token = sorted_decoded_vocab_[rhs].second;
-        return lhs_token.substr(json_string_closing_quote_offsets_[lhs] + 1) <
-               rhs_token.substr(json_string_closing_quote_offsets_[rhs] + 1);
       }
   );
   DynamicBitset within_limit(vocab_size_);

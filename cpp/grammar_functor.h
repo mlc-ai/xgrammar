@@ -461,6 +461,10 @@ class GrammarFSMBuilder {
   static Result<FSMWithStartEnd> Regex(
       const std::string& regex, bool json_string = false, bool byte_mode = false
   );
+  /*! \brief Inline a rule and its regular rule references into one local FSM. */
+  static Result<FSMWithStartEnd> FlattenRuleFSMs(
+      const Grammar& grammar, int32_t root_rule_id, int32_t max_num_states = 100000
+  );
   /*!
    * \brief Build the automaton of an intersection expr: compile each operand into a leaf FSM
    * and intersect them. Returns the error message on failure.

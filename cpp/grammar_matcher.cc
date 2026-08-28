@@ -29,7 +29,6 @@
 #include "compiled_grammar_impl.h"
 #include "earley_parser.h"
 #include "grammar_impl.h"
-#include "json_string_rule.h"
 #include "support/dynamic_bitset.h"
 #include "support/encoding.h"
 #include "support/int_set.h"
@@ -511,11 +510,6 @@ class GrammarMatcher::Impl : public EarleyParser {
     if (has_json_string_length_rules_) {
       tmp_state_accepted_bitset_ = DynamicBitset(tokenizer_info_.GetVocabSize());
     }
-    json_string_quote_suffix_index_rules_.resize(grammar_->NumRules(), false);
-    for (int32_t rule_id = 0; rule_id < grammar_->NumRules(); ++rule_id) {
-      json_string_quote_suffix_index_rules_[rule_id] =
-          IsGenericJSONStringBodyRule(grammar_.operator->(), rule_id);
-    }
   }
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
@@ -673,11 +667,9 @@ class GrammarMatcher::Impl : public EarleyParser {
       const DynamicBitset* additional_accepted_tokens
   );
 
-  /*! \brief Accept valid quote-crossing tokens from the sorted post-quote suffix index. */
-  void AddJSONStringQuoteCrossingTokensFromSuffixIndex(
-      const ParserState& state,
-      const std::vector<int32_t>& uncertain_indices,
-      const DynamicBitset& uncertain_tokens
+  /*! \brief Accept crossing tokens by matching each distinct post-completion suffix once. */
+  bool AddLocalCompletionCrossingTokens(
+      const ParserState& state, const AdaptiveTokenMask& adaptive_token_mask
   );
 
   bool NeedsJSONStringLengthTokenFilter(const ParserState& state) const;
@@ -810,9 +802,8 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::vector<int32_t> tmp_json_length_invalid_indices_;
   std::vector<int32_t> tmp_json_length_valid_escaped_indices_;
   std::vector<int32_t> tmp_repeat_quote_crossing_indices_;
-  std::vector<int32_t> tmp_json_string_suffix_accepted_token_ids_;
-  std::vector<std::pair<size_t, size_t>> tmp_json_string_accepted_suffix_ranges_;
-  std::vector<uint8_t> json_string_quote_suffix_index_rules_;
+  std::vector<int32_t> tmp_local_completion_accepted_token_ids_;
+  std::vector<std::pair<size_t, size_t>> tmp_local_completion_accepted_suffix_ranges_;
   std::vector<ParserState> tmp_latest_states_;
   std::vector<std::pair<const ParserState*, const AdaptiveTokenMask*>>
       tmp_latest_states_with_masks_;
@@ -3000,18 +2991,18 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
   std::sort(tmp_json_length_invalid_indices_.begin(), tmp_json_length_invalid_indices_.end());
 }
 
-void GrammarMatcher::Impl::AddJSONStringQuoteCrossingTokensFromSuffixIndex(
-    const ParserState& state,
-    const std::vector<int32_t>& uncertain_indices,
-    const DynamicBitset& uncertain_tokens
+bool GrammarMatcher::Impl::AddLocalCompletionCrossingTokens(
+    const ParserState& state, const AdaptiveTokenMask& adaptive_token_mask
 ) {
-  tmp_json_string_suffix_accepted_token_ids_.clear();
-  tmp_json_string_accepted_suffix_ranges_.clear();
-  const auto* tokenizer_impl = tokenizer_info_.ImplPtr();
-  const auto& suffix_indices = tokenizer_impl->GetJSONStringCrossingIndicesBySuffix();
-  if (suffix_indices.empty()) {
-    return;
+  XGRAMMAR_DCHECK(adaptive_token_mask.local_completion_summary != nullptr);
+  const auto& summary = *adaptive_token_mask.local_completion_summary;
+  const auto& suffix_entries = summary.crossings_by_suffix;
+  if (suffix_entries.empty()) {
+    return true;
   }
+  tmp_local_completion_accepted_token_ids_.clear();
+  tmp_local_completion_accepted_suffix_ranges_.clear();
+  const auto* tokenizer_impl = tokenizer_info_.ImplPtr();
 
   const int32_t current_count = GetCurrentJSONStringCharIndex();
   const int32_t min_deadline = JSONStringMinLengthDeadline(state);
@@ -3020,13 +3011,17 @@ void GrammarMatcher::Impl::AddJSONStringQuoteCrossingTokensFromSuffixIndex(
   const bool all_lengths_are_valid =
       (min_deadline < 0 || current_count >= min_deadline) && max_deadline < 0;
   if (!all_lengths_are_valid) {
-    tmp_json_string_suffix_accepted_token_ids_.reserve(uncertain_indices.size());
+    tmp_local_completion_accepted_token_ids_.reserve(suffix_entries.size());
   }
   const int32_t synthetic_count = std::max(current_count, min_deadline);
   if (max_deadline >= 0 && synthetic_count > max_deadline) {
-    return;
+    return true;
   }
 
+  const int32_t initial_history_size = scanable_state_history_.size();
+  auto restore_parser = [&]() {
+    PopLastStates(static_cast<int32_t>(scanable_state_history_.size()) - initial_history_size);
+  };
   PushOneStateToCheck(state);
   JSONStringCharCounterState initial_counter;
   if (has_length_context) {
@@ -3038,47 +3033,50 @@ void GrammarMatcher::Impl::AddJSONStringQuoteCrossingTokensFromSuffixIndex(
     json_string_char_count_history_.back().count = synthetic_count;
   }
   int32_t representative_prefix_bytes = 0;
-  bool quote_accepted = Advance('"');
-  if (!quote_accepted) {
+  bool completion_accepted = Advance(summary.completion_byte);
+  if (!completion_accepted) {
     if (!has_length_context) {
-      PopLastStates(1);
-      return;
+      restore_parser();
+      return false;
     }
-    XGRAMMAR_DCHECK(!uncertain_indices.empty());
-    const int32_t representative_index = uncertain_indices.front();
-    const int32_t closing_quote_offset =
-        tokenizer_impl->GetJSONStringClosingQuoteOffsets()[representative_index];
-    XGRAMMAR_DCHECK(closing_quote_offset >= 0);
+    const auto& representative_entry = suffix_entries.front();
+    const int32_t representative_index = representative_entry.sorted_vocab_index;
+    XGRAMMAR_DCHECK(representative_entry.suffix_offset >= 1);
     auto& counter = json_string_char_count_history_.back();
     counter = initial_counter;
     counter.length_suspended = true;
     const auto& representative =
         tokenizer_info_.GetSortedDecodedVocab()[representative_index].second;
-    for (; representative_prefix_bytes < closing_quote_offset; ++representative_prefix_bytes) {
+    for (; representative_prefix_bytes < representative_entry.suffix_offset - 1;
+         ++representative_prefix_bytes) {
       if (!Advance(static_cast<uint8_t>(representative[representative_prefix_bytes]))) {
-        PopLastStates(representative_prefix_bytes + 1);
-        return;
+        restore_parser();
+        return false;
       }
     }
-    auto& quote_counter = json_string_char_count_history_.back();
-    quote_counter = initial_counter;
-    quote_counter.count = synthetic_count;
-    quote_counter.length_suspended = false;
-    quote_accepted = Advance('"');
-    if (!quote_accepted) {
-      PopLastStates(representative_prefix_bytes + 1);
-      return;
+    auto& completion_counter = json_string_char_count_history_.back();
+    completion_counter = initial_counter;
+    completion_counter.count = synthetic_count;
+    completion_counter.length_suspended = false;
+    completion_accepted = Advance(summary.completion_byte);
+    if (!completion_accepted) {
+      restore_parser();
+      return false;
     }
+  }
+  if (IsCompleted()) {
+    restore_parser();
+    return false;
   }
 
   const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& plain_prefix_char_counts = tokenizer_impl->GetJSONStringPlainPrefixCharCounts();
-  const auto& closing_quote_offsets = tokenizer_impl->GetJSONStringClosingQuoteOffsets();
-  auto suffix = [&](int32_t token_index) {
-    const std::string_view token = sorted_vocab[token_index].second;
-    return token.substr(closing_quote_offsets[token_index] + 1);
+  auto suffix = [&](const LocalCompletionCrossingToken& entry) {
+    const std::string_view token = sorted_vocab[entry.sorted_vocab_index].second;
+    return token.substr(entry.suffix_offset);
   };
-  auto length_is_valid = [&](int32_t token_index) {
+  auto length_is_valid = [&](const LocalCompletionCrossingToken& entry) {
+    const int32_t token_index = entry.sorted_vocab_index;
     const int32_t plain_prefix_count = plain_prefix_char_counts[token_index];
     if (plain_prefix_count >= 0) {
       const int64_t closing_count = static_cast<int64_t>(current_count) + plain_prefix_count;
@@ -3093,35 +3091,21 @@ void GrammarMatcher::Impl::AddJSONStringQuoteCrossingTokensFromSuffixIndex(
     return result;
   };
 
-  int32_t previous_token_index = -1;
+  int32_t previous_entry_index = -1;
   int32_t previous_matched_size = 0;
   bool all_suffixes_accepted = true;
-  const bool all_indexed_tokens_are_uncertain = uncertain_indices.size() == suffix_indices.size();
-  for (size_t position = 0; position < suffix_indices.size();) {
-    const std::string_view current_suffix = suffix(suffix_indices[position]);
+  for (size_t position = 0; position < suffix_entries.size();) {
+    const int32_t representative_entry_index = static_cast<int32_t>(position);
+    const std::string_view current_suffix = suffix(suffix_entries[position]);
     const auto group_end_it = std::partition_point(
-        suffix_indices.begin() + position + 1,
-        suffix_indices.end(),
-        [&](int32_t candidate_index) { return suffix(candidate_index) == current_suffix; }
+        suffix_entries.begin() + position + 1,
+        suffix_entries.end(),
+        [&](const auto& candidate) { return suffix(candidate) == current_suffix; }
     );
-    const size_t group_end = static_cast<size_t>(group_end_it - suffix_indices.begin());
-    size_t representative_position = position;
-    if (!all_indexed_tokens_are_uncertain) {
-      while (representative_position < group_end &&
-             !uncertain_tokens[sorted_vocab[suffix_indices[representative_position]].first]) {
-        ++representative_position;
-      }
-      if (representative_position == group_end) {
-        position = group_end;
-        continue;
-      }
-    }
-    const int32_t token_index = suffix_indices[representative_position];
-    const int32_t token_id = sorted_vocab[token_index].first;
-    XGRAMMAR_DCHECK(uncertain_tokens[token_id]);
+    const size_t group_end = static_cast<size_t>(group_end_it - suffix_entries.begin());
     int32_t common_prefix_length = 0;
-    if (previous_token_index >= 0) {
-      const std::string_view previous_suffix = suffix(previous_token_index);
+    if (previous_entry_index >= 0) {
+      const std::string_view previous_suffix = suffix(suffix_entries[previous_entry_index]);
       common_prefix_length = static_cast<int32_t>(
           std::mismatch(
               current_suffix.begin(),
@@ -3144,56 +3128,55 @@ void GrammarMatcher::Impl::AddJSONStringQuoteCrossingTokensFromSuffixIndex(
       }
       const size_t rejected_prefix_size = matched_size + 1;
       const auto next = std::partition_point(
-          suffix_indices.begin() + position + 1,
-          suffix_indices.end(),
-          [&](int32_t candidate_index) {
-            const std::string_view candidate_suffix = suffix(candidate_index);
+          suffix_entries.begin() + position + 1,
+          suffix_entries.end(),
+          [&](const auto& candidate) {
+            const std::string_view candidate_suffix = suffix(candidate);
             return candidate_suffix.size() >= rejected_prefix_size &&
                    candidate_suffix.compare(
                        0, rejected_prefix_size, current_suffix, 0, rejected_prefix_size
                    ) == 0;
           }
       );
-      position = static_cast<size_t>(next - suffix_indices.begin());
+      position = static_cast<size_t>(next - suffix_entries.begin());
       accepted = false;
       all_suffixes_accepted = false;
       break;
     }
     if (accepted) {
       if (all_lengths_are_valid) {
-        tmp_json_string_accepted_suffix_ranges_.emplace_back(position, group_end);
+        tmp_local_completion_accepted_suffix_ranges_.emplace_back(position, group_end);
       } else {
         for (size_t candidate_position = position; candidate_position < group_end;
              ++candidate_position) {
-          const int32_t candidate_index = suffix_indices[candidate_position];
+          const auto& candidate = suffix_entries[candidate_position];
+          const int32_t candidate_index = candidate.sorted_vocab_index;
           const int32_t candidate_id = sorted_vocab[candidate_index].first;
-          if (uncertain_tokens[candidate_id] && length_is_valid(candidate_index)) {
-            tmp_json_string_suffix_accepted_token_ids_.push_back(candidate_id);
+          if (length_is_valid(candidate)) {
+            tmp_local_completion_accepted_token_ids_.push_back(candidate_id);
           }
         }
       }
       position = group_end;
     }
-    previous_token_index = token_index;
+    previous_entry_index = representative_entry_index;
     previous_matched_size = matched_size;
   }
-  if (all_lengths_are_valid && all_indexed_tokens_are_uncertain && all_suffixes_accepted) {
-    tmp_accepted_bitset_ |= uncertain_tokens;
+  if (all_lengths_are_valid && all_suffixes_accepted) {
+    tmp_accepted_bitset_ |= adaptive_token_mask.uncertain_token_bitset;
   } else {
-    for (const auto& [begin, end] : tmp_json_string_accepted_suffix_ranges_) {
+    for (const auto& [begin, end] : tmp_local_completion_accepted_suffix_ranges_) {
       for (size_t position = begin; position < end; ++position) {
-        const int32_t token_id = sorted_vocab[suffix_indices[position]].first;
-        if (uncertain_tokens[token_id]) {
-          tmp_accepted_bitset_.Set(token_id);
-        }
+        const int32_t token_id = sorted_vocab[suffix_entries[position].sorted_vocab_index].first;
+        tmp_accepted_bitset_.Set(token_id);
       }
     }
-    for (int32_t token_id : tmp_json_string_suffix_accepted_token_ids_) {
+    for (int32_t token_id : tmp_local_completion_accepted_token_ids_) {
       tmp_accepted_bitset_.Set(token_id);
     }
   }
-  // Remove the suffix, quote, representative content prefix, and temporary state row.
-  PopLastStates(previous_matched_size + representative_prefix_bytes + 2);
+  restore_parser();
+  return true;
 }
 
 bool GrammarMatcher::Impl::NeedsJSONStringLengthTokenFilter(const ParserState& state) const {
@@ -3413,15 +3396,12 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       }
     }
 
-    const bool supports_json_string_quote_suffix_index =
-        state.rule_id >= 0 && json_string_quote_suffix_index_rules_[state.rule_id];
-    if (supports_json_string_quote_suffix_index &&
-        adaptive_token_mask.store_type != StoreType::kRejected &&
-        adaptive_token_mask.all_uncertain_tokens_are_json_string_crossing && !has_budget_rules_ &&
-        !has_char_budget_rules_ && !capture_tracking_) {
-      AddJSONStringQuoteCrossingTokensFromSuffixIndex(
-          state, adaptive_token_mask.uncertain_indices, adaptive_token_mask.uncertain_token_bitset
-      );
+    const auto& local_completion_summary = adaptive_token_mask.local_completion_summary;
+    if (local_completion_summary != nullptr &&
+        adaptive_token_mask.store_type != StoreType::kRejected && !has_budget_rules_ &&
+        !has_char_budget_rules_ && !capture_tracking_ &&
+        (!json_string_length_active || local_completion_summary->json_string_length_compatible) &&
+        AddLocalCompletionCrossingTokens(state, adaptive_token_mask)) {
       continue;
     }
 
