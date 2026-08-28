@@ -253,6 +253,53 @@ d_1 ::= ("" | ("d"))
     compiledGrammar2.dispose();
     compiler.dispose();
   });
+
+  test("Test MiniMax M3 fixed-name structural tag", async () => {
+    const ns = "]<]minimax[>[";
+    const structuralTag = {
+      type: "structural_tag" as const,
+      format: {
+        type: "json_schema" as const,
+        json_schema: {
+          type: "object",
+          properties: {
+            city: { type: "string" },
+            days: { type: "array", items: { type: "integer" } },
+          },
+          required: ["city", "days"],
+          additionalProperties: false,
+        },
+        style: "minimax_m3_xml" as const,
+      },
+    };
+    const element = (name: string, value: string) =>
+      `${ns}<${name}>${value}${ns}</${name}>`;
+    const valid = element("city", "Paris") + element(
+      "days",
+      element("item", "1") + element("item", "2"),
+    );
+
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(["x"], "byte_level", false);
+    const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+    const compiledGrammar = await compiler.compileStructuralTag(structuralTag);
+
+    const matching = await GrammarMatcher.createGrammarMatcher(compiledGrammar, undefined, true);
+    expect(matching._acceptString(valid)).toEqual(true);
+    expect(matching.isCompleted()).toEqual(true);
+
+    const mismatching = await GrammarMatcher.createGrammarMatcher(
+      compiledGrammar,
+      undefined,
+      true,
+    );
+    expect(mismatching._acceptString(valid.replace("</days>", "</wrong>"))).toEqual(false);
+
+    matching.dispose();
+    mismatching.dispose();
+    compiledGrammar.dispose();
+    compiler.dispose();
+    tokenizerInfo.dispose();
+  });
 });
 
 // Identical to tests in `test_grammar_matcher.py`
