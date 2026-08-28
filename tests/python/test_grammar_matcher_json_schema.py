@@ -612,8 +612,8 @@ def test_json_schema_number_without_constraint():
 @pytest.mark.hf_token_required
 def test_rule_level_cache_cross_grammar():
     """
-    This test ensures the result after applying the rule-level cache is consistent with the previous
-    version (without rule-level cache).
+    This test ensures the result after applying the rule-level cache is consistent with a
+    cache-disabled compiler.
     """
 
     # fmt: off
@@ -918,44 +918,35 @@ def test_rule_level_cache_cross_grammar():
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=True)
-    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
     compiled_grammar_a = grammar_compiler.compile_json_schema(schema_a)
     compiled_grammar_b = grammar_compiler.compile_json_schema(schema_b)
     input_bytes_a = string_a.encode("utf-8")
-    matcher_a = xgr.GrammarMatcher(compiled_grammar_a)
     input_bytes_b = string_b.encode("utf-8")
-    matcher_b = xgr.GrammarMatcher(compiled_grammar_b)
 
-    rejected_sizes = []
+    def assert_mask_traces_equal(cached_grammar, reference_grammar, input_bytes):
+        cached_matcher = xgr.GrammarMatcher(cached_grammar)
+        reference_matcher = xgr.GrammarMatcher(reference_grammar)
+        cached_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        reference_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        for c in input_bytes:
+            cached_matcher.fill_next_token_bitmask(cached_bitmask)
+            reference_matcher.fill_next_token_bitmask(reference_bitmask)
+            assert cached_bitmask.equal(reference_bitmask)
+            assert cached_matcher.accept_string(bytes([c]))
+            assert reference_matcher.accept_string(bytes([c]))
+        cached_matcher.fill_next_token_bitmask(cached_bitmask)
+        reference_matcher.fill_next_token_bitmask(reference_bitmask)
+        assert cached_bitmask.equal(reference_bitmask)
 
-    for i, c in enumerate(input_bytes_a):
-        matcher_a.fill_next_token_bitmask(token_bitmask)
-        rejected_token_ids = _get_masked_tokens_from_bitmask(
-            token_bitmask, tokenizer_info.vocab_size
-        )
-        rejected_sizes.append(len(rejected_token_ids))
-        assert rejected_sizes[-1] == rejected_a[i], (rejected_sizes[-1], rejected_a[i])
-        assert matcher_a.accept_string(bytes([c]))
-
-    matcher_a.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
-    rejected_sizes.append(len(rejected_token_ids))
-    assert rejected_sizes[-1] == rejected_a[-1]
-    rejected_sizes = []
-
-    for i, c in enumerate(input_bytes_b):
-        matcher_b.fill_next_token_bitmask(token_bitmask)
-        rejected_token_ids = _get_masked_tokens_from_bitmask(
-            token_bitmask, tokenizer_info.vocab_size
-        )
-        rejected_sizes.append(len(rejected_token_ids))
-        assert rejected_sizes[-1] == rejected_b[i], (rejected_sizes[-1], rejected_b[i])
-        assert matcher_b.accept_string(bytes([c]))
-
-    matcher_b.fill_next_token_bitmask(token_bitmask)
-    rejected_token_ids = _get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size)
-    rejected_sizes.append(len(rejected_token_ids))
-    assert rejected_sizes[-1] == rejected_b[-1]
+    # Keep the historical arrays as guards that the two long test inputs did not drift. Their
+    # values predate decoded JSON string length enforcement and are no longer semantic oracles.
+    assert len(rejected_a) == len(input_bytes_a) + 1
+    assert len(rejected_b) == len(input_bytes_b) + 1
+    reference_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    reference_a = reference_compiler.compile_json_schema(schema_a)
+    reference_b = reference_compiler.compile_json_schema(schema_b)
+    assert_mask_traces_equal(compiled_grammar_a, reference_a, input_bytes_a)
+    assert_mask_traces_equal(compiled_grammar_b, reference_b, input_bytes_b)
 
 
 if __name__ == "__main__":
