@@ -4092,6 +4092,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"json", JSONFormat::kJSON},
       {"qwen_xml", JSONFormat::kQwenXML},
       {"minimax_xml", JSONFormat::kMiniMaxXML},
+      {"minimax_m3_xml", JSONFormat::kMiniMaxM3XML},
       {"deepseek_xml", JSONFormat::kDeepSeekXML},
       {"glm_xml", JSONFormat::kGlmXML},
       {"cohere_xml", JSONFormat::kCohereXML},
@@ -4156,6 +4157,17 @@ Grammar JSONSchemaToGrammar(
           max_whitespace_cnt,
           std::move(ref_resolver),
           json_format,
+          any_order
+      );
+      return converter.Convert(spec);
+    }
+    case JSONFormat::kMiniMaxM3XML: {
+      MiniMaxM3XMLToolCallingConverter converter(
+          indent,
+          std::move(separators),
+          any_whitespace,
+          max_whitespace_cnt,
+          std::move(ref_resolver),
           any_order
       );
       return converter.Convert(spec);
@@ -4250,6 +4262,12 @@ std::string JSONSchemaToEBNF(
           ref_resolver,
           json_format,
           any_order
+      );
+      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
+    }
+    case JSONFormat::kMiniMaxM3XML: {
+      MiniMaxM3XMLToolCallingConverter converter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
       return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
     }
