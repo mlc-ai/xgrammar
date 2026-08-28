@@ -356,6 +356,58 @@ def test_json_string_length_quote_suffix_index_matches_eager_and_token_oracle(ca
     torch.testing.assert_close(restored_bitmask, dynamic_bitmask, rtol=0, atol=0)
 
 
+def test_json_string_length_quote_suffix_index_after_high_surrogate_escape():
+    # A prefix ending with a complete high-surrogate escape reaches the string content position
+    # while the decoded-character counter still awaits a possible low-surrogate half.
+    vocabulary = [
+        "a",
+        '"',
+        "}",
+        'a"}',
+        'aa"}',
+        r'\ude00"}',
+        r'\ude00a"}',
+        '"}',
+        'a"',
+        r'\u0061"}',
+        'aaaaaa"}',
+        "aaaa",
+        b"\xff",
+        'a"x',
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    schema = {
+        "type": "object",
+        "properties": {"value": {"type": "string", "minLength": 2, "maxLength": 5}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    compiler_options = {"tokenizer_info": tokenizer_info, "max_threads": 1, "cache_enabled": False}
+    eager = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=False
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+    dynamic = xgr.GrammarCompiler(
+        **compiler_options, enable_dynamic_compilation=True
+    ).compile_json_schema(schema, any_whitespace=False, strict_mode=True)
+
+    prefix = '{"value": "a' + "\\ud83d"
+
+    def fill(compiled_grammar):
+        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        assert matcher.accept_string(prefix)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        return matcher, bitmask
+
+    _, eager_bitmask = fill(eager)
+    dynamic_matcher, dynamic_bitmask = fill(dynamic)
+    torch.testing.assert_close(dynamic_bitmask, eager_bitmask, rtol=0, atol=0)
+
+    allowed = bitmask_to_bool_mask(dynamic_bitmask, tokenizer_info.vocab_size)[0]
+    for token_id in range(tokenizer_info.vocab_size):
+        assert bool(allowed[token_id]) == dynamic_matcher.fork().accept_token(token_id), token_id
+
+
 def _json_string_length_boundary_cases():
     cases = []
     boundary_values = (

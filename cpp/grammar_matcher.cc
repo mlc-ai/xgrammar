@@ -825,6 +825,9 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   struct ContinuationMaskCacheEntry {
     std::vector<int32_t> key;
+    // Entry identity relies on this address. Adaptive masks live in the compiled grammar's
+    // state-keyed mask cache or its character-class repeat-mask map; neither container evicts
+    // entries, so one address identifies one mask for the lifetime of this matcher.
     const AdaptiveTokenMask* adaptive_token_mask;
     std::vector<int32_t> accepted_indices;
     std::vector<int32_t> rejected_indices;
@@ -3027,7 +3030,10 @@ void GrammarMatcher::Impl::AddJSONStringQuoteCrossingTokensFromSuffixIndex(
   PushOneStateToCheck(state);
   JSONStringCharCounterState initial_counter;
   if (has_length_context) {
-    XGRAMMAR_DCHECK(IsJSONStringCounterInside());
+    // The counter phase is usually kInside here, but the string content position is also
+    // reachable right after a complete high-surrogate escape (e.g. \uD83D), where the phase
+    // still awaits a possible low-surrogate half of the same decoded character.
+    XGRAMMAR_DCHECK(!json_string_char_count_history_.empty());
     initial_counter = json_string_char_count_history_.back();
     json_string_char_count_history_.back().count = synthetic_count;
   }
@@ -3042,7 +3048,7 @@ void GrammarMatcher::Impl::AddJSONStringQuoteCrossingTokensFromSuffixIndex(
     const int32_t representative_index = uncertain_indices.front();
     const int32_t closing_quote_offset =
         tokenizer_impl->GetJSONStringClosingQuoteOffsets()[representative_index];
-    XGRAMMAR_DCHECK(closing_quote_offset > 0);
+    XGRAMMAR_DCHECK(closing_quote_offset >= 0);
     auto& counter = json_string_char_count_history_.back();
     counter = initial_counter;
     counter.length_suspended = true;
