@@ -389,17 +389,13 @@ TokenizerInfo::Impl::Impl(
   };
   std::sort(sorted_decoded_vocab_.begin(), sorted_decoded_vocab_.end(), f_compare_token);
 
-  token_id_to_sorted_vocab_index_.assign(vocab_size_, -1);
-  for (int32_t i = 0; i < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++i) {
-    token_id_to_sorted_vocab_index_[sorted_decoded_vocab_[i].first] = i;
-  }
-
   // The value means: the subtree is [i, trie_subtree_nodes_range[i]).
   trie_subtree_nodes_range_.resize(sorted_decoded_vocab_.size(), 0);
   std::stack<std::pair<std::string, int32_t>> prefix_stack;
   for (size_t i = 0; i < sorted_decoded_vocab_.size(); ++i) {
     const auto& token = sorted_decoded_vocab_[i].second;
-    while ((!prefix_stack.empty()) && (token.find(prefix_stack.top().first) == std::string::npos)) {
+    while (!prefix_stack.empty() &&
+           token.compare(0, prefix_stack.top().first.size(), prefix_stack.top().first) != 0) {
       const auto& top_pair = prefix_stack.top();
       trie_subtree_nodes_range_[top_pair.second] = i;
       prefix_stack.pop();
@@ -416,6 +412,12 @@ TokenizerInfo::Impl::Impl(
 
 void TokenizerInfo::Impl::BuildTokenCharData() {
   constexpr int32_t kMaxPrecomputedJSONStringPrefixLimit = 32;
+  // This mapping is derived from sorted_decoded_vocab_ and is not serialized, so it must be
+  // rebuilt here to stay valid after deserialization as well as after construction.
+  token_id_to_sorted_vocab_index_.assign(vocab_size_, -1);
+  for (int32_t i = 0; i < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++i) {
+    token_id_to_sorted_vocab_index_[sorted_decoded_vocab_[i].first] = i;
+  }
   sorted_vocab_lcp_with_previous_.assign(sorted_decoded_vocab_.size(), 0);
   for (int32_t index = 1; index < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++index) {
     const auto& current = sorted_decoded_vocab_[index].second;

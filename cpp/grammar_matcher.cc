@@ -1340,9 +1340,28 @@ std::optional<std::vector<int32_t>> GrammarMatcher::Impl::GetStableCharacterClas
     return std::nullopt;
   }
   std::vector<int32_t> key;
-  key.reserve(states.size() * (has_json_string_length_rules_ ? 16 : 12) + 2);
+  key.reserve(states.size() * (has_json_string_length_rules_ ? 16 : 12) + 5);
   key.push_back(static_cast<int32_t>(states.size()));
   key.push_back(IsCompleted());
+  if (has_json_string_length_rules_ &&
+      std::any_of(states.begin(), states.end(), [&](const ParserState& state) {
+        return JSONStringMinLengthDeadline(state) >= 0 || JSONStringLengthDeadline(state) >= 0;
+      })) {
+    // The context ids below only intern the absolute length deadlines. The mask additionally
+    // depends on the current decoded JSON string counter, so it must be part of the key.
+    XGRAMMAR_DCHECK(!json_string_char_count_history_.empty());
+    const auto& counter = json_string_char_count_history_.back();
+    key.insert(
+        key.end(),
+        {counter.count,
+         static_cast<int32_t>(counter.unicode_value),
+         counter.unicode_digits_remaining,
+         counter.unicode_follows_high_surrogate,
+         counter.length_entered,
+         counter.length_suspended,
+         static_cast<int32_t>(counter.phase)}
+    );
+  }
   bool found_repeat = false;
   for (const auto& state : states) {
     if (state.rule_id < 0 ||
@@ -3307,17 +3326,16 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
       // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
       // We can reuse the previous matched size to avoid unnecessary matching.
-      if (prev_token) {
-        int lcp_len =
-            cur_token_idx == prev_token_idx + 1
-                ? lcp_with_previous[cur_token_idx]
-                : static_cast<int>(
-                      std::mismatch(
-                          cur_token.begin(), cur_token.end(), prev_token->begin(), prev_token->end()
-                      )
-                          .first -
-                      cur_token.begin()
-                  );
+      if (prev_token != nullptr) {
+        // For a lexicographically sorted vocabulary, the LCP of two entries is the minimum
+        // adjacent LCP in the interval between them. The checked indices only move forward, so
+        // scanning the intervening intervals costs O(vocab_size) in total and avoids repeatedly
+        // comparing long prefixes when the uncertain-token list is sparse.
+        XGRAMMAR_DCHECK(prev_token_idx < cur_token_idx);
+        int lcp_len = static_cast<int>(cur_token.size());
+        for (int32_t lcp_index = prev_token_idx + 1; lcp_index <= cur_token_idx; ++lcp_index) {
+          lcp_len = std::min(lcp_len, lcp_with_previous[lcp_index]);
+        }
         if (lcp_len > prev_matched_size) {
           last_rejected_uncertain_range = subtree_range[cur_token_idx];
           accepted = false;

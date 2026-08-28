@@ -133,8 +133,14 @@ def test_right_recursive_rule_inside_repetition_matches_eager_masks(repeat_range
 
 @pytest.mark.parametrize("cache_enabled", [False, True], ids=["cache-off", "cache-on"])
 def test_recursive_json_string_character_class_summary_matches_eager(cache_enabled):
+    shared_prefix = "a" * 64
     vocabulary = [chr(value) for value in range(32, 127)] + [
         "plainascii",
+        shared_prefix,
+        shared_prefix + "!",
+        shared_prefix + '"',
+        shared_prefix + '"}',
+        shared_prefix + '"}suffix',
         "中文",
         '中文"',
         '中文"}',
@@ -162,6 +168,66 @@ def test_recursive_json_string_character_class_summary_matches_eager(cache_enabl
     for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
         assert actual_apply == expected_apply
         torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+    dynamic_matcher = xgr.GrammarMatcher(dynamic, terminate_without_stop_token=True)
+    assert dynamic_matcher.accept_string('{"value": "')
+    dynamic_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert dynamic_matcher.fill_next_token_bitmask(dynamic_bitmask)
+    mask = bitmask_to_bool_mask(dynamic_bitmask, tokenizer_info.vocab_size)[0]
+    for token_id in range(tokenizer_info.vocab_size):
+        assert bool(mask[token_id]) == dynamic_matcher.fork().accept_token(token_id), token_id
+
+
+def test_json_string_shape_fast_path_requires_standard_escape_rule():
+    vocabulary = ["a", r"\n", r"\q", '"', 'a"', r"\\"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    grammar = r"""
+root ::= "\"" string_sub
+string_sub ::= "\"" | [^\x00-\x1f"\\] string_sub | "\\" weird_escape string_sub
+weird_escape ::= [q]
+"""
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string('"')
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.fill_next_token_bitmask(bitmask)
+    mask = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+    for token_id in range(tokenizer_info.vocab_size):
+        assert bool(mask[token_id]) == matcher.fork().accept_token(token_id), token_id
+
+
+def test_json_string_min_length_masks_track_decoded_count_across_positions():
+    # Enough quote-crossing tokens to keep them deferred to the runtime matcher and to enable the
+    # runtime continuation-mask cache, which must not replay a mask computed at an earlier decoded
+    # character count of the same string. The chunks step the decoded count through 0, 4, 7 and 8
+    # of the required 8 characters, so quote-closing tokens flip from rejected to accepted: at
+    # seven characters `"` still closes too early while `#"` closes exactly on time.
+    crossing_tokens = ["x" * (index % 60 + 1) + '"' + str(index) for index in range(17000)]
+    vocabulary = (
+        [chr(value) for value in range(32, 127) if value != ord("#")]
+        + ['#"', "abcd", "efg", "h"]
+        + crossing_tokens
+    )
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=True
+    ).compile_json_schema('{"type": "string", "minLength": 8}')
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    sampled_token_ids = list(range(98)) + list(range(98, tokenizer_info.vocab_size, 127))
+    for chunk in ['"', "abcd", "efg", "h", '#"']:
+        xgr.reset_token_bitmask(bitmask)
+        if matcher.fill_next_token_bitmask(bitmask):
+            mask = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+            for token_id in sampled_token_ids:
+                assert bool(mask[token_id]) == matcher.fork().accept_token(token_id), (
+                    chunk,
+                    token_id,
+                )
+        assert matcher.accept_string(chunk)
+    assert matcher.is_terminated()
 
 
 @pytest.mark.parametrize("cache_enabled", [False, True], ids=["cache-off", "cache-on"])
@@ -236,9 +302,13 @@ def test_plain_json_string_length_masks_match_eager_and_token_oracle(cache_enabl
 
 @pytest.mark.parametrize("cache_enabled", [False, True], ids=["cache-off", "cache-on"])
 def test_email_format_regex_fsm_masks_match_eager_and_token_oracle(cache_enabled):
+    shared_prefix = "a" * 64
     vocabulary = [
         "a",
         "abc",
+        shared_prefix + "@example.com",
+        shared_prefix + "@example.com-",
+        shared_prefix + '.doe@example.com"}',
         ".doe",
         ".doe@example",
         "@example",
@@ -781,6 +851,67 @@ def test_dynamic_single_character_class_masks_match_eager(character_class, value
     for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
         assert actual_apply == expected_apply
         torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+@pytest.mark.parametrize(
+    "character_class,value",
+    [("[a-z]", "abc"), ("[a-zа-я一-龥]", "a中я"), ("[^b]", "aé中")],
+    ids=["ascii-positive", "unicode-positive", "negative"],
+)
+def test_recursive_character_class_masks_match_eager_and_token_oracle(character_class, value):
+    shared_prefix = "a" * 64
+    vocabulary = [
+        ">",
+        "<",
+        "a",
+        "abc",
+        "abc<",
+        "b",
+        "é",
+        "中",
+        "я",
+        "a中",
+        "a中<",
+        shared_prefix,
+        shared_prefix + "x",
+        shared_prefix + "!",
+        shared_prefix + "<",
+        b"\xc3",
+        b"\xe4",
+        b"\xe4\xb8",
+        b"\xff",
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    grammar = (
+        'root ::= ">" run "<"\n' f'run ::= ({character_class} run | {character_class}) (=("<"))'
+    )
+    eager = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=False
+    ).compile_grammar(grammar)
+    dynamic = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=True
+    ).compile_grammar(grammar)
+
+    expected = _mask_trace(eager, ">" + value + "<")
+    actual = _mask_trace(dynamic, ">" + value + "<")
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(expected, actual):
+        assert actual_apply == expected_apply
+        torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+    for prefix in [">", ">" + value[:1]]:
+        eager_matcher = xgr.GrammarMatcher(eager, terminate_without_stop_token=True)
+        dynamic_matcher = xgr.GrammarMatcher(dynamic, terminate_without_stop_token=True)
+        assert eager_matcher.accept_string(prefix)
+        assert dynamic_matcher.accept_string(prefix)
+        eager_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        dynamic_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert eager_matcher.fill_next_token_bitmask(eager_bitmask)
+        assert dynamic_matcher.fill_next_token_bitmask(dynamic_bitmask)
+        torch.testing.assert_close(dynamic_bitmask, eager_bitmask, rtol=0, atol=0)
+
+        mask = bitmask_to_bool_mask(dynamic_bitmask, tokenizer_info.vocab_size)[0]
+        for token_id in range(tokenizer_info.vocab_size):
+            assert bool(mask[token_id]) == dynamic_matcher.fork().accept_token(token_id), token_id
 
 
 def test_continuation_transition_cache_isolated_between_parser_states(capfd):
