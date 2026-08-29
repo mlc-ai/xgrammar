@@ -806,6 +806,75 @@ guarded ::= "x" (= "z")"""
         assert bool(allowed[token_id]) == dynamic_matcher.fork().accept_token(token_id), token_id
 
 
+def test_local_completion_all_accepted_suffixes_match_eager_and_oracle():
+    # Every crossing token's suffix is accepted here, so the dynamic fill takes the bulk-OR
+    # branch over the crossing-token bitset. The lazy path must keep the summary's bitset
+    # intact instead of clearing it during JSON metadata recomputation.
+    safe_tokens = ["q" * length for length in range(1, 40)]
+    crossing_tokens = ["a" * length + ";>" for length in range(1, 40)] + [";>", ";"]
+    vocabulary = safe_tokens + crossing_tokens + ["a", "q", ">", b"\xff"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    grammar = xgr.Grammar.from_ebnf(
+        r"""root ::= "<" body ">"
+body ::= (";" | [a-z] body)"""
+    )
+    options = {"tokenizer_info": tokenizer_info, "max_threads": 1, "cache_enabled": False}
+    eager = xgr.GrammarCompiler(**options, enable_dynamic_compilation=False).compile_grammar(
+        grammar
+    )
+    dynamic = xgr.GrammarCompiler(**options, enable_dynamic_compilation=True).compile_grammar(
+        grammar
+    )
+
+    def fill(compiled_grammar):
+        matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
+        assert matcher.accept_string("<")
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        return matcher, bitmask
+
+    _, eager_bitmask = fill(eager)
+    dynamic_matcher, dynamic_bitmask = fill(dynamic)
+    torch.testing.assert_close(dynamic_bitmask, eager_bitmask, rtol=0, atol=0)
+    allowed = bitmask_to_bool_mask(dynamic_bitmask, tokenizer_info.vocab_size)[0]
+    assert allowed[vocabulary.index(";>")]
+    assert allowed[vocabulary.index("a;>")]
+    for token_id in range(tokenizer_info.vocab_size):
+        assert bool(allowed[token_id]) == dynamic_matcher.fork().accept_token(token_id), token_id
+
+
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True], ids=["eager", "dynamic"])
+def test_local_completion_respects_rule_own_lookahead(enable_dynamic_compilation):
+    # body carries its own non-redundant lookahead (= ">") while the true successor is "!".
+    # The mask must filter crossing tokens with the lookahead whether or not the rule
+    # qualifies for the local-completion optimization (unique vs. two completion bytes).
+    vocabulary = ["a;!", "aa;!", "a;>", "a", ";", "!", ">", b"\xff"]
+    tokenizer_info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    optimizable = xgr.Grammar.from_ebnf(
+        r"""root ::= "<" body "!"
+body ::= (";" | [a-z] body) (= ">")"""
+    )
+    fallback = xgr.Grammar.from_ebnf(
+        r"""root ::= "<" body "!"
+body ::= (";" | ":" | [a-z] body) (= ">")"""
+    )
+    options = {"tokenizer_info": tokenizer_info, "max_threads": 1, "cache_enabled": False}
+    for grammar in (optimizable, fallback):
+        compiled = xgr.GrammarCompiler(
+            **options, enable_dynamic_compilation=enable_dynamic_compilation
+        ).compile_grammar(grammar)
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert matcher.accept_string("<")
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        assert matcher.fill_next_token_bitmask(bitmask)
+        allowed = bitmask_to_bool_mask(bitmask, tokenizer_info.vocab_size)[0]
+        assert not allowed[vocabulary.index("a;!")]
+        assert not allowed[vocabulary.index("aa;!")]
+        assert not allowed[vocabulary.index("a;>")]
+        assert allowed[vocabulary.index("a")]
+        assert allowed[vocabulary.index(";")]
+
+
 @pytest.mark.parametrize("cache_enabled", [False, True], ids=["cache-off", "cache-on"])
 def test_email_format_regex_fsm_masks_match_eager_and_token_oracle(cache_enabled):
     shared_prefix = "a" * 64

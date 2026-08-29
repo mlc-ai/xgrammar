@@ -3019,6 +3019,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::BuildWithForbiddenChars(
       }
     }
   }
+  new_fsm.SetEdgeAuxData(std::vector<int32_t>(fsm.GetEdgeAuxData()));
   return ResultOk(FSMWithStartEnd(new_fsm, fsm_wse.GetStart(), fsm_wse.GetEnds()));
 }
 

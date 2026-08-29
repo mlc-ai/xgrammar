@@ -100,8 +100,14 @@ void AdaptiveTokenMask::RecomputeAcceptedCount(size_t sorted_vocab_size) {
 }
 
 void AdaptiveTokenMask::RecomputeJSONStringMetadata(const TokenizerInfo& tokenizer_info) {
-  // Direct local-completion masks carry this derived metadata when they are built. Avoid walking
-  // a large crossing-token vocabulary again on the first dynamic mask fill.
+  // Direct local-completion masks carry final metadata when they are built: the crossing-token
+  // bitset comes from the summary and must be kept. Recomputing here would replace a non-JSON
+  // summary's bitset with an empty one, which the bulk-OR fast path then reads out of bounds.
+  if (local_completion_summary != nullptr) {
+    return;
+  }
+  // JSON-compatible masks already cover the full vocabulary. Avoid walking a large
+  // crossing-token vocabulary again on the first dynamic mask fill.
   if (all_uncertain_tokens_are_json_string_crossing &&
       uncertain_token_bitset.Size() == tokenizer_info.GetVocabSize()) {
     return;
