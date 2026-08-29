@@ -21,9 +21,8 @@ namespace xgrammar {
 /*!
  * \brief Converter for MiniMax M3's recursive namespace-prefixed XML format.
  *
- * This initial implementation supports schemas whose object property names are
- * known when the grammar is built. Schemas requiring runtime element names are
- * rejected explicitly.
+ * Runtime property names are represented by DynamicTag expressions so their
+ * closing tags repeat the generated opening names byte-for-byte.
  */
 class MiniMaxM3XMLToolCallingConverter : public JSONSchemaConverter {
  public:
@@ -37,7 +36,11 @@ class MiniMaxM3XMLToolCallingConverter : public JSONSchemaConverter {
   );
 
  protected:
+  int32_t GenerateInteger(const IntegerSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateNumber(const NumberSpec& spec, const std::string& rule_name) override;
   int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateBoolean(const BooleanSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateNull(const NullSpec& spec, const std::string& rule_name) override;
   int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
   int32_t GenerateObject(
       const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
@@ -53,14 +56,48 @@ class MiniMaxM3XMLToolCallingConverter : public JSONSchemaConverter {
       int64_t idx,
       const SchemaSpecPtr& schema
   ) override;
+  int32_t FormatOtherProperty(
+      int32_t key_pattern_expr,
+      int32_t value_rule_id,
+      const std::string& rule_name,
+      const std::string& rule_name_suffix,
+      const SchemaSpecPtr& schema
+  ) override;
+  int32_t CreatePatternKeyRule(const std::string& pattern, const std::string& rule_name_hint)
+      override;
+  int32_t CreatePropertyNameRule(const SchemaSpecPtr& spec, const std::string& rule_name_hint)
+      override;
+  std::string GetKeyPattern() const override;
+  int32_t GetKeyPatternExcluding(
+      const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+  ) override;
   std::string NextSeparator(bool is_end = false) override;
   void AddBasicRules() override;
+  void AddCache(const std::string& key, int32_t rule_id) override;
+  std::optional<int32_t> GetCache(const std::string& key) const override;
+  int GetRefCacheDomain() const override;
 
  private:
+  struct UniqueKeyScopeContext {
+    int32_t rule_id = -1;
+    std::vector<std::string> reserved_names;
+  };
+
   int32_t FormatElement(const std::string& name, int32_t value_rule_id);
+  int32_t FormatRuntimeElement(
+      int32_t name_rule_id,
+      int32_t content_rule_id,
+      int32_t unique_key_scope_rule_id,
+      const std::vector<std::string>& reserved_names = {}
+  );
   int32_t GenerateLiteral(const picojson::value& value);
+  void EnsureAnyRules();
   void ValidateObject(const ObjectSpec& spec) const;
   static void ValidateElementName(const std::string& name);
+
+  bool generating_property_name_ = false;
+  bool any_rules_initialized_ = false;
+  std::vector<UniqueKeyScopeContext> unique_key_scope_stack_;
 };
 
 /*!
@@ -126,6 +163,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
 
   void AddCache(const std::string& key, int32_t rule_id) override;
   std::optional<int32_t> GetCache(const std::string& key) const override;
+  int GetRefCacheDomain() const override;
 
  protected:
   // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
@@ -223,6 +261,7 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
 
   void AddCache(const std::string& key, int32_t rule_id) override;
   std::optional<int32_t> GetCache(const std::string& key) const override;
+  int GetRefCacheDomain() const override;
 
  private:
   struct XMLIdentifierTrieNode {

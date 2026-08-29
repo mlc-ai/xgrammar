@@ -2452,7 +2452,76 @@ def test_true_schema():
     assert not _is_grammar_accept_string(ebnf_grammar, "anything")
 
 
-# ---------- MiniMax M3 fixed-name recursive XML ----------
+ROOT_SELF_REF_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "child": {"anyOf": [{"type": "null"}, {"$ref": "#"}]},
+    },
+    "required": ["name", "child"],
+    "additionalProperties": False,
+}
+
+
+@pytest.mark.parametrize(
+    "json_format, nested_json, nested_xml",
+    [
+        (
+            "qwen_xml",
+            '<parameter=name>root</parameter><parameter=child>{"name": "leaf", "child": null}</parameter>',
+            "<parameter=name>root</parameter><parameter=child>"
+            "<parameter=name>leaf</parameter><parameter=child>null</parameter></parameter>",
+        ),
+        (
+            "minimax_xml",
+            '<parameter name="name">root</parameter><parameter name="child">'
+            '{"name": "leaf", "child": null}</parameter>',
+            '<parameter name="name">root</parameter><parameter name="child">'
+            '<parameter name="name">leaf</parameter><parameter name="child">null</parameter>'
+            "</parameter>",
+        ),
+        (
+            "deepseek_xml",
+            '<｜DSML｜parameter name="name" string="true">root</｜DSML｜parameter>'
+            '<｜DSML｜parameter name="child" string="false">'
+            '{"name": "leaf", "child": null}</｜DSML｜parameter>',
+            '<｜DSML｜parameter name="name" string="true">root</｜DSML｜parameter>'
+            '<｜DSML｜parameter name="child" string="false">'
+            '<｜DSML｜parameter name="name" string="true">leaf</｜DSML｜parameter>'
+            '<｜DSML｜parameter name="child" string="false">null</｜DSML｜parameter>'
+            "</｜DSML｜parameter>",
+        ),
+        (
+            "glm_xml",
+            "<arg_key>name</arg_key><arg_value>root</arg_value>"
+            '<arg_key>child</arg_key><arg_value>{"name": "leaf", "child": null}</arg_value>',
+            "<arg_key>name</arg_key><arg_value>root</arg_value>"
+            "<arg_key>child</arg_key><arg_value>"
+            "<arg_key>name</arg_key><arg_value>leaf</arg_value>"
+            "<arg_key>child</arg_key><arg_value>null</arg_value></arg_value>",
+        ),
+        (
+            "kimi_k3_xml",
+            '<|open|>argument key="name" type="string"<|sep|>root<|close|>argument<|sep|>'
+            '<|open|>argument key="child" type="object"<|sep|>'
+            '{"name": "leaf", "child": null}<|close|>argument<|sep|>',
+            '<|open|>argument key="name" type="string"<|sep|>root<|close|>argument<|sep|>'
+            '<|open|>argument key="child" type="object"<|sep|>'
+            '<|open|>argument key="name" type="string"<|sep|>leaf<|close|>argument<|sep|>'
+            '<|open|>argument key="child" type="null"<|sep|>null<|close|>argument<|sep|>'
+            "<|close|>argument<|sep|>",
+        ),
+    ],
+)
+def test_root_only_xml_self_ref_uses_nested_json_domain(
+    json_format: str, nested_json: str, nested_xml: str
+):
+    grammar = _json_schema_to_ebnf(ROOT_SELF_REF_SCHEMA, json_format=json_format)
+    assert _is_grammar_accept_string(grammar, nested_json)
+    assert not _is_grammar_accept_string(grammar, nested_xml)
+
+
+# ---------- MiniMax M3 recursive XML ----------
 
 M3_NS = "]<]minimax[>["
 
@@ -2705,32 +2774,201 @@ def test_minimax_m3_rejects_unparseable_element_names(key: str):
 
 
 @pytest.mark.parametrize(
+    "schema, accepted, rejected",
+    [
+        (
+            {"type": "object", "additionalProperties": {"type": "string"}},
+            _m3_element("runtime key/城市", "value"),
+            _m3_element("runtime key/城市", "value").replace("</runtime key/城市>", "</other>"),
+        ),
+        (
+            {
+                "type": "object",
+                "patternProperties": {"^x_[a-z]+$": {"type": "integer"}},
+                "additionalProperties": False,
+            },
+            _m3_element("x_count", "2"),
+            _m3_element("y_count", "2"),
+        ),
+        (
+            {
+                "type": "object",
+                "propertyNames": {"pattern": "^[a-z]+$"},
+                "additionalProperties": {"type": "string"},
+            },
+            _m3_element("runtime", "value"),
+            _m3_element("runtime_1", "value"),
+        ),
+        ({}, _m3_element("runtime", _m3_element("nested", "value")), None),
+    ],
+)
+def test_minimax_m3_dynamic_property_schemas(schema: dict, accepted: str, rejected):
+    grammar = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+    assert _is_grammar_accept_string(grammar, accepted)
+    if rejected is not None:
+        assert not _is_grammar_accept_string(grammar, rejected)
+
+
+def test_minimax_m3_property_names_preserves_dynamic_value_policy():
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z]+$"},
+        "additionalProperties": {"type": "string"},
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+    assert _is_grammar_accept_string(grammar, _m3_element("runtime", "value"))
+    assert not _is_grammar_accept_string(
+        grammar, _m3_element("runtime", _m3_element("nested", "value"))
+    )
+
+    forbidden = _json_schema_to_ebnf(
+        {"type": "object", "propertyNames": {"pattern": "^[a-z]+$"}, "additionalProperties": False},
+        json_format="minimax_m3_xml",
+    )
+    assert _is_grammar_accept_string(forbidden, "")
+    assert not _is_grammar_accept_string(forbidden, _m3_element("runtime", "value"))
+
+
+@pytest.mark.parametrize(
     "schema",
     [
-        {"type": "object", "additionalProperties": True},
-        {"type": "object", "additionalProperties": {"type": "string"}},
         {
             "type": "object",
-            "patternProperties": {"^x.*": {"type": "string"}},
+            "properties": {"x": {"type": "string"}},
+            "patternProperties": {"^x$": {"type": "integer"}},
             "additionalProperties": False,
         },
-        {"type": "object", "propertyNames": {"pattern": "^[a-z]+$"}, "additionalProperties": False},
         {
             "type": "object",
-            "properties": {"runtime": {}},
-            "required": ["runtime"],
+            "patternProperties": {"^x": {"type": "integer"}, "x$": {"type": "string"}},
             "additionalProperties": False,
+        },
+        {
+            "type": "object",
+            "properties": {"X": {"type": "string"}},
+            "propertyNames": {"pattern": "^[a-z]+$"},
+            "additionalProperties": False,
+        },
+        {
+            "type": "object",
+            "propertyNames": {"pattern": "^[a-z]+$"},
+            "patternProperties": {".*": {"type": "string"}},
+            "additionalProperties": False,
+        },
+        {
+            "type": "object",
+            "patternProperties": {"^x$": {"type": "integer"}},
+            "additionalProperties": {"type": "string"},
         },
     ],
 )
-def test_minimax_m3_rejects_runtime_property_schemas(schema: dict):
-    with pytest.raises(RuntimeError, match="fixed object property names|unconstrained schemas"):
+def test_minimax_m3_rejects_overlapping_object_name_constraints(schema: dict):
+    with pytest.raises(RuntimeError, match="minimax_m3_xml does not support"):
         _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
 
 
-def test_minimax_m3_strict_false_rejected():
-    with pytest.raises(RuntimeError, match="fixed object property names"):
-        _json_schema_to_ebnf({"type": "object"}, json_format="minimax_m3_xml", strict_mode=False)
+@pytest.mark.parametrize("any_order", [False, True])
+def test_minimax_m3_dynamic_names_are_unique_and_cannot_shadow_fixed_names(any_order: bool):
+    schema = {
+        "type": "object",
+        "properties": {"fixed": {"const": "value"}},
+        "required": ["fixed"],
+        "additionalProperties": {"type": "string"},
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml", any_order=any_order)
+    fixed = _m3_element("fixed", "value")
+    assert _is_grammar_accept_string(
+        grammar, fixed + _m3_element("left", "a") + _m3_element("right", "b")
+    )
+    assert not _is_grammar_accept_string(
+        grammar, fixed + _m3_element("same", "a") + _m3_element("same", "b")
+    )
+    assert not _is_grammar_accept_string(grammar, fixed + _m3_element("fixed", "again"))
+
+
+def test_minimax_m3_dynamic_name_uniqueness_is_object_local():
+    schema = {
+        "type": "object",
+        "additionalProperties": {"type": "object", "additionalProperties": {"type": "string"}},
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+    assert _is_grammar_accept_string(
+        grammar,
+        _m3_element("left", _m3_element("same", "a"))
+        + _m3_element("right", _m3_element("same", "b")),
+    )
+    assert not _is_grammar_accept_string(
+        grammar, _m3_element("outer", _m3_element("same", "a") + _m3_element("same", "b"))
+    )
+
+
+def test_minimax_m3_recursive_ref_keeps_dynamic_scopes_occurrence_local():
+    schema = {
+        "$defs": {
+            "node": {
+                "type": "object",
+                "properties": {"value": {"type": "string"}},
+                "required": ["value"],
+                "additionalProperties": {"$ref": "#/$defs/node"},
+            }
+        },
+        "type": "object",
+        "properties": {"root": {"$ref": "#/$defs/node"}},
+        "required": ["root"],
+        "additionalProperties": False,
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+    nested = _m3_element("value", "parent") + _m3_element("child", _m3_element("value", "leaf"))
+    assert _is_grammar_accept_string(grammar, _m3_element("root", nested))
+    duplicate_children = nested + _m3_element("child", _m3_element("value", "second leaf"))
+    assert not _is_grammar_accept_string(grammar, _m3_element("root", duplicate_children))
+
+
+def test_minimax_m3_any_distinguishes_objects_from_repeated_item_arrays():
+    grammar = _json_schema_to_ebnf(
+        {"type": "object", "additionalProperties": True}, json_format="minimax_m3_xml"
+    )
+    assert _is_grammar_accept_string(
+        grammar,
+        _m3_element(
+            "array",
+            _m3_element("item", "first") + _m3_element("item", _m3_element("nested", "second")),
+        ),
+    )
+    assert not _is_grammar_accept_string(
+        grammar, _m3_element("object", _m3_element("same", "a") + _m3_element("same", "b"))
+    )
+
+
+@pytest.mark.parametrize(
+    "schema, instance",
+    [
+        ({"type": "object"}, _m3_element("runtime", _m3_element("nested", "value"))),
+        (
+            {"type": "array"},
+            _m3_element("item", "value") + _m3_element("item", _m3_element("nested", "value")),
+        ),
+    ],
+)
+def test_minimax_m3_strict_false_supports_dynamic_containers(schema: dict, instance: str):
+    grammar = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml", strict_mode=False)
+    assert _is_grammar_accept_string(grammar, instance)
+
+
+def test_minimax_m3_property_name_refs_use_an_independent_cache_domain():
+    schema = {
+        "$defs": {"text": {"type": "string"}},
+        "type": "object",
+        "propertyNames": {"$ref": "#/$defs/text"},
+        "additionalProperties": {"$ref": "#/$defs/text"},
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+    assert _is_grammar_accept_string(grammar, _m3_element("runtime", "a>b"))
+
+
+def test_minimax_m3_fixed_only_schema_does_not_emit_dynamic_tag():
+    grammar = _json_schema_to_ebnf(M3_FIXED_SCHEMA, json_format="minimax_m3_xml")
+    assert "DynamicTag(" not in str(grammar)
 
 
 @pytest.mark.parametrize(

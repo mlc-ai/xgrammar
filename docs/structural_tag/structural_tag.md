@@ -162,7 +162,7 @@ Matches content that conforms to a JSON Schema.
 - `"json"`: standard JSON
 - `"qwen_xml"`: Qwen-style XML parameters, such as `<parameter=name>value</parameter>`
 - `"minimax_xml"`: MiniMax-style XML parameters, such as `<parameter name="name">value</parameter>`
-- `"minimax_m3_xml"`: MiniMax M3 namespace-prefixed XML. Fixed-name objects and arrays are encoded recursively, for example `]<]minimax[>[<city>Paris]<]minimax[>[</city>`. Schemas requiring runtime property names—for example schemas that permit `additionalProperties` or use `patternProperties` / `propertyNames`—and unconstrained schemas are rejected. String pattern, recognized format, and length constraints are also unsupported because string bodies must exclude the namespace marker.
+- `"minimax_m3_xml"`: MiniMax M3 namespace-prefixed XML. Objects and arrays are encoded recursively, for example `]<]minimax[>[<city>Paris]<]minimax[>[</city>`. Fixed property names produce fixed tags. Runtime property names from `additionalProperties`, a single standalone `patternProperties`, or standalone `propertyNames` are captured from the opening tag and reproduced byte-for-byte in the closing tag. Unsafe combinations whose property-name schemas would require intersection are rejected. Runtime name grammars must be byte-regular and delimiter-safe. String pattern, recognized format, and length constraints remain unsupported because string bodies must exclude the namespace marker.
 - `"deepseek_xml"`: DeepSeek-v3.2 XML parameter format
 - `"glm_xml"`: GLM-style XML parameter format, such as `<arg_key>name</arg_key><arg_value>value</arg_value>`
 - `"cohere_xml"`: Cohere-style XML values, such as `<cofl:value name="name" type="raw">value</cofl:value>`

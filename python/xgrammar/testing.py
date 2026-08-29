@@ -68,8 +68,8 @@ def _json_schema_to_ebnf(
     json_format : str, default: "json"
         The generated grammar format. One of "json", "qwen_xml", "minimax_xml",
         "minimax_m3_xml", "deepseek_xml", "glm_xml", "cohere_xml", or "kimi_k3_xml".
-        MiniMax M3 encodes fixed-name nested objects and arrays recursively; the other XML
-        styles use their existing model-specific encodings.
+        MiniMax M3 encodes nested objects and arrays recursively and supports fixed or runtime
+        property names; the other XML styles use their existing model-specific encodings.
 
     Returns
     -------

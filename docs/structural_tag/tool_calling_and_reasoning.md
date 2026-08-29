@@ -30,7 +30,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
     {"type": "function", "function": {"name": "...", "parameters": {...}}}
     ```
     The `"parameters"` field accepts a JSON Schema dict, `True` (any JSON), or can be omitted (unconstrained). When `"strict"` is `False`, the parameters constraint is skipped.
-    MiniMax M3 currently requires fixed property names and rejects unconstrained parameters and schemas with runtime-named properties.
+    MiniMax M3 normalizes unconstrained parameters to an object with runtime-named properties. Its XML grammar captures each runtime name from the opening tag and requires the closing tag to reproduce it byte-for-byte. Object schemas whose fixed, pattern, or property-name constraints overlap in ways that require schema intersection are rejected.
   - **Builtin tools** use a compact shape with XGrammar-specific fields:
     ```json
     {"type": "web_search_preview", "name": "browser.search", "parameters": {...}}

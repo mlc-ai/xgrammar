@@ -214,8 +214,7 @@ def get_model_structural_tag(
     -----
     If a tool's ``parameters`` field is omitted or ``None``, its generated
     arguments are unconstrained JSON. If a function tool has ``strict=False``,
-    its ``parameters`` schema is also treated as unconstrained. MiniMax M3's
-    fixed-name XML converter currently rejects such unconstrained schemas.
+    its ``parameters`` schema is also treated as unconstrained.
 
     Returns
     -------
@@ -1975,19 +1974,25 @@ def get_minimax_m3_structural_tag(
     if builtin_tools:
         raise ValueError("MiniMax M3 does not support builtin tools.")
 
-    invoke_tags = [
-        TagFormat(
-            begin=INVOKE_BEGIN_PREFIX + tool.function.name + INVOKE_BEGIN_SUFFIX,
-            content=JSONSchemaFormat(
-                json_schema=_get_function_parameters(tool.function),
-                style=XML_STYLE,
-                any_order=any_order,
-                max_whitespace_cnt=max_whitespace_cnt,
-            ),
-            end=INVOKE_END,
+    invoke_tags = []
+    for tool in tools:
+        parameters = _get_function_parameters(tool.function)
+        # Tool arguments are always an object. Preserve that outer shape when the
+        # function declaration leaves its members unconstrained.
+        if parameters is True:
+            parameters = {"type": "object", "additionalProperties": True}
+        invoke_tags.append(
+            TagFormat(
+                begin=INVOKE_BEGIN_PREFIX + tool.function.name + INVOKE_BEGIN_SUFFIX,
+                content=JSONSchemaFormat(
+                    json_schema=parameters,
+                    style=XML_STYLE,
+                    any_order=any_order,
+                    max_whitespace_cnt=max_whitespace_cnt,
+                ),
+                end=INVOKE_END,
+            )
         )
-        for tool in tools
-    ]
 
     def make_tool_call_tag(tags: List[TagFormat], *, allow_multiple: bool = True) -> TagFormat:
         content = (

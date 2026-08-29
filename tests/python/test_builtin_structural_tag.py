@@ -2333,6 +2333,41 @@ def test_minimax_m3_auto_without_tools_forbids_tool_calls_but_not_namespace_text
         check_stag_with_instance(structural_tag, _M3_SEARCH_CALL, False)
 
 
+@pytest.mark.parametrize(
+    "function",
+    [
+        {"name": "dynamic"},
+        {
+            "name": "dynamic",
+            "strict": False,
+            "parameters": {
+                "type": "object",
+                "properties": {"fixed": {"type": "integer"}},
+                "required": ["fixed"],
+                "additionalProperties": False,
+            },
+        },
+    ],
+)
+def test_minimax_m3_unconstrained_tool_parameters_keep_object_shape(function: Dict[str, Any]):
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=[{"type": "function", "function": function}],
+        tool_choice="required",
+        reasoning=False,
+    )
+    assert _collect_json_schema_values(structural_tag) == [
+        {"type": "object", "additionalProperties": True}
+    ]
+
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    assert _is_grammar_accept_string(
+        grammar, _m3_tool_call(_m3_invoke("dynamic", _m3_element("runtime", "value")))
+    )
+    assert not _is_grammar_accept_string(grammar, _m3_tool_call(_m3_invoke("dynamic", "value")))
+    assert _is_grammar_accept_string(grammar, _m3_tool_call(_m3_invoke("dynamic", "")))
+
+
 # ---------- Test: any_order propagation ----------
 
 
