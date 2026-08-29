@@ -286,10 +286,12 @@ std::vector<uint8_t> GetPureFSMSemanticsRules(const Grammar& grammar) {
       }
     }
   }
-  // A rule's own lookahead is checked when the optimized completion byte is advanced. A
-  // non-redundant lookahead in a different referenced rule would instead be skipped with the
-  // local prefix, so conservatively invalidate each of its callers. Self-recursive tail calls
-  // complete at the same boundary and do not introduce another lookahead position.
+  // Lookahead assertions are only enforced during compile-time mask adaptation, never when the
+  // online parser advances bytes. A candidate rule's own non-redundant lookahead is instead
+  // enforced by filtering the crossing tokens when its local-completion summary is built. A
+  // non-redundant lookahead in a referenced rule would still be skipped with the local prefix,
+  // so conservatively invalidate each of its callers. Self-recursive tail calls complete at the
+  // same boundary and do not introduce another lookahead position.
   for (int32_t rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
     if (redundant_lookahead[rule_id]) {
       continue;
@@ -318,7 +320,8 @@ std::shared_ptr<const LocalCompletionTokenSummary> BuildLocalCompletionTokenSumm
     const Grammar& grammar,
     int32_t rule_id,
     const TokenizerInfo& tokenizer_info,
-    bool has_pure_fsm_semantics
+    bool has_pure_fsm_semantics,
+    bool enforce_own_lookahead
 ) {
   if (rule_id < 0 || rule_id >= grammar->NumRules() || tokenizer_info.GetVocabSize() == 0 ||
       !grammar->per_rule_fsms[rule_id].has_value()) {
@@ -502,6 +505,86 @@ std::shared_ptr<const LocalCompletionTokenSummary> BuildLocalCompletionTokenSumm
     // finite vocabulary has proven otherwise identical to JSON lexical behavior.
     summary->accepted_prefix_tokens = tokenizer_impl->GetJSONStringContentPrefixBitset();
   }
+  // A non-redundant lookahead on the candidate rule itself must keep filtering crossing tokens
+  // exactly like the fallback path's lookahead adaptation: a crossing token whose suffix cannot
+  // start the assertion is rejected. JSON-length-compatible summaries are exempt: their
+  // machine-generated closing-context lookahead matches the rule's true successors, which the
+  // per-fill suffix reparse already enforces exactly, and the quote-suffix machinery requires
+  // the full crossing set. If the assertion cannot become a byte-level DFA, skip the
+  // optimization so the fallback path enforces it.
+  if (enforce_own_lookahead && !summary->json_string_length_compatible) {
+    const int32_t lookahead_id = grammar->GetRule(rule_id).lookahead_assertion_id;
+    XGRAMMAR_DCHECK(lookahead_id != -1);
+    auto lookahead_fsm =
+        GrammarFSMBuilder::Sequence(grammar->GetGrammarExpr(lookahead_id), grammar);
+    if (!lookahead_fsm.has_value()) {
+      return nullptr;
+    }
+    const auto simplified = lookahead_fsm->SimplifyEpsilon();
+    for (int32_t state = 0; state < simplified.NumStates(); ++state) {
+      for (const auto& edge : simplified.GetFsm().GetEdges(state)) {
+        if (!edge.IsCharRange() && !edge.IsEpsilon()) {
+          return nullptr;
+        }
+      }
+    }
+    auto lookahead_dfa_result = simplified.MinimizeDFA(64);
+    if (lookahead_dfa_result.IsErr()) {
+      return nullptr;
+    }
+    const auto lookahead_dfa = std::move(lookahead_dfa_result).Unwrap();
+    std::vector<std::array<int32_t, 256>> lookahead_transitions(lookahead_dfa.NumStates());
+    for (auto& state_transitions : lookahead_transitions) {
+      state_transitions.fill(FSM::kNoNextState);
+    }
+    for (int32_t state = 0; state < lookahead_dfa.NumStates(); ++state) {
+      for (const auto& edge : lookahead_dfa.GetFsm().GetEdges(state)) {
+        if (!edge.IsCharRange() || edge.min < 0 || edge.max > 255) {
+          return nullptr;
+        }
+        for (int32_t byte = edge.min; byte <= edge.max; ++byte) {
+          lookahead_transitions[state][byte] = edge.target;
+        }
+      }
+    }
+    const auto lookahead_allows = [&](const LocalCompletionCrossingToken& crossing) {
+      const std::string& token = sorted_vocab[crossing.sorted_vocab_index].second;
+      int32_t state = lookahead_dfa.GetStart();
+      if (lookahead_dfa.IsEndState(state)) {
+        return true;
+      }
+      for (size_t offset = crossing.suffix_offset; offset < token.size(); ++offset) {
+        state = lookahead_transitions[state][static_cast<uint8_t>(token[offset])];
+        if (state == FSM::kNoNextState) {
+          return false;
+        }
+        if (lookahead_dfa.IsEndState(state)) {
+          return true;
+        }
+      }
+      return true;
+    };
+    std::vector<LocalCompletionCrossingToken> kept_crossings;
+    kept_crossings.reserve(summary->crossings_by_suffix.size());
+    for (const auto& crossing : summary->crossings_by_suffix) {
+      if (lookahead_allows(crossing)) {
+        kept_crossings.push_back(crossing);
+      } else {
+        summary->crossing_tokens.Reset(sorted_vocab[crossing.sorted_vocab_index].first);
+      }
+    }
+    if (kept_crossings.size() != summary->crossings_by_suffix.size()) {
+      summary->crossings_by_suffix = std::move(kept_crossings);
+      summary->crossing_indices.clear();
+      for (const auto& crossing : summary->crossings_by_suffix) {
+        summary->crossing_indices.push_back(crossing.sorted_vocab_index);
+      }
+      std::sort(summary->crossing_indices.begin(), summary->crossing_indices.end());
+    }
+    if (summary->crossing_indices.empty()) {
+      return nullptr;
+    }
+  }
   return summary;
 }
 
@@ -509,10 +592,11 @@ std::vector<std::shared_ptr<const LocalCompletionTokenSummary>> BuildLocalComple
     const Grammar& grammar, const TokenizerInfo& tokenizer_info
 ) {
   const auto pure_fsm_semantics = GetPureFSMSemanticsRules(grammar);
+  const auto redundant_lookahead = GetRedundantLookaheadRules(grammar);
   std::vector<std::shared_ptr<const LocalCompletionTokenSummary>> result(grammar->NumRules());
   for (int32_t rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
     result[rule_id] = BuildLocalCompletionTokenSummary(
-        grammar, rule_id, tokenizer_info, pure_fsm_semantics[rule_id]
+        grammar, rule_id, tokenizer_info, pure_fsm_semantics[rule_id], !redundant_lookahead[rule_id]
     );
   }
   return result;
