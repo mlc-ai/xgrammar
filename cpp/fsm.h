@@ -56,6 +56,15 @@ struct FSMEdge {
     //! Accepts any token NOT in the given set. max = aux index into edge_aux_data
     //! (layout: [count, token_id_0, token_id_1, ...]).
     kExcludeToken = -6,
+    //! Zero-width marker recording the end input position of a DynamicTag opening name.
+    //! max is reserved and must be zero.
+    kCaptureEnd = -7,
+    //! Replays the bytes between the DynamicTag opening-name start and kCaptureEnd in the same
+    //! rule occurrence. max is reserved and must be zero.
+    kBackReference = -8,
+    //! Zero-width marker recording the start input position of a DynamicTag opening name.
+    //! max is reserved and must be zero.
+    kCaptureStart = -9,
   };
 
   inline static constexpr int kMaxChar = 255;
@@ -120,6 +129,12 @@ struct FSMEdge {
   bool IsToken() const { return min == EdgeType::kToken; }
 
   bool IsExcludeToken() const { return min == EdgeType::kExcludeToken; }
+
+  bool IsCaptureEnd() const { return min == EdgeType::kCaptureEnd; }
+
+  bool IsBackReference() const { return min == EdgeType::kBackReference; }
+
+  bool IsCaptureStart() const { return min == EdgeType::kCaptureStart; }
 
   /*!
    * \brief Get the rule id of the edge.
@@ -345,6 +360,15 @@ class FSM {
    * \param rule_id The rule id to reference.
    */
   void AddRuleEdge(int from, int to, int32_t rule_id);
+
+  /*! \brief Add a zero-width marker that records the end of a DynamicTag opening name. */
+  void AddCaptureEndEdge(int from, int to);
+
+  /*! \brief Add an edge that replays a name captured earlier in the same rule occurrence. */
+  void AddBackReferenceEdge(int from, int to);
+
+  /*! \brief Add a zero-width marker that records the start of a DynamicTag opening name. */
+  void AddCaptureStartEdge(int from, int to);
 
   /*!
    * \brief Add an EOS transition between two states.
@@ -631,11 +655,24 @@ class FSMWithStartEndBase {
    */
   bool IsScanableState(int state) const {
     for (const auto& edge : fsm_.GetEdges(state)) {
-      if (edge.IsCharRange() || edge.IsToken() || edge.IsExcludeToken()) {
+      if (edge.IsCharRange() || edge.IsToken() || edge.IsExcludeToken() || edge.IsBackReference()) {
         return true;
       }
     }
     return false;
+  }
+
+  /*! \brief Whether the state has only backreference edges and at least one exists. */
+  bool IsBackReferenceOnlyScanableState(int state) const {
+    bool has_backreference = false;
+    for (const auto& edge : fsm_.GetEdges(state)) {
+      if (edge.IsBackReference()) {
+        has_backreference = true;
+      } else {
+        return false;
+      }
+    }
+    return has_backreference;
   }
 
   /*!
@@ -645,7 +682,8 @@ class FSMWithStartEndBase {
    */
   bool IsNonTerminalState(int state) const {
     for (const auto& edge : fsm_.GetEdges(state)) {
-      if (edge.IsRuleRef() || edge.IsEpsilon() || edge.IsRepeatRef()) {
+      if (edge.IsRuleRef() || edge.IsCaptureStart() || edge.IsCaptureEnd() || edge.IsEpsilon() ||
+          edge.IsRepeatRef()) {
         return true;
       }
     }
@@ -1038,7 +1076,8 @@ inline bool FSMWithStartEndBase<FSMType>::IsLeaf() const {
   GetReachableStates(&reachable_states);
   for (const auto& state : reachable_states) {
     for (const auto& edge : fsm_.GetEdges(state)) {
-      if (edge.IsRuleRef() || edge.IsRepeatRef()) {
+      if (edge.IsRuleRef() || edge.IsRepeatRef() || edge.IsCaptureStart() || edge.IsCaptureEnd() ||
+          edge.IsBackReference()) {
         return false;
       }
     }
