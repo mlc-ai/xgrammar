@@ -14,6 +14,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -128,6 +129,395 @@ std::vector<uint8_t> GetRuleLevelCacheableRules(const Grammar& grammar) {
   return context_dependent;
 }
 
+namespace {
+
+bool IsPotentiallyValidUTF8Prefix(std::string_view value) {
+  for (size_t offset = 0; offset < value.size();) {
+    const uint8_t first = static_cast<uint8_t>(value[offset]);
+    int32_t total_bytes;
+    uint8_t second_min = 0x80;
+    uint8_t second_max = 0xbf;
+    if (first <= 0x7f) {
+      ++offset;
+      continue;
+    } else if (first >= 0xc2 && first <= 0xdf) {
+      total_bytes = 2;
+    } else if (first >= 0xe0 && first <= 0xef) {
+      total_bytes = 3;
+      second_min = first == 0xe0 ? 0xa0 : 0x80;
+      second_max = first == 0xed ? 0x9f : 0xbf;
+    } else if (first >= 0xf0 && first <= 0xf4) {
+      total_bytes = 4;
+      second_min = first == 0xf0 ? 0x90 : 0x80;
+      second_max = first == 0xf4 ? 0x8f : 0xbf;
+    } else {
+      return false;
+    }
+    for (int32_t continuation = 1; continuation < total_bytes; ++continuation) {
+      if (offset + continuation == value.size()) {
+        return true;
+      }
+      const uint8_t byte = static_cast<uint8_t>(value[offset + continuation]);
+      if (continuation == 1) {
+        if (byte < second_min || byte > second_max) {
+          return false;
+        }
+      } else if (byte < 0x80 || byte > 0xbf) {
+        return false;
+      }
+    }
+    offset += total_bytes;
+  }
+  return true;
+}
+
+std::vector<uint8_t> GetRedundantLookaheadRules(const Grammar& grammar) {
+  struct LookaheadInfo {
+    bool disqualified{false};
+    int32_t non_last_occurrences{0};
+    std::vector<int32_t> suffix;
+  };
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  std::vector<LookaheadInfo> infos(grammar->NumRules());
+  for (int32_t parent_rule_id = 0; parent_rule_id < grammar->NumRules(); ++parent_rule_id) {
+    const auto body = grammar->GetGrammarExpr(grammar->GetRule(parent_rule_id).body_expr_id);
+    if (body.type == GrammarExprType::kTagDispatch) {
+      for (const auto& [tag, rule_id] : grammar->GetTagDispatch(body).tag_rule_pairs) {
+        infos[rule_id].disqualified = true;
+      }
+      continue;
+    }
+    if (body.type == GrammarExprType::kTokenTagDispatch) {
+      for (const auto& [token_id, rule_id] :
+           grammar->GetTokenTagDispatch(body).trigger_rule_pairs) {
+        infos[rule_id].disqualified = true;
+      }
+      continue;
+    }
+    if (body.type != GrammarExprType::kChoices) {
+      continue;
+    }
+    for (int32_t sequence_id : body) {
+      const auto sequence = grammar->GetGrammarExpr(sequence_id);
+      if (sequence.type != GrammarExprType::kSequence) {
+        continue;
+      }
+      for (int32_t position = 0; position < sequence.size(); ++position) {
+        const auto element = grammar->GetGrammarExpr(sequence[position]);
+        int32_t referenced_rule_id = -1;
+        if (element.type == GrammarExprType::kRuleRef) {
+          referenced_rule_id = element[0];
+        } else if (element.type == GrammarExprType::kRepeat) {
+          if (element[2] == 0) {
+            continue;
+          }
+          referenced_rule_id = element[0];
+          if (element[2] != 1) {
+            infos[referenced_rule_id].disqualified = true;
+            continue;
+          }
+        } else {
+          continue;
+        }
+        auto& info = infos[referenced_rule_id];
+        if (position + 1 == sequence.size()) {
+          if (parent_rule_id != referenced_rule_id) {
+            info.disqualified = true;
+          }
+          continue;
+        }
+        if (info.non_last_occurrences++ == 0) {
+          info.suffix.assign(sequence.begin() + position + 1, sequence.end());
+        }
+      }
+    }
+  }
+
+  std::vector<uint8_t> result(grammar->NumRules(), false);
+  for (int32_t rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
+    const auto& rule = grammar->GetRule(rule_id);
+    if (rule.lookahead_assertion_id == -1) {
+      result[rule_id] = true;
+      continue;
+    }
+    const auto lookahead = grammar->GetGrammarExpr(rule.lookahead_assertion_id);
+    const auto& info = infos[rule_id];
+    result[rule_id] = rule.is_exact_lookahead && !info.disqualified &&
+                      info.non_last_occurrences == 1 &&
+                      lookahead.type == GrammarExprType::kSequence &&
+                      lookahead.size() == static_cast<int32_t>(info.suffix.size()) &&
+                      std::equal(lookahead.begin(), lookahead.end(), info.suffix.begin());
+  }
+  return result;
+}
+
+std::vector<uint8_t> GetPureFSMSemanticsRules(const Grammar& grammar) {
+  const auto redundant_lookahead = GetRedundantLookaheadRules(grammar);
+  std::vector<uint8_t> result(grammar->NumRules(), true);
+  std::vector<std::vector<int32_t>> referencing_rules(grammar->NumRules());
+  std::vector<int32_t> impure_rules;
+  for (int32_t rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
+    const auto& rule = grammar->GetRule(rule_id);
+    result[rule_id] = rule.max_tokens == -1 && rule.max_chars == -1 &&
+                      rule.json_string_min_length == -1 && rule.json_string_max_length == -1 &&
+                      !rule.is_lazy && !rule.temperature.has_value() && rule.capture_name.empty() &&
+                      grammar->GetSuffixStopInfo(rule_id) == nullptr &&
+                      grammar->per_rule_fsms[rule_id].has_value();
+    if (!result[rule_id]) {
+      impure_rules.push_back(rule_id);
+    }
+    if (!grammar->per_rule_fsms[rule_id].has_value()) {
+      continue;
+    }
+    const auto& local_fsm = grammar->per_rule_fsms[rule_id]->GetFsm();
+    std::unordered_set<int32_t> reachable_states;
+    local_fsm.GetReachableStates(&reachable_states);
+    for (int32_t state : reachable_states) {
+      for (const auto& edge : local_fsm.GetFsm().GetEdges(state)) {
+        int32_t referenced_rule_id = -1;
+        if (edge.IsRuleRef()) {
+          referenced_rule_id = edge.GetRefRuleId();
+        } else if (edge.IsRepeatRef()) {
+          referenced_rule_id = grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId();
+        }
+        if (referenced_rule_id >= 0) {
+          referencing_rules[referenced_rule_id].push_back(rule_id);
+        }
+      }
+    }
+  }
+  // A rule's own lookahead is checked when the optimized completion byte is advanced. A
+  // non-redundant lookahead in a different referenced rule would instead be skipped with the
+  // local prefix, so conservatively invalidate each of its callers. Self-recursive tail calls
+  // complete at the same boundary and do not introduce another lookahead position.
+  for (int32_t rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
+    if (redundant_lookahead[rule_id]) {
+      continue;
+    }
+    for (int32_t referencing_rule_id : referencing_rules[rule_id]) {
+      if (referencing_rule_id != rule_id && result[referencing_rule_id]) {
+        result[referencing_rule_id] = false;
+        impure_rules.push_back(referencing_rule_id);
+      }
+    }
+  }
+  for (size_t position = 0; position < impure_rules.size(); ++position) {
+    for (int32_t referencing_rule_id : referencing_rules[impure_rules[position]]) {
+      if (result[referencing_rule_id]) {
+        result[referencing_rule_id] = false;
+        impure_rules.push_back(referencing_rule_id);
+      }
+    }
+  }
+  return result;
+}
+
+}  // namespace
+
+std::shared_ptr<const LocalCompletionTokenSummary> BuildLocalCompletionTokenSummary(
+    const Grammar& grammar,
+    int32_t rule_id,
+    const TokenizerInfo& tokenizer_info,
+    bool has_pure_fsm_semantics
+) {
+  if (rule_id < 0 || rule_id >= grammar->NumRules() || tokenizer_info.GetVocabSize() == 0 ||
+      !grammar->per_rule_fsms[rule_id].has_value()) {
+    return nullptr;
+  }
+  if (!has_pure_fsm_semantics) {
+    return nullptr;
+  }
+
+  auto flattened_result = GrammarFSMBuilder::FlattenRuleFSMs(grammar, rule_id, 256);
+  if (flattened_result.IsErr()) {
+    return nullptr;
+  }
+  auto dfa_result = std::move(flattened_result).Unwrap().MinimizeDFA(64);
+  if (dfa_result.IsErr()) {
+    return nullptr;
+  }
+  const auto dfa = std::move(dfa_result).Unwrap();
+  const auto& fsm = dfa.GetFsm();
+  const int32_t num_states = dfa.NumStates();
+  const int32_t start = dfa.GetStart();
+  if (num_states == 0 || dfa.IsEndState(start) || dfa.GetEnds().empty()) {
+    return nullptr;
+  }
+
+  std::vector<std::array<int32_t, 256>> transitions(num_states);
+  for (auto& state_transitions : transitions) {
+    state_transitions.fill(FSM::kNoNextState);
+  }
+  int32_t completion_byte = -1;
+  bool found_completion = false;
+  std::vector<std::vector<int32_t>> predecessors(num_states);
+  for (int32_t state = 0; state < num_states; ++state) {
+    if (dfa.IsEndState(state) && !fsm.GetEdges(state).empty()) {
+      return nullptr;
+    }
+    for (const auto& edge : fsm.GetEdges(state)) {
+      if (!edge.IsCharRange() || edge.min < 0 || edge.max > 255) {
+        return nullptr;
+      }
+      predecessors[edge.target].push_back(state);
+      for (int32_t byte = edge.min; byte <= edge.max; ++byte) {
+        auto& target = transitions[state][byte];
+        if (target != FSM::kNoNextState && target != edge.target) {
+          return nullptr;
+        }
+        target = edge.target;
+        if (!dfa.IsEndState(edge.target)) {
+          continue;
+        }
+        if (state != start || (completion_byte != -1 && completion_byte != byte)) {
+          return nullptr;
+        }
+        completion_byte = byte;
+        found_completion = true;
+      }
+    }
+  }
+  // The optimization is useful only for a repeatable local prefix. Since every DFA state is
+  // reachable from start, an incoming edge to start proves that start belongs to a non-trivial
+  // SCC (including a self-loop), rather than describing a one-shot delimiter rule.
+  if (!found_completion || predecessors[start].empty()) {
+    return nullptr;
+  }
+
+  // A decoded token ending in a non-accepting state is a valid local prefix only when some
+  // completion remains reachable from that state.
+  std::vector<uint8_t> can_reach_end(num_states, false);
+  std::vector<int32_t> pending(dfa.GetEnds().begin(), dfa.GetEnds().end());
+  for (int32_t end : pending) {
+    can_reach_end[end] = true;
+  }
+  for (size_t position = 0; position < pending.size(); ++position) {
+    for (int32_t predecessor : predecessors[pending[position]]) {
+      if (!can_reach_end[predecessor]) {
+        can_reach_end[predecessor] = true;
+        pending.push_back(predecessor);
+      }
+    }
+  }
+
+  const auto& sorted_vocab = tokenizer_info.GetSortedDecodedVocab();
+  const auto& lcp_with_previous = tokenizer_info.ImplPtr()->GetSortedVocabLCPWithPrevious();
+  auto summary = std::make_shared<LocalCompletionTokenSummary>();
+  summary->completion_byte = static_cast<uint8_t>(completion_byte);
+  summary->accepted_prefix_tokens = DynamicBitset(tokenizer_info.GetVocabSize());
+  summary->crossing_tokens = DynamicBitset(tokenizer_info.GetVocabSize());
+  summary->crossing_indices.reserve(sorted_vocab.size() / 16);
+  summary->crossings_by_suffix.reserve(sorted_vocab.size() / 16);
+
+  enum class PreviousDecision : uint8_t { kNone, kCrossing, kRejected };
+  PreviousDecision previous_decision = PreviousDecision::kNone;
+  int32_t previous_decision_prefix = -1;
+  std::vector<int32_t> prefix_states{start};
+  for (int32_t token_index = 0; token_index < static_cast<int32_t>(sorted_vocab.size());
+       ++token_index) {
+    const auto& token = sorted_vocab[token_index].second;
+    const int32_t lcp = token_index == 0 ? 0 : lcp_with_previous[token_index];
+    if (previous_decision != PreviousDecision::kNone && lcp >= previous_decision_prefix) {
+      if (previous_decision == PreviousDecision::kCrossing) {
+        summary->crossing_tokens.Set(sorted_vocab[token_index].first);
+        summary->crossing_indices.push_back(token_index);
+        summary->crossings_by_suffix.push_back(
+            LocalCompletionCrossingToken{token_index, previous_decision_prefix}
+        );
+      }
+      continue;
+    }
+
+    XGRAMMAR_DCHECK(lcp < static_cast<int32_t>(prefix_states.size()));
+    prefix_states.resize(lcp + 1);
+    int32_t state = prefix_states.back();
+    previous_decision = PreviousDecision::kNone;
+    previous_decision_prefix = -1;
+    for (int32_t offset = lcp; offset < static_cast<int32_t>(token.size()); ++offset) {
+      const int32_t next = transitions[state][static_cast<uint8_t>(token[offset])];
+      if (next == FSM::kNoNextState) {
+        previous_decision = PreviousDecision::kRejected;
+        previous_decision_prefix = offset + 1;
+        break;
+      }
+      state = next;
+      prefix_states.push_back(state);
+      if (dfa.IsEndState(state)) {
+        previous_decision = PreviousDecision::kCrossing;
+        previous_decision_prefix = offset + 1;
+        summary->crossing_tokens.Set(sorted_vocab[token_index].first);
+        summary->crossing_indices.push_back(token_index);
+        summary->crossings_by_suffix.push_back(
+            LocalCompletionCrossingToken{token_index, previous_decision_prefix}
+        );
+        break;
+      }
+    }
+    if (previous_decision == PreviousDecision::kNone && can_reach_end[state]) {
+      summary->accepted_prefix_tokens.Set(sorted_vocab[token_index].first);
+    }
+  }
+  if (summary->crossing_indices.empty()) {
+    return nullptr;
+  }
+
+  std::stable_sort(
+      summary->crossings_by_suffix.begin(),
+      summary->crossings_by_suffix.end(),
+      [&](const auto& lhs, const auto& rhs) {
+        const std::string_view lhs_token = sorted_vocab[lhs.sorted_vocab_index].second;
+        const std::string_view rhs_token = sorted_vocab[rhs.sorted_vocab_index].second;
+        return lhs_token.substr(lhs.suffix_offset) < rhs_token.substr(rhs.suffix_offset);
+      }
+  );
+
+  const auto* tokenizer_impl = tokenizer_info.ImplPtr();
+  summary->json_string_length_compatible =
+      summary->completion_byte == static_cast<uint8_t>('"') &&
+      summary->crossing_indices == tokenizer_impl->GetJSONStringCrossingIndices();
+  if (summary->json_string_length_compatible) {
+    const auto& quote_offsets = tokenizer_impl->GetJSONStringClosingQuoteOffsets();
+    for (const auto& crossing : summary->crossings_by_suffix) {
+      if (crossing.suffix_offset != quote_offsets[crossing.sorted_vocab_index] + 1) {
+        summary->json_string_length_compatible = false;
+        break;
+      }
+    }
+  }
+  if (summary->json_string_length_compatible) {
+    const auto& json_prefix_tokens = tokenizer_impl->GetJSONStringContentPrefixBitset();
+    for (const auto& [token_id, token] : sorted_vocab) {
+      const bool local_prefix = summary->accepted_prefix_tokens[token_id];
+      const bool json_prefix = json_prefix_tokens[token_id];
+      if ((json_prefix && !local_prefix) ||
+          (local_prefix && !json_prefix && IsPotentiallyValidUTF8Prefix(token))) {
+        summary->json_string_length_compatible = false;
+        break;
+      }
+    }
+  }
+  if (summary->json_string_length_compatible) {
+    // The local grammar machinery deliberately preserves a few malformed UTF-8 prefixes, while
+    // JSON strings require RFC 3629. Project those orthogonal byte prefixes out only after the
+    // finite vocabulary has proven otherwise identical to JSON lexical behavior.
+    summary->accepted_prefix_tokens = tokenizer_impl->GetJSONStringContentPrefixBitset();
+  }
+  return summary;
+}
+
+std::vector<std::shared_ptr<const LocalCompletionTokenSummary>> BuildLocalCompletionTokenSummaries(
+    const Grammar& grammar, const TokenizerInfo& tokenizer_info
+) {
+  const auto pure_fsm_semantics = GetPureFSMSemanticsRules(grammar);
+  std::vector<std::shared_ptr<const LocalCompletionTokenSummary>> result(grammar->NumRules());
+  for (int32_t rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
+    result[rule_id] = BuildLocalCompletionTokenSummary(
+        grammar, rule_id, tokenizer_info, pure_fsm_semantics[rule_id]
+    );
+  }
+  return result;
+}
+
 class CharacterClassTokenSummaryCache {
  private:
   struct KeyHash {
@@ -236,6 +626,7 @@ class CharacterClassTokenSummaryCache {
       const std::vector<std::pair<int32_t, std::string>>& sorted_vocab,
       const std::vector<int32_t>& lcp_with_previous,
       const std::vector<int32_t>& ascii_string_safe_indices,
+      const std::vector<uint8_t>& json_string_crossing_flags,
       size_t vocab_size,
       int32_t max_characters
   ) {
@@ -270,9 +661,16 @@ class CharacterClassTokenSummaryCache {
                     summaries->small_consumed_whole_token_indices,
                     summaries->completed_prefix_unconsumed_indices
                 );
-      auto computed = std::make_shared<const CharacterClassRepeatTokenMask>(
-          CharacterClassRepeatTokenMask{std::move(adaptive_token_mask), DynamicBitset(vocab_size)}
-      );
+      auto computed =
+          std::make_shared<const CharacterClassRepeatTokenMask>(CharacterClassRepeatTokenMask{
+              std::move(adaptive_token_mask),
+              DynamicBitset(vocab_size),
+              std::all_of(
+                  summaries->completed_prefix_unconsumed_indices.begin(),
+                  summaries->completed_prefix_unconsumed_indices.end(),
+                  [&](int32_t index) { return json_string_crossing_flags[index]; }
+              )
+          });
       std::lock_guard<std::mutex> lock(repeat_mutex_);
       auto& cached = repeat_cache_[std::move(key)];
       if (auto retained = cached.lock()) {
@@ -296,7 +694,12 @@ class CharacterClassTokenSummaryCache {
     auto computed =
         std::make_shared<const CharacterClassRepeatTokenMask>(CharacterClassRepeatTokenMask{
             AdaptiveTokenMask(vocab_size, sorted_vocab, accepted_indices, uncertain_indices),
-            std::move(accepted_prefix_tokens)
+            std::move(accepted_prefix_tokens),
+            std::all_of(
+                uncertain_indices.begin(),
+                uncertain_indices.end(),
+                [&](int32_t index) { return json_string_crossing_flags[index]; }
+            )
         });
     std::lock_guard<std::mutex> lock(repeat_mutex_);
     auto& cached = repeat_cache_[std::move(key)];
@@ -418,6 +821,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const TokenizerInfo& tokenizer_info,
       std::optional<RuleLevelCache>& rule_level_cache,
       const std::shared_ptr<CharacterClassTokenSummaryCache>& character_class_token_summary_cache,
+      const std::vector<std::shared_ptr<const LocalCompletionTokenSummary>>&
+          local_completion_summaries,
       bool enable_direct_character_class_mask,
       const std::shared_ptr<const EarleyParserGrammarFeatures>& grammar_features
   )
@@ -434,6 +839,7 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
         tokenizer_info_(tokenizer_info),
         rule_level_cache_(rule_level_cache),
         character_class_token_summary_cache_(character_class_token_summary_cache),
+        local_completion_summaries_(local_completion_summaries),
         enable_direct_character_class_mask_(enable_direct_character_class_mask) {
     // A context-independent rule has already been proven unable to enter a JSON string length
     // rule by GetRuleLevelCacheableRules. Avoid maintaining the grammar-wide JSON counter while
@@ -480,6 +886,9 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
  private:
   /*! \brief Build a token mask directly for a context-independent single character class. */
   std::optional<AdaptiveTokenMask> GetSingleCharacterClassDirectMask(bool is_root_rule) const;
+
+  /*! \brief Build a direct mask for a rule with a mechanically proven stable completion. */
+  std::optional<AdaptiveTokenMask> GetLocalCompletionDirectMask(bool is_root_rule) const;
 
   /*! \brief Reuse tokenizer metadata for a deterministic ASCII alphanumeric run. */
   std::optional<AdaptiveTokenMask> GetAsciiAlphanumericRunDirectMask(bool is_root_rule);
@@ -567,6 +976,9 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   std::optional<RuleLevelCache> rule_level_cache_;
 
   std::shared_ptr<CharacterClassTokenSummaryCache> character_class_token_summary_cache_;
+
+  const std::vector<std::shared_ptr<const LocalCompletionTokenSummary>>&
+      local_completion_summaries_;
 
   bool enable_direct_character_class_mask_;
 
@@ -1524,6 +1936,30 @@ std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetSingleChara
       std::move(accepted_indices),
       std::move(uncertain_indices)
   );
+}
+
+std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetLocalCompletionDirectMask(
+    bool is_root_rule
+) const {
+  if (is_root_rule || initial_state_.sub_element_id != 0 || init_rule_id_ < 0 ||
+      init_rule_id_ >= static_cast<int32_t>(local_completion_summaries_.size()) ||
+      initial_state_.element_id != grammar_->per_rule_fsms[init_rule_id_]->GetFsm().GetStart()) {
+    return std::nullopt;
+  }
+  const auto& summary = local_completion_summaries_[init_rule_id_];
+  if (summary == nullptr) {
+    return std::nullopt;
+  }
+  AdaptiveTokenMask result(
+      summary->accepted_prefix_tokens,
+      tokenizer_info_.GetSortedDecodedVocab(),
+      /*additional_accepted_indices=*/{},
+      summary->crossing_indices
+  );
+  result.local_completion_summary = summary;
+  result.uncertain_token_bitset = summary->crossing_tokens;
+  result.all_uncertain_tokens_are_json_string_crossing = summary->json_string_length_compatible;
+  return result;
 }
 
 std::optional<AdaptiveTokenMask>
@@ -2919,6 +3355,11 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   tmp_can_reach_end_stack_.push_back(false);
   tmp_can_reach_end_prefix_or_stack_.push_back(false);
 
+  auto direct_local_completion_mask = GetLocalCompletionDirectMask(is_root_rule);
+  if (direct_local_completion_mask.has_value()) {
+    return std::move(*direct_local_completion_mask);
+  }
+
   // Try to get the crossing cache.
   bool rule_level_cache_is_available = !has_char_budget_rules_ && rule_level_cache_.has_value() &&
                                        grammar_->per_rule_fsm_hashes[init_rule_id_].has_value();
@@ -3279,10 +3720,12 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(
                                tokenizer_info,
                                retained_rule_level_cache,
                                character_class_token_summary_cache,
+                               local_completion_summaries,
                                is_context_independent,
                                earley_parser_grammar_features
   )
                                .GetAdaptiveTokenMask(is_root_rule);
+  mask.RecomputeJSONStringMetadata(tokenizer_info);
   return adaptive_token_mask_cache.emplace(cache_state, std::move(mask)).first->second;
 }
 
@@ -3304,6 +3747,7 @@ const CharacterClassRepeatTokenMask& CompiledGrammar::Impl::GetCharacterClassRep
       sorted_vocab,
       tokenizer_info.ImplPtr()->GetSortedVocabLCPWithPrevious(),
       tokenizer_info.ImplPtr()->GetAsciiStringSafeIndices(),
+      tokenizer_info.ImplPtr()->GetJSONStringCrossingFlags(),
       tokenizer_info.GetVocabSize(),
       max_characters
   );
@@ -3459,6 +3903,9 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
+  compiled_grammar_impl->local_completion_summaries = BuildLocalCompletionTokenSummaries(
+      compiled_grammar_impl->grammar, compiled_grammar_impl->tokenizer_info
+  );
   std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
   TagDispatchOptimization(compiled_grammar_impl, &tag_dispatch_rule_id_to_second_slicing_bitset);
 
@@ -3567,6 +4014,7 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
         tokenizer_info_,
         retained_rule_level_cache,
         character_class_token_summary_cache_,
+        compiled_grammar_impl->local_completion_summaries,
         false,
         compiled_grammar_impl->earley_parser_grammar_features
     );

@@ -29,6 +29,37 @@ namespace xgrammar {
 class RuleLevelCache;
 class CharacterClassTokenSummaryCache;
 
+/*!
+ * \brief One token that completes a stable local rule and continues into its caller.
+ */
+struct LocalCompletionCrossingToken {
+  int32_t sorted_vocab_index;
+  int32_t suffix_offset;
+};
+
+/*!
+ * \brief Token behavior of a local DFA whose completions all leave one stable entry state.
+ *
+ * This is derived performance metadata. It is intentionally not serialized.
+ */
+struct LocalCompletionTokenSummary {
+  uint8_t completion_byte{0};
+  DynamicBitset accepted_prefix_tokens;
+  DynamicBitset crossing_tokens;
+  std::vector<int32_t> crossing_indices;
+  std::vector<LocalCompletionCrossingToken> crossings_by_suffix;
+  bool json_string_length_compatible{false};
+
+  friend std::size_t MemorySize(const LocalCompletionTokenSummary& summary) {
+    return MemorySize(summary.accepted_prefix_tokens) + MemorySize(summary.crossing_tokens) +
+           MemorySize(summary.crossing_indices) + MemorySize(summary.crossings_by_suffix);
+  }
+};
+
+std::vector<std::shared_ptr<const LocalCompletionTokenSummary>> BuildLocalCompletionTokenSummaries(
+    const Grammar& grammar, const TokenizerInfo& tokenizer_info
+);
+
 /******************* CompiledGrammar Datastructures *******************/
 
 /*!
@@ -65,6 +96,14 @@ struct AdaptiveTokenMask {
 
   std::vector<int32_t> uncertain_indices;
 
+  /*! \brief Token-id membership for uncertain_indices. Derived, not serialized. */
+  DynamicBitset uncertain_token_bitset;
+  /*! \brief Whether every uncertain token crosses an unescaped JSON closing quote. */
+  bool all_uncertain_tokens_are_json_string_crossing{false};
+
+  /*! \brief Stable local-rule completion metadata. Derived, not serialized. */
+  std::shared_ptr<const LocalCompletionTokenSummary> local_completion_summary;
+
   /*! \brief Number of definitely accepted decoded-vocabulary tokens. Derived, not serialized. */
   int32_t accepted_count{-1};
 
@@ -100,11 +139,14 @@ struct AdaptiveTokenMask {
 
   void RecomputeAcceptedCount(size_t sorted_vocab_size);
 
+  void RecomputeJSONStringMetadata(const TokenizerInfo& tokenizer_info);
+
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask) {
     return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
-           MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset);
+           MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset) +
+           MemorySize(mask.uncertain_token_bitset);
   }
 };
 
@@ -125,6 +167,8 @@ XGRAMMAR_MEMBER_TABLE(
 struct CharacterClassRepeatTokenMask {
   AdaptiveTokenMask adaptive_token_mask;
   DynamicBitset accepted_prefix_tokens;
+  /*! \brief Whether every uncertain token crosses an unescaped JSON closing quote. */
+  bool all_uncertain_tokens_are_json_string_crossing;
 };
 
 /*!
@@ -177,6 +221,9 @@ class CompiledGrammar::Impl {
   std::unordered_map<uint64_t, std::shared_ptr<const CharacterClassRepeatTokenMask>>
       character_class_repeat_token_masks;
   mutable std::mutex character_class_repeat_token_masks_mutex;
+
+  /*! \brief Stable local-completion summaries indexed by rule id. Derived, not serialized. */
+  std::vector<std::shared_ptr<const LocalCompletionTokenSummary>> local_completion_summaries;
 
   /*! \brief Grammar-wide flags and nullable rules shared by Earley parsers. */
   std::shared_ptr<const EarleyParserGrammarFeatures> earley_parser_grammar_features;

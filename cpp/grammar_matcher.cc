@@ -18,6 +18,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -666,6 +667,11 @@ class GrammarMatcher::Impl : public EarleyParser {
       const DynamicBitset* additional_accepted_tokens
   );
 
+  /*! \brief Accept crossing tokens by matching each distinct post-completion suffix once. */
+  bool AddLocalCompletionCrossingTokens(
+      const ParserState& state, const AdaptiveTokenMask& adaptive_token_mask
+  );
+
   bool NeedsJSONStringLengthTokenFilter(const ParserState& state) const;
 
   bool AdvanceWithCharacterBudget(uint8_t byte, bool debug_print = false);
@@ -796,6 +802,8 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::vector<int32_t> tmp_json_length_invalid_indices_;
   std::vector<int32_t> tmp_json_length_valid_escaped_indices_;
   std::vector<int32_t> tmp_repeat_quote_crossing_indices_;
+  std::vector<int32_t> tmp_local_completion_accepted_token_ids_;
+  std::vector<std::pair<size_t, size_t>> tmp_local_completion_accepted_suffix_ranges_;
   std::vector<ParserState> tmp_latest_states_;
   std::vector<std::pair<const ParserState*, const AdaptiveTokenMask*>>
       tmp_latest_states_with_masks_;
@@ -808,6 +816,9 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   struct ContinuationMaskCacheEntry {
     std::vector<int32_t> key;
+    // Entry identity relies on this address. Adaptive masks live in the compiled grammar's
+    // state-keyed mask cache or its character-class repeat-mask map; neither container evicts
+    // entries, so one address identifies one mask for the lifetime of this matcher.
     const AdaptiveTokenMask* adaptive_token_mask;
     std::vector<int32_t> accepted_indices;
     std::vector<int32_t> rejected_indices;
@@ -2980,6 +2991,194 @@ void GrammarMatcher::Impl::BuildJSONStringLengthFilteredAcceptedTokens(
   std::sort(tmp_json_length_invalid_indices_.begin(), tmp_json_length_invalid_indices_.end());
 }
 
+bool GrammarMatcher::Impl::AddLocalCompletionCrossingTokens(
+    const ParserState& state, const AdaptiveTokenMask& adaptive_token_mask
+) {
+  XGRAMMAR_DCHECK(adaptive_token_mask.local_completion_summary != nullptr);
+  const auto& summary = *adaptive_token_mask.local_completion_summary;
+  const auto& suffix_entries = summary.crossings_by_suffix;
+  if (suffix_entries.empty()) {
+    return true;
+  }
+  tmp_local_completion_accepted_token_ids_.clear();
+  tmp_local_completion_accepted_suffix_ranges_.clear();
+  const auto* tokenizer_impl = tokenizer_info_.ImplPtr();
+
+  const int32_t current_count = GetCurrentJSONStringCharIndex();
+  const int32_t min_deadline = JSONStringMinLengthDeadline(state);
+  const int32_t max_deadline = JSONStringLengthDeadline(state);
+  const bool has_length_context = min_deadline >= 0 || max_deadline >= 0;
+  const bool all_lengths_are_valid =
+      (min_deadline < 0 || current_count >= min_deadline) && max_deadline < 0;
+  if (!all_lengths_are_valid) {
+    tmp_local_completion_accepted_token_ids_.reserve(suffix_entries.size());
+  }
+  const int32_t synthetic_count = std::max(current_count, min_deadline);
+  if (max_deadline >= 0 && synthetic_count > max_deadline) {
+    return true;
+  }
+
+  const int32_t initial_history_size = scanable_state_history_.size();
+  auto restore_parser = [&]() {
+    PopLastStates(static_cast<int32_t>(scanable_state_history_.size()) - initial_history_size);
+  };
+  PushOneStateToCheck(state);
+  JSONStringCharCounterState initial_counter;
+  if (has_length_context) {
+    // The counter phase is usually kInside here, but the string content position is also
+    // reachable right after a complete high-surrogate escape (e.g. \uD83D), where the phase
+    // still awaits a possible low-surrogate half of the same decoded character.
+    XGRAMMAR_DCHECK(!json_string_char_count_history_.empty());
+    initial_counter = json_string_char_count_history_.back();
+    json_string_char_count_history_.back().count = synthetic_count;
+  }
+  int32_t representative_prefix_bytes = 0;
+  bool completion_accepted = Advance(summary.completion_byte);
+  if (!completion_accepted) {
+    if (!has_length_context) {
+      restore_parser();
+      return false;
+    }
+    const auto& representative_entry = suffix_entries.front();
+    const int32_t representative_index = representative_entry.sorted_vocab_index;
+    XGRAMMAR_DCHECK(representative_entry.suffix_offset >= 1);
+    auto& counter = json_string_char_count_history_.back();
+    counter = initial_counter;
+    counter.length_suspended = true;
+    const auto& representative =
+        tokenizer_info_.GetSortedDecodedVocab()[representative_index].second;
+    for (; representative_prefix_bytes < representative_entry.suffix_offset - 1;
+         ++representative_prefix_bytes) {
+      if (!Advance(static_cast<uint8_t>(representative[representative_prefix_bytes]))) {
+        restore_parser();
+        return false;
+      }
+    }
+    auto& completion_counter = json_string_char_count_history_.back();
+    completion_counter = initial_counter;
+    completion_counter.count = synthetic_count;
+    completion_counter.length_suspended = false;
+    completion_accepted = Advance(summary.completion_byte);
+    if (!completion_accepted) {
+      restore_parser();
+      return false;
+    }
+  }
+  if (IsCompleted()) {
+    restore_parser();
+    return false;
+  }
+
+  const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  const auto& plain_prefix_char_counts = tokenizer_impl->GetJSONStringPlainPrefixCharCounts();
+  auto suffix = [&](const LocalCompletionCrossingToken& entry) {
+    const std::string_view token = sorted_vocab[entry.sorted_vocab_index].second;
+    return token.substr(entry.suffix_offset);
+  };
+  auto length_is_valid = [&](const LocalCompletionCrossingToken& entry) {
+    const int32_t token_index = entry.sorted_vocab_index;
+    const int32_t plain_prefix_count = plain_prefix_char_counts[token_index];
+    if (plain_prefix_count >= 0) {
+      const int64_t closing_count = static_cast<int64_t>(current_count) + plain_prefix_count;
+      return (min_deadline < 0 || closing_count >= min_deadline) &&
+             (max_deadline < 0 || closing_count <= max_deadline);
+    }
+    const JSONStringCharCounterState suffix_counter = json_string_char_count_history_.back();
+    json_string_char_count_history_.back() = initial_counter;
+    const bool result =
+        IsCachedAcceptedTokenWithinJSONStringLength(state, sorted_vocab[token_index].second);
+    json_string_char_count_history_.back() = suffix_counter;
+    return result;
+  };
+
+  int32_t previous_entry_index = -1;
+  int32_t previous_matched_size = 0;
+  bool all_suffixes_accepted = true;
+  for (size_t position = 0; position < suffix_entries.size();) {
+    const int32_t representative_entry_index = static_cast<int32_t>(position);
+    const std::string_view current_suffix = suffix(suffix_entries[position]);
+    const auto group_end_it = std::partition_point(
+        suffix_entries.begin() + position + 1,
+        suffix_entries.end(),
+        [&](const auto& candidate) { return suffix(candidate) == current_suffix; }
+    );
+    const size_t group_end = static_cast<size_t>(group_end_it - suffix_entries.begin());
+    int32_t common_prefix_length = 0;
+    if (previous_entry_index >= 0) {
+      const std::string_view previous_suffix = suffix(suffix_entries[previous_entry_index]);
+      common_prefix_length = static_cast<int32_t>(
+          std::mismatch(
+              current_suffix.begin(),
+              current_suffix.end(),
+              previous_suffix.begin(),
+              previous_suffix.end()
+          )
+              .first -
+          current_suffix.begin()
+      );
+      common_prefix_length = std::min(common_prefix_length, previous_matched_size);
+    }
+    PopLastStates(previous_matched_size - common_prefix_length);
+
+    bool accepted = true;
+    int32_t matched_size = common_prefix_length;
+    for (; matched_size < static_cast<int32_t>(current_suffix.size()); ++matched_size) {
+      if (Advance(static_cast<uint8_t>(current_suffix[matched_size]))) {
+        continue;
+      }
+      const size_t rejected_prefix_size = matched_size + 1;
+      const auto next = std::partition_point(
+          suffix_entries.begin() + position + 1,
+          suffix_entries.end(),
+          [&](const auto& candidate) {
+            const std::string_view candidate_suffix = suffix(candidate);
+            return candidate_suffix.size() >= rejected_prefix_size &&
+                   candidate_suffix.compare(
+                       0, rejected_prefix_size, current_suffix, 0, rejected_prefix_size
+                   ) == 0;
+          }
+      );
+      position = static_cast<size_t>(next - suffix_entries.begin());
+      accepted = false;
+      all_suffixes_accepted = false;
+      break;
+    }
+    if (accepted) {
+      if (all_lengths_are_valid) {
+        tmp_local_completion_accepted_suffix_ranges_.emplace_back(position, group_end);
+      } else {
+        for (size_t candidate_position = position; candidate_position < group_end;
+             ++candidate_position) {
+          const auto& candidate = suffix_entries[candidate_position];
+          const int32_t candidate_index = candidate.sorted_vocab_index;
+          const int32_t candidate_id = sorted_vocab[candidate_index].first;
+          if (length_is_valid(candidate)) {
+            tmp_local_completion_accepted_token_ids_.push_back(candidate_id);
+          }
+        }
+      }
+      position = group_end;
+    }
+    previous_entry_index = representative_entry_index;
+    previous_matched_size = matched_size;
+  }
+  if (all_lengths_are_valid && all_suffixes_accepted) {
+    tmp_accepted_bitset_ |= adaptive_token_mask.uncertain_token_bitset;
+  } else {
+    for (const auto& [begin, end] : tmp_local_completion_accepted_suffix_ranges_) {
+      for (size_t position = begin; position < end; ++position) {
+        const int32_t token_id = sorted_vocab[suffix_entries[position].sorted_vocab_index].first;
+        tmp_accepted_bitset_.Set(token_id);
+      }
+    }
+    for (int32_t token_id : tmp_local_completion_accepted_token_ids_) {
+      tmp_accepted_bitset_.Set(token_id);
+    }
+  }
+  restore_parser();
+  return true;
+}
+
 bool GrammarMatcher::Impl::NeedsJSONStringLengthTokenFilter(const ParserState& state) const {
   const auto* tokenizer_impl = tokenizer_info_.ImplPtr();
   const int32_t current_count = GetCurrentJSONStringCharIndex();
@@ -3149,15 +3348,19 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         if (!repeat->has_stable_upper) {
           tmp_accepted_bitset_ |= quote_boundary_repeat_token_mask->accepted_prefix_tokens;
         }
-        const auto& quote_flags = tokenizer_info_.ImplPtr()->GetJSONStringQuoteTokenFlags();
-        tmp_repeat_quote_crossing_indices_.clear();
-        tmp_repeat_quote_crossing_indices_.reserve(adaptive_token_mask.uncertain_indices.size());
-        for (int32_t token_index : adaptive_token_mask.uncertain_indices) {
-          if (quote_flags[token_index]) {
-            tmp_repeat_quote_crossing_indices_.push_back(token_index);
+        if (quote_boundary_repeat_token_mask->all_uncertain_tokens_are_json_string_crossing) {
+          indices_to_check = &adaptive_token_mask.uncertain_indices;
+        } else {
+          const auto& quote_flags = tokenizer_info_.ImplPtr()->GetJSONStringQuoteTokenFlags();
+          tmp_repeat_quote_crossing_indices_.clear();
+          tmp_repeat_quote_crossing_indices_.reserve(adaptive_token_mask.uncertain_indices.size());
+          for (int32_t token_index : adaptive_token_mask.uncertain_indices) {
+            if (quote_flags[token_index]) {
+              tmp_repeat_quote_crossing_indices_.push_back(token_index);
+            }
           }
+          indices_to_check = &tmp_repeat_quote_crossing_indices_;
         }
-        indices_to_check = &tmp_repeat_quote_crossing_indices_;
       }
     }
     // For each ParserState, we will check every uncertain token and put them into the accepted or
@@ -3193,6 +3396,15 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       }
     }
 
+    const auto& local_completion_summary = adaptive_token_mask.local_completion_summary;
+    if (local_completion_summary != nullptr &&
+        adaptive_token_mask.store_type != StoreType::kRejected && !has_budget_rules_ &&
+        !has_char_budget_rules_ && !capture_tracking_ &&
+        (!json_string_length_active || local_completion_summary->json_string_length_compatible) &&
+        AddLocalCompletionCrossingTokens(state, adaptive_token_mask)) {
+      continue;
+    }
+
     constexpr size_t kMinUncertainTokensForContinuationCache = 128;
     constexpr size_t kMinUncertainTokensForCanonicalContext = 32768;
     std::optional<std::vector<int32_t>> continuation_mask_key;
@@ -3207,15 +3419,11 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
           continuation_mask_cache_.begin(),
           continuation_mask_cache_.end(),
           [&](const ContinuationMaskCacheEntry& entry) {
-            if (entry.key != *continuation_mask_key || entry.adaptive_token_mask == nullptr) {
+            if (entry.key != *continuation_mask_key ||
+                entry.adaptive_token_mask != &adaptive_token_mask) {
               return false;
             }
-            const auto& cached_mask = *entry.adaptive_token_mask;
-            return cached_mask.store_type == adaptive_token_mask.store_type &&
-                   cached_mask.accepted_indices == adaptive_token_mask.accepted_indices &&
-                   cached_mask.rejected_indices == adaptive_token_mask.rejected_indices &&
-                   cached_mask.accepted_bitset == adaptive_token_mask.accepted_bitset &&
-                   cached_mask.uncertain_indices == adaptive_token_mask.uncertain_indices;
+            return true;
           }
       );
       if (cached != continuation_mask_cache_.end()) {
@@ -3241,8 +3449,11 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     std::vector<int32_t> continuation_accepted_indices;
     std::vector<int32_t> continuation_rejected_indices;
     if (continuation_mask_key.has_value()) {
-      continuation_accepted_indices.reserve(adaptive_token_mask.uncertain_indices.size());
-      continuation_rejected_indices.reserve(adaptive_token_mask.uncertain_indices.size());
+      if (adaptive_token_mask.store_type == StoreType::kRejected) {
+        continuation_rejected_indices.reserve(indices_to_check->size());
+      } else {
+        continuation_accepted_indices.reserve(indices_to_check->size());
+      }
       if (repeat_continuation_requires_quote &&
           adaptive_token_mask.store_type == StoreType::kRejected) {
         const auto& quote_flags = tokenizer_info_.ImplPtr()->GetJSONStringQuoteTokenFlags();
@@ -3312,7 +3523,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       // Check if the current token is in the rejected range. i.e. check if the current token
       // is on the subtree of the rejected token.
       if (cur_token_idx < last_rejected_uncertain_range) {
-        if (continuation_mask_key.has_value()) {
+        if (continuation_mask_key.has_value() &&
+            adaptive_token_mask.store_type == StoreType::kRejected) {
           continuation_rejected_indices.push_back(cur_token_idx);
         }
         if (adaptive_token_mask.store_type == StoreType::kRejected) {
@@ -3390,8 +3602,11 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
       // Step 2.3. Push the result to the delta list.
       if (continuation_mask_key.has_value()) {
-        (accepted ? continuation_accepted_indices : continuation_rejected_indices)
-            .push_back(cur_token_idx);
+        if (accepted && adaptive_token_mask.store_type != StoreType::kRejected) {
+          continuation_accepted_indices.push_back(cur_token_idx);
+        } else if (!accepted && adaptive_token_mask.store_type == StoreType::kRejected) {
+          continuation_rejected_indices.push_back(cur_token_idx);
+        }
       }
       if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset ||
           adaptive_token_mask.store_type == StoreType::kAccepted) {

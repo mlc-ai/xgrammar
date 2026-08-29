@@ -1502,6 +1502,8 @@ class GrammarFSMBuilderImpl {
   );
 
  private:
+  friend class GrammarFSMBuilder;
+
   static FSMWithStartEnd BuildRuleFSM(
       const Grammar& grammar,
       int rule_id,
@@ -1526,7 +1528,9 @@ class GrammarFSMBuilderImpl {
   /*! \brief Build the leaf FSM of a regex, preserving compact large-repeat handling. */
   static Result<FSMWithStartEnd> RegexLeafFSM(const std::string& pattern);
   /*! \brief Inline the rule references of the per-rule FSMs into one leaf FSM. */
-  static Result<FSMWithStartEnd> FlattenRuleFSMs(const Grammar& grammar, int32_t root_rule_id);
+  static Result<FSMWithStartEnd> FlattenRuleFSMs(
+      const Grammar& grammar, int32_t root_rule_id, int32_t max_num_states = 100000
+  );
   /*! \brief The DFA accepting every valid UTF-8 string (RFC 3629: no surrogates, no overlong
    * encodings, at most U+10FFFF), including the empty string. */
   static const FSMWithStartEnd& ValidUTF8UniverseFSM();
@@ -2475,9 +2479,8 @@ struct RuleFSMConfigurationHash {
 }  // namespace
 
 Result<FSMWithStartEnd> GrammarFSMBuilderImpl::FlattenRuleFSMs(
-    const Grammar& grammar, int32_t root_rule_id
+    const Grammar& grammar, int32_t root_rule_id, int32_t max_num_states
 ) {
-  static constexpr int32_t kMaxFlattenedStates = 100000;
   FSM result_fsm;
   std::vector<int32_t> end_states;
   std::vector<RuleFSMConfiguration> configurations;
@@ -2489,7 +2492,7 @@ Result<FSMWithStartEnd> GrammarFSMBuilderImpl::FlattenRuleFSMs(
     if (!inserted) {
       return it->second;
     }
-    if (static_cast<int32_t>(configurations.size()) >= kMaxFlattenedStates) {
+    if (static_cast<int32_t>(configurations.size()) >= max_num_states) {
       state_by_config.erase(it);
       return FSM::kNoNextState;
     }
@@ -2524,7 +2527,7 @@ Result<FSMWithStartEnd> GrammarFSMBuilderImpl::FlattenRuleFSMs(
           return ResultErr(
               "The number of states needed to flatten a regular expression exceeds the limit "
               "of " +
-              std::to_string(kMaxFlattenedStates)
+              std::to_string(max_num_states)
           );
         }
         result_fsm.AddEpsilonEdge(result_state, target);
@@ -2558,7 +2561,7 @@ Result<FSMWithStartEnd> GrammarFSMBuilderImpl::FlattenRuleFSMs(
       if (target == FSM::kNoNextState) {
         return ResultErr(
             "The number of states needed to flatten a regular expression exceeds the limit of " +
-            std::to_string(kMaxFlattenedStates)
+            std::to_string(max_num_states)
         );
       }
       if (edge.IsCharRange()) {
@@ -4644,6 +4647,12 @@ Result<FSMWithStartEnd> GrammarFSMBuilder::Regex(
     const std::string& regex, bool json_string, bool byte_mode
 ) {
   return GrammarFSMBuilderImpl::Regex(regex, json_string, byte_mode);
+}
+
+Result<FSMWithStartEnd> GrammarFSMBuilder::FlattenRuleFSMs(
+    const Grammar& grammar, int32_t root_rule_id, int32_t max_num_states
+) {
+  return GrammarFSMBuilderImpl::FlattenRuleFSMs(grammar, root_rule_id, max_num_states);
 }
 
 Result<FSMWithStartEnd> GrammarFSMBuilder::Intersect(
