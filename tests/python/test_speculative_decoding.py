@@ -232,5 +232,17 @@ def test_traverse_draft_tree_timeout_triggers():
     assert bitmask[0].any(), "Root bitmask should still be computed even when timed out"
 
 
+def test_traverse_draft_tree_out_of_bounds_edge(compiled_grammar):
+    # An edge index outside [-1, num_nodes) would make the traversal recurse into an out-of-bounds
+    # node; it must be rejected instead of crashing.
+    bad_tree = (
+        torch.tensor([1000000], dtype=torch.int64),  # next_token points to a non-existent node
+        torch.tensor([-1], dtype=torch.int64),  # next_sibling: root has none (passes the check)
+        torch.tensor([3], dtype=torch.int64),  # draft tokens
+    )
+    with pytest.raises(Exception):
+        _run_traverse(compiled_grammar, bad_tree)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
