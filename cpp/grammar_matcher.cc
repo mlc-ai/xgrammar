@@ -344,6 +344,14 @@ void ApplyTokenBitmaskInplaceCPU(
         << "When indices is not provided, the logits's batch size should be equal to the "
            "bitmask's batch size, but got "
         << logits_shape.first << " vs " << bitmask_shape.first;
+  } else {
+    // Each index selects a row of both logits and bitmask; an out-of-range index would lead to
+    // an out-of-bounds access, so validate every index against both batch sizes here.
+    for (int idx : indices.value()) {
+      XGRAMMAR_CHECK(idx >= 0 && idx < logits_shape.first && idx < bitmask_shape.first)
+          << "The provided index " << idx << " is out of bounds: it should be in [0, "
+          << std::min(logits_shape.first, bitmask_shape.first) << ").";
+    }
   }
 
   // Apply mask
@@ -1218,8 +1226,13 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   const auto& special_token_ids = tokenizer_info_.GetSpecialTokenIds();
   if (!is_stop_token && std::find(special_token_ids.begin(), special_token_ids.end(), token_id) !=
                             special_token_ids.end()) {
+    // Padding ids in [vocab_size beyond the real tokens) are special ids too, but they have no
+    // entry in decoded_vocab_, so only decode ids that are backed by a real token.
+    const auto& decoded_vocab = tokenizer_info_.GetDecodedVocab();
     XGRAMMAR_LOG(WARNING) << "GrammarMatcher cannot accept special token id " << token_id << ": "
-                          << tokenizer_info_.GetDecodedVocab()[token_id]
+                          << (token_id < static_cast<int32_t>(decoded_vocab.size())
+                                  ? decoded_vocab[token_id]
+                                  : "<padding>")
                           << ". Rejecting the token.";
     return false;
   }
@@ -2666,6 +2679,20 @@ bool GrammarMatcher::TraverseDraftTree(
       << "The draft tree must not be empty";
   XGRAMMAR_CHECK(reinterpret_cast<const int64_t*>(retrieve_next_sibling->data)[0] == -1)
       << "The root node must not have siblings";
+
+  // The traversal follows retrieve_next_token / retrieve_next_sibling as node indices; a value
+  // outside [-1, num_nodes) would recurse into an out-of-bounds position, so validate them upfront.
+  int64_t num_nodes = retrieve_next_token->shape[0];
+  const int64_t* next_token_data = reinterpret_cast<const int64_t*>(retrieve_next_token->data);
+  const int64_t* next_sibling_data = reinterpret_cast<const int64_t*>(retrieve_next_sibling->data);
+  for (int64_t i = 0; i < num_nodes; ++i) {
+    XGRAMMAR_CHECK(next_token_data[i] >= -1 && next_token_data[i] < num_nodes)
+        << "retrieve_next_token[" << i << "] = " << next_token_data[i]
+        << " is out of bounds: it should be in [-1, " << num_nodes << ").";
+    XGRAMMAR_CHECK(next_sibling_data[i] >= -1 && next_sibling_data[i] < num_nodes)
+        << "retrieve_next_sibling[" << i << "] = " << next_sibling_data[i]
+        << " is out of bounds: it should be in [-1, " << num_nodes << ").";
+  }
 
   return details::TraverseDraftTreeRecursive(
       0,

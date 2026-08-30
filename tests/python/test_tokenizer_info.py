@@ -303,5 +303,22 @@ def test_model_vocab_size_smaller_than_tokenizer(tokenizer_path: str, model_voca
     print(len(tokenizer_info.decoded_vocab))
 
 
+def test_tokenizer_info_vocab_size_smaller_than_vocab_raises():
+    # vocab_size only ever pads the vocab; a value below the number of real tokens leaves token ids
+    # without a slot and used to corrupt an internal table. It must be rejected.
+    vocab = [str(i) for i in range(100)]
+    with pytest.raises(RuntimeError):
+        xgr.TokenizerInfo(vocab, vocab_size=1)
+
+
+def test_matcher_accept_padding_token_id():
+    # With a padded vocab, ids in [len(vocab), vocab_size) are padding/special ids with no decoded
+    # token. Accepting one must be rejected gracefully instead of reading out of bounds.
+    tokenizer_info = xgr.TokenizerInfo(["a", "b"], vocab_size=1000, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_builtin_json_grammar()
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_token(500) is False
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

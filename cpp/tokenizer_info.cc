@@ -274,6 +274,11 @@ TokenizerInfo::Impl::Impl(
     : vocab_type_(vocab_type),
       vocab_size_(vocab_size.value_or(encoded_vocab.size())),
       add_prefix_space_(add_prefix_space) {
+  // vocab_size only ever pads the encoded vocab with special ids; a value below the number of
+  // real tokens would leave token ids without a slot and corrupt the id -> index table below.
+  XGRAMMAR_CHECK(vocab_size_ >= static_cast<int>(encoded_vocab.size()))
+      << "vocab_size (" << vocab_size_ << ") must be at least the number of tokens in the vocab ("
+      << encoded_vocab.size() << ").";
   decoded_vocab_.reserve(encoded_vocab.size());
   sorted_decoded_vocab_.reserve(encoded_vocab.size());
   for (int i = 0; i < static_cast<int>(encoded_vocab.size()); ++i) {
