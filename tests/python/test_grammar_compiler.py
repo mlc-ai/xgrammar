@@ -12,7 +12,11 @@ from pydantic import BaseModel
 from transformers import AutoTokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import _get_allow_empty_rule_ids, bitmask_to_bool_mask
+from xgrammar.testing import (
+    _ebnf_to_grammar_no_normalization,
+    _get_allow_empty_rule_ids,
+    bitmask_to_bool_mask,
+)
 
 
 @pytest.mark.parametrize(
@@ -638,6 +642,31 @@ def test_limited_compiler_cache_evicts_value_that_crosses_limit():
     compiled = compiler.compile_builtin_json_grammar()
     assert compiler.get_cache_size_bytes() <= cache_limit
     assert _compiled_accepts(compiled, '{"a": 1}')
+
+
+def test_derived_lookahead_skips_non_atom_suffix():
+    # A non-normalized rule body may leave a choices expr inside a sequence.
+    # LookaheadAssertionAnalyzer derives a lookahead for `sub` (its single
+    # non-last occurrence) whose suffix would then include that choices expr.
+    # The Earley lookahead matcher only handles atom elements, so deriving such
+    # a lookahead used to abort compilation with a fatal "element type is not
+    # supported" error. The analyzer must skip deriving a lookahead in that case
+    # while still accepting the same language.
+    #
+    # The vocabulary contains tokens that straddle the end of `sub` into the
+    # following choices (e.g. "xa", "ax"). Those become uncertain tokens whose
+    # mask is resolved by matching the derived lookahead at compile time, which
+    # is exactly the path that reached the fatal error.
+    tokenizer_info = xgr.TokenizerInfo(["ax", "a", "bb", "z", "xa", "aa", "xbb"], stop_token_ids=[])
+    grammar = _ebnf_to_grammar_no_normalization(
+        'root ::= sub ("a" | "bb") "z"\n' 'sub ::= inner "x" | inner inner\n' "inner ::= [a-z]"
+    )
+    compiled = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False
+    ).compile_grammar(grammar)
+    assert _compiled_accepts(compiled, "axaz")
+    assert _compiled_accepts(compiled, "aabbz")
+    assert not _compiled_accepts(compiled, "axz")
 
 
 if __name__ == "__main__":
