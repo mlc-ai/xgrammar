@@ -1075,6 +1075,25 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
     if (!CanUseDerivedLookahead(rule_id)) {
       return -1;
     }
+    // The lookahead assertion is matched by EarleyParser::Predict/Scan on the expr path, which
+    // only handles atom elements. A composite element such as a choices expr (which a
+    // non-normalized rule body may leave inside a sequence) would abort the parser, so skip
+    // deriving a lookahead in that case. The derived lookahead is only an optimization, so
+    // skipping it never changes the accepted language.
+    for (int32_t element_id : rule_lookahead_infos_[rule_id].suffix_after_first_occurrence) {
+      switch (base_grammar_->GetGrammarExpr(element_id).type) {
+        case GrammarExprType::kByteString:
+        case GrammarExprType::kCharacterClass:
+        case GrammarExprType::kCharacterClassStar:
+        case GrammarExprType::kRuleRef:
+        case GrammarExprType::kRepeat:
+        case GrammarExprType::kToken:
+        case GrammarExprType::kExcludeToken:
+          break;
+        default:
+          return -1;
+      }
+    }
     return builder_->AddSequence(rule_lookahead_infos_[rule_id].suffix_after_first_occurrence);
   }
 
