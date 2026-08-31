@@ -38,7 +38,7 @@ jobs:
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-14, macos-15-intel]
         python: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14', '3.14t']
         include:
-          # Exercise NVIDIA's Windows ARM64 CUDA nightlies across supported Python versions.
+          # Native Windows ARM64 PyTorch wheels are available for Python 3.11-3.13.
           - {os: windows-11-vs2026-arm, python: '3.11'}
           - {os: windows-11-vs2026-arm, python: '3.12'}
           - {os: windows-11-vs2026-arm, python: '3.13'}
@@ -81,12 +81,9 @@ jobs:
           echo "$(brew --prefix llvm@17)/bin" >> "$GITHUB_PATH"
           clang++ --version
 
-      - name: Install NVIDIA PyTorch nightly on Windows ARM64
+      - name: Install PyTorch on Windows ARM64
         if: matrix.os == 'windows-11-vs2026-arm'
-        run: >
-          python -m pip install --pre
-          --extra-index-url https://pypi.nvidia.com/nvtorch_oot_nightly
-          torch
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Build xgrammar from source
         run: |
