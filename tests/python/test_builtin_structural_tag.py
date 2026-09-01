@@ -1084,6 +1084,106 @@ def test_cohere_required_accepts_nested_params():
     check_stag_with_instance(structural_tag, named_list_item_output, False)
 
 
+@pytest.mark.parametrize(
+    "function",
+    (
+        pytest.param({"name": "anything"}, id="omitted-parameters"),
+        pytest.param({"name": "anything", "parameters": None}, id="none-parameters"),
+        pytest.param(
+            {
+                "name": "anything",
+                "strict": False,
+                "parameters": {
+                    "type": "object",
+                    "properties": {"only": {"type": "integer"}},
+                    "required": ["only"],
+                    "additionalProperties": False,
+                },
+            },
+            id="strict-false",
+        ),
+    ),
+)
+@pytest.mark.parametrize(
+    "body, accepted",
+    (
+        pytest.param('<cofl:value name="text" type="raw">hello</cofl:value>', True, id="raw"),
+        pytest.param(
+            '<cofl:value name="count" type="json">2</cofl:value>'
+            '<cofl:value name="enabled" type="json">true</cofl:value>'
+            '<cofl:value name="nothing" type="json">null</cofl:value>',
+            True,
+            id="scalars",
+        ),
+        pytest.param(
+            '<cofl:value name="config" type="dict">'
+            '<cofl:value name="mode" type="raw">fast</cofl:value>'
+            '<cofl:value name="items" type="list">'
+            '<cofl:value type="json">1</cofl:value>'
+            '<cofl:value type="dict">'
+            '<cofl:value name="ok" type="json">true</cofl:value>'
+            "</cofl:value>"
+            "</cofl:value>"
+            "</cofl:value>",
+            True,
+            id="recursive-dict",
+        ),
+        pytest.param(
+            '<cofl:value name="items" type="list">'
+            '<cofl:value type="raw">first</cofl:value>'
+            '<cofl:value type="list"></cofl:value>'
+            "</cofl:value>",
+            True,
+            id="recursive-list",
+        ),
+        pytest.param(
+            '<cofl:value name="text" type="json">"hello"</cofl:value>',
+            False,
+            id="quoted-string-under-json",
+        ),
+        pytest.param(
+            '<cofl:value name="config" type="json">{"mode":"fast"}</cofl:value>',
+            False,
+            id="serialized-dict",
+        ),
+        pytest.param(
+            '<cofl:value name="items" type="list">'
+            '<cofl:value name="0" type="raw">first</cofl:value>'
+            "</cofl:value>",
+            False,
+            id="named-list-item",
+        ),
+        pytest.param(
+            '<cofl:value type="dict">'
+            '<cofl:value name="text" type="raw">hello</cofl:value>'
+            "</cofl:value>",
+            False,
+            id="outer-dict-wrapper",
+        ),
+    ),
+)
+def test_cohere_unrestricted_tool_parameters_use_canonical_recursive_values(
+    function, body: str, accepted: bool
+):
+    """Schemas normalized to true retain canonical recursive Cohere Any values."""
+
+    structural_tag = get_model_structural_tag(
+        "cohere",
+        tools=[{"type": "function", "function": function}],
+        tool_choice="required",
+        reasoning=False,
+    )
+
+    output = (
+        "<cofl:tool_calls>"
+        '<cofl:tool_call id="0" name="anything">'
+        f"{body}"
+        "</cofl:tool_call>"
+        "</cofl:tool_calls>"
+    )
+    check_stag_with_instance(structural_tag, output, accepted)
+
+
 def test_cohere_reasoning_prefix_uses_end_thinking_token():
     """Cohere reasoning mode accepts reasoning text before the end-thinking token."""
 
@@ -1413,7 +1513,7 @@ InstanceCase = Tuple[Dict[str, Any], List[str], bool, List[bool]]
 
 def run_instance_case(format_type: str, case: InstanceCase):
     """Run one instance test case (accept/reject per instance string)."""
-    (input_dict, instances, reasoning, expected_accept_per_instance) = case
+    input_dict, instances, reasoning, expected_accept_per_instance = case
     kwargs = _input_dict_to_get_stag_kwargs(format_type, input_dict)
     kwargs["reasoning"] = reasoning
     stag = get_model_structural_tag(**kwargs)
