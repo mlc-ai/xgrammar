@@ -1612,9 +1612,9 @@ void IndentManager::EndIndent() {
 std::string IndentManager::StartSeparator() {
   if (any_whitespace_) {
     if (!max_whitespace_cnt_.has_value()) {
-      return "[ \\n\\t]*";
+      return "[ \\n\\r\\t]*";
     } else {
-      return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+      return "[ \\n\\r\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
     }
   }
   if (!enable_newline_) {
@@ -1627,9 +1627,9 @@ std::string IndentManager::MiddleSeparator() {
   if (any_whitespace_) {
     std::string whitespace_part;
     if (!max_whitespace_cnt_.has_value()) {
-      whitespace_part = "[ \\n\\t]*";
+      whitespace_part = "[ \\n\\r\\t]*";
     } else {
-      whitespace_part = "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+      whitespace_part = "[ \\n\\r\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
     }
     return whitespace_part + " \"" + separator_ + "\" " + whitespace_part;
   }
@@ -1642,9 +1642,9 @@ std::string IndentManager::MiddleSeparator() {
 std::string IndentManager::EndSeparator() {
   if (any_whitespace_) {
     if (!max_whitespace_cnt_.has_value()) {
-      return "[ \\n\\t]*";
+      return "[ \\n\\r\\t]*";
     } else {
-      return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+      return "[ \\n\\r\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
     }
   }
   if (!enable_newline_) {
@@ -1656,9 +1656,9 @@ std::string IndentManager::EndSeparator() {
 std::string IndentManager::EmptySeparator() {
   if (any_whitespace_) {
     if (!max_whitespace_cnt_.has_value()) {
-      return "[ \\n\\t]*";
+      return "[ \\n\\r\\t]*";
     } else {
-      return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+      return "[ \\n\\r\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
     }
   }
   return "\"\"";
@@ -1669,16 +1669,16 @@ std::string IndentManager::NextSeparator(bool is_end) {
     if (is_first_.back() || is_end) {
       is_first_.back() = false;
       if (!max_whitespace_cnt_.has_value()) {
-        return "[ \\n\\t]*";
+        return "[ \\n\\r\\t]*";
       } else {
-        return "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+        return "[ \\n\\r\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
       }
     } else {
       std::string whitespace_part;
       if (!max_whitespace_cnt_.has_value()) {
-        whitespace_part = "[ \\n\\t]*";
+        whitespace_part = "[ \\n\\r\\t]*";
       } else {
-        whitespace_part = "[ \\n\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
+        whitespace_part = "[ \\n\\r\\t]{0," + std::to_string(max_whitespace_cnt_.value()) + "}";
       }
       return whitespace_part + " \"" + separator_ + "\" " + whitespace_part;
     }
@@ -1987,13 +1987,15 @@ int32_t JSONSchemaConverter::AddSubGrammar(const Grammar& grammar) {
 
 std::string JSONSchemaConverter::GetWhitespacePattern() const {
   if (!max_whitespace_cnt_.has_value()) {
-    return "[ \\n\\t]*";
+    return "[ \\n\\r\\t]*";
   }
-  return "[ \\n\\t]{0," + std::to_string(*max_whitespace_cnt_) + "}";
+  return "[ \\n\\r\\t]{0," + std::to_string(*max_whitespace_cnt_) + "}";
 }
 
 int32_t JSONSchemaConverter::WhitespaceExpression() {
-  std::vector<CharacterClassElement> elements = {{' ', ' '}, {'\n', '\n'}, {'\t', '\t'}};
+  std::vector<CharacterClassElement> elements = {
+      {' ', ' '}, {'\n', '\n'}, {'\r', '\r'}, {'\t', '\t'}
+  };
   if (!max_whitespace_cnt_.has_value()) {
     if (!whitespace_expr_id_.has_value()) {
       whitespace_expr_id_ = builder_.AddCharacterClassStar(elements);
