@@ -509,5 +509,18 @@ def test_empty(regex: str):
     assert not _is_grammar_accept_string(grammar, "a")
 
 
+# A NUL makes the std::string non-empty while its c_str() is empty (leading NUL)
+# or truncated (later NUL). ParseUTF8 consumes the C string, so a leading NUL
+# used to yield an empty codepoint vector and an out-of-bounds read, and a later
+# one silently compiled just the prefix.
+null_regex = ["\0", "\0abc", "a\0b", "[0-9]+\0"]
+
+
+@pytest.mark.parametrize("regex", null_regex)
+def test_null_character(regex: str):
+    with pytest.raises(RuntimeError, match="The regex must not contain null characters."):
+        xgr.Grammar.from_regex(regex)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

@@ -24,6 +24,14 @@ class RegexConverter {
  public:
   explicit RegexConverter(const std::string& regex) : regex_(regex) {
     if (!regex.empty()) {
+      // ParseUTF8 takes a C string and stops at the first NUL, so a regex
+      // containing one would either yield an empty codepoint vector (leading
+      // NUL -- an out-of-bounds read below) or be silently truncated to the
+      // prefix. A NUL is never meaningful in a regex, so reject it here.
+      if (regex.find('\0') != std::string::npos) {
+        XGRAMMAR_LOG(FATAL) << "The regex must not contain null characters.";
+        XGRAMMAR_UNREACHABLE();
+      }
       regex_codepoints_ = ParseUTF8(regex_.c_str(), false);
       if (regex_codepoints_[0] == kInvalidUTF8) {
         XGRAMMAR_LOG(FATAL) << "The regex is not a valid UTF-8 string.";
