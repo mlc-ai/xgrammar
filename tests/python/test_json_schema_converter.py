@@ -2419,6 +2419,46 @@ def test_min_max_length():
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
 
 
+def test_string_pattern_with_length():
+    # When a string schema has both a pattern and length constraints, the length must be enforced
+    # on top of the pattern. The single-element anchored pattern ^[a-z]+$ has its own repetition
+    # range [1, inf), which is intersected with [minLength, maxLength] -> [2, 4].
+    schema = {"type": "string", "pattern": "^[a-z]+$", "minLength": 2, "maxLength": 4}
+
+    check_schema_with_instance(schema, '"ab"')
+    check_schema_with_instance(schema, '"abcd"')
+    check_schema_with_instance(schema, '"a"', is_accepted=False)  # shorter than minLength
+    check_schema_with_instance(schema, '"abcde"', is_accepted=False)  # longer than maxLength
+    check_schema_with_instance(schema, '"AB"', is_accepted=False)  # violates the pattern
+
+    # Length is counted in Unicode code points, not bytes: a dot element counts each code point
+    # once regardless of its UTF-8 byte width.
+    cp_schema = {"type": "string", "pattern": "^.+$", "minLength": 2, "maxLength": 3}
+    check_schema_with_instance(cp_schema, '"你好"')  # 你好 -> 2 code points
+    check_schema_with_instance(
+        cp_schema, '"你好啊呀"', is_accepted=False
+    )  # 你好啊呀 -> 4 code points
+
+
+@pytest.mark.xfail(
+    reason="alternation patterns are not a recognized single-element shape, so the length "
+    "constraints cannot be merged into the pattern and are not enforced"
+)
+def test_string_pattern_alternation_with_length():
+    schema = {"type": "string", "pattern": "^(cat|dog)$", "minLength": 5, "maxLength": 10}
+    # "cat" has only 3 code points, so it should be rejected by minLength=5. Because the pattern
+    # is an alternation rather than a single repeated element, the length is not enforced today,
+    # so this acceptance check fails (xfail).
+    check_schema_with_instance(schema, '"cat"', is_accepted=False)
+
+
+def test_string_pattern_with_length_unsupported_shape_warns(capfd):
+    schema = {"type": "string", "pattern": "^(cat|dog)$", "minLength": 5, "maxLength": 10}
+    xgr.Grammar.from_json_schema(json.dumps(schema))
+    captured = capfd.readouterr()
+    assert "not a recognized shape for length" in (captured.err + captured.out)
+
+
 def test_type_array():
     schema = {
         "type": ["integer", "string"],

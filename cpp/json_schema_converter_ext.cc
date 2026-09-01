@@ -285,6 +285,18 @@ int32_t XMLToolCallingConverter::GenerateString(
       }
     }
     if (spec.pattern.has_value()) {
+      // Same route-C length merge as the JSON branch, but without the surrounding quotes
+      // (XML string form). See TryBuildPatternLengthContent for the code-point reasoning.
+      if (spec.min_length != 0 || spec.max_length != -1) {
+        if (auto body = TryBuildPatternLengthContent(spec, rule_name, /*json_string=*/false)) {
+          return *body;
+        }
+        XGRAMMAR_LOG(WARNING
+        ) << "String schema combines pattern \""
+          << *spec.pattern
+          << "\" with minLength/maxLength, but the pattern is not a recognized shape for "
+             "length merging; the length constraints will not be enforced.";
+      }
       return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
     }
     return Repeat(
