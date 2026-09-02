@@ -1632,5 +1632,14 @@ def test_stag_any_tokens_exclude_redispatch():
     assert m.is_terminated()
 
 
+def test_token_edge_id_out_of_vocab_raises():
+    # Token ids index per-token arrays during compilation, so an id outside the vocabulary must be
+    # rejected with an error instead of being read out of bounds.
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c", "d"])
+    grammar = xgr.Grammar.from_ebnf('root ::= Token(2147483647) "c"\n')
+    with pytest.raises(RuntimeError):
+        xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

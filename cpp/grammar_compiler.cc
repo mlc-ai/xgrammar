@@ -733,6 +733,12 @@ const std::vector<int32_t>& GrammarMatcherForTokenMaskCache::GetTokenEdgeAccepte
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   int32_t sorted_size = static_cast<int32_t>(sorted_decoded_vocab.size());
   const auto& tid_to_sorted = tokenizer_info_.ImplPtr()->GetTokenIdToSortedVocabIndex();
+  // Out-of-vocabulary ids are rejected before compilation starts (CheckTokenIdsInVocab); guard
+  // here as well because this runs on worker threads, where an out-of-bounds read cannot be
+  // reported as an error.
+  auto sorted_index = [&](int32_t tid) {
+    return tid >= 0 && tid < static_cast<int32_t>(tid_to_sorted.size()) ? tid_to_sorted[tid] : -1;
+  };
 
   bool has_exclude_token = false;
 
@@ -740,20 +746,16 @@ const std::vector<int32_t>& GrammarMatcherForTokenMaskCache::GetTokenEdgeAccepte
     if (edge.IsToken()) {
       auto info = fsm.GetFsm().GetFsm().GetTokenEdgeInfo(edge.GetAuxIndex());
       for (int32_t i = 0; i < info.Count(); ++i) {
-        int32_t tid = info.TokenIds()[i];
-        XGRAMMAR_DCHECK(tid >= 0 && tid < static_cast<int32_t>(tid_to_sorted.size()));
-        if (tid_to_sorted[tid] >= 0) {
-          tmp_token_edge_accepted_.push_back(tid_to_sorted[tid]);
+        if (int32_t index = sorted_index(info.TokenIds()[i]); index >= 0) {
+          tmp_token_edge_accepted_.push_back(index);
         }
       }
     } else if (edge.IsExcludeToken()) {
       has_exclude_token = true;
       auto info = fsm.GetFsm().GetFsm().GetExcludeTokenEdgeInfo(edge.GetAuxIndex());
       for (int32_t i = 0; i < info.Count(); ++i) {
-        int32_t tid = info.TokenIds()[i];
-        XGRAMMAR_DCHECK(tid >= 0 && tid < static_cast<int32_t>(tid_to_sorted.size()));
-        if (tid_to_sorted[tid] >= 0) {
-          tmp_token_edge_excluded_.push_back(tid_to_sorted[tid]);
+        if (int32_t index = sorted_index(info.TokenIds()[i]); index >= 0) {
+          tmp_token_edge_excluded_.push_back(index);
         }
       }
     }
@@ -1061,10 +1063,34 @@ class GrammarCompilerSub {
   std::optional<RuleLevelCache> rule_level_cache_;
 };
 
+/*!
+ * \brief Check that every token id written in Token(...), ExcludeToken(...) and TokenTagDispatch
+ * exists in the vocabulary. They are used as indices into per-token arrays during compilation,
+ * which runs on worker threads where an error cannot be reported.
+ */
+static void CheckTokenIdsInVocab(const Grammar& grammar, int vocab_size) {
+  const CompactFSM& fsm = grammar->complete_fsm;
+  for (int state = 0; state < fsm.NumStates(); ++state) {
+    for (const auto& edge : fsm.GetEdges(state)) {
+      if (!edge.IsToken() && !edge.IsExcludeToken()) {
+        continue;
+      }
+      // Token and exclude-token edges share the [count, token_id_0, ...] aux layout.
+      const auto info = fsm.GetTokenEdgeInfo(edge.GetAuxIndex());
+      for (int32_t i = 0; i < info.Count(); ++i) {
+        XGRAMMAR_CHECK(info.TokenIds()[i] >= 0 && info.TokenIds()[i] < vocab_size)
+            << "Token id " << info.TokenIds()[i]
+            << " in the grammar is out of the vocabulary range [0, " << vocab_size << ")";
+      }
+    }
+  }
+}
+
 CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
   compiled_grammar_impl->grammar = GrammarOptimizer::Apply(grammar_unoptimized);
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
+  CheckTokenIdsInVocab(compiled_grammar_impl->grammar, tokenizer_info_.GetVocabSize());
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }

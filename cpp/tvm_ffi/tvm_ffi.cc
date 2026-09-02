@@ -903,8 +903,10 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           "xgrammar.tvm_ffi_binding.testing._is_rule_fsm_accept_string",
           [](O grammar_ref, int64_t rule_id, ffi::String input) {
             const auto& grammar = grammar_ref.as<GrammarObj>()->value;
-            XGRAMMAR_CHECK(rule_id >= 0 && rule_id < grammar->NumRules())
-                << "Rule id is out of range: " << rule_id;
+            XGRAMMAR_CHECK(
+                rule_id >= 0 && rule_id < static_cast<int64_t>(grammar->per_rule_fsms.size())
+            ) << "Rule id is out of range or the grammar has no per-rule FSMs: "
+              << rule_id;
             const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
             XGRAMMAR_CHECK(rule_fsm.has_value())
                 << "Rule " << rule_id << " does not have a finite-state machine";

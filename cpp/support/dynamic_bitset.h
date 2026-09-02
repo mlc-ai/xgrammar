@@ -261,9 +261,14 @@ class DynamicBitset {
       return ConstructDeserializeError("Expect an integer for buffer_size", type_name);
     }
     int buffer_size = static_cast<int>(arr[1].get<int64_t>());
-    if (buffer_size != GetBufferSize(size)) {
+    if (size < 0 || buffer_size != GetBufferSize(size)) {
       return ConstructDeserializeError(
           "Invalid buffer_size. Buffer size should be ceil(size / 32)", type_name
+      );
+    }
+    if (static_cast<int64_t>(arr.size()) != static_cast<int64_t>(buffer_size) + 2) {
+      return ConstructDeserializeError(
+          "Expect exactly buffer_size + 2 elements in the array", type_name
       );
     }
 

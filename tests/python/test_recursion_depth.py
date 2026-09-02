@@ -54,8 +54,8 @@ def test_recursion_exceed():
 
 def test_deeply_nested_macro_tuple_does_not_overflow():
     # Nested tuples inside a macro argument recurse once per layer; without a depth guard this
-    # overflows the stack. It must instead be rejected with a parser error.
-    grammar_str = "root ::= Token(" + "(" * 500000
+    # overflows the stack. Exceeding the 1000-layer guard must be rejected with a parser error.
+    grammar_str = "root ::= Token(" + "(" * 2000
     with pytest.raises(RuntimeError):
         xgr.Grammar.from_ebnf(grammar_str)
 

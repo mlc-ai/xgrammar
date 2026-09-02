@@ -4973,5 +4973,19 @@ def test_structural_tag_max_whitespace_cnt_compile_cache():
     assert not _is_grammar_accept_string(g_bounded, _ws_instance(5))
 
 
+def test_deeply_nested_formats_rejected():
+    # Formats are walked by several recursive passes; the nesting depth must be bounded instead of
+    # overflowing the stack.
+    def nested(depth: int) -> Dict[str, Any]:
+        fmt: Dict[str, Any] = {"type": "const_string", "value": "a"}
+        for _ in range(depth):
+            fmt = {"type": "sequence", "elements": [fmt]}
+        return fmt
+
+    xgr.Grammar.from_structural_tag({"type": "structural_tag", "format": nested(100)})
+    with pytest.raises(Exception, match="nested deeper than"):
+        xgr.Grammar.from_structural_tag({"type": "structural_tag", "format": nested(2000)})
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

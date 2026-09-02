@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "encoding.h"
+#include "json_parse.h"
 #include "logging.h"
 #include "reflection.h"
 #include "utils.h"
@@ -96,7 +97,10 @@ std::string AutoSerializeJSON(const T& value, bool add_version = false);
  * \details It supports STL types, PImpl types, reflection-based types (whose members are defined
  * through XGRAMMAR_MEMBER_TABLE or XGRAMMAR_MEMBER_ARRAY), and types who have defined a global
  * DeserializeJSONValue function. For reflection-based types, the deserialization logic is
- * automatically generated from the defined members.
+ * automatically generated from the defined members. If a reflection-based type also defines
+ * `std::optional<std::string> Validate() const`, it is called after all members are deserialized,
+ * and a returned message is reported as a deserialization error. This is where a type checks the
+ * invariants (index ranges, CSR layout, ...) that the constructors normally guarantee.
  * \param result The pointer to the result to be deserialized.
  * \param value The JSON value to be deserialized.
  * \param type_name The name of the type to be deserialized. Used for error message.
@@ -198,6 +202,31 @@ struct has_deserialize_json_global<
       "global deserializer can only apply to a default constructible type"
   );
 };
+
+template <typename, typename = void>
+struct has_validate : std::false_type {};
+
+template <typename T>
+struct has_validate<T, std::void_t<decltype(std::declval<const T&>().Validate())>>
+    : std::true_type {
+  static_assert(
+      std::is_same_v<decltype(std::declval<const T&>().Validate()), std::optional<std::string>>,
+      "Validate must be a const member function returning std::optional<std::string>"
+  );
+};
+
+/*! \brief Runs T::Validate() on a deserialized value if the type defines one. */
+template <typename T>
+inline std::optional<SerializationError> ValidateDeserialized(
+    const T& value, const std::string& type_name
+) {
+  if constexpr (has_validate<T>::value) {
+    if (auto error = value.Validate()) {
+      return ConstructDeserializeError(*error, type_name);
+    }
+  }
+  return std::nullopt;
+}
 
 template <typename>
 inline constexpr bool false_v = false;
@@ -439,7 +468,10 @@ inline std::optional<SerializationError> AutoDeserializeJSONValue(
   } else if constexpr (is_pimpl_class<T>::value) {
     return detail::json_serializer::AutoDeserializeJSONValuePImpl(result, value, type_name);
   } else if constexpr (member_trait<T>::value != member_type::kNone) {
-    return detail::json_serializer::TraitDeserializeJSONValue(result, value, type_name);
+    if (auto error = detail::json_serializer::TraitDeserializeJSONValue(result, value, type_name)) {
+      return error;
+    }
+    return detail::json_serializer::ValidateDeserialized(*result, type_name);
   } else if constexpr (std::is_same_v<T, bool>) {
     if (!value.is<bool>()) {
       return ConstructDeserializeError("Expect a boolean", type_name);
@@ -591,7 +623,7 @@ inline std::optional<SerializationError> AutoDeserializeJSON(
     T* result, const std::string& json_string, bool check_version, const std::string& type_name
 ) {
   picojson::value json_value;
-  if (auto error = picojson::parse(json_value, json_string); !error.empty()) {
+  if (auto error = ParseJSON(json_value, json_string); !error.empty()) {
     return InvalidJSONError(error);
   }
   if (check_version) {

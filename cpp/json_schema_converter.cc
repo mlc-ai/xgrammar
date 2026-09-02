@@ -29,6 +29,7 @@
 #include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
 #include "regex_converter.h"
+#include "support/json_parse.h"
 #include "support/logging.h"
 
 namespace xgrammar {
@@ -1113,10 +1114,15 @@ Result<StringSpec, SchemaError> SchemaParser::ParseString(const picojson::object
   StringSpec spec;
   if (schema.count("format")) spec.format = schema.at("format").get<std::string>();
   if (schema.count("pattern")) spec.pattern = schema.at("pattern").get<std::string>();
+  // Lengths become int32 repetition bounds. A minimum beyond int32 can never be satisfied; a
+  // maximum beyond it is unbounded in practice. Neither may wrap around when converted.
+  constexpr int64_t kMaxBound = std::numeric_limits<int32_t>::max();
   if (schema.count("minLength")) {
-    if (!schema.at("minLength").is<int64_t>()) {
+    if (!schema.at("minLength").is<int64_t>() ||
+        schema.at("minLength").get<int64_t>() > kMaxBound) {
       return ResultErr<SchemaError>(
-          SchemaErrorType::kInvalidSchema, "minLength must be an integer"
+          SchemaErrorType::kInvalidSchema,
+          "minLength must be an integer not exceeding " + std::to_string(kMaxBound)
       );
     }
     spec.min_length = static_cast<int>(schema.at("minLength").get<int64_t>());
@@ -1127,7 +1133,9 @@ Result<StringSpec, SchemaError> SchemaParser::ParseString(const picojson::object
           SchemaErrorType::kInvalidSchema, "maxLength must be an integer"
       );
     }
-    spec.max_length = static_cast<int>(schema.at("maxLength").get<int64_t>());
+    if (schema.at("maxLength").get<int64_t>() <= kMaxBound) {
+      spec.max_length = static_cast<int>(schema.at("maxLength").get<int64_t>());
+    }
   }
   if (spec.max_length != -1 && spec.min_length > spec.max_length) {
     return ResultErr<SchemaError>(
@@ -1231,6 +1239,17 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
       );
     }
     spec.max_items = schema.at("maxItems").get<int64_t>();
+  }
+  // Item counts become int32 repetition bounds, see ParseString for the rationale.
+  constexpr int64_t kMaxBound = std::numeric_limits<int32_t>::max();
+  if (spec.min_items > kMaxBound) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kInvalidSchema,
+        "minItems and minContains must not exceed " + std::to_string(kMaxBound)
+    );
+  }
+  if (spec.max_items > kMaxBound) {
+    spec.max_items = -1;
   }
 
   if (spec.max_items != -1 && spec.min_items > spec.max_items) {
@@ -2033,7 +2052,7 @@ int32_t JSONSchemaConverter::FormattingExpression(const std::string& expression)
   }
 
   picojson::value value;
-  std::string error = picojson::parse(value, expression);
+  std::string error = ParseJSON(value, expression);
   XGRAMMAR_CHECK(error.empty() && value.is<std::string>())
       << "Unsupported indentation expression: " << expression;
   return ByteString(value.get<std::string>());
@@ -4146,7 +4165,7 @@ Grammar JSONSchemaToGrammar(
     JSONFormat json_format
 ) {
   picojson::value schema_value;
-  std::string error = picojson::parse(schema_value, schema);
+  std::string error = ParseJSON(schema_value, schema);
   XGRAMMAR_CHECK(error.empty()) << "Failed to parse JSON: " << error
                                 << ". The JSON string is:" << schema;
   SchemaParser parser(schema_value, {strict_mode, json_format});
@@ -4219,7 +4238,7 @@ std::string JSONSchemaToEBNF(
     bool any_order
 ) {
   picojson::value schema_value;
-  std::string err = picojson::parse(schema_value, schema);
+  std::string err = ParseJSON(schema_value, schema);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse JSON: " << err
                               << ". The JSON string is:" << schema;
   return JSONSchemaToEBNF(
