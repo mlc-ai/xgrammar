@@ -4975,16 +4975,16 @@ def test_structural_tag_max_whitespace_cnt_compile_cache():
 
 def test_deeply_nested_formats_rejected():
     # Formats are walked by several recursive passes; the nesting depth must be bounded instead of
-    # overflowing the stack.
-    def nested(depth: int) -> Dict[str, Any]:
-        fmt: Dict[str, Any] = {"type": "const_string", "value": "a"}
-        for _ in range(depth):
-            fmt = {"type": "sequence", "elements": [fmt]}
-        return fmt
+    # overflowing the stack. The JSON is built as a string so that Python's own recursion limit is
+    # not the thing under test.
+    def nested(depth: int) -> str:
+        fmt = '{"type": "sequence", "elements": [' * depth
+        fmt += '{"type": "const_string", "value": "a"}' + "]}" * depth
+        return '{"type": "structural_tag", "format": ' + fmt + "}"
 
-    xgr.Grammar.from_structural_tag({"type": "structural_tag", "format": nested(100)})
+    xgr.Grammar.from_structural_tag(nested(50))
     with pytest.raises(Exception, match="nested deeper than"):
-        xgr.Grammar.from_structural_tag({"type": "structural_tag", "format": nested(2000)})
+        xgr.Grammar.from_structural_tag(nested(300))
 
 
 if __name__ == "__main__":

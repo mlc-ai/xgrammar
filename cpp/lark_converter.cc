@@ -1024,7 +1024,8 @@ class LarkParser {
   }
 
   // Groups recurse ParseChoice -> ParseSequence -> ParseExpr -> ParseAtom once per level, so bound
-  // the depth like the EBNF parser does instead of overflowing the stack.
+  // the depth instead of overflowing the stack. Each level uses a few KB of stack; the limit keeps
+  // a wide margin below the 1 MB main-thread stack of Windows.
   Node ParseGroupBody(const Token& open) {
     if (group_depth_ >= kMaxGroupDepth) {
       RaiseLarkError(
@@ -1166,7 +1167,7 @@ class LarkParser {
   std::vector<Token> tokens_;
   size_t position_ = 0;
   int group_depth_ = 0;
-  static constexpr int kMaxGroupDepth = 1000;
+  static constexpr int kMaxGroupDepth = 200;
 };
 
 const std::unordered_map<std::string, std::string>& CommonRegexes() {
