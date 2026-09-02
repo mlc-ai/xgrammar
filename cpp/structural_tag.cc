@@ -407,8 +407,9 @@ Result<StructuralTag, ISTError> StructuralTagParser::ParseStructuralTag(const pi
 Result<Format, ISTError> StructuralTagParser::ParseFormat(const picojson::value& value) {
   RecursionGuard guard(&parse_format_recursion_depth_);
   // The global recursion limit is far deeper than the native stack allows for the recursive passes
-  // over the format tree, so cap the nesting of formats explicitly.
-  static constexpr int kMaxFormatDepth = 1000;
+  // over the format tree (a few KB per level, and Windows has a 1 MB main-thread stack), so cap
+  // the nesting of formats explicitly.
+  static constexpr int kMaxFormatDepth = 100;
   if (parse_format_recursion_depth_ > kMaxFormatDepth) {
     return ResultErr<ISTError>(
         "Formats are nested deeper than " + std::to_string(kMaxFormatDepth) + " levels"
