@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "support/encoding.h"
+#include "support/json_parse.h"
 #include "support/json_serializer.h"
 #include "support/logging.h"
 #include "tokenizer_info_impl.h"
@@ -326,6 +327,28 @@ TokenizerInfo::Impl::Impl(
   BuildTokenCharData();
 }
 
+std::optional<std::string> TokenizerInfo::Impl::Validate() const {
+  const int64_t num_tokens = decoded_vocab_.size();
+  if (vocab_size_ < num_tokens) {
+    return "vocab_size " + std::to_string(vocab_size_) + " is smaller than the number of tokens " +
+           std::to_string(num_tokens);
+  }
+  for (const auto& [token_id, token] : sorted_decoded_vocab_) {
+    if (token_id < 0 || token_id >= num_tokens) {
+      return "sorted_decoded_vocab contains token id " + std::to_string(token_id) + " out of range";
+    }
+  }
+  if (trie_subtree_nodes_range_.size() != sorted_decoded_vocab_.size()) {
+    return "trie_subtree_nodes_range must have one entry per sorted token";
+  }
+  auto id_ok = [&](int32_t token_id) { return token_id >= 0 && token_id < vocab_size_; };
+  if (!std::all_of(stop_token_ids_.begin(), stop_token_ids_.end(), id_ok) ||
+      !std::all_of(special_token_ids_.begin(), special_token_ids_.end(), id_ok)) {
+    return "stop_token_ids or special_token_ids contains a token id out of range";
+  }
+  return std::nullopt;
+}
+
 void TokenizerInfo::Impl::BuildTokenIdToSortedVocabIndex() {
   token_id_to_sorted_vocab_index_.assign(vocab_size_, -1);
   for (int32_t i = 0; i < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++i) {
@@ -429,7 +452,7 @@ std::shared_ptr<TokenizerInfo::Impl> TokenizerInfo::Impl::FromVocabAndMetadata(
     const std::vector<std::string>& encoded_vocab, const std::string& metadata
 ) {
   picojson::value v;
-  std::string err = picojson::parse(v, metadata);
+  std::string err = ParseJSON(v, metadata);
   XGRAMMAR_CHECK(err.empty()) << "Failed to parse metadata: " << err;
 
   const picojson::object& obj = v.get<picojson::object>();
@@ -463,7 +486,7 @@ std::shared_ptr<TokenizerInfo::Impl> TokenizerInfo::Impl::FromVocabAndMetadata(
 
 std::string TokenizerInfo::Impl::DetectMetadataFromHF(const std::string& backend_str) {
   picojson::value v;
-  std::string err = picojson::parse(v, backend_str);
+  std::string err = ParseJSON(v, backend_str);
   XGRAMMAR_CHECK(err.empty() && v.is<picojson::object>()) << "Failed to parse JSON object: " << err;
   const picojson::object& obj = v.get<picojson::object>();
   VocabType vocab_type = HFTokenizerAnalyzer::DetectVocabType(obj);
@@ -530,6 +553,7 @@ std::variant<TokenizerInfo, SerializationError> TokenizerInfo::DeserializeJSON(
   if (auto err = AutoDeserializeJSON(&tokenizer_info, json_string, true, "TokenizerInfo")) {
     return err.value();
   }
+  // Derived per-token arrays are not serialized; rebuild them like the constructor does.
   tokenizer_info->BuildTokenIdToSortedVocabIndex();
   tokenizer_info->BuildTokenCharData();
   return tokenizer_info;

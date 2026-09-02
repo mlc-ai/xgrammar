@@ -3168,3 +3168,10 @@ def test_lark_suffix_stop_body_must_be_terminal_but_supports_bounded_regex(attri
         ["ab!", "abcde!"],
         ["a!", "abcdef!", "ab!!"],
     )
+
+
+def test_deeply_nested_groups_rejected():
+    # Group parsing recurses once per level; the depth must be bounded instead of overflowing the
+    # stack.
+    assert xgr.Grammar.from_lark("start: " + "(" * 100 + '"a"' + ")" * 100) is not None
+    _assert_lark_error("start: " + "(" * 2000 + '"a"' + ")" * 2000, "nested deeper than")

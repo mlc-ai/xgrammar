@@ -154,6 +154,13 @@ class Grammar::Impl {
     return rules_[root_rule_id_];
   }
 
+  /*!
+   * \brief Check that every id and offset stored in the grammar is in range. Used after
+   * deserialization, where the fields are restored verbatim and none of the builder checks run.
+   * \return An error message if the grammar is malformed.
+   */
+  std::optional<std::string> Validate() const;
+
   /*! \brief The type of the grammar expr. */
   enum class GrammarExprType : int32_t {
     // data format: [byte0, byte1, ...]
