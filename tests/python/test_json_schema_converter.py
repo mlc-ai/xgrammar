@@ -1059,9 +1059,72 @@ root ::= "{" [ \n\t]* (("\"value\"" [ \n\t]* ":" [ \n\t]* basic_string root_part
         '{ "value" : "test", "arr": [1, 2], "obj": {"a": 1} }',
         '{\n  "value"  :  "test",\n  "arr"  :  [1, 2],\n  "obj"  :  {"a": 1}\n}',
         '{\t"value"\t:\t"test",\t"arr":\t[1,\t2],\t"obj":\t{"a":\t1}\t}',
+        '{\r"value"\r:\r"test",\r"arr"\r:\r[1,\r2],\r"obj"\r:\r{"a"\r:\r1}\r}',
+        '{\r\n"value"\r\n:\r\n"test",\r\n"arr"\r\n:\r\n[1,\r\n2],'
+        '\r\n"obj"\r\n:\r\n{"a"\r\n:\r\n1}\r\n}',
+        (
+            '{ \t\r\n"value"\t\r\n: \t\r\n"test",\n\r\t "arr" : [1, 2],'
+            '\r\n\t "obj" : {"a" : 1}\r}'
+        ),
     ]
     for instance in instances:
         check_schema_with_instance(schema, instance, any_whitespace=True)
+
+    # Fixed formatting remains exact and does not silently become flexible.
+    check_schema_with_instance(schema, instances[0], any_whitespace=False)
+    for instance in instances[1:]:
+        check_schema_with_instance(schema, instance, is_accepted=False, any_whitespace=False)
+
+
+def test_json_whitespace_cr_exact_grammar_and_token_mask():
+    schema = {
+        "type": "object",
+        "properties": {"value": {"type": "integer"}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=True)
+    grammar_text = str(grammar)
+    assert "[ \\n\\r\\t]" in grammar_text
+    assert "[ \\n\\t]" not in grammar_text
+
+    valid_instances = [
+        '{\r"value"\r:\r3\r}',
+        '{\r\n"value"\r\n:\r\n3\r\n}',
+        '{ \t\r\n"value"\n\r\t :\r 3\t\n}',
+    ]
+    for instance in valid_instances:
+        assert json.loads(instance) == {"value": 3}
+        assert _is_grammar_accept_string(grammar, instance)
+
+    fixed_grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    assert _is_grammar_accept_string(fixed_grammar, '{"value": 3}')
+    for instance in valid_instances:
+        assert not _is_grammar_accept_string(fixed_grammar, instance)
+
+    vocab = ["{\r", "{\r\n", "{ \t\r\n", "{", '"value"', ":", " ", "3", "}"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    compiled = compiler.compile_json_schema(schema, any_whitespace=True)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    matcher.fill_next_token_bitmask(bitmask)
+    for token_id in range(4):
+        assert int(bitmask[0, token_id // 32]) & (1 << (token_id % 32))
+
+    for token_id in (1, 4, 5, 6, 7, 8):
+        matcher.fill_next_token_bitmask(bitmask)
+        assert int(bitmask[0, token_id // 32]) & (1 << (token_id % 32))
+        assert matcher.accept_token(token_id)
+    assert matcher.is_terminated()
+
+    fixed_compiled = compiler.compile_json_schema(schema, any_whitespace=False)
+    fixed_matcher = xgr.GrammarMatcher(fixed_compiled, terminate_without_stop_token=True)
+    fixed_matcher.fill_next_token_bitmask(bitmask)
+    for token_id in range(3):
+        assert not int(bitmask[0, token_id // 32]) & (1 << (token_id % 32))
+    assert int(bitmask[0, 3 // 32]) & (1 << (3 % 32))
 
 
 schema__err_message__test_array_schema_error_cases = [
@@ -2970,8 +3033,8 @@ def test_limited_whitespace_cnt():
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_string_sub_4 [,}\]:]))
 basic_string ::= (("\"" basic_string_sub)) (=(basic_string_sub_4 "}"))
 root ::= (("{" basic_string_sub_4 "\"key\"" basic_string_sub_4 ":" basic_string_sub_4 basic_string basic_string_sub_4 "}"))
-basic_string_sub_2 ::= ("" | ([ \n\t] basic_string_sub_3))
-basic_string_sub_3 ::= ("" | ([ \n\t]))
+basic_string_sub_2 ::= ("" | ([ \n\r\t] basic_string_sub_3))
+basic_string_sub_3 ::= ("" | ([ \n\r\t]))
 basic_string_sub_4 ::= ((basic_string_sub_2))
 """
     schema = {"type": "object", "properties": {"key": {"type": "string"}}, "required": ["key"]}
@@ -2981,8 +3044,10 @@ basic_string_sub_4 ::= ((basic_string_sub_2))
     assert str(grammar) == expected_grammar
     assert _is_grammar_accept_string(grammar, '{  "key"  :  "value"  }')
     assert _is_grammar_accept_string(grammar, '{"key":"value"}')
+    assert _is_grammar_accept_string(grammar, '{\r\n"key"\r:\t"value"\n\r}')
     assert not _is_grammar_accept_string(grammar, '{   "key"  :  "value"   }')
     assert not _is_grammar_accept_string(grammar, '{    "key"  :  "value"    }')
+    assert not _is_grammar_accept_string(grammar, '{\r\n\r"key":"value"}')
 
 
 def test_limited_whitespace_compile():
@@ -2990,8 +3055,8 @@ def test_limited_whitespace_compile():
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_string_sub_4 [,}\]:]))
 basic_string ::= (("\"" basic_string_sub)) (=(basic_string_sub_4 "}"))
 root ::= (("{" basic_string_sub_4 "\"key\"" basic_string_sub_4 ":" basic_string_sub_4 basic_string basic_string_sub_4 "}"))
-basic_string_sub_2 ::= ("" | ([ \n\t] basic_string_sub_3))
-basic_string_sub_3 ::= ("" | ([ \n\t]))
+basic_string_sub_2 ::= ("" | ([ \n\r\t] basic_string_sub_3))
+basic_string_sub_3 ::= ("" | ([ \n\r\t]))
 basic_string_sub_4 ::= ((basic_string_sub_2))
 """
     schema = {"type": "object", "properties": {"key": {"type": "string"}}, "required": ["key"]}
@@ -3006,8 +3071,10 @@ basic_string_sub_4 ::= ((basic_string_sub_2))
     assert grammar is not None
     assert _is_grammar_accept_string(grammar, '{  "key"  :  "value"  }')
     assert _is_grammar_accept_string(grammar, '{"key":"value"}')
+    assert _is_grammar_accept_string(grammar, '{\r\n"key"\r:\t"value"\n\r}')
     assert not _is_grammar_accept_string(grammar, '{   "key"  :  "value"   }')
     assert not _is_grammar_accept_string(grammar, '{    "key"  :  "value"    }')
+    assert not _is_grammar_accept_string(grammar, '{\r\n\r"key":"value"}')
 
 
 def test_utf8_in_enum():
