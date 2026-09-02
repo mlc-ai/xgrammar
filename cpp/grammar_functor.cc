@@ -2784,7 +2784,7 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
    * upper) to the resulting grammar_expr_id.
    *
    * Grammars may contain a large number of identical repetitions. E.g. a JSON schema converted
-   * with max_whitespace_cnt emits one [ \n\t]{0,n} repetition per whitespace position, so a
+   * with max_whitespace_cnt emits one [ \n\r\t]{0,n} repetition per whitespace position, so a
    * schema with 50k properties produces 200k+ identical repetitions. Expanding each occurrence
    * into its own chain of rules multiplies the rule count by more than an order of magnitude,
    * which blows up all downstream compilation stages (FSM building, token mask cache) in both

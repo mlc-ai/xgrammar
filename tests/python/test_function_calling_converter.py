@@ -111,22 +111,22 @@ test_string_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", test_string_schema_input_str_accepted)
 def test_string_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=  [ \n\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= [ \n\r\t]* "<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" ""
+root ::=  [ \n\r\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
 
     schema = {
@@ -154,24 +154,24 @@ test_additional_properties_schema_input_str_accepted = (
 )
 def test_additional_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=  [ \n\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= [ \n\r\t]* "<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -196,24 +196,24 @@ test_not_required_properties_schema_input_str_accepted = (
 )
 def test_not_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::= ( [ \n\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0) | ("<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1) | "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>" root_part_1) [ \n\t]*) | [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::= ( [ \n\r\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0) | ("<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1) | "<parameter=" xml_variable_name ">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>" root_part_1) [ \n\r\t]*) | [ \n\r\t]*
 """
 
     schema = {
@@ -242,24 +242,24 @@ test_part_required_properties_schema_input_str_accepted = (
 )
 def test_part_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=  [ \n\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
 
     schema = {
@@ -287,22 +287,22 @@ test_inner_object_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", test_inner_object_schema_input_str_accepted)
 def test_inner_object_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"city\"" [ \n\t]* ":" [ \n\t]* basic_string ""
-root_prop_0 ::= "{" [ \n\t]* (("\"street\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_0)) [ \n\t]* "}"
-root ::=  [ \n\t]* (("<parameter=address>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" "")) [ \n\t]*
+root_prop_0_part_0 ::= [ \n\r\t]* "," [ \n\r\t]* "\"city\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string ""
+root_prop_0 ::= "{" [ \n\r\t]* (("\"street\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_0)) [ \n\r\t]* "}"
+root ::=  [ \n\r\t]* (("<parameter=address>" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</parameter>" "")) [ \n\r\t]*
 """
 
     schema = {
@@ -336,29 +336,29 @@ test_numbers_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", test_numbers_schema_input_str_accepted)
 def test_numbers_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_2 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_3 ::= "true" | "false"
-root_part_2_1 ::= [ \n\t]* "<parameter=is_student>" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
-root_part_2_2 ::= "" | [ \n\t]* "<parameter=is_student>" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
+root_part_2_1 ::= [ \n\r\t]* "<parameter=is_student>" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</parameter>" ""
+root_part_2_2 ::= "" | [ \n\r\t]* "<parameter=is_student>" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</parameter>" ""
 root_part_2_3 ::= ""
-root_part_1_1 ::= root_part_2_1 | [ \n\t]* "<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_2
-root_part_1_2 ::= root_part_2_2 | [ \n\t]* "<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_3
-root_part_0_1 ::= root_part_1_1 | [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_2
-root ::=  [ \n\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0_1) | ("<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_1) | ("<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_1)) [ \n\t]*
+root_part_1_1 ::= root_part_2_1 | [ \n\r\t]* "<parameter=ID>" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_2
+root_part_1_2 ::= root_part_2_2 | [ \n\r\t]* "<parameter=ID>" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_3
+root_part_0_1 ::= root_part_1_1 | [ \n\r\t]* "<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1_2
+root ::=  [ \n\r\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0_1) | ("<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1_1) | ("<parameter=ID>" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_1)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -412,26 +412,26 @@ test_string_format_length_schema_input_str_accepted = {
 @pytest.mark.parametrize("input_str, accepted", test_string_format_length_schema_input_str_accepted)
 def test_string_format_length_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0 ::= [^]{1,}
 root_prop_1_prop_0 ::= "\"" Regex("[0-9]{5}$", json_string=true) "\""
 root_prop_1_prop_1 ::= "\"" ( ( [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ ( "." [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ )* ) | "\\" "\"" ( "\\" [ -~] | [ !#-[\]-~] )* "\\" "\"" ) "@" ( [A-Za-z0-9] ( [\-A-Za-z0-9]* [A-Za-z0-9] )? ) ( ( "." [A-Za-z0-9] [\-A-Za-z0-9]* [A-Za-z0-9] )* ) "\""
-root_prop_1_part_0 ::= [ \n\t]* "," [ \n\t]* "\"email\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_1 ""
-root_prop_1 ::= "{" [ \n\t]* (("\"phone\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_0 root_prop_1_part_0)) [ \n\t]* "}"
-root_part_0 ::= [ \n\t]* "<parameter=contact_info>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
+root_prop_1_part_0 ::= [ \n\r\t]* "," [ \n\r\t]* "\"email\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1_prop_1 ""
+root_prop_1 ::= "{" [ \n\r\t]* (("\"phone\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1_prop_0 root_prop_1_part_0)) [ \n\r\t]* "}"
+root_part_0 ::= [ \n\r\t]* "<parameter=contact_info>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" ""
+root ::=  [ \n\r\t]* (("<parameter=name>" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -463,21 +463,21 @@ test_array_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", test_array_schema_input_str_accepted)
 def test_array_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_0 ::= (("[" [ \n\t]* basic_string ([ \n\t]* "," [ \n\t]* basic_string)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-root ::=  [ \n\t]* (("<parameter=array>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" "")) [ \n\t]*
+root_prop_0 ::= (("[" [ \n\r\t]* basic_string ([ \n\r\t]* "," [ \n\r\t]* basic_string)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+root ::=  [ \n\r\t]* (("<parameter=array>" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</parameter>" "")) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -508,22 +508,22 @@ minimax_test_string_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", minimax_test_string_schema_input_str_accepted)
 def test_minimax_string_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=  [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" ""
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
 
     schema = {
@@ -551,24 +551,24 @@ minimax_test_additional_properties_schema_input_str_accepted = (
 )
 def test_minimax_additional_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=  [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -593,24 +593,24 @@ minimax_test_not_required_properties_schema_input_str_accepted = (
 )
 def test_minimax_not_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::= ( [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0) | ("<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1) | "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>" root_part_1) [ \n\t]*) | [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::= ( [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0) | ("<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1) | "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>" root_part_1) [ \n\r\t]*) | [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -641,24 +641,24 @@ minimax_test_part_required_properties_schema_input_str_accepted = (
 )
 def test_minimax_part_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=  [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -696,27 +696,27 @@ minimax_test_inner_object_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", minimax_test_inner_object_schema_input_str_accepted)
 def test_minimax_inner_object_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-root_prop_0_addl_key ::= ["] (("\"" | [^cs\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "c" ("\"" | [^i\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "i" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^y\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "y" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))) | "s" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))))))) (= [ \n\t]* [,}\]:])
-root_prop_0_part_1 ::= ([ \n\t]* "," [ \n\t]* root_prop_0_addl_key [ \n\t]* ":" [ \n\t]* root_prop_0_addl)*
-root_prop_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"city\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_1
-root_prop_0 ::= "{" [ \n\t]* (("\"street\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_0)) [ \n\t]* "}"
+root_prop_0_addl_key ::= ["] (("\"" | [^cs\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "c" ("\"" | [^i\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "i" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^y\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "y" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))) | "s" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))))))) (= [ \n\r\t]* [,}\]:])
+root_prop_0_part_1 ::= ([ \n\r\t]* "," [ \n\r\t]* root_prop_0_addl_key [ \n\r\t]* ":" [ \n\r\t]* root_prop_0_addl)*
+root_prop_0_part_0 ::= [ \n\r\t]* "," [ \n\r\t]* "\"city\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_1
+root_prop_0 ::= "{" [ \n\r\t]* (("\"street\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_0)) [ \n\r\t]* "}"
 root_addl ::= xml_string | basic_array | basic_object
-root_part_0 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root ::=  [ \n\t]* (("<parameter name=\"address\">" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root ::=  [ \n\r\t]* (("<parameter name=\"address\">" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -751,29 +751,29 @@ minimax_test_numbers_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", minimax_test_numbers_schema_input_str_accepted)
 def test_minimax_numbers_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_2 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_3 ::= "true" | "false"
-root_part_2_1 ::= [ \n\t]* "<parameter name=\"is_student\">" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
-root_part_2_2 ::= "" | [ \n\t]* "<parameter name=\"is_student\">" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
+root_part_2_1 ::= [ \n\r\t]* "<parameter name=\"is_student\">" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</parameter>" ""
+root_part_2_2 ::= "" | [ \n\r\t]* "<parameter name=\"is_student\">" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</parameter>" ""
 root_part_2_3 ::= ""
-root_part_1_1 ::= root_part_2_1 | [ \n\t]* "<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_2
-root_part_1_2 ::= root_part_2_2 | [ \n\t]* "<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_3
-root_part_0_1 ::= root_part_1_1 | [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_2
-root ::=  [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0_1) | ("<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_1) | ("<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_1)) [ \n\t]*
+root_part_1_1 ::= root_part_2_1 | [ \n\r\t]* "<parameter name=\"ID\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_2
+root_part_1_2 ::= root_part_2_2 | [ \n\r\t]* "<parameter name=\"ID\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_3
+root_part_0_1 ::= root_part_1_1 | [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1_2
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0_1) | ("<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1_1) | ("<parameter name=\"ID\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_1)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -831,26 +831,26 @@ minimax_test_string_format_length_schema_input_str_accepted = (
 )
 def test_minimax_string_format_length_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0 ::= [^]{1,}
 root_prop_1_prop_0 ::= "\"" Regex("[0-9]{5}$", json_string=true) "\""
 root_prop_1_prop_1 ::= "\"" ( ( [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ ( "." [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ )* ) | "\\" "\"" ( "\\" [ -~] | [ !#-[\]-~] )* "\\" "\"" ) "@" ( [A-Za-z0-9] ( [\-A-Za-z0-9]* [A-Za-z0-9] )? ) ( ( "." [A-Za-z0-9] [\-A-Za-z0-9]* [A-Za-z0-9] )* ) "\""
-root_prop_1_part_0 ::= [ \n\t]* "," [ \n\t]* "\"email\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_1 ""
-root_prop_1 ::= "{" [ \n\t]* (("\"phone\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_0 root_prop_1_part_0)) [ \n\t]* "}"
-root_part_0 ::= [ \n\t]* "<parameter name=\"contact_info\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=  [ \n\t]* (("<parameter name=\"name\">" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
+root_prop_1_part_0 ::= [ \n\r\t]* "," [ \n\r\t]* "\"email\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1_prop_1 ""
+root_prop_1 ::= "{" [ \n\r\t]* (("\"phone\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1_prop_0 root_prop_1_part_0)) [ \n\r\t]* "}"
+root_part_0 ::= [ \n\r\t]* "<parameter name=\"contact_info\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" ""
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -890,22 +890,22 @@ minimax_reject_wrong_parameter_format_input_str_accepted = (
 def test_minimax_reject_wrong_parameter_format(input_str: str, accepted: bool):
     """MiniMax grammar must accept <parameter name=\"key\"> but reject <parameter=key> and <parameter name=key>."""
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=  [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" ""
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -959,22 +959,22 @@ deepseek_test_string_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", deepseek_test_string_schema_input_str_accepted)
 def test_deepseek_string_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" ""
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" ""
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1000,21 +1000,21 @@ def test_deepseek_pattern_empty_leading_alternative(input_str: str, accepted: bo
     # leading '|' (root_prop_0 ::= | ...) and crash the grammar parser on the deepseek_xml path.
     # It must now be emitted as root_prop_0 ::= "" | ...
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0 ::= "" | "h" "t" "t" "p" "s" ":" "/" "/" "x" "." "c" "o" "m" "/"
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"url\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_0 [ \n\t]* "</｜DSML｜parameter>" "")) [ \n\t]*
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"url\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</｜DSML｜parameter>" "")) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1047,24 +1047,24 @@ deepseek_test_additional_properties_schema_input_str_accepted = (
 )
 def test_deepseek_additional_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root_part_0 ::= [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
+root_part_0 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1095,24 +1095,24 @@ deepseek_test_not_required_properties_schema_input_str_accepted = (
 )
 def test_deepseek_not_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
-root ::= ( [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1) | "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>" root_part_1) [ \n\t]*) | [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1
+root ::= ( [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1) | "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>" root_part_1) [ \n\r\t]*) | [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1146,24 +1146,24 @@ deepseek_test_part_required_properties_schema_input_str_accepted = (
 )
 def test_deepseek_part_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1215,27 +1215,27 @@ deepseek_test_inner_object_schema_input_str_accepted = (
 )
 def test_deepseek_inner_object_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-root_prop_0_addl_key ::= ["] (("\"" | [^cs\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "c" ("\"" | [^i\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "i" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^y\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "y" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))) | "s" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))))))) (= [ \n\t]* [,}\]:])
-root_prop_0_part_1 ::= ([ \n\t]* "," [ \n\t]* root_prop_0_addl_key [ \n\t]* ":" [ \n\t]* root_prop_0_addl)*
-root_prop_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"city\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_1
-root_prop_0 ::= "{" [ \n\t]* (("\"street\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_0)) [ \n\t]* "}"
+root_prop_0_addl_key ::= ["] (("\"" | [^cs\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "c" ("\"" | [^i\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "i" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^y\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "y" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))) | "s" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))))))) (= [ \n\r\t]* [,}\]:])
+root_prop_0_part_1 ::= ([ \n\r\t]* "," [ \n\r\t]* root_prop_0_addl_key [ \n\r\t]* ":" [ \n\r\t]* root_prop_0_addl)*
+root_prop_0_part_0 ::= [ \n\r\t]* "," [ \n\r\t]* "\"city\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_1
+root_prop_0 ::= "{" [ \n\r\t]* (("\"street\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_0)) [ \n\r\t]* "}"
 root_addl ::= xml_string | basic_array | basic_object
-root_part_0 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"address\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_0 [ \n\t]* "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"address\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1273,29 +1273,29 @@ deepseek_test_numbers_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", deepseek_test_numbers_schema_input_str_accepted)
 def test_deepseek_numbers_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_2 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_3 ::= "true" | "false"
-root_part_2_1 ::= [ \n\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</｜DSML｜parameter>" ""
-root_part_2_2 ::= "" | [ \n\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</｜DSML｜parameter>" ""
+root_part_2_1 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</｜DSML｜parameter>" ""
+root_part_2_2 ::= "" | [ \n\r\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</｜DSML｜parameter>" ""
 root_part_2_3 ::= ""
-root_part_1_1 ::= root_part_2_1 | [ \n\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_2
-root_part_1_2 ::= root_part_2_2 | [ \n\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_3
-root_part_0_1 ::= root_part_1_1 | [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1_2
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0_1) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1_1) | ("<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_1)) [ \n\t]*
+root_part_1_1 ::= root_part_2_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</｜DSML｜parameter>" root_part_2_2
+root_part_1_2 ::= root_part_2_2 | [ \n\r\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</｜DSML｜parameter>" root_part_2_3
+root_part_0_1 ::= root_part_1_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1_2
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0_1) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1_1) | ("<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</｜DSML｜parameter>" root_part_2_1)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1331,22 +1331,22 @@ deepseek_reject_wrong_parameter_format_input_str_accepted = (
 def test_deepseek_reject_wrong_parameter_format(input_str: str, accepted: bool):
     """DeepSeek grammar must accept <｜DSML｜parameter name=\"key\" string=\"true|false\">, reject Qwen and Minimax formats."""
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" ""
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" ""
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
