@@ -1008,9 +1008,9 @@ std::optional<int32_t> CohereXMLToolCallingConverter::GetCache(const std::string
   if (key.empty()) {
     return std::nullopt;
   }
-  // true and {} are equivalent schemas. At the tool-arguments root both are unrestricted
+  // "true" and {} are equivalent schemas. At the tool-arguments root both are unrestricted
   // dictionaries, while nested {} keeps using the aggregate Any body rule.
-  if (AtCohereRoot() && key == "{}") {
+  if (AtCohereRoot() && (key == "{}" || key == "true")) {
     return builder_.GetRuleId(kXMLObject);
   }
   return rule_cache_manager_.GetCache(key, nested_object_level_ > 1 && !InCohereValueContext());
