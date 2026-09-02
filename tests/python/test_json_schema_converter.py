@@ -2419,44 +2419,152 @@ def test_min_max_length():
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
 
 
-def test_string_pattern_with_length():
-    # When a string schema has both a pattern and length constraints, the length must be enforced
-    # on top of the pattern. The single-element anchored pattern ^[a-z]+$ has its own repetition
-    # range [1, inf), which is intersected with [minLength, maxLength] -> [2, 4].
-    schema = {"type": "string", "pattern": "^[a-z]+$", "minLength": 2, "maxLength": 4}
-
-    check_schema_with_instance(schema, '"ab"')
-    check_schema_with_instance(schema, '"abcd"')
-    check_schema_with_instance(schema, '"a"', is_accepted=False)  # shorter than minLength
-    check_schema_with_instance(schema, '"abcde"', is_accepted=False)  # longer than maxLength
-    check_schema_with_instance(schema, '"AB"', is_accepted=False)  # violates the pattern
-
-    # Length is counted in Unicode code points, not bytes: a dot element counts each code point
-    # once regardless of its UTF-8 byte width.
-    cp_schema = {"type": "string", "pattern": "^.+$", "minLength": 2, "maxLength": 3}
-    check_schema_with_instance(cp_schema, '"你好"')  # 你好 -> 2 code points
-    check_schema_with_instance(
-        cp_schema, '"你好啊呀"', is_accepted=False
-    )  # 你好啊呀 -> 4 code points
+# --- string schemas with both `pattern` and length bounds -------------------------------------
+#
+# Feature under test: JSONSchemaConverter::TryBuildPatternLengthContent. When a string schema
+# carries a `pattern` together with minLength/maxLength, the grammar must accept a string s
+# exactly when
+#
+#     re.fullmatch(pattern, s) and minLength <= len(s) <= maxLength      (len in Unicode code points)
+#
+# The tests below are organized around the distinct places that equivalence can break, rather than
+# around a pile of individual patterns: (1) the range-merge arithmetic, (2) the empty/unsatisfiable
+# merge, (3) code-point (not byte) counting, (4) the shape recognizer's safe fallback for shapes it
+# cannot merge, and (5) composition of the string into a larger grammar -- an object property and
+# the XML tool-calling form, which is emitted by a separate converter (json_schema_converter_ext).
 
 
-@pytest.mark.xfail(
-    reason="alternation patterns are not a recognized single-element shape, so the length "
-    "constraints cannot be merged into the pattern and are not enforced"
+def _assert_pattern_length_oracle(pattern, min_length, max_length, samples):
+    """Assert the generated grammar agrees with the re.fullmatch + code-point-length oracle.
+
+    ``samples`` are raw (unquoted) string contents; each is checked in both directions, so one list
+    pins down the exact accept/reject boundary instead of relying on hand-computed expectations.
+    """
+    schema = {"type": "string", "pattern": pattern}
+    if min_length is not None:
+        schema["minLength"] = min_length
+    if max_length is not None:
+        schema["maxLength"] = max_length
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema))
+    lo = min_length or 0
+    for s in samples:
+        within_length = lo <= len(s) and (max_length is None or len(s) <= max_length)
+        expected = bool(re.fullmatch(pattern, s)) and within_length
+        # ensure_ascii=False keeps multi-byte samples literal so the byte/code-point distinction is
+        # actually exercised (json.dumps would otherwise escape them to ASCII \uXXXX).
+        instance = json.dumps(s, ensure_ascii=False)
+        assert _is_grammar_accept_string(grammar, instance) == expected, (pattern, s, expected)
+
+
+@pytest.mark.parametrize(
+    "pattern, min_length, max_length, samples",
+    [
+        # The element's own repetition range [a, b] is intersected with [minLength, maxLength]; the
+        # samples straddle both resulting edges. Together these cover *, +, ?, {n}, {n,}, {n,m}, an
+        # escaped character-class element, and both directions of "which side is tighter".
+        ("^[a-z]{2,8}$", 4, 6, ["aaa", "aaaa", "aaaaaa", "aaaaaaa"]),  # finite ∩ finite -> [4, 6]
+        ("^[0-9]{1,3}$", 0, 10, ["", "7", "777", "7777"]),  # pattern tighter than window -> [1, 3]
+        ("^[a-z]*$", 2, 3, ["a", "aa", "aaa", "aaaa"]),  # star [0, inf) -> [2, 3]
+        ("^[a-z]+$", 0, 3, ["", "a", "aaa", "aaaa"]),  # plus [1, inf) -> [1, 3]
+        ("^[a-z]?$", 0, 5, ["", "a", "aa"]),  # optional [0, 1], window looser -> [0, 1]
+        ("^[a-f]{5}$", 2, 10, ["aaaa", "aaaaa", "aaaaaa"]),  # exact {5} unaffected by looser window
+        (
+            "^[a-z]{2,}$",
+            0,
+            4,
+            ["a", "aa", "aaaa", "aaaaa"],
+        ),  # open upper capped by window -> [2, 4]
+        (r"^\d+$", 2, 3, ["7", "77", "777", "7777"]),  # escaped character-class element (\d)
+    ],
 )
-def test_string_pattern_alternation_with_length():
-    schema = {"type": "string", "pattern": "^(cat|dog)$", "minLength": 5, "maxLength": 10}
-    # "cat" has only 3 code points, so it should be rejected by minLength=5. Because the pattern
-    # is an alternation rather than a single repeated element, the length is not enforced today,
-    # so this acceptance check fails (xfail).
-    check_schema_with_instance(schema, '"cat"', is_accepted=False)
+def test_string_pattern_length_merge_arithmetic(pattern, min_length, max_length, samples):
+    _assert_pattern_length_oracle(pattern, min_length, max_length, samples)
 
 
-def test_string_pattern_with_length_unsupported_shape_warns(capfd):
-    schema = {"type": "string", "pattern": "^(cat|dog)$", "minLength": 5, "maxLength": 10}
-    xgr.Grammar.from_json_schema(json.dumps(schema))
-    captured = capfd.readouterr()
-    assert "not a recognized shape for length" in (captured.err + captured.out)
+def test_string_pattern_length_counts_codepoints():
+    # Length is counted in Unicode code points, not UTF-8 bytes -- for `.` and for an explicit
+    # character class whose members are each multiple UTF-8 bytes.
+    _assert_pattern_length_oracle("^.+$", 2, 3, ["你", "你好", "你好啊", "你好啊呀"])
+    _assert_pattern_length_oracle("^[一-鿿]+$", 1, 2, ["你", "你好", "你好啊", "a"])
+
+
+def test_string_pattern_length_unsatisfiable():
+    # An empty merged range ([a-z]{5,} needs >= 5 characters, maxLength caps at 3) accepts no string
+    # and is reported at grammar-construction time rather than silently producing a dead grammar.
+    schema = {"type": "string", "pattern": "^[a-z]{5,}$", "maxLength": 3}
+    with pytest.raises(Exception) as e:
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+    assert "accepts no string" in str(e.value)
+
+
+@pytest.mark.parametrize(
+    "pattern, over_length_match",
+    [
+        ("^(cat|dog)$", "cat"),  # alternation: no single repeated element
+        ("^[a-z]+[0-9]+$", "a1"),  # two distinct elements
+        ("^(ab)+$", "abab"),  # a grouped (multi-character) element
+        ("^[a-z]{2}x$", "aax"),  # an element followed by a trailing literal
+    ],
+)
+def test_string_pattern_length_unrecognized_shape_falls_back(pattern, over_length_match, capfd):
+    # For shapes the merge does not recognize, the length cannot be folded into the pattern. The
+    # converter degrades safely: it keeps enforcing the pattern, warns that the length is dropped,
+    # and over-accepts on length rather than producing a wrong or empty grammar.
+    schema = {"type": "string", "pattern": pattern, "minLength": 5, "maxLength": 6}
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema))
+    warning = capfd.readouterr()
+    assert "not a recognized shape for length" in (warning.err + warning.out)
+
+    # The chosen match satisfies the pattern but lies outside [5, 6]; it is still accepted because
+    # the length is not enforced for this shape (a safe over-accept, not a wrong grammar).
+    assert len(over_length_match) not in range(5, 7)
+    assert _is_grammar_accept_string(grammar, json.dumps(over_length_match))
+    # The pattern itself is still enforced: a non-matching string is rejected.
+    assert not _is_grammar_accept_string(grammar, json.dumps("zzzzz"))
+
+
+def test_string_pattern_length_in_object_property():
+    # The merge must survive composition: the same enforcement applies when the string is a property
+    # value nested inside a larger object, not only as a top-level schema.
+    schema = {
+        "type": "object",
+        "properties": {
+            "code": {"type": "string", "pattern": "^[a-z]+$", "minLength": 2, "maxLength": 4}
+        },
+        "required": ["code"],
+    }
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema))
+    for content, accepted in [
+        ("a", False),
+        ("ab", True),
+        ("abcd", True),
+        ("abcde", False),
+        ("AB", False),
+    ]:
+        assert _is_grammar_accept_string(grammar, json.dumps({"code": content})) == accepted
+
+
+def test_string_pattern_length_in_xml_tool_call():
+    # The XML tool-calling converter overrides GenerateString in a separate translation unit
+    # (json_schema_converter_ext) and emits the length-bounded repetition without the surrounding
+    # JSON quotes. Exercise that path end-to-end so the shared helper is covered on both sides.
+    schema = {
+        "type": "object",
+        "properties": {
+            "code": {"type": "string", "pattern": "^[a-z]+$", "minLength": 2, "maxLength": 4}
+        },
+        "required": ["code"],
+    }
+    ebnf = _json_schema_to_ebnf(schema, json_format="qwen_xml")
+    for content, accepted in [
+        ("a", False),
+        ("ab", True),
+        ("abcd", True),
+        ("abcde", False),
+        ("AB", False),
+    ]:
+        instance = f"<parameter=code>{content}</parameter>"
+        assert _is_grammar_accept_string(ebnf, instance) == accepted
 
 
 def test_type_array():
