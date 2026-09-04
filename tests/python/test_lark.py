@@ -10,8 +10,7 @@ def _compile_lark(
     grammar: str, tokenizer_info: Optional[xgr.TokenizerInfo] = None
 ) -> xgr.CompiledGrammar:
     tokenizer_info = tokenizer_info or xgr.TokenizerInfo([])
-    grammar_obj = xgr.Grammar.from_lark(grammar, tokenizer_info=tokenizer_info)
-    return xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar_obj)
+    return xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_lark(grammar)
 
 
 def _matches_string(compiled: xgr.CompiledGrammar, value: str) -> bool:
@@ -74,6 +73,33 @@ def _assert_lark_error(
     assert "Lark error at line " in error
     assert ", column " in error
     return error
+
+
+def test_compile_lark_api_uses_compiler_tokenizer_and_named_grammars() -> None:
+    tokenizer_info = xgr.TokenizerInfo(["a", "<|tool|>", "b"])
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    compiled = compiler.compile_lark(
+        "start: <|tool|> @item", named_grammars={"item": 'start: "a" | "b"'}
+    )
+    assert _matches_token_sequence(compiled, [1, 0])
+    assert _matches_token_sequence(compiled, [1, 2])
+    assert not _matches_token_sequence(compiled, [0])
+
+    compiled_with_grammar_object = compiler.compile_lark(
+        "start: @item", named_grammars={"item": xgr.Grammar.from_lark('start: "a"')}
+    )
+    assert _matches_token_sequence(compiled_with_grammar_object, [0])
+
+
+def test_compile_lark_named_grammar_argument_validation() -> None:
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
+    item = xgr.Grammar.from_lark('start: "x"')
+    with pytest.raises(TypeError, match="must be a dictionary"):
+        compiler.compile_lark("start: @item", named_grammars=[item])  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="names must be strings"):
+        compiler.compile_lark("start: @item", named_grammars={1: item})  # type: ignore[dict-item]
+    with pytest.raises(TypeError, match="values must be Grammar instances or Lark strings"):
+        compiler.compile_lark("start: @item", named_grammars={"item": 1})  # type: ignore[dict-item]
 
 
 @pytest.mark.parametrize(
