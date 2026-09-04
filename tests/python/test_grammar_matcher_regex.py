@@ -121,6 +121,53 @@ def test_advanced(regex_string: str, instance: str, is_accepted: bool):
     assert _is_grammar_accept_string(grammar, instance) == is_accepted
 
 
+def test_negative_class_rejects_non_ascii_range():
+    grammar = xgr.Grammar.from_regex(r"[^а-я]+")
+    assert not _is_grammar_accept_string(grammar, "привет")
+    assert _is_grammar_accept_string(grammar, "hello")
+    assert _is_grammar_accept_string(grammar, "ПРИВЕТ")
+
+
+def test_positive_class_non_ascii_range_unchanged():
+    grammar = xgr.Grammar.from_regex(r"[а-я]+")
+    assert _is_grammar_accept_string(grammar, "привет")
+    assert not _is_grammar_accept_string(grammar, "hello")
+
+
+def test_negative_class_spans_ascii_boundary():
+    pattern = "[^a-" + chr(0xFF) + "]+"
+    grammar = xgr.Grammar.from_regex(pattern)
+    assert not _is_grammar_accept_string(grammar, "a")
+    assert not _is_grammar_accept_string(grammar, chr(0xFF))
+    assert _is_grammar_accept_string(grammar, chr(0x100))
+
+
+def test_negative_class_excludes_top_of_codepoint_domain():
+    pattern = "[^" + chr(0x10FF00) + "-" + chr(0x10FFFF) + "]+"
+    grammar = xgr.Grammar.from_regex(pattern)
+    assert not _is_grammar_accept_string(grammar, chr(0x10FFFF))
+    assert not _is_grammar_accept_string(grammar, chr(0x10FF00))
+    assert _is_grammar_accept_string(grammar, chr(0x100000))
+    assert _is_grammar_accept_string(grammar, "a")
+
+
+def test_negative_class_non_ascii_masks_excluded_token():
+    vocab = ["a", "b", " ", "привет", "<eos>"]
+    excluded_token_id = vocab.index("привет")
+    tokenizer_info = xgr.TokenizerInfo(
+        vocab, vocab_size=len(vocab), stop_token_ids=[len(vocab) - 1]
+    )
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    grammar = xgr.Grammar.from_regex(r"^[^а-я]*$")
+    compiled = compiler.compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    masked = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert excluded_token_id in masked
+    assert vocab.index("a") not in masked
+
+
 regex_input_str_test_fill_next_token_bitmask = [
     (r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}", "test@email.com"),
     (r"[0-9]{3}-[0-9]{3}-[0-9]{4}", "123-456-7890"),
