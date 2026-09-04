@@ -3,6 +3,7 @@
 
 #include <picojson.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_set>
@@ -41,6 +42,7 @@ class TokenizerInfo::Impl {
   }
   const std::vector<int32_t>& GetTokenCharCounts() const;
   int32_t GetMaxTokenChars() const;
+  size_t GetMaxTokenBytes() const { return max_token_bytes_; }
   void BuildTokenCharData();
 
   std::string DumpMetadata() const;
@@ -84,6 +86,7 @@ class TokenizerInfo::Impl {
   std::vector<int32_t> token_id_to_sorted_vocab_index_;
   /*! \brief Unicode codepoint counts for the sorted decoded vocabulary. */
   int32_t max_token_chars_ = 0;
+  size_t max_token_bytes_ = 0;
   std::vector<int32_t> token_char_counts_;
 
   /*!

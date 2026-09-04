@@ -423,6 +423,22 @@ class GrammarMatcher(XGRObject):
         """
         return str(self._handle.find_jump_forward_string())
 
+    def find_jump_forward_tokens(self) -> List[int]:
+        """Find token ids that can be used for jump-forward decoding.
+
+        The decoded bytes of the returned tokens form a stable tokenizable prefix of
+        :meth:`find_jump_forward_string`. A token is kept only when no grammar-valid continuation
+        can extend across its boundary into another vocabulary token. The result uses the fewest
+        tokens possible for that stable prefix, and every token is checked against a copy of the
+        matcher. The matcher state is not changed.
+
+        Returns
+        -------
+        jump_forward_tokens : List[int]
+            Token ids that can be appended without model decoding.
+        """
+        return list(self._handle.find_jump_forward_tokens())
+
     def rollback(self, num_tokens: int = 1) -> None:
         """Rollback the matcher to a previous state by several tokens.
 
