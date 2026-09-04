@@ -441,7 +441,22 @@ int32_t XMLToolCallingConverter::GenerateObject(
 ) {
   nested_object_level_++;
   bool need_brace = nested_object_level_ > 1;
-  auto result = JSONSchemaConverter::GenerateObject(spec, rule_name, need_brace);
+  // The root XML object is not wrapped in braces: its properties are emitted as
+  // separate `<parameter=key>value</parameter>` tags. When such an object cannot hold
+  // any property, the generic path degenerates into `whitespace*`, a self-loop with no
+  // non-whitespace successor. A model whose prior favours indentation can then emit
+  // whitespace until its token budget runs out instead of closing the tool call.
+  // Emitting nothing hands control straight to the enclosing structural tag's end
+  // pattern. `min_properties` needs no check here: a positive lower bound with no
+  // permitted property is already rejected as an unsatisfiable schema.
+  bool cannot_contain_properties =
+      !need_brace &&
+      (spec.max_properties == 0 ||
+       (spec.properties.empty() && spec.pattern_properties.empty() && !spec.property_names &&
+        !spec.allow_additional_properties && !spec.allow_unevaluated_properties));
+  auto result = cannot_contain_properties
+                    ? Empty()
+                    : JSONSchemaConverter::GenerateObject(spec, rule_name, need_brace);
   nested_object_level_--;
   return result;
 }
