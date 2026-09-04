@@ -65,6 +65,8 @@ const std::string XMLToolCallingConverter::kXMLString = "xml_string";
 const std::string XMLToolCallingConverter::kXMLAny = "xml_any";
 const std::string XMLToolCallingConverter::kXMLObject = "xml_object";
 const std::string XMLToolCallingConverter::kXMLVariableName = "xml_variable_name";
+const std::string CohereXMLToolCallingConverter::kCohereAnyScalar = "cohere_any_scalar";
+const std::string CohereXMLToolCallingConverter::kCohereAnyList = "cohere_any_list";
 const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
     XMLToolCallingConverter::kKeyWrapperMap = {
         {JSONFormat::kQwenXML, {"<parameter=", ">", "", "</parameter>"}},
@@ -485,6 +487,28 @@ CohereXMLToolCallingConverter::CohereXMLToolCallingConverter(
           any_order
       ) {}
 
+void CohereXMLToolCallingConverter::AddBasicRules() {
+  // The recursive Any bodies must have stable targets before kXMLAny and kXMLObject are built.
+  builder_.AddEmptyRule(kCohereAnyScalar);
+  builder_.AddEmptyRule(kCohereAnyList);
+
+  XMLToolCallingConverter::AddBasicRules();
+
+  builder_.UpdateRuleBody(
+      kCohereAnyScalar, Choice({RuleRef(kBasicNumber), RuleRef(kBasicBoolean), RuleRef(kBasicNull)})
+  );
+  // kXMLObject already provides named_any_value* through its dynamic-property formatting.
+  // Lists need the corresponding recursive sequence of unnamed Any wrappers explicitly.
+  int32_t unnamed_any_value = FormatAnyCohereParam(std::nullopt, std::nullopt);
+  builder_.UpdateRuleBody(
+      kCohereAnyList, Repeat("cohere_any_list_items", unnamed_any_value, 0, -1)
+  );
+}
+
+bool CohereXMLToolCallingConverter::AtCohereRoot() const {
+  return nested_object_level_ == 0 && object_stack_.empty() && cohere_array_level_ == 0;
+}
+
 bool CohereXMLToolCallingConverter::InCohereValueContext() const {
   return nested_object_level_ <= 1 || !object_stack_.empty() || cohere_array_level_ > 0;
 }
@@ -594,6 +618,17 @@ int32_t CohereXMLToolCallingConverter::FormatSingleCohereParam(
     const SchemaSpecPtr& schema,
     int32_t value_rule_id
 ) {
+  return FormatCohereParamWithType(
+      name, key_pattern_expr, GetCohereTypePattern(schema), value_rule_id
+  );
+}
+
+int32_t CohereXMLToolCallingConverter::FormatCohereParamWithType(
+    const std::optional<std::string>& name,
+    const std::optional<int32_t>& key_pattern_expr,
+    int32_t type_expression,
+    int32_t value_rule_id
+) {
   std::vector<int32_t> elements = {ByteString(xml_wrapper_.key_wrapper_prefix)};
   if (name.has_value()) {
     elements.push_back(ByteString(" name=\"" + *name + "\""));
@@ -603,7 +638,7 @@ int32_t CohereXMLToolCallingConverter::FormatSingleCohereParam(
     elements.push_back(ByteString("\""));
   }
   elements.push_back(ByteString(" type=\""));
-  elements.push_back(GetCohereTypePattern(schema));
+  elements.push_back(type_expression);
   elements.push_back(ByteString("\"" + xml_wrapper_.key_wrapper_suffix));
 
   if (!xml_wrapper_.value_wrapper_prefix.empty()) {
@@ -612,6 +647,27 @@ int32_t CohereXMLToolCallingConverter::FormatSingleCohereParam(
   elements.push_back(FormatCohereValue(value_rule_id));
   elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
   return Sequence(elements);
+}
+
+int32_t CohereXMLToolCallingConverter::FormatAnyCohereParam(
+    const std::optional<std::string>& name, const std::optional<int32_t>& key_pattern_expr
+) {
+  // kXMLAny is the aggregate body-only union. Wrapping it under every type would create a
+  // type/body cross product, so each wrapper deliberately references its matching component.
+  return Choice(
+      {FormatCohereParamWithType(
+           name, key_pattern_expr, ByteString("raw"), builder_.GetRuleId(kXMLString)
+       ),
+       FormatCohereParamWithType(
+           name, key_pattern_expr, ByteString("json"), builder_.GetRuleId(kCohereAnyScalar)
+       ),
+       FormatCohereParamWithType(
+           name, key_pattern_expr, ByteString("dict"), builder_.GetRuleId(kXMLObject)
+       ),
+       FormatCohereParamWithType(
+           name, key_pattern_expr, ByteString("list"), builder_.GetRuleId(kCohereAnyList)
+       )}
+  );
 }
 
 int32_t CohereXMLToolCallingConverter::FormatCohereParam(
@@ -634,6 +690,18 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParam(
       resolved_schema = ResolveRefSchema(*ref, value_rule_name);
       ref = std::get_if<RefSpec>(&resolved_schema->spec);
     } while (ref != nullptr);
+  }
+
+  // CreateRule may return any aggregate rule (cached or freshly generated), but the schema is
+  // retained along this object-property call path so Any can select correlated wrappers here.
+  if (std::holds_alternative<AnySpec>(resolved_schema->spec)) {
+    return FormatAnyCohereParam(name, key_pattern_expr);
+  }
+  if (const auto* all_of = std::get_if<AllOfSpec>(&resolved_schema->spec);
+      all_of != nullptr && all_of->schemas.size() != 1) {
+    // The base converter intentionally falls back to Any while multi-branch allOf support is
+    // incomplete. Keep that fallback canonical instead of wrapping its aggregate body as json.
+    return FormatAnyCohereParam(name, key_pattern_expr);
   }
 
   auto options = GetCohereCompositeOptions(resolved_schema);
@@ -689,10 +757,12 @@ int32_t CohereXMLToolCallingConverter::GenerateAny(
   if (!InCohereValueContext()) {
     return JSONSchemaConverter::GenerateAny(spec, rule_name);
   }
-  if (nested_object_level_ == 0) {
+  if (AtCohereRoot()) {
     return RuleRef(kXMLObject);
   }
-  return JSONSchemaConverter::GenerateAny(spec, rule_name);
+  return Choice(
+      {RuleRef(kXMLString), RuleRef(kCohereAnyScalar), RuleRef(kXMLObject), RuleRef(kCohereAnyList)}
+  );
 }
 
 int32_t CohereXMLToolCallingConverter::GenerateConst(
@@ -937,6 +1007,11 @@ void CohereXMLToolCallingConverter::AddCache(const std::string& key, int32_t rul
 std::optional<int32_t> CohereXMLToolCallingConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
+  }
+  // "true" and {} are equivalent schemas. At the tool-arguments root both are unrestricted
+  // dictionaries, while nested {} keeps using the aggregate Any body rule.
+  if (AtCohereRoot() && (key == "{}" || key == "true")) {
+    return builder_.GetRuleId(kXMLObject);
   }
   return rule_cache_manager_.GetCache(key, nested_object_level_ > 1 && !InCohereValueContext());
 }
