@@ -37,6 +37,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-14, macos-15-intel]
         python: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14', '3.14t']
+        include:
+          # Native Windows ARM64 PyTorch wheels are available for Python 3.11-3.13.
+          - {os: windows-11-vs2026-arm, python: '3.11'}
+          - {os: windows-11-vs2026-arm, python: '3.12'}
+          - {os: windows-11-vs2026-arm, python: '3.13'}
         exclude:
           - os: macos-14
             python: '3.14t'
@@ -75,6 +80,10 @@ jobs:
           echo "CXX=$(brew --prefix llvm@17)/bin/clang++" >> "$GITHUB_ENV"
           echo "$(brew --prefix llvm@17)/bin" >> "$GITHUB_PATH"
           clang++ --version
+
+      - name: Install PyTorch on Windows ARM64
+        if: matrix.os == 'windows-11-vs2026-arm'
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Build xgrammar from source
         run: |
