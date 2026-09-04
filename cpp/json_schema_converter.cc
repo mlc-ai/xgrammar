@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <climits>
 #include <cmath>
 #include <cstdint>
@@ -32,6 +33,164 @@
 #include "support/logging.h"
 
 namespace xgrammar {
+
+// ==================== Pattern + length helpers ====================
+
+namespace {
+
+// Parse the digit run pattern[begin, end) into a non-negative int. Uses std::from_chars so that
+// an overflowing quantifier (e.g. `{99999999999999999999}`) fails cleanly instead of throwing.
+// Returns false on overflow or if the range is not entirely digits.
+bool ParseNonNegativeInt(const std::string& pattern, size_t begin, size_t end, int* out) {
+  int value = 0;
+  auto [ptr, ec] = std::from_chars(pattern.data() + begin, pattern.data() + end, value);
+  if (ec != std::errc() || ptr != pattern.data() + end) return false;
+  *out = value;
+  return true;
+}
+
+// Parse a `{n}` / `{n,}` / `{n,m}` quantifier starting at pattern[pos] (which must be '{').
+// On success, sets *a/*b to the repetition range (b == -1 means unbounded) and advances *pos
+// to just past the closing '}'. Returns false if the braces do not form a valid quantifier.
+bool ParseBraceQuantifier(const std::string& pattern, size_t* pos, int* a, int* b) {
+  size_t i = *pos;  // points at '{'
+  size_t n = pattern.size();
+  ++i;  // skip '{'
+  size_t lo_begin = i;
+  while (i < n && std::isdigit(static_cast<unsigned char>(pattern[i]))) ++i;
+  if (i == lo_begin) return false;  // {n,m} requires at least the lower bound digits
+  int lo;
+  if (!ParseNonNegativeInt(pattern, lo_begin, i, &lo)) return false;  // overflow / too many digits
+  int hi;
+  if (i < n && pattern[i] == '}') {
+    hi = lo;  // {n}
+    ++i;
+  } else if (i < n && pattern[i] == ',') {
+    ++i;  // skip ','
+    size_t hi_begin = i;
+    while (i < n && std::isdigit(static_cast<unsigned char>(pattern[i]))) ++i;
+    if (i >= n || pattern[i] != '}') return false;
+    if (i == hi_begin) {
+      hi = -1;  // {n,}
+    } else if (!ParseNonNegativeInt(pattern, hi_begin, i, &hi)) {
+      return false;  // overflow / too many digits
+    }
+    ++i;  // skip '}'
+  } else {
+    return false;
+  }
+  *a = lo;
+  *b = hi;
+  *pos = i;
+  return true;
+}
+
+// Recognize an anchored single-element regex `^ E Q? $` (E = char class / `.` / escape /
+// single literal; Q = `*` `+` `?` `{n}` `{n,}` `{n,m}`, absent = exactly one). On success,
+// writes E's regex slice into *element_regex and E's own repetition range into [*a, *b]
+// (*b == -1 means unbounded). Returns false for any other shape (caller falls back).
+bool ParseSimpleAnchoredPattern(
+    const std::string& pattern, std::string* element_regex, int* a, int* b
+) {
+  // Require exact anchors: ^ ... $
+  if (pattern.size() < 3 || pattern.front() != '^' || pattern.back() != '$') return false;
+
+  size_t i = 1;                     // just past '^'
+  size_t end = pattern.size() - 1;  // index of trailing '$'
+
+  // Parse the single element E.
+  size_t elem_begin = i;
+  if (i >= end) return false;
+  char c = pattern[i];
+  if (c == '[') {
+    // Char class: scan to the matching unescaped ']'.
+    ++i;
+    // A ']' immediately after '[' or '[^' is a literal member, not the close bracket.
+    if (i < end && pattern[i] == '^') ++i;
+    if (i < end && pattern[i] == ']') ++i;
+    bool closed = false;
+    while (i < end) {
+      if (pattern[i] == '\\') {
+        i += 2;
+        continue;
+      }
+      if (pattern[i] == ']') {
+        ++i;
+        closed = true;
+        break;
+      }
+      ++i;
+    }
+    if (!closed) return false;
+  } else if (c == '\\') {
+    // Escape: two characters.
+    if (i + 1 >= end) return false;
+    i += 2;
+  } else if (c == '.') {
+    ++i;
+  } else {
+    // A single literal char. Reject regex metacharacters that would make E not a
+    // simple single element (grouping, alternation, anchors, quantifier-on-nothing).
+    if (c == '(' || c == ')' || c == '|' || c == '*' || c == '+' || c == '?' || c == '{' ||
+        c == '^' || c == '$') {
+      return false;
+    }
+    ++i;
+  }
+  size_t elem_end = i;
+  *element_regex = pattern.substr(elem_begin, elem_end - elem_begin);
+
+  // Parse the optional quantifier Q.
+  if (i == end) {
+    *a = 1;
+    *b = 1;  // exactly one
+  } else if (pattern[i] == '*') {
+    *a = 0;
+    *b = -1;
+    ++i;
+  } else if (pattern[i] == '+') {
+    *a = 1;
+    *b = -1;
+    ++i;
+  } else if (pattern[i] == '?') {
+    *a = 0;
+    *b = 1;
+    ++i;
+  } else if (pattern[i] == '{') {
+    if (!ParseBraceQuantifier(pattern, &i, a, b)) return false;
+  } else {
+    return false;
+  }
+
+  // The quantifier must be immediately followed by the trailing '$'; anything else means
+  // there is more than one element and the shape is not recognized.
+  return i == end;
+}
+
+// Merge the pattern element's upper bound with a maxLength upper bound. Both use -1 for
+// unbounded; returns -1 only if both are unbounded.
+int MergePatternLengthUpper(int element_upper, int max_length) {
+  if (element_upper == -1 && max_length == -1) return -1;
+  if (element_upper == -1) return max_length;
+  if (max_length == -1) return element_upper;
+  return std::min(element_upper, max_length);
+}
+
+// Recognize spec.pattern as an anchored single-element shape and intersect its repetition
+// range with the schema's [minLength, maxLength]. On success, writes E's regex slice and the
+// merged bounds into *element_regex / [*lo, *hi] (*hi == -1 = unbounded) and returns true;
+// returns false for any other shape. Single source of truth for the merge math, shared by the
+// unsatisfiable check in ParseString and the grammar generation in GenerateString (which rely
+// on computing the same [lo, hi]). Requires spec.pattern.has_value().
+bool TryMergePatternLength(const StringSpec& spec, std::string* element_regex, int* lo, int* hi) {
+  int elem_a, elem_b;
+  if (!ParseSimpleAnchoredPattern(*spec.pattern, element_regex, &elem_a, &elem_b)) return false;
+  *lo = std::max(elem_a, spec.min_length);
+  *hi = MergePatternLengthUpper(elem_b, spec.max_length);
+  return true;
+}
+
+}  // namespace
 
 // ==================== Spec ToString implementations ====================
 
@@ -1136,6 +1295,21 @@ Result<StringSpec, SchemaError> SchemaParser::ParseString(const picojson::object
             std::to_string(spec.max_length)
     );
   }
+  // When a pattern of a recognized simple shape (^ E Q? $) is combined with length
+  // constraints, the effective repetition range is the intersection of the element's own
+  // range with [minLength, maxLength]. If that intersection is empty (lo > hi), no string
+  // can satisfy the schema; reject it here, consistent with the minLength > maxLength case.
+  // (Alternation and other complex shapes are not detectable here; see route C limitation.)
+  if (spec.pattern.has_value() && (spec.min_length != 0 || spec.max_length != -1)) {
+    std::string unused;  // the element regex is only needed for generation, not here
+    int lo, hi;
+    if (TryMergePatternLength(spec, &unused, &lo, &hi) && hi != -1 && lo > hi) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema,
+          "pattern \"" + *spec.pattern + "\" combined with the length constraints accepts no string"
+      );
+    }
+  }
   return ResultOk(std::move(spec));
 }
 
@@ -2226,6 +2400,19 @@ int32_t JSONSchemaConverter::RegexExpression(
 
 // ==================== Generate Methods ====================
 
+std::optional<int32_t> JSONSchemaConverter::TryBuildPatternLengthContent(
+    const StringSpec& spec, const std::string& rule_name, bool json_string
+) {
+  std::string element_regex;
+  int lo, hi;
+  if (!TryMergePatternLength(spec, &element_regex, &lo, &hi)) return std::nullopt;
+  // Repeat counts element occurrences (one code point each), so the length bound is enforced in
+  // Unicode code points, not bytes. force_cfg_expansion keeps the element a code-point-level CFG
+  // rather than a byte-level FSM (e.g. `.` under maxLength counts code points).
+  int32_t element = RegexExpression(element_regex, json_string, /*force_cfg_expansion=*/true);
+  return Repeat(rule_name + "_pattern", element, lo, hi);
+}
+
 int32_t JSONSchemaConverter::GenerateInteger(
     const IntegerSpec& spec, const std::string& rule_name
 ) {
@@ -2364,6 +2551,19 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   }
   // Check for pattern
   if (spec.pattern.has_value()) {
+    // With length constraints, merge them into an anchored single-element pattern's repetition
+    // range (route C): emit the element repeated over the merged range inside the JSON quotes.
+    // Shapes that are not a recognized single element (alternation, grouping, ...) fall back to
+    // the plain pattern with a warning; without length constraints, use the plain path directly.
+    if (spec.min_length != 0 || spec.max_length != -1) {
+      if (auto body = TryBuildPatternLengthContent(spec, rule_name, /*json_string=*/true)) {
+        return Sequence({ByteString("\""), *body, ByteString("\"")});
+      }
+      XGRAMMAR_LOG(WARNING) << "String schema combines pattern \"" << *spec.pattern
+                            << "\" with minLength/maxLength, but the pattern is not a recognized "
+                               "shape for length merging; the length constraints will not be "
+                               "enforced.";
+    }
     return Sequence(
         {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
     );
