@@ -1173,15 +1173,68 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
     }
   }
 
+  // Draft-07 form: "items" may be an array of schemas applied positionally,
+  // equivalent to prefixItems (with additionalItems governing the elements
+  // beyond that list). Parse that positional form into prefix_items so the
+  // rest of this function treats it uniformly with prefixItems.
+  if (schema.count("items") && schema.at("items").is<picojson::array>()) {
+    for (const auto& item : schema.at("items").get<picojson::array>()) {
+      if (item.is<bool>() && !item.get<bool>()) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsatisfiableSchema, "items contains false"
+        );
+      } else if (!item.is<picojson::object>()) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "items array must only contain objects or booleans"
+        );
+      }
+      auto item_result = Parse(item, "item");
+      if (item_result.IsErr()) return ResultErr(std::move(item_result).UnwrapErr());
+      spec.prefix_items.push_back(std::move(item_result).Unwrap());
+    }
+  }
+
   if (schema.count("items")) {
     auto items_value = schema.at("items");
-    if (!items_value.is<bool>() && !items_value.is<picojson::object>()) {
+    if (!items_value.is<bool>() && !items_value.is<picojson::object>() &&
+        !items_value.is<picojson::array>()) {
       return ResultErr<SchemaError>(
-          SchemaErrorType::kInvalidSchema, "items must be a boolean or an object"
+          SchemaErrorType::kInvalidSchema, "items must be a boolean, an object or an array"
       );
     }
-    if (items_value.is<bool>() && !items_value.get<bool>()) {
-      spec.allow_additional_items = false;
+    if (items_value.is<picojson::array>()) {
+      // The positional items were parsed into prefix_items above. Without an
+      // explicit additionalItems we follow the strict-mode default, matching
+      // prefixItems behaviour.
+      if (schema.count("additionalItems")) {
+        auto additional_items_value = schema.at("additionalItems");
+        if (!additional_items_value.is<bool>() && !additional_items_value.is<picojson::object>()) {
+          return ResultErr<SchemaError>(
+              SchemaErrorType::kInvalidSchema, "additionalItems must be a boolean or an object"
+          );
+        }
+        if (additional_items_value.is<bool>()) {
+          spec.allow_additional_items = additional_items_value.get<bool>();
+          if (spec.allow_additional_items) {
+            spec.additional_items = SchemaSpec::Make(AnySpec{}, "", "any");
+          }
+        } else {
+          spec.allow_additional_items = true;
+          auto additional_result = Parse(additional_items_value, "additional_item");
+          if (additional_result.IsErr()) return ResultErr(std::move(additional_result).UnwrapErr());
+          spec.additional_items = std::move(additional_result).Unwrap();
+        }
+      } else if (!config_.strict_mode) {
+        spec.allow_additional_items = true;
+        spec.additional_items = SchemaSpec::Make(AnySpec{}, "", "any");
+      } else {
+        spec.allow_additional_items = false;
+      }
+    } else if (items_value.is<bool>()) {
+      spec.allow_additional_items = items_value.get<bool>();
+      if (spec.allow_additional_items) {
+        spec.additional_items = SchemaSpec::Make(AnySpec{}, "", "any");
+      }
     } else {
       spec.allow_additional_items = true;
       auto items_result = Parse(items_value, "item");
@@ -1208,6 +1261,30 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
     spec.additional_items = SchemaSpec::Make(AnySpec{}, "", "any");
   } else {
     spec.allow_additional_items = false;
+  }
+
+  // Draft-07 keyword: additionalItems only has meaning when a positional item
+  // list (prefixItems or a positional "items" array) is present; it constrains
+  // the elements beyond that list. Without a positional list the draft says it
+  // is ignored, so apply it only in that case.
+  if (schema.count("additionalItems") && !spec.prefix_items.empty()) {
+    auto additional_items_value = schema.at("additionalItems");
+    if (!additional_items_value.is<bool>() && !additional_items_value.is<picojson::object>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "additionalItems must be a boolean or an object"
+      );
+    }
+    if (additional_items_value.is<bool>()) {
+      spec.allow_additional_items = additional_items_value.get<bool>();
+      if (spec.allow_additional_items) {
+        spec.additional_items = SchemaSpec::Make(AnySpec{}, "", "any");
+      }
+    } else {
+      spec.allow_additional_items = true;
+      auto additional_result = Parse(additional_items_value, "additional_item");
+      if (additional_result.IsErr()) return ResultErr(std::move(additional_result).UnwrapErr());
+      spec.additional_items = std::move(additional_result).Unwrap();
+    }
   }
 
   if (schema.count("minItems")) {
