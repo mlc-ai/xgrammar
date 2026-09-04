@@ -100,8 +100,10 @@ struct ObjectSpec {
   std::unordered_set<std::string> required;
 
   bool allow_additional_properties = false;
+  bool has_explicit_additional_properties = false;
   SchemaSpecPtr additional_properties_schema;
   bool allow_unevaluated_properties = true;
+  bool has_explicit_unevaluated_properties = false;
   SchemaSpecPtr unevaluated_properties_schema;
   SchemaSpecPtr property_names;
 
@@ -201,12 +203,13 @@ enum class JSONFormat : int {
   kGlmXML = 4,
   kCohereXML = 5,
   kKimiK3XML = 6,
+  kMiniMaxM3XML = 7,
 };
 
 /*!
  * \brief Convert a format name to JSONFormat.
- * \param format One of "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml",
- * "cohere_xml", or "kimi_k3_xml".
+ * \param format One of "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml",
+ * "glm_xml", "cohere_xml", or "kimi_k3_xml".
  * \return The corresponding JSONFormat, or std::nullopt if the name is not recognized.
  */
 std::optional<JSONFormat> JSONFormatFromString(const std::string& format);
@@ -351,6 +354,16 @@ class JSONSchemaConverter {
       const SchemaSpecPtr& schema
   );
 
+  /*! \brief Create the grammar for a patternProperties key. */
+  virtual int32_t CreatePatternKeyRule(
+      const std::string& pattern, const std::string& rule_name_hint
+  );
+
+  /*! \brief Create the grammar for a propertyNames schema. */
+  virtual int32_t CreatePropertyNameRule(
+      const SchemaSpecPtr& spec, const std::string& rule_name_hint
+  );
+
   /*! \brief Get the basic string rule name. Override for different formats. */
   virtual std::string GetKeyPattern() const;
 
@@ -371,6 +384,9 @@ class JSONSchemaConverter {
 
   /*! \brief Get cached value by key. Returns std::nullopt if not found. */
   virtual std::optional<int32_t> GetCache(const std::string& key) const;
+
+  /*! \brief Return the encoding domain used to cache resolved references. */
+  virtual int GetRefCacheDomain() const;
 
   // ==================== Helper methods (for subclasses to use) ====================
 
@@ -480,8 +496,10 @@ class JSONSchemaConverter {
 
  private:
   void AddHelperRules();
+  std::string GetRefCacheKey(const std::string& uri) const;
 
-  std::unordered_map<std::string, int32_t> uri_to_rule_id_;  // For circular reference handling
+  // Domain-qualified URI mappings for circular reference handling.
+  std::unordered_map<std::string, int32_t> uri_to_rule_id_;
   RefResolver ref_resolver_;  // Resolves $ref URI to SchemaSpecPtr at generate time
 
   // Trie over property names, for key patterns that exclude specific properties

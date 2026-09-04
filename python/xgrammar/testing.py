@@ -25,7 +25,14 @@ def _json_schema_to_ebnf(
     max_whitespace_cnt: Optional[int] = None,
     strict_mode: bool = True,
     json_format: Literal[
-        "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml", "cohere_xml", "kimi_k3_xml"
+        "json",
+        "qwen_xml",
+        "minimax_xml",
+        "minimax_m3_xml",
+        "deepseek_xml",
+        "glm_xml",
+        "cohere_xml",
+        "kimi_k3_xml",
     ] = "json",
     any_order: bool = False,
 ) -> str:
@@ -59,9 +66,10 @@ def _json_schema_to_ebnf(
         It should be a positive integer.
 
     json_format : str, default: "json"
-        The root format of the generated grammar. One of "json", "qwen_xml", "minimax_xml",
-        "deepseek_xml", "glm_xml", "cohere_xml", "kimi_k3_xml". Formats other than "json" generate an
-        XML-style root object for tool calling, while the inner values remain JSON-style.
+        The generated grammar format. One of "json", "qwen_xml", "minimax_xml",
+        "minimax_m3_xml", "deepseek_xml", "glm_xml", "cohere_xml", or "kimi_k3_xml".
+        MiniMax M3 encodes nested objects and arrays recursively and supports fixed or runtime
+        property names; the other XML styles use their existing model-specific encodings.
 
     Returns
     -------

@@ -50,19 +50,29 @@ Grammar GrammarBuilder::Get(const std::string& root_rule_name) {
 Grammar GrammarBuilder::Get(int32_t root_rule_id) {
   XGRAMMAR_CHECK(root_rule_id >= 0 && root_rule_id < static_cast<int32_t>(grammar_->rules_.size()))
       << "The root rule id " << root_rule_id << " is out of bound.";
+  for (int32_t i = 0; i < static_cast<int32_t>(grammar_->rules_.size()); ++i) {
+    XGRAMMAR_CHECK(grammar_->rules_[i].body_expr_id >= 0)
+        << "The rule with name \"" << grammar_->rules_[i].name << "\" has no body.";
+  }
   grammar_->root_rule_id_ = root_rule_id;
   return Grammar(grammar_);
 }
 
 int32_t GrammarBuilder::AddGrammarExpr(const GrammarExpr& grammar_expr) {
+  XGRAMMAR_CHECK(grammar_expr.data_len >= 0)
+      << "Grammar expression data length cannot be negative.";
   grammar_->grammar_expr_indptr_.push_back(grammar_->grammar_expr_data_.size());
   grammar_->grammar_expr_data_.push_back(static_cast<int32_t>(grammar_expr.type));
   grammar_->grammar_expr_data_.push_back(grammar_expr.data_len);
-  grammar_->grammar_expr_data_.insert(
-      grammar_->grammar_expr_data_.end(),
-      grammar_expr.data,
-      grammar_expr.data + grammar_expr.data_len
-  );
+  if (grammar_expr.data_len > 0) {
+    XGRAMMAR_CHECK(grammar_expr.data != nullptr)
+        << "Grammar expression data cannot be null when data length is positive.";
+    grammar_->grammar_expr_data_.insert(
+        grammar_->grammar_expr_data_.end(),
+        grammar_expr.data,
+        grammar_expr.data + grammar_expr.data_len
+    );
+  }
   return static_cast<int32_t>(grammar_->grammar_expr_indptr_.size()) - 1;
 }
 
@@ -205,6 +215,40 @@ int32_t GrammarBuilder::AddTokenTagDispatch(
   }
   return AddGrammarExpr(
       {GrammarExprType::kTokenTagDispatch, data.data(), static_cast<int32_t>(data.size())}
+  );
+}
+
+int32_t GrammarBuilder::AddDynamicTag(const Grammar::Impl::DynamicTag& dynamic_tag) {
+  XGRAMMAR_CHECK(dynamic_tag.name_rule_id >= 0 && dynamic_tag.name_rule_id < NumRules())
+      << "DynamicTag name_rule_id is out of range";
+  XGRAMMAR_CHECK(dynamic_tag.content_rule_id >= 0 && dynamic_tag.content_rule_id < NumRules())
+      << "DynamicTag content_rule_id is out of range";
+  XGRAMMAR_CHECK(
+      (dynamic_tag.unique_key_scope_rule_id == -1 && dynamic_tag.reserved_names.empty()) ||
+      (dynamic_tag.unique_key_scope_rule_id >= 0 &&
+       dynamic_tag.unique_key_scope_rule_id < NumRules())
+  ) << "DynamicTag unique-key metadata requires a valid scope rule";
+  XGRAMMAR_CHECK(dynamic_tag.unique_key_scope_rule_id == -1 || !dynamic_tag.open_suffix.empty())
+      << "A unique-key DynamicTag requires a non-empty opening suffix";
+  std::vector<int32_t> data = {
+      AddByteString(dynamic_tag.open_prefix),
+      dynamic_tag.name_rule_id,
+      AddByteString(dynamic_tag.open_suffix),
+      dynamic_tag.content_rule_id,
+      AddByteString(dynamic_tag.close_prefix),
+      AddByteString(dynamic_tag.close_suffix)
+  };
+  if (dynamic_tag.unique_key_scope_rule_id >= 0) {
+    data.push_back(dynamic_tag.unique_key_scope_rule_id);
+    std::vector<int32_t> reserved_name_expr_ids;
+    reserved_name_expr_ids.reserve(dynamic_tag.reserved_names.size());
+    for (const auto& name : dynamic_tag.reserved_names) {
+      reserved_name_expr_ids.push_back(AddByteString(name));
+    }
+    data.push_back(AddChoices(reserved_name_expr_ids));
+  }
+  return AddGrammarExpr(
+      {GrammarExprType::kDynamicTag, data.data(), static_cast<int32_t>(data.size())}
   );
 }
 

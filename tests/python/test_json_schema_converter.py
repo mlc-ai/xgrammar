@@ -3185,6 +3185,22 @@ def test_pattern_properties_extra_key():
     )
 
 
+def test_additional_property_branch_cannot_repeat_fixed_key_with_pattern_properties():
+    schema = {
+        "type": "object",
+        "properties": {"fixed": {"type": "string"}},
+        "required": ["fixed"],
+        "patternProperties": {"^x_.*$": {"type": "integer"}},
+        "additionalProperties": {"type": "string"},
+    }
+    grammar = xgr.Grammar.from_json_schema(
+        json.dumps(schema), any_whitespace=False, separators=(",", ":")
+    )
+
+    assert _is_grammar_accept_string(grammar, '{"fixed":"a","x_key":1,"other":"b"}')
+    assert not _is_grammar_accept_string(grammar, '{"fixed":"a","fixed":"b"}')
+
+
 def test_pattern_properties_additional_false():
     """Regression test for #487: additionalProperties=false with both properties and patternProperties."""
     schema = {
