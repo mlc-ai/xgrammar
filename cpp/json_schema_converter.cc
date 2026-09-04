@@ -16,6 +16,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <numeric>
 #include <sstream>
 #include <string>
 #include <type_traits>
@@ -29,6 +30,7 @@
 #include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
 #include "regex_converter.h"
+#include "support/encoding.h"
 #include "support/logging.h"
 
 namespace xgrammar {
@@ -66,6 +68,8 @@ std::string BooleanSpec::ToString() const { return "BooleanSpec{}"; }
 std::string NullSpec::ToString() const { return "NullSpec{}"; }
 
 std::string AnySpec::ToString() const { return "AnySpec{}"; }
+
+std::string NeverSpec::ToString() const { return "NeverSpec{}"; }
 
 std::string ArraySpec::ToString() const {
   return "ArraySpec{prefix_items.size()=" + std::to_string(prefix_items.size()) +
@@ -183,6 +187,44 @@ bool IsSchemaAnnotationKey(const std::string& key) {
       "$schema",
   };
   return kAnnotationKeys.count(key) != 0;
+}
+
+bool EstablishesSchemaType(const picojson::value& schema) {
+  if (schema.is<bool>()) return !schema.get<bool>();
+  if (!schema.is<picojson::object>()) return false;
+  static const std::unordered_set<std::string> kTypeEstablishingKeywords = {
+      "type",
+      "$ref",
+      "const",
+      "enum",
+      "anyOf",
+      "oneOf",
+      "allOf",
+      "properties",
+      "additionalProperties",
+      "items",
+      "prefixItems",
+  };
+  for (const auto& [key, _] : schema.get<picojson::object>()) {
+    if (kTypeEstablishingKeywords.count(key)) return true;
+  }
+  return false;
+}
+
+bool SchemaDeclaresType(const picojson::object& schema, const std::string& type) {
+  auto type_it = schema.find("type");
+  if (type_it == schema.end()) return false;
+  if (type_it->second.is<std::string>()) {
+    return type_it->second.get<std::string>() == type;
+  }
+  if (!type_it->second.is<picojson::array>()) return false;
+  return std::any_of(
+      type_it->second.get<picojson::array>().begin(),
+      type_it->second.get<picojson::array>().end(),
+      [&](const picojson::value& candidate) {
+        return candidate.is<std::string>() && candidate.get<std::string>() == type;
+      }
+  );
 }
 
 bool HasOnlyKeys(
@@ -304,6 +346,63 @@ bool JSONValuesMayOverlap(const picojson::value& lhs, const picojson::value& rhs
     for (const auto& [key, lhs_value] : lhs_object) {
       auto rhs_it = rhs_object.find(key);
       if (rhs_it == rhs_object.end() || !JSONValuesMayOverlap(lhs_value, rhs_it->second)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return lhs.serialize() == rhs.serialize();
+}
+
+bool JSONValuesEqual(const picojson::value& lhs, const picojson::value& rhs) {
+  if (IsNumericValue(lhs) || IsNumericValue(rhs)) {
+    if (!IsNumericValue(lhs) || !IsNumericValue(rhs)) {
+      return false;
+    }
+    long double lhs_number = lhs.is<int64_t>() ? static_cast<long double>(lhs.get<int64_t>())
+                                               : static_cast<long double>(lhs.get<double>());
+    long double rhs_number = rhs.is<int64_t>() ? static_cast<long double>(rhs.get<int64_t>())
+                                               : static_cast<long double>(rhs.get<double>());
+    return lhs_number == rhs_number;
+  }
+  if (lhs.is<picojson::null>() || rhs.is<picojson::null>()) {
+    return lhs.is<picojson::null>() && rhs.is<picojson::null>();
+  }
+  if (lhs.is<bool>() || rhs.is<bool>()) {
+    return lhs.is<bool>() && rhs.is<bool>() && lhs.get<bool>() == rhs.get<bool>();
+  }
+  if (lhs.is<std::string>() || rhs.is<std::string>()) {
+    return lhs.is<std::string>() && rhs.is<std::string>() &&
+           lhs.get<std::string>() == rhs.get<std::string>();
+  }
+  if (lhs.is<picojson::array>() || rhs.is<picojson::array>()) {
+    if (!lhs.is<picojson::array>() || !rhs.is<picojson::array>()) {
+      return false;
+    }
+    const auto& lhs_array = lhs.get<picojson::array>();
+    const auto& rhs_array = rhs.get<picojson::array>();
+    if (lhs_array.size() != rhs_array.size()) {
+      return false;
+    }
+    for (size_t i = 0; i < lhs_array.size(); ++i) {
+      if (!JSONValuesEqual(lhs_array[i], rhs_array[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (lhs.is<picojson::object>() || rhs.is<picojson::object>()) {
+    if (!lhs.is<picojson::object>() || !rhs.is<picojson::object>()) {
+      return false;
+    }
+    const auto& lhs_object = lhs.get<picojson::object>();
+    const auto& rhs_object = rhs.get<picojson::object>();
+    if (lhs_object.size() != rhs_object.size()) {
+      return false;
+    }
+    for (const auto& [key, lhs_value] : lhs_object) {
+      auto rhs_it = rhs_object.find(key);
+      if (rhs_it == rhs_object.end() || !JSONValuesEqual(lhs_value, rhs_it->second)) {
         return false;
       }
     }
@@ -689,9 +788,32 @@ class SchemaParser {
       const picojson::object& schema, const std::string& keyword
   );
   Result<OneOfSpec, SchemaError> ParseOneOf(const picojson::object& schema);
-  Result<AllOfSpec, SchemaError> ParseAllOf(const picojson::object& schema);
+  Result<SchemaSpecPtr, SchemaError> ParseAllOf(
+      const picojson::object& schema, const std::string& rule_name_hint
+  );
   Result<TypeArraySpec, SchemaError> ParseTypeArray(
       const picojson::object& schema, const std::string& rule_name_hint
+  );
+  Result<SchemaSpecPtr, SchemaError> Intersect(
+      const SchemaSpecPtr& lhs, const SchemaSpecPtr& rhs, const std::string& rule_name_hint
+  );
+  Result<SchemaSpecPtr, SchemaError> IntersectOptions(
+      const std::vector<SchemaSpecPtr>& options,
+      const SchemaSpecPtr& other,
+      const std::string& rule_name_hint
+  );
+  Result<SchemaSpecPtr, SchemaError> IntersectFiniteValues(
+      const std::vector<std::string>& values,
+      const SchemaSpecPtr& other,
+      const std::string& rule_name_hint
+  );
+  Result<std::optional<std::string>, SchemaError> InferDefaultType(
+      const SchemaSpecPtr& schema, const std::string& rule_name_hint
+  );
+  Result<SchemaSpecPtr, SchemaError> ApplySchemaConstraint(
+      const SchemaSpecPtr& current,
+      const picojson::value& constraint,
+      const std::string& rule_name_hint
   );
 
   std::string ComputeCacheKey(const picojson::value& schema);
@@ -704,6 +826,7 @@ class SchemaParser {
   picojson::value root_schema_;
   std::unordered_map<std::string, SchemaSpecPtr> ref_cache_;
   std::unordered_map<std::string, SchemaSpecPtr> schema_cache_;
+  size_t intersection_steps_ = 0;
 };
 
 std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
@@ -773,6 +896,9 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     std::optional<std::string> default_type
 ) {
   std::string cache_key = ComputeCacheKey(schema);
+  if (default_type) {
+    cache_key += "|default:" + *default_type;
+  }
   if (schema_cache_.count(cache_key)) {
     return ResultOk(schema_cache_[cache_key]);
   }
@@ -802,7 +928,14 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
 
   SchemaSpecPtr result;
 
-  if (schema_obj.count("$ref")) {
+  if (schema_obj.count("allOf")) {
+    auto allof_result = ParseAllOf(schema_obj, rule_name_hint);
+    if (allof_result.IsErr()) return ResultErr(std::move(allof_result).UnwrapErr());
+    auto normalized = std::make_shared<SchemaSpec>(*std::move(allof_result).Unwrap());
+    normalized->cache_key = cache_key;
+    normalized->rule_name_hint = rule_name_hint;
+    result = std::move(normalized);
+  } else if (schema_obj.count("$ref")) {
     auto ref_result = ParseRef(schema_obj);
     if (ref_result.IsErr()) return ResultErr(std::move(ref_result).UnwrapErr());
     auto ref_spec = std::move(ref_result).Unwrap();
@@ -832,10 +965,6 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     } else {
       result = SchemaSpec::Make(std::move(oneof_result).Unwrap(), cache_key, rule_name_hint);
     }
-  } else if (schema_obj.count("allOf")) {
-    auto allof_result = ParseAllOf(schema_obj);
-    if (allof_result.IsErr()) return ResultErr(std::move(allof_result).UnwrapErr());
-    result = SchemaSpec::Make(std::move(allof_result).Unwrap(), cache_key, rule_name_hint);
   } else if (schema_obj.count("type") || default_type.has_value()) {
     if (schema_obj.count("type") && schema_obj.at("type").is<picojson::array>()) {
       auto type_array_result = ParseTypeArray(schema_obj, rule_name_hint);
@@ -1534,19 +1663,1052 @@ Result<OneOfSpec, SchemaError> SchemaParser::ParseOneOf(const picojson::object& 
   return ResultOk(std::move(spec));
 }
 
-Result<AllOfSpec, SchemaError> SchemaParser::ParseAllOf(const picojson::object& schema) {
-  AllOfSpec spec;
+Result<std::optional<std::string>, SchemaError> SchemaParser::InferDefaultType(
+    const SchemaSpecPtr& schema, const std::string& rule_name_hint
+) {
+  if (std::holds_alternative<IntegerSpec>(schema->spec)) return ResultOk(std::string("integer"));
+  if (std::holds_alternative<NumberSpec>(schema->spec)) return ResultOk(std::string("number"));
+  if (std::holds_alternative<StringSpec>(schema->spec)) return ResultOk(std::string("string"));
+  if (std::holds_alternative<BooleanSpec>(schema->spec)) return ResultOk(std::string("boolean"));
+  if (std::holds_alternative<NullSpec>(schema->spec)) return ResultOk(std::string("null"));
+  if (std::holds_alternative<ArraySpec>(schema->spec)) return ResultOk(std::string("array"));
+  if (std::holds_alternative<ObjectSpec>(schema->spec)) return ResultOk(std::string("object"));
+
+  if (const auto* ref = std::get_if<RefSpec>(&schema->spec)) {
+    auto resolved = ResolveRef(ref->uri, rule_name_hint + "_ref");
+    if (resolved.IsErr()) return ResultErr(std::move(resolved).UnwrapErr());
+    return InferDefaultType(std::move(resolved).Unwrap(), rule_name_hint);
+  }
+
+  auto serialized_type = [](const std::string& serialized) -> std::optional<std::string> {
+    picojson::value value;
+    if (!picojson::parse(value, serialized).empty()) return std::nullopt;
+    if (value.is<int64_t>()) return std::string("integer");
+    if (value.is<double>()) return std::string("number");
+    if (value.is<std::string>()) return std::string("string");
+    if (value.is<bool>()) return std::string("boolean");
+    if (value.is<picojson::null>()) return std::string("null");
+    if (value.is<picojson::array>()) return std::string("array");
+    if (value.is<picojson::object>()) return std::string("object");
+    return std::nullopt;
+  };
+  std::vector<std::string> finite_values;
+  if (const auto* const_spec = std::get_if<ConstSpec>(&schema->spec)) {
+    finite_values.push_back(const_spec->json_value);
+  } else if (const auto* enum_spec = std::get_if<EnumSpec>(&schema->spec)) {
+    finite_values = enum_spec->json_values;
+  }
+  if (!finite_values.empty()) {
+    std::optional<std::string> common_type;
+    for (const auto& value : finite_values) {
+      auto type = serialized_type(value);
+      if (!type) return ResultOk(std::optional<std::string>{});
+      if (!common_type) {
+        common_type = type;
+      } else if ((*common_type == "integer" && *type == "number") ||
+                 (*common_type == "number" && *type == "integer")) {
+        common_type = "number";
+      } else if (*common_type != *type) {
+        return ResultOk(std::optional<std::string>{});
+      }
+    }
+    return ResultOk(common_type);
+  }
+
+  const std::vector<SchemaSpecPtr>* options = nullptr;
+  if (const auto* any_of = std::get_if<AnyOfSpec>(&schema->spec)) {
+    options = &any_of->options;
+  } else if (const auto* one_of = std::get_if<OneOfSpec>(&schema->spec)) {
+    options = &one_of->options;
+  } else if (const auto* types = std::get_if<TypeArraySpec>(&schema->spec)) {
+    options = &types->type_schemas;
+  }
+  if (options && !options->empty()) {
+    std::optional<std::string> common_type;
+    for (const auto& option : *options) {
+      auto option_type = InferDefaultType(option, rule_name_hint);
+      if (option_type.IsErr()) return ResultErr(std::move(option_type).UnwrapErr());
+      auto inferred = std::move(option_type).Unwrap();
+      if (!inferred) return ResultOk(std::optional<std::string>{});
+      if (!common_type) {
+        common_type = inferred;
+      } else if (*common_type != *inferred) {
+        return ResultOk(std::optional<std::string>{});
+      }
+    }
+    return ResultOk(common_type);
+  }
+
+  return ResultOk(std::optional<std::string>{});
+}
+
+Result<SchemaSpecPtr, SchemaError> SchemaParser::ApplySchemaConstraint(
+    const SchemaSpecPtr& current,
+    const picojson::value& constraint,
+    const std::string& rule_name_hint
+) {
+  if (constraint.is<bool>() && constraint.get<bool>()) {
+    return ResultOk(current);
+  }
+  if (constraint.is<picojson::object>()) {
+    bool has_validation_keyword = false;
+    for (const auto& [key, _] : constraint.get<picojson::object>()) {
+      if (!IsSchemaAnnotationKey(key) && key != "$defs" && key != "definitions" && key != "$id") {
+        has_validation_keyword = true;
+        break;
+      }
+    }
+    if (!has_validation_keyword) {
+      return ResultOk(current);
+    }
+  }
+
+  const std::vector<SchemaSpecPtr>* options = nullptr;
+  if (!EstablishesSchemaType(constraint)) {
+    if (const auto* any_of = std::get_if<AnyOfSpec>(&current->spec)) {
+      options = &any_of->options;
+    } else if (const auto* one_of = std::get_if<OneOfSpec>(&current->spec)) {
+      options = &one_of->options;
+    } else if (const auto* types = std::get_if<TypeArraySpec>(&current->spec)) {
+      options = &types->type_schemas;
+    }
+  }
+  if (options) {
+    std::vector<SchemaSpecPtr> constrained_options;
+    constrained_options.reserve(options->size());
+    for (size_t i = 0; i < options->size(); ++i) {
+      auto constrained = ApplySchemaConstraint(
+          (*options)[i], constraint, rule_name_hint + "_case_" + std::to_string(i)
+      );
+      if (constrained.IsErr()) {
+        if (constrained.ErrRef().Type() == SchemaErrorType::kUnsatisfiableSchema) {
+          continue;
+        }
+        return ResultErr(std::move(constrained).UnwrapErr());
+      }
+      constrained_options.push_back(std::move(constrained).Unwrap());
+    }
+    if (constrained_options.empty()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema,
+          "allOf intersection is unsatisfiable: no union branch satisfies an untyped constraint"
+      );
+    }
+    if (constrained_options.size() == 1) {
+      return ResultOk(constrained_options.front());
+    }
+    return ResultOk(SchemaSpec::Make(AnyOfSpec{std::move(constrained_options)}, "", rule_name_hint)
+    );
+  }
+
+  picojson::value schema_to_parse = constraint;
+  std::optional<std::string> default_type;
+  if (!EstablishesSchemaType(constraint)) {
+    auto inferred = InferDefaultType(current, rule_name_hint);
+    if (inferred.IsErr()) return ResultErr(std::move(inferred).UnwrapErr());
+    default_type = std::move(inferred).Unwrap();
+    if (!default_type && constraint.is<picojson::object>()) {
+      bool has_validation_keyword = false;
+      for (const auto& [key, _] : constraint.get<picojson::object>()) {
+        if (!IsSchemaAnnotationKey(key) && key != "$defs" && key != "definitions" && key != "$id") {
+          has_validation_keyword = true;
+          break;
+        }
+      }
+      if (has_validation_keyword) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsupportedSchema,
+            "allOf cannot apply untyped constraints without a resolvable value type"
+        );
+      }
+      return ResultOk(current);
+    }
+    if (default_type && constraint.is<picojson::object>()) {
+      auto object = constraint.get<picojson::object>();
+      object["type"] = picojson::value(*default_type);
+      if (*default_type == "object" && !object.count("additionalProperties") &&
+          !object.count("unevaluatedProperties")) {
+        object["additionalProperties"] = picojson::value(true);
+      } else if (*default_type == "array" && !object.count("items") &&
+                 !object.count("unevaluatedItems")) {
+        object["items"] = picojson::value(true);
+      }
+      schema_to_parse = picojson::value(std::move(object));
+      default_type.reset();
+    }
+  }
+
+  auto parsed = Parse(schema_to_parse, rule_name_hint + "_constraint", default_type);
+  if (parsed.IsErr()) return ResultErr(std::move(parsed).UnwrapErr());
+  return Intersect(current, std::move(parsed).Unwrap(), rule_name_hint);
+}
+
+Result<SchemaSpecPtr, SchemaError> SchemaParser::ParseAllOf(
+    const picojson::object& schema, const std::string& rule_name_hint
+) {
   if (!schema.at("allOf").is<picojson::array>()) {
     return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "allOf must be an array");
   }
-  int idx = 0;
-  for (const auto& sub_schema : schema.at("allOf").get<picojson::array>()) {
-    auto sub_result = Parse(sub_schema, "all_" + std::to_string(idx));
-    if (sub_result.IsErr()) return ResultErr(std::move(sub_result).UnwrapErr());
-    spec.schemas.push_back(std::move(sub_result).Unwrap());
-    ++idx;
+
+  picojson::object sibling_schema = schema;
+  sibling_schema.erase("allOf");
+  std::optional<picojson::value> unevaluated_properties;
+  std::optional<picojson::value> unevaluated_items;
+  if (sibling_schema.count("unevaluatedProperties")) {
+    unevaluated_properties = sibling_schema.at("unevaluatedProperties");
+    sibling_schema.erase("unevaluatedProperties");
   }
-  return ResultOk(std::move(spec));
+  if (sibling_schema.count("unevaluatedItems")) {
+    unevaluated_items = sibling_schema.at("unevaluatedItems");
+    sibling_schema.erase("unevaluatedItems");
+  }
+  std::vector<picojson::value> schemas;
+  schemas.emplace_back(std::move(sibling_schema));
+  for (const auto& sub_schema : schema.at("allOf").get<picojson::array>()) {
+    schemas.push_back(sub_schema);
+  }
+
+  if (unevaluated_properties) {
+    if (!unevaluated_properties->is<bool>() && !unevaluated_properties->is<picojson::object>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "unevaluatedProperties must be a boolean or an object"
+      );
+    }
+    for (auto& sub_schema : schemas) {
+      if (!sub_schema.is<picojson::object>()) continue;
+      auto object = sub_schema.get<picojson::object>();
+      if (object.count("$ref") || object.count("anyOf") || object.count("oneOf") ||
+          object.count("allOf")) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsupportedSchema,
+            "allOf cannot combine unevaluatedProperties with nested applicators exactly"
+        );
+      }
+      if (object.count("additionalProperties")) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsupportedSchema,
+            "allOf cannot combine unevaluatedProperties with additionalProperties exactly"
+        );
+      }
+      bool object_schema = SchemaDeclaresType(object, "object") || object.count("properties") ||
+                           object.count("required") || object.count("patternProperties") ||
+                           object.count("propertyNames") || object.count("minProperties") ||
+                           object.count("maxProperties");
+      if (object_schema) {
+        object["additionalProperties"] = picojson::value(true);
+        sub_schema = picojson::value(std::move(object));
+      }
+    }
+  }
+  if (unevaluated_items) {
+    if (!unevaluated_items->is<bool>() && !unevaluated_items->is<picojson::object>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "unevaluatedItems must be a boolean or an object"
+      );
+    }
+    for (auto& sub_schema : schemas) {
+      if (!sub_schema.is<picojson::object>()) continue;
+      auto object = sub_schema.get<picojson::object>();
+      if (object.count("$ref") || object.count("anyOf") || object.count("oneOf") ||
+          object.count("allOf")) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsupportedSchema,
+            "allOf cannot combine unevaluatedItems with nested applicators exactly"
+        );
+      }
+      if (object.count("items")) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsupportedSchema,
+            "allOf cannot combine unevaluatedItems with items exactly"
+        );
+      }
+      bool array_schema = SchemaDeclaresType(object, "array") || object.count("prefixItems") ||
+                          object.count("minItems") || object.count("maxItems");
+      if (array_schema) {
+        object["items"] = picojson::value(true);
+        sub_schema = picojson::value(std::move(object));
+      }
+    }
+  }
+
+  size_t anchor = schemas.size();
+  for (size_t i = 0; i < schemas.size(); ++i) {
+    if (EstablishesSchemaType(schemas[i])) {
+      anchor = i;
+      break;
+    }
+  }
+
+  SchemaSpecPtr result = SchemaSpec::Make(AnySpec{}, "", rule_name_hint);
+  std::vector<size_t> order;
+  if (anchor < schemas.size()) order.push_back(anchor);
+  for (size_t i = 0; i < schemas.size(); ++i) {
+    if (i != anchor) order.push_back(i);
+  }
+
+  for (size_t idx : order) {
+    auto constrained =
+        ApplySchemaConstraint(result, schemas[idx], rule_name_hint + "_all_" + std::to_string(idx));
+    if (constrained.IsErr()) return ResultErr(std::move(constrained).UnwrapErr());
+    result = std::move(constrained).Unwrap();
+  }
+
+  auto apply_unevaluated = [&](const picojson::value& constraint,
+                               bool apply_to_object) -> Result<SchemaSpecPtr, SchemaError> {
+    SchemaSpecPtr additional_schema;
+    bool allow_additional = !constraint.is<bool>() || constraint.get<bool>();
+    if (!constraint.is<bool>()) {
+      auto parsed = Parse(
+          constraint,
+          rule_name_hint + (apply_to_object ? "_unevaluated_property" : "_unevaluated_item")
+      );
+      if (parsed.IsErr()) return ResultErr(std::move(parsed).UnwrapErr());
+      additional_schema = std::move(parsed).Unwrap();
+    }
+
+    std::function<Result<SchemaSpecPtr, SchemaError>(const SchemaSpecPtr&)> apply;
+    apply = [&](const SchemaSpecPtr& current) -> Result<SchemaSpecPtr, SchemaError> {
+      const std::vector<SchemaSpecPtr>* options = nullptr;
+      if (const auto* any_of = std::get_if<AnyOfSpec>(&current->spec)) {
+        options = &any_of->options;
+      } else if (const auto* one_of = std::get_if<OneOfSpec>(&current->spec)) {
+        options = &one_of->options;
+      } else if (const auto* types = std::get_if<TypeArraySpec>(&current->spec)) {
+        options = &types->type_schemas;
+      }
+      if (options) {
+        std::vector<SchemaSpecPtr> updated_options;
+        updated_options.reserve(options->size());
+        for (const auto& option : *options) {
+          auto updated = apply(option);
+          if (updated.IsErr()) return ResultErr(std::move(updated).UnwrapErr());
+          updated_options.push_back(std::move(updated).Unwrap());
+        }
+        return ResultOk(SchemaSpec::Make(AnyOfSpec{std::move(updated_options)}, "", rule_name_hint)
+        );
+      }
+
+      if (apply_to_object) {
+        const auto* object = std::get_if<ObjectSpec>(&current->spec);
+        if (!object) return ResultOk(current);
+        ObjectSpec updated = *object;
+        updated.allow_additional_properties = allow_additional;
+        updated.additional_properties_schema = additional_schema;
+        updated.allow_unevaluated_properties = false;
+        updated.unevaluated_properties_schema.reset();
+        if (!allow_additional &&
+            updated.min_properties > static_cast<int>(updated.properties.size())) {
+          return ResultErr<SchemaError>(
+              SchemaErrorType::kUnsatisfiableSchema,
+              "allOf intersection is unsatisfiable: unevaluatedProperties rejects properties "
+              "required by minProperties"
+          );
+        }
+        return ResultOk(SchemaSpec::Make(std::move(updated), "", rule_name_hint));
+      }
+
+      const auto* array = std::get_if<ArraySpec>(&current->spec);
+      if (!array) return ResultOk(current);
+      ArraySpec updated = *array;
+      updated.allow_additional_items = allow_additional;
+      updated.additional_items = additional_schema;
+      if (!allow_additional &&
+          updated.min_items > static_cast<int64_t>(updated.prefix_items.size())) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsatisfiableSchema,
+            "allOf intersection is unsatisfiable: unevaluatedItems rejects items required by "
+            "minItems"
+        );
+      }
+      return ResultOk(SchemaSpec::Make(std::move(updated), "", rule_name_hint));
+    };
+    return apply(result);
+  };
+
+  if (unevaluated_properties) {
+    auto updated = apply_unevaluated(*unevaluated_properties, true);
+    if (updated.IsErr()) return ResultErr(std::move(updated).UnwrapErr());
+    result = std::move(updated).Unwrap();
+  }
+  if (unevaluated_items) {
+    auto updated = apply_unevaluated(*unevaluated_items, false);
+    if (updated.IsErr()) return ResultErr(std::move(updated).UnwrapErr());
+    result = std::move(updated).Unwrap();
+  }
+  return ResultOk(std::move(result));
+}
+
+Result<SchemaSpecPtr, SchemaError> SchemaParser::IntersectOptions(
+    const std::vector<SchemaSpecPtr>& options,
+    const SchemaSpecPtr& other,
+    const std::string& rule_name_hint
+) {
+  std::vector<SchemaSpecPtr> intersections;
+  intersections.reserve(options.size());
+  for (size_t i = 0; i < options.size(); ++i) {
+    auto intersection = Intersect(options[i], other, rule_name_hint + "_case_" + std::to_string(i));
+    if (intersection.IsErr()) {
+      if (intersection.ErrRef().Type() == SchemaErrorType::kUnsatisfiableSchema) {
+        continue;
+      }
+      return ResultErr(std::move(intersection).UnwrapErr());
+    }
+    intersections.push_back(std::move(intersection).Unwrap());
+  }
+  if (intersections.empty()) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema,
+        "allOf intersection is unsatisfiable: no union branch can satisfy every constraint"
+    );
+  }
+  if (intersections.size() == 1) {
+    return ResultOk(intersections.front());
+  }
+  return ResultOk(SchemaSpec::Make(AnyOfSpec{std::move(intersections)}, "", rule_name_hint));
+}
+
+Result<SchemaSpecPtr, SchemaError> SchemaParser::IntersectFiniteValues(
+    const std::vector<std::string>& values,
+    const SchemaSpecPtr& other,
+    const std::string& rule_name_hint
+) {
+  std::vector<std::string> matches;
+  for (const auto& serialized : values) {
+    picojson::value value;
+    std::string parse_error = picojson::parse(value, serialized);
+    if (!parse_error.empty()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "Invalid serialized value in finite schema"
+      );
+    }
+
+    std::optional<bool> matches_other;
+    if (const auto* integer = std::get_if<IntegerSpec>(&other->spec)) {
+      if (!IsIntegerValue(value)) {
+        matches_other = false;
+      } else {
+        long double number = value.is<int64_t>() ? static_cast<long double>(value.get<int64_t>())
+                                                 : static_cast<long double>(value.get<double>());
+        EffectiveIntegerRange range = ComputeEffectiveIntegerRange(*integer);
+        bool matches_range = (!range.start || number >= static_cast<long double>(*range.start)) &&
+                             (!range.end || number <= static_cast<long double>(*range.end));
+        bool matches_multiple = true;
+        if (integer->multiple_of) {
+          if (value.is<int64_t>()) {
+            matches_multiple = IsMultipleOf(value.get<int64_t>(), *integer->multiple_of);
+          } else {
+            matches_multiple =
+                std::fmod(value.get<double>(), static_cast<double>(*integer->multiple_of)) == 0;
+          }
+        }
+        matches_other = matches_range && matches_multiple;
+      }
+    } else if (const auto* number_spec = std::get_if<NumberSpec>(&other->spec)) {
+      if (!IsNumericValue(value)) {
+        matches_other = false;
+      } else {
+        long double number = value.is<int64_t>() ? static_cast<long double>(value.get<int64_t>())
+                                                 : static_cast<long double>(value.get<double>());
+        matches_other =
+            (!number_spec->minimum || number >= static_cast<long double>(*number_spec->minimum)) &&
+            (!number_spec->maximum || number <= static_cast<long double>(*number_spec->maximum)) &&
+            (!number_spec->exclusive_minimum ||
+             number > static_cast<long double>(*number_spec->exclusive_minimum)) &&
+            (!number_spec->exclusive_maximum ||
+             number < static_cast<long double>(*number_spec->exclusive_maximum));
+      }
+    } else if (const auto* string_spec = std::get_if<StringSpec>(&other->spec)) {
+      if (!value.is<std::string>()) {
+        matches_other = false;
+      } else if (string_spec->pattern || string_spec->format) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsupportedSchema,
+            "allOf cannot filter finite string values through string constraints exactly"
+        );
+      } else {
+        size_t length = ParseUTF8(value.get<std::string>().c_str()).size();
+        matches_other = length >= static_cast<size_t>(string_spec->min_length) &&
+                        (string_spec->max_length == -1 ||
+                         length <= static_cast<size_t>(string_spec->max_length));
+      }
+    } else if (std::holds_alternative<BooleanSpec>(other->spec)) {
+      matches_other = value.is<bool>();
+    } else if (std::holds_alternative<NullSpec>(other->spec)) {
+      matches_other = value.is<picojson::null>();
+    } else {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "allOf cannot filter finite values through this schema exactly"
+      );
+    }
+
+    if (*matches_other) {
+      matches.push_back(serialized);
+    }
+  }
+
+  if (matches.empty()) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema,
+        "allOf intersection is unsatisfiable: no finite value satisfies every constraint"
+    );
+  }
+  if (matches.size() == 1) {
+    return ResultOk(SchemaSpec::Make(ConstSpec{matches.front()}, "", rule_name_hint));
+  }
+  return ResultOk(SchemaSpec::Make(EnumSpec{std::move(matches)}, "", rule_name_hint));
+}
+
+Result<SchemaSpecPtr, SchemaError> SchemaParser::Intersect(
+    const SchemaSpecPtr& lhs, const SchemaSpecPtr& rhs, const std::string& rule_name_hint
+) {
+  constexpr size_t kMaxIntersectionSteps = 4096;
+  if (++intersection_steps_ > kMaxIntersectionSteps) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "allOf intersection exceeds the supported complexity limit"
+    );
+  }
+
+  auto unsatisfiable = [](const std::string& detail) -> Result<SchemaSpecPtr, SchemaError> {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema, "allOf intersection is unsatisfiable: " + detail
+    );
+  };
+  auto unsupported = [](const std::string& detail) -> Result<SchemaSpecPtr, SchemaError> {
+    return ResultErr<SchemaError>(SchemaErrorType::kUnsupportedSchema, "allOf " + detail);
+  };
+
+  auto has_inexact_string_constraints = [](const SchemaSpecPtr& schema) {
+    const auto* string_spec = std::get_if<StringSpec>(&schema->spec);
+    return string_spec && (string_spec->pattern || string_spec->format) &&
+           (string_spec->min_length != 0 || string_spec->max_length != -1);
+  };
+  auto has_pattern_and_format = [](const SchemaSpecPtr& schema) {
+    const auto* string_spec = std::get_if<StringSpec>(&schema->spec);
+    return string_spec && string_spec->pattern && string_spec->format;
+  };
+  if (has_pattern_and_format(lhs) || has_pattern_and_format(rhs)) {
+    return unsupported("cannot combine string format and pattern exactly");
+  }
+  if ((std::holds_alternative<AnySpec>(lhs->spec) && has_inexact_string_constraints(rhs)) ||
+      (std::holds_alternative<AnySpec>(rhs->spec) && has_inexact_string_constraints(lhs))) {
+    return unsupported("cannot combine string match and length constraints exactly");
+  }
+  if (std::holds_alternative<NeverSpec>(lhs->spec) ||
+      std::holds_alternative<NeverSpec>(rhs->spec)) {
+    return unsatisfiable("a nested schema rejects every value");
+  }
+
+  if (lhs == rhs || std::holds_alternative<AnySpec>(rhs->spec)) {
+    return ResultOk(lhs);
+  }
+  if (std::holds_alternative<AnySpec>(lhs->spec)) {
+    return ResultOk(rhs);
+  }
+
+  if (const auto* ref = std::get_if<RefSpec>(&lhs->spec)) {
+    auto resolved = ResolveRef(ref->uri, rule_name_hint + "_left_ref");
+    if (resolved.IsErr()) return ResultErr(std::move(resolved).UnwrapErr());
+    return Intersect(std::move(resolved).Unwrap(), rhs, rule_name_hint);
+  }
+  if (const auto* ref = std::get_if<RefSpec>(&rhs->spec)) {
+    auto resolved = ResolveRef(ref->uri, rule_name_hint + "_right_ref");
+    if (resolved.IsErr()) return ResultErr(std::move(resolved).UnwrapErr());
+    return Intersect(lhs, std::move(resolved).Unwrap(), rule_name_hint);
+  }
+
+  if (const auto* any_of = std::get_if<AnyOfSpec>(&lhs->spec)) {
+    return IntersectOptions(any_of->options, rhs, rule_name_hint);
+  }
+  if (const auto* one_of = std::get_if<OneOfSpec>(&lhs->spec)) {
+    return IntersectOptions(one_of->options, rhs, rule_name_hint);
+  }
+  if (const auto* types = std::get_if<TypeArraySpec>(&lhs->spec)) {
+    return IntersectOptions(types->type_schemas, rhs, rule_name_hint);
+  }
+  if (const auto* any_of = std::get_if<AnyOfSpec>(&rhs->spec)) {
+    return IntersectOptions(any_of->options, lhs, rule_name_hint);
+  }
+  if (const auto* one_of = std::get_if<OneOfSpec>(&rhs->spec)) {
+    return IntersectOptions(one_of->options, lhs, rule_name_hint);
+  }
+  if (const auto* types = std::get_if<TypeArraySpec>(&rhs->spec)) {
+    return IntersectOptions(types->type_schemas, lhs, rule_name_hint);
+  }
+
+  if (const auto* all_of = std::get_if<AllOfSpec>(&lhs->spec)) {
+    SchemaSpecPtr result = rhs;
+    for (const auto& schema : all_of->schemas) {
+      auto intersection = Intersect(result, schema, rule_name_hint);
+      if (intersection.IsErr()) return ResultErr(std::move(intersection).UnwrapErr());
+      result = std::move(intersection).Unwrap();
+    }
+    return ResultOk(std::move(result));
+  }
+  if (const auto* all_of = std::get_if<AllOfSpec>(&rhs->spec)) {
+    SchemaSpecPtr result = lhs;
+    for (const auto& schema : all_of->schemas) {
+      auto intersection = Intersect(result, schema, rule_name_hint);
+      if (intersection.IsErr()) return ResultErr(std::move(intersection).UnwrapErr());
+      result = std::move(intersection).Unwrap();
+    }
+    return ResultOk(std::move(result));
+  }
+
+  auto get_finite_values = [](const SchemaSpecPtr& spec
+                           ) -> std::optional<std::vector<std::string>> {
+    if (const auto* const_spec = std::get_if<ConstSpec>(&spec->spec)) {
+      return std::vector<std::string>{const_spec->json_value};
+    }
+    if (const auto* enum_spec = std::get_if<EnumSpec>(&spec->spec)) {
+      return enum_spec->json_values;
+    }
+    return std::nullopt;
+  };
+  auto lhs_values = get_finite_values(lhs);
+  auto rhs_values = get_finite_values(rhs);
+  if (lhs_values && rhs_values) {
+    std::vector<std::string> common;
+    for (const auto& lhs_value_string : *lhs_values) {
+      picojson::value lhs_value;
+      std::string lhs_error = picojson::parse(lhs_value, lhs_value_string);
+      if (!lhs_error.empty()) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "Invalid serialized value in finite schema"
+        );
+      }
+      bool found = false;
+      for (const auto& rhs_value_string : *rhs_values) {
+        picojson::value rhs_value;
+        std::string rhs_error = picojson::parse(rhs_value, rhs_value_string);
+        if (!rhs_error.empty()) {
+          return ResultErr<SchemaError>(
+              SchemaErrorType::kInvalidSchema, "Invalid serialized value in finite schema"
+          );
+        }
+        if (JSONValuesEqual(lhs_value, rhs_value)) {
+          found = true;
+          break;
+        }
+      }
+      if (found) {
+        common.push_back(lhs_value_string);
+      }
+    }
+    if (common.empty()) {
+      return unsatisfiable("finite value sets do not overlap");
+    }
+    if (common.size() == 1) {
+      return ResultOk(SchemaSpec::Make(ConstSpec{common.front()}, "", rule_name_hint));
+    }
+    return ResultOk(SchemaSpec::Make(EnumSpec{std::move(common)}, "", rule_name_hint));
+  }
+  if (lhs_values) {
+    return IntersectFiniteValues(*lhs_values, rhs, rule_name_hint);
+  }
+  if (rhs_values) {
+    return IntersectFiniteValues(*rhs_values, lhs, rule_name_hint);
+  }
+
+  if (const auto* lhs_integer = std::get_if<IntegerSpec>(&lhs->spec)) {
+    if (const auto* rhs_integer = std::get_if<IntegerSpec>(&rhs->spec)) {
+      EffectiveIntegerRange lhs_range = ComputeEffectiveIntegerRange(*lhs_integer);
+      EffectiveIntegerRange rhs_range = ComputeEffectiveIntegerRange(*rhs_integer);
+      IntegerSpec result;
+      if (lhs_range.start || rhs_range.start) {
+        result.minimum = !lhs_range.start ? rhs_range.start
+                         : !rhs_range.start
+                             ? lhs_range.start
+                             : std::optional<int64_t>(std::max(*lhs_range.start, *rhs_range.start));
+      }
+      if (lhs_range.end || rhs_range.end) {
+        result.maximum = !lhs_range.end ? rhs_range.end
+                         : !rhs_range.end
+                             ? lhs_range.end
+                             : std::optional<int64_t>(std::min(*lhs_range.end, *rhs_range.end));
+      }
+      if (result.minimum && result.maximum && *result.minimum > *result.maximum) {
+        return unsatisfiable("integer ranges do not overlap");
+      }
+
+      if (lhs_integer->multiple_of || rhs_integer->multiple_of) {
+        int64_t lhs_multiple = lhs_integer->multiple_of.value_or(1);
+        int64_t rhs_multiple = rhs_integer->multiple_of.value_or(1);
+        int64_t divisor = std::gcd(lhs_multiple, rhs_multiple);
+        if (lhs_multiple / divisor > kIntegerMultipleOfMax / rhs_multiple) {
+          return unsupported("integer multipleOf intersection exceeds the supported limit");
+        }
+        result.multiple_of = lhs_multiple / divisor * rhs_multiple;
+        bool has_lower = result.minimum.has_value();
+        bool has_upper = result.maximum.has_value();
+        if (has_lower != has_upper) {
+          return unsupported("cannot combine integer multipleOf with a one-sided range exactly");
+        }
+        if (has_lower && has_upper) {
+          if (IsRangeWidthOverCap(
+                  *result.minimum, *result.maximum, kIntegerMultipleOfRangeWidthMax
+              )) {
+            return unsupported("integer multipleOf intersection exceeds the supported bounded range"
+            );
+          }
+          if (!HasMultipleInRange(*result.minimum, *result.maximum, *result.multiple_of)) {
+            return unsatisfiable("integer range contains no common multipleOf value");
+          }
+        }
+      }
+      return ResultOk(SchemaSpec::Make(std::move(result), "", rule_name_hint));
+    }
+    if (const auto* rhs_number = std::get_if<NumberSpec>(&rhs->spec)) {
+      auto convert_number_bounds = [&](const NumberSpec& number
+                                   ) -> Result<IntegerSpec, SchemaError> {
+        IntegerSpec converted;
+        std::optional<long double> lower;
+        std::optional<long double> upper;
+        if (number.minimum) {
+          lower = std::ceil(static_cast<long double>(*number.minimum));
+        }
+        if (number.exclusive_minimum) {
+          long double exclusive =
+              std::floor(static_cast<long double>(*number.exclusive_minimum)) + 1;
+          lower = lower ? std::max(*lower, exclusive) : exclusive;
+        }
+        if (number.maximum) {
+          upper = std::floor(static_cast<long double>(*number.maximum));
+        }
+        if (number.exclusive_maximum) {
+          long double exclusive =
+              std::ceil(static_cast<long double>(*number.exclusive_maximum)) - 1;
+          upper = upper ? std::min(*upper, exclusive) : exclusive;
+        }
+        if (lower && *lower > static_cast<long double>(std::numeric_limits<int64_t>::max())) {
+          return ResultErr<SchemaError>(
+              SchemaErrorType::kUnsatisfiableSchema,
+              "allOf intersection is unsatisfiable: numeric lower bound excludes all integers"
+          );
+        }
+        if (upper && *upper < static_cast<long double>(std::numeric_limits<int64_t>::min())) {
+          return ResultErr<SchemaError>(
+              SchemaErrorType::kUnsatisfiableSchema,
+              "allOf intersection is unsatisfiable: numeric upper bound excludes all integers"
+          );
+        }
+        if (lower && *lower > static_cast<long double>(std::numeric_limits<int64_t>::min())) {
+          converted.minimum = static_cast<int64_t>(*lower);
+        }
+        if (upper && *upper < static_cast<long double>(std::numeric_limits<int64_t>::max())) {
+          converted.maximum = static_cast<int64_t>(*upper);
+        }
+        if (converted.minimum && converted.maximum && *converted.minimum > *converted.maximum) {
+          return ResultErr<SchemaError>(
+              SchemaErrorType::kUnsatisfiableSchema,
+              "allOf intersection is unsatisfiable: numeric range contains no integer"
+          );
+        }
+        return ResultOk(std::move(converted));
+      };
+      auto converted = convert_number_bounds(*rhs_number);
+      if (converted.IsErr()) return ResultErr(std::move(converted).UnwrapErr());
+      return Intersect(
+          lhs, SchemaSpec::Make(std::move(converted).Unwrap(), "", rule_name_hint), rule_name_hint
+      );
+    }
+  }
+  if (std::holds_alternative<NumberSpec>(lhs->spec) &&
+      std::holds_alternative<IntegerSpec>(rhs->spec)) {
+    return Intersect(rhs, lhs, rule_name_hint);
+  }
+
+  if (const auto* lhs_number = std::get_if<NumberSpec>(&lhs->spec)) {
+    if (const auto* rhs_number = std::get_if<NumberSpec>(&rhs->spec)) {
+      struct Bound {
+        double value;
+        bool exclusive;
+      };
+      auto lower_bound = [](const NumberSpec& spec) -> std::optional<Bound> {
+        std::optional<Bound> result;
+        if (spec.minimum) result = Bound{*spec.minimum, false};
+        if (spec.exclusive_minimum && (!result || *spec.exclusive_minimum >= result->value)) {
+          result = Bound{*spec.exclusive_minimum, true};
+        }
+        return result;
+      };
+      auto upper_bound = [](const NumberSpec& spec) -> std::optional<Bound> {
+        std::optional<Bound> result;
+        if (spec.maximum) result = Bound{*spec.maximum, false};
+        if (spec.exclusive_maximum && (!result || *spec.exclusive_maximum <= result->value)) {
+          result = Bound{*spec.exclusive_maximum, true};
+        }
+        return result;
+      };
+      auto choose_lower = [](std::optional<Bound> left, std::optional<Bound> right) {
+        if (!left) return right;
+        if (!right) return left;
+        if (left->value != right->value) return left->value > right->value ? left : right;
+        return std::optional<Bound>{Bound{left->value, left->exclusive || right->exclusive}};
+      };
+      auto choose_upper = [](std::optional<Bound> left, std::optional<Bound> right) {
+        if (!left) return right;
+        if (!right) return left;
+        if (left->value != right->value) return left->value < right->value ? left : right;
+        return std::optional<Bound>{Bound{left->value, left->exclusive || right->exclusive}};
+      };
+
+      auto lower = choose_lower(lower_bound(*lhs_number), lower_bound(*rhs_number));
+      auto upper = choose_upper(upper_bound(*lhs_number), upper_bound(*rhs_number));
+      if (lower && upper &&
+          (lower->value > upper->value ||
+           (lower->value == upper->value && (lower->exclusive || upper->exclusive)))) {
+        return unsatisfiable("number ranges do not overlap");
+      }
+      NumberSpec result;
+      if (lower) {
+        if (lower->exclusive) {
+          result.exclusive_minimum = lower->value;
+        } else {
+          result.minimum = lower->value;
+        }
+      }
+      if (upper) {
+        if (upper->exclusive) {
+          result.exclusive_maximum = upper->value;
+        } else {
+          result.maximum = upper->value;
+        }
+      }
+      return ResultOk(SchemaSpec::Make(std::move(result), "", rule_name_hint));
+    }
+  }
+
+  if (const auto* lhs_string = std::get_if<StringSpec>(&lhs->spec)) {
+    if (const auto* rhs_string = std::get_if<StringSpec>(&rhs->spec)) {
+      int min_length = std::max(lhs_string->min_length, rhs_string->min_length);
+      int max_length = lhs_string->max_length == -1 ? rhs_string->max_length
+                       : rhs_string->max_length == -1
+                           ? lhs_string->max_length
+                           : std::min(lhs_string->max_length, rhs_string->max_length);
+      if (max_length != -1 && min_length > max_length) {
+        return unsatisfiable("string length ranges do not overlap");
+      }
+
+      auto matcher = [](const StringSpec& spec
+                     ) -> std::optional<std::pair<std::string, std::string>> {
+        if (spec.format) return std::pair<std::string, std::string>{"format", *spec.format};
+        if (spec.pattern) return std::pair<std::string, std::string>{"pattern", *spec.pattern};
+        return std::nullopt;
+      };
+      auto lhs_matcher = matcher(*lhs_string);
+      auto rhs_matcher = matcher(*rhs_string);
+      if (lhs_matcher && rhs_matcher && *lhs_matcher != *rhs_matcher) {
+        if (lhs_matcher->first == "pattern" && rhs_matcher->first == "pattern") {
+          return unsupported("cannot combine distinct string patterns exactly");
+        }
+        return unsupported("cannot combine distinct string match constraints exactly");
+      }
+      auto result_matcher = lhs_matcher ? lhs_matcher : rhs_matcher;
+      if (result_matcher && (min_length != 0 || max_length != -1)) {
+        return unsupported("cannot combine string match and length constraints exactly");
+      }
+      StringSpec result;
+      result.min_length = min_length;
+      result.max_length = max_length;
+      if (result_matcher) {
+        if (result_matcher->first == "format") {
+          result.format = result_matcher->second;
+        } else {
+          result.pattern = result_matcher->second;
+        }
+      }
+      return ResultOk(SchemaSpec::Make(std::move(result), "", rule_name_hint));
+    }
+  }
+
+  if (std::holds_alternative<BooleanSpec>(lhs->spec) &&
+      std::holds_alternative<BooleanSpec>(rhs->spec)) {
+    return ResultOk(lhs);
+  }
+  if (std::holds_alternative<NullSpec>(lhs->spec) && std::holds_alternative<NullSpec>(rhs->spec)) {
+    return ResultOk(lhs);
+  }
+
+  if (const auto* lhs_array = std::get_if<ArraySpec>(&lhs->spec)) {
+    if (const auto* rhs_array = std::get_if<ArraySpec>(&rhs->spec)) {
+      ArraySpec result;
+      result.allow_additional_items = false;
+      auto item_at = [](const ArraySpec& array, size_t index) -> SchemaSpecPtr {
+        if (index < array.prefix_items.size()) {
+          return array.prefix_items[index];
+        }
+        if (!array.allow_additional_items) {
+          return nullptr;
+        }
+        return array.additional_items ? array.additional_items
+                                      : SchemaSpec::Make(AnySpec{}, "", "any");
+      };
+      size_t prefix_size = std::max(lhs_array->prefix_items.size(), rhs_array->prefix_items.size());
+      for (size_t i = 0; i < prefix_size; ++i) {
+        SchemaSpecPtr lhs_item = item_at(*lhs_array, i);
+        SchemaSpecPtr rhs_item = item_at(*rhs_array, i);
+        if (!lhs_item || !rhs_item) {
+          return unsatisfiable("a prefixItem required by one branch is rejected by another branch");
+        }
+        auto item = Intersect(lhs_item, rhs_item, rule_name_hint + "_prefix_" + std::to_string(i));
+        if (item.IsErr()) return ResultErr(std::move(item).UnwrapErr());
+        result.prefix_items.push_back(std::move(item).Unwrap());
+      }
+
+      result.min_items = std::max(lhs_array->min_items, rhs_array->min_items);
+      result.max_items = lhs_array->max_items == -1 ? rhs_array->max_items
+                         : rhs_array->max_items == -1
+                             ? lhs_array->max_items
+                             : std::min(lhs_array->max_items, rhs_array->max_items);
+      if (result.max_items != -1 && result.min_items > result.max_items) {
+        return unsatisfiable("array length ranges do not overlap");
+      }
+      if (result.max_items != -1 &&
+          result.max_items < static_cast<int64_t>(result.prefix_items.size())) {
+        return unsatisfiable("array maximum is shorter than required prefixItems");
+      }
+
+      if (lhs_array->allow_additional_items && rhs_array->allow_additional_items) {
+        SchemaSpecPtr lhs_items = lhs_array->additional_items
+                                      ? lhs_array->additional_items
+                                      : SchemaSpec::Make(AnySpec{}, "", "any");
+        SchemaSpecPtr rhs_items = rhs_array->additional_items
+                                      ? rhs_array->additional_items
+                                      : SchemaSpec::Make(AnySpec{}, "", "any");
+        auto items = Intersect(lhs_items, rhs_items, rule_name_hint + "_items");
+        if (items.IsErr()) {
+          if (items.ErrRef().Type() != SchemaErrorType::kUnsatisfiableSchema) {
+            return ResultErr(std::move(items).UnwrapErr());
+          }
+        } else {
+          result.allow_additional_items = true;
+          result.additional_items = std::move(items).Unwrap();
+        }
+      }
+      if (!result.allow_additional_items &&
+          result.min_items > static_cast<int64_t>(result.prefix_items.size())) {
+        return unsatisfiable(
+            "array minimum requires items that cannot satisfy the item intersection"
+        );
+      }
+      return ResultOk(SchemaSpec::Make(std::move(result), "", rule_name_hint));
+    }
+  }
+
+  if (const auto* lhs_object = std::get_if<ObjectSpec>(&lhs->spec)) {
+    if (const auto* rhs_object = std::get_if<ObjectSpec>(&rhs->spec)) {
+      if (!lhs_object->pattern_properties.empty() || !rhs_object->pattern_properties.empty() ||
+          lhs_object->property_names || rhs_object->property_names) {
+        return unsupported("cannot combine patternProperties or propertyNames exactly");
+      }
+
+      auto effective_additional = [](const ObjectSpec& spec) -> SchemaSpecPtr {
+        if (spec.allow_additional_properties) {
+          return spec.additional_properties_schema ? spec.additional_properties_schema
+                                                   : SchemaSpec::Make(AnySpec{}, "", "any");
+        }
+        if (spec.allow_unevaluated_properties) {
+          return spec.unevaluated_properties_schema ? spec.unevaluated_properties_schema
+                                                    : SchemaSpec::Make(AnySpec{}, "", "any");
+        }
+        return nullptr;
+      };
+      auto lhs_additional = effective_additional(*lhs_object);
+      auto rhs_additional = effective_additional(*rhs_object);
+
+      std::unordered_map<std::string, SchemaSpecPtr> lhs_properties;
+      std::unordered_map<std::string, SchemaSpecPtr> rhs_properties;
+      std::vector<std::string> property_order;
+      std::unordered_set<std::string> seen;
+      for (const auto& property : lhs_object->properties) {
+        lhs_properties[property.name] = property.schema;
+        property_order.push_back(property.name);
+        seen.insert(property.name);
+      }
+      for (const auto& property : rhs_object->properties) {
+        rhs_properties[property.name] = property.schema;
+        if (seen.insert(property.name).second) {
+          property_order.push_back(property.name);
+        }
+      }
+      std::vector<std::string> implicit_required;
+      for (const auto& name : lhs_object->required) {
+        if (seen.insert(name).second) implicit_required.push_back(name);
+      }
+      for (const auto& name : rhs_object->required) {
+        if (seen.insert(name).second) implicit_required.push_back(name);
+      }
+      std::sort(implicit_required.begin(), implicit_required.end());
+      property_order.insert(
+          property_order.end(), implicit_required.begin(), implicit_required.end()
+      );
+
+      ObjectSpec result;
+      result.required = lhs_object->required;
+      result.required.insert(rhs_object->required.begin(), rhs_object->required.end());
+      for (const auto& name : property_order) {
+        SchemaSpecPtr lhs_property =
+            lhs_properties.count(name) ? lhs_properties.at(name) : lhs_additional;
+        SchemaSpecPtr rhs_property =
+            rhs_properties.count(name) ? rhs_properties.at(name) : rhs_additional;
+        bool required = result.required.count(name) != 0;
+        if (!lhs_property || !rhs_property) {
+          if (required) {
+            return unsatisfiable(
+                "required property \"" + name + "\" is rejected by another object branch"
+            );
+          }
+          continue;
+        }
+        auto property = Intersect(lhs_property, rhs_property, rule_name_hint + "_prop_" + name);
+        if (property.IsErr()) {
+          if (property.ErrRef().Type() == SchemaErrorType::kUnsatisfiableSchema && !required) {
+            result.properties.push_back(
+                {name, SchemaSpec::Make(NeverSpec{}, "", rule_name_hint + "_prop_" + name)}
+            );
+            continue;
+          }
+          return ResultErr(std::move(property).UnwrapErr());
+        }
+        result.properties.push_back({name, std::move(property).Unwrap()});
+      }
+
+      if (lhs_additional && rhs_additional) {
+        auto additional = Intersect(lhs_additional, rhs_additional, rule_name_hint + "_additional");
+        if (additional.IsErr()) {
+          if (additional.ErrRef().Type() != SchemaErrorType::kUnsatisfiableSchema) {
+            return ResultErr(std::move(additional).UnwrapErr());
+          }
+        } else {
+          result.allow_additional_properties = true;
+          result.additional_properties_schema = std::move(additional).Unwrap();
+        }
+      }
+      result.allow_unevaluated_properties = false;
+      result.min_properties = std::max(lhs_object->min_properties, rhs_object->min_properties);
+      result.max_properties =
+          lhs_object->max_properties == -1 ? rhs_object->max_properties
+          : rhs_object->max_properties == -1
+              ? lhs_object->max_properties
+              : std::min(lhs_object->max_properties, rhs_object->max_properties);
+      if (result.max_properties != -1 && result.min_properties > result.max_properties) {
+        return unsatisfiable("object property-count ranges do not overlap");
+      }
+      if (result.max_properties != -1 &&
+          static_cast<int>(result.required.size()) > result.max_properties) {
+        return unsatisfiable("object maximum is smaller than its required property set");
+      }
+      if (!result.allow_additional_properties &&
+          result.min_properties > static_cast<int>(result.properties.size())) {
+        return unsatisfiable("object minimum requires properties rejected by the intersection");
+      }
+      return ResultOk(SchemaSpec::Make(std::move(result), "", rule_name_hint));
+    }
+  }
+
+  return unsatisfiable("schema types do not overlap");
 }
 
 Result<TypeArraySpec, SchemaError> SchemaParser::ParseTypeArray(
@@ -2162,6 +3324,8 @@ int32_t JSONSchemaConverter::GenerateFromSpec(
           return GenerateObject(s, rule_name_hint);
         } else if constexpr (std::is_same_v<T, AnySpec>) {
           return GenerateAny(s, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, NeverSpec>) {
+          return GenerateNever(s, rule_name_hint);
         } else if constexpr (std::is_same_v<T, ConstSpec>) {
           return GenerateConst(s, rule_name_hint);
         } else if constexpr (std::is_same_v<T, EnumSpec>) {
@@ -3097,6 +4261,12 @@ int32_t JSONSchemaConverter::GenerateAny(const AnySpec& spec, const std::string&
   );
 }
 
+int32_t JSONSchemaConverter::GenerateNever(const NeverSpec& spec, const std::string& rule_name) {
+  int32_t never_rule_id = builder_.AddEmptyRuleWithHint(rule_name + "_never");
+  builder_.UpdateRuleBody(never_rule_id, RuleRef(never_rule_id));
+  return RuleRef(never_rule_id);
+}
+
 int32_t JSONSchemaConverter::GenerateConst(const ConstSpec& spec, const std::string& rule_name) {
   return ByteString(spec.json_value);
 }
@@ -3184,11 +4354,9 @@ int32_t JSONSchemaConverter::GenerateOneOf(const OneOfSpec& spec, const std::str
 }
 
 int32_t JSONSchemaConverter::GenerateAllOf(const AllOfSpec& spec, const std::string& rule_name) {
-  if (spec.schemas.size() == 1) {
-    return GenerateFromSpec(spec.schemas[0], rule_name + "_case_0");
-  }
-  XGRAMMAR_LOG(WARNING) << "Support for allOf with multiple options is still ongoing";
-  return GenerateFromSpec(SchemaSpec::Make(AnySpec{}, "", "any"), rule_name);
+  XGRAMMAR_CHECK(spec.schemas.size() == 1)
+      << "allOf specs must be normalized before grammar generation";
+  return GenerateFromSpec(spec.schemas[0], rule_name + "_case_0");
 }
 
 int32_t JSONSchemaConverter::GenerateTypeArray(
