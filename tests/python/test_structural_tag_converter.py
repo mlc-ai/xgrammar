@@ -1108,6 +1108,31 @@ def test_json_schema_style_kimi_k3_xml_const_enum_and_nullable_values():
     )
 
 
+def test_json_schema_style_minimax_m3_xml_fixed_nested_values():
+    namespace = "]<]minimax[>["
+
+    def element(name: str, value: str) -> str:
+        return f"{namespace}<{name}>{value}{namespace}</{name}>"
+
+    structural_tag = StructuralTag(
+        format=JSONSchemaFormat(
+            json_schema={
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string"},
+                    "days": {"type": "array", "items": {"type": "integer"}},
+                },
+                "required": ["city", "days"],
+                "additionalProperties": False,
+            },
+            style="minimax_m3_xml",
+        )
+    )
+    valid = element("city", "Paris") + element("days", element("item", "1") + element("item", "2"))
+    check_stag_with_instance(structural_tag, valid, True)
+    check_stag_with_instance(structural_tag, valid.replace("</days>", "</wrong>"), False)
+
+
 ebnf_grammar_stag_grammar = [
     (
         {
@@ -3263,7 +3288,7 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "style": "not_string"}}',
-        'style must be "json", "qwen_xml", "minimax_xml", "deepseek_xml", "glm_xml", "cohere_xml", or "kimi_k3_xml"',
+        'style must be "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml", "glm_xml", "cohere_xml", or "kimi_k3_xml"',
     ),
     # RepeatFormat Errors - illegal min/max
     (
