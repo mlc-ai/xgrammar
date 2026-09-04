@@ -288,6 +288,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">.grammar</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">Grammar</span><span class="p">,</span>
     <span class="n">StructuralTagItem</span><span class="p">,</span>
+    <span class="n">_convert_named_grammars_to_lists</span><span class="p">,</span>
     <span class="n">_convert_schema_to_str</span><span class="p">,</span>
     <span class="n">_get_structural_tag_str_from_args</span><span class="p">,</span>
 <span class="p">)</span>
@@ -538,6 +539,38 @@
 <span class="sd">            The compiled grammar.</span>
 <span class="sd">        """</span>
         <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_regex</span><span class="p">(</span><span class="n">regex</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="GrammarCompiler.compile_lark">
+<a class="viewcode-back" href="../../api/python/grammar_compiler.html#xgrammar.GrammarCompiler.compile_lark">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">compile_lark</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">lark_string</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">named_grammars</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="n">Grammar</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CompiledGrammar</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Compile a grammar from Lark syntax.</span>
+
+<span class="sd">        The compiler's tokenizer info is used to resolve named special tokens.</span>
+<span class="sd">        When caching is enabled, repeated calls with the same Lark source and</span>
+<span class="sd">        named grammars reuse the previous compiled result.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        lark_string : str</span>
+<span class="sd">            The Lark grammar source. It must define a ``start`` rule.</span>
+
+<span class="sd">        named_grammars : Optional[Dict[str, Union[Grammar, str]]]</span>
+<span class="sd">            Grammars referenced by ``@name`` in the Lark source. String values</span>
+<span class="sd">            contain Lark grammar sources with their own ``start`` rules. Dictionary</span>
+<span class="sd">            keys are passed without the leading ``@``.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        compiled_grammar : CompiledGrammar</span>
+<span class="sd">            The compiled Lark grammar.</span>
+<span class="sd">        """</span>
+        <span class="n">names</span><span class="p">,</span> <span class="n">values</span> <span class="o">=</span> <span class="n">_convert_named_grammars_to_lists</span><span class="p">(</span><span class="n">named_grammars</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">CompiledGrammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">compile_lark</span><span class="p">(</span><span class="n">lark_string</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">values</span><span class="p">)</span>
+        <span class="p">)</span></div>
 
 
     <span class="nd">@overload</span>

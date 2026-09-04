@@ -293,6 +293,29 @@
     <span class="kn">from</span><span class="w"> </span><span class="nn">.tokenizer_info</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenizerInfo</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_convert_named_grammars_to_lists</span><span class="p">(</span>
+    <span class="n">named_grammars</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="s2">"Grammar"</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]]:</span>
+    <span class="k">if</span> <span class="n">named_grammars</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">named_grammars</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">named_grammars</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"named_grammars must be a dictionary"</span><span class="p">)</span>
+    <span class="n">names</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">values</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">grammar_or_source</span> <span class="ow">in</span> <span class="n">named_grammars</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"named grammar names must be strings"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">grammar_or_source</span><span class="p">,</span> <span class="n">Grammar</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">grammar_or_source</span><span class="o">.</span><span class="n">_handle</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">grammar_or_source</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">grammar_or_source</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"named grammar values must be Grammar instances or Lark strings"</span><span class="p">)</span>
+        <span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">names</span><span class="p">,</span> <span class="n">values</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_convert_instance_to_str</span><span class="p">(</span><span class="n">instance</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">StructuralTag</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Convert a instance to a string representation. It returns the schema in string format because</span>
 <span class="sd">    it's faster to send to C++.</span>
@@ -624,23 +647,7 @@
 <span class="sd">            keys are passed without the leading ``@``.</span>
 <span class="sd">        """</span>
         <span class="n">tokenizer_handle</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">tokenizer_info</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">_handle</span>
-        <span class="k">if</span> <span class="n">named_grammars</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">named_grammars</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">named_grammars</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"named_grammars must be a dictionary"</span><span class="p">)</span>
-        <span class="n">names</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">values</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">grammar_or_source</span> <span class="ow">in</span> <span class="n">named_grammars</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"named grammar names must be strings"</span><span class="p">)</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">grammar_or_source</span><span class="p">,</span> <span class="n">Grammar</span><span class="p">):</span>
-                <span class="n">value</span> <span class="o">=</span> <span class="n">grammar_or_source</span><span class="o">.</span><span class="n">_handle</span>
-            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">grammar_or_source</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
-                <span class="n">value</span> <span class="o">=</span> <span class="n">grammar_or_source</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"named grammar values must be Grammar instances or Lark strings"</span><span class="p">)</span>
-            <span class="n">names</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-            <span class="n">values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="n">names</span><span class="p">,</span> <span class="n">values</span> <span class="o">=</span> <span class="n">_convert_named_grammars_to_lists</span><span class="p">(</span><span class="n">named_grammars</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">Grammar</span><span class="o">.</span><span class="n">_create_from_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span><span class="n">lark_string</span><span class="p">,</span> <span class="n">tokenizer_handle</span><span class="p">,</span> <span class="n">names</span><span class="p">,</span> <span class="n">values</span><span class="p">)</span>
         <span class="p">)</span></div>

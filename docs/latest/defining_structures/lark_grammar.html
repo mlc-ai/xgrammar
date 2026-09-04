@@ -340,13 +340,16 @@ point of the grammar.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">named_grammars</span></code> supplies external grammars referenced with <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code> in the Lark source. See
 <a class="reference internal" href="#named-grammars"><span class="std std-ref">Named Grammars</span></a>.</p></li>
 </ul>
-<p>The returned grammar is compiled and matched like any other grammar:</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_lark</span></code> to parse and compile a Lark source in one call. The compiler’s
+tokenizer information is used to resolve special tokens, and repeated calls with the same source
+and named grammars reuse the cached result when caching is enabled:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">tokenizer_info</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">TokenizerInfo</span><span class="o">.</span><span class="n">from_huggingface</span><span class="p">(</span><span class="n">tokenizer</span><span class="p">)</span>
 <span class="n">compiler</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">)</span>
-<span class="n">compiled</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_grammar</span><span class="p">(</span><span class="n">xgr</span><span class="o">.</span><span class="n">Grammar</span><span class="o">.</span><span class="n">from_lark</span><span class="p">(</span><span class="s1">'start: "a" | "b"'</span><span class="p">))</span>
+<span class="n">compiled</span> <span class="o">=</span> <span class="n">compiler</span><span class="o">.</span><span class="n">compile_lark</span><span class="p">(</span><span class="s1">'start: "a" | "b"'</span><span class="p">)</span>
 <span class="n">matcher</span> <span class="o">=</span> <span class="n">xgr</span><span class="o">.</span><span class="n">GrammarMatcher</span><span class="p">(</span><span class="n">compiled</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>Use <code class="docutils literal notranslate"><span class="pre">Grammar.from_lark</span></code> instead when an uncompiled <code class="docutils literal notranslate"><span class="pre">Grammar</span></code> object is needed.</p>
 <p>Errors in the grammar raise <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> with the line, the column, and the offending source
 line:</p>
 <div class="highlight-text notranslate"><div class="highlight"><pre><span></span>Lark error at line 3, column 6: expected ':' after rule name

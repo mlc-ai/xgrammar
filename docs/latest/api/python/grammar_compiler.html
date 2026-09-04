@@ -321,16 +321,19 @@ same grammar multiple times.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_regex" title="xgrammar.GrammarCompiler.compile_regex"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_regex</span></code></a>(regex)</p></td>
 <td><p>Get CompiledGrammar from the specified regex.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="xgrammar.GrammarCompiler.compile_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_structural_tag</span></code></a>(...)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_lark" title="xgrammar.GrammarCompiler.compile_lark"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_lark</span></code></a>(lark_string, *[, named_grammars])</p></td>
+<td><p>Compile a grammar from Lark syntax.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag" title="xgrammar.GrammarCompiler.compile_structural_tag"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_structural_tag</span></code></a>(...)</p></td>
 <td><p>Compile a grammar from a structural tag.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_grammar" title="xgrammar.GrammarCompiler.compile_grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_grammar</span></code></a>(...)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_grammar" title="xgrammar.GrammarCompiler.compile_grammar"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compile_grammar</span></code></a>(...)</p></td>
 <td><p>Compile a grammar object.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.clear_cache" title="xgrammar.GrammarCompiler.clear_cache"><code class="xref py py-obj docutils literal notranslate"><span class="pre">clear_cache</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.clear_cache" title="xgrammar.GrammarCompiler.clear_cache"><code class="xref py py-obj docutils literal notranslate"><span class="pre">clear_cache</span></code></a>()</p></td>
 <td><p>Clear all cached compiled grammars.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.get_cache_size_bytes" title="xgrammar.GrammarCompiler.get_cache_size_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_cache_size_bytes</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarCompiler.get_cache_size_bytes" title="xgrammar.GrammarCompiler.get_cache_size_bytes"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_cache_size_bytes</span></code></a>()</p></td>
 <td><p>The approximate memory usage of the cache in bytes.</p></td>
 </tr>
 </tbody>
@@ -433,6 +436,31 @@ is unset).</p></li>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><strong>compiled_grammar</strong> – The compiled grammar.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar">CompiledGrammar</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarCompiler.compile_lark">
+<span class="sig-name descname"><span class="pre">compile_lark</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">lark_string</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">named_grammars</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.Dict" title="(in Python v3.12)"><span class="pre">Dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="grammar.html#xgrammar.Grammar" title="xgrammar.grammar.Grammar"><span class="pre">Grammar</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.compiler.CompiledGrammar"><span class="pre">CompiledGrammar</span></a></span></span><a class="reference internal" href="../../_modules/xgrammar/compiler.html#GrammarCompiler.compile_lark"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarCompiler.compile_lark" title="Link to this definition">¶</a></dt>
+<dd><p>Compile a grammar from Lark syntax.</p>
+<p>The compiler’s tokenizer info is used to resolve named special tokens.
+When caching is enabled, repeated calls with the same Lark source and
+named grammars reuse the previous compiled result.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>lark_string</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a>) – The Lark grammar source. It must define a <code class="docutils literal notranslate"><span class="pre">start</span></code> rule.</p></li>
+<li><p><strong>named_grammars</strong> (<em>Optional</em><em>[</em><em>Dict</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>Union</em><em>[</em><a class="reference internal" href="grammar.html#xgrammar.Grammar" title="xgrammar.Grammar"><em>Grammar</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>]</em><em>]</em><em>]</em>) – Grammars referenced by <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code> in the Lark source. String values
+contain Lark grammar sources with their own <code class="docutils literal notranslate"><span class="pre">start</span></code> rules. Dictionary
+keys are passed without the leading <code class="docutils literal notranslate"><span class="pre">&#64;</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>compiled_grammar</strong> – The compiled Lark grammar.</p>
 </dd>
 <dt class="field-odd">Return type<span class="colon">:</span></dt>
 <dd class="field-odd"><p><a class="reference internal" href="compiled_grammar.html#xgrammar.CompiledGrammar" title="xgrammar.CompiledGrammar">CompiledGrammar</a></p>
@@ -606,6 +634,7 @@ Returns -1 if the cache has no memory limit.</p>
 <li><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_json_schema"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_json_schema()</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_builtin_json_grammar"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_builtin_json_grammar()</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_regex"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_regex()</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_lark"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_lark()</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_structural_tag"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_structural_tag()</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.GrammarCompiler.compile_grammar"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.compile_grammar()</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.GrammarCompiler.clear_cache"><code class="docutils literal notranslate"><span class="pre">GrammarCompiler.clear_cache()</span></code></a></li>
