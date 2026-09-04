@@ -1111,24 +1111,65 @@ Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object
 
 Result<StringSpec, SchemaError> SchemaParser::ParseString(const picojson::object& schema) {
   StringSpec spec;
-  if (schema.count("format")) spec.format = schema.at("format").get<std::string>();
-  if (schema.count("pattern")) spec.pattern = schema.at("pattern").get<std::string>();
+
+  if (schema.count("format")) {
+    if (!schema.at("format").is<std::string>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "format must be a string"
+      );
+    }
+    spec.format = schema.at("format").get<std::string>();
+  }
+
+  if (schema.count("pattern")) {
+    if (!schema.at("pattern").is<std::string>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "pattern must be a string"
+      );
+    }
+    spec.pattern = schema.at("pattern").get<std::string>();
+  }
+
   if (schema.count("minLength")) {
     if (!schema.at("minLength").is<int64_t>()) {
       return ResultErr<SchemaError>(
           SchemaErrorType::kInvalidSchema, "minLength must be an integer"
       );
     }
-    spec.min_length = static_cast<int>(schema.at("minLength").get<int64_t>());
+    int64_t min_len = schema.at("minLength").get<int64_t>();
+    if (min_len < 0) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "minLength must be a non-negative integer"
+      );
+    }
+    if (min_len > std::numeric_limits<int>::max()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "minLength exceeds maximum supported value"
+      );
+    }
+    spec.min_length = static_cast<int>(min_len);
   }
+
   if (schema.count("maxLength")) {
     if (!schema.at("maxLength").is<int64_t>()) {
       return ResultErr<SchemaError>(
           SchemaErrorType::kInvalidSchema, "maxLength must be an integer"
       );
     }
-    spec.max_length = static_cast<int>(schema.at("maxLength").get<int64_t>());
+    int64_t max_len = schema.at("maxLength").get<int64_t>();
+    if (max_len < 0) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "maxLength must be a non-negative integer"
+      );
+    }
+    if (max_len > std::numeric_limits<int>::max()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "maxLength exceeds maximum supported value"
+      );
+    }
+    spec.max_length = static_cast<int>(max_len);
   }
+
   if (spec.max_length != -1 && spec.min_length > spec.max_length) {
     return ResultErr<SchemaError>(
         SchemaErrorType::kUnsatisfiableSchema,
@@ -1136,6 +1177,20 @@ Result<StringSpec, SchemaError> SchemaParser::ParseString(const picojson::object
             std::to_string(spec.max_length)
     );
   }
+
+  // Check unsupported combination: pattern or built-in format with non-trivial length constraints
+  bool has_builtin_format =
+      spec.format.has_value() && JSONSchemaConverter::IsBuiltinFormat(*spec.format);
+  bool has_generative = spec.pattern.has_value() || has_builtin_format;
+  bool has_non_trivial_length = (spec.min_length > 0) || (spec.max_length != -1);
+
+  if (has_generative && has_non_trivial_length) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "Combining pattern/format with minLength/maxLength is currently unsupported"
+    );
+  }
+
   return ResultOk(std::move(spec));
 }
 

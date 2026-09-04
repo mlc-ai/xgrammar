@@ -3533,5 +3533,46 @@ def test_prefix_items_no_additional_items_allows_shorter():
     check_schema_with_instance(schema, '["a", 1, true]', is_accepted=False)
 
 
+def test_pattern_format_with_length_constraints_raises():
+    """Combining pattern or built-in format with non-trivial length constraints must be rejected."""
+    unsupported_schemas = [
+        {"type": "string", "pattern": "^a+$", "maxLength": 2},
+        {"type": "string", "pattern": "^a+$", "minLength": 1},
+        {"type": "string", "format": "email", "maxLength": 10},
+        {"type": "string", "format": "email", "minLength": 5},
+    ]
+    for schema in unsupported_schemas:
+        with pytest.raises(
+            RuntimeError,
+            match="Combining pattern/format with minLength/maxLength is currently unsupported",
+        ):
+            xgr.Grammar.from_json_schema(schema)
+
+    # Trivial minLength: 0 does not conflict with pattern/format and should compile without error
+    trivial_schemas = [
+        {"type": "string", "pattern": "^a+$", "minLength": 0},
+        {"type": "string", "format": "email", "minLength": 0},
+    ]
+    for schema in trivial_schemas:
+        grammar = xgr.Grammar.from_json_schema(schema)
+        assert grammar is not None
+
+    negative_schemas = [
+        ({"type": "string", "minLength": -1}, "minLength must be a non-negative integer"),
+        ({"type": "string", "maxLength": -1}, "maxLength must be a non-negative integer"),
+    ]
+    for schema, match_msg in negative_schemas:
+        with pytest.raises(RuntimeError, match=match_msg):
+            xgr.Grammar.from_json_schema(schema)
+
+    invalid_type_schemas = [
+        ({"type": "string", "pattern": 123}, "pattern must be a string"),
+        ({"type": "string", "format": 123}, "format must be a string"),
+    ]
+    for schema, match_msg in invalid_type_schemas:
+        with pytest.raises(RuntimeError, match=match_msg):
+            xgr.Grammar.from_json_schema(schema)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

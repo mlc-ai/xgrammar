@@ -296,6 +296,12 @@ class JSONSchemaConverter {
    */
   Grammar Convert(const SchemaSpecPtr& spec);
 
+  /*! \brief Check if a format string corresponds to a built-in format pattern. */
+  static bool IsBuiltinFormat(const std::string& format) {
+    return JSONFormatToRegexPattern(format).has_value();
+  }
+  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
+
  protected:
   using CharacterClassElement = GrammarBuilder::CharacterClassElement;
 
@@ -388,6 +394,7 @@ class JSONSchemaConverter {
 
   /*! \brief Get whitespace pattern. */
   std::string GetWhitespacePattern() const;
+
 
   int32_t Empty();
   int32_t ByteString(const std::string& value);
@@ -507,9 +514,6 @@ class JSONSchemaConverter {
       bool exclusive_start = false,
       bool exclusive_end = false
   );
-
- protected:
-  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
 
   // Expose for testing
   friend std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);
