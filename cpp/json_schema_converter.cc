@@ -2492,12 +2492,34 @@ int32_t JSONSchemaConverter::FormatPropertyKey(
 
 int32_t JSONSchemaConverter::FormatProperty(
     const std::string& key,
+    const SchemaSpecPtr& value_spec,
+    const std::string& rule_name,
+    int64_t idx
+) {
+  int32_t value_rule_id = CreateRule(value_spec, rule_name + "_prop_" + std::to_string(idx));
+  return FormatProperty(key, value_rule_id, rule_name, idx, value_spec);
+}
+
+int32_t JSONSchemaConverter::FormatProperty(
+    const std::string& key,
     int32_t value_rule_id,
     const std::string& rule_name,
     int64_t idx,
     const SchemaSpecPtr& schema
 ) {
   return Sequence({FormatPropertyKey(key, schema), colon_expr_id_, RuleRef(value_rule_id)});
+}
+
+int32_t JSONSchemaConverter::FormatOtherProperty(
+    int32_t key_pattern_expr,
+    const SchemaSpecPtr& value_spec,
+    const std::string& rule_name,
+    const std::string& rule_name_suffix
+) {
+  int32_t value_rule_id = CreateRule(value_spec, rule_name + "_" + rule_name_suffix);
+  return FormatOtherProperty(
+      key_pattern_expr, value_rule_id, rule_name, rule_name_suffix, value_spec
+  );
 }
 
 int32_t JSONSchemaConverter::FormatOtherProperty(
@@ -2544,22 +2566,14 @@ int32_t JSONSchemaConverter::GetAnyOrderRuleForProperties(
   std::vector<int32_t> items;
   for (size_t index = 0; index < properties.size(); ++index) {
     const auto& property = properties[index];
-    int32_t value_rule_id =
-        CreateRule(property.schema, rule_name + "_prop_" + std::to_string(index));
-    items.push_back(FormatProperty(property.name, value_rule_id, rule_name, index, property.schema)
-    );
+    items.push_back(FormatProperty(property.name, property.schema, rule_name, index));
   }
   if (additional != nullptr) {
     if (additional_property_override.has_value()) {
       items.push_back(*additional_property_override);
     } else {
-      int32_t value_rule_id = CreateRule(additional, rule_name + "_" + additional_suffix);
       items.push_back(FormatOtherProperty(
-          GetKeyPatternExcluding(properties, rule_name),
-          value_rule_id,
-          rule_name,
-          additional_suffix,
-          /*schema=*/nullptr
+          GetKeyPatternExcluding(properties, rule_name), additional, rule_name, additional_suffix
       ));
     }
   }
@@ -2611,11 +2625,9 @@ int32_t JSONSchemaConverter::GetPartialRuleForProperties(
 
   std::vector<int32_t> property_patterns;
   for (size_t index = 0; index < properties.size(); ++index) {
-    int32_t value_rule_id =
-        CreateRule(properties[index].schema, rule_name + "_prop_" + std::to_string(index));
-    property_patterns.push_back(FormatProperty(
-        properties[index].name, value_rule_id, rule_name, index, properties[index].schema
-    ));
+    property_patterns.push_back(
+        FormatProperty(properties[index].name, properties[index].schema, rule_name, index)
+    );
   }
 
   bool allow_additional = additional != nullptr;
@@ -2625,13 +2637,8 @@ int32_t JSONSchemaConverter::GetPartialRuleForProperties(
       if (additional_property_override.has_value()) {
         additional_pattern = *additional_property_override;
       } else {
-        int32_t value_rule_id = CreateRule(additional, rule_name + "_" + additional_suffix);
         additional_pattern = FormatOtherProperty(
-            GetKeyPatternExcluding(properties, rule_name),
-            value_rule_id,
-            rule_name,
-            additional_suffix,
-            /*schema=*/nullptr
+            GetKeyPatternExcluding(properties, rule_name), additional, rule_name, additional_suffix
         );
       }
     }
@@ -2921,22 +2928,14 @@ int32_t JSONSchemaConverter::GenerateObject(
         int32_t key_rule_id = create_pattern_key_rule(
             pattern_property.pattern, rule_name + "_" + pattern_suffix + "_key"
         );
-        int32_t value_rule_id =
-            CreateRule(pattern_property.schema, rule_name + "_" + pattern_suffix);
         patterns.push_back(FormatOtherProperty(
-            RuleRef(key_rule_id), value_rule_id, rule_name, pattern_suffix, pattern_property.schema
+            RuleRef(key_rule_id), pattern_property.schema, rule_name, pattern_suffix
         ));
       }
       // Merge with existing additionalProperties if present
       if (effective_additional) {
-        int32_t value_rule_id =
-            CreateRule(effective_additional, rule_name + "_" + effective_suffix);
         patterns.push_back(FormatOtherProperty(
-            KeyPatternExpression(),
-            value_rule_id,
-            rule_name,
-            effective_suffix,
-            /*schema=*/nullptr
+            KeyPatternExpression(), effective_additional, rule_name, effective_suffix
         ));
       }
       additional_override = Choice(patterns);
@@ -2949,13 +2948,8 @@ int32_t JSONSchemaConverter::GenerateObject(
       // Only apply when additional properties are allowed - when additionalProperties
       // is false, no extra keys beyond named properties should be permitted.
       int32_t key_rule_id = CreateRule(spec.property_names, rule_name + "_name");
-      int32_t value_rule_id = CreateRule(effective_additional, rule_name + "_" + effective_suffix);
       additional_override = FormatOtherProperty(
-          RuleRef(key_rule_id),
-          value_rule_id,
-          rule_name,
-          /*rule_name_suffix=*/"pn",
-          /*schema=*/nullptr
+          RuleRef(key_rule_id), effective_additional, rule_name, effective_suffix
       );
       effective_suffix = "pn";
     }
@@ -2984,31 +2978,22 @@ int32_t JSONSchemaConverter::GenerateObject(
           int32_t key_rule_id = create_pattern_key_rule(
               pattern_property.pattern, rule_name + "_" + pattern_suffix + "_key"
           );
-          int32_t value_rule_id =
-              CreateRule(pattern_property.schema, rule_name + "_" + pattern_suffix);
           property_choices.push_back(Sequence(
               {beginning_separator,
                FormatOtherProperty(
-                   RuleRef(key_rule_id),
-                   value_rule_id,
-                   rule_name,
-                   pattern_suffix,
-                   pattern_property.schema
+                   RuleRef(key_rule_id), pattern_property.schema, rule_name, pattern_suffix
                )}
           ));
         }
       } else {
         int32_t key_rule_id = CreateRule(spec.property_names, rule_name + "_name");
-        int32_t value_rule_id = builder_.GetRuleId(GetBasicAnyRuleName());
-        XGRAMMAR_DCHECK(value_rule_id != -1);
         property_choices.push_back(Sequence(
             {beginning_separator,
              FormatOtherProperty(
                  RuleRef(key_rule_id),
-                 value_rule_id,
+                 SchemaSpec::Make(AnySpec{}, "{}"),
                  rule_name,
-                 /*rule_name_suffix=*/"pn",
-                 /*schema=*/nullptr
+                 /*rule_name_suffix=*/"pn"
              )}
         ));
       }
@@ -3045,13 +3030,8 @@ int32_t JSONSchemaConverter::GenerateObject(
   } else if (additional_property) {
     // Case 3: no properties defined, additional properties allowed
     if (spec.max_properties != 0) {
-      int32_t value_rule_id = CreateRule(additional_property, rule_name + "_" + additional_suffix);
       int32_t property = FormatOtherProperty(
-          KeyPatternExpression(),
-          value_rule_id,
-          rule_name,
-          additional_suffix,
-          /*schema=*/nullptr
+          KeyPatternExpression(), additional_property, rule_name, additional_suffix
       );
       content = Sequence(
           {NextSeparatorExpression(),
@@ -3121,19 +3101,14 @@ SchemaSpecPtr JSONSchemaConverter::ResolveRefSchema(
   return ref_resolver_(spec.uri, rule_name_hint);
 }
 
-int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string& rule_name) {
-  // First check if we have a direct URI mapping (for circular references)
-  if (uri_to_rule_id_.count(spec.uri)) {
-    return RuleRef(uri_to_rule_id_[spec.uri]);
-  }
-
+std::string JSONSchemaConverter::GetRuleNameHintFromURI(const std::string& uri) {
   // Derive rule name from URI path (like original URIToRule) so that the same
   // $ref always gets the same rule name, and allocate before resolving to prevent
   // dead recursion when the ref target contains a ref back.
   std::string rule_name_hint = "ref";
-  if (spec.uri.size() >= 2 && spec.uri[0] == '#' && spec.uri[1] == '/') {
+  if (uri.size() >= 2 && uri[0] == '#' && uri[1] == '/') {
     std::string new_rule_name_prefix;
-    std::stringstream ss(spec.uri.substr(2));
+    std::stringstream ss(uri.substr(2));
     std::string part;
     while (std::getline(ss, part, '/')) {
       if (!part.empty()) {
@@ -3151,7 +3126,16 @@ int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string&
       rule_name_hint = std::move(new_rule_name_prefix);
     }
   }
+  return rule_name_hint;
+}
 
+int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string& rule_name) {
+  // First check if we have a direct URI mapping (for circular references)
+  if (uri_to_rule_id_.count(spec.uri)) {
+    return RuleRef(uri_to_rule_id_[spec.uri]);
+  }
+
+  std::string rule_name_hint = GetRuleNameHintFromURI(spec.uri);
   int32_t allocated_rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
   std::string allocated_rule_name = builder_.GetRule(allocated_rule_id).name;
   uri_to_rule_id_[spec.uri] = allocated_rule_id;
@@ -4177,7 +4161,6 @@ Grammar JSONSchemaToGrammar(
     }
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
-    case JSONFormat::kDeepSeekXML:
     case JSONFormat::kGlmXML:
     case JSONFormat::kKimiK3XML: {
       XMLToolCallingConverter converter(
@@ -4187,6 +4170,17 @@ Grammar JSONSchemaToGrammar(
           max_whitespace_cnt,
           std::move(ref_resolver),
           json_format,
+          any_order
+      );
+      return converter.Convert(spec);
+    }
+    case JSONFormat::kDeepSeekXML: {
+      DeepSeekXMLToolCallingConverter converter(
+          indent,
+          std::move(separators),
+          any_whitespace,
+          max_whitespace_cnt,
+          std::move(ref_resolver),
           any_order
       );
       return converter.Convert(spec);
@@ -4270,7 +4264,6 @@ std::string JSONSchemaToEBNF(
     }
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
-    case JSONFormat::kDeepSeekXML:
     case JSONFormat::kGlmXML:
     case JSONFormat::kKimiK3XML: {
       XMLToolCallingConverter converter(
@@ -4281,6 +4274,12 @@ std::string JSONSchemaToEBNF(
           ref_resolver,
           json_format,
           any_order
+      );
+      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
+    }
+    case JSONFormat::kDeepSeekXML: {
+      DeepSeekXMLToolCallingConverter converter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
       return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
     }
