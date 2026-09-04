@@ -4,6 +4,7 @@
 #include <picojson.h>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -42,6 +43,14 @@ class TokenizerInfo::Impl {
   const std::vector<int32_t>& GetTokenCharCounts() const;
   int32_t GetMaxTokenChars() const;
   void BuildTokenCharData();
+  void BuildTokenIdToSortedVocabIndex();
+
+  /*!
+   * \brief Check that the token ids and per-token arrays are consistent with the vocabulary. Used
+   * after deserialization, where the fields are restored verbatim.
+   * \return An error message if the tokenizer info is malformed.
+   */
+  std::optional<std::string> Validate() const;
 
   std::string DumpMetadata() const;
   picojson::value DumpMetadataValue() const;

@@ -28,6 +28,7 @@
 #include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "support/encoding.h"
+#include "support/json_parse.h"
 #include "support/logging.h"
 
 namespace xgrammar {
@@ -469,7 +470,7 @@ class LarkLexer {
     auto end = source_.end();
     picojson::value value;
     std::string error;
-    auto parsed_end = picojson::parse(value, begin, end, &error);
+    auto parsed_end = ParseJSON(value, begin, end, &error);
     if (!error.empty() || parsed_end == begin) {
       RaiseLarkError(
           source_, location, "failed to parse JSON value after " + directive + ": " + error
@@ -713,7 +714,7 @@ class LarkParser {
   void ParseOptions(Document* document) {
     Token token = Consume(TokenType::kGrammarOptions, "expected %grammar_options");
     picojson::value value;
-    std::string error = picojson::parse(value, token.text);
+    std::string error = ParseJSON(value, token.text);
     if (!error.empty()) {
       RaiseLarkError(source_, token.location, "invalid %grammar_options value: " + error);
     }
@@ -1022,15 +1023,32 @@ class LarkParser {
     return repeat;
   }
 
+  // Groups recurse ParseChoice -> ParseSequence -> ParseExpr -> ParseAtom once per level, so bound
+  // the depth instead of overflowing the stack. Each level uses a few KB of stack; the limit keeps
+  // a wide margin below the 1 MB main-thread stack of Windows.
+  Node ParseGroupBody(const Token& open) {
+    if (group_depth_ >= kMaxGroupDepth) {
+      RaiseLarkError(
+          source_,
+          open.location,
+          "groups are nested deeper than " + std::to_string(kMaxGroupDepth) + " levels"
+      );
+    }
+    ++group_depth_;
+    Node result = ParseChoice();
+    --group_depth_;
+    return result;
+  }
+
   Node ParseAtom() {
     Token token = Peek();
     if (Match(TokenType::kLParen)) {
-      Node result = ParseChoice();
+      Node result = ParseGroupBody(token);
       Consume(TokenType::kRParen, "expected ')' after group");
       return result;
     }
     if (Match(TokenType::kLBracket)) {
-      Node inner = ParseChoice();
+      Node inner = ParseGroupBody(token);
       Consume(TokenType::kRBracket, "expected ']' after optional group");
       Node result;
       result.kind = Node::Kind::kRepeat;
@@ -1133,7 +1151,7 @@ class LarkParser {
       json_string.pop_back();
     }
     picojson::value value;
-    std::string error = picojson::parse(value, json_string);
+    std::string error = ParseJSON(value, json_string);
     if (!error.empty() || !value.is<std::string>()) {
       RaiseLarkError(source_, token.location, "invalid string literal: " + error);
     }
@@ -1148,6 +1166,8 @@ class LarkParser {
   const std::string& source_;
   std::vector<Token> tokens_;
   size_t position_ = 0;
+  int group_depth_ = 0;
+  static constexpr int kMaxGroupDepth = 200;
 };
 
 const std::unordered_map<std::string, std::string>& CommonRegexes() {
@@ -1846,7 +1866,7 @@ class LarkCompiler {
 
   std::vector<std::string> ParseStructuredRegexChunks(const Node& node) const {
     picojson::value value;
-    std::string error = picojson::parse(value, node.text);
+    std::string error = ParseJSON(value, node.text);
     if (!error.empty()) {
       RaiseLarkError(source_, node.location, "failed to parse %regex: " + error);
     }
