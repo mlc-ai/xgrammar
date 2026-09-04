@@ -1452,9 +1452,14 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
     }
 
     // Case 1: Like ab | ac | ad, then they can be merged into a(b | c | d).
+    // The start state must not be merged by this rule. The rule reasons that states with
+    // identical incoming edges are reached by identical prefixes, but the start state is
+    // additionally reached by the empty prefix. Merging it with a sibling would wrongly
+    // expose the sibling's suffixes at the very start, e.g. for (ab)*abc the FSM would
+    // start accepting "c".
     bool is_equiv_successor = false;
     for (int i = 0; i < n; i++) {
-      if (incoming_distinct_count[i] != 1 || union_find_set.Count(i)) {
+      if (i == result.GetStart() || incoming_distinct_count[i] != 1 || union_find_set.Count(i)) {
         continue;
       }
       int previous_state = single_incoming_source[i];
@@ -1469,7 +1474,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
         }
         auto edges_to_sibling = siblings.Slice(group_begin, group_end);
         group_begin = group_end;
-        if (sibling <= i || incoming_distinct_count[sibling] != 1 ||
+        if (sibling <= i || sibling == result.GetStart() || incoming_distinct_count[sibling] != 1 ||
             result.IsEndState(sibling) != result.IsEndState(i)) {
           continue;
         }
