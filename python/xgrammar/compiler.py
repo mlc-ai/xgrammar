@@ -8,6 +8,7 @@ from .base import XGRObject, _core
 from .grammar import (
     Grammar,
     StructuralTagItem,
+    _convert_named_grammars_to_lists,
     _convert_schema_to_str,
     _get_structural_tag_str_from_args,
 )
@@ -251,6 +252,35 @@ class GrammarCompiler(XGRObject):
             The compiled grammar.
         """
         return CompiledGrammar._create_from_handle(self._handle.compile_regex(regex))
+
+    def compile_lark(
+        self, lark_string: str, *, named_grammars: Optional[Dict[str, Union[Grammar, str]]] = None
+    ) -> CompiledGrammar:
+        """Compile a grammar from Lark syntax.
+
+        The compiler's tokenizer info is used to resolve named special tokens.
+        When caching is enabled, repeated calls with the same Lark source and
+        named grammars reuse the previous compiled result.
+
+        Parameters
+        ----------
+        lark_string : str
+            The Lark grammar source. It must define a ``start`` rule.
+
+        named_grammars : Optional[Dict[str, Union[Grammar, str]]]
+            Grammars referenced by ``@name`` in the Lark source. String values
+            contain Lark grammar sources with their own ``start`` rules. Dictionary
+            keys are passed without the leading ``@``.
+
+        Returns
+        -------
+        compiled_grammar : CompiledGrammar
+            The compiled Lark grammar.
+        """
+        names, values = _convert_named_grammars_to_lists(named_grammars)
+        return CompiledGrammar._create_from_handle(
+            self._handle.compile_lark(lark_string, names, values)
+        )
 
     @overload
     def compile_structural_tag(

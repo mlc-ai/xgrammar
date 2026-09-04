@@ -101,6 +101,15 @@ class GrammarCompiler {
   /*! \brief Get the compiled grammar for pure JSON. */
   CompiledGrammar CompileBuiltinJSONGrammar();
 
+  /*!
+   * \brief Get the compiled grammar for a Lark grammar string.
+   * \param lark_string The Lark grammar. The root rule must be named "start".
+   * \param named_grammars Grammar objects or Lark sources that can be referenced with `@name`.
+   */
+  CompiledGrammar CompileLark(
+      const std::string& lark_string, const std::vector<NamedGrammar>& named_grammars = {}
+  );
+
   /*! \brief Get the compiled grammar for a grammar. */
   CompiledGrammar CompileGrammar(const Grammar& grammar);
 
