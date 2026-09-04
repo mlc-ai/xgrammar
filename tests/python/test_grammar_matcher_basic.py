@@ -176,6 +176,50 @@ def test_token_operations():
     assert result == expected
 
 
+def test_validate_tokens_returns_longest_accepted_prefix_without_mutation():
+    vocab = ["<s>", "</s>", "a", "b", "c", "ab", "x"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= captured\ncaptured[capture="value"] ::= "abc"', tokenizer_info
+    )
+
+    assert matcher.validate_tokens([]) == 0
+    assert matcher.validate_tokens([2, 3, 4]) == 3
+    assert matcher.validate_tokens([2, 3, 6, 4]) == 2
+    assert matcher.validate_tokens([5, 4, 1, 2]) == 3
+    assert matcher.validate_tokens([2, 1 << 40]) == 1
+
+    # Validation runs on an isolated state: it neither commits tokens nor records captures.
+    assert matcher.get_captures() == []
+    assert not matcher.is_completed()
+    assert not matcher.is_terminated()
+
+    assert matcher.accept_token(5)
+    assert matcher.validate_tokens([4, 1, 2]) == 2
+    assert matcher.validate_tokens([6]) == 0
+
+    # The already accepted prefix is unchanged after both successful and rejected validation.
+    assert not matcher.is_completed()
+    assert matcher.accept_token(4)
+    assert matcher.is_completed()
+    assert matcher.get_captures() == [("value", b"abc")]
+
+
+def test_validate_tokens_enforces_token_budgets():
+    vocab = ["<s>", "</s>", "a", "b", "!", "ab"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= value "!"\nvalue[max_tokens=1] ::= [a-z]+', tokenizer_info
+    )
+
+    assert matcher.validate_tokens([2, 3, 4]) == 1
+    assert matcher.validate_tokens([5, 4, 1]) == 3
+
+    # Both validation paths leave the one-token budget unused on the original matcher.
+    assert matcher.accept_token(2)
+    assert matcher.validate_tokens([4, 1]) == 2
+
+
 def test_rollback():
     vocab = [
         # fmt: off

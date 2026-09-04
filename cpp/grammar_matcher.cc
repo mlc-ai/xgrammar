@@ -496,6 +496,8 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   bool AcceptToken(int32_t token_id, bool debug_print = false);
 
+  int64_t ValidateTokens(const std::vector<int32_t>& token_ids) const;
+
   bool AcceptString(const std::string& input_str, bool debug_print = false);
 
   bool FillNextTokenBitmask(DLTensor* next_token_bitmask, int index, bool debug_print = false);
@@ -1511,6 +1513,47 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   }
   record_char_budget_relaxation_ = false;
   return FinishAccept(consumed_past_deadline);
+}
+
+int64_t GrammarMatcher::Impl::ValidateTokens(const std::vector<int32_t>& token_ids) const {
+  Impl trial(*this);
+  // Validation is observational and should not emit one-time budget warnings on behalf of the
+  // real matcher.
+  trial.budget_exceeded_warned_ = true;
+  trial.char_budget_exceeded_warned_ = true;
+
+  int32_t bitmask_size = GetBitmaskSize(tokenizer_info_.GetVocabSize());
+  std::vector<int32_t> bitmask_data(bitmask_size);
+  int64_t bitmask_shape[1] = {bitmask_size};
+  DLTensor bitmask;
+  bitmask.data = bitmask_data.data();
+  bitmask.device = DLDevice{kDLCPU, 0};
+  bitmask.ndim = 1;
+  bitmask.dtype = GetBitmaskDLType();
+  bitmask.shape = bitmask_shape;
+  bitmask.strides = nullptr;
+  bitmask.byte_offset = 0;
+
+  int64_t accepted = 0;
+  for (int32_t token_id : token_ids) {
+    if (trial.IsTerminated() || token_id < 0 || token_id >= tokenizer_info_.GetVocabSize()) {
+      break;
+    }
+    std::fill(bitmask_data.begin(), bitmask_data.end(), -1);
+    trial.FillNextTokenBitmask(&bitmask, 0, false);
+    uint32_t token_mask = uint32_t{1} << static_cast<uint32_t>(token_id % 32);
+    if ((static_cast<uint32_t>(bitmask_data[token_id / 32]) & token_mask) == 0) {
+      break;
+    }
+    if (!trial.AcceptToken(token_id)) {
+      break;
+    }
+    ++accepted;
+    if (trial.IsTerminated()) {
+      break;
+    }
+  }
+  return accepted;
 }
 
 bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug_print) {
@@ -2592,6 +2635,10 @@ GrammarMatcher::GrammarMatcher(
 
 bool GrammarMatcher::AcceptToken(int32_t token_id, bool debug_print) {
   return pimpl_->AcceptToken(token_id, debug_print);
+}
+
+int64_t GrammarMatcher::ValidateTokens(const std::vector<int32_t>& token_ids) const {
+  return pimpl_->ValidateTokens(token_ids);
 }
 
 bool GrammarMatcher::AcceptString(const std::string& input_str, bool debug_print) {
