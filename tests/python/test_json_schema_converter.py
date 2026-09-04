@@ -2482,6 +2482,65 @@ def test_min_max_length():
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
 
 
+@pytest.mark.parametrize(
+    "instance",
+    [
+        r'"\""',
+        r'"\\"',
+        r'"\/"',
+        r'"\b"',
+        r'"\f"',
+        r'"\n"',
+        r'"\r"',
+        r'"\t"',
+        r'"\u0061"',
+        r'"\uD7FF"',
+        r'"\uE000"',
+        r'"\uFFFF"',
+    ],
+)
+def test_min_max_length_accepts_json_escapes(instance: str):
+    schema = {"type": "string", "minLength": 1, "maxLength": 1}
+
+    check_schema_with_instance(schema, instance)
+
+
+def test_min_max_length_counts_json_escape_as_one_character():
+    instance = r'"a\nb"'
+
+    check_schema_with_instance({"type": "string", "minLength": 3}, instance)
+    check_schema_with_instance({"type": "string", "maxLength": 2}, instance, is_accepted=False)
+
+
+def test_min_max_length_rejects_unescaped_control_characters():
+    schema = {"type": "string", "minLength": 1, "maxLength": 3}
+
+    check_schema_with_instance(schema, '"a\tb"', is_accepted=False)
+
+
+@pytest.mark.parametrize(
+    "instance", ['"😀"', r'"\uD83D\uDE00"', r'"\ud83d\ude00"', r'"\uD800\uDC00"', r'"\uDBFF\uDFFF"']
+)
+def test_min_max_length_counts_non_bmp_character_as_one(instance: str):
+    check_schema_with_instance({"type": "string", "minLength": 1, "maxLength": 1}, instance)
+    check_schema_with_instance({"type": "string", "minLength": 2}, instance, is_accepted=False)
+
+
+@pytest.mark.parametrize(
+    "instance",
+    [r'"\uD800"', r'"\uDBFF"', r'"\uDC00"', r'"\uDFFF"', r'"\uD83D\u0061"', r'"\uD83D\uD83D"'],
+)
+def test_min_max_length_rejects_unpaired_surrogate_escapes(instance: str):
+    check_schema_with_instance(
+        {"type": "string", "minLength": 1, "maxLength": 2}, instance, is_accepted=False
+    )
+
+
+@pytest.mark.parametrize("instance", [r'"\uD800"', r'"\uDFFF"'])
+def test_unbounded_string_preserves_unpaired_surrogate_behavior(instance: str):
+    check_schema_with_instance({"type": "string"}, instance)
+
+
 def test_type_array():
     schema = {
         "type": ["integer", "string"],
