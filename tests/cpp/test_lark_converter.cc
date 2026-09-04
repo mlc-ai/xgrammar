@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 #include <xgrammar/xgrammar.h>
 
+#include <algorithm>
 #include <string>
+#include <vector>
 
 #include "test_utils.h"
 
@@ -104,6 +106,40 @@ TEST(LarkConverterTest, NamedGrammarSources) {
       XGrammarError,
       "circular named grammar reference: @left -> @right -> @left"
   );
+}
+
+TEST(LarkConverterTest, GrammarCompilerCachesLarkSources) {
+  TokenizerInfo tokenizer_info(std::vector<std::string>{});
+  GrammarCompiler compiler(tokenizer_info, /*max_threads=*/1, /*cache_enabled=*/true);
+
+  auto first = compiler.CompileLark(R"(start: "a")");
+  auto repeated = compiler.CompileLark(R"(start: "a")");
+  EXPECT_EQ(first.ImplPtr(), repeated.ImplPtr());
+
+  std::vector<NamedGrammar> named_grammars = {
+      {"left", std::string(R"(start: "a")")}, {"right", std::string(R"(start: "b")")}
+  };
+  auto with_named_grammars = compiler.CompileLark("start: @left @right", named_grammars);
+  std::reverse(named_grammars.begin(), named_grammars.end());
+  auto with_reordered_named_grammars = compiler.CompileLark("start: @left @right", named_grammars);
+  EXPECT_EQ(with_named_grammars.ImplPtr(), with_reordered_named_grammars.ImplPtr());
+
+  auto with_different_named_grammar = compiler.CompileLark(
+      "start: @left @right",
+      {{"left", std::string(R"(start: "a")")}, {"right", std::string(R"(start: "c")")}}
+  );
+  EXPECT_NE(with_named_grammars.ImplPtr(), with_different_named_grammar.ImplPtr());
+
+  auto with_grammar_object =
+      compiler.CompileLark("start: @item", {{"item", Grammar::FromLark(R"(start: "item")")}});
+  auto with_equivalent_grammar_object =
+      compiler.CompileLark("start: @item", {{"item", Grammar::FromLark(R"(start: "item")")}});
+  EXPECT_EQ(with_grammar_object.ImplPtr(), with_equivalent_grammar_object.ImplPtr());
+
+  GrammarCompiler uncached_compiler(tokenizer_info, /*max_threads=*/1, /*cache_enabled=*/false);
+  auto uncached_first = uncached_compiler.CompileLark(R"(start: "a")");
+  auto uncached_second = uncached_compiler.CompileLark(R"(start: "a")");
+  EXPECT_NE(uncached_first.ImplPtr(), uncached_second.ImplPtr());
 }
 
 TEST(LarkConverterTest, DynamicToolCallLowersToTagDispatch) {
