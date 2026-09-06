@@ -3531,6 +3531,8 @@ def test_prefix_items_no_additional_items_allows_shorter():
     check_schema_with_instance(schema, '["a"]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1, true]', is_accepted=False)
+
+
 def test_property_names_preserves_additional_properties_value_schema():
     # Regression for issue #826: propertyNames constrains only the key; a
     # typed additionalProperties schema must still constrain the value.
