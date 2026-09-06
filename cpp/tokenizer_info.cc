@@ -299,10 +299,7 @@ TokenizerInfo::Impl::Impl(
   };
   std::sort(sorted_decoded_vocab_.begin(), sorted_decoded_vocab_.end(), f_compare_token);
 
-  token_id_to_sorted_vocab_index_.assign(vocab_size_, -1);
-  for (int32_t i = 0; i < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++i) {
-    token_id_to_sorted_vocab_index_[sorted_decoded_vocab_[i].first] = i;
-  }
+  BuildTokenIdToSortedVocabIndex();
 
   // The value means: the subtree is [i, trie_subtree_nodes_range[i]).
   trie_subtree_nodes_range_.resize(sorted_decoded_vocab_.size(), 0);
@@ -322,6 +319,13 @@ TokenizerInfo::Impl::Impl(
     prefix_stack.pop();
   }
   BuildTokenCharData();
+}
+
+void TokenizerInfo::Impl::BuildTokenIdToSortedVocabIndex() {
+  token_id_to_sorted_vocab_index_.assign(vocab_size_, -1);
+  for (int32_t i = 0; i < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++i) {
+    token_id_to_sorted_vocab_index_[sorted_decoded_vocab_[i].first] = i;
+  }
 }
 
 void TokenizerInfo::Impl::BuildTokenCharData() {
@@ -521,6 +525,7 @@ std::variant<TokenizerInfo, SerializationError> TokenizerInfo::DeserializeJSON(
   if (auto err = AutoDeserializeJSON(&tokenizer_info, json_string, true, "TokenizerInfo")) {
     return err.value();
   }
+  tokenizer_info->BuildTokenIdToSortedVocabIndex();
   tokenizer_info->BuildTokenCharData();
   return tokenizer_info;
 }

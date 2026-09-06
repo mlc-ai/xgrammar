@@ -10,7 +10,7 @@ from pydantic import BaseModel, RootModel
 from transformers import AutoTokenizer  # type: ignore
 
 import xgrammar as xgr
-from xgrammar.testing import _is_grammar_accept_string
+from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
 
 
 def construct_grammar():
@@ -194,6 +194,30 @@ def test_serialize_tokenizer_info_functional():
 
     test_input = "aaa"
     assert matcher_original.accept_string(test_input) == matcher_recovered.accept_string(test_input)
+
+
+def test_serialize_tokenizer_info_token_grammar_functional():
+    """Test binary vocab preservation and token masks after deserialization."""
+    original_tokenizer_info = xgr.TokenizerInfo(
+        [b"\x00", b"a", b"</s>"], vocab_type=xgr.VocabType.RAW, vocab_size=4, stop_token_ids=[2]
+    )
+    recovered_tokenizer_info = xgr.TokenizerInfo.deserialize_json(
+        original_tokenizer_info.serialize_json()
+    )
+
+    assert recovered_tokenizer_info.decoded_vocab == original_tokenizer_info.decoded_vocab
+
+    grammar = xgr.Grammar.from_ebnf("root ::= Token(1)\n")
+    compiled_grammar = xgr.GrammarCompiler(
+        recovered_tokenizer_info, cache_enabled=False
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    token_bitmask = xgr.allocate_token_bitmask(1, recovered_tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(
+        token_bitmask, recovered_tokenizer_info.vocab_size
+    )
+    assert rejected_token_ids == [0, 2, 3]
 
 
 def test_serialize_compiled_grammar():
