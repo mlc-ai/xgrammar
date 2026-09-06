@@ -3552,6 +3552,8 @@ def test_prefix_items_no_additional_items_allows_shorter():
     check_schema_with_instance(schema, '["a"]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1, true]', is_accepted=False)
+
+
 def test_qwen_xml_empty_object_emits_nothing():
     # Regression for issue #802: a qwen_xml tool-call object with no
     # properties must emit nothing, letting the structural tag's end
