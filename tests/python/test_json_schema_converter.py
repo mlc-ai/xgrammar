@@ -3552,6 +3552,8 @@ def test_prefix_items_no_additional_items_allows_shorter():
     check_schema_with_instance(schema, '["a"]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1, true]', is_accepted=False)
+
+
 def test_contains_implies_min_one_non_strict():
     # Regression for issue #833: a bare 'contains' implies minContains = 1 per
     # Draft 2020-12; previously the keyword was ignored entirely and the array
