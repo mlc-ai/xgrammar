@@ -81,6 +81,9 @@ struct NamedGrammar;
  * rule2 ::= character_class_star_grammar_expr(id_of_a_character_class_grammar_expr)
  */
 class Grammar {
+  // The default argument must not instantiate vector until NamedGrammar is complete.
+  static const std::vector<NamedGrammar>& EmptyNamedGrammars();
+
  public:
   /*!
    * \brief Get the EBNF string of the grammar.
@@ -142,7 +145,7 @@ class Grammar {
   static Grammar FromLark(
       const std::string& lark_string,
       const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt,
-      const std::vector<NamedGrammar>& named_grammars = {}
+      const std::vector<NamedGrammar>& named_grammars = EmptyNamedGrammars()
   );
 
   /*!
@@ -215,6 +218,11 @@ struct NamedGrammar {
   /*! \brief An existing grammar or a Lark source with its own `start` rule. */
   std::variant<Grammar, std::string> grammar;
 };
+
+inline const std::vector<NamedGrammar>& Grammar::EmptyNamedGrammars() {
+  static const std::vector<NamedGrammar> empty;
+  return empty;
+}
 
 }  // namespace xgrammar
 

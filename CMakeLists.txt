@@ -126,6 +126,11 @@ if(XGRAMMAR_BUILD_CXX_TESTS)
 
   include(GoogleTest)
   gtest_discover_tests(xgrammar_test)
+
+  add_executable(xgrammar_header_test tests/cpp20/test_public_headers.cc)
+  set_target_properties(xgrammar_header_test PROPERTIES CXX_STANDARD 20)
+  target_link_libraries(xgrammar_header_test xgrammar gtest_main)
+  gtest_discover_tests(xgrammar_header_test)
 endif()
 
 if(XGRAMMAR_ENABLE_COVERAGE)
