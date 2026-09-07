@@ -41,6 +41,7 @@ class TokenizerInfo::Impl {
   }
   const std::vector<int32_t>& GetTokenCharCounts() const;
   int32_t GetMaxTokenChars() const;
+  void BuildTokenIdToSortedVocabIndex();
   void BuildTokenCharData();
 
   std::string DumpMetadata() const;
