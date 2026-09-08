@@ -10,7 +10,7 @@ from xgrammar.testing import _get_matcher_from_grammar
 def test_set_get_recursion_depth():
     """Test getting default recursion depth"""
     default_depth = xgr.get_max_recursion_depth()
-    assert default_depth == 10000
+    assert default_depth == 50
 
     xgr.set_max_recursion_depth(1000)
     new_depth = xgr.get_max_recursion_depth()
@@ -21,7 +21,7 @@ def test_set_get_recursion_depth():
 @pytest.mark.thread_unsafe
 def test_recursion_depth_context():
     """Test recursion depth context manager"""
-    assert xgr.get_max_recursion_depth() == 10000
+    assert xgr.get_max_recursion_depth() == 50
     with xgr.max_recursion_depth(1000):
         depth = xgr.get_max_recursion_depth()
         assert depth == 1000
