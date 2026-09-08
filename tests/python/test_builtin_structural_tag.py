@@ -354,6 +354,27 @@ def test_public_api_validation_errors(kwargs: Dict[str, Any], error_substring: s
     assert error_substring in str(exc_info.value)
 
 
+@pytest.mark.parametrize(
+    "tool",
+    [
+        {"type": "function"},
+        {"type": "function", "function": None},
+        {"type": "function", "function": {}},
+        {"type": "function", "function": {"name": 42}},
+    ],
+)
+def test_normalize_tool_choice_rejects_malformed_function(tool):
+    with pytest.raises(ValueError):
+        normalize_tool_choice(tools=[tool])
+    with pytest.raises(ValueError):
+        get_model_structural_tag("harmony", tools=[tool])
+
+
+def test_builtin_tool_rejects_function_type():
+    with pytest.raises(ValueError, match="requires a function tool definition"):
+        BuiltinToolParam(type="function")
+
+
 def test_normalize_tool_choice_named_function():
     """normalize_tool_choice returns one forced function for named choices."""
 
