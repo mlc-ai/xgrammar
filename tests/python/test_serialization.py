@@ -552,5 +552,13 @@ def test_deserialized_tokenizer_info_compiles_token_edges():
     assert masks[0] == masks[1]
 
 
+def test_deserialize_deeply_nested_json_rejected():
+    # The JSON parser recurses once per nesting level; the depth is bounded by the maximum
+    # recursion depth and reported as an invalid JSON error.
+    with xgr.max_recursion_depth(50):
+        with pytest.raises(xgr.InvalidJSONError, match="Maximum recursion depth exceeded"):
+            xgr.Grammar.deserialize_json("[" * 60 + "]" * 60)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

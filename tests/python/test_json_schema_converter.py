@@ -3550,9 +3550,15 @@ def test_bounds_beyond_int32():
 
 
 def test_deeply_nested_json_rejected():
-    # The JSON parser recurses once per nesting level, so the depth must be bounded.
-    with pytest.raises(RuntimeError):
-        xgr.Grammar.from_json_schema("[" * 30000 + "]" * 30000)
+    # The JSON parser recurses once per nesting level; the depth is bounded by the maximum
+    # recursion depth instead of overflowing the stack.
+    def schema(depth: int) -> str:
+        return '{"unused": ' + "[" * depth + "0" + "]" * depth + "}"
+
+    with xgr.max_recursion_depth(50):
+        xgr.Grammar.from_json_schema(schema(40))
+        with pytest.raises(RuntimeError, match="Maximum recursion depth exceeded"):
+            xgr.Grammar.from_json_schema(schema(60))
 
 
 if __name__ == "__main__":

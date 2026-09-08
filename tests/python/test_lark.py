@@ -3175,3 +3175,13 @@ def test_deeply_nested_groups_rejected():
     # stack.
     assert xgr.Grammar.from_lark("start: " + "(" * 100 + '"a"' + ")" * 100) is not None
     _assert_lark_error("start: " + "(" * 2000 + '"a"' + ")" * 2000, "nested deeper than")
+
+
+def test_json_directive_depth_is_bounded_per_value():
+    # The %json value is parsed on its own: brackets in the rest of the grammar must not count
+    # towards its nesting depth, while the value itself is bounded by the maximum recursion depth.
+    with xgr.max_recursion_depth(50):
+        assert xgr.Grammar.from_lark("start: %json true\n# " + "[" * 100) is not None
+        _assert_lark_error(
+            "start: %json " + "[" * 60 + "]" * 60, "Maximum recursion depth exceeded"
+        )
