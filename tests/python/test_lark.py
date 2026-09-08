@@ -3177,6 +3177,7 @@ def test_deeply_nested_groups_rejected():
     _assert_lark_error("start: " + "(" * 2000 + '"a"' + ")" * 2000, "nested deeper than")
 
 
+@pytest.mark.thread_unsafe
 def test_json_directive_depth_is_bounded_per_value():
     # The %json value is parsed on its own: brackets in the rest of the grammar must not count
     # towards its nesting depth, while the value itself is bounded by the maximum recursion depth.

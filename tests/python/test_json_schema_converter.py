@@ -3549,6 +3549,7 @@ def test_bounds_beyond_int32():
         xgr.Grammar.from_json_schema(json.dumps({"type": "string", "minLength": 2**31 + 1}))
 
 
+@pytest.mark.thread_unsafe
 def test_deeply_nested_json_rejected():
     # The JSON parser recurses once per nesting level; the depth is bounded by the maximum
     # recursion depth instead of overflowing the stack.
