@@ -368,7 +368,14 @@ inline int32_t Compact2DArray<DataType>::PushBackIndirect(
     const std::vector<const DataType*>& new_data
 ) {
   CheckCanAppendData(new_data.size());
-  data_.reserve(data_.size() + new_data.size());
+  const size_t needed = data_.size() + new_data.size();
+  if (needed > data_.capacity()) {
+    // Exact-size reservations repeatedly relocate the full parser history.
+    // Grow geometrically while respecting the array's int32_t index limit.
+    const size_t doubled =
+        data_.capacity() > kMaxRepresentableSize / 2 ? kMaxRepresentableSize : data_.capacity() * 2;
+    data_.reserve(doubled > needed ? doubled : needed);
+  }
   for (const DataType* element : new_data) {
     data_.push_back(*element);
   }
