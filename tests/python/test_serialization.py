@@ -552,7 +552,6 @@ def test_deserialized_tokenizer_info_compiles_token_edges():
     assert masks[0] == masks[1]
 
 
-@pytest.mark.thread_unsafe
 def test_deserialize_deeply_nested_json_rejected():
     # The JSON parser recurses once per nesting level; the depth is bounded by the maximum
     # recursion depth and reported as an invalid JSON error.
