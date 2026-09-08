@@ -9,9 +9,11 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <ostream>
 #include <queue>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -54,7 +56,8 @@ struct ParserState {
       const int32_t& repeat_count = 0,
       const int32_t& partial_codepoint = 0,
       const int32_t& active_temperature_rule_id = -1,
-      const int32_t& char_budget_deadline = -1
+      const int32_t& char_budget_deadline = -1,
+      const int32_t& unique_key_state_id = 0
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
@@ -65,7 +68,8 @@ struct ParserState {
         repeat_count(repeat_count),
         partial_codepoint(partial_codepoint),
         active_temperature_rule_id(active_temperature_rule_id),
-        char_budget_deadline(char_budget_deadline) {}
+        char_budget_deadline(char_budget_deadline),
+        unique_key_state_id(unique_key_state_id) {}
 
   /*!
    * \brief A rule_start_pos value of kNoPrevInputPos means this ParserState is the root of the
@@ -93,13 +97,15 @@ struct ParserState {
    * is predicted and inherited by the states inside it. */
   int32_t budget_deadline = -1;
 
-  /*! \brief The id of the sub element in the current element of the sequence. */
+  /*! \brief The id of the sub element in the current element of the sequence. In a DynamicTag
+   * FSM, this stores the parser row at the start of the captured opening name. */
   int32_t sub_element_id = 0;
 
   /*! \brief The number of times the element is repeated. It will be used in kRepeat.*/
   int32_t repeat_count = 0;
 
-  /*! \brief Partial codepoint accumulated during UTF-8 decoding for positive character classes. */
+  /*! \brief Partial codepoint accumulated during UTF-8 decoding. In a DynamicTag FSM, this
+   * stores the parser row at the end of the captured opening name; the two uses cannot overlap. */
   int32_t partial_codepoint = 0;
 
   /*! \brief The innermost active rule that specifies a sampling temperature. */
@@ -108,6 +114,10 @@ struct ParserState {
   /*! \brief The number of Unicode codepoints this derivation may consume before its active
    * character budget expires; -1 means unlimited. Stored as an absolute input position. */
   int32_t char_budget_deadline = -1;
+
+  /*! \brief Matcher-local state for branch-scoped DynamicTag key uniqueness. Zero for grammars
+   * that do not use scoped dynamic keys. */
+  int32_t unique_key_state_id = 0;
 
   /*!
    * \brief Lexicographic order over all fields. It is only used to sort the states for
@@ -127,7 +137,10 @@ struct ParserState {
     if (active_temperature_rule_id != other.active_temperature_rule_id) {
       return active_temperature_rule_id < other.active_temperature_rule_id;
     }
-    return char_budget_deadline < other.char_budget_deadline;
+    if (char_budget_deadline != other.char_budget_deadline) {
+      return char_budget_deadline < other.char_budget_deadline;
+    }
+    return unique_key_state_id < other.unique_key_state_id;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
@@ -156,6 +169,9 @@ struct ParserState {
     if (char_budget_deadline != -1) {
       result += ", char_budget_deadline=" + std::to_string(char_budget_deadline);
     }
+    if (unique_key_state_id != 0) {
+      result += ", unique_key_state_id=" + std::to_string(unique_key_state_id);
+    }
     result += ")";
     return result;
   }
@@ -172,13 +188,17 @@ XGRAMMAR_MEMBER_ARRAY(
     &ParserState::repeat_count,
     &ParserState::partial_codepoint,
     &ParserState::active_temperature_rule_id,
-    &ParserState::char_budget_deadline
+    &ParserState::char_budget_deadline,
+    &ParserState::unique_key_state_id
 );
 
 /*!
- * \brief Hash of a state used as the key of the adaptive token mask cache. The token mask of a
- * state does not depend on rule_start_pos, repeat_count or partial_codepoint, so they are
- * ignored. Pairs with StateEqualForCache.
+ * \brief Hash of a state used as the key of the adaptive token mask cache.
+ *
+ * The reusable cache is keyed only by grammar position. Runtime-dependent fields are ignored:
+ * character budgets are handled by boundary checks, and DynamicTag backreferences and scoped
+ * key uniqueness use a conservative cache plus matcher-local exact checks. Pairs with
+ * StateEqualForCache.
  */
 class StateHashForCache {
  public:
@@ -212,7 +232,8 @@ class StateEqualForParsing {
            lhs.partial_codepoint == rhs.partial_codepoint &&
            lhs.budget_deadline == rhs.budget_deadline &&
            lhs.active_temperature_rule_id == rhs.active_temperature_rule_id &&
-           lhs.char_budget_deadline == rhs.char_budget_deadline;
+           lhs.char_budget_deadline == rhs.char_budget_deadline &&
+           lhs.unique_key_state_id == rhs.unique_key_state_id;
   }
 };
 
@@ -223,7 +244,7 @@ class StateEqualForParsing {
 class StateHashForParsing {
  public:
   size_t operator()(const ParserState& state) const {
-    return HashCombine(
+    const uint64_t base_hash = HashCombine(
         state.rule_id,
         state.sequence_id,
         state.element_id,
@@ -235,6 +256,10 @@ class StateHashForParsing {
         state.active_temperature_rule_id,
         state.char_budget_deadline
     );
+    // Keep the ordinary-grammar hot path at its original hashing cost. DynamicTag uniqueness is
+    // opt-in, and zero is the only value used by grammars that do not request it.
+    return state.unique_key_state_id == 0 ? base_hash
+                                          : HashCombine(base_hash, state.unique_key_state_id);
   }
 };
 
@@ -468,6 +493,132 @@ class EarleyParser {
    */
   bool capture_recording_ = false;
 
+  /*! \brief Whether the optimized grammar contains a DynamicTag rule. */
+  bool has_dynamic_tag_rules_ = false;
+
+  /*! \brief Rules whose concrete occurrences delimit DynamicTag key-uniqueness scopes. */
+  std::vector<uint8_t> unique_key_scope_rules_;
+
+  /*! \brief Scope rule id for each scoped DynamicTag rule, or -1. Empty if none exist. */
+  std::vector<int32_t> dynamic_tag_unique_key_scope_rule_ids_;
+
+  /*! \brief Whether this parser instance performs matcher-local uniqueness tracking. The
+   * compiler's conservative parsers leave this disabled so runtime IDs never enter caches. */
+  bool track_unique_key_contexts_ = false;
+
+  struct UniqueKeyContextNode {
+    enum class Kind : uint8_t { kRoot, kScope, kKey };
+
+    Kind kind = Kind::kRoot;
+    int32_t parent_id = 0;
+    int32_t scope_rule_id = -1;
+    int32_t scope_start_pos = ParserState::kNoPrevInputPos;
+    int32_t name_start_byte = -1;
+    int32_t byte_length = 0;
+    int32_t nearest_scope_context_id = 0;
+    int32_t scope_key_depth = 0;
+    uint64_t name_hash = 0;
+    uint64_t name_bloom = 0;
+    uint64_t signature_hash = 0;
+  };
+
+  struct UniqueKeySemanticState {
+    int32_t current_context_id = 0;
+    int32_t entry_context_id = 0;
+  };
+
+  struct UniqueKeyContextStorage {
+    std::vector<UniqueKeyContextNode> contexts{UniqueKeyContextNode{}};
+    std::vector<UniqueKeySemanticState> semantic_states{UniqueKeySemanticState{}};
+    std::unordered_multimap<uint64_t, int32_t> context_ids_by_hash;
+    std::unordered_map<uint64_t, int32_t> semantic_state_ids;
+    std::unordered_multimap<uint64_t, int32_t> key_context_ids_by_scope_and_name_hash;
+  };
+
+  struct UniqueKeyContextSnapshot {
+    size_t num_contexts = 1;
+    size_t num_semantic_states = 1;
+  };
+
+  std::shared_ptr<UniqueKeyContextStorage> unique_key_context_storage_;
+
+  const UniqueKeySemanticState& GetUniqueKeySemanticState(int32_t state_id) const;
+
+  const UniqueKeyContextNode& GetUniqueKeyContext(int32_t context_id) const;
+
+  int32_t InternUniqueKeySemanticState(int32_t current_context_id, int32_t entry_context_id);
+
+  int32_t InternUniqueKeyContext(UniqueKeyContextNode node);
+
+  int32_t MakeChildUniqueKeyState(
+      int32_t parent_state_id, int32_t child_rule_id, int32_t child_start_pos
+  );
+
+  std::optional<int32_t> CompleteUniqueKeyState(
+      int32_t parent_state_id, const ParserState& completed_state
+  );
+
+  int32_t AppendUniqueKey(
+      int32_t state_id, int32_t name_start_byte, int32_t byte_length, uint64_t name_hash
+  );
+
+  struct UniqueKeyRowRemapCache {
+    std::unordered_map<int32_t, int32_t> context_ids;
+    std::unordered_map<int32_t, int32_t> semantic_state_ids;
+    std::vector<int32_t> context_path;
+  };
+
+  int32_t RemapUniqueKeyStateRows(
+      int32_t state_id, int32_t from_row, int32_t to_row, UniqueKeyRowRemapCache* remap_cache
+  );
+
+  UniqueKeyContextSnapshot SnapshotUniqueKeyContexts() const;
+
+  void RestoreUniqueKeyContexts(const UniqueKeyContextSnapshot& snapshot);
+
+  void EnsureUniqueKeyContextStorage();
+
+  bool IsDynamicTagRule(int32_t rule_id) const {
+    return rule_id >= 0 && grammar_->GetGrammarExpr(grammar_->GetRule(rule_id).body_expr_id).type ==
+                               Grammar::Impl::GrammarExprType::kDynamicTag;
+  }
+
+  bool IsUniqueKeyDynamicTagRule(int32_t rule_id) const {
+    return rule_id >= 0 &&
+           rule_id < static_cast<int32_t>(dynamic_tag_unique_key_scope_rule_ids_.size()) &&
+           dynamic_tag_unique_key_scope_rule_ids_[rule_id] >= 0;
+  }
+
+  int32_t GetDynamicTagUniqueKeyScopeRuleId(int32_t rule_id) const {
+    XGRAMMAR_DCHECK(IsUniqueKeyDynamicTagRule(rule_id));
+    return dynamic_tag_unique_key_scope_rule_ids_[rule_id];
+  }
+
+  bool IsUniqueKeyScopeRule(int32_t rule_id) const {
+    return rule_id >= 0 && rule_id < static_cast<int32_t>(unique_key_scope_rules_.size()) &&
+           unique_key_scope_rules_[rule_id] != 0;
+  }
+
+  struct BackReferenceProgress {
+    uint8_t next_byte;
+    bool is_last_byte;
+  };
+
+  /*! \brief Get the next byte required by a backreference state. GrammarMatcher overrides this
+   * using its matcher-local committed and speculative byte history. */
+  virtual std::optional<BackReferenceProgress> GetBackReferenceProgress(const ParserState& state
+  ) const {
+    return std::nullopt;
+  }
+
+  /*! \brief Whether a backreference should be over-approximated as one or more arbitrary bytes.
+   * Used only while compiling a conservative token mask; normal matching always returns false. */
+  virtual bool AllowWildcardBackReference() const { return false; }
+
+  /*! \brief Validate a scoped DynamicTag name and update this derivation's uniqueness state
+   * after its opening suffix is fully matched. */
+  virtual bool PrepareDynamicTagContent(ParserState* state) { return true; }
+
   /*!
    * \brief The history of capture events. capture_event_history_[i] stores the events recorded
    * when input position i was created. Kept aligned with scanable_state_history_ row-by-row
@@ -556,7 +707,7 @@ class EarleyParser {
   std::pair<bool, bool> Predict(const ParserState& state, bool debug_print = false);
 
   /*! \brief The initial state expanded from the root rule of the grammar. */
-  ParserState RootInitialState() const;
+  ParserState RootInitialState();
 
   /*! \brief Resolve the active temperature rule when entering a rule. */
   int32_t ResolveActiveTemperatureRule(int32_t rule_id, int32_t inherited_rule_id) const;
@@ -672,8 +823,12 @@ class EarleyParser {
    * from the root rule of the grammar.
    */
   explicit EarleyParser(
-      const Grammar& grammar, std::optional<ParserState> initial_state = std::nullopt
+      const Grammar& grammar,
+      std::optional<ParserState> initial_state = std::nullopt,
+      bool track_unique_key_contexts = false
   );
+
+  virtual ~EarleyParser() = default;
 
   /*!
    * \brief From the current states, advance to the next state.

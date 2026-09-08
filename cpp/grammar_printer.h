@@ -69,6 +69,8 @@ class GrammarPrinter {
   std::string PrintExcludeToken(const GrammarExpr& grammar_expr);
   /*! \brief Print a GrammarExpr for token tag dispatch. */
   std::string PrintTokenTagDispatch(const GrammarExpr& grammar_expr);
+  /*! \brief Print a GrammarExpr for a dynamic tag. */
+  std::string PrintDynamicTag(const GrammarExpr& grammar_expr);
   /*! \brief Print a GrammarExpr for regex. */
   std::string PrintRegex(const GrammarExpr& grammar_expr);
   /*! \brief Print a GrammarExpr for substring. */

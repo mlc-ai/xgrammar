@@ -745,6 +745,7 @@ class EBNFParser {
   int32_t ParseTokenSet();
   int32_t ParseExcludeToken();
   int32_t ParseTokenTagDispatch();
+  int32_t ParseDynamicTag();
   int32_t ParseRegexMacro();
   int32_t ParseSubstringMacro();
 
@@ -800,6 +801,7 @@ const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>>
         {"TokenTagDispatch", [](EBNFParser* parser) { return parser->ParseTokenTagDispatch(); }},
         {"Regex", [](EBNFParser* parser) { return parser->ParseRegexMacro(); }},
         {"Substring", [](EBNFParser* parser) { return parser->ParseSubstringMacro(); }},
+        {"DynamicTag", [](EBNFParser* parser) { return parser->ParseDynamicTag(); }},
 };
 
 const EBNFParser::Token& EBNFParser::Peek(int delta) const { return *(current_token_ + delta); }
@@ -1264,6 +1266,82 @@ int32_t EBNFParser::ParseTagDispatch() {
   }
 
   return builder_.AddTagDispatch(tag_dispatch);
+}
+
+int32_t EBNFParser::ParseDynamicTag() {
+  Consume();  // Consume DynamicTag operator.
+  auto start = current_token_;
+  auto args = ParseMacroArguments();
+  auto delta_element = start - current_token_;
+  if (args.arguments.size() != 6) {
+    ReportParseError(
+        "DynamicTag expects (open_prefix, name_rule, open_suffix, content_rule, close_prefix, "
+        "close_suffix)",
+        delta_element
+    );
+  }
+  for (const auto& [name, _] : args.named_arguments) {
+    if (name != "unique_key_scope" && name != "reserved_names") {
+      ReportParseError("Unknown DynamicTag argument: " + name, delta_element);
+    }
+  }
+
+  auto get_string = [&](size_t index, const char* name) -> std::string {
+    auto* node = std::get_if<MacroIR::StringNode>(args.arguments[index].get());
+    if (node == nullptr) {
+      ReportParseError(std::string(name) + " must be a string literal", delta_element);
+    }
+    return node->value;
+  };
+  auto get_rule = [&](size_t index, const char* name) -> int32_t {
+    auto* node = std::get_if<MacroIR::IdentifierNode>(args.arguments[index].get());
+    if (node == nullptr) {
+      ReportParseError(std::string(name) + " must be a rule identifier", delta_element);
+    }
+    int32_t rule_id = builder_.GetRuleId(node->name);
+    if (rule_id < 0) {
+      ReportParseError("Rule \"" + node->name + "\" is not defined", delta_element);
+    }
+    return rule_id;
+  };
+
+  Grammar::Impl::DynamicTag dynamic_tag{
+      get_string(0, "open_prefix"),
+      get_rule(1, "name_rule"),
+      get_string(2, "open_suffix"),
+      get_rule(3, "content_rule"),
+      get_string(4, "close_prefix"),
+      get_string(5, "close_suffix")
+  };
+  auto scope_it = args.named_arguments.find("unique_key_scope");
+  auto reserved_it = args.named_arguments.find("reserved_names");
+  if ((scope_it == args.named_arguments.end()) != (reserved_it == args.named_arguments.end())) {
+    ReportParseError(
+        "unique_key_scope and reserved_names must be specified together", delta_element
+    );
+  }
+  if (scope_it != args.named_arguments.end()) {
+    auto* scope = std::get_if<MacroIR::IdentifierNode>(scope_it->second.get());
+    if (scope == nullptr) {
+      ReportParseError("unique_key_scope must be a rule identifier", delta_element);
+    }
+    dynamic_tag.unique_key_scope_rule_id = builder_.GetRuleId(scope->name);
+    if (dynamic_tag.unique_key_scope_rule_id < 0) {
+      ReportParseError("Rule \"" + scope->name + "\" is not defined", delta_element);
+    }
+    auto* names = std::get_if<MacroIR::TupleNode>(reserved_it->second.get());
+    if (names == nullptr) {
+      ReportParseError("reserved_names must be a tuple", delta_element);
+    }
+    for (const auto& element : names->elements) {
+      auto* name = std::get_if<MacroIR::StringNode>(element.get());
+      if (name == nullptr) {
+        ReportParseError("reserved_names must contain only string literals", delta_element);
+      }
+      dynamic_tag.reserved_names.push_back(name->value);
+    }
+  }
+  return builder_.AddDynamicTag(dynamic_tag);
 }
 
 int32_t EBNFParser::ParseRegexMacro() {

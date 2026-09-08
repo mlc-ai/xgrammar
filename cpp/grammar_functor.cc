@@ -18,6 +18,8 @@
 #include <stack>
 #include <string>
 #include <tuple>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "compiled_grammar_impl.h"
@@ -35,6 +37,12 @@ namespace xgrammar {
 
 using GrammarExpr = Grammar::Impl::GrammarExpr;
 using ExprType = Grammar::Impl::GrammarExprType;
+
+namespace {
+
+constexpr int32_t kMaxDynamicTagNameStates = 100000;
+
+}  // namespace
 
 /*************************** Impl of grammar constructors ***************************/
 
@@ -117,6 +125,17 @@ class SubGrammarAdderImpl : public GrammarMutator {
     new_ttd.loop_after_dispatch = old_ttd.loop_after_dispatch;
     new_ttd.excludes = old_ttd.excludes;
     return builder_->AddTokenTagDispatch(new_ttd);
+  }
+
+  int32_t VisitDynamicTag(const GrammarExpr& grammar_expr) final {
+    auto dynamic_tag = base_grammar_->GetDynamicTag(grammar_expr);
+    dynamic_tag.name_rule_id = new_rule_ids_names[dynamic_tag.name_rule_id].first;
+    dynamic_tag.content_rule_id = new_rule_ids_names[dynamic_tag.content_rule_id].first;
+    if (dynamic_tag.unique_key_scope_rule_id >= 0) {
+      dynamic_tag.unique_key_scope_rule_id =
+          new_rule_ids_names[dynamic_tag.unique_key_scope_rule_id].first;
+    }
+    return builder_->AddDynamicTag(dynamic_tag);
   }
 
   std::vector<std::pair<int32_t, std::string>> new_rule_ids_names;
@@ -323,6 +342,9 @@ class StructureNormalizerImpl : public GrammarMutator {
       case GrammarExprType::kSubstring:
         XGRAMMAR_LOG(FATAL) << "Substring should not be in lookahead assertion";
         XGRAMMAR_UNREACHABLE();
+      case GrammarExprType::kDynamicTag:
+        XGRAMMAR_LOG(FATAL) << "DynamicTag should not be in lookahead assertion";
+        XGRAMMAR_UNREACHABLE();
       case GrammarExprType::kByteString:
       case GrammarExprType::kCharacterClass:
       case GrammarExprType::kCharacterClassStar:
@@ -366,8 +388,11 @@ class StructureNormalizerImpl : public GrammarMutator {
       }
       case GrammarExprType::kRegex:
       case GrammarExprType::kSubstring:
+      case GrammarExprType::kDynamicTag:
         // A regex or substring is kept as the direct body of the rule, like a tag dispatch.
-        return builder_->AddGrammarExpr(grammar_expr);
+        return grammar_expr.type == GrammarExprType::kDynamicTag
+                   ? VisitDynamicTag(grammar_expr)
+                   : builder_->AddGrammarExpr(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
         XGRAMMAR_UNREACHABLE();
@@ -422,6 +447,12 @@ class StructureNormalizerImpl : public GrammarMutator {
           auto new_rule_id = builder_->AddRuleWithHint(cur_rule_name_, leaf_expr_id);
           auto new_sequence_id = builder_->AddSequence({builder_->AddRuleRef(new_rule_id)});
           new_choice_ids.push_back(new_sequence_id);
+          break;
+        }
+        case GrammarExprType::kDynamicTag: {
+          auto dynamic_tag_expr_id = VisitDynamicTag(choice_expr);
+          auto new_rule_id = builder_->AddRuleWithHint(cur_rule_name_, dynamic_tag_expr_id);
+          new_choice_ids.push_back(builder_->AddSequence({builder_->AddRuleRef(new_rule_id)}));
           break;
         }
         default:
@@ -514,6 +545,12 @@ class StructureNormalizerImpl : public GrammarMutator {
         case GrammarExprType::kSubstring: {
           auto leaf_expr_id = builder_->AddGrammarExpr(element_expr);
           auto new_rule_id = builder_->AddRuleWithHint(cur_rule_name_, leaf_expr_id);
+          new_sequence_ids.push_back(builder_->AddRuleRef(new_rule_id));
+          break;
+        }
+        case GrammarExprType::kDynamicTag: {
+          auto dynamic_tag_expr_id = VisitDynamicTag(element_expr);
+          auto new_rule_id = builder_->AddRuleWithHint(cur_rule_name_, dynamic_tag_expr_id);
           new_sequence_ids.push_back(builder_->AddRuleRef(new_rule_id));
           break;
         }
@@ -726,7 +763,19 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
     int32_t num_rules = builder_.NumRules();
     original_body_expr_ids_.reserve(num_rules);
     for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
-      original_body_expr_ids_.push_back(builder_.GetRule(rule_id).body_expr_id);
+      int32_t body_expr_id = builder_.GetRule(rule_id).body_expr_id;
+      original_body_expr_ids_.push_back(body_expr_id);
+      const auto body = builder_.GetGrammarExpr(body_expr_id);
+      if (body.type != GrammarExprType::kDynamicTag) {
+        continue;
+      }
+      int32_t scope_rule_id = (*grammar_)->GetDynamicTagUniqueKeyScopeRuleId(body);
+      if (scope_rule_id >= 0) {
+        if (is_unique_key_scope_rule_.empty()) {
+          is_unique_key_scope_rule_.assign(num_rules, false);
+        }
+        is_unique_key_scope_rule_[scope_rule_id] = true;
+      }
     }
     can_rule_be_inlined_.assign(num_rules, -1);
   }
@@ -807,7 +856,8 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
     // Inlining a temperature rule would erase the rule its sampling temperature applies to.
     if (rule.max_tokens >= 0 || rule.max_chars >= 0 || !rule.capture_name.empty() ||
         (*grammar_)->GetSuffixStopInfo(rule_id) != nullptr || rule.is_lazy ||
-        rule.temperature.has_value()) {
+        rule.temperature.has_value() ||
+        (!is_unique_key_scope_rule_.empty() && is_unique_key_scope_rule_[rule_id])) {
       can_rule_be_inlined_[rule_id] = false;
       return false;
     }
@@ -844,6 +894,7 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
   std::vector<int32_t> original_body_expr_ids_;
   // Per-rule cache of CanRuleBeInlined: -1 unknown, 0 false, 1 true.
   std::vector<int8_t> can_rule_be_inlined_;
+  std::vector<uint8_t> is_unique_key_scope_rule_;
 };
 
 /*!
@@ -895,6 +946,15 @@ class UsedRulesAnalyzer : public GrammarVisitor<std::vector<int32_t>> {
     auto ttd = base_grammar_->GetTokenTagDispatch(grammar_expr);
     for (const auto& [token_id, rule_id] : ttd.trigger_rule_pairs) {
       visit_queue_.push(rule_id);
+    }
+  }
+
+  void VisitDynamicTag(const GrammarExpr& grammar_expr) {
+    auto dynamic_tag = base_grammar_->GetDynamicTag(grammar_expr);
+    visit_queue_.push(dynamic_tag.name_rule_id);
+    visit_queue_.push(dynamic_tag.content_rule_id);
+    if (dynamic_tag.unique_key_scope_rule_id >= 0) {
+      visit_queue_.push(dynamic_tag.unique_key_scope_rule_id);
     }
   }
 
@@ -962,6 +1022,19 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
     return builder_->AddTokenTagDispatch(ttd);
   }
 
+  int32_t VisitDynamicTag(const GrammarExpr& grammar_expr) final {
+    auto dynamic_tag = base_grammar_->GetDynamicTag(grammar_expr);
+    XGRAMMAR_DCHECK(rule_id_map_.count(dynamic_tag.name_rule_id) > 0);
+    XGRAMMAR_DCHECK(rule_id_map_.count(dynamic_tag.content_rule_id) > 0);
+    dynamic_tag.name_rule_id = rule_id_map_[dynamic_tag.name_rule_id];
+    dynamic_tag.content_rule_id = rule_id_map_[dynamic_tag.content_rule_id];
+    if (dynamic_tag.unique_key_scope_rule_id >= 0) {
+      XGRAMMAR_DCHECK(rule_id_map_.count(dynamic_tag.unique_key_scope_rule_id) > 0);
+      dynamic_tag.unique_key_scope_rule_id = rule_id_map_[dynamic_tag.unique_key_scope_rule_id];
+    }
+    return builder_->AddDynamicTag(dynamic_tag);
+  }
+
   int32_t VisitRuleRef(const GrammarExpr& grammar_expr) final {
     XGRAMMAR_DCHECK(rule_id_map_.count(grammar_expr[0]) > 0);
     auto new_rule_id = rule_id_map_[grammar_expr[0]];
@@ -990,7 +1063,8 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
     if (root_grammar_expr.type == GrammarExprType::kTagDispatch ||
         root_grammar_expr.type == GrammarExprType::kTokenTagDispatch ||
         root_grammar_expr.type == GrammarExprType::kRegex ||
-        root_grammar_expr.type == GrammarExprType::kSubstring) {
+        root_grammar_expr.type == GrammarExprType::kSubstring ||
+        root_grammar_expr.type == GrammarExprType::kDynamicTag) {
       return grammar;
     }
     BuildRuleLookaheadInfo();
@@ -1055,6 +1129,12 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
         for (const auto& [token_id, rule_id] : token_tag_dispatch.trigger_rule_pairs) {
           rule_lookahead_infos_[rule_id].is_triggered_by_dispatch = true;
         }
+        continue;
+      }
+      if (grammar_expr.type == GrammarExprType::kDynamicTag) {
+        auto dynamic_tag = base_grammar_->GetDynamicTag(grammar_expr);
+        rule_lookahead_infos_[dynamic_tag.name_rule_id].is_triggered_by_dispatch = true;
+        rule_lookahead_infos_[dynamic_tag.content_rule_id].is_triggered_by_dispatch = true;
         continue;
       }
       if (grammar_expr.type == GrammarExprType::kRegex ||
@@ -1142,6 +1222,12 @@ class RuleRefGraphFinder : public GrammarVisitor<std::vector<std::vector<int32_t
     }
   }
 
+  void VisitDynamicTag(const GrammarExpr& grammar_expr) {
+    auto dynamic_tag = base_grammar_->GetDynamicTag(grammar_expr);
+    rule_visit_graph_[dynamic_tag.name_rule_id].push_back(cur_rule_id_);
+    rule_visit_graph_[dynamic_tag.content_rule_id].push_back(cur_rule_id_);
+  }
+
   // Inversed reference graph: pointing from referee to referer
   std::vector<std::vector<int32_t>> rule_visit_graph_;
   int32_t cur_rule_id_;
@@ -1184,6 +1270,10 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
       if (grammar_expr.type == GrammarExprType::kSubstring) {
         // A substring automaton always accepts the empty string: every state is accepting.
         empty_rule_id_set->insert(i);
+        continue;
+      }
+
+      if (grammar_expr.type == GrammarExprType::kDynamicTag) {
         continue;
       }
 
@@ -1254,6 +1344,9 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
         auto rule = base_grammar_->GetRule(referer_rule_id);
         auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
 
+        if (grammar_expr.type == GrammarExprType::kDynamicTag) {
+          continue;
+        }
         XGRAMMAR_DCHECK(
             grammar_expr.type != GrammarExprType::kTagDispatch &&
             grammar_expr.type != GrammarExprType::kTokenTagDispatch
@@ -1404,6 +1497,25 @@ class GrammarFSMBuilderImpl {
       int start_state,
       std::vector<int32_t>* end_states
   );
+  void BuildDynamicTag(
+      const Grammar::Impl::DynamicTag& dynamic_tag,
+      const Grammar& grammar,
+      int start_state,
+      std::vector<int32_t>* end_states
+  );
+  Result<FSMWithStartEnd> BuildRegularRuleFSM(const Grammar& grammar, int32_t rule_id);
+  Result<FSMWithStartEnd> ExpandRegularFSM(
+      const Grammar& grammar, int32_t rule_id, const FSMWithStartEnd& raw_fsm
+  );
+  static Result<FSMWithStartEnd> RepeatRegularFSM(
+      const FSMWithStartEnd& child, int32_t lower, int32_t upper, int32_t state_budget
+  );
+  static Result<FSMWithStartEnd> BuildDynamicTagNameConstraint(
+      const std::string& open_prefix,
+      const std::string& open_suffix,
+      const std::string& close_prefix,
+      const std::string& close_suffix
+  );
   void BuildSequence(
       const GrammarExpr& expr,
       const Grammar& grammar,
@@ -1425,6 +1537,8 @@ class GrammarFSMBuilderImpl {
   const std::string* rule_name_;
   // If not null, kRegex expressions may add new rules through this builder; see Apply().
   GrammarBuilder* grammar_builder_ = nullptr;
+  std::unordered_map<int32_t, FSMWithStartEnd> regular_rule_fsm_cache_;
+  std::unordered_set<int32_t> regular_rule_fsm_visiting_;
 };
 
 // This function will add a range [min, max] of unicode characters to the FSM.
@@ -1642,6 +1756,8 @@ void GrammarFSMBuilderImpl::BuildExpression(
       return BuildTagDispatch(grammar->GetTagDispatch(expr), start_state, end_states);
     case ExprType::kTokenTagDispatch:
       return BuildTokenTagDispatch(grammar->GetTokenTagDispatch(expr), start_state, end_states);
+    case ExprType::kDynamicTag:
+      return BuildDynamicTag(grammar->GetDynamicTag(expr), grammar, start_state, end_states);
   }
   XGRAMMAR_UNREACHABLE();
 }
@@ -1912,6 +2028,433 @@ void GrammarFSMBuilderImpl::BuildTokenTagDispatch(
     target_fsm_.AddRuleEdge(dispatch_states[index], dispatch_target, rule_id);
   }
   target_fsm_.AddExcludeTokenEdge(start_state, start_state, excluded_token_ids);
+}
+
+Result<FSMWithStartEnd> GrammarFSMBuilderImpl::RepeatRegularFSM(
+    const FSMWithStartEnd& child, int32_t lower, int32_t upper, int32_t state_budget
+) {
+  XGRAMMAR_DCHECK(lower >= 0 && (upper == -1 || upper >= lower));
+  XGRAMMAR_DCHECK(state_budget >= 0 && state_budget <= kMaxDynamicTagNameStates);
+  const int64_t copies = upper == -1 ? static_cast<int64_t>(lower) + 1 : upper;
+  const int64_t required_states =
+      1 + copies * static_cast<int64_t>(child.NumStates()) + (upper == -1 ? 1 : 0);
+  if (required_states > state_budget) {
+    return ResultErr(
+        "DynamicTag name_rule expands beyond 100000 FSM states; use a regex name rule or a "
+        "smaller repetition bound"
+    );
+  }
+
+  FSM repeated(1);
+  std::vector<int32_t> previous_ends{0};
+  std::vector<int32_t> accepted_ends;
+  if (lower == 0) {
+    accepted_ends.push_back(0);
+  }
+
+  auto append_child = [&]() {
+    std::vector<int> mapping;
+    repeated.AddFSM(child.GetFsm(), &mapping);
+    for (int32_t previous_end : previous_ends) {
+      repeated.AddEpsilonEdge(previous_end, mapping[child.GetStart()]);
+    }
+    previous_ends.clear();
+    previous_ends.reserve(child.GetEnds().size());
+    for (int32_t end : child.GetEnds()) {
+      previous_ends.push_back(mapping[end]);
+    }
+  };
+
+  if (upper != -1) {
+    for (int32_t count = 1; count <= upper; ++count) {
+      append_child();
+      if (count >= lower) {
+        accepted_ends.insert(accepted_ends.end(), previous_ends.begin(), previous_ends.end());
+      }
+    }
+    return ResultOk(FSMWithStartEnd(std::move(repeated), 0, std::move(accepted_ends)));
+  }
+
+  for (int32_t count = 0; count < lower; ++count) {
+    append_child();
+  }
+  int32_t loop_entry = repeated.AddState();
+  for (int32_t previous_end : previous_ends) {
+    repeated.AddEpsilonEdge(previous_end, loop_entry);
+  }
+  std::vector<int> mapping;
+  repeated.AddFSM(child.GetFsm(), &mapping);
+  repeated.AddEpsilonEdge(loop_entry, mapping[child.GetStart()]);
+  for (int32_t end : child.GetEnds()) {
+    repeated.AddEpsilonEdge(mapping[end], loop_entry);
+  }
+  return ResultOk(FSMWithStartEnd(std::move(repeated), 0, {loop_entry}));
+}
+
+Result<FSMWithStartEnd> GrammarFSMBuilderImpl::ExpandRegularFSM(
+    const Grammar& grammar, int32_t rule_id, const FSMWithStartEnd& raw_fsm
+) {
+  auto exceeds_state_budget = [](int64_t current_states, int64_t additional_states) {
+    return current_states + additional_states > kMaxDynamicTagNameStates;
+  };
+  if (exceeds_state_budget(0, raw_fsm.NumStates())) {
+    return ResultErr("DynamicTag name_rule expands beyond 100000 FSM states; simplify the name rule"
+    );
+  }
+  auto is_pure_epsilon_tail = [&](int32_t start) {
+    std::unordered_set<int32_t> closure{start};
+    std::vector<int32_t> pending{start};
+    for (size_t i = 0; i < pending.size(); ++i) {
+      for (const auto& edge : raw_fsm.GetFsm().GetEdges(pending[i])) {
+        if (!edge.IsEpsilon()) {
+          return false;
+        }
+        if (closure.insert(edge.target).second) {
+          pending.push_back(edge.target);
+        }
+      }
+    }
+    return std::any_of(raw_fsm.GetEnds().begin(), raw_fsm.GetEnds().end(), [&](int32_t end) {
+      return closure.count(end) != 0;
+    });
+  };
+  FSM expanded(raw_fsm.NumStates());
+  for (int32_t source = 0; source < raw_fsm.NumStates(); ++source) {
+    for (const auto& edge : raw_fsm.GetFsm().GetEdges(source)) {
+      if (edge.IsCharRange()) {
+        expanded.AddEdge(source, edge.target, edge.min, edge.max);
+      } else if (edge.IsEpsilon()) {
+        expanded.AddEpsilonEdge(source, edge.target);
+      } else if (edge.IsRuleRef()) {
+        if (regular_rule_fsm_visiting_.count(edge.GetRefRuleId()) != 0) {
+          if (edge.GetRefRuleId() != rule_id || !is_pure_epsilon_tail(edge.target)) {
+            return ResultErr("DynamicTag name_rule recursion must be a direct tail recursion");
+          }
+          expanded.AddEpsilonEdge(source, raw_fsm.GetStart());
+          continue;
+        }
+        auto child_result = BuildRegularRuleFSM(grammar, edge.GetRefRuleId());
+        if (child_result.IsErr()) {
+          return ResultErr(std::move(child_result).UnwrapErr());
+        }
+        auto child = std::move(child_result).Unwrap();
+        if (exceeds_state_budget(expanded.NumStates(), child.NumStates())) {
+          return ResultErr(
+              "DynamicTag name_rule expands beyond 100000 FSM states; simplify the name rule"
+          );
+        }
+        std::vector<int> mapping;
+        expanded.AddFSM(child.GetFsm(), &mapping);
+        expanded.AddEpsilonEdge(source, mapping[child.GetStart()]);
+        for (int32_t end : child.GetEnds()) {
+          expanded.AddEpsilonEdge(mapping[end], edge.target);
+        }
+      } else if (edge.IsRepeatRef()) {
+        auto repeat = raw_fsm.GetFsm().GetRepeatEdgeInfo(edge.GetAuxIndex());
+        auto child_result = BuildRegularRuleFSM(grammar, repeat.RuleId());
+        if (child_result.IsErr()) {
+          return ResultErr(std::move(child_result).UnwrapErr());
+        }
+        auto repeated_result = RepeatRegularFSM(
+            std::move(child_result).Unwrap(),
+            repeat.Lower(),
+            repeat.Upper(),
+            kMaxDynamicTagNameStates - expanded.NumStates()
+        );
+        if (repeated_result.IsErr()) {
+          return ResultErr(std::move(repeated_result).UnwrapErr());
+        }
+        auto repeated = std::move(repeated_result).Unwrap();
+        if (exceeds_state_budget(expanded.NumStates(), repeated.NumStates())) {
+          return ResultErr(
+              "DynamicTag name_rule expands beyond 100000 FSM states; simplify the name rule"
+          );
+        }
+        std::vector<int> mapping;
+        expanded.AddFSM(repeated.GetFsm(), &mapping);
+        expanded.AddEpsilonEdge(source, mapping[repeated.GetStart()]);
+        for (int32_t end : repeated.GetEnds()) {
+          expanded.AddEpsilonEdge(mapping[end], edge.target);
+        }
+      } else {
+        return ResultErr(
+            "DynamicTag name_rule must be a byte-regular grammar without Token, "
+            "ExcludeToken, DynamicTag, or EOS transitions"
+        );
+      }
+    }
+  }
+  auto result =
+      FSMWithStartEnd(std::move(expanded), raw_fsm.GetStart(), raw_fsm.GetEnds()).SimplifyEpsilon();
+  return ResultOk(result.MergeEquivalentStates());
+}
+
+Result<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildRegularRuleFSM(
+    const Grammar& grammar, int32_t rule_id
+) {
+  const auto& rule = grammar->GetRule(rule_id);
+  // A rule lookahead is a token-mask boundary hint rather than part of the accepted byte
+  // language. Once the name is inlined, DynamicTag's opening suffix provides that boundary.
+  if (rule.max_tokens >= 0 || rule.max_chars >= 0 || !rule.capture_name.empty() || rule.is_lazy ||
+      rule.temperature.has_value() || grammar->GetSuffixStopInfo(rule_id) != nullptr) {
+    return ResultErr(
+        "DynamicTag name_rule and its dependencies must not use budgets, captures, lazy "
+        "matching, temperature, suffix, or stop metadata"
+    );
+  }
+  auto cached = regular_rule_fsm_cache_.find(rule_id);
+  if (cached != regular_rule_fsm_cache_.end()) {
+    return ResultOk(cached->second.Copy());
+  }
+  if (!regular_rule_fsm_visiting_.insert(rule_id).second) {
+    return ResultErr("DynamicTag name_rule must not contain recursive rule references");
+  }
+
+  auto raw = BuildRuleFSM(grammar, rule_id, grammar_builder_);
+  auto expanded_result = ExpandRegularFSM(grammar, rule_id, raw);
+  regular_rule_fsm_visiting_.erase(rule_id);
+  if (expanded_result.IsErr()) {
+    return ResultErr(std::move(expanded_result).UnwrapErr());
+  }
+  auto expanded = std::move(expanded_result).Unwrap();
+  regular_rule_fsm_cache_.emplace(rule_id, expanded.Copy());
+  return ResultOk(std::move(expanded));
+}
+
+Result<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildDynamicTagNameConstraint(
+    const std::string& open_prefix,
+    const std::string& open_suffix,
+    const std::string& close_prefix,
+    const std::string& close_suffix
+) {
+  std::string forbidden_initial;
+  if (close_prefix.size() > open_prefix.size() &&
+      std::equal(open_prefix.begin(), open_prefix.end(), close_prefix.begin())) {
+    forbidden_initial = close_prefix.substr(open_prefix.size());
+  } else if (open_prefix.size() > close_prefix.size() &&
+             std::equal(close_prefix.begin(), close_prefix.end(), open_prefix.begin())) {
+    forbidden_initial = open_prefix.substr(close_prefix.size());
+  }
+
+  auto build_failure = [](const std::string& delimiter) {
+    std::vector<int32_t> failure(delimiter.size());
+    for (int32_t i = 1, matched = 0; i < static_cast<int32_t>(delimiter.size()); ++i) {
+      while (matched > 0 && delimiter[i] != delimiter[matched]) {
+        matched = failure[matched - 1];
+      }
+      if (delimiter[i] == delimiter[matched]) {
+        ++matched;
+      }
+      failure[i] = matched;
+    }
+    return failure;
+  };
+  const auto open_suffix_failure = build_failure(open_suffix);
+  const auto close_suffix_failure = build_failure(close_suffix);
+
+  using State = std::tuple<int32_t, int32_t, int32_t, bool>;
+  const State start{0, 0, forbidden_initial.empty() ? -1 : 0, false};
+  const auto state_hash = [](const State& state) {
+    return std::apply(
+        [](int32_t open_matched, int32_t close_matched, int32_t initial_matched, bool nonblank) {
+          return static_cast<size_t>(
+              HashCombine(open_matched, close_matched, initial_matched, nonblank)
+          );
+        },
+        state
+    );
+  };
+  std::unordered_map<State, int32_t, decltype(state_hash)> state_ids(0, state_hash);
+  state_ids.emplace(start, 0);
+  std::queue<State> pending;
+  pending.push(start);
+  FSM fsm(1);
+  std::vector<int32_t> ends;
+
+  auto advance_delimiter = [](const std::string& delimiter,
+                              const std::vector<int32_t>& failure,
+                              int32_t matched,
+                              uint8_t byte) -> std::optional<int32_t> {
+    if (delimiter.empty()) {
+      return 0;
+    }
+    while (matched > 0 && byte != static_cast<uint8_t>(delimiter[matched])) {
+      matched = failure[matched - 1];
+    }
+    if (byte == static_cast<uint8_t>(delimiter[matched])) {
+      ++matched;
+      if (matched == static_cast<int32_t>(delimiter.size())) {
+        return std::nullopt;
+      }
+    }
+    return matched;
+  };
+
+  auto has_safe_boundary =
+      [](const std::string& delimiter, const std::vector<int32_t>& failure, int32_t matched) {
+        if (delimiter.empty()) {
+          return true;
+        }
+        for (int32_t index = 0; index < static_cast<int32_t>(delimiter.size()); ++index) {
+          const uint8_t byte = static_cast<uint8_t>(delimiter[index]);
+          while (matched > 0 && byte != static_cast<uint8_t>(delimiter[matched])) {
+            matched = failure[matched - 1];
+          }
+          if (byte == static_cast<uint8_t>(delimiter[matched])) {
+            ++matched;
+            if (matched == static_cast<int32_t>(delimiter.size())) {
+              return index + 1 == static_cast<int32_t>(delimiter.size());
+            }
+          }
+        }
+        XGRAMMAR_UNREACHABLE();
+      };
+
+  auto advance = [&](const State& state, uint8_t byte) -> std::optional<State> {
+    auto [open_suffix_matched, close_suffix_matched, initial_matched, has_non_whitespace] = state;
+    auto next_open = advance_delimiter(open_suffix, open_suffix_failure, open_suffix_matched, byte);
+    auto next_close =
+        advance_delimiter(close_suffix, close_suffix_failure, close_suffix_matched, byte);
+    if (!next_open.has_value() || !next_close.has_value()) {
+      return std::nullopt;
+    }
+    if (initial_matched >= 0) {
+      if (byte == static_cast<uint8_t>(forbidden_initial[initial_matched])) {
+        ++initial_matched;
+        if (initial_matched == static_cast<int32_t>(forbidden_initial.size())) {
+          return std::nullopt;
+        }
+      } else {
+        initial_matched = -1;
+      }
+    }
+    has_non_whitespace = has_non_whitespace || (byte != ' ' && byte != '\t' && byte != '\n' &&
+                                                byte != '\r' && byte != '\f' && byte != '\v');
+    return State{*next_open, *next_close, initial_matched, has_non_whitespace};
+  };
+
+  while (!pending.empty()) {
+    State state = pending.front();
+    pending.pop();
+    const int32_t source = state_ids.at(state);
+    const auto [open_suffix_matched, close_suffix_matched, initial_matched, has_non_whitespace] =
+        state;
+    if (has_non_whitespace &&
+        has_safe_boundary(open_suffix, open_suffix_failure, open_suffix_matched) &&
+        has_safe_boundary(close_suffix, close_suffix_failure, close_suffix_matched)) {
+      ends.push_back(source);
+    }
+
+    std::array<int32_t, 256> targets;
+    targets.fill(-1);
+    for (int32_t byte = 0; byte < 256; ++byte) {
+      auto next = advance(state, static_cast<uint8_t>(byte));
+      if (!next.has_value()) {
+        continue;
+      }
+      auto [it, inserted] = state_ids.emplace(*next, state_ids.size());
+      if (inserted) {
+        if (state_ids.size() > kMaxDynamicTagNameStates) {
+          return ResultErr(
+              "DynamicTag delimiters expand the name constraint beyond 100000 FSM states"
+          );
+        }
+        fsm.AddState();
+        pending.push(*next);
+      }
+      targets[byte] = it->second;
+    }
+    for (int32_t begin = 0; begin < 256;) {
+      if (targets[begin] < 0) {
+        ++begin;
+        continue;
+      }
+      int32_t end = begin;
+      while (end + 1 < 256 && targets[end + 1] == targets[begin]) {
+        ++end;
+      }
+      fsm.AddEdge(source, targets[begin], begin, end);
+      begin = end + 1;
+    }
+  }
+  return ResultOk(FSMWithStartEnd(std::move(fsm), 0, std::move(ends), true));
+}
+
+void GrammarFSMBuilderImpl::BuildDynamicTag(
+    const Grammar::Impl::DynamicTag& dynamic_tag,
+    const Grammar& grammar,
+    int start_state,
+    std::vector<int32_t>* end_states
+) {
+  auto append_literal = [&](int32_t from, const std::string& literal) {
+    int32_t current = from;
+    for (uint8_t byte : literal) {
+      int32_t next = target_fsm_.AddState();
+      target_fsm_.AddEdge(current, next, byte, byte);
+      current = next;
+    }
+    return current;
+  };
+
+  int32_t current = append_literal(start_state, dynamic_tag.open_prefix);
+  int32_t before_name = current;
+  current = target_fsm_.AddState();
+  target_fsm_.AddCaptureStartEdge(before_name, current);
+  auto name_result = BuildRegularRuleFSM(grammar, dynamic_tag.name_rule_id);
+  if (name_result.IsErr()) {
+    XGRAMMAR_LOG(FATAL) << "Cannot compile DynamicTag name_rule \""
+                        << grammar->GetRule(dynamic_tag.name_rule_id).name
+                        << "\": " << std::move(name_result).UnwrapErr().what();
+  }
+  auto name_dfa_result = std::move(name_result).Unwrap().ToDFA(kMaxDynamicTagNameStates);
+  if (name_dfa_result.IsErr()) {
+    XGRAMMAR_LOG(FATAL) << "Cannot determinize DynamicTag name_rule \""
+                        << grammar->GetRule(dynamic_tag.name_rule_id).name
+                        << "\": " << std::move(name_dfa_result).UnwrapErr().what();
+  }
+  auto constraint_result = BuildDynamicTagNameConstraint(
+      dynamic_tag.open_prefix,
+      dynamic_tag.open_suffix,
+      dynamic_tag.close_prefix,
+      dynamic_tag.close_suffix
+  );
+  if (constraint_result.IsErr()) {
+    XGRAMMAR_LOG(FATAL) << "Cannot compile DynamicTag delimiters: "
+                        << std::move(constraint_result).UnwrapErr().what();
+  }
+  auto constrained_name_result = FSMWithStartEnd::Intersect(
+      std::move(name_dfa_result).Unwrap(),
+      std::move(constraint_result).Unwrap(),
+      kMaxDynamicTagNameStates
+  );
+  if (constrained_name_result.IsErr()) {
+    XGRAMMAR_LOG(FATAL) << "Cannot constrain DynamicTag name_rule \""
+                        << grammar->GetRule(dynamic_tag.name_rule_id).name
+                        << "\": " << std::move(constrained_name_result).UnwrapErr().what();
+  }
+  auto constrained_name = std::move(constrained_name_result).Unwrap();
+  if (constrained_name.GetEnds().empty()) {
+    XGRAMMAR_LOG(FATAL) << "Cannot constrain DynamicTag name_rule \""
+                        << grammar->GetRule(dynamic_tag.name_rule_id).name
+                        << "\": the rule has no delimiter-safe nonblank name";
+  }
+  std::vector<int> name_mapping;
+  target_fsm_.AddFSM(constrained_name.GetFsm(), &name_mapping);
+  target_fsm_.AddEpsilonEdge(current, name_mapping[constrained_name.GetStart()]);
+  int32_t after_name = target_fsm_.AddState();
+  for (int32_t end : constrained_name.GetEnds()) {
+    target_fsm_.AddCaptureEndEdge(name_mapping[end], after_name);
+  }
+  current = append_literal(after_name, dynamic_tag.open_suffix);
+
+  int32_t after_content = target_fsm_.AddState();
+  target_fsm_.AddRuleEdge(current, after_content, dynamic_tag.content_rule_id);
+  current = append_literal(after_content, dynamic_tag.close_prefix);
+
+  int32_t after_backreference = target_fsm_.AddState();
+  target_fsm_.AddBackReferenceEdge(current, after_backreference);
+  current = append_literal(after_backreference, dynamic_tag.close_suffix);
+  end_states->assign({current});
 }
 
 std::optional<FSMWithStartEnd> GrammarFSMBuilderImpl::BuildTagDispatchFSM(
@@ -3481,7 +4024,8 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
         return std::nullopt;
       }
       case (GrammarExprType::kTagDispatch):
-      case (GrammarExprType::kTokenTagDispatch): {
+      case (GrammarExprType::kTokenTagDispatch):
+      case (GrammarExprType::kDynamicTag): {
         return std::nullopt;
       }
       case (GrammarExprType::kRegex):

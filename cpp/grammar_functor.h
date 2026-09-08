@@ -157,6 +157,8 @@ class GrammarFunctor {
         return VisitRegex(grammar_expr);
       case GrammarExprType::kSubstring:
         return VisitSubstring(grammar_expr);
+      case GrammarExprType::kDynamicTag:
+        return VisitDynamicTag(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
         XGRAMMAR_UNREACHABLE();
@@ -249,6 +251,16 @@ class GrammarFunctor {
 
   virtual T VisitTokenTagDispatch(const GrammarExpr& grammar_expr) {
     return VisitElement(grammar_expr);
+  }
+
+  virtual T VisitDynamicTag(const GrammarExpr& grammar_expr) {
+    if constexpr (std::is_same<T, void>::value) {
+      return;
+    } else if constexpr (std::is_same<T, int32_t>::value) {
+      return builder_->AddDynamicTag(base_grammar_->GetDynamicTag(grammar_expr));
+    } else {
+      return T();
+    }
   }
 
   /*! \brief Visit a regex GrammarExpr. It is a leaf: the pattern string is carried as-is. */

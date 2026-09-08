@@ -2,7 +2,7 @@
 
 import re
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import pytest
 from transformers import AutoTokenizer
@@ -19,6 +19,7 @@ from xgrammar.builtin_structural_tag import (
     get_kimi_k3_structural_tag,
     get_kimi_structural_tag,
     get_llama_structural_tag,
+    get_minimax_m3_structural_tag,
     get_minimax_structural_tag,
     get_model_structural_tag,
     get_qwen_3_5_structural_tag,
@@ -27,7 +28,14 @@ from xgrammar.builtin_structural_tag import (
     normalize_tool_choice,
 )
 from xgrammar.openai_tool_call_schema import BuiltinToolParam, FunctionToolParam
-from xgrammar.structural_tag import JSONSchemaFormat, StructuralTag, TagFormat
+from xgrammar.structural_tag import (
+    ConstStringFormat,
+    JSONSchemaFormat,
+    OptionalFormat,
+    SequenceFormat,
+    StructuralTag,
+    TagFormat,
+)
 from xgrammar.testing import _is_grammar_accept_string
 
 
@@ -58,7 +66,7 @@ def _input_dict_to_get_stag_kwargs(format_type: str, input_dict: Dict[str, Any])
     return {
         "model": format_type,
         "tools": tools,
-        "reasoning": input_dict.get("reasoning", input_dict.get("reasoning", True)),
+        "reasoning": input_dict.get("reasoning", True),
         "tool_choice": tool_choice,
     }
 
@@ -201,6 +209,7 @@ _builtin_harmony = make_tools(["analysis_tool"])
 _tools_deepseek_v3_2 = make_tools(["search"])
 _tools_deepseek_v4 = make_tools(["search"])
 _tools_minimax = make_tools(["search"])
+_tools_minimax_m3 = make_tools(["search"])
 _tools_glm_4_7 = make_tools(["search"])
 _tools_cohere = make_tools(["search"])
 
@@ -212,6 +221,7 @@ _tools_deepseek_pair = make_tools(["search", "alt"])
 _tools_deepseek_v3_2_pair = make_tools(["search", "alt"])
 _tools_deepseek_v4_pair = make_tools(["search", "alt"])
 _tools_minimax_pair = make_tools(["search", "alt"])
+_tools_minimax_m3_pair = make_tools(["search", "alt"])
 _tools_qwen_3_coder_pair = make_tools(["run_sql", "run_py"])
 _tools_qwen_3_pair = make_tools(["t1", "t2"])
 _tools_qwen_3_5_pair = make_tools(["run_sql", "run_py"])
@@ -243,6 +253,81 @@ def test_unknown_format_is_checked_before_tool_inputs():
 
 
 # ---------- Test: input validation errors ----------
+
+
+@pytest.mark.parametrize(("boolean_value", "mode"), [(True, "enabled"), (False, "disabled")])
+def test_reasoning_boolean_aliases(boolean_value: bool, mode: Literal["enabled", "disabled"]):
+    by_boolean = get_model_structural_tag("qwen_3", tools=[], reasoning=boolean_value)
+    by_mode = get_model_structural_tag("qwen_3", tools=[], reasoning=mode)
+    assert by_boolean == by_mode
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "llama",
+        "kimi",
+        "kimi_k3",
+        "deepseek_r1",
+        "deepseek_v3_1",
+        "qwen_3_5",
+        "qwen_3_coder",
+        "qwen_3",
+        "harmony",
+        "deepseek_v3_2",
+        "minimax",
+        "minimax_m3",
+        "glm_4_7",
+        "deepseek_v4",
+        "cohere",
+        "exaone",
+    ],
+)
+def test_reasoning_auto_builds_for_every_model(model: str):
+    structural_tag = get_model_structural_tag(model, tools=[], reasoning="auto")
+    xgr.Grammar.from_structural_tag(structural_tag)
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "kimi",
+        "kimi_k3",
+        "deepseek_r1",
+        "deepseek_v3_1",
+        "qwen_3_5",
+        "qwen_3_coder",
+        "qwen_3",
+        "deepseek_v3_2",
+        "minimax",
+        "minimax_m3",
+        "glm_4_7",
+        "deepseek_v4",
+        "cohere",
+        "exaone",
+    ],
+)
+def test_reasoning_auto_uses_an_optional_complete_prefix(model: str):
+    structural_tag = get_model_structural_tag(model, tools=[], reasoning="auto")
+    assert isinstance(structural_tag.format, SequenceFormat)
+    assert isinstance(structural_tag.format.elements[0], OptionalFormat)
+
+
+@pytest.mark.parametrize(
+    "model", ["kimi", "deepseek_r1", "deepseek_v3_1", "deepseek_v3_2", "deepseek_v4", "glm_4_7"]
+)
+def test_standard_reasoning_auto_accepts_complete_reasoning_or_direct_response(model: str):
+    structural_tag = get_model_structural_tag(model, tools=[], reasoning="auto")
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    assert _is_grammar_accept_string(grammar, "answer")
+    assert _is_grammar_accept_string(grammar, "<think>plan</think>answer")
+    assert not _is_grammar_accept_string(grammar, "plan</think>answer")
+
+
+def test_invalid_reasoning_mode_is_rejected():
+    with pytest.raises(ValueError, match="enabled.*disabled.*auto"):
+        get_model_structural_tag("qwen_3", tools=[], reasoning="invalid")  # type: ignore[arg-type]
+
 
 # (format_type, input_dict, substring that must appear in the error message)
 input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
@@ -782,6 +867,20 @@ def test_kimi_k3_reasoning_false_starts_inside_the_response_block():
     )
 
 
+def test_kimi_k3_reasoning_auto_starts_before_think_or_response_block():
+    """Adaptive prompts have not opened either block, so both complete paths are legal."""
+
+    structural_tag = get_model_structural_tag("kimi_k3", tools=[], reasoning="auto")
+    response = "<|open|>response<|sep|>answer<|close|>response<|sep|><|close|>message<|sep|>"
+    check_stag_with_instance(structural_tag, response, True)
+    check_stag_with_instance(
+        structural_tag, "<|open|>think<|sep|>plan<|close|>think<|sep|>" + response, True
+    )
+    check_stag_with_instance(
+        structural_tag, "answer<|close|>response<|sep|><|close|>message<|sep|>", False
+    )
+
+
 def test_kimi_k3_no_tools_rejects_tools_section():
     """Without tools the grammar must not admit a tools section at all."""
 
@@ -1103,6 +1202,40 @@ def test_cohere_reasoning_prefix_uses_end_thinking_token():
 
 
 @pytest.mark.parametrize(
+    ("model", "reasoning_output", "direct_output"),
+    [
+        ("minimax", "<think>plan</think>\n\nanswer", "answer"),
+        ("cohere", "<|START_THINKING|>plan<|END_THINKING|>answer", "answer"),
+        ("exaone", "<think>plan</think>\n\nanswer", "answer"),
+    ],
+)
+def test_custom_reasoning_auto_accepts_complete_reasoning_or_direct_response(
+    model: str, reasoning_output: str, direct_output: str
+):
+    structural_tag = get_model_structural_tag(model, tools=[], reasoning="auto")
+    check_stag_with_instance(structural_tag, reasoning_output, True)
+    check_stag_with_instance(structural_tag, direct_output, True)
+
+
+@pytest.mark.parametrize("model", ["qwen_3", "qwen_3_5"])
+def test_qwen_reasoning_suffix_stays_inside_the_optional_prefix(model: str):
+    structural_tag = get_model_structural_tag(model, tools=[], reasoning="auto")
+    assert isinstance(structural_tag.format, SequenceFormat)
+
+    optional_prefix = structural_tag.format.elements[0]
+    assert isinstance(optional_prefix, OptionalFormat)
+    assert isinstance(optional_prefix.content, SequenceFormat)
+    assert isinstance(optional_prefix.content.elements[0], TagFormat)
+    assert optional_prefix.content.elements[0].end == "</think>"
+    assert optional_prefix.content.elements[1] == ConstStringFormat(value="\n\n")
+
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    assert _is_grammar_accept_string(grammar, "answer")
+    assert _is_grammar_accept_string(grammar, "<think>reasoning</think>\n\nanswer")
+    assert not _is_grammar_accept_string(grammar, "<think>reasoning</think>answer")
+
+
+@pytest.mark.parametrize(
     "structural_tag_fn",
     [
         get_llama_structural_tag,
@@ -1186,7 +1319,7 @@ def test_specific_functions_cases(structural_tag_fn, case: Dict[str, Any]):
         tools=case["tools"],
         builtin_tools=case["builtin_tools"],
         tool_choice=case["tool_choice"],
-        reasoning=True,
+        reasoning="enabled",
     )
     assert isinstance(structural_tag, StructuralTag)
     xgr.Grammar.from_structural_tag(structural_tag)
@@ -2110,6 +2243,131 @@ def test_required_allows_termination_with_trailing_text(stag_key, one_call, two_
     ), f"{stag_key}: tool call + trailing text rejected"
 
 
+# ---------- Test: MiniMax M3 ----------
+
+_M3_NS = "]<]minimax[>["
+
+
+def _m3_element(name: str, value: str) -> str:
+    return f"{_M3_NS}<{name}>{value}{_M3_NS}</{name}>"
+
+
+def _m3_invoke(name: str, body: str) -> str:
+    return f'{_M3_NS}<invoke name="{name}">{body}{_M3_NS}</invoke>\n'
+
+
+def _m3_tool_call(*invokes: str) -> str:
+    return f"{_M3_NS}<tool_call>\n{''.join(invokes)}{_M3_NS}</tool_call>"
+
+
+_M3_SEARCH_CALL = _m3_tool_call(_m3_invoke("search", _m3_element("q", "weather")))
+
+
+def test_minimax_m3_reasoning_modes():
+    enabled = get_model_structural_tag("minimax_m3", tools=_tools_minimax_m3, reasoning="enabled")
+    check_stag_with_instance(enabled, "plan</mm:think>answer", True)
+    check_stag_with_instance(enabled, "plan</mm:think>" + _M3_SEARCH_CALL, True)
+    check_stag_with_instance(enabled, "answer", False)
+    check_stag_with_instance(enabled, "<mm:think>plan</mm:think>answer", False)
+
+    disabled = get_model_structural_tag("minimax_m3", tools=_tools_minimax_m3, reasoning="disabled")
+    check_stag_with_instance(disabled, "answer", True)
+    check_stag_with_instance(disabled, _M3_SEARCH_CALL, True)
+    check_stag_with_instance(disabled, "plan</mm:think>answer", False)
+
+    adaptive = get_model_structural_tag("minimax_m3", tools=_tools_minimax_m3, reasoning="auto")
+    check_stag_with_instance(adaptive, "answer", True)
+    check_stag_with_instance(adaptive, _M3_SEARCH_CALL, True)
+    check_stag_with_instance(adaptive, "<mm:think>plan</mm:think>answer", True)
+    check_stag_with_instance(adaptive, "<mm:think>plan</mm:think>" + _M3_SEARCH_CALL, True)
+    check_stag_with_instance(adaptive, "plan</mm:think>answer", False)
+
+
+def test_minimax_m3_reasoning_defaults_and_validation():
+    default_enabled = get_model_structural_tag("minimax_m3", tools=[])
+    assert default_enabled == get_model_structural_tag("minimax_m3", tools=[], reasoning="enabled")
+    assert default_enabled == get_model_structural_tag("minimax_m3", tools=[], reasoning=True)
+
+    direct_auto = get_minimax_m3_structural_tag(tools=[])
+    assert direct_auto == get_minimax_m3_structural_tag(tools=[], reasoning="auto")
+    assert isinstance(direct_auto.format, SequenceFormat)
+    assert isinstance(direct_auto.format.elements[0], OptionalFormat)
+
+    direct_disabled = get_minimax_m3_structural_tag(tools=[], reasoning="disabled")
+    assert not isinstance(direct_disabled.format, SequenceFormat)
+
+    with pytest.raises(ValueError, match="reasoning"):
+        get_minimax_m3_structural_tag(tools=[], reasoning="invalid")  # type: ignore[arg-type]
+
+
+def test_minimax_m3_required_and_forced_tool_choice():
+    required = get_model_structural_tag(
+        "minimax_m3", tools=_tools_minimax_m3_pair, tool_choice="required", reasoning=False
+    )
+    search = _m3_invoke("search", _m3_element("q", "weather"))
+    alt = _m3_invoke("alt", _m3_element("q", "time"))
+    check_stag_with_instance(required, "plain text", False)
+    check_stag_with_instance(required, _m3_tool_call(search), True)
+    check_stag_with_instance(required, _m3_tool_call(search, alt), True)
+    check_stag_with_instance(required, _m3_tool_call(search + "\n", alt), False)
+    check_stag_with_instance(required, _m3_tool_call(search) + " done", True)
+
+    forced = get_model_structural_tag(
+        "minimax_m3",
+        tools=_tools_minimax_m3_pair,
+        tool_choice={"type": "function", "function": {"name": "alt"}},
+        reasoning=False,
+    )
+    check_stag_with_instance(forced, _m3_tool_call(alt), True)
+    check_stag_with_instance(forced, _m3_tool_call(search), False)
+    check_stag_with_instance(forced, _m3_tool_call(alt, alt), False)
+
+
+def test_minimax_m3_auto_without_tools_forbids_tool_calls_but_not_namespace_text():
+    no_tools = get_model_structural_tag("minimax_m3", tools=[], reasoning=False)
+    choice_none = get_model_structural_tag(
+        "minimax_m3", tools=_tools_minimax_m3, tool_choice="none", reasoning=False
+    )
+    for structural_tag in (no_tools, choice_none):
+        check_stag_with_instance(structural_tag, "plain " + _M3_NS + " text", True)
+        check_stag_with_instance(structural_tag, _M3_SEARCH_CALL, False)
+
+
+@pytest.mark.parametrize(
+    "function",
+    [
+        {"name": "dynamic"},
+        {
+            "name": "dynamic",
+            "strict": False,
+            "parameters": {
+                "type": "object",
+                "properties": {"fixed": {"type": "integer"}},
+                "required": ["fixed"],
+                "additionalProperties": False,
+            },
+        },
+    ],
+)
+def test_minimax_m3_unconstrained_tool_parameters_keep_object_shape(function: Dict[str, Any]):
+    structural_tag = get_model_structural_tag(
+        "minimax_m3",
+        tools=[{"type": "function", "function": function}],
+        tool_choice="required",
+        reasoning=False,
+    )
+    assert _collect_json_schema_values(structural_tag) == [
+        {"type": "object", "additionalProperties": True}
+    ]
+
+    grammar = xgr.Grammar.from_structural_tag(structural_tag)
+    assert _is_grammar_accept_string(
+        grammar, _m3_tool_call(_m3_invoke("dynamic", _m3_element("runtime", "value")))
+    )
+    assert not _is_grammar_accept_string(grammar, _m3_tool_call(_m3_invoke("dynamic", "value")))
+    assert _is_grammar_accept_string(grammar, _m3_tool_call(_m3_invoke("dynamic", "")))
+
+
 # ---------- Test: any_order propagation ----------
 
 
@@ -2134,6 +2392,7 @@ _ANY_ORDER_MODELS = [
     "deepseek_v3_2",
     "deepseek_v4",
     "minimax",
+    "minimax_m3",
     "glm_4_7",
     "harmony",
     "exaone",

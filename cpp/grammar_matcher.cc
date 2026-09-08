@@ -17,6 +17,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -466,7 +467,11 @@ class GrammarMatcher::Impl : public EarleyParser {
       int max_rollback_tokens = -1,
       std::optional<float> default_temperature = std::nullopt
   )
-      : EarleyParser(compiled_grammar->grammar),
+      : EarleyParser(
+            compiled_grammar->grammar,
+            /*initial_state=*/std::nullopt,
+            /*track_unique_key_contexts=*/true
+        ),
         compiled_grammar_(compiled_grammar),
         tokenizer_info_(compiled_grammar->tokenizer_info),
         stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
@@ -510,6 +515,7 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   void Reset() {
     token_length_history.clear();
+    unique_key_context_history_.clear();
     current_token_index_ = -1;
     budget_enforce_pending_ = false;
     budget_force_close_pending_ = false;
@@ -535,6 +541,26 @@ class GrammarMatcher::Impl : public EarleyParser {
 
  private:
   using StoreType = AdaptiveTokenMask::StoreType;
+
+  class UniqueKeyContextRestoreGuard {
+   public:
+    explicit UniqueKeyContextRestoreGuard(Impl* matcher)
+        : matcher_(matcher->track_unique_key_contexts_ ? matcher : nullptr) {
+      if (matcher_ != nullptr) {
+        snapshot_ = matcher_->SnapshotUniqueKeyContexts();
+      }
+    }
+
+    ~UniqueKeyContextRestoreGuard() {
+      if (matcher_ != nullptr) {
+        matcher_->RestoreUniqueKeyContexts(snapshot_);
+      }
+    }
+
+   private:
+    Impl* matcher_;
+    UniqueKeyContextSnapshot snapshot_;
+  };
 
   /*!
    * \brief If is_uncertain_saved is true, find the next token in uncertain_indices. Otherwise,
@@ -612,6 +638,9 @@ class GrammarMatcher::Impl : public EarleyParser {
       int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
   );
 
+  /*! \brief Evaluate a pure backreference state over only tokens with the required first byte. */
+  bool FillBitmaskForBackReferenceState(const ParserState& state);
+
   void FillBitmaskForCharBudgetBoundary(
       const AdaptiveTokenMask& adaptive_token_mask, int32_t remaining_chars
   );
@@ -624,8 +653,21 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   /*! \brief Whether byte offsets are needed for captures or budgeted suffix/stop rules. */
   bool ShouldTrackAcceptedBytes() const {
-    return IsCaptureTrackingEnabled() || has_budget_marker_rules_;
+    return IsCaptureTrackingEnabled() || has_budget_marker_rules_ || has_dynamic_tag_rules_;
   }
+
+  bool ShouldTrackTemporaryInput() const {
+    return has_dynamic_tag_rules_ || (has_char_budget_rules_ && has_budget_marker_rules_);
+  }
+
+  std::optional<int64_t> GetInputBytePosition(int32_t row) const;
+
+  std::optional<uint8_t> GetInputByte(int64_t byte_offset) const;
+
+  std::optional<BackReferenceProgress> GetBackReferenceProgress(const ParserState& state
+  ) const final;
+
+  bool PrepareDynamicTagContent(ParserState* state) final;
 
   /*! \brief Whether the bytes consumed by this expired suffix/stop occurrence form a complete
    * match of its body, so max_tokens may end it without consuming the marker. */
@@ -675,20 +717,32 @@ class GrammarMatcher::Impl : public EarleyParser {
     return bitset.Any();
   }
 
+  void CheckCanAppendTrackedBytes(size_t num_bytes) const {
+    constexpr size_t kMaxTrackedBytes = std::numeric_limits<int32_t>::max();
+    XGRAMMAR_CHECK(
+        accepted_bytes_.size() <= kMaxTrackedBytes &&
+        num_bytes <= kMaxTrackedBytes - accepted_bytes_.size()
+    ) << "GrammarMatcher cannot track more than "
+      << kMaxTrackedBytes << " accepted bytes";
+  }
+
   /*! \brief Record that num_rows new input positions were created, each consuming one byte of
    * bytes in order. Used for the byte-by-byte advance paths. */
   void AppendPerByteRows(const std::string& bytes) {
-    for (char c : bytes) {
-      accepted_bytes_.push_back(static_cast<uint8_t>(c));
-      row_byte_end_.push_back(static_cast<int64_t>(accepted_bytes_.size()));
+    CheckCanAppendTrackedBytes(bytes.size());
+    const int32_t previous_size = static_cast<int32_t>(accepted_bytes_.size());
+    accepted_bytes_.insert(accepted_bytes_.end(), bytes.begin(), bytes.end());
+    for (size_t index = 0; index < bytes.size(); ++index) {
+      row_byte_end_.push_back(previous_size + static_cast<int32_t>(index) + 1);
     }
   }
 
   /*! \brief Record that one new input position was created, consuming all bytes of the token.
    * Used for the atomic token advance path. */
   void AppendAtomicRow(const std::string& bytes) {
+    CheckCanAppendTrackedBytes(bytes.size());
     accepted_bytes_.insert(accepted_bytes_.end(), bytes.begin(), bytes.end());
-    row_byte_end_.push_back(static_cast<int64_t>(accepted_bytes_.size()));
+    row_byte_end_.push_back(static_cast<int32_t>(accepted_bytes_.size()));
   }
 
   CompiledGrammar compiled_grammar_;
@@ -698,6 +752,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::optional<float> default_temperature_;
   mutable bool has_warned_temperature_conflict_ = false;
   std::deque<int> token_length_history;
+  std::vector<UniqueKeyContextSnapshot> unique_key_context_history_;
 
   /*! \brief Set by the last mask computation when an exhausted budget could be enforced: the
    * next accept commits the same state transition used to compute that mask. */
@@ -728,7 +783,7 @@ class GrammarMatcher::Impl : public EarleyParser {
   std::vector<uint8_t> accepted_bytes_;
   /*! \brief row_byte_end_[i] is the number of accepted bytes after input position i. Aligned
    * with the parser's state history whenever accepted_bytes_ is maintained. */
-  std::vector<int64_t> row_byte_end_{0};
+  std::vector<int32_t> row_byte_end_{0};
   /*! \brief Bytes tentatively consumed by the current token or string advance. */
   std::string temporary_input_bytes_;
   /*! \brief Parser row immediately before temporary_input_bytes_. */
@@ -812,6 +867,161 @@ bool GrammarMatcher::Impl::IsTerminated() const {
 
 bool GrammarMatcher::Impl::IsStopTokenAccepted() const { return stop_token_is_accepted_; }
 
+std::optional<int64_t> GrammarMatcher::Impl::GetInputBytePosition(int32_t row) const {
+  if (row >= 0 && row < static_cast<int32_t>(row_byte_end_.size())) {
+    return row_byte_end_[row];
+  }
+  if (temporary_input_start_row_ >= 0 && row >= temporary_input_start_row_ &&
+      row <= temporary_input_start_row_ + static_cast<int32_t>(temporary_input_bytes_.size())) {
+    return static_cast<int64_t>(accepted_bytes_.size()) + row - temporary_input_start_row_;
+  }
+  return std::nullopt;
+}
+
+std::optional<uint8_t> GrammarMatcher::Impl::GetInputByte(int64_t byte_offset) const {
+  if (byte_offset < 0) {
+    return std::nullopt;
+  }
+  if (byte_offset < static_cast<int64_t>(accepted_bytes_.size())) {
+    return accepted_bytes_[byte_offset];
+  }
+  const int64_t temporary_offset = byte_offset - accepted_bytes_.size();
+  if (temporary_offset < static_cast<int64_t>(temporary_input_bytes_.size())) {
+    return static_cast<uint8_t>(temporary_input_bytes_[temporary_offset]);
+  }
+  return std::nullopt;
+}
+
+std::optional<EarleyParser::BackReferenceProgress> GrammarMatcher::Impl::GetBackReferenceProgress(
+    const ParserState& state
+) const {
+  if (!IsDynamicTagRule(state.rule_id) || state.partial_codepoint < 0 || state.repeat_count < 0) {
+    return std::nullopt;
+  }
+  auto capture_start_byte = GetInputBytePosition(state.sub_element_id);
+  auto capture_end_byte = GetInputBytePosition(state.partial_codepoint);
+  if (!capture_start_byte.has_value() || !capture_end_byte.has_value()) {
+    return std::nullopt;
+  }
+  const int64_t capture_size = *capture_end_byte - *capture_start_byte;
+  if (capture_size <= 0 || state.repeat_count >= capture_size) {
+    return std::nullopt;
+  }
+  auto next_byte = GetInputByte(*capture_start_byte + state.repeat_count);
+  if (!next_byte.has_value()) {
+    return std::nullopt;
+  }
+  return BackReferenceProgress{*next_byte, state.repeat_count + 1 == capture_size};
+}
+
+bool GrammarMatcher::Impl::PrepareDynamicTagContent(ParserState* state) {
+  XGRAMMAR_DCHECK(state != nullptr && IsUniqueKeyDynamicTagRule(state->rule_id));
+  const int32_t scope_rule_id = GetDynamicTagUniqueKeyScopeRuleId(state->rule_id);
+
+  const auto name_start = GetInputBytePosition(state->sub_element_id);
+  const auto name_end = GetInputBytePosition(state->partial_codepoint);
+  if (!name_start.has_value() || !name_end.has_value() || *name_start < 0 ||
+      *name_end <= *name_start || *name_end > std::numeric_limits<int32_t>::max()) {
+    return false;
+  }
+  const int32_t name_start_byte = static_cast<int32_t>(*name_start);
+  const int32_t byte_length = static_cast<int32_t>(*name_end - *name_start);
+
+  const auto semantic_state = GetUniqueKeySemanticState(state->unique_key_state_id);
+  int32_t context_id = semantic_state.current_context_id;
+  const auto& current_context = GetUniqueKeyContext(context_id);
+  if (current_context.kind == UniqueKeyContextNode::Kind::kKey &&
+      current_context.name_start_byte == name_start_byte &&
+      current_context.byte_length == byte_length) {
+    return true;
+  }
+
+  constexpr uint64_t kFNVOffsetBasis = 14695981039346656037ULL;
+  constexpr uint64_t kFNVPrime = 1099511628211ULL;
+  uint64_t hash = kFNVOffsetBasis;
+  for (int32_t offset = 0; offset < byte_length; ++offset) {
+    auto byte = GetInputByte(static_cast<int64_t>(name_start_byte) + offset);
+    if (!byte.has_value()) {
+      return false;
+    }
+    hash = (hash ^ *byte) * kFNVPrime;
+  }
+
+  auto equals_bytes = [&](int32_t lhs_start, int32_t rhs_start, int32_t length) {
+    for (int32_t offset = 0; offset < length; ++offset) {
+      auto lhs = GetInputByte(static_cast<int64_t>(lhs_start) + offset);
+      auto rhs = GetInputByte(static_cast<int64_t>(rhs_start) + offset);
+      if (!lhs.has_value() || !rhs.has_value() || *lhs != *rhs) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const auto body = grammar_->GetGrammarExpr(grammar_->GetRule(state->rule_id).body_expr_id);
+  const auto reserved_names = grammar_->GetDynamicTagReservedNames(body);
+  for (int32_t name_expr_id : reserved_names) {
+    const auto reserved_name = grammar_->GetGrammarExpr(name_expr_id);
+    XGRAMMAR_DCHECK(reserved_name.type == Grammar::Impl::GrammarExprType::kByteString);
+    if (reserved_name.size() != byte_length) {
+      continue;
+    }
+    bool matches = true;
+    for (int32_t offset = 0; offset < byte_length; ++offset) {
+      auto byte = GetInputByte(static_cast<int64_t>(name_start_byte) + offset);
+      if (!byte.has_value() || *byte != static_cast<uint8_t>(reserved_name[offset])) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return false;
+    }
+  }
+
+  const uint64_t bloom_bit_1 = uint64_t{1} << (hash & 63);
+  const uint64_t bloom_bit_2 = uint64_t{1} << ((hash >> 32) & 63);
+  const bool may_be_duplicate = (current_context.name_bloom & bloom_bit_1) != 0 &&
+                                (current_context.name_bloom & bloom_bit_2) != 0;
+  const int32_t scope_context_id = current_context.kind == UniqueKeyContextNode::Kind::kKey
+                                       ? current_context.nearest_scope_context_id
+                                       : context_id;
+  if (may_be_duplicate) {
+    XGRAMMAR_DCHECK(unique_key_context_storage_ != nullptr);
+    const int32_t current_depth = current_context.kind == UniqueKeyContextNode::Kind::kKey
+                                      ? current_context.scope_key_depth
+                                      : 0;
+    const auto candidates =
+        unique_key_context_storage_->key_context_ids_by_scope_and_name_hash.equal_range(
+            HashCombine(scope_context_id, hash)
+        );
+    for (auto it = candidates.first; it != candidates.second; ++it) {
+      const int32_t candidate_id = it->second;
+      const auto& candidate = GetUniqueKeyContext(candidate_id);
+      if (candidate_id > context_id || candidate.nearest_scope_context_id != scope_context_id ||
+          candidate.scope_key_depth > current_depth || candidate.byte_length != byte_length) {
+        continue;
+      }
+      int32_t ancestor_id = context_id;
+      while (GetUniqueKeyContext(ancestor_id).scope_key_depth > candidate.scope_key_depth) {
+        ancestor_id = GetUniqueKeyContext(ancestor_id).parent_id;
+      }
+      if (ancestor_id == candidate_id &&
+          equals_bytes(candidate.name_start_byte, name_start_byte, byte_length)) {
+        return false;
+      }
+    }
+  }
+  const auto& scope = GetUniqueKeyContext(scope_context_id);
+  if (scope.kind != UniqueKeyContextNode::Kind::kScope || scope.scope_rule_id != scope_rule_id) {
+    return false;
+  }
+
+  state->unique_key_state_id =
+      AppendUniqueKey(state->unique_key_state_id, name_start_byte, byte_length, hash);
+  return true;
+}
+
 bool GrammarMatcher::Impl::CanForceCompleteWithoutMarker(
     const ParserState& state, bool use_char_budget
 ) {
@@ -830,18 +1040,12 @@ bool GrammarMatcher::Impl::CanForceCompleteWithoutMarker(
   XGRAMMAR_DCHECK(ShouldTrackAcceptedBytes());
   int32_t start_row =
       state.rule_start_pos == ParserState::kNoPrevInputPos ? 0 : state.rule_start_pos;
-  auto byte_position_for_row = [&](int32_t row) {
-    if (row >= 0 && row < static_cast<int32_t>(row_byte_end_.size())) {
-      return row_byte_end_[row];
-    }
-    XGRAMMAR_DCHECK(temporary_input_start_row_ >= 0);
-    XGRAMMAR_DCHECK(row >= temporary_input_start_row_);
-    XGRAMMAR_DCHECK(
-        row <= temporary_input_start_row_ + static_cast<int32_t>(temporary_input_bytes_.size())
-    );
-    return static_cast<int64_t>(accepted_bytes_.size() + row - temporary_input_start_row_);
-  };
-  int64_t begin = byte_position_for_row(start_row);
+  auto begin_position = GetInputBytePosition(start_row);
+  XGRAMMAR_DCHECK(begin_position.has_value());
+  if (!begin_position.has_value()) {
+    return false;
+  }
+  int64_t begin = *begin_position;
   int64_t end = accepted_bytes_.size() + temporary_input_bytes_.size();
 
   XGRAMMAR_DCHECK(grammar_->per_rule_fsms[suffix_stop_info->body_rule_id].has_value());
@@ -889,7 +1093,7 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
   const auto latest_row = scanable_state_history_[scanable_state_history_.size() - 1];
   std::vector<ParserState> latest_states(latest_row.begin(), latest_row.end());
   std::vector<ParserState> force_completed_states;
-  std::unordered_set<int64_t> force_completed_occurrences;
+  std::unordered_set<std::tuple<int32_t, int32_t, int32_t>> force_completed_occurrences;
 
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
@@ -904,8 +1108,8 @@ bool GrammarMatcher::Impl::ApplyBudgetEnforcement(bool debug_print) {
     if (!CanForceCompleteWithoutMarker(state, false)) {
       continue;
     }
-    int64_t occurrence =
-        (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
+    auto occurrence =
+        std::make_tuple(state.rule_id, state.rule_start_pos, state.unique_key_state_id);
     if (force_completed_occurrences.insert(occurrence).second) {
       force_completed_states.push_back(state);
     }
@@ -975,8 +1179,12 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
   if (capture_tracking_) {
     previous_capture_events = CopyLastCaptureRow();
   }
+  UniqueKeyContextSnapshot previous_unique_key_contexts;
+  if (track_unique_key_contexts_) {
+    previous_unique_key_contexts = SnapshotUniqueKeyContexts();
+  }
   std::vector<ParserState> force_completed_states;
-  std::unordered_set<int64_t> force_completed_occurrences;
+  std::unordered_set<std::tuple<int32_t, int32_t, int32_t>> force_completed_occurrences;
 
   tmp_states_visited_in_queue_.Clear();
   tmp_states_to_be_added_.clear();
@@ -991,8 +1199,8 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
     if (!CanForceCompleteWithoutMarker(state, true)) {
       continue;
     }
-    int64_t occurrence =
-        (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos);
+    auto occurrence =
+        std::make_tuple(state.rule_id, state.rule_start_pos, state.unique_key_state_id);
     if (force_completed_occurrences.insert(occurrence).second) {
       force_completed_states.push_back(state);
     }
@@ -1043,6 +1251,9 @@ bool GrammarMatcher::Impl::ApplyCharacterBudgetEnforcement(bool debug_print) {
     if (capture_tracking_) {
       capture_event_history_.PopBack(1);
       capture_event_history_.PushBack(previous_capture_events);
+    }
+    if (track_unique_key_contexts_) {
+      RestoreUniqueKeyContexts(previous_unique_key_contexts);
     }
     return false;
   }
@@ -1100,6 +1311,10 @@ bool GrammarMatcher::Impl::AdvanceWithCharacterBudget(uint8_t byte, bool debug_p
   if (capture_tracking_) {
     previous_capture_events = CopyLastCaptureRow();
   }
+  UniqueKeyContextSnapshot previous_unique_key_contexts;
+  if (track_unique_key_contexts_) {
+    previous_unique_key_contexts = SnapshotUniqueKeyContexts();
+  }
 
   bool enforced = ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
   if (!enforced && record_char_budget_relaxation_) {
@@ -1115,6 +1330,9 @@ bool GrammarMatcher::Impl::AdvanceWithCharacterBudget(uint8_t byte, bool debug_p
     if (capture_tracking_) {
       capture_event_history_.PopBack(1);
       capture_event_history_.PushBack(previous_capture_events);
+    }
+    if (track_unique_key_contexts_) {
+      RestoreUniqueKeyContexts(previous_unique_key_contexts);
     }
   }
   return accepted;
@@ -1138,6 +1356,7 @@ bool GrammarMatcher::Impl::AdvanceAtomicTokenWithCharacterBudget(
   std::vector<std::pair<int32_t, ParserState>> previous_completable_states;
   bool previous_completed = false;
   std::vector<CaptureEvent> previous_capture_events;
+  UniqueKeyContextSnapshot previous_unique_key_contexts;
   bool enforced = false;
   if (has_expired_state) {
     previous_states = GetLatestScanableStates();
@@ -1149,6 +1368,9 @@ bool GrammarMatcher::Impl::AdvanceAtomicTokenWithCharacterBudget(
     previous_completed = IsCompleted();
     if (capture_tracking_) {
       previous_capture_events = CopyLastCaptureRow();
+    }
+    if (track_unique_key_contexts_) {
+      previous_unique_key_contexts = SnapshotUniqueKeyContexts();
     }
     enforced = ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
     if (!enforced && record_char_budget_relaxation_) {
@@ -1166,6 +1388,9 @@ bool GrammarMatcher::Impl::AdvanceAtomicTokenWithCharacterBudget(
     if (capture_tracking_) {
       capture_event_history_.PopBack(1);
       capture_event_history_.PushBack(previous_capture_events);
+    }
+    if (track_unique_key_contexts_) {
+      RestoreUniqueKeyContexts(previous_unique_key_contexts);
     }
   }
   if (accepted && crosses_budget && record_char_budget_relaxation_) {
@@ -1284,6 +1509,9 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   // Handle the stop token
   if (is_stop_token) {
     bool accepted = AcceptStopToken();
+    if (accepted && track_unique_key_contexts_) {
+      unique_key_context_history_.push_back(SnapshotUniqueKeyContexts());
+    }
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: " << accepted;
     }
@@ -1302,6 +1530,10 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   std::vector<ParserState> states_before_token;
   std::vector<std::pair<int32_t, ParserState>> completable_before_token;
   std::vector<CaptureEvent> capture_row_before_token;
+  UniqueKeyContextSnapshot unique_key_contexts_before_token;
+  if (track_unique_key_contexts_) {
+    unique_key_contexts_before_token = SnapshotUniqueKeyContexts();
+  }
   bool completed_before_token = false;
   if (has_char_budget_rules_) {
     states_before_token = GetLatestScanableStates();
@@ -1346,10 +1578,13 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     PopLastStates(1);
   }
   restore_row_before_token();
+  if (!atomic_success && track_unique_key_contexts_) {
+    RestoreUniqueKeyContexts(unique_key_contexts_before_token);
+  }
 
   // Phase 2: Try byte-by-byte path (from the same original state)
   record_char_budget_relaxation_ = true;
-  bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
+  bool track_temporary_input = ShouldTrackTemporaryInput();
   if (track_temporary_input) {
     temporary_input_start_row_ = scanable_state_history_.size() - 1;
     temporary_input_bytes_.clear();
@@ -1382,6 +1617,9 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     }
     PopLastStates(pos);
     restore_row_before_token();
+    if (track_unique_key_contexts_) {
+      RestoreUniqueKeyContexts(unique_key_contexts_before_token);
+    }
     record_char_budget_relaxation_ = false;
     char_budget_relaxed_ = false;
     return false;
@@ -1390,6 +1628,9 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   if (atomic_success && !byte_path_success) {
     PopLastStates(pos);
     restore_row_before_token();
+    if (track_unique_key_contexts_) {
+      RestoreUniqueKeyContexts(unique_key_contexts_before_token);
+    }
     char_budget_relaxed_ = false;
     bool accepted =
         has_char_budget_rules_
@@ -1419,6 +1660,37 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
         AppendAtomicRow(token);
       }
     } else {
+      if (has_dynamic_tag_rules_) {
+        const int32_t byte_path_end_row = scanable_state_history_.size() - 1;
+        UniqueKeyRowRemapCache unique_key_remap_cache;
+        auto remap_atomic_end_row = [&](ParserState* state) {
+          if (state->rule_start_pos == size_before_token) {
+            state->rule_start_pos = byte_path_end_row;
+          }
+          if (IsDynamicTagRule(state->rule_id)) {
+            if (state->sub_element_id == size_before_token) {
+              state->sub_element_id = byte_path_end_row;
+            }
+            if (state->partial_codepoint == size_before_token) {
+              state->partial_codepoint = byte_path_end_row;
+            }
+          }
+          state->unique_key_state_id = RemapUniqueKeyStateRows(
+              state->unique_key_state_id,
+              size_before_token,
+              byte_path_end_row,
+              &unique_key_remap_cache
+          );
+        };
+        for (auto& state : atomic_states) {
+          remap_atomic_end_row(&state);
+        }
+        for (auto& [ref_rule_id, state] : atomic_completable) {
+          static_cast<void>(ref_rule_id);
+          remap_atomic_end_row(&state);
+        }
+      }
+
       auto byte_states = GetLatestScanableStates();
       std::vector<ParserState> merged = byte_states;
       StateEqualForParsing state_eq;
@@ -1509,6 +1781,9 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     // Close exhausted occurrences at the token boundary, including after zero-byte atomic tokens.
     ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
   }
+  if (track_unique_key_contexts_) {
+    unique_key_context_history_.push_back(unique_key_contexts_before_token);
+  }
   record_char_budget_relaxation_ = false;
   return FinishAccept(consumed_past_deadline);
 }
@@ -1536,6 +1811,10 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
   std::vector<ParserState> states_before_input;
   std::vector<std::pair<int32_t, ParserState>> completable_before_input;
   std::vector<CaptureEvent> capture_row_before_input;
+  UniqueKeyContextSnapshot unique_key_contexts_before_input;
+  if (track_unique_key_contexts_) {
+    unique_key_contexts_before_input = SnapshotUniqueKeyContexts();
+  }
   bool completed_before_input = false;
   if (has_char_budget_rules_) {
     states_before_input = GetLatestScanableStates();
@@ -1547,7 +1826,7 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
     capture_row_before_input = CopyLastCaptureRow();
     completed_before_input = is_completed_.back();
   }
-  bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
+  bool track_temporary_input = ShouldTrackTemporaryInput();
   if (track_temporary_input) {
     temporary_input_start_row_ = scanable_state_history_.size() - 1;
     temporary_input_bytes_.clear();
@@ -1573,6 +1852,9 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
           capture_event_history_.PopBack(1);
           capture_event_history_.PushBack(capture_row_before_input);
         }
+      }
+      if (track_unique_key_contexts_) {
+        RestoreUniqueKeyContexts(unique_key_contexts_before_input);
       }
       if (track_temporary_input) {
         temporary_input_start_row_ = -1;
@@ -1602,6 +1884,9 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
   if (track_temporary_input) {
     temporary_input_start_row_ = -1;
     temporary_input_bytes_.clear();
+  }
+  if (track_unique_key_contexts_) {
+    unique_key_context_history_.push_back(unique_key_contexts_before_input);
   }
   record_char_budget_relaxation_ = false;
   FinishCharacterBudgetAccept();
@@ -1645,6 +1930,7 @@ bool GrammarMatcher::Impl::IsTokenBitmaskAllTrue(int32_t* bitmask_data_ptr) {
 bool GrammarMatcher::Impl::FillNextTokenBitmask(
     DLTensor* next_token_bitmask, int index, bool debug_print
 ) {
+  UniqueKeyContextRestoreGuard unique_key_context_guard(this);
   XGRAMMAR_CHECK(!IsStopTokenAccepted())
       << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
          "find the next token mask";
@@ -1827,6 +2113,95 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
   temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
 }
 
+bool GrammarMatcher::Impl::FillBitmaskForBackReferenceState(const ParserState& state) {
+  XGRAMMAR_DCHECK(state.rule_id >= 0 && grammar_->per_rule_fsms[state.rule_id].has_value());
+  const auto& rule_fsm = grammar_->per_rule_fsms[state.rule_id]->GetFsm();
+  if (!rule_fsm.IsBackReferenceOnlyScanableState(state.element_id)) {
+    return false;
+  }
+
+  auto progress = GetBackReferenceProgress(state);
+  if (!progress.has_value()) {
+    // A normal matcher should always have the capture at this point. Treat missing history as an
+    // empty accepted set so malformed/restored state cannot weaken the grammar.
+    return true;
+  }
+
+  const auto& vocab = tokenizer_info_.GetSortedDecodedVocab();
+  const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
+  const std::string lower_key(1, static_cast<char>(progress->next_byte));
+  auto begin = std::lower_bound(
+      vocab.begin(),
+      vocab.end(),
+      lower_key,
+      [](const auto& entry, const auto& key) { return entry.second < key; }
+  );
+  auto end = vocab.end();
+  if (progress->next_byte != std::numeric_limits<uint8_t>::max()) {
+    const std::string upper_key(1, static_cast<char>(progress->next_byte + 1));
+    end = std::lower_bound(begin, vocab.end(), upper_key, [](const auto& entry, const auto& key) {
+      return entry.second < key;
+    });
+  }
+
+  PushOneStateToCheck(state);
+  const int32_t saved_temporary_input_start_row = temporary_input_start_row_;
+  std::string saved_temporary_input_bytes = std::move(temporary_input_bytes_);
+  temporary_input_start_row_ = scanable_state_history_.size() - 1;
+  temporary_input_bytes_.clear();
+
+  const std::string* previous_token = nullptr;
+  int32_t previous_matched_size = 0;
+  int32_t rejected_subtree_end = 0;
+  for (auto it = begin; it != end; ++it) {
+    const int32_t vocab_index = static_cast<int32_t>(it - vocab.begin());
+    if (vocab_index < rejected_subtree_end) {
+      continue;
+    }
+    const std::string& token = it->second;
+    bool accepted = true;
+    if (previous_token != nullptr) {
+      const int32_t common_prefix = static_cast<int32_t>(
+          std::mismatch(token.begin(), token.end(), previous_token->begin(), previous_token->end())
+              .first -
+          token.begin()
+      );
+      if (common_prefix > previous_matched_size) {
+        rejected_subtree_end = subtree_range[vocab_index];
+        accepted = false;
+      } else if (common_prefix < previous_matched_size) {
+        PopLastStates(previous_matched_size - common_prefix);
+        temporary_input_bytes_.resize(common_prefix);
+      }
+      previous_matched_size = std::min(previous_matched_size, common_prefix);
+    }
+
+    if (accepted) {
+      for (int32_t i = previous_matched_size; i < static_cast<int32_t>(token.size()); ++i) {
+        const bool byte_accepted = has_char_budget_rules_
+                                       ? AdvanceWithCharacterBudget(static_cast<uint8_t>(token[i]))
+                                       : Advance(static_cast<uint8_t>(token[i]));
+        if (!byte_accepted) {
+          rejected_subtree_end = subtree_range[vocab_index];
+          accepted = false;
+          break;
+        }
+        temporary_input_bytes_.push_back(token[i]);
+        previous_matched_size = i + 1;
+      }
+    }
+    if (accepted) {
+      tmp_accepted_bitset_.Set(it->first, true);
+    }
+    previous_token = &token;
+  }
+
+  PopLastStates(previous_matched_size + 1);
+  temporary_input_start_row_ = saved_temporary_input_start_row;
+  temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
+  return true;
+}
+
 void GrammarMatcher::Impl::FillBitmaskForStates(
     int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
 ) {
@@ -1862,7 +2237,19 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
+    ParserState cache_key = state;
+    if (has_dynamic_tag_rules_) {
+      if (FillBitmaskForBackReferenceState(state)) {
+        continue;
+      }
+      if (IsDynamicTagRule(cache_key.rule_id)) {
+        // DynamicTag uses sub_element_id as an occurrence-local capture row. It does not change the
+        // grammar position, so the reusable mask is stored under the normalized value compiled for
+        // this FSM node.
+        cache_key.sub_element_id = 0;
+      }
+    }
+    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(cache_key);
     XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
     if (state.char_budget_deadline >= 0) {
@@ -1903,7 +2290,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       atomic_trial_base->capture_recording_ = false;
     }
     PushOneStateToCheck(state);
-    bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
+    bool track_temporary_input = ShouldTrackTemporaryInput();
     int32_t saved_temporary_input_start_row = -1;
     std::string saved_temporary_input_bytes;
     if (track_temporary_input) {
@@ -2033,6 +2420,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 }
 
 std::string GrammarMatcher::Impl::FindJumpForwardString() {
+  UniqueKeyContextRestoreGuard unique_key_context_guard(this);
   XGRAMMAR_CHECK(!IsStopTokenAccepted())
       << "GrammarMatcher has terminated after accepting the stop token, but is trying to "
          "get the jump forward string";
@@ -2051,7 +2439,14 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
   std::string result;
   int num_accepted_chars = 0;
   bool can_find_next_char = true;
-
+  const bool track_temporary_input = ShouldTrackTemporaryInput();
+  int32_t saved_temporary_input_start_row = temporary_input_start_row_;
+  std::string saved_temporary_input_bytes;
+  if (track_temporary_input) {
+    saved_temporary_input_bytes = std::move(temporary_input_bytes_);
+    temporary_input_start_row_ = scanable_state_history_.size() - 1;
+    temporary_input_bytes_.clear();
+  }
   while (can_find_next_char) {
     const auto& states = scanable_state_history_[scanable_state_history_.size() - 1];
 
@@ -2061,8 +2456,8 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
       break;
     }
 
-    // 1. Check that for every leaf ParserState, the next possible char is unique and the same
-    // -1 means not found yet; 0~255 means the next char
+    // 1. Find a byte that is forced by the grammar.
+    // -1 means not found yet; 0~255 means the next char.
     int next_char = -1;
     for (const auto& state : states) {
       if (budget_enforce_pending_ && IsExpiredState(state)) {
@@ -2072,16 +2467,26 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
       const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
       const auto& current_edges = fsm.GetFsm().GetFsm().GetEdges(state.element_id);
       for (const auto& edge : current_edges) {
-        if (!edge.IsCharRange()) {
+        int edge_byte = -1;
+        if (edge.IsBackReference()) {
+          auto progress = GetBackReferenceProgress(state);
+          if (!progress.has_value()) {
+            can_find_next_char = false;
+            break;
+          }
+          edge_byte = progress->next_byte;
+        } else if (edge.IsCharRange()) {
+          if (edge.min != edge.max) {
+            can_find_next_char = false;
+            break;
+          }
+          edge_byte = edge.min;
+        } else {
           continue;
         }
-        if (edge.min != edge.max) {
-          can_find_next_char = false;
-          break;
-        }
         if (next_char == -1) {
-          next_char = edge.min;
-        } else if (next_char != edge.min) {
+          next_char = edge_byte;
+        } else if (next_char != edge_byte) {
           can_find_next_char = false;
           break;
         }
@@ -2100,14 +2505,22 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
           })) {
         break;
       }
+      const char next_byte = static_cast<char>(next_char);
       result += static_cast<uint8_t>(next_char);
       Advance(next_char);
+      if (track_temporary_input) {
+        temporary_input_bytes_.push_back(next_byte);
+      }
       ++num_accepted_chars;
     }
   }
 
   // Rollback all chars accepted
   PopLastStates(num_accepted_chars);
+  if (track_temporary_input) {
+    temporary_input_start_row_ = saved_temporary_input_start_row;
+    temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
+  }
   return result;
 }
 
@@ -2115,15 +2528,29 @@ void GrammarMatcher::Impl::Rollback(int num_tokens) {
   XGRAMMAR_CHECK(num_tokens <= static_cast<int>(token_length_history.size()))
       << "Intended to rollback " << num_tokens << " tokens, but only the last "
       << token_length_history.size() << " steps of history are saved";
+  XGRAMMAR_DCHECK(
+      !track_unique_key_contexts_ ||
+      unique_key_context_history_.size() == token_length_history.size()
+  );
+  UniqueKeyContextSnapshot rollback_unique_key_contexts;
+  bool restore_unique_key_contexts = false;
   while (num_tokens > 0) {
     int steps = token_length_history.back();
     PopLastStates(steps);
     token_length_history.pop_back();
+    if (track_unique_key_contexts_) {
+      rollback_unique_key_contexts = unique_key_context_history_.back();
+      unique_key_context_history_.pop_back();
+      restore_unique_key_contexts = true;
+    }
     if (ShouldTrackAcceptedBytes() && steps > 0) {
       row_byte_end_.resize(row_byte_end_.size() - steps);
       accepted_bytes_.resize(row_byte_end_.back());
     }
     --num_tokens;
+  }
+  if (restore_unique_key_contexts) {
+    RestoreUniqueKeyContexts(rollback_unique_key_contexts);
   }
   budget_enforce_pending_ = false;
   budget_force_close_pending_ = false;
@@ -2439,12 +2866,20 @@ void GrammarMatcher::Impl::SetTokenBitmask(
       for (int id : tokenizer_info_.GetSpecialTokenIds()) {
         next_token_bitset.Set(id, true);
       }
+    } else {
+      for (int id : tokenizer_info_.GetSpecialTokenIds()) {
+        next_token_bitset.Set(id, false);
+      }
     }
 
     if (can_reach_end) {
       // add end tokens
       for (int id : stop_token_ids_) {
         next_token_bitset.Set(id, true);
+      }
+    } else {
+      for (int id : stop_token_ids_) {
+        next_token_bitset.Set(id, false);
       }
     }
   } else {

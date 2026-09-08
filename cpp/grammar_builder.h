@@ -146,6 +146,12 @@ class GrammarBuilder {
   /*! \brief Encode a TokenTagDispatch struct into a kTokenTagDispatch expr. */
   int32_t AddTokenTagDispatch(const Grammar::Impl::TokenTagDispatch& token_tag_dispatch);
 
+  /*!
+   * \brief Add a paired dynamic tag whose closing name repeats its opening name byte-for-byte.
+   * \note name_rule must be byte-regular; delimiter safety is enforced during FSM compilation.
+   */
+  int32_t AddDynamicTag(const Grammar::Impl::DynamicTag& dynamic_tag);
+
   int32_t AddRepeat(int32_t ref_rule_id, int32_t min_repeat_count, int32_t max_repeat_count);
 
   /*!

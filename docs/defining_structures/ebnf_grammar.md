@@ -455,6 +455,41 @@ The chunk list is compiled into a suffix automaton, so the number of automaton s
 linearly with the number of chunks. This is also the compiled form of the Lark
 `%regex {"substring_chunks": ...}` and `%regex {"substring_chars": ...}` extensions.
 
+### `DynamicTag`
+
+`DynamicTag` captures a name from an opening tag and requires the closing tag to reproduce the
+same bytes:
+
+```text
+root ::= DynamicTag("<", name, ">", content, "</", ">")
+name ::= [a-z_]+
+content ::= [A-Z]*
+```
+
+This grammar accepts `<key>VALUE</key>` but rejects `<key>VALUE</other>`. The six positional
+arguments are the opening prefix, name rule, opening suffix, content rule, closing prefix, and
+closing suffix. The name and content arguments must reference defined rules.
+
+The name rule must describe a byte-regular language. During compilation, XGrammar also constrains
+it to non-empty, nonblank names that cannot consume or overlap either suffix delimiter, or make
+the opening and closing prefixes indistinguishable. A name rule that cannot be converted to this
+bounded finite-state form fails closed at compilation time.
+
+Structured-data converters can additionally specify both `unique_key_scope` and
+`reserved_names`:
+
+```text
+object ::= dynamic_property*
+dynamic_property ::= DynamicTag(
+    "<", name, ">", content, "</", ">",
+    unique_key_scope=object,
+    reserved_names=("fixed",)
+)
+```
+
+Within each active occurrence of `object`, this rejects duplicate runtime names and names listed
+in `reserved_names`. The two named arguments must be supplied together.
+
 ### `TagDispatch`
 
 `TagDispatch` implements the common tool-calling pattern: the model produces free text until a

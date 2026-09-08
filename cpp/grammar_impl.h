@@ -196,6 +196,14 @@ class Grammar::Impl {
     // and is carried through the grammar passes as-is; when GrammarFSMBuilder runs, it is
     // compiled into an automaton via a chunk-level suffix automaton (see SuffixAutomata).
     kSubstring,
+    // data format: [open_prefix_expr_id, name_rule_id, open_suffix_expr_id,
+    //               content_rule_id, close_prefix_expr_id, close_suffix_expr_id]
+    // or, when runtime names must be unique within an enclosing object occurrence:
+    //              [..., unique_key_scope_rule_id, reserved_names_choices_expr_id]
+    // Matches a paired tag whose closing name must byte-for-byte equal the runtime-generated
+    // opening name. Structure normalization materializes a nested occurrence as a helper rule,
+    // so every compiled occurrence has an independent rule-local capture scope.
+    kDynamicTag,
   };
 
   /*! \brief The object representing a grammar expr. */
@@ -379,6 +387,84 @@ class Grammar::Impl {
   /*! \brief Get the token tag dispatch from the grammar expr with the given id. */
   TokenTagDispatch GetTokenTagDispatch(int32_t grammar_expr_id) const {
     return GetTokenTagDispatch(GetGrammarExpr(grammar_expr_id));
+  }
+
+  /*!
+   * \brief A paired tag with a runtime-generated name repeated byte-for-byte by its closing tag.
+   *
+   * name_rule must be byte-regular. During compilation it is intersected with the delimiter-safe
+   * tag-name language: names are nonempty and nonblank, cannot contain either suffix or overlap a
+   * suffix across the name boundary, and cannot make the two prefixes indistinguishable.
+   */
+  struct DynamicTag {
+    std::string open_prefix;
+    int32_t name_rule_id;
+    std::string open_suffix;
+    int32_t content_rule_id;
+    std::string close_prefix;
+    std::string close_suffix;
+    int32_t unique_key_scope_rule_id = -1;
+    std::vector<std::string> reserved_names;
+
+    DynamicTag(
+        std::string open_prefix,
+        int32_t name_rule_id,
+        std::string open_suffix,
+        int32_t content_rule_id,
+        std::string close_prefix,
+        std::string close_suffix,
+        int32_t unique_key_scope_rule_id = -1,
+        std::vector<std::string> reserved_names = {}
+    )
+        : open_prefix(std::move(open_prefix)),
+          name_rule_id(name_rule_id),
+          open_suffix(std::move(open_suffix)),
+          content_rule_id(content_rule_id),
+          close_prefix(std::move(close_prefix)),
+          close_suffix(std::move(close_suffix)),
+          unique_key_scope_rule_id(unique_key_scope_rule_id),
+          reserved_names(std::move(reserved_names)) {}
+  };
+
+  DynamicTag GetDynamicTag(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kDynamicTag);
+    XGRAMMAR_DCHECK(grammar_expr.size() == 6 || grammar_expr.size() == 8);
+    DynamicTag result{
+        GetByteString(grammar_expr[0]),
+        grammar_expr[1],
+        GetByteString(grammar_expr[2]),
+        grammar_expr[3],
+        GetByteString(grammar_expr[4]),
+        GetByteString(grammar_expr[5])
+    };
+    if (grammar_expr.size() == 8) {
+      result.unique_key_scope_rule_id = grammar_expr[6];
+      auto reserved_names = GetGrammarExpr(grammar_expr[7]);
+      XGRAMMAR_DCHECK(reserved_names.type == GrammarExprType::kChoices);
+      result.reserved_names.reserve(reserved_names.size());
+      for (int32_t name_expr_id : reserved_names) {
+        result.reserved_names.push_back(GetByteString(name_expr_id));
+      }
+    }
+    return result;
+  }
+
+  DynamicTag GetDynamicTag(int32_t grammar_expr_id) const {
+    return GetDynamicTag(GetGrammarExpr(grammar_expr_id));
+  }
+
+  int32_t GetDynamicTagUniqueKeyScopeRuleId(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kDynamicTag);
+    XGRAMMAR_DCHECK(grammar_expr.size() == 6 || grammar_expr.size() == 8);
+    return grammar_expr.size() == 8 ? grammar_expr[6] : -1;
+  }
+
+  GrammarExpr GetDynamicTagReservedNames(const GrammarExpr& grammar_expr) const {
+    XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kDynamicTag);
+    XGRAMMAR_DCHECK(grammar_expr.size() == 8);
+    auto result = GetGrammarExpr(grammar_expr[7]);
+    XGRAMMAR_DCHECK(result.type == GrammarExprType::kChoices);
+    return result;
   }
 
  private:
