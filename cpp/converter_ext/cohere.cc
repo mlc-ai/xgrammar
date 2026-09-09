@@ -16,8 +16,15 @@
 #include "../support/encoding.h"
 #include "../support/json_parse.h"
 #include "../support/logging.h"
+#include "xml_tool_calling.h"
 
 namespace xgrammar {
+
+namespace converter_ext {
+
+XMLWrapperParts GetCohereXMLWrapper() { return {"<cofl:value", ">", "", "</cofl:value>"}; }
+
+}  // namespace converter_ext
 
 namespace {
 
