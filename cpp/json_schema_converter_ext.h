@@ -10,6 +10,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -25,23 +26,14 @@ namespace xgrammar {
  * - Inner values use standard JSON format
  */
 class XMLToolCallingConverter : public JSONSchemaConverter {
- protected:
-  // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
-  struct XMLWrapper {
-    std::string key_wrapper_prefix;
-    std::string key_wrapper_suffix;
-    std::string value_wrapper_prefix;
-    std::string parameter_suffix;
-  };
-
  public:
   XMLToolCallingConverter(
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
       bool any_whitespace,
       std::optional<int> max_whitespace_cnt,
-      RefResolver ref_resolver,
-      XMLWrapper xml_wrapper,
+      RefResolver ref_resolver = nullptr,
+      JSONFormat json_format = JSONFormat::kQwenXML,
       bool any_order = false
   );
 
@@ -91,99 +83,23 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::optional<int32_t> GetCache(const std::string& key) const override;
 
  protected:
+  // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
+  struct XMLWrapper {
+    std::string key_wrapper_prefix;
+    std::string key_wrapper_suffix;
+    std::string value_wrapper_prefix;
+    std::string parameter_suffix;
+  };
+
+  static const std::unordered_map<JSONFormat, XMLWrapper> kKeyWrapperMap;
   static const std::string kXMLString;
   static const std::string kXMLAny;
   static const std::string kXMLObject;
   static const std::string kXMLVariableName;
 
   std::string XMLValue(const std::string& json_value) const;
-  virtual std::string EscapeAttrValue(const std::string& value) const;
+  std::string EscapeAttrValue(const std::string& value) const;
 
-  /*! \brief Build the expression between the property key and its value. */
-  virtual int32_t XMLKeySuffix(const SchemaSpecPtr& schema);
-
-  // Track if we're at the root object level
-  int nested_object_level_ = 0;
-  const XMLWrapper xml_wrapper_;
-};
-
-// To add a format, declare its converter here and implement it in converter_ext/.
-// Configure XMLWrapper and override XMLKeySuffix/EscapeAttrValue as needed, or override
-// generation methods for recursive formats. Register it in JSONFormat, JSONFormatFromString,
-// and ConvertSchemaSpecToGrammar. For structural tags, also update C++/Python style validation.
-
-/*! \brief Converter for Qwen XML Tool Calling format. */
-class QwenXMLToolCallingConverter : public XMLToolCallingConverter {
- public:
-  QwenXMLToolCallingConverter(
-      std::optional<int> indent,
-      std::optional<std::pair<std::string, std::string>> separators,
-      bool any_whitespace,
-      std::optional<int> max_whitespace_cnt,
-      RefResolver ref_resolver = nullptr,
-      bool any_order = false
-  );
-};
-
-/*! \brief Converter for MiniMax XML Tool Calling format. */
-class MiniMaxXMLToolCallingConverter : public XMLToolCallingConverter {
- public:
-  MiniMaxXMLToolCallingConverter(
-      std::optional<int> indent,
-      std::optional<std::pair<std::string, std::string>> separators,
-      bool any_whitespace,
-      std::optional<int> max_whitespace_cnt,
-      RefResolver ref_resolver = nullptr,
-      bool any_order = false
-  );
-};
-
-/*! \brief Converter for DeepSeek XML Tool Calling format. */
-class DeepSeekXMLToolCallingConverter : public XMLToolCallingConverter {
- public:
-  DeepSeekXMLToolCallingConverter(
-      std::optional<int> indent,
-      std::optional<std::pair<std::string, std::string>> separators,
-      bool any_whitespace,
-      std::optional<int> max_whitespace_cnt,
-      RefResolver ref_resolver = nullptr,
-      bool any_order = false
-  );
-
- protected:
-  int32_t XMLKeySuffix(const SchemaSpecPtr& schema) override;
-};
-
-/*! \brief Converter for Glm XML Tool Calling format. */
-class GlmXMLToolCallingConverter : public XMLToolCallingConverter {
- public:
-  GlmXMLToolCallingConverter(
-      std::optional<int> indent,
-      std::optional<std::pair<std::string, std::string>> separators,
-      bool any_whitespace,
-      std::optional<int> max_whitespace_cnt,
-      RefResolver ref_resolver = nullptr,
-      bool any_order = false
-  );
-};
-
-/*! \brief Converter for KimiK3 XML Tool Calling format. */
-class KimiK3XMLToolCallingConverter : public XMLToolCallingConverter {
- public:
-  KimiK3XMLToolCallingConverter(
-      std::optional<int> indent,
-      std::optional<std::pair<std::string, std::string>> separators,
-      bool any_whitespace,
-      std::optional<int> max_whitespace_cnt,
-      RefResolver ref_resolver = nullptr,
-      bool any_order = false
-  );
-
- protected:
-  int32_t XMLKeySuffix(const SchemaSpecPtr& schema) override;
-  std::string EscapeAttrValue(const std::string& value) const override;
-
- private:
   /*!
    * \brief Return the Kimi-K3 `type` attribute a value of \p spec is rendered with, or
    * std::nullopt if the schema does not pin down a single type (\p spec may be nullptr, which
@@ -196,6 +112,19 @@ class KimiK3XMLToolCallingConverter : public XMLToolCallingConverter {
    * model's renderer (_xtml_type), which maps both ints and floats to "number".
    */
   static std::optional<std::string> KimiK3TypeAttr(const SchemaSpecPtr& spec);
+
+  /*!
+   * \brief Build the expression between the property key and its value.
+   * \param pinned_type For kimi_k3_xml, the single type attribute this property must carry.
+   * std::nullopt keeps every type allowed, which is what free-form keys
+   * (additionalProperties / patternProperties) need.
+   */
+  int32_t XMLKeySuffix(const std::optional<std::string>& pinned_type = std::nullopt);
+
+  JSONFormat json_format_;
+  // Track if we're at the root object level
+  int nested_object_level_ = 0;
+  const XMLWrapper xml_wrapper_;
 };
 
 /*!

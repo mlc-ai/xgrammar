@@ -114,7 +114,7 @@ CohereXMLToolCallingConverter::CohereXMLToolCallingConverter(
           any_whitespace,
           max_whitespace_cnt,
           ref_resolver,
-          {"<cofl:value", ">", "", "</cofl:value>"},
+          JSONFormat::kCohereXML,
           any_order
       ) {}
 
