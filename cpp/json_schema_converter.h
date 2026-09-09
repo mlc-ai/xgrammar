@@ -332,10 +332,26 @@ class JSONSchemaConverter {
   /*! \brief Format a property (key + value). Override for different formats. */
   virtual int32_t FormatProperty(
       const std::string& key,
+      const SchemaSpecPtr& value_spec,
+      const std::string& rule_name,
+      int64_t idx
+  );
+
+  /*! \brief Format a property (key + value). Override for different formats. */
+  virtual int32_t FormatProperty(
+      const std::string& key,
       int32_t value_rule_id,
       const std::string& rule_name,
       int64_t idx,
       const SchemaSpecPtr& schema
+  );
+
+  /*! \brief Format an "other" property (additional/unevaluated). Override for different formats. */
+  virtual int32_t FormatOtherProperty(
+      int32_t key_pattern_expr,
+      const SchemaSpecPtr& value_spec,
+      const std::string& rule_name,
+      const std::string& rule_name_suffix
   );
 
   /*!
@@ -449,6 +465,9 @@ class JSONSchemaConverter {
       int max_properties,
       const std::optional<int32_t>& additional_property_override = std::nullopt
   );
+
+  /*! \brief Helper to create rule name hint from $ref URI. */
+  std::string GetRuleNameHintFromURI(const std::string& uri);
 
   // ==================== Protected members ====================
 

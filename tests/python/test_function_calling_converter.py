@@ -48,7 +48,7 @@ def _check_minimax_grammar(schema: dict, expected_grammar: str, instance: str, a
 
 def _check_deepseek_grammar(schema: dict, expected_grammar: str, instance: str, accepted: bool):
     ebnf_grammar = _json_schema_to_ebnf(schema, json_format="deepseek_xml")
-    check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)
+    assert ebnf_grammar == expected_grammar, f"Expected:\n{expected_grammar}\nGot:\n{ebnf_grammar}"
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 
@@ -894,11 +894,11 @@ deepseek_test_string_schema_input_str_accepted = (
     ),
     (
         '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter>\t\n<｜DSML｜parameter name="age" string="true">\t100\n</｜DSML｜parameter>',
-        True,
+        False,
     ),
     (
         '<｜DSML｜parameter name="name" string="false">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="true">100</｜DSML｜parameter>',
-        True,
+        False,
     ),
     (
         """<｜DSML｜parameter name="name" string="true"><!DOCTYPE html>
@@ -926,23 +926,37 @@ deepseek_test_string_schema_input_str_accepted = (
 
 @pytest.mark.parametrize("input_str, accepted", deepseek_test_string_schema_input_str_accepted)
 def test_deepseek_string_schema(input_str: str, accepted: bool):
-    expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
-basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
-basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
-basic_string ::= ["] basic_string_sub
-basic_boolean ::= "true" | "false"
-basic_null ::= "null"
-basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
-basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
-xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
-xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
-xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" ""
-root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"name\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\r\t]*))
+root_part_0 ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"age\" string=\"false\">" [ \n\r\t]* basic_integer [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
 """
     schema = {
         "type": "object",
@@ -967,22 +981,38 @@ def test_deepseek_pattern_empty_leading_alternative(input_str: str, accepted: bo
     # Regression: a pattern whose first alternative is empty ("^$|...") used to emit a bare
     # leading '|' (root_prop_0 ::= | ...) and crash the grammar parser on the deepseek_xml path.
     # It must now be emitted as root_prop_0 ::= "" | ...
-    expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
-basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
-basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
-basic_string ::= ["] basic_string_sub
-basic_boolean ::= "true" | "false"
-basic_null ::= "null"
-basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
-basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
-xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
-xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
-xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_0 ::= "" | "h" "t" "t" "p" "s" ":" "/" "/" "x" "." "c" "o" "m" "/"
-root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"url\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</｜DSML｜parameter>" "")) [ \n\r\t]*
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"url\" string=\"true\">" root_string_prop_0 "</\uff5cDSML\uff5cparameter>" [ \n\r\t]*))
+root_1 ::= ("" | ("h" "t" "t" "p" "s" ":" "/" "/" "x" "." "c" "o" "m" "/"))
+root_string_prop_0 ::= ((root_1))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
 """
     schema = {
         "type": "object",
@@ -1014,25 +1044,42 @@ deepseek_test_additional_properties_schema_input_str_accepted = (
     "input_str, accepted", deepseek_test_additional_properties_schema_input_str_accepted
 )
 def test_deepseek_additional_properties_schema(input_str: str, accepted: bool):
-    expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
-basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
-basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
-basic_string ::= ["] basic_string_sub
-basic_boolean ::= "true" | "false"
-basic_null ::= "null"
-basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
-basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
-xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
-xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
-xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
-root_part_0 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1
-root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"name\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\r\t]*))
+root_string_addl ::= ((xml_string))
+root_json_addl ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+root_additional_properties ::= (([ \n\r\t]* root_additional_properties_1))
+root_part_1 ::= ((root_additional_properties{0, -1}))
+root_part_0 ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"age\" string=\"false\">" [ \n\r\t]* basic_integer [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_1))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_additional_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" root_string_addl "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* root_json_addl [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
 """
     schema = {
         "type": "object",
@@ -1062,25 +1109,44 @@ deepseek_test_not_required_properties_schema_input_str_accepted = (
     "input_str, accepted", deepseek_test_not_required_properties_schema_input_str_accepted
 )
 def test_deepseek_not_required_properties_schema(input_str: str, accepted: bool):
-    expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
-basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
-basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
-basic_string ::= ["] basic_string_sub
-basic_boolean ::= "true" | "false"
-basic_null ::= "null"
-basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
-basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
-xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
-xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
-xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
-root_part_0 ::= root_part_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1
-root ::= ( [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1) | "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>" root_part_1) [ \n\r\t]*) | [ \n\r\t]*
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* root_2 [ \n\r\t]*) | ([ \n\r\t]*))
+root_string_addl ::= ((xml_string))
+root_json_addl ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+root_additional_properties ::= (([ \n\r\t]* root_additional_properties_1))
+root_part_1 ::= ((root_additional_properties{0, -1}))
+root_part_0 ::= ((root_part_1) | ([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"age\" string=\"false\">" [ \n\r\t]* basic_integer [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_1))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" root_string_addl "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* root_json_addl [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_2 ::= (("<\uff5cDSML\uff5cparameter name=\"name\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>" root_part_0) | ("<\uff5cDSML\uff5cparameter name=\"age\" string=\"false\">" [ \n\r\t]* basic_integer [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_1) | (root_1 root_part_1))
+root_additional_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" root_string_addl "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* root_json_addl [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
 """
     schema = {
         "type": "object",
@@ -1103,6 +1169,10 @@ deepseek_test_part_required_properties_schema_input_str_accepted = (
     ),
     (
         '<｜DSML｜parameter name="name" string="false">Bob</｜DSML｜parameter><｜DSML｜parameter name="anything" string="true">It\'s a string.</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="anything" string="true">It\'s a string.</｜DSML｜parameter>',
         True,
     ),
     ('<｜DSML｜parameter name="anything" string="true">It\'s a string.</｜DSML｜parameter>', False),
@@ -1113,25 +1183,42 @@ deepseek_test_part_required_properties_schema_input_str_accepted = (
     "input_str, accepted", deepseek_test_part_required_properties_schema_input_str_accepted
 )
 def test_deepseek_part_required_properties_schema(input_str: str, accepted: bool):
-    expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
-basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
-basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
-basic_string ::= ["] basic_string_sub
-basic_boolean ::= "true" | "false"
-basic_null ::= "null"
-basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
-basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
-xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
-xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
-xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
-root_part_0 ::= root_part_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1
-root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"name\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\r\t]*))
+root_string_addl ::= ((xml_string))
+root_json_addl ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+root_additional_properties ::= (([ \n\r\t]* root_additional_properties_1))
+root_part_1 ::= ((root_additional_properties{0, -1}))
+root_part_0 ::= ((root_part_1) | ([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"age\" string=\"false\">" [ \n\r\t]* basic_integer [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_1))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_additional_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" root_string_addl "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* root_json_addl [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
 """
     schema = {
         "type": "object",
@@ -1145,6 +1232,10 @@ root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | 
 deepseek_test_inner_object_schema_input_str_accepted = (
     (
         '<｜DSML｜parameter name="address" string="true">{"street": "Main St", "city": "New York"}</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="address" string="false">{"street": "Main St", "city": "New York"}</｜DSML｜parameter>',
         True,
     ),
     (
@@ -1169,6 +1260,10 @@ deepseek_test_inner_object_schema_input_str_accepted = (
     ),
     (
         '<｜DSML｜parameter name="address" string="true">{"street": "Main St", "city": "New York", "additional_property": "value"}</｜DSML｜parameter><｜DSML｜parameter name="additional_property" string="true">value</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="address" string="false">{"street": "Main St", "city": "New York", "additional_property": "value"}</｜DSML｜parameter><｜DSML｜parameter name="additional_property" string="true">value</｜DSML｜parameter>',
         True,
     ),
     (
@@ -1182,28 +1277,58 @@ deepseek_test_inner_object_schema_input_str_accepted = (
     "input_str, accepted", deepseek_test_inner_object_schema_input_str_accepted
 )
 def test_deepseek_inner_object_schema(input_str: str, accepted: bool):
-    expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
-basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
-basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
-basic_string ::= ["] basic_string_sub
-basic_boolean ::= "true" | "false"
-basic_null ::= "null"
-basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
-basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
-xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
-xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
-xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_0_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-root_prop_0_addl_key ::= ["] (("\"" | [^cs\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "c" ("\"" | [^i\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "i" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^y\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "y" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))) | "s" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))))))) (= [ \n\r\t]* [,}\]:])
-root_prop_0_part_1 ::= ([ \n\r\t]* "," [ \n\r\t]* root_prop_0_addl_key [ \n\r\t]* ":" [ \n\r\t]* root_prop_0_addl)*
-root_prop_0_part_0 ::= [ \n\r\t]* "," [ \n\r\t]* "\"city\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_1
-root_prop_0 ::= "{" [ \n\r\t]* (("\"street\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_0)) [ \n\r\t]* "}"
-root_addl ::= xml_string | basic_array | basic_object
-root_part_0 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
-root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"address\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"address\" string=\"false\">" [ \n\r\t]* root_json_prop_0 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\r\t]*))
+root_json_prop_0_addl_key ::= (("\"" root_json_prop_0_addl_key_11)) (=([ \n\r\t]* [,}\]:]))
+root_json_prop_0_addl ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+root_json_prop_0_additional_properties ::= (([ \n\r\t]* "," [ \n\r\t]* root_json_prop_0_addl_key [ \n\r\t]* ":" [ \n\r\t]* root_json_prop_0_addl))
+root_json_prop_0_part_1 ::= ((root_json_prop_0_additional_properties{0, -1}))
+root_json_prop_0_part_0 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"city\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_json_prop_0_part_1))
+root_json_prop_0 ::= (("{" [ \n\r\t]* "\"street\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_json_prop_0_part_0 [ \n\r\t]* "}"))
+root_string_addl ::= ((xml_string))
+root_json_addl ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+root_additional_properties ::= (([ \n\r\t]* root_additional_properties_1))
+root_part_0 ::= ((root_additional_properties{0, -1}))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_json_prop_0_addl_key_1 ::= (([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub))
+root_json_prop_0_addl_key_2 ::= (("\"") | ([^\0-\x1f\"\\\r\ny] basic_string_sub) | ("\\" basic_escape basic_string_sub) | ("y" root_json_prop_0_addl_key_1))
+root_json_prop_0_addl_key_3 ::= (("\"") | ([^\0-\x1f\"\\\r\nt] basic_string_sub) | ("\\" basic_escape basic_string_sub) | ("t" root_json_prop_0_addl_key_2))
+root_json_prop_0_addl_key_4 ::= (("\"") | ([^\0-\x1f\"\\\r\ni] basic_string_sub) | ("\\" basic_escape basic_string_sub) | ("i" root_json_prop_0_addl_key_3))
+root_json_prop_0_addl_key_5 ::= (([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub))
+root_json_prop_0_addl_key_6 ::= (("\"") | ([^\0-\x1f\"\\\r\nt] basic_string_sub) | ("\\" basic_escape basic_string_sub) | ("t" root_json_prop_0_addl_key_5))
+root_json_prop_0_addl_key_7 ::= (("\"") | ([^\0-\x1f\"\\\r\ne] basic_string_sub) | ("\\" basic_escape basic_string_sub) | ("e" root_json_prop_0_addl_key_6))
+root_json_prop_0_addl_key_8 ::= (("\"") | ([^\0-\x1f\"\\\r\ne] basic_string_sub) | ("\\" basic_escape basic_string_sub) | ("e" root_json_prop_0_addl_key_7))
+root_json_prop_0_addl_key_9 ::= (("\"") | ([^\0-\x1f\"\\\r\nr] basic_string_sub) | ("\\" basic_escape basic_string_sub) | ("r" root_json_prop_0_addl_key_8))
+root_json_prop_0_addl_key_10 ::= (("\"") | ([^\0-\x1f\"\\\r\nt] basic_string_sub) | ("\\" basic_escape basic_string_sub) | ("t" root_json_prop_0_addl_key_9))
+root_json_prop_0_addl_key_11 ::= (("\"") | ([^\0-\x1f\"\\\r\ncs] basic_string_sub) | ("\\" basic_escape basic_string_sub) | ("c" root_json_prop_0_addl_key_4) | ("s" root_json_prop_0_addl_key_10))
+root_additional_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" root_string_addl "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* root_json_addl [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
 """
     schema = {
         "type": "object",
@@ -1229,6 +1354,10 @@ deepseek_test_numbers_schema_input_str_accepted = (
     ),
     (
         '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="ID" string="false">123456</｜DSML｜parameter><｜DSML｜parameter name="is_student" string="true">true</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter><｜DSML｜parameter name="ID" string="false">123456</｜DSML｜parameter><｜DSML｜parameter name="is_student" string="false">true</｜DSML｜parameter>',
         True,
     ),
     (
@@ -1240,30 +1369,43 @@ deepseek_test_numbers_schema_input_str_accepted = (
 
 @pytest.mark.parametrize("input_str, accepted", deepseek_test_numbers_schema_input_str_accepted)
 def test_deepseek_numbers_schema(input_str: str, accepted: bool):
-    expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
-basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
-basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
-basic_string ::= ["] basic_string_sub
-basic_boolean ::= "true" | "false"
-basic_null ::= "null"
-basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
-basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
-xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
-xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
-xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_prop_2 ::= ("0" | "-"? [1-9] [0-9]*)
-root_prop_3 ::= "true" | "false"
-root_part_2_1 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</｜DSML｜parameter>" ""
-root_part_2_2 ::= "" | [ \n\r\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</｜DSML｜parameter>" ""
-root_part_2_3 ::= ""
-root_part_1_1 ::= root_part_2_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</｜DSML｜parameter>" root_part_2_2
-root_part_1_2 ::= root_part_2_2 | [ \n\r\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</｜DSML｜parameter>" root_part_2_3
-root_part_0_1 ::= root_part_1_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1_2
-root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0_1) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1_1) | ("<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</｜DSML｜parameter>" root_part_2_1)) [ \n\r\t]*
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* root_1 [ \n\r\t]*))
+root_part_2_1 ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"is_student\" string=\"false\">" [ \n\r\t]* basic_boolean [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_part_2_2 ::= ("" | ([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"is_student\" string=\"false\">" [ \n\r\t]* basic_boolean [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_part_2_3 ::= ("")
+root_part_1_1 ::= ((root_part_2_1) | ([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"ID\" string=\"false\">" [ \n\r\t]* basic_integer [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_2_2))
+root_part_1_2 ::= ((root_part_2_2) | ([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"ID\" string=\"false\">" [ \n\r\t]* basic_integer [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_2_3))
+root_part_0_1 ::= ((root_part_1_1) | ([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"age\" string=\"false\">" [ \n\r\t]* basic_integer [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_1_2))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_1 ::= (("<\uff5cDSML\uff5cparameter name=\"name\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>" root_part_0_1) | ("<\uff5cDSML\uff5cparameter name=\"age\" string=\"false\">" [ \n\r\t]* basic_integer [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_1_1) | ("<\uff5cDSML\uff5cparameter name=\"ID\" string=\"false\">" [ \n\r\t]* basic_integer [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_2_1))
 """
     schema = {
         "type": "object",
@@ -1298,28 +1440,623 @@ deepseek_reject_wrong_parameter_format_input_str_accepted = (
 )
 def test_deepseek_reject_wrong_parameter_format(input_str: str, accepted: bool):
     """DeepSeek grammar must accept <｜DSML｜parameter name=\"key\" string=\"true|false\">, reject Qwen and Minimax formats."""
-    expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
-basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
-basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
-basic_string ::= ["] basic_string_sub
-basic_boolean ::= "true" | "false"
-basic_null ::= "null"
-basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
-basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
-xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
-xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
-xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" ""
-root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"name\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\r\t]*))
+root_part_0 ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"age\" string=\"false\">" [ \n\r\t]* basic_integer [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
 """
     schema = {
         "type": "object",
         "properties": {"name": {"type": "string"}, "age": {"type": "integer"}},
         "required": ["name", "age"],
+    }
+    _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
+
+
+deepseek_mixed_string_nonstring_input_str_accepted = (
+    ('<｜DSML｜parameter name="field" string="true">hello</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="field" string="false">hello</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="field" string="false">"hello"</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="field" string="false">1234</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="field" string="false">"1234"</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="field" string="false">[]</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="field" string="false">["hello"]</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="field" string="false">["1234"]</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="field" string="false">[hello]</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="field" string="false">[1234]</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="field" string="true">quotes"newlines\n</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="field" string="false">quotes"newlines\n</｜DSML｜parameter>', False),
+    (
+        '<｜DSML｜parameter name="field" string="false">"quotes\\"newlines\\n"</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="field" string="false">["quotes\\"newlines\\n"]</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="field" string="false">["quotes"newlines\\n"]</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="field" string="false">["quotes\\"newlines\n"]</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="field" string="false">["quotes"newlines\n"]</｜DSML｜parameter>',
+        False,
+    ),
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", deepseek_mixed_string_nonstring_input_str_accepted)
+def test_deepseek_mixed_string_nonstring(input_str: str, accepted: bool):
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* root_1 [ \n\r\t]*))
+root_string_prop_0 ::= ((xml_string))
+root_json_prop_0_case_2_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string))
+root_json_prop_0_case_2 ::= (("[" [ \n\r\t]* basic_string root_json_prop_0_case_2_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+root_json_prop_0 ::= ((basic_integer) | (root_json_prop_0_case_2))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_1 ::= (("<\uff5cDSML\uff5cparameter name=\"field\" string=\"true\">" root_string_prop_0 "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"field\" string=\"false\">" [ \n\r\t]* root_json_prop_0 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+"""
+    schema = {
+        "type": "object",
+        "properties": {
+            "field": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "integer"},
+                    {"type": "array", "items": {"type": "string"}},
+                ]
+            }
+        },
+        "required": ["field"],
+    }
+    _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
+
+
+deepseek_mixed_enum_input_str_accepted = (
+    ('<｜DSML｜parameter name="field" string="true">hello</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="field" string="true">"hello"</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="field" string="false">hello</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="field" string="false">"hello"</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="field" string="false">1234</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="field" string="true">1234</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="field" string="true">5678</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="field" string="false">5678</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="field" string="true">quotes"newlines\n</｜DSML｜parameter>', True),
+    (
+        '<｜DSML｜parameter name="field" string="true">quotes\\"newlines\\n</｜DSML｜parameter>',
+        False,
+    ),
+    ('<｜DSML｜parameter name="field" string="false">quotes"newlines\n</｜DSML｜parameter>', False),
+    (
+        '<｜DSML｜parameter name="field" string="false">"quotes\\"newlines\\n"</｜DSML｜parameter>',
+        False,
+    ),
+    ('<｜DSML｜parameter name="field" string="false">\tnull\n</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="field" string="true">null</｜DSML｜parameter>', False),
+    ('<｜DSML｜parameter name="field" string="false">["hello"]</｜DSML｜parameter>', True),
+    ('<｜DSML｜parameter name="field" string="true">["hello"]</｜DSML｜parameter>', False),
+    (
+        '<｜DSML｜parameter name="field" string="false">["quotes\\"newlines\\n"]</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="field" string="false">["quotes"newlines\\n"]</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="field" string="false">["quotes\\"newlines\n"]</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="field" string="false">["quotes"newlines\n"]</｜DSML｜parameter>',
+        False,
+    ),
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", deepseek_mixed_enum_input_str_accepted)
+def test_deepseek_mixed_enum(input_str: str, accepted: bool):
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* root_1 [ \n\r\t]*))
+root_string_prop_0 ::= (("hello") | ("5678") | ("quotes\"newlines\n"))
+root_json_prop_0 ::= (("1234") | ("null") | ("[\"hello\"]") | ("[\"quotes\\\"newlines\\n\"]"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_1 ::= (("<\uff5cDSML\uff5cparameter name=\"field\" string=\"true\">" root_string_prop_0 "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"field\" string=\"false\">" [ \n\r\t]* root_json_prop_0 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+"""
+    schema = {
+        "type": "object",
+        "properties": {
+            "field": {
+                "enum": [
+                    "hello",
+                    1234,
+                    "5678",
+                    'quotes"newlines\n',
+                    None,
+                    ["hello"],
+                    ['quotes"newlines\n'],
+                ]
+            }
+        },
+        "required": ["field"],
+    }
+    _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
+
+
+deepseek_ref_string_input_str_accepted = [
+    (
+        '<｜DSML｜parameter name="string1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="string2" string="true">world</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="string1" string="true">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="string2" string="true">world</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="string1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="string2" string="true">5678</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="string1" string="true">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="string2" string="true">5678</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="string1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="string2" string="false">world</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="string1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="string2" string="false">"world"</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="string1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="string2" string="false">5678</｜DSML｜parameter>',
+        False,
+    ),
+]
+
+
+@pytest.mark.parametrize("input_str, accepted", deepseek_ref_string_input_str_accepted)
+def test_deepseek_ref_string(input_str: str, accepted: bool):
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"string1\" string=\"true\">" root_string_prop_0 "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\r\t]*))
+defs_String ::= ((xml_string))
+root_string_prop_0 ::= ((defs_String))
+root_string_prop_1 ::= ((defs_String))
+root_part_0 ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"string2\" string=\"true\">" root_string_prop_1 "</\uff5cDSML\uff5cparameter>"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+"""
+    schema = {
+        "type": "object",
+        "properties": {
+            "string1": {"$ref": "#/$defs/String"},
+            "string2": {"$ref": "#/$defs/String"},
+        },
+        "required": ["string1", "string2"],
+        "$defs": {"String": {"type": "string"}},
+    }
+    _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
+
+
+deepseek_ref_integer_input_str_accepted = [
+    (
+        '<｜DSML｜parameter name="integer1" string="false">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="integer2" string="false">5678</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="integer1" string="true">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="integer2" string="false">5678</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="integer1" string="false">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="integer2" string="true">5678</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="integer1" string="true">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="integer2" string="true">5678</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="integer1" string="false">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="integer2" string="false">world</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="integer1" string="false">"hello"</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="integer2" string="false">"world"</｜DSML｜parameter>',
+        False,
+    ),
+]
+
+
+@pytest.mark.parametrize("input_str, accepted", deepseek_ref_integer_input_str_accepted)
+def test_deepseek_ref_integer(input_str: str, accepted: bool):
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"integer1\" string=\"false\">" [ \n\r\t]* root_json_prop_0 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\r\t]*))
+defs_Integer_1 ::= (("0") | (defs_Integer_1_1 [1-9] [0-9]*))
+root_json_prop_0 ::= ((defs_Integer_1))
+root_json_prop_1 ::= ((defs_Integer_1))
+root_part_0 ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"integer2\" string=\"false\">" [ \n\r\t]* root_json_prop_1 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+defs_Integer_1_1 ::= ("" | ("-"))
+"""
+    schema = {
+        "type": "object",
+        "properties": {
+            "integer1": {"$ref": "#/$defs/Integer"},
+            "integer2": {"$ref": "#/$defs/Integer"},
+        },
+        "required": ["integer1", "integer2"],
+        "$defs": {"Integer": {"type": "integer"}},
+    }
+    _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
+
+
+deepseek_ref_mixed_input_str_accepted = [
+    (
+        '<｜DSML｜parameter name="mixed1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="true">world</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="false">world</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="false">"world"</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="false">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="false">world</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="false">"hello"</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="false">"world"</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="true">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="true">5678</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="false">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="false">5678</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="true">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="false">5678</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="false">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="true">5678</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="true">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="true">world</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="true">5678</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="false">5678</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="false">[]</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="false">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="false">[]</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="false">[]</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="true">world</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="mixed1" string="false">[]</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="mixed2" string="false">5678</｜DSML｜parameter>',
+        False,
+    ),
+]
+
+
+@pytest.mark.parametrize("input_str, accepted", deepseek_ref_mixed_input_str_accepted)
+def test_deepseek_ref_mixed(input_str: str, accepted: bool):
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* root_1 root_part_0 [ \n\r\t]*))
+defs_Mixed ::= ((xml_string))
+root_string_prop_0 ::= ((defs_Mixed))
+defs_Mixed_1 ::= ((basic_integer))
+root_json_prop_0 ::= ((defs_Mixed_1))
+root_string_prop_1 ::= ((defs_Mixed))
+root_json_prop_1 ::= ((defs_Mixed_1))
+root_part_0 ::= (([ \n\r\t]* root_part_0_1))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_1 ::= (("<\uff5cDSML\uff5cparameter name=\"mixed1\" string=\"true\">" root_string_prop_0 "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"mixed1\" string=\"false\">" [ \n\r\t]* root_json_prop_0 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_part_0_1 ::= (("<\uff5cDSML\uff5cparameter name=\"mixed2\" string=\"true\">" root_string_prop_1 "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"mixed2\" string=\"false\">" [ \n\r\t]* root_json_prop_1 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+"""
+    schema = {
+        "type": "object",
+        "properties": {"mixed1": {"$ref": "#/$defs/Mixed"}, "mixed2": {"$ref": "#/$defs/Mixed"}},
+        "required": ["mixed1", "mixed2"],
+        "$defs": {"Mixed": {"type": ["string", "integer"]}},
+    }
+    _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
+
+
+deepseek_ref_recursive_input_str_accepted = [
+    (
+        '<｜DSML｜parameter name="array1" string="false">null</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="array2" string="false">[]</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="array1" string="false">[[[[[]]]], [[], [null]]]</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="array2" string="false">[null, [[null, [[]], [null]]]]</｜DSML｜parameter>',
+        True,
+    ),
+    (
+        '<｜DSML｜parameter name="array1" string="false">1234</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="array2" string="false">5678</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="array1" string="false">"hello"</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="array2" string="false">"world"</｜DSML｜parameter>',
+        False,
+    ),
+    (
+        '<｜DSML｜parameter name="array1" string="true">hello</｜DSML｜parameter>'
+        '<｜DSML｜parameter name="array2" string="true">world</｜DSML｜parameter>',
+        False,
+    ),
+]
+
+
+@pytest.mark.parametrize("input_str, accepted", deepseek_ref_recursive_input_str_accepted)
+def test_deepseek_ref_recursive(input_str: str, accepted: bool):
+    expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
+basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
+basic_string ::= (("\"" basic_string_sub))
+basic_boolean ::= (("true") | ("false"))
+basic_null ::= (("null"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+xml_string ::= TagDispatch(
+  loop_after_dispatch=false,
+  excludes=("</\uff5cDSML\uff5cparameter>")
+)
+xml_any_json ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object ::= (([ \n\r\t]* xml_object_1 xml_object_properties{0, -1} [ \n\r\t]*) | ([ \n\r\t]*))
+xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
+basic_number_digits ::= (([0-9]))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+xml_object_properties ::= (([ \n\r\t]* xml_object_properties_1))
+root ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"array1\" string=\"false\">" [ \n\r\t]* root_json_prop_0 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\r\t]*))
+defs_Array_1_case_1_additional ::= ((defs_Array_2))
+defs_Array_2 ::= ((basic_null) | (defs_Array_2_case_1))
+defs_Array_2_case_1 ::= (("[" [ \n\r\t]* defs_Array_2_case_1_additional defs_Array_2_case_1_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+defs_Array_2_case_1_additional ::= ((defs_Array_2))
+defs_Array_2_case_1_items ::= (([ \n\r\t]* "," [ \n\r\t]* defs_Array_2_case_1_additional))
+defs_Array_1_case_1_items ::= (([ \n\r\t]* "," [ \n\r\t]* defs_Array_1_case_1_additional))
+defs_Array_1_case_1 ::= (("[" [ \n\r\t]* defs_Array_1_case_1_additional defs_Array_1_case_1_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+defs_Array_1 ::= ((basic_null) | (defs_Array_1_case_1))
+root_json_prop_0 ::= ((defs_Array_1))
+root_json_prop_1 ::= ((defs_Array_1))
+root_part_0 ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"array2\" string=\"false\">" [ \n\r\t]* root_json_prop_1 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+basic_integer_1 ::= ("" | ("-"))
+basic_number_1 ::= ("" | ("-"))
+basic_number_2 ::= (("0") | ([1-9] [0-9]*))
+basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
+basic_number_4 ::= ("" | ([+\-]))
+basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
+xml_object_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= (("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"false\">" [ \n\r\t]* xml_any_json [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+"""
+    schema = {
+        "type": "object",
+        "properties": {"array1": {"$ref": "#/$defs/Array"}, "array2": {"$ref": "#/$defs/Array"}},
+        "required": ["array1", "array2"],
+        "$defs": {
+            "Array": {
+                "anyOf": [{"type": "null"}, {"type": "array", "items": {"$ref": "#/$defs/Array"}}]
+            }
+        },
     }
     _check_deepseek_grammar(schema, expected_grammar, input_str, accepted)
 

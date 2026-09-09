@@ -42,6 +42,9 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   Grammar Convert(const SchemaSpecPtr& spec);
 
  protected:
+  using JSONSchemaConverter::FormatOtherProperty;
+  using JSONSchemaConverter::FormatProperty;
+
   // Override methods for XML format
   int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
   int32_t GenerateObject(
@@ -78,6 +81,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::string NextSeparator(bool is_end = false) override;
 
   void AddBasicRules() override;
+  void AddBasicRules(const std::vector<std::string>& additional_rule_names);
+  virtual void AddXMLBasicRulesLevel1();
 
   void AddCache(const std::string& key, int32_t rule_id) override;
   std::optional<int32_t> GetCache(const std::string& key) const override;
@@ -127,6 +132,92 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   const XMLWrapper xml_wrapper_;
 };
 
+/*! \brief Converter for DeepSeek XML Tool Calling format. */
+class DeepSeekXMLToolCallingConverter : public XMLToolCallingConverter {
+ public:
+  DeepSeekXMLToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false
+  );
+
+ protected:
+  using XMLToolCallingConverter::AddCache;
+  using XMLToolCallingConverter::FormatOtherProperty;
+  using XMLToolCallingConverter::FormatProperty;
+  using XMLToolCallingConverter::GetCache;
+
+  void AddBasicRules() override;
+  void AddXMLBasicRulesLevel1() override;
+
+  int32_t FormatProperty(
+      const std::string& key,
+      const SchemaSpecPtr& value_spec,
+      const std::string& rule_name,
+      int64_t idx
+  ) override;
+  int32_t FormatOtherProperty(
+      int32_t key_pattern_expr,
+      const SchemaSpecPtr& value_spec,
+      const std::string& rule_name,
+      const std::string& rule_name_suffix
+  ) override;
+
+ private:
+  enum class GenerateMode {
+    kString,
+    kJSON,
+  };
+
+  static const std::string kXMLAnyJSON;
+  static constexpr const char* kKeySuffixes[] = {
+      "\" string=\"true\">",
+      "\" string=\"false\">",
+  };
+
+  int32_t CreateRuleConstrained(
+      const SchemaSpecPtr& spec, const std::string& rule_name_hint, GenerateMode mode
+  );
+  int32_t GenerateFromSpecConstrained(
+      const SchemaSpecPtr& spec, const std::string& rule_name_hint, GenerateMode mode
+  );
+
+  int32_t GenerateAnyConstrained(
+      const AnySpec& spec, const std::string& rule_name, GenerateMode mode
+  );
+  int32_t GenerateConstConstrained(
+      const ConstSpec& spec, const std::string& rule_name, GenerateMode mode
+  );
+  int32_t GenerateEnumConstrained(
+      const EnumSpec& spec, const std::string& rule_name, GenerateMode mode
+  );
+  int32_t GenerateRefConstrained(
+      const RefSpec& spec, const std::string& rule_name, GenerateMode mode
+  );
+  int32_t GenerateAnyOfConstrained(
+      const AnyOfSpec& spec, const std::string& rule_name, GenerateMode mode
+  );
+  int32_t GenerateOneOfConstrained(
+      const OneOfSpec& spec, const std::string& rule_name, GenerateMode mode
+  );
+  int32_t GenerateAllOfConstrained(
+      const AllOfSpec& spec, const std::string& rule_name, GenerateMode mode
+  );
+  int32_t GenerateTypeArrayConstrained(
+      const TypeArraySpec& spec, const std::string& rule_name, GenerateMode mode
+  );
+
+  void AddCache(const std::string& key, int32_t rule_id, GenerateMode mode);
+  std::optional<int32_t> GetCache(const std::string& key, GenerateMode mode) const;
+
+  GenerateCacheManager constrained_rule_cache_manager_;
+  std::unordered_map<std::pair<std::string, GenerateMode>, std::string>
+      uri_to_constrained_rule_name_;
+};
+
 /*!
  * \brief Converter for Cohere XML Tool Calling format.
  *
@@ -146,6 +237,9 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   );
 
  protected:
+  using XMLToolCallingConverter::FormatOtherProperty;
+  using XMLToolCallingConverter::FormatProperty;
+
   int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
   int32_t GenerateObject(
       const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
