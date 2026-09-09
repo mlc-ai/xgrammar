@@ -1690,6 +1690,78 @@ def test_cohere_property_names_reject_invalid_name_or_wrapper(instance: str):
     _check_cohere_grammar(schema, instance, False)
 
 
+@pytest.mark.parametrize("keyword", ["additionalProperties", "unevaluatedProperties"])
+@pytest.mark.parametrize("nested", [False, True], ids=["root", "nested"])
+@pytest.mark.parametrize(
+    "body, accepted",
+    [
+        ("123", True),
+        ("-1", True),
+        ("oops", False),
+        ("1.5", False),
+        ("true", False),
+        ('"oops"', False),
+    ],
+)
+def test_cohere_property_names_preserve_integer_body(
+    keyword: str, nested: bool, body: str, accepted: bool
+):
+    """A json wrapper must use the typed value rule, not the aggregate XML Any body."""
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z]+$"},
+        keyword: {"type": "integer"},
+    }
+    instance = f'<cofl:value name="a" type="json">{body}</cofl:value>'
+    if nested:
+        schema = {
+            "type": "object",
+            "properties": {"config": schema},
+            "required": ["config"],
+            "additionalProperties": False,
+        }
+        instance = f'<cofl:value name="config" type="dict">{instance}</cofl:value>'
+
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+@pytest.mark.parametrize(
+    "value_schema, value_type, valid_body, invalid_body",
+    [
+        ({"type": "integer", "minimum": 1}, "json", "1", "0"),
+        ({"type": "string", "pattern": "^[a-z]+$"}, "raw", "hello", "123"),
+        (
+            {"type": "array", "items": {"type": "integer"}},
+            "list",
+            '<cofl:value type="json">1</cofl:value>',
+            '<cofl:value type="json">1.5</cofl:value>',
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"id": {"type": "integer"}},
+                "required": ["id"],
+                "additionalProperties": False,
+            },
+            "dict",
+            '<cofl:value name="id" type="json">1</cofl:value>',
+            "",
+        ),
+    ],
+)
+def test_cohere_property_names_preserve_value_constraints(
+    value_schema: dict, value_type: str, valid_body: str, invalid_body: str
+):
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z]+$"},
+        "additionalProperties": value_schema,
+    }
+    for body, accepted in [(valid_body, True), (invalid_body, False)]:
+        instance = f'<cofl:value name="a" type="{value_type}">{body}</cofl:value>'
+        _check_cohere_grammar(schema, instance, accepted)
+
+
 def test_cohere_nested_property_names():
     """Nested Cohere dictionaries retain property-name constraints and JSON values."""
     schema = {
@@ -2428,6 +2500,37 @@ def test_xml_property_names_use_property_format_hook(
         )
         assert _is_grammar_accept_string(grammar, instance)
         assert not _is_grammar_accept_string(grammar, instance.replace("x_key", "Bad"))
+
+
+@pytest.mark.parametrize(
+    "json_format, _declared_property, integer_property, _property_name", _XML_DYNAMIC_PROPERTY_CASES
+)
+@pytest.mark.parametrize("keyword", ["additionalProperties", "unevaluatedProperties"])
+def test_xml_property_names_preserve_additional_property_schema(
+    json_format: str,
+    _declared_property: str,
+    integer_property: str,
+    _property_name: str,
+    keyword: str,
+):
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z_]+$"},
+        keyword: {"type": "integer"},
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format=json_format)
+    assert _is_grammar_accept_string(grammar, integer_property)
+    assert not _is_grammar_accept_string(grammar, integer_property.replace("3", "oops"))
+    assert not _is_grammar_accept_string(grammar, integer_property.replace("3", "1.5"))
+    assert not _is_grammar_accept_string(grammar, integer_property.replace("x_key", "Bad"))
+    if json_format == "kimi_k3_xml":
+        assert not _is_grammar_accept_string(
+            grammar, integer_property.replace('type="number"', 'type="string"')
+        )
+    elif json_format == "cohere_xml":
+        assert not _is_grammar_accept_string(
+            grammar, integer_property.replace('type="json"', 'type="raw"')
+        )
 
 
 def test_nested_true_schema():

@@ -3018,8 +3018,15 @@ int32_t JSONSchemaConverter::GenerateObject(
         }
       } else {
         int32_t key_rule_id = CreateRule(spec.property_names, rule_name + "_name");
-        int32_t value_rule_id = builder_.GetRuleId(GetBasicAnyRuleName());
-        XGRAMMAR_DCHECK(value_rule_id != -1);
+        // propertyNames constrains only the key, so a typed additionalProperties
+        // schema still applies to the value (issue #826).
+        int32_t value_rule_id;
+        if (additional_property) {
+          value_rule_id = CreateRule(additional_property, rule_name + "_" + additional_suffix);
+        } else {
+          value_rule_id = builder_.GetRuleId(GetBasicAnyRuleName());
+          XGRAMMAR_DCHECK(value_rule_id != -1);
+        }
         property_choices.push_back(Sequence(
             {beginning_separator,
              FormatOtherProperty(
@@ -3027,7 +3034,7 @@ int32_t JSONSchemaConverter::GenerateObject(
                  value_rule_id,
                  rule_name,
                  /*rule_name_suffix=*/"pn",
-                 /*schema=*/nullptr
+                 additional_property
              )}
         ));
       }
