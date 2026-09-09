@@ -1,7 +1,7 @@
 /*!
  *  Copyright (c) 2024 by Contributors
  * \file xgrammar/converter_ext/kimi_k3.cc
- * \brief Implementation of the KimiK3 XML Tool Calling converter.
+ * \brief Kimi-K3 XML type attributes and key escaping.
  */
 #include <picojson.h>
 
@@ -12,44 +12,7 @@
 
 namespace xgrammar {
 
-KimiK3XMLToolCallingConverter::KimiK3XMLToolCallingConverter(
-    std::optional<int> indent,
-    std::optional<std::pair<std::string, std::string>> separators,
-    bool any_whitespace,
-    std::optional<int> max_whitespace_cnt,
-    RefResolver ref_resolver,
-    bool any_order
-)
-    : XMLToolCallingConverter(
-          indent,
-          separators,
-          any_whitespace,
-          max_whitespace_cnt,
-          ref_resolver,
-          {"<|open|>argument key=\"", "", "", "<|close|>argument<|sep|>"},
-          any_order
-      ) {}
-
-int32_t KimiK3XMLToolCallingConverter::XMLKeySuffix(const SchemaSpecPtr& schema) {
-  auto pinned_type = KimiK3TypeAttr(schema);
-  // A declared property carries exactly the type its value grammar is rendered with, so the
-  // parser decodes the value back to the schema's type. Free-form keys have no single schema
-  // type, so they keep the full set.
-  int32_t type_expr = pinned_type.has_value() ? ByteString(*pinned_type)
-                                              : Choice(
-                                                    {ByteString("string"),
-                                                     ByteString("number"),
-                                                     ByteString("integer"),
-                                                     ByteString("boolean"),
-                                                     ByteString("object"),
-                                                     ByteString("array"),
-                                                     ByteString("null")}
-                                                );
-  return Sequence({ByteString("\" type=\""), type_expr, ByteString("\"<|sep|>")});
-}
-
-std::optional<std::string> KimiK3XMLToolCallingConverter::KimiK3TypeAttr(const SchemaSpecPtr& spec
-) {
+std::optional<std::string> XMLToolCallingConverter::KimiK3TypeAttr(const SchemaSpecPtr& spec) {
   if (spec == nullptr) {
     return std::nullopt;
   }
@@ -108,7 +71,10 @@ std::optional<std::string> KimiK3XMLToolCallingConverter::KimiK3TypeAttr(const S
   );
 }
 
-std::string KimiK3XMLToolCallingConverter::EscapeAttrValue(const std::string& value) const {
+std::string XMLToolCallingConverter::EscapeAttrValue(const std::string& value) const {
+  if (json_format_ != JSONFormat::kKimiK3XML) {
+    return value;
+  }
   // Kimi-K3's renderer escapes attribute values with & -> &amp; and " -> &quot;.
   std::string escaped;
   escaped.reserve(value.size());
