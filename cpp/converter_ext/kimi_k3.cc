@@ -9,7 +9,6 @@
 
 #include "../json_schema_converter_ext.h"
 #include "../support/json_parse.h"
-#include "xml_tool_calling.h"
 
 namespace xgrammar {
 

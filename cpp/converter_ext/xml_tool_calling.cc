@@ -3,8 +3,6 @@
  * \file xgrammar/converter_ext/xml_tool_calling.cc
  * \brief XML tool-calling parameter formats.
  */
-#include "xml_tool_calling.h"
-
 #include "../json_schema_converter_ext.h"
 
 namespace xgrammar {

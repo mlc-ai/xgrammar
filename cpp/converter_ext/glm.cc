@@ -3,7 +3,7 @@
  * \file xgrammar/converter_ext/glm.cc
  * \brief GLM XML parameter format.
  */
-#include "xml_tool_calling.h"
+#include "../json_schema_converter_ext.h"
 
 namespace xgrammar {
 namespace converter_ext {
