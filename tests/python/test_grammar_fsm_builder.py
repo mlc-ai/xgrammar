@@ -343,18 +343,20 @@ fsm_structure_cases = [
         'root ::= "x" [^0-9] "y" [^a-z]* "z"',
         _fsm_snapshot(
             r"""
-            Rule 0: root, FSM: CompactFSM(num_states=11, start=7, end=[10], edges=[
+            Rule 0: root, FSM: CompactFSM(num_states=13, start=7, end=[12], edges=[
             0: [[\x80-\xbf]->2]
             1: [[\x80-\xbf]->3]
             2: [[\x80-\xbf]->5]
             3: [[\x80-\xbf]->6]
-            4: [[\0-/]->5, [:-\x7f]->5, [\xc0-\xdf]->2, [\xe0-\xef]->0, [\xf0-\xf7]->8]
+            4: [[\0-/]->5, [:-\x7f]->5, [\xc0-\xdf]->2, [\xe0-\xef]->0, [\xf0-\xf3]->9, '\xf4'->8]
             5: ['y'->6]
-            6: [[\0-`]->6, 'z'->10, [{-\x7f]->6, [\xc0-\xdf]->3, [\xe0-\xef]->1, [\xf0-\xf7]->9]
+            6: [[\0-`]->6, 'z'->12, [{-\x7f]->6, [\xc0-\xdf]->3, [\xe0-\xef]->1, [\xf0-\xf3]->11, '\xf4'->10]
             7: ['x'->4]
-            8: [[\x80-\xbf]->0]
-            9: [[\x80-\xbf]->1]
-            10: []
+            8: [[\x80-\x8f]->0]
+            9: [[\x80-\xbf]->0]
+            10: [[\x80-\x8f]->1]
+            11: [[\x80-\xbf]->1]
+            12: []
             ])
             """
         ),
@@ -597,40 +599,41 @@ fsm_structure_cases = [
         'root ::= a b c\na ::= "x" [0-9]*\nb ::= a "y" | [^xyz]\nc ::= b{1,3} "end"',
         _fsm_snapshot(
             r"""
-            Rule 0: root, FSM: CompactFSM(num_states=23, start=2, end=[3], edges=[
+            Rule 0: root, FSM: CompactFSM(num_states=24, start=2, end=[3], edges=[
             0: [Rule(1)->1, [0-9]->0]
             1: [Rule(2)->3]
             2: ['x'->0]
             3: []
             ])
-            Rule 1: b, FSM: CompactFSM(num_states=23, start=7, end=[5], edges=[
+            Rule 1: b, FSM: CompactFSM(num_states=24, start=7, end=[5], edges=[
             4: [[\x80-\xbf]->6]
             5: []
             6: [[\x80-\xbf]->5]
-            7: [[\0-w]->5, 'x'->8, [{-\x7f]->5, [\xc0-\xdf]->6, [\xe0-\xef]->4, [\xf0-\xf7]->9]
+            7: [[\0-w]->5, 'x'->8, [{-\x7f]->5, [\xc0-\xdf]->6, [\xe0-\xef]->4, [\xf0-\xf3]->10, '\xf4'->9]
             8: [[0-9]->8, 'y'->5]
-            9: [[\x80-\xbf]->4]
+            9: [[\x80-\x8f]->4]
+            10: [[\x80-\xbf]->4]
             ])
-            Rule 2: c, FSM: CompactFSM(num_states=23, start=11, end=[14], edges=[
-            10: ['e'->12]
-            11: [Rule(5)->10]
-            12: ['n'->13]
-            13: ['d'->14]
-            14: []
+            Rule 2: c, FSM: CompactFSM(num_states=24, start=12, end=[15], edges=[
+            11: ['e'->13]
+            12: [Rule(5)->11]
+            13: ['n'->14]
+            14: ['d'->15]
+            15: []
             ])
-            Rule 3: c_1, FSM: CompactFSM(num_states=23, start=15, end=[15, 17], edges=[
-            15: [Rule(1)->16]
-            16: [Rule(4)->17]
-            17: []
+            Rule 3: c_1, FSM: CompactFSM(num_states=24, start=16, end=[16, 18], edges=[
+            16: [Rule(1)->17]
+            17: [Rule(4)->18]
+            18: []
             ])
-            Rule 4: c_2, FSM: CompactFSM(num_states=23, start=18, end=[18, 19], edges=[
-            18: [Rule(1)->19]
-            19: []
+            Rule 4: c_2, FSM: CompactFSM(num_states=24, start=19, end=[19, 20], edges=[
+            19: [Rule(1)->20]
+            20: []
             ])
-            Rule 5: c_3, FSM: CompactFSM(num_states=23, start=21, end=[22], edges=[
-            20: [Rule(3)->22]
-            21: [Rule(1)->20]
-            22: []
+            Rule 5: c_3, FSM: CompactFSM(num_states=24, start=22, end=[23], edges=[
+            21: [Rule(3)->23]
+            22: [Rule(1)->21]
+            23: []
             ])
             """
         ),
