@@ -3034,7 +3034,7 @@ int32_t JSONSchemaConverter::GenerateObject(
                  value_rule_id,
                  rule_name,
                  /*rule_name_suffix=*/"pn",
-                 /*schema=*/nullptr
+                 additional_property
              )}
         ));
       }
