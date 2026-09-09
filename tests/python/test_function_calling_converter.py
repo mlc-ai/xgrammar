@@ -1476,8 +1476,8 @@ def test_cohere_nested_dict_and_list_values():
     _check_cohere_grammar(schema, named_list_item, False)
 
 
-def test_cohere_additional_properties_do_not_match_declared_keys():
-    """Additional Cohere properties cannot reuse names declared in properties."""
+def test_cohere_additional_properties_with_declared_keys():
+    """Additional properties support Cohere keys without reusing declared names."""
     schema = {
         "type": "object",
         "properties": {"foo": {"type": "integer"}},
@@ -1485,14 +1485,82 @@ def test_cohere_additional_properties_do_not_match_declared_keys():
         "additionalProperties": {"type": "string"},
     }
 
-    _check_cohere_grammar(schema, '<cofl:value name="foo" type="json">1</cofl:value>', True)
-    _check_cohere_grammar(
-        schema,
+    accepted = (
         '<cofl:value name="foo" type="json">1</cofl:value>'
-        '<cofl:value name="bar" type="raw">extra</cofl:value>',
-        True,
+        '<cofl:value name="x" type="raw">one unit</cofl:value>'
+        '<cofl:value name="extra-key" type="raw">ordinary suffix</cofl:value>'
+        '<cofl:value name="&amp;x" type="raw">entity suffix</cofl:value>'
     )
+    _check_cohere_grammar(schema, accepted, True)
     _check_cohere_grammar(schema, '<cofl:value name="foo" type="raw">wrong</cofl:value>', False)
+
+
+@pytest.mark.parametrize(
+    "serialized_key, accepted",
+    (
+        pytest.param("my-key", True, id="hyphen"),
+        pytest.param("a.b", True, id="period"),
+        pytest.param("0", True, id="leading-digit"),
+        pytest.param("日本語", True, id="unicode"),
+        pytest.param("a&amp;b", True, id="escaped-ampersand"),
+        pytest.param("a&lt;b", True, id="escaped-less-than"),
+        pytest.param("a&gt;b", True, id="escaped-greater-than"),
+        pytest.param("a&quot;b", True, id="escaped-quote"),
+        pytest.param("", False, id="empty"),
+        pytest.param("a&b", False, id="unescaped-ampersand"),
+        pytest.param("a<b", False, id="unescaped-less-than"),
+        pytest.param("a>b", False, id="unescaped-greater-than"),
+        pytest.param("a&ampb", False, id="incomplete-entity"),
+        pytest.param("a\0b", False, id="embedded-null"),
+    ),
+)
+def test_cohere_nested_any_dynamic_attribute_keys(serialized_key: str, accepted: bool):
+    """Nested Any dictionaries accept only canonical, nonempty XML attribute keys."""
+    schema = {
+        "type": "object",
+        "properties": {"meta": True},
+        "required": ["meta"],
+        "additionalProperties": False,
+    }
+    instance = (
+        '<cofl:value name="meta" type="dict">'
+        f'<cofl:value name="{serialized_key}" type="json">1</cofl:value>'
+        "</cofl:value>"
+    )
+
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+@pytest.mark.parametrize(
+    "declared_key, serialized_key",
+    (
+        pytest.param("my-key", "my-key", id="hyphen"),
+        pytest.param("a.b", "a.b", id="period"),
+        pytest.param("0", "0", id="leading-digit"),
+        pytest.param("日本語", "日本語", id="unicode"),
+        pytest.param("a&b", "a&amp;b", id="escaped-ampersand"),
+        pytest.param("a<b", "a&lt;b", id="escaped-less-than"),
+        pytest.param("a>b", "a&gt;b", id="escaped-greater-than"),
+        pytest.param('a"b', "a&quot;b", id="escaped-quote"),
+    ),
+)
+def test_cohere_additional_properties_exclude_nonidentifier_declared_keys(
+    declared_key: str, serialized_key: str
+):
+    """Declared non-identifier keys are serialized and excluded from additional properties."""
+    schema = {
+        "type": "object",
+        "properties": {declared_key: {"type": "integer"}},
+        "required": [declared_key],
+        "additionalProperties": {"type": "string"},
+    }
+
+    _check_cohere_grammar(
+        schema, f'<cofl:value name="{serialized_key}" type="json">1</cofl:value>', True
+    )
+    _check_cohere_grammar(
+        schema, f'<cofl:value name="{serialized_key}" type="raw">wrong</cofl:value>', False
+    )
 
 
 _COHERE_CANONICAL_ANY_CASES = (

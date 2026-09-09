@@ -181,11 +181,12 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   std::optional<int32_t> GetCache(const std::string& key) const override;
 
  private:
-  struct XMLIdentifierTrieNode {
+  struct CohereKeyTrieNode {
     bool is_terminal = false;
-    std::map<char, XMLIdentifierTrieNode> children;
+    std::map<int32_t, CohereKeyTrieNode> children;
   };
 
+  static const std::string kCohereKey;
   static const std::string kCohereAnyScalar;
   static const std::string kCohereAnyList;
 
@@ -218,9 +219,7 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   );
   std::optional<std::vector<SchemaSpecPtr>> GetCohereCompositeOptions(const SchemaSpecPtr& schema
   ) const;
-  int32_t BuildXMLIdentifierExcludingBody(
-      const XMLIdentifierTrieNode& node, const std::string& rule_name, int depth
-  );
+  int32_t BuildCohereKeyExcludingBody(const CohereKeyTrieNode& node, int depth);
   bool AtCohereRoot() const;
   bool InCohereValueContext() const;
 

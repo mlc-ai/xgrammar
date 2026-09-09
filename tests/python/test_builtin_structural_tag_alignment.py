@@ -478,5 +478,54 @@ def test_reasoning_stag(case):
     validate_output(stag_key, tools, tool_choice, reasoning, model_output)
 
 
+@pytest.mark.parametrize(
+    "parameters, arguments, serialized_name",
+    (
+        pytest.param(
+            {"type": "object"}, {"meta": {"my-key": 1}}, 'name="my-key"', id="nested-dynamic"
+        ),
+        pytest.param(
+            {
+                "type": "object",
+                "properties": {"a&b": {"type": "integer"}},
+                "required": ["a&b"],
+                "additionalProperties": False,
+            },
+            {"a&b": 1},
+            'name="a&amp;b"',
+            id="declared-xml-sensitive",
+        ),
+    ),
+)
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="cohere_melody requires Python >= 3.10")
+def test_cohere_melody_property_name_alignment(parameters, arguments, serialized_name):
+    """Cohere property names rendered by Melody align with the generated grammar."""
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": "lookup", "description": "", "parameters": parameters},
+        }
+    ]
+    assistant_msg = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "id": "call_0",
+                "type": "function",
+                "function": {"name": "lookup", "arguments": arguments},
+            }
+        ],
+    }
+
+    model_output = extract_output_melody_cmd5(
+        assistant_msg, tools, template_kwargs={"reasoning": False}
+    )
+    assert serialized_name in model_output
+    validate_output(
+        "cohere", tools, tool_choice="required", reasoning=False, model_output=model_output
+    )
+
+
 if __name__ == "__main__":
     pytest.main(["-v", __file__])
