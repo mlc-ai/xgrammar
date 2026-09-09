@@ -3,7 +3,7 @@
  * \file xgrammar/converter_ext/qwen.cc
  * \brief Qwen XML parameter format.
  */
-#include "xml_tool_calling.h"
+#include "../json_schema_converter_ext.h"
 
 namespace xgrammar {
 namespace converter_ext {
