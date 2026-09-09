@@ -3533,5 +3533,34 @@ def test_prefix_items_no_additional_items_allows_shorter():
     check_schema_with_instance(schema, '["a", 1, true]', is_accepted=False)
 
 
+def test_bounds_beyond_int32():
+    # Bounds become int32 repetition ranges: a maximum beyond int32 is unbounded in practice and a
+    # minimum beyond it can never be satisfied. Neither may wrap around and crash the converter.
+    schema = {
+        "type": "array",
+        "items": {"type": "string", "maxLength": 2**32},
+        "maxItems": 2**31 + 1,
+    }
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema))
+    assert _is_grammar_accept_string(grammar, '["a", "b"]')
+    with pytest.raises(RuntimeError):
+        xgr.Grammar.from_json_schema(json.dumps({"type": "array", "minItems": 2**31 + 1}))
+    with pytest.raises(RuntimeError):
+        xgr.Grammar.from_json_schema(json.dumps({"type": "string", "minLength": 2**31 + 1}))
+
+
+@pytest.mark.thread_unsafe
+def test_deeply_nested_json_rejected():
+    # The JSON parser recurses once per nesting level; the depth is bounded by the maximum
+    # recursion depth instead of overflowing the stack.
+    def schema(depth: int) -> str:
+        return '{"unused": ' + "[" * depth + "0" + "]" * depth + "}"
+
+    with xgr.max_recursion_depth(50):
+        xgr.Grammar.from_json_schema(schema(40))
+        with pytest.raises(RuntimeError, match="Maximum recursion depth exceeded"):
+            xgr.Grammar.from_json_schema(schema(60))
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

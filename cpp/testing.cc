@@ -45,6 +45,8 @@ Grammar _EBNFToGrammarNoNormalization(
 }
 
 std::string _PrintGrammarFSMs(const Grammar& grammar) {
+  XGRAMMAR_CHECK(static_cast<int>(grammar->per_rule_fsms.size()) == grammar->NumRules())
+      << "The grammar has no per-rule FSMs; build them first";
   std::string result;
   for (int i = 0; i < grammar->NumRules(); i++) {
     result += "Rule " + std::to_string(i) + ": " + grammar->GetRule(i).name + ", FSM: ";

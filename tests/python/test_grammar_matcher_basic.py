@@ -907,5 +907,29 @@ def test_batch_fill_next_token_bitmask_pressure_shuffled():
         )
 
 
+def test_override_stop_tokens_out_of_range_raises():
+    # Stop token ids are written into the token bitmask, so an id outside the vocabulary must be
+    # rejected instead of corrupting memory.
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c"], vocab_size=8)
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(xgr.Grammar.from_regex("a+"))
+    with pytest.raises(RuntimeError):
+        xgr.GrammarMatcher(compiled, override_stop_tokens=[2**28])
+
+
+def test_batch_fill_next_token_bitmask_terminated_matcher_raises():
+    # An error raised by a matcher inside the thread pool must surface on the calling thread instead
+    # of terminating the process.
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "</s>"], stop_token_ids=[2])
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(xgr.Grammar.from_regex("a"))
+    terminated = xgr.GrammarMatcher(compiled)
+    assert terminated.accept_token(0)
+    assert terminated.accept_token(2)
+    assert terminated.is_terminated()
+    matchers = [xgr.GrammarMatcher(compiled), terminated]
+    bitmask = xgr.allocate_token_bitmask(len(matchers), tokenizer_info.vocab_size)
+    with pytest.raises(RuntimeError):
+        xgr.BatchGrammarMatcher(2).batch_fill_next_token_bitmask(matchers, bitmask)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

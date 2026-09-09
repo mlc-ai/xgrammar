@@ -5,7 +5,12 @@
 
 #include <xgrammar/compiler.h>
 
+#include <algorithm>
+#include <cstdint>
+#include <vector>
+
 #include "compiled_grammar_impl.h"
+#include "support/json_parse.h"
 #include "support/json_serializer.h"
 #include "testing.h"
 #include "tokenizer_info_impl.h"
@@ -185,7 +190,12 @@ std::optional<SerializationError> DeserializeJSONValue(
   if (object.find("grammar") == object.end()) {
     return ConstructDeserializeError("Expect a 'grammar' field", type_name);
   }
-  AutoDeserializeJSONValue(&(impl->grammar), object["grammar"], type_name);
+  if (auto error = AutoDeserializeJSONValue(&(impl->grammar), object["grammar"], type_name)) {
+    return error;
+  }
+  if (impl->grammar.IsNull()) {
+    return ConstructDeserializeError("Expect a non-null grammar", type_name);
+  }
   if (object.find("tokenizer_metadata") == object.end()) {
     return ConstructDeserializeError("Expect a 'tokenizer_metadata' field", type_name);
   }
@@ -199,7 +209,33 @@ std::optional<SerializationError> DeserializeJSONValue(
   if (object.find("adaptive_token_mask_cache") == object.end()) {
     return ConstructDeserializeError("Expect a 'adaptive_token_mask_cache' field", type_name);
   }
-  AutoDeserializeJSONValue(&(impl->adaptive_token_mask_cache), object["adaptive_token_mask_cache"]);
+  if (auto error = AutoDeserializeJSONValue(
+          &(impl->adaptive_token_mask_cache), object["adaptive_token_mask_cache"], type_name
+      )) {
+    return error;
+  }
+  // The masks index sorted_decoded_vocab and are OR-ed into a vocab_size-bit bitset, so their
+  // contents must match the tokenizer they are deserialized with.
+  const int64_t num_sorted_tokens = tokenizer_info.GetSortedDecodedVocab().size();
+  auto indices_ok = [&](const std::vector<int32_t>& indices) {
+    return std::all_of(indices.begin(), indices.end(), [&](int32_t index) {
+      return index >= 0 && index < num_sorted_tokens;
+    });
+  };
+  for (const auto& [state, mask] : impl->adaptive_token_mask_cache) {
+    using StoreType = AdaptiveTokenMask::StoreType;
+    const bool store_type_ok = mask.store_type == StoreType::kAccepted ||
+                               mask.store_type == StoreType::kRejected ||
+                               mask.store_type == StoreType::kAcceptedBitset;
+    const bool bitset_ok = mask.store_type != StoreType::kAcceptedBitset ||
+                           mask.accepted_bitset.Size() == tokenizer_info.GetVocabSize();
+    if (!store_type_ok || !bitset_ok || !indices_ok(mask.accepted_indices) ||
+        !indices_ok(mask.rejected_indices) || !indices_ok(mask.uncertain_indices)) {
+      return ConstructDeserializeError(
+          "adaptive_token_mask_cache contains a mask that does not match the tokenizer", type_name
+      );
+    }
+  }
   return std::nullopt;
 }
 
@@ -223,7 +259,7 @@ std::variant<CompiledGrammar, SerializationError> CompiledGrammar::DeserializeJS
     const std::string& json_string, const TokenizerInfo& tokenizer_info
 ) {
   picojson::value json_value;
-  if (auto error = picojson::parse(json_value, json_string); !error.empty()) {
+  if (auto error = ParseJSON(json_value, json_string); !error.empty()) {
     return InvalidJSONError("Failed to parse JSON: " + error);
   }
   if (!json_value.is<picojson::object>()) {

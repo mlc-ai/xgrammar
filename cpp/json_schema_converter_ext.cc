@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "support/json_parse.h"
 #include "support/logging.h"
 
 namespace xgrammar {
@@ -108,7 +109,7 @@ Grammar XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
 
 std::string XMLToolCallingConverter::XMLValue(const std::string& json_value) const {
   picojson::value value;
-  std::string error = picojson::parse(value, json_value);
+  std::string error = ParseJSON(value, json_value);
   if (error.empty() && value.is<std::string>()) {
     return value.get<std::string>();
   }
@@ -149,7 +150,7 @@ std::optional<std::string> XMLToolCallingConverter::KimiK3TypeAttr(const SchemaS
   // The type name a single JSON value is rendered with, following the model's _xtml_type.
   auto type_of_json_value = [](const std::string& json_value) -> std::optional<std::string> {
     picojson::value value;
-    if (!picojson::parse(value, json_value).empty()) {
+    if (!ParseJSON(value, json_value).empty()) {
       return std::nullopt;
     }
     if (value.is<std::string>()) return "string";
@@ -498,7 +499,7 @@ int32_t CohereXMLToolCallingConverter::FormatCohereValue(int32_t value_rule_id) 
 
 std::string CohereXMLToolCallingConverter::CohereTypeForJSONLiteral(const std::string& json_value) {
   picojson::value value;
-  std::string error = picojson::parse(value, json_value);
+  std::string error = ParseJSON(value, json_value);
   // Const/enum object and array literals are emitted as JSON text today, not recursive Cohere
   // dict/list bodies, so only JSON strings get the raw Cohere type.
   return error.empty() && value.is<std::string>() ? "raw" : "json";
