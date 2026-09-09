@@ -1100,7 +1100,20 @@ def test_cohere_required_accepts_nested_params():
                     "additionalProperties": False,
                 },
             },
-            id="strict-false",
+            id="strict-false-additional-properties-false",
+        ),
+        pytest.param(
+            {
+                "name": "anything",
+                "strict": False,
+                "parameters": {
+                    "type": "object",
+                    "properties": {"only": {"type": "integer"}},
+                    "required": ["only"],
+                    "additionalProperties": True,
+                },
+            },
+            id="strict-false-additional-properties-true",
         ),
     ),
 )
