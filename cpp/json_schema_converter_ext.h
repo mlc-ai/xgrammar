@@ -10,7 +10,6 @@
 #include <map>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -18,16 +17,15 @@
 
 namespace xgrammar {
 
-/*!
- * \brief Converter for MiniMax M3's recursive namespace-prefixed XML format.
- *
- * This initial implementation supports schemas whose object property names are
- * known when the grammar is built. Schemas requiring runtime element names are
- * rejected explicitly.
- */
-class MiniMaxM3XMLToolCallingConverter : public JSONSchemaConverter {
+// To add a format, declare its converter here and implement it in converter_ext/.
+// Configure XMLWrapper and override XMLKeySuffix/EscapeAttrValue as needed, or override
+// generation methods for recursive formats. Register it in JSONFormat, JSONFormatFromString,
+// and ConvertSchemaSpecToGrammar. For structural tags, also update C++/Python style validation.
+
+/*! \brief Converter for Qwen XML Tool Calling format. */
+class QwenXMLToolCallingConverter : public XMLToolCallingConverter {
  public:
-  MiniMaxM3XMLToolCallingConverter(
+  QwenXMLToolCallingConverter(
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
       bool any_whitespace,
@@ -35,116 +33,67 @@ class MiniMaxM3XMLToolCallingConverter : public JSONSchemaConverter {
       RefResolver ref_resolver = nullptr,
       bool any_order = false
   );
-
- protected:
-  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
-  int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
-  int32_t GenerateObject(
-      const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
-  ) override;
-  int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
-  int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
-  int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
-
-  int32_t FormatProperty(
-      const std::string& key,
-      int32_t value_rule_id,
-      const std::string& rule_name,
-      int64_t idx,
-      const SchemaSpecPtr& schema
-  ) override;
-  std::string NextSeparator(bool is_end = false) override;
-  void AddBasicRules() override;
-
- private:
-  int32_t FormatElement(const std::string& name, int32_t value_rule_id);
-  int32_t GenerateLiteral(const picojson::value& value);
-  void ValidateObject(const ObjectSpec& spec) const;
-  static void ValidateElementName(const std::string& name);
 };
 
-/*!
- * \brief Converter for XML Tool Calling format (e.g., Qwen style).
- *
- * This converter generates a grammar where:
- * - The outermost object uses XML format: <parameter=name>value</parameter>
- * - Inner values use standard JSON format
- */
-class XMLToolCallingConverter : public JSONSchemaConverter {
+/*! \brief Converter for MiniMax XML Tool Calling format. */
+class MiniMaxXMLToolCallingConverter : public XMLToolCallingConverter {
  public:
-  XMLToolCallingConverter(
+  MiniMaxXMLToolCallingConverter(
       std::optional<int> indent,
       std::optional<std::pair<std::string, std::string>> separators,
       bool any_whitespace,
       std::optional<int> max_whitespace_cnt,
       RefResolver ref_resolver = nullptr,
-      JSONFormat json_format = JSONFormat::kQwenXML,
+      bool any_order = false
+  );
+};
+
+/*! \brief Converter for DeepSeek XML Tool Calling format. */
+class DeepSeekXMLToolCallingConverter : public XMLToolCallingConverter {
+ public:
+  DeepSeekXMLToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
       bool any_order = false
   );
 
-  /*! \brief Convert SchemaSpec to grammar with XML format for root object. Note that this function
-   * is not thread-safe.*/
-  Grammar Convert(const SchemaSpecPtr& spec);
+ protected:
+  int32_t XMLKeySuffix(const SchemaSpecPtr& schema) override;
+};
+
+/*! \brief Converter for Glm XML Tool Calling format. */
+class GlmXMLToolCallingConverter : public XMLToolCallingConverter {
+ public:
+  GlmXMLToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false
+  );
+};
+
+/*! \brief Converter for KimiK3 XML Tool Calling format. */
+class KimiK3XMLToolCallingConverter : public XMLToolCallingConverter {
+ public:
+  KimiK3XMLToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false
+  );
 
  protected:
-  // Override methods for XML format
-  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
-  int32_t GenerateObject(
-      const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
-  ) override;
-  int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
-  int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
-  int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
-  int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
+  int32_t XMLKeySuffix(const SchemaSpecPtr& schema) override;
+  std::string EscapeAttrValue(const std::string& value) const override;
 
-  // Override format hooks
-  int32_t FormatPropertyKey(const std::string& key, const SchemaSpecPtr& schema) override;
-  int32_t FormatProperty(
-      const std::string& key,
-      int32_t value_rule_id,
-      const std::string& rule_name,
-      int64_t idx,
-      const SchemaSpecPtr& schema
-  ) override;
-  int32_t FormatOtherProperty(
-      int32_t key_pattern_expr,
-      int32_t value_rule_id,
-      const std::string& rule_name,
-      const std::string& rule_name_suffix,
-      const SchemaSpecPtr& schema
-  ) override;
-
-  std::string GetKeyPattern() const override;
-  std::string GetBasicAnyRuleName() const override;
-  int32_t GetKeyPatternExcluding(
-      const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
-  ) override;
-
-  std::string NextSeparator(bool is_end = false) override;
-
-  void AddBasicRules() override;
-
-  void AddCache(const std::string& key, int32_t rule_id) override;
-  std::optional<int32_t> GetCache(const std::string& key) const override;
-
- protected:
-  // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
-  struct XMLWrapper {
-    std::string key_wrapper_prefix;
-    std::string key_wrapper_suffix;
-    std::string value_wrapper_prefix;
-    std::string parameter_suffix;
-  };
-
-  static const std::unordered_map<JSONFormat, XMLWrapper> kKeyWrapperMap;
-  static const std::string kXMLString;
-  static const std::string kXMLAny;
-  static const std::string kXMLObject;
-  static const std::string kXMLVariableName;
-
-  std::string XMLValue(const std::string& json_value) const;
-  std::string EscapeAttrValue(const std::string& value) const;
-
+ private:
   /*!
    * \brief Return the Kimi-K3 `type` attribute a value of \p spec is rendered with, or
    * std::nullopt if the schema does not pin down a single type (\p spec may be nullptr, which
@@ -157,19 +106,6 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
    * model's renderer (_xtml_type), which maps both ints and floats to "number".
    */
   static std::optional<std::string> KimiK3TypeAttr(const SchemaSpecPtr& spec);
-
-  /*!
-   * \brief Build the expression between the property key and its value.
-   * \param pinned_type For kimi_k3_xml, the single type attribute this property must carry.
-   * std::nullopt keeps every type allowed, which is what free-form keys
-   * (additionalProperties / patternProperties) need.
-   */
-  int32_t XMLKeySuffix(const std::optional<std::string>& pinned_type = std::nullopt);
-
-  JSONFormat json_format_;
-  // Track if we're at the root object level
-  int nested_object_level_ = 0;
-  const XMLWrapper xml_wrapper_;
 };
 
 /*!
@@ -271,6 +207,51 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   std::vector<const ObjectSpec*> object_stack_;
   std::vector<SchemaSpecPtr> additional_property_stack_;
   int cohere_array_level_ = 0;
+};
+
+/*!
+ * \brief Converter for MiniMax M3's recursive namespace-prefixed XML format.
+ *
+ * This initial implementation supports schemas whose object property names are
+ * known when the grammar is built. Schemas requiring runtime element names are
+ * rejected explicitly.
+ */
+class MiniMaxM3XMLToolCallingConverter : public JSONSchemaConverter {
+ public:
+  MiniMaxM3XMLToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false
+  );
+
+ protected:
+  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateObject(
+      const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
+  ) override;
+  int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
+
+  int32_t FormatProperty(
+      const std::string& key,
+      int32_t value_rule_id,
+      const std::string& rule_name,
+      int64_t idx,
+      const SchemaSpecPtr& schema
+  ) override;
+  std::string NextSeparator(bool is_end = false) override;
+  void AddBasicRules() override;
+
+ private:
+  int32_t FormatElement(const std::string& name, int32_t value_rule_id);
+  int32_t GenerateLiteral(const picojson::value& value);
+  void ValidateObject(const ObjectSpec& spec) const;
+  static void ValidateElementName(const std::string& name);
 };
 
 }  // namespace xgrammar
