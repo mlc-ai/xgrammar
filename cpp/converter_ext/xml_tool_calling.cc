@@ -3,29 +3,26 @@
  * \file xgrammar/converter_ext/xml_tool_calling.cc
  * \brief XML tool-calling parameter formats.
  */
+#include "xml_tool_calling.h"
+
 #include "../json_schema_converter_ext.h"
 
 namespace xgrammar {
 
 const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
-    XMLToolCallingConverter::kKeyWrapperMap = {
-        {JSONFormat::kQwenXML, {"<parameter=", ">", "", "</parameter>"}},
-        {JSONFormat::kMiniMaxXML, {"<parameter name=\"", "\">", "", "</parameter>"}},
-        {JSONFormat::kDeepSeekXML,
-         {"<｜DSML｜parameter name=\"",
-          "",
-          "",
-          // TODO(Linzhang): We do not validate the string's value, and we accept both.
-          "</｜DSML｜parameter>"}},
-        {JSONFormat::kGlmXML, {"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"}},
-        {JSONFormat::kCohereXML, {"<cofl:value", ">", "", "</cofl:value>"}},
-        {JSONFormat::kKimiK3XML,
-         {"<|open|>argument key=\"",
-          "",
-          "",
-          // The key suffix (type attribute and <|sep|>) is generated in XMLKeySuffix.
-          "<|close|>argument<|sep|>"}},
-};
+    XMLToolCallingConverter::kKeyWrapperMap = [] {
+      auto wrapper = [](const converter_ext::XMLWrapperParts& parts) {
+        return XMLWrapper{parts[0], parts[1], parts[2], parts[3]};
+      };
+      return std::unordered_map<JSONFormat, XMLWrapper>{
+          {JSONFormat::kQwenXML, wrapper(converter_ext::GetQwenXMLWrapper())},
+          {JSONFormat::kMiniMaxXML, wrapper(converter_ext::GetMiniMaxXMLWrapper())},
+          {JSONFormat::kDeepSeekXML, wrapper(converter_ext::GetDeepSeekXMLWrapper())},
+          {JSONFormat::kGlmXML, wrapper(converter_ext::GetGLMXMLWrapper())},
+          {JSONFormat::kCohereXML, wrapper(converter_ext::GetCohereXMLWrapper())},
+          {JSONFormat::kKimiK3XML, wrapper(converter_ext::GetKimiK3XMLWrapper())},
+      };
+    }();
 
 XMLToolCallingConverter::XMLToolCallingConverter(
     std::optional<int> indent,
@@ -44,28 +41,28 @@ XMLToolCallingConverter::XMLToolCallingConverter(
       xml_wrapper_(kKeyWrapperMap.at(json_format)) {}
 
 int32_t XMLToolCallingConverter::XMLKeySuffix(const std::optional<std::string>& pinned_type) {
+  auto value_choices = [this](const std::vector<const char*>& values) {
+    std::vector<int32_t> choices;
+    choices.reserve(values.size());
+    for (const auto* value : values) {
+      choices.push_back(ByteString(value));
+    }
+    return Choice(choices);
+  };
   if (json_format_ == JSONFormat::kDeepSeekXML) {
+    const auto& suffix = converter_ext::GetDeepSeekXMLKeySuffix();
     return Sequence(
-        {ByteString("\" string=\""),
-         Choice({ByteString("true"), ByteString("false")}),
-         ByteString("\">")}
+        {ByteString(suffix.prefix), value_choices(suffix.values), ByteString(suffix.suffix)}
     );
   }
   if (json_format_ == JSONFormat::kKimiK3XML) {
+    const auto& suffix = converter_ext::GetKimiK3XMLKeySuffix();
     // A declared property carries exactly the type its value grammar is rendered with, so the
     // parser decodes the value back to the schema's type. Free-form keys have no single schema
     // type, so they keep the full set.
-    int32_t type_expr = pinned_type.has_value() ? ByteString(*pinned_type)
-                                                : Choice(
-                                                      {ByteString("string"),
-                                                       ByteString("number"),
-                                                       ByteString("integer"),
-                                                       ByteString("boolean"),
-                                                       ByteString("object"),
-                                                       ByteString("array"),
-                                                       ByteString("null")}
-                                                  );
-    return Sequence({ByteString("\" type=\""), type_expr, ByteString("\"<|sep|>")});
+    int32_t type_expr =
+        pinned_type.has_value() ? ByteString(*pinned_type) : value_choices(suffix.values);
+    return Sequence({ByteString(suffix.prefix), type_expr, ByteString(suffix.suffix)});
   }
   return ByteString(xml_wrapper_.key_wrapper_suffix);
 }

@@ -9,8 +9,27 @@
 
 #include "../json_schema_converter_ext.h"
 #include "../support/json_parse.h"
+#include "xml_tool_calling.h"
 
 namespace xgrammar {
+
+namespace converter_ext {
+
+XMLWrapperParts GetKimiK3XMLWrapper() {
+  // The key suffix (type attribute and <|sep|>) is generated in XMLKeySuffix.
+  return {"<|open|>argument key=\"", "", "", "<|close|>argument<|sep|>"};
+}
+
+const XMLKeySuffix& GetKimiK3XMLKeySuffix() {
+  static const XMLKeySuffix suffix = {
+      "\" type=\"",
+      {"string", "number", "integer", "boolean", "object", "array", "null"},
+      "\"<|sep|>"
+  };
+  return suffix;
+}
+
+}  // namespace converter_ext
 
 std::optional<std::string> XMLToolCallingConverter::KimiK3TypeAttr(const SchemaSpecPtr& spec) {
   if (spec == nullptr) {
