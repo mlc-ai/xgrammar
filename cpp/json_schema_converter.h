@@ -410,6 +410,22 @@ class JSONSchemaConverter {
       const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
   );
 
+  /*!
+   * \brief Route C: if \p spec combines a `pattern` of a recognized anchored single-element
+   * shape `^ E Q? $` with `minLength`/`maxLength`, build the AST for E repeated over the merged
+   * `[minLength, maxLength]` range -- the string *content*, without any surrounding quotes.
+   * Returns std::nullopt for shapes that cannot be merged (alternation, grouping, ...), so the
+   * caller falls back to the plain pattern and should warn. The element is CFG-expanded so the
+   * length bound is counted in Unicode code points, not bytes. Shared by the JSON string form
+   * (base class) and the XML string form (XMLToolCallingConverter), which differ only in the
+   * `json_string` escaping and whether they wrap the content in quotes.
+   *
+   * \param spec Requires `spec.pattern.has_value()` and (`min_length != 0` || `max_length != -1`).
+   */
+  std::optional<int32_t> TryBuildPatternLengthContent(
+      const StringSpec& spec, const std::string& rule_name, bool json_string
+  );
+
   /*! \brief Helper to create rule with repetition constraints. */
   int32_t GetPropertyWithNumberConstraints(
       int32_t pattern,
