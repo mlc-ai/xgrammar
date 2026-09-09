@@ -2389,8 +2389,63 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   }
   // Check for length constraints
   if (spec.min_length != 0 || spec.max_length != -1) {
-    int32_t character =
-        builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
+    // Each repetition must match exactly one JSON character so the Repeat budget counts
+    // characters (JSON Schema maxLength counts characters of the decoded string). An
+    // unescaped code point is one repetition; one complete escape sequence is also one.
+    // A bare [^"\\\r\n] class here would drop the escape branch entirely (issue #800),
+    // making \n/\"/\\/\\uXXXX unemittable inside length-bounded strings.
+    // kBasicEscape is not reused: it accepts every \uXXXX uniformly, so a surrogate pair
+    // (one code point spelled as two escapes) would cost two repetitions and lone
+    // surrogates would be admitted. Enumerate instead: a BMP escape is one repetition,
+    // a high+low surrogate pair is one repetition, and a lone surrogate matches nothing.
+    // The unescaped class mirrors AddHelperRules: all of U+0000-U+001F must stay escaped
+    // per RFC 8259 section 7.
+    int32_t unescaped_character =
+        builder_.AddCharacterClass({{0, 0x1f}, {'"', '"'}, {'\\', '\\'}}, true);
+    int32_t short_escape_character = builder_.AddCharacterClass(
+        {{'"', '"'},
+         {'\\', '\\'},
+         {'/', '/'},
+         {'b', 'b'},
+         {'f', 'f'},
+         {'n', 'n'},
+         {'r', 'r'},
+         {'t', 't'}}
+    );
+    int32_t hex_character = builder_.AddCharacterClass({{'0', '9'}, {'A', 'F'}, {'a', 'f'}});
+    int32_t non_surrogate_lead =
+        builder_.AddCharacterClass({{'0', '9'}, {'A', 'C'}, {'E', 'F'}, {'a', 'c'}, {'e', 'f'}});
+    int32_t surrogate_lead = builder_.AddCharacterClass({{'D', 'D'}, {'d', 'd'}});
+    int32_t bmp_escape = Sequence(
+        {ByteString("u"),
+         Choice(
+             {Sequence({non_surrogate_lead, hex_character, hex_character, hex_character}),
+              Sequence(
+                  {surrogate_lead,
+                   builder_.AddCharacterClass({{'0', '7'}}),
+                   hex_character,
+                   hex_character}
+              )}
+         )}
+    );
+    int32_t surrogate_pair_escape = Sequence(
+        {ByteString("u"),
+         surrogate_lead,
+         builder_.AddCharacterClass({{'8', '9'}, {'A', 'B'}, {'a', 'b'}}),
+         hex_character,
+         hex_character,
+         ByteString("\\u"),
+         surrogate_lead,
+         builder_.AddCharacterClass({{'C', 'F'}, {'c', 'f'}}),
+         hex_character,
+         hex_character}
+    );
+    int32_t character = Choice(
+        {unescaped_character,
+         Sequence({ByteString("\\"), short_escape_character}),
+         Sequence({ByteString("\\"), bmp_escape}),
+         Sequence({ByteString("\\"), surrogate_pair_escape})}
+    );
     int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
     return Sequence({ByteString("\""), body, ByteString("\"")});
   }
