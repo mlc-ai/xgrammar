@@ -18,6 +18,7 @@ from .structural_tag import (
     Format,
     JSONSchemaFormat,
     OptionalFormat,
+    OrFormat,
     RegexFormat,
     SequenceFormat,
     StructuralTag,
@@ -33,7 +34,7 @@ def get_model_structural_tag(
     model: str,
     tools: Optional[List[Union[ToolParam, dict]]] = None,
     tool_choice: Union[ToolChoiceOptionParam, dict, None] = "auto",
-    reasoning: Union[bool, Literal["enabled", "disabled", "auto"]] = True,
+    reasoning: Union[bool, Literal["enabled", "disabled", "auto"]] = "enabled",
     force_reasoning: bool = False,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
@@ -179,12 +180,13 @@ def get_model_structural_tag(
           contain both function refs and builtin refs. Builtin refs are matched
           by ``type``.
     reasoning : Union[bool, Literal["enabled", "disabled", "auto"]]
-        Controls the model-specific reasoning section. ``True`` and ``False``
-        are equivalent to ``"enabled"`` and ``"disabled"``, respectively.
+        Controls the model-specific reasoning section. Use the recommended
+        string modes ``"enabled"``, ``"disabled"``, or ``"auto"``.
         For models with a leading reasoning block, ``"auto"`` allows either a
-        complete block or a direct response/tool call. Defaults to ``True``.
-        Boolean aliases are supported by this dispatcher; model-specific
-        builders accept the three explicit string modes.
+        complete block or a direct response/tool call. Defaults to ``"enabled"``.
+        The boolean aliases ``True`` and ``False`` are deprecated but remain
+        supported by this dispatcher as ``"enabled"`` and ``"disabled"``,
+        respectively. Model-specific builders accept the three string modes.
     force_reasoning : bool
         Deprecated. Control whether to keep the reasoning part but leave its content empty.
         Now we will embed the model's specific behavior into the structural tag function, so
@@ -848,7 +850,8 @@ def get_kimi_structural_tag(
         think_tag_begin=THINK_TAG_BEGIN,
         think_tag_end=THINK_TAG_END,
         exclude_special_tokens=exclude_special_tokens,
-        reasoning_exclude_tokens=THINK_EXCLUDE_TOKENS,
+        # Kimi-K2 does not prefill <think>; preserve enabled mode's acceptance of it.
+        reasoning_exclude_tokens=THINK_EXCLUDE_TOKENS if reasoning == "auto" else [],
     )
     return _assemble_structural_tag(prefix_tag, suffix_tag)
 
@@ -1940,8 +1943,9 @@ def get_minimax_m3_structural_tag(
     already emitted ``<mm:think>`` and constrained output starts inside its
     body. ``"disabled"`` starts directly at the response body after the matching
     prompt. ``"auto"`` matches the ``adaptive`` prompt and accepts
-    either a complete reasoning block or a direct response/tool call. ``"auto"``
-    is the default for this model-specific builder.
+    either a complete reasoning block or a direct response/tool call, optionally
+    prefixed by ``</mm:think>`` when skipping reasoning. ``"auto"`` is the default
+    for this model-specific builder.
 
     Corresponding model key: ``"minimax_m3"``.
 
@@ -2036,6 +2040,11 @@ def get_minimax_m3_structural_tag(
         exclude_special_tokens=exclude_special_tokens,
         reasoning_exclude_tokens=reasoning_excludes,
     )
+    if isinstance(prefix_tag, OptionalFormat):
+        # The adaptive template emits a lone closing marker when skipping reasoning.
+        prefix_tag.content = OrFormat(
+            elements=[prefix_tag.content, ConstStringFormat(value=THINK_TAG_END)]
+        )
     return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 

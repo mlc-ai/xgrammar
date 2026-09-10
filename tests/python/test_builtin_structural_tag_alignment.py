@@ -101,6 +101,9 @@ MODEL_CONFIGS = [
     ("deepseek_v3_2", "ENCODER:dsv32", True, {"thinking_mode": "thinking"}),
     ("deepseek_v3_2", "ENCODER:dsv32", False, {"thinking_mode": "chat"}),
     ("minimax", "MiniMaxAI/MiniMax-M2.5", True, {}),
+    ("minimax_m3", "MiniMaxAI/MiniMax-M3", "enabled", {"thinking_mode": "enabled"}),
+    ("minimax_m3", "MiniMaxAI/MiniMax-M3", "disabled", {"thinking_mode": "disabled"}),
+    ("minimax_m3", "MiniMaxAI/MiniMax-M3", "auto", {"thinking_mode": "adaptive"}),
     ("glm_4_7", "zai-org/GLM-4.7-Flash", True, {"enable_thinking": True}),
     ("glm_4_7", "zai-org/GLM-4.7-Flash", False, {"enable_thinking": False}),
     ("deepseek_v4", "ENCODER:dsv4", True, {"thinking_mode": "thinking"}),
@@ -138,6 +141,7 @@ STRIP_THINK_MODELS = {
     "deepseek-ai/DeepSeek-R1",
     "zai-org/GLM-4.7-Flash",
     "MiniMaxAI/MiniMax-M2.5",
+    "MiniMaxAI/MiniMax-M3",
     "Qwen/Qwen3.5-35B-A3B",
 }
 
@@ -152,6 +156,7 @@ EOS_SUFFIXES = {
     "qwen_3_coder": ["<|im_end|>"],
     "harmony": None,
     "minimax": ["[e~["],
+    "minimax_m3": ["[e~["],
     "glm_4_7": [],
     "deepseek_v3_2": ["<｜end▁of▁sentence｜>"],
     "deepseek_v4": ["<｜end▁of▁sentence｜>"],
@@ -242,7 +247,12 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
 
     if model_id in STRIP_THINK_MODELS and assistant_msg.get("reasoning_content") is not None:
         if not full.startswith(prompt):
-            base = prompt.removesuffix("<think>\n").removesuffix("<think>")
+            think_begin, think_end = (
+                ("<mm:think>", "</mm:think>")
+                if stag_key == "minimax_m3"
+                else ("<think>", "</think>")
+            )
+            base = prompt.removesuffix(think_begin + "\n").removesuffix(think_begin)
             assert full.startswith(base), (
                 f"Base mismatch.\nbase[-200:]={repr(base[-200:])}\n"
                 f"full[:len(base)+200]={repr(full[: len(base) + 200])}"
@@ -250,8 +260,8 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
             raw = full[len(base) :]
             raw = strip_eos(raw, stag_key, tokenizer)
             reasoning = assistant_msg["reasoning_content"]
-            if not raw.startswith("</think>"):
-                raw = "</think>" + raw
+            if not raw.startswith(think_end):
+                raw = think_end + raw
             return reasoning + raw
 
     assert full.startswith(prompt), (
@@ -382,12 +392,12 @@ def generate_test_cases():
                 continue
             if num_tool_calls > 1 and model_id in SKIP_PARALLEL_TOOLS:
                 continue
-            if reasoning:
+            if reasoning not in (False, "disabled"):
                 cases.append(
                     (
                         stag_key,
                         model_id,
-                        True,
+                        reasoning,
                         REASONING_CONTENT,
                         num_tools,
                         tool_choice_str,
@@ -400,7 +410,7 @@ def generate_test_cases():
                         (
                             stag_key,
                             model_id,
-                            True,
+                            reasoning,
                             "",
                             num_tools,
                             tool_choice_str,
@@ -408,12 +418,12 @@ def generate_test_cases():
                             num_tool_calls,
                         )
                     )
-            else:
+            if reasoning in (False, "disabled", "auto"):
                 cases.append(
                     (
                         stag_key,
                         model_id,
-                        False,
+                        reasoning,
                         None,
                         num_tools,
                         tool_choice_str,
@@ -436,12 +446,14 @@ def case_id(case):
         num_tool_calls,
     ) = case
     model_short = model_id.split("/")[-1] if "/" in model_id else model_id.replace("ENCODER:", "")
-    if not reasoning:
+    if reasoning in (False, "disabled"):
         r_tag = "off"
     elif reasoning_content:
         r_tag = "on"
     else:
         r_tag = "empty"
+    if reasoning == "auto":
+        r_tag = "auto-" + r_tag if reasoning_content is not None else "auto-off"
     return f"{stag_key}-{model_short}-r{r_tag}-{num_tools}t-{tool_choice_str}-{num_tool_calls}calls"
 
 
@@ -476,6 +488,60 @@ def test_reasoning_stag(case):
     assistant_msg = make_assistant_msg(stag_key, reasoning_content, num_tool_calls)
     model_output = extract_model_output(stag_key, model_id, assistant_msg, tools, template_kwargs)
     validate_output(stag_key, tools, tool_choice, reasoning, model_output)
+
+
+@pytest.mark.hf_token_required
+def test_minimax_m3_recursive_tool_arguments_alignment():
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "create_order",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "shipping": {
+                            "type": "object",
+                            "properties": {"city": {"type": "string"}},
+                            "required": ["city"],
+                        },
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "qty": {"type": "integer"},
+                                    "gift": {"type": "boolean"},
+                                },
+                                "required": ["qty", "gift"],
+                            },
+                        },
+                    },
+                    "required": ["shipping", "items"],
+                },
+            },
+        }
+    ]
+    assistant_msg = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_order",
+                    "arguments": {
+                        "shipping": {"city": "北京"},
+                        "items": [{"qty": 2, "gift": True}, {"qty": 1, "gift": False}],
+                    },
+                },
+            }
+        ],
+    }
+    model_output = extract_model_output(
+        "minimax_m3", "MiniMaxAI/MiniMax-M3", assistant_msg, tools, {"thinking_mode": "disabled"}
+    )
+    validate_output("minimax_m3", tools, "required", "disabled", model_output)
 
 
 @pytest.mark.parametrize(

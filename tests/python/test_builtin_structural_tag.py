@@ -2391,9 +2391,13 @@ def test_minimax_m3_reasoning_modes():
     adaptive = get_model_structural_tag("minimax_m3", tools=_tools_minimax_m3, reasoning="auto")
     check_stag_with_instance(adaptive, "answer", True)
     check_stag_with_instance(adaptive, _M3_SEARCH_CALL, True)
+    check_stag_with_instance(adaptive, "</mm:think>answer", True)
+    check_stag_with_instance(adaptive, "</mm:think>" + _M3_SEARCH_CALL, True)
     check_stag_with_instance(adaptive, "<mm:think>plan</mm:think>answer", True)
     check_stag_with_instance(adaptive, "<mm:think>plan</mm:think>" + _M3_SEARCH_CALL, True)
     check_stag_with_instance(adaptive, "plan</mm:think>answer", False)
+    check_stag_with_instance(adaptive, "</mm:think></mm:think>answer", False)
+    check_stag_with_instance(adaptive, "</mm:think><mm:think>plan</mm:think>answer", False)
 
 
 def test_minimax_m3_reasoning_defaults_and_validation():

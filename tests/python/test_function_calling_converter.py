@@ -3111,10 +3111,17 @@ def test_minimax_m3_self_ref_stays_recursive_xml():
     assert not _is_grammar_accept_string(grammar, nested_json)
 
 
-def test_minimax_m3_rejects_array_bounds_outside_repeat_range():
-    with pytest.raises(RuntimeError, match="array bounds exceed the supported range"):
+def test_minimax_m3_array_bounds_outside_repeat_range():
+    # Schema parsing treats oversized upper bounds as unbounded but rejects lower bounds.
+    grammar = _json_schema_to_ebnf(
+        {"type": "array", "items": {"type": "string"}, "maxItems": 2**31},
+        json_format="minimax_m3_xml",
+    )
+    assert _is_grammar_accept_string(grammar, "")
+    assert _is_grammar_accept_string(grammar, _m3_element("item", "a") + _m3_element("item", "b"))
+    with pytest.raises(RuntimeError, match="minItems and minContains must not exceed"):
         _json_schema_to_ebnf(
-            {"type": "array", "items": {"type": "string"}, "maxItems": 2**31},
+            {"type": "array", "items": {"type": "string"}, "minItems": 2**31},
             json_format="minimax_m3_xml",
         )
 
