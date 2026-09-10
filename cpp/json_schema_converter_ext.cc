@@ -8,6 +8,7 @@
 #include <picojson.h>
 
 #include <algorithm>
+#include <array>
 #include <map>
 #include <type_traits>
 #include <unordered_map>
@@ -15,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "support/encoding.h"
 #include "support/json_parse.h"
 #include "support/logging.h"
 
@@ -22,38 +24,77 @@ namespace xgrammar {
 
 namespace {
 
-bool IsXMLIdentifierChar(char c, bool is_first) {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' ||
-         (!is_first && c >= '0' && c <= '9');
+constexpr std::array<std::pair<TCodepoint, const char*>, 4> kCohereKeyEntities = {
+    std::pair<TCodepoint, const char*>{'&', "&amp;"},
+    std::pair<TCodepoint, const char*>{'<', "&lt;"},
+    std::pair<TCodepoint, const char*>{'>', "&gt;"},
+    std::pair<TCodepoint, const char*>{'"', "&quot;"},
+};
+
+std::string SerializeCohereKeyCodepoint(TCodepoint codepoint) {
+  for (const auto& [entity_codepoint, entity] : kCohereKeyEntities) {
+    if (codepoint == entity_codepoint) {
+      return entity;
+    }
+  }
+  return CharToUTF8(codepoint);
+}
+
+std::vector<TCodepoint> ParseCohereKeyCodepoints(const std::string& key) {
+  XGRAMMAR_CHECK(key.find('\0') == std::string::npos) << "Cohere property names cannot contain NUL";
+  auto codepoints = ParseUTF8(key.c_str());
+  XGRAMMAR_CHECK(codepoints.size() != 1 || codepoints[0] != CharHandlingError::kInvalidUTF8)
+      << "Cohere property names must be valid UTF-8";
+  return codepoints;
+}
+
+std::string SerializeCohereKey(const std::string& key) {
+  std::string serialized;
+  for (TCodepoint codepoint : ParseCohereKeyCodepoints(key)) {
+    serialized += SerializeCohereKeyCodepoint(codepoint);
+  }
+  return serialized;
 }
 
 template <typename Children>
-std::vector<GrammarBuilder::CharacterClassElement> XMLIdentifierCharClassExcluding(
-    const Children& children, bool is_first
+std::vector<GrammarBuilder::CharacterClassElement> CohereOrdinaryKeyRangesExcluding(
+    const Children& children
 ) {
-  std::vector<GrammarBuilder::CharacterClassElement> chars;
-  auto add_if_missing = [&](char c) {
-    if (!children.count(c)) {
-      chars.push_back({c, c});
-    }
-  };
-  for (char c = 'A'; c <= 'Z'; ++c) {
-    add_if_missing(c);
-  }
-  add_if_missing('_');
-  for (char c = 'a'; c <= 'z'; ++c) {
-    add_if_missing(c);
-  }
-  if (!is_first) {
-    for (char c = '0'; c <= '9'; ++c) {
-      add_if_missing(c);
-    }
-  }
-  return chars;
-}
+  constexpr TCodepoint kMaxUnicodeCodepoint = 0x10FFFF;
 
-std::vector<GrammarBuilder::CharacterClassElement> XMLIdentifierContinuationChars() {
-  return {{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}};
+  // Ordinary key characters must not consume NUL, XML-sensitive characters (which are
+  // represented by entity alternatives), or a codepoint handled by a child trie branch.
+  std::vector<TCodepoint> excluded;
+  excluded.reserve(1 + kCohereKeyEntities.size() + children.size());
+  excluded.push_back('\0');
+  for (const auto& entry : kCohereKeyEntities) {
+    excluded.push_back(entry.first);
+  }
+  for (const auto& entry : children) {
+    excluded.push_back(entry.first);
+  }
+
+  // Sorting makes duplicate exclusions adjacent so that unique + erase can remove them.
+  std::sort(excluded.begin(), excluded.end());
+  excluded.erase(std::unique(excluded.begin(), excluded.end()), excluded.end());
+
+  // Build the positive character class as the gaps between excluded codepoints. Positive
+  // ranges preserve full Unicode support when the grammar is lowered to an FSM.
+  std::vector<GrammarBuilder::CharacterClassElement> ranges;
+  TCodepoint range_start = 0;
+  for (TCodepoint codepoint : excluded) {
+    if (codepoint < range_start) {
+      continue;
+    }
+    if (range_start < codepoint) {
+      ranges.push_back({range_start, codepoint - 1});
+    }
+    range_start = codepoint + 1;
+  }
+  if (range_start <= kMaxUnicodeCodepoint) {
+    ranges.push_back({range_start, kMaxUnicodeCodepoint});
+  }
+  return ranges;
 }
 
 constexpr const char* kStringCacheKey = "{\"type\":\"string\"}";
@@ -66,6 +107,9 @@ const std::string XMLToolCallingConverter::kXMLString = "xml_string";
 const std::string XMLToolCallingConverter::kXMLAny = "xml_any";
 const std::string XMLToolCallingConverter::kXMLObject = "xml_object";
 const std::string XMLToolCallingConverter::kXMLVariableName = "xml_variable_name";
+const std::string CohereXMLToolCallingConverter::kCohereKey = "cohere_key";
+const std::string CohereXMLToolCallingConverter::kCohereAnyScalar = "cohere_any_scalar";
+const std::string CohereXMLToolCallingConverter::kCohereAnyList = "cohere_any_list";
 const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
     XMLToolCallingConverter::kKeyWrapperMap = {
         {JSONFormat::kQwenXML, {"<parameter=", ">", "", "</parameter>"}},
@@ -486,6 +530,32 @@ CohereXMLToolCallingConverter::CohereXMLToolCallingConverter(
           any_order
       ) {}
 
+void CohereXMLToolCallingConverter::AddBasicRules() {
+  // Cohere's dynamic key and recursive Any rules must have stable targets before kXMLObject is
+  // built, because its additional-property formatting reaches them through virtual dispatch.
+  builder_.AddEmptyRule(kCohereKey);
+  builder_.AddEmptyRule(kCohereAnyScalar);
+  builder_.AddEmptyRule(kCohereAnyList);
+
+  XMLToolCallingConverter::AddBasicRules();
+
+  builder_.UpdateRuleBody(kCohereKey, RegexExpression(R"(([^\x00"&<>]|&amp;|&lt;|&gt;|&quot;)+)"));
+
+  builder_.UpdateRuleBody(
+      kCohereAnyScalar, Choice({RuleRef(kBasicNumber), RuleRef(kBasicBoolean), RuleRef(kBasicNull)})
+  );
+  // kXMLObject already provides named_any_value* through its dynamic-property formatting.
+  // Lists need the corresponding recursive sequence of unnamed Any wrappers explicitly.
+  int32_t unnamed_any_value = FormatAnyCohereParam(std::nullopt, std::nullopt);
+  builder_.UpdateRuleBody(
+      kCohereAnyList, Repeat("cohere_any_list_items", unnamed_any_value, 0, -1)
+  );
+}
+
+bool CohereXMLToolCallingConverter::AtCohereRoot() const {
+  return nested_object_level_ == 0 && object_stack_.empty() && cohere_array_level_ == 0;
+}
+
 bool CohereXMLToolCallingConverter::InCohereValueContext() const {
   return nested_object_level_ <= 1 || !object_stack_.empty() || cohere_array_level_ > 0;
 }
@@ -595,16 +665,27 @@ int32_t CohereXMLToolCallingConverter::FormatSingleCohereParam(
     const SchemaSpecPtr& schema,
     int32_t value_rule_id
 ) {
+  return FormatCohereParamWithType(
+      name, key_pattern_expr, GetCohereTypePattern(schema), value_rule_id
+  );
+}
+
+int32_t CohereXMLToolCallingConverter::FormatCohereParamWithType(
+    const std::optional<std::string>& name,
+    const std::optional<int32_t>& key_pattern_expr,
+    int32_t type_expression,
+    int32_t value_rule_id
+) {
   std::vector<int32_t> elements = {ByteString(xml_wrapper_.key_wrapper_prefix)};
   if (name.has_value()) {
-    elements.push_back(ByteString(" name=\"" + *name + "\""));
+    elements.push_back(ByteString(" name=\"" + SerializeCohereKey(*name) + "\""));
   } else if (key_pattern_expr.has_value()) {
     elements.push_back(ByteString(" name=\""));
     elements.push_back(*key_pattern_expr);
     elements.push_back(ByteString("\""));
   }
   elements.push_back(ByteString(" type=\""));
-  elements.push_back(GetCohereTypePattern(schema));
+  elements.push_back(type_expression);
   elements.push_back(ByteString("\"" + xml_wrapper_.key_wrapper_suffix));
 
   if (!xml_wrapper_.value_wrapper_prefix.empty()) {
@@ -613,6 +694,27 @@ int32_t CohereXMLToolCallingConverter::FormatSingleCohereParam(
   elements.push_back(FormatCohereValue(value_rule_id));
   elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
   return Sequence(elements);
+}
+
+int32_t CohereXMLToolCallingConverter::FormatAnyCohereParam(
+    const std::optional<std::string>& name, const std::optional<int32_t>& key_pattern_expr
+) {
+  // kXMLAny is the aggregate body-only union. Wrapping it under every type would create a
+  // type/body cross product, so each wrapper deliberately references its matching component.
+  return Choice(
+      {FormatCohereParamWithType(
+           name, key_pattern_expr, ByteString("raw"), builder_.GetRuleId(kXMLString)
+       ),
+       FormatCohereParamWithType(
+           name, key_pattern_expr, ByteString("json"), builder_.GetRuleId(kCohereAnyScalar)
+       ),
+       FormatCohereParamWithType(
+           name, key_pattern_expr, ByteString("dict"), builder_.GetRuleId(kXMLObject)
+       ),
+       FormatCohereParamWithType(
+           name, key_pattern_expr, ByteString("list"), builder_.GetRuleId(kCohereAnyList)
+       )}
+  );
 }
 
 int32_t CohereXMLToolCallingConverter::FormatCohereParam(
@@ -635,6 +737,18 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParam(
       resolved_schema = ResolveRefSchema(*ref, value_rule_name);
       ref = std::get_if<RefSpec>(&resolved_schema->spec);
     } while (ref != nullptr);
+  }
+
+  // CreateRule may return any aggregate rule (cached or freshly generated), but the schema is
+  // retained along this object-property call path so Any can select correlated wrappers here.
+  if (std::holds_alternative<AnySpec>(resolved_schema->spec)) {
+    return FormatAnyCohereParam(name, key_pattern_expr);
+  }
+  if (const auto* all_of = std::get_if<AllOfSpec>(&resolved_schema->spec);
+      all_of != nullptr && all_of->schemas.size() != 1) {
+    // The base converter intentionally falls back to Any while multi-branch allOf support is
+    // incomplete. Keep that fallback canonical instead of wrapping its aggregate body as json.
+    return FormatAnyCohereParam(name, key_pattern_expr);
   }
 
   auto options = GetCohereCompositeOptions(resolved_schema);
@@ -690,10 +804,12 @@ int32_t CohereXMLToolCallingConverter::GenerateAny(
   if (!InCohereValueContext()) {
     return JSONSchemaConverter::GenerateAny(spec, rule_name);
   }
-  if (nested_object_level_ == 0) {
+  if (AtCohereRoot()) {
     return RuleRef(kXMLObject);
   }
-  return JSONSchemaConverter::GenerateAny(spec, rule_name);
+  return Choice(
+      {RuleRef(kXMLString), RuleRef(kCohereAnyScalar), RuleRef(kXMLObject), RuleRef(kCohereAnyList)}
+  );
 }
 
 int32_t CohereXMLToolCallingConverter::GenerateConst(
@@ -852,40 +968,37 @@ int32_t CohereXMLToolCallingConverter::FormatOtherProperty(
 
 std::string CohereXMLToolCallingConverter::GetKeyPattern() const {
   if (InCohereValueContext()) {
-    return kXMLVariableName;
+    return kCohereKey;
   }
   return JSONSchemaConverter::GetKeyPattern();
 }
 
-int32_t CohereXMLToolCallingConverter::BuildXMLIdentifierExcludingBody(
-    const XMLIdentifierTrieNode& node, const std::string& rule_name, int depth
+int32_t CohereXMLToolCallingConverter::BuildCohereKeyExcludingBody(
+    const CohereKeyTrieNode& node, int depth
 ) {
   std::vector<int32_t> choices;
   if (depth > 0 && !node.is_terminal) {
     choices.push_back(Empty());
   }
 
-  auto divergent_chars = XMLIdentifierCharClassExcluding(node.children, depth == 0);
-  if (!divergent_chars.empty()) {
-    choices.push_back(Sequence(
-        {builder_.AddCharacterClass(divergent_chars),
-         builder_.AddCharacterClassStar(XMLIdentifierContinuationChars())}
-    ));
-  }
-
-  for (const auto& [c, child] : node.children) {
-    if (!IsXMLIdentifierChar(c, depth == 0)) {
-      continue;
+  int32_t optional_key_suffix = Choice({Empty(), RuleRef(kCohereKey)});
+  int32_t ordinary_key_unit =
+      builder_.AddCharacterClass(CohereOrdinaryKeyRangesExcluding(node.children));
+  choices.push_back(Sequence({ordinary_key_unit, optional_key_suffix}));
+  for (const auto& [codepoint, entity] : kCohereKeyEntities) {
+    if (!node.children.count(codepoint)) {
+      int32_t entity_key_unit = ByteString(entity);
+      choices.push_back(Sequence({entity_key_unit, optional_key_suffix}));
     }
+  }
+
+  for (const auto& [codepoint, child] : node.children) {
     choices.push_back(Sequence(
-        {ByteString(std::string(1, c)), BuildXMLIdentifierExcludingBody(child, rule_name, depth + 1)
-        }
+        {ByteString(SerializeCohereKeyCodepoint(codepoint)),
+         BuildCohereKeyExcludingBody(child, depth + 1)}
     ));
   }
 
-  if (choices.empty()) {
-    return Empty();
-  }
   return Choice(choices);
 }
 
@@ -896,26 +1009,19 @@ int32_t CohereXMLToolCallingConverter::GetKeyPatternExcluding(
     if (properties.empty()) {
       return RuleRef(GetKeyPattern());
     }
-    XMLIdentifierTrieNode root;
+    CohereKeyTrieNode root;
     for (const auto& prop : properties) {
-      XMLIdentifierTrieNode* cur = &root;
-      bool is_valid_identifier = true;
-      for (size_t i = 0; i < prop.name.size(); ++i) {
-        char c = prop.name[i];
-        if (!IsXMLIdentifierChar(c, i == 0)) {
-          is_valid_identifier = false;
-          break;
-        }
-        cur = &cur->children[c];
+      CohereKeyTrieNode* cur = &root;
+      auto codepoints = ParseCohereKeyCodepoints(prop.name);
+      for (TCodepoint codepoint : codepoints) {
+        cur = &cur->children[codepoint];
       }
-      if (is_valid_identifier && !prop.name.empty()) {
+      if (!codepoints.empty()) {
         cur->is_terminal = true;
       }
     }
     int32_t key_rule_id = builder_.AddEmptyRuleWithHint(rule_name + "_cohere_addl_key");
-    builder_.UpdateRuleBody(
-        key_rule_id, BuildXMLIdentifierExcludingBody(root, builder_.GetRule(key_rule_id).name, 0)
-    );
+    builder_.UpdateRuleBody(key_rule_id, BuildCohereKeyExcludingBody(root, 0));
     return RuleRef(key_rule_id);
   }
   return JSONSchemaConverter::GetKeyPatternExcluding(properties, rule_name);
@@ -938,6 +1044,11 @@ void CohereXMLToolCallingConverter::AddCache(const std::string& key, int32_t rul
 std::optional<int32_t> CohereXMLToolCallingConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
+  }
+  // "true" and {} are equivalent schemas. At the tool-arguments root both are unrestricted
+  // dictionaries, while nested {} keeps using the aggregate Any body rule.
+  if (AtCohereRoot() && (key == "{}" || key == "true")) {
+    return builder_.GetRuleId(kXMLObject);
   }
   return rule_cache_manager_.GetCache(key, nested_object_level_ > 1 && !InCohereValueContext());
 }

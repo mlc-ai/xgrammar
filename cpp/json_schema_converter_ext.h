@@ -176,14 +176,19 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   ) override;
   std::string NextSeparator(bool is_end = false) override;
 
+  void AddBasicRules() override;
   void AddCache(const std::string& key, int32_t rule_id) override;
   std::optional<int32_t> GetCache(const std::string& key) const override;
 
  private:
-  struct XMLIdentifierTrieNode {
+  struct CohereKeyTrieNode {
     bool is_terminal = false;
-    std::map<char, XMLIdentifierTrieNode> children;
+    std::map<int32_t, CohereKeyTrieNode> children;
   };
+
+  static const std::string kCohereKey;
+  static const std::string kCohereAnyScalar;
+  static const std::string kCohereAnyList;
 
   int32_t FormatCohereParam(
       const std::optional<std::string>& name,
@@ -197,6 +202,15 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
       const SchemaSpecPtr& schema,
       int32_t value_rule_id
   );
+  int32_t FormatCohereParamWithType(
+      const std::optional<std::string>& name,
+      const std::optional<int32_t>& key_pattern_expr,
+      int32_t type_expression,
+      int32_t value_rule_id
+  );
+  int32_t FormatAnyCohereParam(
+      const std::optional<std::string>& name, const std::optional<int32_t>& key_pattern_expr
+  );
   int32_t FormatCohereValue(int32_t value_rule_id);
   int32_t GetCohereTypePattern(const SchemaSpecPtr& schema);
   static std::string CohereTypeForJSONLiteral(const std::string& json_value);
@@ -205,9 +219,8 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   );
   std::optional<std::vector<SchemaSpecPtr>> GetCohereCompositeOptions(const SchemaSpecPtr& schema
   ) const;
-  int32_t BuildXMLIdentifierExcludingBody(
-      const XMLIdentifierTrieNode& node, const std::string& rule_name, int depth
-  );
+  int32_t BuildCohereKeyExcludingBody(const CohereKeyTrieNode& node, int depth);
+  bool AtCohereRoot() const;
   bool InCohereValueContext() const;
 
   std::vector<const ObjectSpec*> object_stack_;

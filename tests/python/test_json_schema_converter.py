@@ -3228,6 +3228,27 @@ def test_property_names_with_properties():
     check_schema_with_instance(schema, {"Name": "John"}, is_accepted=False, any_whitespace=False)
 
 
+@pytest.mark.parametrize("keyword", ["additionalProperties", "unevaluatedProperties"])
+@pytest.mark.parametrize(
+    "instance, accepted",
+    [
+        ({"a": 123}, True),
+        ({"a": -1, "b": 2}, True),
+        ({"a": "oops"}, False),
+        ({"a": 1.5}, False),
+        ({"a": True}, False),
+        ({"A": 123}, False),
+    ],
+)
+def test_property_names_preserve_typed_values(keyword: str, instance: dict, accepted: bool):
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z]+$"},
+        keyword: {"type": "integer"},
+    }
+    check_schema_with_instance(schema, instance, is_accepted=accepted)
+
+
 def test_multiple_pattern_properties_with_properties():
     """Regression test for #487: multiple patternProperties + properties coexistence."""
     schema = {
@@ -3531,6 +3552,21 @@ def test_prefix_items_no_additional_items_allows_shorter():
     check_schema_with_instance(schema, '["a"]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1]', is_accepted=True)
     check_schema_with_instance(schema, '["a", 1, true]', is_accepted=False)
+
+
+def test_property_names_preserves_additional_properties_value_schema():
+    # Regression for issue #826: propertyNames constrains only the key; a
+    # typed additionalProperties schema must still constrain the value.
+    value = {
+        "type": "object",
+        "properties": {"n": {"type": "number"}},
+        "required": ["n"],
+        "additionalProperties": False,
+    }
+    schema = {"type": "object", "propertyNames": {"type": "string"}, "additionalProperties": value}
+    check_schema_with_instance(schema, '{"a":"plain"}', is_accepted=False)
+    check_schema_with_instance(schema, '{"a":{"n":1}}', is_accepted=True)
+    check_schema_with_instance(schema, '{"a":{"n":"x"}}', is_accepted=False)
 
 
 def test_bounds_beyond_int32():
