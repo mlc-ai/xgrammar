@@ -7,6 +7,7 @@
 #ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 #define XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 
+#include <array>
 #include <map>
 #include <optional>
 #include <string>
@@ -273,6 +274,28 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   int cohere_array_level_ = 0;
 };
 
+namespace converter_ext {
+
+// Key prefix, key suffix, value prefix, and closing suffix, in XMLWrapper field order.
+using XMLWrapperParts = std::array<const char*, 4>;
+
+XMLWrapperParts GetQwenXMLWrapper();
+XMLWrapperParts GetMiniMaxXMLWrapper();
+XMLWrapperParts GetDeepSeekXMLWrapper();
+XMLWrapperParts GetGLMXMLWrapper();
+XMLWrapperParts GetCohereXMLWrapper();
+XMLWrapperParts GetKimiK3XMLWrapper();
+
+struct XMLKeySuffix {
+  const char* prefix;
+  std::vector<const char*> values;
+  const char* suffix;
+};
+
+const XMLKeySuffix& GetDeepSeekXMLKeySuffix();
+const XMLKeySuffix& GetKimiK3XMLKeySuffix();
+
+}  // namespace converter_ext
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
