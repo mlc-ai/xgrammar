@@ -317,10 +317,19 @@
     <span class="n">json_schema</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
 <span class="w">    </span><span class="sd">"""The JSON schema."""</span>
     <span class="n">style</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span>
-        <span class="s2">"json"</span><span class="p">,</span> <span class="s2">"qwen_xml"</span><span class="p">,</span> <span class="s2">"minimax_xml"</span><span class="p">,</span> <span class="s2">"deepseek_xml"</span><span class="p">,</span> <span class="s2">"glm_xml"</span><span class="p">,</span> <span class="s2">"cohere_xml"</span><span class="p">,</span> <span class="s2">"kimi_k3_xml"</span>
+        <span class="s2">"json"</span><span class="p">,</span>
+        <span class="s2">"qwen_xml"</span><span class="p">,</span>
+        <span class="s2">"minimax_xml"</span><span class="p">,</span>
+        <span class="s2">"minimax_m3_xml"</span><span class="p">,</span>
+        <span class="s2">"deepseek_xml"</span><span class="p">,</span>
+        <span class="s2">"glm_xml"</span><span class="p">,</span>
+        <span class="s2">"cohere_xml"</span><span class="p">,</span>
+        <span class="s2">"kimi_k3_xml"</span><span class="p">,</span>
     <span class="p">]</span> <span class="o">=</span> <span class="s2">"json"</span>
 <span class="w">    </span><span class="sd">"""How to parse the content. Valid values: \"json\" (standard JSON), \"qwen_xml\" (Qwen XML:</span>
-<span class="sd">    &lt;parameter=key&gt;value&lt;/parameter&gt;), \"minimax_xml\" (MiniMax XML: &lt;parameter name=\"key\"&gt;value&lt;/parameter&gt;),</span>
+<span class="sd">    &lt;parameter=key&gt;value&lt;/parameter&gt;), \"minimax_xml\" (MiniMax XML:</span>
+<span class="sd">    &lt;parameter name=\"key\"&gt;value&lt;/parameter&gt;), \"minimax_m3_xml\" (MiniMax M3 recursive</span>
+<span class="sd">    namespace XML: ]&lt;]minimax[&gt;[&lt;key&gt;value]&lt;]minimax[&gt;[&lt;/key&gt;),</span>
 <span class="sd">    \"deepseek_xml\" (DeepSeek XML(DeepSeek-v3.2): &lt;{dsml_token}parameter name=\"key\" string=\"true|false\"&gt;value&lt;/{dsml_token}parameter&gt;),</span>
 <span class="sd">    \"glm_xml\" (GLM XML: &lt;arg_key&gt;key&lt;/arg_key&gt;&lt;arg_value&gt;value&lt;/arg_value&gt;),</span>
 <span class="sd">    \"cohere_xml\" (Cohere XML: &lt;cofl:value name=\"key\" type=\"raw|json|dict|list\"&gt;value&lt;/cofl:value&gt;),</span>

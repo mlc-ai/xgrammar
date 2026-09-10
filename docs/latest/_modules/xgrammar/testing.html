@@ -307,7 +307,14 @@
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">strict_mode</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">json_format</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span>
-        <span class="s2">"json"</span><span class="p">,</span> <span class="s2">"qwen_xml"</span><span class="p">,</span> <span class="s2">"minimax_xml"</span><span class="p">,</span> <span class="s2">"deepseek_xml"</span><span class="p">,</span> <span class="s2">"glm_xml"</span><span class="p">,</span> <span class="s2">"cohere_xml"</span><span class="p">,</span> <span class="s2">"kimi_k3_xml"</span>
+        <span class="s2">"json"</span><span class="p">,</span>
+        <span class="s2">"qwen_xml"</span><span class="p">,</span>
+        <span class="s2">"minimax_xml"</span><span class="p">,</span>
+        <span class="s2">"minimax_m3_xml"</span><span class="p">,</span>
+        <span class="s2">"deepseek_xml"</span><span class="p">,</span>
+        <span class="s2">"glm_xml"</span><span class="p">,</span>
+        <span class="s2">"cohere_xml"</span><span class="p">,</span>
+        <span class="s2">"kimi_k3_xml"</span><span class="p">,</span>
     <span class="p">]</span> <span class="o">=</span> <span class="s2">"json"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
@@ -341,9 +348,10 @@
 <span class="sd">        It should be a positive integer.</span>
 
 <span class="sd">    json_format : str, default: "json"</span>
-<span class="sd">        The root format of the generated grammar. One of "json", "qwen_xml", "minimax_xml",</span>
-<span class="sd">        "deepseek_xml", "glm_xml", "cohere_xml", "kimi_k3_xml". Formats other than "json" generate an</span>
-<span class="sd">        XML-style root object for tool calling, while the inner values remain JSON-style.</span>
+<span class="sd">        The generated grammar format. One of "json", "qwen_xml", "minimax_xml",</span>
+<span class="sd">        "minimax_m3_xml", "deepseek_xml", "glm_xml", "cohere_xml", or "kimi_k3_xml".</span>
+<span class="sd">        MiniMax M3 encodes fixed-name nested objects and arrays recursively; the other XML</span>
+<span class="sd">        styles use their existing model-specific encodings.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>

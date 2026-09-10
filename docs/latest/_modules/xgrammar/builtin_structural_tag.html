@@ -295,8 +295,10 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">.structural_tag</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">AnyTextFormat</span><span class="p">,</span>
     <span class="n">ConstStringFormat</span><span class="p">,</span>
+    <span class="n">Format</span><span class="p">,</span>
     <span class="n">JSONSchemaFormat</span><span class="p">,</span>
     <span class="n">OptionalFormat</span><span class="p">,</span>
+    <span class="n">OrFormat</span><span class="p">,</span>
     <span class="n">RegexFormat</span><span class="p">,</span>
     <span class="n">SequenceFormat</span><span class="p">,</span>
     <span class="n">StructuralTag</span><span class="p">,</span>
@@ -314,7 +316,7 @@
     <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">ToolParam</span><span class="p">,</span> <span class="nb">dict</span><span class="p">]]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="n">ToolChoiceOptionParam</span><span class="p">,</span> <span class="nb">dict</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">force_reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
@@ -459,12 +461,14 @@
 <span class="sd">          available tools before applying its ``mode``. Its ``tools`` list may</span>
 <span class="sd">          contain both function refs and builtin refs. Builtin refs are matched</span>
 <span class="sd">          by ``type``.</span>
-<span class="sd">    reasoning : bool</span>
-<span class="sd">        Whether to enable the reasoning part. Some models, such as Qwen 3.6</span>
-<span class="sd">        and DeepSeek V4, support both reasoning and non-reasoning modes. If</span>
-<span class="sd">        ``False``, use the non-reasoning mode. For models that do not support</span>
-<span class="sd">        reasoning, this has no effect. For models that only support reasoning,</span>
-<span class="sd">        ``False`` means reasoning with empty content.</span>
+<span class="sd">    reasoning : Union[bool, Literal["enabled", "disabled", "auto"]]</span>
+<span class="sd">        Controls the model-specific reasoning section. Use the recommended</span>
+<span class="sd">        string modes ``"enabled"``, ``"disabled"``, or ``"auto"``.</span>
+<span class="sd">        For models with a leading reasoning block, ``"auto"`` allows either a</span>
+<span class="sd">        complete block or a direct response/tool call. Defaults to ``"enabled"``.</span>
+<span class="sd">        The boolean aliases ``True`` and ``False`` are deprecated but remain</span>
+<span class="sd">        supported by this dispatcher as ``"enabled"`` and ``"disabled"``,</span>
+<span class="sd">        respectively. Model-specific builders accept the three string modes.</span>
 <span class="sd">    force_reasoning : bool</span>
 <span class="sd">        Deprecated. Control whether to keep the reasoning part but leave its content empty.</span>
 <span class="sd">        Now we will embed the model's specific behavior into the structural tag function, so</span>
@@ -494,7 +498,8 @@
 <span class="sd">    -----</span>
 <span class="sd">    If a tool's ``parameters`` field is omitted or ``None``, its generated</span>
 <span class="sd">    arguments are unconstrained JSON. If a function tool has ``strict=False``,</span>
-<span class="sd">    its ``parameters`` schema is also treated as unconstrained.</span>
+<span class="sd">    its ``parameters`` schema is also treated as unconstrained. MiniMax M3's</span>
+<span class="sd">    fixed-name XML converter currently rejects such unconstrained schemas.</span>
 
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -504,7 +509,7 @@
 <span class="sd">    Raises</span>
 <span class="sd">    ------</span>
 <span class="sd">    ValueError</span>
-<span class="sd">        If tool lists, tool choices, or required tool availability are invalid.</span>
+<span class="sd">        If tool lists, tool choices, reasoning modes, or required tool availability are invalid.</span>
 <span class="sd">    """</span>
 
     <span class="n">func</span> <span class="o">=</span> <span class="n">_structural_tag_registry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
@@ -516,11 +521,20 @@
         <span class="n">tools</span><span class="p">,</span> <span class="n">tool_choice</span>
     <span class="p">)</span>
 
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">reasoning</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+        <span class="n">reasoning_mode</span> <span class="o">=</span> <span class="s2">"enabled"</span> <span class="k">if</span> <span class="n">reasoning</span> <span class="k">else</span> <span class="s2">"disabled"</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">reasoning</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">reasoning</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">):</span>
+        <span class="n">reasoning_mode</span> <span class="o">=</span> <span class="n">reasoning</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">"The 'reasoning' argument must be a bool or one of: "</span> <span class="s2">"'enabled', 'disabled', 'auto'."</span>
+        <span class="p">)</span>
+
     <span class="k">return</span> <span class="n">func</span><span class="p">(</span>
         <span class="n">function_tools</span><span class="p">,</span>
         <span class="n">builtin_tools</span><span class="p">,</span>
         <span class="n">simplified_tool_choice</span><span class="p">,</span>
-        <span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">reasoning_mode</span><span class="p">,</span>
         <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
         <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
         <span class="n">max_whitespace_cnt</span><span class="o">=</span><span class="n">max_whitespace_cnt</span><span class="p">,</span>
@@ -630,7 +644,7 @@
 <span class="sd">            function_tools,</span>
 <span class="sd">            builtin_tools,</span>
 <span class="sd">            tool_choice,</span>
-<span class="sd">            reasoning=True,</span>
+<span class="sd">            reasoning="enabled",</span>
 <span class="sd">        )</span>
 <span class="sd">    """</span>
 
@@ -737,6 +751,53 @@
     <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">tokens</span><span class="p">)</span> <span class="k">if</span> <span class="n">exclude_special_tokens</span> <span class="k">else</span> <span class="p">[]</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_reasoning_prefix</span><span class="p">(</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">reasoning_mode</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">],</span>
+    <span class="n">think_tag_begin</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">think_tag_end</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">reasoning_exclude_tokens</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">prompt_end_with_think</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning_suffix</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Format</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Build a conventional leading reasoning block.</span>
+
+<span class="sd">    ``enabled`` continues an opener already present in the prompt by default.</span>
+<span class="sd">    ``auto`` makes a complete reasoning block optional. ``disabled`` omits the</span>
+<span class="sd">    block. Models with a different protocol keep their model-specific assembly.</span>
+<span class="sd">    """</span>
+
+    <span class="k">if</span> <span class="n">reasoning_mode</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">"The 'reasoning_mode' argument must be one of: 'enabled', 'disabled', 'auto'."</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">reasoning_mode</span> <span class="o">==</span> <span class="s2">"disabled"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="n">begin</span> <span class="o">=</span> <span class="s2">""</span> <span class="k">if</span> <span class="n">reasoning_mode</span> <span class="o">==</span> <span class="s2">"enabled"</span> <span class="ow">and</span> <span class="n">prompt_end_with_think</span> <span class="k">else</span> <span class="n">think_tag_begin</span>
+    <span class="n">prefix</span><span class="p">:</span> <span class="n">Format</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
+        <span class="n">begin</span><span class="o">=</span><span class="n">begin</span><span class="p">,</span>
+        <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(</span>
+            <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">reasoning_exclude_tokens</span><span class="p">)</span>
+        <span class="p">),</span>
+        <span class="n">end</span><span class="o">=</span><span class="n">think_tag_end</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">reasoning_suffix</span><span class="p">:</span>
+        <span class="n">prefix</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix</span><span class="p">,</span> <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">reasoning_suffix</span><span class="p">)])</span>
+    <span class="k">if</span> <span class="n">reasoning_mode</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
+        <span class="n">prefix</span> <span class="o">=</span> <span class="n">OptionalFormat</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="n">prefix</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">prefix</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Format</span><span class="p">],</span> <span class="n">suffix</span><span class="p">:</span> <span class="n">Format</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Assemble an optional reasoning prefix and a model-specific suffix."""</span>
+
+    <span class="k">if</span> <span class="n">prefix</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix</span><span class="p">,</span> <span class="n">suffix</span><span class="p">]))</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_filter_allowed_tools</span><span class="p">(</span>
     <span class="n">tools</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">],</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">],</span>
@@ -793,7 +854,7 @@
 <span class="sd">        @register_model_structural_tag("my_model")</span>
 <span class="sd">        def get_my_model_structural_tag(</span>
 <span class="sd">            tools=None, builtin_tools=None, tool_choice="auto",</span>
-<span class="sd">            reasoning=True, **kwargs,</span>
+<span class="sd">            reasoning="enabled", **kwargs,</span>
 <span class="sd">        ):</span>
 <span class="sd">            ...</span>
 <span class="sd">    """</span>
@@ -816,7 +877,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -935,7 +996,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -952,8 +1013,9 @@
 
 <span class="sd">    - ``tools``: a list of function tools. Each tool should have a ``function``</span>
 <span class="sd">      object containing ``name`` and ``parameters`` fields.</span>
-<span class="sd">    - ``reasoning``: whether to enable reasoning mode. If ``False``, remove</span>
-<span class="sd">      the reasoning part and constrain only the following part.</span>
+<span class="sd">    - ``reasoning``: ``"enabled"`` keeps the reasoning part,</span>
+<span class="sd">      ``"disabled"`` removes it, and ``"auto"`` makes a complete reasoning</span>
+<span class="sd">      block optional.</span>
 
 <span class="sd">    Supported models:</span>
 
@@ -973,6 +1035,7 @@
     <span class="n">TOOL_CALL_END</span> <span class="o">=</span> <span class="s2">"&lt;|tool_call_end|&gt;"</span>
     <span class="n">TOOL_CALLS_SECTION_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;|tool_calls_section_begin|&gt;"</span>
     <span class="n">TOOL_CALLS_SECTION_END</span> <span class="o">=</span> <span class="s2">"&lt;|tool_calls_section_end|&gt;"</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;think&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/think&gt;"</span>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">]</span>
 
@@ -1076,11 +1139,15 @@
             <span class="p">]</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
-
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="c1"># Kimi-K2 does not prefill &lt;think&gt;; preserve enabled mode's acceptance of it.</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span> <span class="k">if</span> <span class="n">reasoning</span> <span class="o">==</span> <span class="s2">"auto"</span> <span class="k">else</span> <span class="p">[],</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
 
 
 
@@ -1091,7 +1158,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1133,8 +1200,8 @@
 
 <span class="sd">    - ``tools``: a list of function tools. Each tool should have a ``function``</span>
 <span class="sd">      object containing ``name`` and ``parameters`` fields.</span>
-<span class="sd">    - ``reasoning``: whether to enable reasoning mode. If ``False``, remove</span>
-<span class="sd">      the leading think block and constrain only the following part.</span>
+<span class="sd">    - ``reasoning``: selects ``"enabled"``, ``"disabled"``, or adaptive</span>
+<span class="sd">      ``"auto"`` reasoning.</span>
 
 <span class="sd">    Supported models:</span>
 
@@ -1149,6 +1216,7 @@
     <span class="n">OPEN</span> <span class="o">=</span> <span class="s2">"&lt;|open|&gt;"</span>
     <span class="n">CLOSE</span> <span class="o">=</span> <span class="s2">"&lt;|close|&gt;"</span>
     <span class="n">SEP</span> <span class="o">=</span> <span class="s2">"&lt;|sep|&gt;"</span>
+    <span class="n">THINK_BEGIN</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">OPEN</span><span class="si">}</span><span class="s2">think</span><span class="si">{</span><span class="n">SEP</span><span class="si">}</span><span class="s2">"</span>
     <span class="n">THINK_END</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">CLOSE</span><span class="si">}</span><span class="s2">think</span><span class="si">{</span><span class="n">SEP</span><span class="si">}</span><span class="s2">"</span>
     <span class="n">RESPONSE_BEGIN</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">OPEN</span><span class="si">}</span><span class="s2">response</span><span class="si">{</span><span class="n">SEP</span><span class="si">}</span><span class="s2">"</span>
     <span class="n">RESPONSE_END</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">CLOSE</span><span class="si">}</span><span class="s2">response</span><span class="si">{</span><span class="n">SEP</span><span class="si">}</span><span class="s2">"</span>
@@ -1220,20 +1288,19 @@
     <span class="c1"># The generation prompt already emitted the first block's opening marker, so the</span>
     <span class="c1"># constrained output starts inside its body: the think body in reasoning mode, the</span>
     <span class="c1"># response body otherwise. Only the remaining markers are generated by the model.</span>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">SPECIAL_EXCLUDE_TOKENS</span><span class="p">,</span>
+    <span class="p">)</span>
     <span class="n">elements</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-    <span class="k">if</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="n">elements</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-            <span class="n">TagFormat</span><span class="p">(</span>
-                <span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
-                <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(</span>
-                    <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">SPECIAL_EXCLUDE_TOKENS</span><span class="p">)</span>
-                <span class="p">),</span>
-                <span class="n">end</span><span class="o">=</span><span class="n">THINK_END</span><span class="p">,</span>
-            <span class="p">)</span>
-        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">prefix_tag</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">elements</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">)</span>
     <span class="n">elements</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
         <span class="n">TagFormat</span><span class="p">(</span>
-            <span class="n">begin</span><span class="o">=</span><span class="n">RESPONSE_BEGIN</span> <span class="k">if</span> <span class="n">reasoning</span> <span class="k">else</span> <span class="s2">""</span><span class="p">,</span>
+            <span class="n">begin</span><span class="o">=</span><span class="s2">""</span> <span class="k">if</span> <span class="n">reasoning</span> <span class="o">==</span> <span class="s2">"disabled"</span> <span class="k">else</span> <span class="n">RESPONSE_BEGIN</span><span class="p">,</span>
             <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">SPECIAL_EXCLUDE_TOKENS</span><span class="p">)</span>
             <span class="p">),</span>
@@ -1256,7 +1323,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1280,6 +1347,7 @@
     <span class="n">TOOL_SEP</span> <span class="o">=</span> <span class="s2">"&lt;｜tool▁sep｜&gt;"</span>
     <span class="n">JSON_RENDER_BEGIN</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">```json</span><span class="se">\n</span><span class="s2">"</span>
     <span class="n">JSON_RENDER_END</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">```"</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;think&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/think&gt;"</span>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">]</span>
 
@@ -1353,12 +1421,14 @@
         <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">inner_tool_calls</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALLS_END</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
-
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">)</span>
-
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
 
 
 
@@ -1369,7 +1439,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1391,6 +1461,7 @@
     <span class="n">TOOL_CALL_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;｜tool▁call▁begin｜&gt;"</span>
     <span class="n">TOOL_CALL_END</span> <span class="o">=</span> <span class="s2">"&lt;｜tool▁call▁end｜&gt;"</span>
     <span class="n">TOOL_SEP</span> <span class="o">=</span> <span class="s2">"&lt;｜tool▁sep｜&gt;"</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;think&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/think&gt;"</span>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">]</span>
 
@@ -1464,12 +1535,14 @@
         <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">inner_tool_calls</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALLS_END</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
-
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">)</span>
-
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
 
 
 
@@ -1481,7 +1554,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1498,8 +1571,8 @@
 
 <span class="sd">    - ``tools``: a list of function tools. Each tool should have a ``function``</span>
 <span class="sd">      object containing ``name`` and ``parameters`` fields.</span>
-<span class="sd">    - ``reasoning``: whether to add the ``&lt;/think&gt;`` reasoning prefix before</span>
-<span class="sd">      the tool/text suffix.</span>
+<span class="sd">    - ``reasoning``: controls whether the reasoning prefix is required,</span>
+<span class="sd">      omitted, or optional before the tool/text suffix.</span>
 
 <span class="sd">    Supported models:</span>
 
@@ -1517,6 +1590,7 @@
     <span class="n">TOOL_CALL_BEGIN_SUFFIX</span> <span class="o">=</span> <span class="s2">"&gt;</span><span class="se">\n</span><span class="s2">"</span>
     <span class="n">TOOL_CALL_END</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">&lt;/function&gt;</span><span class="se">\n</span><span class="s2">&lt;/tool_call&gt;"</span>
     <span class="n">TOOL_CALL_TRIGGER</span> <span class="o">=</span> <span class="s2">"&lt;tool_call&gt;</span><span class="se">\n</span><span class="s2">&lt;function="</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;think&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/think&gt;"</span>
     <span class="n">THINK_SUFFIX</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n\n</span><span class="s2">"</span>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">]</span>
@@ -1594,16 +1668,15 @@
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
-
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
-        <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
-            <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">),</span>
-            <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">THINK_SUFFIX</span><span class="p">),</span>
-        <span class="p">]</span>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+        <span class="n">reasoning_suffix</span><span class="o">=</span><span class="n">THINK_SUFFIX</span><span class="p">,</span>
     <span class="p">)</span>
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
 
 
 
@@ -1618,7 +1691,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1635,8 +1708,8 @@
 
 <span class="sd">    - ``tools``: a list of function tools. Each tool should have a ``function``</span>
 <span class="sd">      object containing ``name`` and ``parameters`` fields.</span>
-<span class="sd">    - ``reasoning``: whether to enable reasoning mode. If ``False``, remove</span>
-<span class="sd">      the reasoning part.</span>
+<span class="sd">    - ``reasoning``: controls whether the reasoning block is required,</span>
+<span class="sd">      omitted, or optional.</span>
 
 <span class="sd">    Supported models:</span>
 
@@ -1653,6 +1726,7 @@
     <span class="n">ARGUMENTS_FIELD_PREFIX</span> <span class="o">=</span> <span class="s1">'", "arguments": '</span>
     <span class="n">TOOL_CALL_END</span> <span class="o">=</span> <span class="s2">"}</span><span class="se">\n</span><span class="s2">&lt;/tool_call&gt;"</span>
     <span class="n">TOOL_CALL_TRIGGER</span> <span class="o">=</span> <span class="s2">"&lt;tool_call&gt;"</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;think&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/think&gt;"</span>
     <span class="n">THINK_SUFFIX</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n\n</span><span class="s2">"</span>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">]</span>
@@ -1727,16 +1801,15 @@
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
-
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
-        <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
-            <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">),</span>
-            <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">THINK_SUFFIX</span><span class="p">),</span>
-        <span class="p">]</span>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+        <span class="n">reasoning_suffix</span><span class="o">=</span><span class="n">THINK_SUFFIX</span><span class="p">,</span>
     <span class="p">)</span>
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
 
 
 
@@ -1747,7 +1820,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1767,7 +1840,7 @@
 <span class="sd">      object containing ``name`` and ``parameters`` fields.</span>
 <span class="sd">    - ``builtin_tools``: a list of builtin tools. Each builtin tool should</span>
 <span class="sd">      provide ``type``, optional ``name``, and ``parameters`` fields.</span>
-<span class="sd">    - ``reasoning``: whether to enable the analysis channel.</span>
+<span class="sd">    - ``reasoning``: controls whether the analysis channel is available.</span>
 
 <span class="sd">    Supported models:</span>
 
@@ -1871,7 +1944,7 @@
             <span class="n">tags</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">_function_tool_tags</span><span class="p">(</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">parameters</span><span class="p">))</span>
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
 
-    <span class="k">if</span> <span class="n">reasoning</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">reasoning</span> <span class="o">!=</span> <span class="s2">"disabled"</span><span class="p">:</span>
         <span class="n">analysis_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="n">ANALYSIS_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">FINAL_END</span><span class="p">)</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">analysis_tag</span><span class="p">)</span>
 
@@ -1887,7 +1960,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1914,6 +1987,7 @@
     <span class="n">FUNCTION_CALLS_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;｜DSML｜function_calls&gt;</span><span class="se">\n</span><span class="s2">"</span>
     <span class="n">FUNCTION_CALLS_END</span> <span class="o">=</span> <span class="s2">"&lt;/｜DSML｜function_calls&gt;"</span>
     <span class="n">FUNCTION_CALLS_TRIGGER</span> <span class="o">=</span> <span class="s2">"&lt;｜DSML｜function_calls&gt;"</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;think&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/think&gt;"</span>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">]</span>
     <span class="n">XML_STYLE</span> <span class="o">=</span> <span class="s2">"deepseek_xml"</span>
@@ -2008,13 +2082,14 @@
             <span class="p">]</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
-
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">)</span>
-
-    <span class="n">sequence_format</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">])</span>
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">sequence_format</span><span class="p">)</span></div>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
 
 
 
@@ -2025,7 +2100,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2051,6 +2126,7 @@
     <span class="n">TOOL_CALL_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;minimax:tool_call&gt;</span><span class="se">\n</span><span class="s2">"</span>
     <span class="n">TOOL_CALL_END</span> <span class="o">=</span> <span class="s2">"&lt;/minimax:tool_call&gt;"</span>
     <span class="n">TOOL_CALL_TRIGGER</span> <span class="o">=</span> <span class="s2">"&lt;minimax:tool_call&gt;"</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;think&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/think&gt;"</span>
     <span class="n">THINK_SUFFIX</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n\n</span><span class="s2">"</span>
     <span class="n">EMPTY_THINK_CONTENT</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">&lt;/think&gt;</span><span class="se">\n\n</span><span class="s2">"</span>
@@ -2145,15 +2221,152 @@
             <span class="p">]</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="n">think_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="n">think_tag</span> <span class="o">=</span> <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">EMPTY_THINK_CONTENT</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span>
-        <span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span>
-            <span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">think_tag</span><span class="p">,</span> <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">THINK_SUFFIX</span><span class="p">),</span> <span class="n">suffix_tag</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">reasoning</span> <span class="o">==</span> <span class="s2">"disabled"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span>
+            <span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span>
+                <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+                    <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">EMPTY_THINK_CONTENT</span><span class="p">),</span>
+                    <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">THINK_SUFFIX</span><span class="p">),</span>
+                    <span class="n">suffix_tag</span><span class="p">,</span>
+                <span class="p">]</span>
+            <span class="p">)</span>
         <span class="p">)</span>
-    <span class="p">)</span></div>
+
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="p">[]</span> <span class="k">if</span> <span class="n">reasoning</span> <span class="o">==</span> <span class="s2">"enabled"</span> <span class="k">else</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+        <span class="n">reasoning_suffix</span><span class="o">=</span><span class="n">THINK_SUFFIX</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_minimax_m3_structural_tag">
+<a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_minimax_m3_structural_tag">[docs]</a>
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"minimax_m3"</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_minimax_m3_structural_tag</span><span class="p">(</span>
+    <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Get MiniMax-M3 style structural tag format.</span>
+
+<span class="sd">    MiniMax M3 recursively encodes tool arguments as namespace-prefixed XML.</span>
+<span class="sd">    With ``reasoning="enabled"``, the matching generation prompt has</span>
+<span class="sd">    already emitted ``&lt;mm:think&gt;`` and constrained output starts inside its</span>
+<span class="sd">    body. ``"disabled"`` starts directly at the response body after the matching</span>
+<span class="sd">    prompt. ``"auto"`` matches the ``adaptive`` prompt and accepts</span>
+<span class="sd">    either a complete reasoning block or a direct response/tool call, optionally</span>
+<span class="sd">    prefixed by ``&lt;/mm:think&gt;`` when skipping reasoning. ``"auto"`` is the default</span>
+<span class="sd">    for this model-specific builder.</span>
+
+<span class="sd">    Corresponding model key: ``"minimax_m3"``.</span>
+
+<span class="sd">    Supported models:</span>
+
+<span class="sd">    - MiniMax-M3</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    StructuralTag</span>
+<span class="sd">        A structural tag for MiniMax M3 reasoning and function calling.</span>
+<span class="sd">    """</span>
+    <span class="n">NAMESPACE</span> <span class="o">=</span> <span class="s2">"]&lt;]minimax[&gt;["</span>
+    <span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">=</span> <span class="n">NAMESPACE</span> <span class="o">+</span> <span class="s1">'&lt;invoke name="'</span>
+    <span class="n">INVOKE_BEGIN_SUFFIX</span> <span class="o">=</span> <span class="s1">'"&gt;'</span>
+    <span class="n">INVOKE_END</span> <span class="o">=</span> <span class="n">NAMESPACE</span> <span class="o">+</span> <span class="s2">"&lt;/invoke&gt;</span><span class="se">\n</span><span class="s2">"</span>
+    <span class="n">TOOL_CALL_BEGIN</span> <span class="o">=</span> <span class="n">NAMESPACE</span> <span class="o">+</span> <span class="s2">"&lt;tool_call&gt;</span><span class="se">\n</span><span class="s2">"</span>
+    <span class="n">TOOL_CALL_END</span> <span class="o">=</span> <span class="n">NAMESPACE</span> <span class="o">+</span> <span class="s2">"&lt;/tool_call&gt;"</span>
+    <span class="n">TOOL_CALL_TRIGGER</span> <span class="o">=</span> <span class="n">NAMESPACE</span> <span class="o">+</span> <span class="s2">"&lt;tool_call&gt;"</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;mm:think&gt;"</span>
+    <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/mm:think&gt;"</span>
+    <span class="n">XML_STYLE</span> <span class="o">=</span> <span class="s2">"minimax_m3_xml"</span>
+
+    <span class="c1"># Do not exclude the bare namespace: every M3 element and the tool-call trigger share it.</span>
+    <span class="n">stray_tool_markers</span> <span class="o">=</span> <span class="p">[</span><span class="n">TOOL_CALL_END</span><span class="p">,</span> <span class="n">NAMESPACE</span> <span class="o">+</span> <span class="s2">"&lt;invoke"</span><span class="p">,</span> <span class="n">NAMESPACE</span> <span class="o">+</span> <span class="s2">"&lt;/invoke&gt;"</span><span class="p">]</span>
+    <span class="n">suffix_excludes</span> <span class="o">=</span> <span class="p">[</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span> <span class="n">THINK_TAG_END</span><span class="p">,</span> <span class="o">*</span><span class="n">stray_tool_markers</span><span class="p">]</span>
+    <span class="n">reasoning_excludes</span> <span class="o">=</span> <span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">,</span> <span class="o">*</span><span class="n">suffix_excludes</span><span class="p">]</span>
+
+    <span class="n">tools</span> <span class="o">=</span> <span class="n">tools</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="n">builtin_tools</span> <span class="o">=</span> <span class="n">builtin_tools</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">builtin_tools</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"MiniMax M3 does not support builtin tools."</span><span class="p">)</span>
+
+    <span class="n">invoke_tags</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">TagFormat</span><span class="p">(</span>
+            <span class="n">begin</span><span class="o">=</span><span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">tool</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">name</span> <span class="o">+</span> <span class="n">INVOKE_BEGIN_SUFFIX</span><span class="p">,</span>
+            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">tool</span><span class="o">.</span><span class="n">function</span><span class="p">),</span>
+                <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span>
+                <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
+                <span class="n">max_whitespace_cnt</span><span class="o">=</span><span class="n">max_whitespace_cnt</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">end</span><span class="o">=</span><span class="n">INVOKE_END</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span>
+    <span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">make_tool_call_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagFormat</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">allow_multiple</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TagFormat</span><span class="p">:</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">allow_multiple</span>
+            <span class="k">else</span> <span class="n">tags</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALL_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">content</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">invoke_tags</span><span class="p">:</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
+                <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">make_tool_call_tag</span><span class="p">(</span><span class="n">invoke_tags</span><span class="p">)],</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">suffix_excludes</span><span class="p">),</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span>
+                    <span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">,</span> <span class="o">*</span><span class="n">suffix_excludes</span><span class="p">]</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+    <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"forced"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">invoke_tags</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Forced tool choice must resolve to exactly one tool."</span><span class="p">)</span>
+        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">make_tool_call_tag</span><span class="p">([</span><span class="n">invoke_tags</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">allow_multiple</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"required"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">invoke_tags</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Required tool choice needs at least one function tool."</span><span class="p">)</span>
+        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
+            <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
+            <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">make_tool_call_tag</span><span class="p">(</span><span class="n">invoke_tags</span><span class="p">)],</span>
+            <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">suffix_excludes</span><span class="p">),</span>
+            <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unsupported tool choice: </span><span class="si">{</span><span class="n">tool_choice</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="c1"># The generation prompt already emitted the first block's opening marker, so the</span>
+    <span class="c1"># constrained output starts inside its body: the think body in reasoning mode, the</span>
+    <span class="c1"># response body otherwise. Only the remaining markers are generated by the model.</span>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">reasoning_excludes</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">OptionalFormat</span><span class="p">):</span>
+        <span class="c1"># The adaptive template emits a lone closing marker when skipping reasoning.</span>
+        <span class="n">prefix_tag</span><span class="o">.</span><span class="n">content</span> <span class="o">=</span> <span class="n">OrFormat</span><span class="p">(</span>
+            <span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="o">.</span><span class="n">content</span><span class="p">,</span> <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">)]</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
 
 
 
@@ -2164,7 +2377,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2184,8 +2397,7 @@
 
 <span class="sd">    - ``tools``: a list of function tools. Each tool should have a ``function``</span>
 <span class="sd">      object containing ``name`` and ``parameters`` fields.</span>
-<span class="sd">    - ``reasoning``: whether to enable reasoning mode. If ``False``, use the</span>
-<span class="sd">      non-reasoning mode.</span>
+<span class="sd">    - ``reasoning``: selects enabled, disabled, or automatic reasoning mode.</span>
 
 <span class="sd">    Supported models:</span>
 
@@ -2200,6 +2412,7 @@
     <span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">=</span> <span class="s2">"&lt;tool_call&gt;"</span>
     <span class="n">TOOL_CALL_END</span> <span class="o">=</span> <span class="s2">"&lt;/tool_call&gt;"</span>
     <span class="n">TOOL_CALL_TRIGGER</span> <span class="o">=</span> <span class="s2">"&lt;tool_call&gt;"</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;think&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/think&gt;"</span>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">]</span>
     <span class="n">XML_STYLE</span> <span class="o">=</span> <span class="s2">"glm_xml"</span>
@@ -2287,16 +2500,14 @@
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
-
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
-        <span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
-        <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">REASONING_EXCLUDES</span><span class="p">)),</span>
-        <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">REASONING_EXCLUDES</span><span class="p">,</span>
     <span class="p">)</span>
-
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
 
 
 
@@ -2307,7 +2518,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2331,8 +2542,8 @@
 
 <span class="sd">    - ``tools``: a list of function tools. Each tool should have a</span>
 <span class="sd">      ``function`` object containing ``name`` and ``parameters`` fields.</span>
-<span class="sd">    - ``reasoning``: whether to enable reasoning mode. If ``False``, the</span>
-<span class="sd">      reasoning channel is omitted.</span>
+<span class="sd">    - ``reasoning``: controls whether the reasoning channel is required,</span>
+<span class="sd">      omitted, or optional.</span>
 <span class="sd">    - ``tool_choice``: ``"auto"`` or ``"required"``. ``"required"`` forces at</span>
 <span class="sd">      least one tool call.</span>
 
@@ -2426,11 +2637,15 @@
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
-
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">GEMMA4_EXCLUDE_TOKENS</span><span class="p">,</span>
+        <span class="n">prompt_end_with_think</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="get_deepseek_v4_structural_tag">
@@ -2440,7 +2655,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2465,6 +2680,7 @@
     <span class="n">FUNCTION_CALLS_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;｜DSML｜tool_calls&gt;</span><span class="se">\n</span><span class="s2">"</span>
     <span class="n">FUNCTION_CALLS_END</span> <span class="o">=</span> <span class="s2">"&lt;/｜DSML｜tool_calls&gt;"</span>
     <span class="n">FUNCTION_CALLS_TRIGGER</span> <span class="o">=</span> <span class="s2">"&lt;｜DSML｜tool_calls&gt;"</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;think&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/think&gt;"</span>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">]</span>
     <span class="n">XML_STYLE</span> <span class="o">=</span> <span class="s2">"deepseek_xml"</span>
@@ -2559,13 +2775,14 @@
             <span class="p">]</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
-
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">)</span>
-
-    <span class="n">sequence_format</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">])</span>
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">sequence_format</span><span class="p">)</span></div>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
 
 
 
@@ -2576,7 +2793,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2598,6 +2815,7 @@
     <span class="n">TOOL_CALLS_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;cofl:tool_calls&gt;"</span>
     <span class="n">TOOL_CALLS_END</span> <span class="o">=</span> <span class="s2">"&lt;/cofl:tool_calls&gt;"</span>
     <span class="n">TOOL_CALLS_TRIGGER</span> <span class="o">=</span> <span class="s2">"&lt;cofl:tool_calls&gt;"</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;|START_THINKING|&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;|END_THINKING|&gt;"</span>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;|START_THINKING|&gt;"</span><span class="p">,</span> <span class="s2">"&lt;|END_THINKING|&gt;"</span><span class="p">]</span>
     <span class="n">XML_STYLE</span> <span class="o">=</span> <span class="s2">"cohere_xml"</span>
@@ -2665,11 +2883,14 @@
             <span class="p">]</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
-
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="p">[]</span> <span class="k">if</span> <span class="n">reasoning</span> <span class="o">==</span> <span class="s2">"enabled"</span> <span class="k">else</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
 
 
 
@@ -2680,7 +2901,7 @@
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
-    <span class="n">reasoning</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2701,6 +2922,7 @@
     <span class="n">ARGUMENTS_FIELD_PREFIX</span> <span class="o">=</span> <span class="s1">'", "arguments": '</span>
     <span class="n">TOOL_CALL_END</span> <span class="o">=</span> <span class="s2">"}&lt;/tool_call&gt;"</span>
     <span class="n">TOOL_CALL_TRIGGER</span> <span class="o">=</span> <span class="s2">"&lt;tool_call&gt;"</span>
+    <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;think&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/think&gt;"</span>
     <span class="n">THINK_SUFFIX</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n\n</span><span class="s2">"</span>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">]</span>
@@ -2775,16 +2997,15 @@
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">reasoning</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span>
-
-    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
-        <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
-            <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">),</span>
-            <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">THINK_SUFFIX</span><span class="p">),</span>
-        <span class="p">]</span>
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="p">[]</span> <span class="k">if</span> <span class="n">reasoning</span> <span class="o">==</span> <span class="s2">"enabled"</span> <span class="k">else</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
+        <span class="n">reasoning_suffix</span><span class="o">=</span><span class="n">THINK_SUFFIX</span><span class="p">,</span>
     <span class="p">)</span>
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">]))</span></div>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
 
 
 
