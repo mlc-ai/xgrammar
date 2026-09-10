@@ -28,6 +28,68 @@ jobs:
       - name: Ruff check
         uses: astral-sh/ruff-action@v3
 
+  run_rust_test:
+    needs: [pre_check]
+    name: Run Rust tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # apache-tvm-ffi provides tvm-ffi-config and libtvm_ffi. Keep the
+      # version in lockstep with the tvm-ffi revision pinned in
+      # rust/Cargo.toml: the Rust crate and libxgrammar_bindings must link
+      # the same libtvm_ffi ABI.
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install apache-tvm-ffi==0.1.13.post3 cmake ninja
+
+      - name: Build the bindings library
+        run: |
+          # Explicit interpreter: FindPython does not follow PATH, and the
+          # tvm_ffi CMake discovery must use the environment set up above.
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DPython_EXECUTABLE="$(which python)"
+          cmake --build build --target xgrammar_bindings
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: Format check
+        working-directory: rust
+        run: cargo fmt --check
+
+      - name: Clippy
+        working-directory: rust
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run Rust tests
+        working-directory: rust
+        run: cargo test
+
+      - name: Run the example
+        working-directory: rust
+        run: cargo run --example constrained_decoding
+
   run_unit_test:
     needs: [pre_check]
     name: Run unit tests on ${{ matrix.os }}
