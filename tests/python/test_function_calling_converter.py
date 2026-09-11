@@ -2773,6 +2773,12 @@ def test_cohere_resolves_chained_recursive_ref():
 
 _XML_DYNAMIC_PROPERTY_CASES = (
     (
+        "deepseek_v4_1_xml",
+        '<｜DSML｜ parameter name="name" string="true">n</｜DSML｜ parameter>',
+        '<｜DSML｜ parameter name="x_key" string="false">3</｜DSML｜ parameter>',
+        '<｜DSML｜ parameter name="x_key" string="true">v</｜DSML｜ parameter>',
+    ),
+    (
         "qwen_xml",
         "<parameter=name>n</parameter>",
         "<parameter=x_key>3</parameter>",

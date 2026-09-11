@@ -13,6 +13,7 @@ from xgrammar.builtin_structural_tag import (
     get_deepseek_r1_structural_tag,
     get_deepseek_v3_1_structural_tag,
     get_deepseek_v3_2_structural_tag,
+    get_deepseek_v4_1_structural_tag,
     get_deepseek_v4_structural_tag,
     get_glm_4_7_structural_tag,
     get_harmony_structural_tag,
@@ -279,6 +280,7 @@ def test_reasoning_boolean_aliases(boolean_value: bool, mode: Literal["enabled",
         "minimax_m3",
         "glm_4_7",
         "deepseek_v4",
+        "deepseek_v4_1",
         "cohere",
         "exaone",
     ],
@@ -303,6 +305,7 @@ def test_reasoning_auto_builds_for_every_model(model: str):
         "minimax_m3",
         "glm_4_7",
         "deepseek_v4",
+        "deepseek_v4_1",
         "cohere",
         "exaone",
     ],
@@ -314,7 +317,16 @@ def test_reasoning_auto_uses_an_optional_complete_prefix(model: str):
 
 
 @pytest.mark.parametrize(
-    "model", ["kimi", "deepseek_r1", "deepseek_v3_1", "deepseek_v3_2", "deepseek_v4", "glm_4_7"]
+    "model",
+    [
+        "kimi",
+        "deepseek_r1",
+        "deepseek_v3_1",
+        "deepseek_v3_2",
+        "deepseek_v4",
+        "deepseek_v4_1",
+        "glm_4_7",
+    ],
 )
 def test_standard_reasoning_auto_accepts_complete_reasoning_or_direct_response(model: str):
     structural_tag = get_model_structural_tag(model, tools=[], reasoning="auto")
@@ -1362,6 +1374,7 @@ def test_qwen_reasoning_suffix_stays_inside_the_optional_prefix(model: str):
         get_harmony_structural_tag,
         get_deepseek_v3_2_structural_tag,
         get_deepseek_v4_structural_tag,
+        get_deepseek_v4_1_structural_tag,
         get_minimax_structural_tag,
         get_glm_4_7_structural_tag,
         get_cohere_structural_tag,
@@ -1451,6 +1464,7 @@ _EXCLUDE_TOKEN_MODELS = [
     "deepseek_v3_1",
     "deepseek_v3_2",
     "deepseek_v4",
+    "deepseek_v4_1",
     "qwen_3",
     "qwen_3_5",
     "minimax",
@@ -1477,13 +1491,16 @@ def test_exclude_special_tokens_default_excludes_think_tokens(model, tools):
 
 @pytest.mark.parametrize("model", _EXCLUDE_TOKEN_MODELS)
 @pytest.mark.parametrize("tools", [make_tools(["search"]), []])
-def test_exclude_special_tokens_false_excludes_nothing(model, tools):
-    """Opting out with ``exclude_special_tokens=False`` excludes nothing from free text."""
+def test_exclude_special_tokens_false_keeps_format_constraints(model, tools):
+    """Opting out allows special tokens while retaining tool availability constraints."""
 
     structural_tag = get_model_structural_tag(
         model, tools=tools, reasoning=True, exclude_special_tokens=False
     )
-    assert all(excludes == [] for excludes in _collect_excludes(structural_tag))
+    allowed_excludes = (
+        [[], ["<｜DSML｜ calls>"]] if model == "deepseek_v4_1" and not tools else [[]]
+    )
+    assert all(excludes in allowed_excludes for excludes in _collect_excludes(structural_tag))
     # The less-restrictive grammar must still build.
     xgr.Grammar.from_structural_tag(structural_tag)
 
@@ -2473,6 +2490,7 @@ _ANY_ORDER_MODELS = [
     "deepseek_v3_1",
     "deepseek_v3_2",
     "deepseek_v4",
+    "deepseek_v4_1",
     "minimax",
     "minimax_m3",
     "glm_4_7",

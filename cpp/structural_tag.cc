@@ -563,10 +563,11 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
       style = it->second.get<std::string>();
       if (style != "json" && style != "qwen_xml" && style != "minimax_xml" &&
           style != "minimax_m3_xml" && style != "deepseek_xml" && style != "glm_xml" &&
-          style != "cohere_xml" && style != "kimi_k3_xml") {
+          style != "cohere_xml" && style != "kimi_k3_xml" && style != "deepseek_v4_1_xml") {
         return ResultErr<ISTError>(
             "style must be \"json\", \"qwen_xml\", \"minimax_xml\", \"minimax_m3_xml\", "
-            "\"deepseek_xml\", \"glm_xml\", \"cohere_xml\", or \"kimi_k3_xml\""
+            "\"deepseek_xml\", \"glm_xml\", \"cohere_xml\", \"kimi_k3_xml\", or "
+            "\"deepseek_v4_1_xml\""
         );
       }
     }

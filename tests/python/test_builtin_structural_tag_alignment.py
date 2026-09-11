@@ -1,11 +1,12 @@
 """Validate builtin structural tags against official model renderers.
 
-Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4)
+Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4/V4.1)
 and Cohere Melody for CMD5 to render model outputs, then checks that xgrammar
 structural tag grammars accept them. Requires encoding_dsv32.py and
-encoding_dsv4.py in the same directory.
+encoding_dsv4.py in the same directory. V4.1 uses a revision-pinned official encoder.
 """
 
+import importlib.util
 import json
 import os
 import sys
@@ -108,6 +109,8 @@ MODEL_CONFIGS = [
     ("glm_4_7", "zai-org/GLM-4.7-Flash", False, {"enable_thinking": False}),
     ("deepseek_v4", "ENCODER:dsv4", True, {"thinking_mode": "thinking"}),
     ("deepseek_v4", "ENCODER:dsv4", False, {"thinking_mode": "chat"}),
+    ("deepseek_v4_1", "ENCODER:dsv41", True, {"thinking_mode": "thinking"}),
+    ("deepseek_v4_1", "ENCODER:dsv41", False, {"thinking_mode": "chat"}),
     # Command A+'s Hugging Face template still emits CMD4 JSON action blocks. Use
     # Cohere's official Melody renderer, which is the source of truth for CMD5.
     ("cohere", "MELODY:cmd5", True, {"reasoning": True}),
@@ -160,6 +163,7 @@ EOS_SUFFIXES = {
     "glm_4_7": [],
     "deepseek_v3_2": ["<｜end▁of▁sentence｜>"],
     "deepseek_v4": ["<｜end▁of▁sentence｜>"],
+    "deepseek_v4_1": ["<｜end▁of▁sentence｜>"],
     "cohere": ["<|END_OF_TURN_TOKEN|>"],
     "exaone": ["[|endofturn|]"],
 }
@@ -272,9 +276,28 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
     return strip_eos(output, stag_key, tokenizer)
 
 
+@lru_cache(maxsize=1)
+def load_deepseek_v41_encoder():
+    """Load the official, revision-pinned renderer (the release has no Jinja template)."""
+    from huggingface_hub import hf_hub_download
+
+    path = hf_hub_download(
+        "deepseek-ai/DeepSeek-V4.1-Flash",
+        "encoding/encoding.py",
+        revision="dba1be0a40aa45a94ad051997016db3960a90277",
+    )
+    spec = importlib.util.spec_from_file_location("encoding_dsv41", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def extract_output_encoder(encoder_name, stag_key, assistant_msg, tools, template_kwargs):
     if encoder_name == "dsv32":
         from encoding_dsv32 import encode_messages, eos_token
+    elif encoder_name == "dsv41":
+        encoder = load_deepseek_v41_encoder()
+        encode_messages, eos_token = encoder.encode_messages, encoder.eos_token
     else:
         from encoding_dsv4 import encode_messages, eos_token
 
