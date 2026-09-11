@@ -4151,6 +4151,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"minimax_xml", JSONFormat::kMiniMaxXML},
       {"minimax_m3_xml", JSONFormat::kMiniMaxM3XML},
       {"deepseek_xml", JSONFormat::kDeepSeekXML},
+      {"deepseek_v4_1_xml", JSONFormat::kDeepSeekV41XML},
       {"glm_xml", JSONFormat::kGlmXML},
       {"cohere_xml", JSONFormat::kCohereXML},
       {"kimi_k3_xml", JSONFormat::kKimiK3XML},
@@ -4205,6 +4206,7 @@ Grammar JSONSchemaToGrammar(
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
     case JSONFormat::kDeepSeekXML:
+    case JSONFormat::kDeepSeekV41XML:
     case JSONFormat::kGlmXML:
     case JSONFormat::kKimiK3XML: {
       XMLToolCallingConverter converter(
@@ -4309,6 +4311,7 @@ std::string JSONSchemaToEBNF(
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
     case JSONFormat::kDeepSeekXML:
+    case JSONFormat::kDeepSeekV41XML:
     case JSONFormat::kGlmXML:
     case JSONFormat::kKimiK3XML: {
       XMLToolCallingConverter converter(

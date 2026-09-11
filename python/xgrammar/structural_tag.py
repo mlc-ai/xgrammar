@@ -40,12 +40,14 @@ class JSONSchemaFormat(BaseModel):
         "glm_xml",
         "cohere_xml",
         "kimi_k3_xml",
+        "deepseek_v4_1_xml",
     ] = "json"
     """How to parse the content. Valid values: \"json\" (standard JSON), \"qwen_xml\" (Qwen XML:
     <parameter=key>value</parameter>), \"minimax_xml\" (MiniMax XML:
     <parameter name=\"key\">value</parameter>), \"minimax_m3_xml\" (MiniMax M3 recursive
     namespace XML: ]<]minimax[>[<key>value]<]minimax[>[</key>),
     \"deepseek_xml\" (DeepSeek XML(DeepSeek-v3.2): <{dsml_token}parameter name=\"key\" string=\"true|false\">value</{dsml_token}parameter>),
+    \"deepseek_v4_1_xml\" (DeepSeek-V4.1: <{dsml_token} parameter name=\"key\" string=\"true|false\">value</{dsml_token} parameter>),
     \"glm_xml\" (GLM XML: <arg_key>key</arg_key><arg_value>value</arg_value>),
     \"cohere_xml\" (Cohere XML: <cofl:value name=\"key\" type=\"raw|json|dict|list\">value</cofl:value>),
     \"kimi_k3_xml\" (Kimi-K3: <|open|>argument key=\"key\" type=\"type\"<|sep|>value<|close|>argument<|sep|>)."""
