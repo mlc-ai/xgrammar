@@ -454,6 +454,9 @@ std::string XMLToolCallingConverter::XMLValue(const std::string& json_value) con
 }
 
 int32_t XMLToolCallingConverter::XMLKeySuffix(const std::optional<std::string>& pinned_type) {
+  if (json_format_ == JSONFormat::kDeepSeekV41XML && pinned_type.has_value()) {
+    return ByteString(*pinned_type == "string" ? "\" string=\"true\">" : "\" string=\"false\">");
+  }
   if (json_format_ == JSONFormat::kDeepSeekXML || json_format_ == JSONFormat::kDeepSeekV41XML) {
     return Sequence(
         {ByteString("\" string=\""),
@@ -480,7 +483,7 @@ int32_t XMLToolCallingConverter::XMLKeySuffix(const std::optional<std::string>& 
   return ByteString(xml_wrapper_.key_wrapper_suffix);
 }
 
-std::optional<std::string> XMLToolCallingConverter::KimiK3TypeAttr(const SchemaSpecPtr& spec) {
+std::optional<std::string> XMLToolCallingConverter::XMLTypeAttr(const SchemaSpecPtr& spec) {
   if (spec == nullptr) {
     return std::nullopt;
   }
@@ -700,11 +703,10 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
     const std::string& key, const SchemaSpecPtr& schema
 ) {
   if (nested_object_level_ <= 1) {
-    // Only kimi_k3_xml encodes the value's type next to the key; the other formats would
-    // discard the result, so don't walk the schema for them.
+    // Only kimi_k3_xml uses this hook to encode the value's type next to the key.
     std::optional<std::string> pinned_type;
     if (json_format_ == JSONFormat::kKimiK3XML) {
-      pinned_type = KimiK3TypeAttr(schema);
+      pinned_type = XMLTypeAttr(schema);
     }
     return Sequence(
         {ByteString(xml_wrapper_.key_wrapper_prefix + EscapeAttrValue(key)),
@@ -712,6 +714,80 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
     );
   }
   return JSONSchemaConverter::FormatPropertyKey(key, schema);
+}
+
+int32_t XMLToolCallingConverter::FormatDeepSeekV41Param(
+    int32_t key_expr, const SchemaSpecPtr& schema, int32_t value_rule_id
+) {
+  // Creating alternative rules can reallocate the builder's rule storage.
+  std::string value_rule_name = builder_.GetRule(value_rule_id).name;
+  SchemaSpecPtr resolved = schema;
+  std::unordered_set<std::string> visited_refs;
+  while (resolved != nullptr) {
+    const auto* ref = std::get_if<RefSpec>(&resolved->spec);
+    if (ref == nullptr || !visited_refs.insert(ref->uri).second) break;
+    resolved = ResolveRefSchema(*ref, value_rule_name);
+  }
+
+  auto wrap = [&](int32_t value_expr, bool is_string) {
+    std::vector<int32_t> elements = {key_expr, XMLKeySuffix(is_string ? "string" : "json")};
+    // Whitespace in raw string parameters is part of the value, including for const/enum.
+    if (!is_string) elements.push_back(WhitespaceExpression());
+    elements.push_back(value_expr);
+    if (!is_string) elements.push_back(WhitespaceExpression());
+    elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
+    return Sequence(elements);
+  };
+
+  if (resolved == nullptr || std::holds_alternative<AnySpec>(resolved->spec)) {
+    return Choice(
+        {wrap(RuleRef(kXMLString), true),
+         wrap(
+             Choice(
+                 {RuleRef(kBasicNumber),
+                  RuleRef(kBasicBoolean),
+                  RuleRef(kBasicNull),
+                  RuleRef(kBasicArray),
+                  RuleRef(kBasicObject)}
+             ),
+             false
+         )}
+    );
+  }
+
+  auto options = std::visit(
+      [](const auto& spec) -> std::vector<SchemaSpecPtr> {
+        using T = std::decay_t<decltype(spec)>;
+        if constexpr (std::is_same_v<T, AnyOfSpec> || std::is_same_v<T, OneOfSpec>) {
+          return spec.options;
+        } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
+          return spec.type_schemas;
+        } else if constexpr (std::is_same_v<T, AllOfSpec>) {
+          if (spec.schemas.size() == 1) return spec.schemas;
+        } else if constexpr (std::is_same_v<T, EnumSpec>) {
+          std::vector<SchemaSpecPtr> result;
+          for (const auto& value : spec.json_values) {
+            result.push_back(SchemaSpec::Make(ConstSpec{value}, "", "enum_case"));
+          }
+          return result;
+        }
+        return {};
+      },
+      resolved->spec
+  );
+  if (!options.empty()) {
+    std::vector<int32_t> choices;
+    for (size_t index = 0; index < options.size(); ++index) {
+      int32_t option_rule_id =
+          CreateRule(options[index], value_rule_name + "_dsml_case_" + std::to_string(index));
+      choices.push_back(FormatDeepSeekV41Param(key_expr, options[index], option_rule_id));
+    }
+    return choices.size() == 1 ? choices[0] : Choice(choices);
+  }
+
+  return wrap(
+      RuleRef(value_rule_id), XMLTypeAttr(resolved) == std::optional<std::string>("string")
+  );
 }
 
 int32_t XMLToolCallingConverter::FormatProperty(
@@ -722,6 +798,11 @@ int32_t XMLToolCallingConverter::FormatProperty(
     const SchemaSpecPtr& schema
 ) {
   if (nested_object_level_ <= 1) {
+    if (json_format_ == JSONFormat::kDeepSeekV41XML) {
+      return FormatDeepSeekV41Param(
+          ByteString(xml_wrapper_.key_wrapper_prefix + key), schema, value_rule_id
+      );
+    }
     std::vector<int32_t> elements = {FormatPropertyKey(key, schema)};
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
       elements.push_back(WhitespaceExpression());
@@ -750,10 +831,17 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
     const SchemaSpecPtr& schema
 ) {
   if (nested_object_level_ <= 1) {
+    if (json_format_ == JSONFormat::kDeepSeekV41XML) {
+      return FormatDeepSeekV41Param(
+          Sequence({ByteString(xml_wrapper_.key_wrapper_prefix), key_pattern_expr}),
+          schema,
+          value_rule_id
+      );
+    }
     std::vector<int32_t> elements = {
         ByteString(xml_wrapper_.key_wrapper_prefix),
         key_pattern_expr,
-        XMLKeySuffix(json_format_ == JSONFormat::kKimiK3XML ? KimiK3TypeAttr(schema) : std::nullopt)
+        XMLKeySuffix(json_format_ == JSONFormat::kKimiK3XML ? XMLTypeAttr(schema) : std::nullopt)
     };
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
       elements.push_back(WhitespaceExpression());

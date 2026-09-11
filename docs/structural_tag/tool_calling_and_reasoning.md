@@ -262,8 +262,9 @@ The generated reasoning ends with `</think>`. EOS (`<｜end▁of▁sentence｜>`
 is handled by the matcher's stop token. Numeric reasoning effort and image inputs
 affect the prompt, not this output grammar.
 
-The parameter schema uses the same conversion rules as `deepseek_xml`; the
-`string` attribute is currently accepted independently of the value type.
+The `string` attribute is constrained with the parameter value: raw strings use
+`string="true"`, and JSON nonstrings use `string="false"`. This also applies to
+union types, references, mixed enums, and unconstrained parameters.
 
 For namespaced tools, pass the qualified wire name (for example, `web::search`)
 in `function.name`, including in named or allowed tool choices. Separate provider
