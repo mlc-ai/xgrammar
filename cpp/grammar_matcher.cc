@@ -1941,7 +1941,9 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                          << adaptive_token_mask.Print(tokenizer_info_);
     }
     int last_rejected_uncertain_range = 0;
-    for (const auto& cur_token_idx : adaptive_token_mask.uncertain_indices) {
+    const auto& uncertain_indices = adaptive_token_mask.uncertain_indices;
+    for (auto token_it = uncertain_indices.begin(); token_it != uncertain_indices.end();) {
+      const auto cur_token_idx = *token_it++;
       // Check if the current token is already accepted. If it is, we can skip it.
       if (tmp_accepted_bitset_[sorted_decoded_vocab[cur_token_idx].first]) {
         continue;
@@ -1952,6 +1954,14 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       if (cur_token_idx < last_rejected_uncertain_range) {
         if (adaptive_token_mask.store_type == StoreType::kRejected) {
           tmp_rejected_indices_delta_.push_back(cur_token_idx);
+        } else {
+          // Accepted-list/bitset masks need no per-token record for a rejected subtree.
+          // Sorted, distinct indices bound the number of remaining tokens in this subtree.
+          const auto search_size = std::min<int64_t>(
+              uncertain_indices.end() - token_it, last_rejected_uncertain_range - cur_token_idx - 1
+          );
+          token_it =
+              std::lower_bound(token_it, token_it + search_size, last_rejected_uncertain_range);
         }
         continue;
       }
