@@ -71,6 +71,8 @@ def test_tool_choice(reasoning, policy):
         CALLS.replace('name="query"', 'name="unknown"'),
         CALLS.replace('string="false">2', 'string="false">0'),
         CALLS.replace('string="false">2', 'string="false">"two"'),
+        CALLS.replace('name="query" string="true"', 'name="query" string="false"'),
+        CALLS.replace('name="limit" string="false"', 'name="limit" string="true"'),
         CALLS.replace(
             '<｜DSML｜ parameter name="limit" string="false">2</｜DSML｜ parameter>\n', ""
         ),
@@ -158,7 +160,7 @@ def test_parameter_order(any_order):
         ),
         ({"const": "fixed"}, "fixed", "true"),
         ({"enum": [1, 2]}, "2", "false"),
-        ({"anyOf": [{"type": "string"}, {"type": "null"}]}, "null", "false"),
+        ({"anyOf": [{"type": "integer"}, {"type": "null"}]}, "null", "false"),
     ],
 )
 def test_parameter_style(schema, value, string_attr):
@@ -176,6 +178,10 @@ def test_parameter_style(schema, value, string_attr):
         xgr.Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")),
     ]:
         assert _is_grammar_accept_string(grammar, output)
+        wrong_attr = "false" if string_attr == "true" else "true"
+        assert not _is_grammar_accept_string(
+            grammar, output.replace(f'string="{string_attr}"', f'string="{wrong_attr}"')
+        )
         assert not _is_grammar_accept_string(
             grammar, output.replace("｜DSML｜ parameter", "｜DSML｜parameter")
         )
@@ -213,6 +219,71 @@ def test_unconstrained_tool_parameters(function):
         )
     )
     assert _is_grammar_accept_string(grammar, CALLS)
+    assert not _is_grammar_accept_string(
+        grammar, CALLS.replace('string="false">2', 'string="false">not-json')
+    )
+
+
+@pytest.mark.parametrize(
+    "value_schema",
+    [
+        {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+        {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+        {"type": ["string", "integer"]},
+        {"$ref": "#/$defs/value"},
+        {"allOf": [{"type": ["string", "integer"]}]},
+        {},
+    ],
+)
+@pytest.mark.parametrize("dynamic", [False, True])
+def test_type_attribute_tracks_value_alternatives(value_schema, dynamic):
+    schema = {"type": "object", "$defs": {"value": {"type": ["string", "integer"]}}}
+    if dynamic:
+        schema["additionalProperties"] = value_schema
+    else:
+        schema.update({"properties": {"value": value_schema}, "required": ["value"]})
+    grammar = xgr.Grammar.from_structural_tag(
+        StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    )
+    for value, attribute, accepted in [
+        ("text", "true", True),
+        ("42", "true", True),
+        ("42", "false", True),
+        ("not-json", "false", False),
+        ('"text"', "false", False),
+    ]:
+        output = (
+            f'<｜DSML｜ parameter name="value" string="{attribute}">{value}</｜DSML｜ parameter>'
+        )
+        assert _is_grammar_accept_string(grammar, output) == accepted
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+def test_mixed_enum_and_string_whitespace(any_order):
+    schema = {
+        "type": "object",
+        "properties": {"value": {"enum": ["fixed", 2]}},
+        "required": ["value"],
+    }
+    grammar = xgr.Grammar.from_structural_tag(
+        StructuralTag(
+            format=JSONSchemaFormat(
+                json_schema=schema, style="deepseek_v4_1_xml", any_order=any_order
+            )
+        )
+    )
+    for value, attribute, accepted in [
+        ("fixed", "true", True),
+        ("2", "false", True),
+        (" 2 ", "false", True),
+        ("fixed", "false", False),
+        ("2", "true", False),
+        (" fixed ", "true", False),
+    ]:
+        output = (
+            f'<｜DSML｜ parameter name="value" string="{attribute}">{value}</｜DSML｜ parameter>'
+        )
+        assert _is_grammar_accept_string(grammar, output) == accepted
 
 
 def test_whitespace_limit_and_serialization():
@@ -229,7 +300,8 @@ def test_whitespace_limit_and_serialization():
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize("reasoning", [False, True])
 @pytest.mark.parametrize("policy", ["auto", "required", "forced"])
-def test_official_tokenizer_masks(reasoning, policy):
+@pytest.mark.parametrize("schema_kind", ["typed", "union", "unconstrained"])
+def test_official_tokenizer_masks(reasoning, policy, schema_kind):
     from test_builtin_structural_tag_alignment import extract_output_encoder
     from transformers import AutoTokenizer
 
@@ -244,6 +316,14 @@ def test_official_tokenizer_masks(reasoning, policy):
         {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
     )
     tools = copy.deepcopy(TOOLS)
+    for tool in tools:
+        if schema_kind == "union":
+            tool["function"]["parameters"]["properties"] = {
+                "query": {"type": ["string", "null"]},
+                "limit": {"anyOf": [{"type": "integer"}, {"type": "string"}]},
+            }
+        elif schema_kind == "unconstrained":
+            tool["function"]["parameters"] = {}
     stag = get_model_structural_tag(
         "deepseek_v4_1", tools=tools, reasoning=reasoning, tool_choice=tool_choice
     )
@@ -257,7 +337,14 @@ def test_official_tokenizer_masks(reasoning, policy):
         "tool_calls": [
             {
                 "type": "function",
-                "function": {"name": name, "arguments": {"query": "北京\n<code>", "limit": 2}},
+                "function": {
+                    "name": name,
+                    "arguments": (
+                        {"query": None, "limit": "two"}
+                        if schema_kind == "union" and name == "other"
+                        else {"query": "北京\n<code>", "limit": 2}
+                    ),
+                },
             }
             for name in (["search"] if policy == "forced" else ["search", "other"])
         ],
