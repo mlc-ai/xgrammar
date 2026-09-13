@@ -19,6 +19,51 @@
 namespace xgrammar {
 
 /*!
+ * \brief Converter for MiniMax M3's recursive namespace-prefixed XML format.
+ *
+ * This initial implementation supports schemas whose object property names are
+ * known when the grammar is built. Schemas requiring runtime element names are
+ * rejected explicitly.
+ */
+class MiniMaxM3XMLToolCallingConverter : public JSONSchemaConverter {
+ public:
+  MiniMaxM3XMLToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false
+  );
+
+ protected:
+  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateObject(
+      const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
+  ) override;
+  int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
+
+  int32_t FormatProperty(
+      const std::string& key,
+      int32_t value_rule_id,
+      const std::string& rule_name,
+      int64_t idx,
+      const SchemaSpecPtr& schema
+  ) override;
+  std::string NextSeparator(bool is_end = false) override;
+  void AddBasicRules() override;
+
+ private:
+  int32_t FormatElement(const std::string& name, int32_t value_rule_id);
+  int32_t GenerateLiteral(const picojson::value& value);
+  void ValidateObject(const ObjectSpec& spec) const;
+  static void ValidateElementName(const std::string& name);
+};
+
+/*!
  * \brief Converter for XML Tool Calling format (e.g., Qwen style).
  *
  * This converter generates a grammar where:
