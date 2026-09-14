@@ -3317,6 +3317,119 @@ def test_deepseek_v4_1_type_attribute_tracks_value_alternatives(value_schema, dy
         assert _is_grammar_accept_string(grammar, output) == accepted
 
 
+@pytest.mark.parametrize("keyword", ["anyOf", "oneOf"])
+@pytest.mark.parametrize("property_kind", ["named", "additional", "pattern"])
+def test_deepseek_v4_1_recursive_parameter_references(keyword, property_kind):
+    value_schema = {"$ref": "#/$defs/V"}
+    schema = {"type": "object", "$defs": {"V": {keyword: [{"type": "string"}, value_schema]}}}
+    if property_kind == "named":
+        schema.update(
+            properties={"value_1": value_schema, "value_2": value_schema},
+            required=["value_1", "value_2"],
+            additionalProperties=False,
+        )
+    elif property_kind == "additional":
+        schema["additionalProperties"] = value_schema
+    else:
+        schema.update(patternProperties={"^value_[12]$": value_schema}, additionalProperties=False)
+
+    output = "".join(
+        f'<｜DSML｜ parameter name="{name}" string="true">hello</｜DSML｜ parameter>'
+        for name in ["value_1", "value_2"]
+    )
+    stag = StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    for grammar in [
+        Grammar.from_structural_tag(stag),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")),
+    ]:
+        assert _is_grammar_accept_string(grammar, output)
+        assert not _is_grammar_accept_string(
+            grammar, output.replace('string="true"', 'string="false"')
+        )
+        assert not _is_grammar_accept_string(grammar, output[:-1])
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+def test_deepseek_v4_1_mutually_recursive_parameter_references(any_order):
+    schema = {
+        "type": "object",
+        "$defs": {
+            "V": {"anyOf": [{"const": "fixed"}, {"$ref": "#/$defs/Alias"}]},
+            "Alias": {"allOf": [{"$ref": "#/$defs/W"}]},
+            "W": {"oneOf": [{"type": "integer", "minimum": 1}, {"$ref": "#/$defs/V"}]},
+        },
+        "properties": {"first": {"$ref": "#/$defs/V"}, "second": {"$ref": "#/$defs/W"}},
+        "required": ["first", "second"],
+        "additionalProperties": False,
+    }
+    stag = StructuralTag(
+        format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml", any_order=any_order)
+    )
+    for grammar in [
+        Grammar.from_structural_tag(stag),
+        Grammar.from_ebnf(
+            _json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml", any_order=any_order)
+        ),
+    ]:
+        for value, attribute, accepted in [
+            ("fixed", "true", True),
+            ("2", "false", True),
+            (" 2 ", "false", True),
+            ("fixed", "false", False),
+            ('"fixed"', "false", False),
+            ("2", "true", False),
+            ("0", "false", False),
+            (" fixed ", "true", False),
+        ]:
+            parameters = [
+                f'<｜DSML｜ parameter name="{name}" string="{attribute}">{value}</｜DSML｜ parameter>'
+                for name in ["first", "second"]
+            ]
+            assert _is_grammar_accept_string(grammar, "".join(parameters)) == accepted
+            assert _is_grammar_accept_string(grammar, "".join(reversed(parameters))) == (
+                accepted and any_order
+            )
+
+
+@pytest.mark.parametrize("from_ebnf", [False, True])
+def test_deepseek_v4_1_shared_parameter_references_have_linear_grammar_size(from_ebnf):
+    rule_counts = []
+    for num_defs in [12, 24]:
+        definitions = {"V0": {"const": "fixed"}, "V1": {"type": "integer", "minimum": 1}}
+        for index in range(2, num_defs):
+            definitions[f"V{index}"] = {
+                "anyOf": [{"$ref": f"#/$defs/V{index - 1}"}, {"$ref": f"#/$defs/V{index - 2}"}]
+            }
+        schema = {
+            "type": "object",
+            "$defs": definitions,
+            "properties": {"value": {"$ref": f"#/$defs/V{num_defs - 1}"}},
+            "required": ["value"],
+            "additionalProperties": False,
+        }
+        if from_ebnf:
+            grammar = Grammar.from_ebnf(
+                _json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")
+            )
+        else:
+            grammar = Grammar.from_structural_tag(
+                StructuralTag(
+                    format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml")
+                )
+            )
+        rule_counts.append(len(str(grammar).splitlines()))
+        for value, attribute, accepted in [
+            ("fixed", "true", True),
+            ("2", "false", True),
+            ("fixed", "false", False),
+            ("2", "true", False),
+        ]:
+            output = f'<｜DSML｜ parameter name="value" string="{attribute}">{value}</｜DSML｜ parameter>'
+            assert _is_grammar_accept_string(grammar, output) == accepted
+    # Doubling this shared reference graph must not expand its exponentially many paths.
+    assert rule_counts[1] <= 2 * rule_counts[0], rule_counts
+
+
 @pytest.mark.parametrize("any_order", [False, True])
 def test_deepseek_v4_1_mixed_enum_and_string_whitespace(any_order):
     schema = {
