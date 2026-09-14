@@ -4,7 +4,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pytest
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.structural_tag import JSONSchemaFormat, SequenceFormat, StructuralTag, TagFormat
@@ -13,9 +13,7 @@ from xgrammar.testing import _is_grammar_accept_string
 
 class Profiler:
     def __init__(self, tokenizer_id: str):
-        tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_id, use_fast=True, trust_remote_code=True
-        )
+        tokenizer = load_tokenizer(tokenizer_id, use_fast=True, trust_remote_code=True)
         self.tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
         self.compiler = xgr.GrammarCompiler(
             self.tokenizer_info, max_threads=16, cache_enabled=False

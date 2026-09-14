@@ -7,7 +7,7 @@ from typing import Any, List, Tuple
 
 import pytest
 from pydantic import BaseModel, RootModel
-from transformers import AutoTokenizer  # type: ignore
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
@@ -363,7 +363,7 @@ def test_serialize_compiled_grammar_functional():
 @pytest.mark.hf_token_required
 def test_serialize_compiled_grammar_with_hf_tokenizer():
     """Test CompiledGrammar serialization with a real HuggingFace tokenizer."""
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = load_tokenizer(
         "meta-llama/Llama-3.1-8B-Instruct", use_fast=True, trust_remote_code=True
     )
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)

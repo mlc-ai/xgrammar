@@ -7,7 +7,7 @@ from typing import List, Optional, Union
 
 import pytest
 import torch
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import (
@@ -97,7 +97,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 def test_fill_next_token_bitmask(
     tokenizer_path: str, input_str: str, expected_rejected_sizes: Optional[List[int]]
 ):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
 
@@ -513,7 +513,7 @@ tokenizer_path_override_stop_tokens = [
     "tokenizer_path, override_stop_tokens", tokenizer_path_override_stop_tokens
 )
 def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[int]):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info_1 = xgr.TokenizerInfo.from_huggingface(
         tokenizer, stop_token_ids=override_stop_tokens
     )
@@ -531,7 +531,7 @@ def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[in
 @pytest.mark.hf_token_required
 def test_fill_next_token_bitmask_errors():
     # llama 3.1 8b
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = load_tokenizer(
         "meta-llama/Meta-Llama-3-8B-Instruct", use_fast=True, trust_remote_code=True
     )
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
@@ -816,7 +816,7 @@ def test_batch_fill_next_token_bitmask_pressure():
             31970, 31841, 31841, 261, 261, 261, 261, 261, 261, 261, 261, 31970, 31999,
         # fmt: on
     ]
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matchers = [
         _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
@@ -849,7 +849,7 @@ def test_batch_fill_next_token_bitmask_pressure_single_thread():
             31970, 31841, 31841, 261, 261, 261, 261, 261, 261, 261, 261, 31970, 31999,
         # fmt: on
     ]
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matchers = [
         _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
@@ -882,7 +882,7 @@ def test_batch_fill_next_token_bitmask_pressure_shuffled():
             31970, 31841, 31841, 261, 261, 261, 261, 261, 261, 261, 261, 31970, 31999,
         # fmt: on
     ]
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matchers = [
         _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)

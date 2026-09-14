@@ -7,7 +7,7 @@ from typing import List
 
 import pytest
 from pydantic import BaseModel
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
@@ -209,7 +209,7 @@ def test_structural_tag_mask_gen():
 
     # Set up tokenizer
     tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_id, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
 
     # Compile grammar and create matcher
@@ -382,7 +382,7 @@ def test_excludes_overlapping_prefixes():
 @pytest.mark.hf_token_required
 def test_utf8_structural_tag_begin_end():
     model = "deepseek-ai/DeepSeek-V3-0324"
-    tokenizer = AutoTokenizer.from_pretrained(model)
+    tokenizer = load_tokenizer(model)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
     structures = [
@@ -395,7 +395,7 @@ def test_utf8_structural_tag_begin_end():
 @pytest.mark.hf_token_required
 def test_pressure_structural_tag():
     model = "meta-llama/Llama-3.1-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(model, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(model, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1)
     threads = []
@@ -571,7 +571,7 @@ def test_tag_dispatch_perf(ebnf, input_str):
     import statistics
 
     tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_id, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar = xgr.Grammar.from_ebnf(ebnf)
     input_tokens = tokenizer.encode(input_str, add_special_tokens=False)

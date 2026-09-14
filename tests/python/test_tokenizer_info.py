@@ -3,7 +3,8 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 import pytest
-from transformers import AutoTokenizer, PreTrainedTokenizerBase
+from tokenizer_utils import load_tokenizer
+from transformers import PreTrainedTokenizerBase
 
 import xgrammar as xgr
 from xgrammar.tokenizer_info import _BYTE_LEVEL_CHARSET
@@ -69,7 +70,7 @@ def test_build_tokenizer_info(
     tokenizer_path: str,
     tokenizer_info_storage: Dict[str, Tuple[PreTrainedTokenizerBase, xgr.TokenizerInfo]],
 ):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     tokenizer_info_storage[tokenizer_path] = (tokenizer, tokenizer_info)
 
@@ -210,7 +211,7 @@ tokenizer_path__token_ids__raw_tokens = [
     "tokenizer_path, token_ids, raw_tokens", tokenizer_path__token_ids__raw_tokens
 )
 def test_vocab_conversion(tokenizer_path: str, token_ids: List[int], raw_tokens: List[bytes]):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     vocab = tokenizer_info.decoded_vocab
     for token_id, raw_token in zip(token_ids, raw_tokens):
@@ -236,7 +237,7 @@ tokenizer_path__metadata_str = [
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize("tokenizer_path, metadata_str", tokenizer_path__metadata_str)
 def test_dump_metadata_load(tokenizer_path: str, metadata_str: str):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     assert tokenizer_info.dump_metadata() == metadata_str
 
@@ -265,7 +266,7 @@ def test_special_token_detection():
     "tokenizer_path", ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
 )
 def test_customize_stop_token_ids(tokenizer_path: str):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = load_tokenizer(tokenizer_path)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, stop_token_ids=[1, 2, 3])
     assert tokenizer_info.stop_token_ids == [1, 2, 3]
 
@@ -275,7 +276,7 @@ def test_customize_stop_token_ids(tokenizer_path: str):
     "tokenizer_path", ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
 )
 def test_padding_vocab_size(tokenizer_path: str):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = load_tokenizer(tokenizer_path)
     original_vocab_size = len(tokenizer.get_vocab())
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(
         tokenizer, vocab_size=original_vocab_size + 5
@@ -294,7 +295,7 @@ tokenizer_path__model_vocab_size = [
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize("tokenizer_path, model_vocab_size", tokenizer_path__model_vocab_size)
 def test_model_vocab_size_smaller_than_tokenizer(tokenizer_path: str, model_vocab_size: int):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = load_tokenizer(tokenizer_path)
     original_vocab_size = len(tokenizer.get_vocab())
     assert original_vocab_size > model_vocab_size
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=model_vocab_size)
