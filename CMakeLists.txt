@@ -75,7 +75,8 @@ set(XGRAMMAR_INCLUDE_PATH ${PROJECT_SOURCE_DIR}/3rdparty/picojson
 )
 
 file(GLOB_RECURSE XGRAMMAR_SOURCES_PATH CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/cpp/*.cc")
-list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "${PROJECT_SOURCE_DIR}/cpp/tvm_ffi/.*\\.cc")
+# Match the source suffix: development-version directories can contain regex characters like '+'.
+list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "/cpp/tvm_ffi/.*\\.cc$")
 
 add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
 target_include_directories(xgrammar PUBLIC include)
