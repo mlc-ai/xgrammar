@@ -2669,24 +2669,87 @@
 
 <span class="sd">    - DeepSeek-V4</span>
 <span class="sd">    """</span>
-    <span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">=</span> <span class="s1">'&lt;｜DSML｜invoke name="'</span>
+    <span class="k">return</span> <span class="n">_get_deepseek_v4_structural_tag</span><span class="p">(</span>
+        <span class="n">tools</span><span class="p">,</span>
+        <span class="n">tool_choice</span><span class="p">,</span>
+        <span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">any_order</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">max_whitespace_cnt</span><span class="p">,</span>
+        <span class="n">v4_1</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_deepseek_v4_1_structural_tag">
+<a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_deepseek_v4_1_structural_tag">[docs]</a>
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"deepseek_v4_1"</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_deepseek_v4_1_structural_tag</span><span class="p">(</span>
+    <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Get DeepSeek-V4.1-Flash reasoning and tool-call structural tag format.</span>
+
+<span class="sd">    Corresponding model key: ``"deepseek_v4_1"``.</span>
+
+<span class="sd">    Reference: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/main/encoding/encoding.py</span>
+
+<span class="sd">    V4.1 uses ``&lt;｜DSML｜ calls&gt;`` with space-prefixed ``invoke`` and</span>
+<span class="sd">    ``parameter`` tags. String arguments are raw text; other values are JSON.</span>
+<span class="sd">    Namespace-qualified tools use ``namespace::name`` as the function name.</span>
+
+<span class="sd">    Apply this tag after the generation prompt, which already ends in</span>
+<span class="sd">    ``&lt;think&gt;`` (reasoning) or ``&lt;/think&gt;`` (chat). EOS is handled by the</span>
+<span class="sd">    tokenizer's stop token. Reasoning effort and image inputs are encoded</span>
+<span class="sd">    in the prompt and do not change the output grammar.</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">_get_deepseek_v4_structural_tag</span><span class="p">(</span>
+        <span class="n">tools</span><span class="p">,</span>
+        <span class="n">tool_choice</span><span class="p">,</span>
+        <span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">any_order</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">max_whitespace_cnt</span><span class="p">,</span>
+        <span class="n">v4_1</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_get_deepseek_v4_structural_tag</span><span class="p">(</span>
+    <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]],</span>
+    <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">],</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">],</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">v4_1</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
+    <span class="n">invoke</span> <span class="o">=</span> <span class="s2">" invoke"</span> <span class="k">if</span> <span class="n">v4_1</span> <span class="k">else</span> <span class="s2">"invoke"</span>
+    <span class="n">calls</span> <span class="o">=</span> <span class="s2">" calls"</span> <span class="k">if</span> <span class="n">v4_1</span> <span class="k">else</span> <span class="s2">"tool_calls"</span>
+    <span class="n">INVOKE_BEGIN_PREFIX</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">'&lt;｜DSML｜</span><span class="si">{</span><span class="n">invoke</span><span class="si">}</span><span class="s1"> name="'</span>
     <span class="n">INVOKE_BEGIN_SUFFIX</span> <span class="o">=</span> <span class="s1">'"&gt;</span><span class="se">\n</span><span class="s1">'</span>
     <span class="c1"># See get_deepseek_v3_2_structural_tag for the rationale on INVOKE_END +</span>
     <span class="c1"># INVOKE_SEPARATOR splitting the single "\n" join that the chat template</span>
     <span class="c1"># uses between consecutive &lt;｜DSML｜invoke&gt; blocks.</span>
-    <span class="n">INVOKE_END</span> <span class="o">=</span> <span class="s2">"&lt;/｜DSML｜invoke&gt;</span><span class="se">\n</span><span class="s2">"</span>
+    <span class="n">INVOKE_END</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"&lt;/｜DSML｜</span><span class="si">{</span><span class="n">invoke</span><span class="si">}</span><span class="s2">&gt;</span><span class="se">\n</span><span class="s2">"</span>
     <span class="n">INVOKE_SEPARATOR</span> <span class="o">=</span> <span class="s2">""</span>
     <span class="n">TOOL_CALLS_PREFIX</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n\n</span><span class="s2">"</span>
-    <span class="n">FUNCTION_CALLS_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;｜DSML｜tool_calls&gt;</span><span class="se">\n</span><span class="s2">"</span>
-    <span class="n">FUNCTION_CALLS_END</span> <span class="o">=</span> <span class="s2">"&lt;/｜DSML｜tool_calls&gt;"</span>
-    <span class="n">FUNCTION_CALLS_TRIGGER</span> <span class="o">=</span> <span class="s2">"&lt;｜DSML｜tool_calls&gt;"</span>
+    <span class="n">FUNCTION_CALLS_BEGIN</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"&lt;｜DSML｜</span><span class="si">{</span><span class="n">calls</span><span class="si">}</span><span class="s2">&gt;</span><span class="se">\n</span><span class="s2">"</span>
+    <span class="n">FUNCTION_CALLS_END</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"&lt;/｜DSML｜</span><span class="si">{</span><span class="n">calls</span><span class="si">}</span><span class="s2">&gt;"</span>
+    <span class="n">FUNCTION_CALLS_TRIGGER</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"&lt;｜DSML｜</span><span class="si">{</span><span class="n">calls</span><span class="si">}</span><span class="s2">&gt;"</span>
     <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;think&gt;"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;/think&gt;"</span>
     <span class="n">THINK_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">]</span>
-    <span class="n">XML_STYLE</span> <span class="o">=</span> <span class="s2">"deepseek_xml"</span>
+    <span class="n">XML_STYLE</span> <span class="o">=</span> <span class="s2">"deepseek_v4_1_xml"</span> <span class="k">if</span> <span class="n">v4_1</span> <span class="k">else</span> <span class="s2">"deepseek_xml"</span>
 
     <span class="n">tools</span> <span class="o">=</span> <span class="n">tools</span> <span class="ow">or</span> <span class="p">[]</span>
-    <span class="n">builtin_tools</span> <span class="o">=</span> <span class="n">builtin_tools</span> <span class="ow">or</span> <span class="p">[]</span>
     <span class="k">if</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
         <span class="n">tags</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">:</span>
@@ -2724,9 +2787,12 @@
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
-                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
-            <span class="p">)</span>
+            <span class="n">excludes</span> <span class="o">=</span> <span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">v4_1</span><span class="p">:</span>
+                <span class="c1"># With no available tools (including tool_choice="none"), a calls block</span>
+                <span class="c1"># must not slip through as unconstrained text.</span>
+                <span class="n">excludes</span> <span class="o">=</span> <span class="p">[</span><span class="o">*</span><span class="n">excludes</span><span class="p">,</span> <span class="n">FUNCTION_CALLS_TRIGGER</span><span class="p">]</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">excludes</span><span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"forced"</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
@@ -2782,8 +2848,7 @@
         <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
         <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span>
     <span class="p">)</span>
-    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
-
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="get_cohere_structural_tag">

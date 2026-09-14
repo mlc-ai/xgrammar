@@ -152,7 +152,7 @@ Matches content that conforms to a JSON Schema.
 | Field | Type | Default |
 | --- | --- | --- |
 | `json_schema` | `object` | (required) |
-| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"minimax_m3_xml"` \| `"deepseek_xml"` \| `"glm_xml"` \| `"cohere_xml"` \| `"kimi_k3_xml"` | `"json"` |
+| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"minimax_m3_xml"` \| `"deepseek_xml"` \| `"deepseek_v4_1_xml"` \| `"glm_xml"` \| `"cohere_xml"` \| `"kimi_k3_xml"` | `"json"` |
 | `any_order` | `bool` | `false` |
 
 - **Use it when**: the structured part is naturally expressed as schema-constrained data
@@ -163,7 +163,8 @@ Matches content that conforms to a JSON Schema.
 - `"qwen_xml"`: Qwen-style XML parameters, such as `<parameter=name>value</parameter>`
 - `"minimax_xml"`: MiniMax-style XML parameters, such as `<parameter name="name">value</parameter>`
 - `"minimax_m3_xml"`: MiniMax M3 namespace-prefixed XML. Fixed-name objects and arrays are encoded recursively, for example `]<]minimax[>[<city>Paris]<]minimax[>[</city>`. Schemas requiring runtime property names—for example schemas that permit `additionalProperties` or use `patternProperties` / `propertyNames`—and unconstrained schemas are rejected. String pattern, recognized format, and length constraints are also unsupported because string bodies must exclude the namespace marker.
-- `"deepseek_xml"`: DeepSeek-v3.2 XML parameter format
+- `"deepseek_xml"`: DeepSeek-V3.2 / V4 XML parameter format
+- `"deepseek_v4_1_xml"`: DeepSeek-V4.1 XML parameters, using `<｜DSML｜ parameter name="key" string="true|false">value</｜DSML｜ parameter>` (the space after `｜DSML｜` is significant)
 - `"glm_xml"`: GLM-style XML parameter format, such as `<arg_key>name</arg_key><arg_value>value</arg_value>`
 - `"cohere_xml"`: Cohere-style XML values, such as `<cofl:value name="name" type="raw">value</cofl:value>`
 - `"kimi_k3_xml"`: Kimi-K3 argument format, such as `<|open|>argument key="name" type="string"<|sep|>value<|close|>argument<|sep|>`. The `type` attribute is fixed to the type each declared property is rendered with (`integer` and `number` schemas both render as `number`); keys with no declared schema accept any type name.
