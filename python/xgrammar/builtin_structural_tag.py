@@ -2342,24 +2342,83 @@ def get_deepseek_v4_structural_tag(
 
     - DeepSeek-V4
     """
-    INVOKE_BEGIN_PREFIX = '<｜DSML｜invoke name="'
+    return _get_deepseek_v4_structural_tag(
+        tools,
+        tool_choice,
+        reasoning,
+        any_order,
+        exclude_special_tokens,
+        max_whitespace_cnt,
+        v4_1=False,
+    )
+
+
+@register_model_structural_tag("deepseek_v4_1")
+def get_deepseek_v4_1_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
+    any_order: bool = False,
+    exclude_special_tokens: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get DeepSeek-V4.1-Flash reasoning and tool-call structural tag format.
+
+    Corresponding model key: ``"deepseek_v4_1"``.
+
+    Reference: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/main/encoding/encoding.py
+
+    V4.1 uses ``<｜DSML｜ calls>`` with space-prefixed ``invoke`` and
+    ``parameter`` tags. String arguments are raw text; other values are JSON.
+    Namespace-qualified tools use ``namespace::name`` as the function name.
+
+    Apply this tag after the generation prompt, which already ends in
+    ``<think>`` (reasoning) or ``</think>`` (chat). EOS is handled by the
+    tokenizer's stop token. Reasoning effort and image inputs are encoded
+    in the prompt and do not change the output grammar.
+    """
+    return _get_deepseek_v4_structural_tag(
+        tools,
+        tool_choice,
+        reasoning,
+        any_order,
+        exclude_special_tokens,
+        max_whitespace_cnt,
+        v4_1=True,
+    )
+
+
+def _get_deepseek_v4_structural_tag(
+    tools: Optional[List[FunctionToolParam]],
+    tool_choice: Literal["auto", "required", "forced"],
+    reasoning: Literal["enabled", "disabled", "auto"],
+    any_order: bool,
+    exclude_special_tokens: bool,
+    max_whitespace_cnt: Optional[int],
+    *,
+    v4_1: bool,
+) -> StructuralTag:
+    invoke = " invoke" if v4_1 else "invoke"
+    calls = " calls" if v4_1 else "tool_calls"
+    INVOKE_BEGIN_PREFIX = f'<｜DSML｜{invoke} name="'
     INVOKE_BEGIN_SUFFIX = '">\n'
     # See get_deepseek_v3_2_structural_tag for the rationale on INVOKE_END +
     # INVOKE_SEPARATOR splitting the single "\n" join that the chat template
     # uses between consecutive <｜DSML｜invoke> blocks.
-    INVOKE_END = "</｜DSML｜invoke>\n"
+    INVOKE_END = f"</｜DSML｜{invoke}>\n"
     INVOKE_SEPARATOR = ""
     TOOL_CALLS_PREFIX = "\n\n"
-    FUNCTION_CALLS_BEGIN = "<｜DSML｜tool_calls>\n"
-    FUNCTION_CALLS_END = "</｜DSML｜tool_calls>"
-    FUNCTION_CALLS_TRIGGER = "<｜DSML｜tool_calls>"
+    FUNCTION_CALLS_BEGIN = f"<｜DSML｜{calls}>\n"
+    FUNCTION_CALLS_END = f"</｜DSML｜{calls}>"
+    FUNCTION_CALLS_TRIGGER = f"<｜DSML｜{calls}>"
     THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
-    XML_STYLE = "deepseek_xml"
+    XML_STYLE = "deepseek_v4_1_xml" if v4_1 else "deepseek_xml"
 
     tools = tools or []
-    builtin_tools = builtin_tools or []
     if tool_choice == "auto":
         tags = []
         for tool in tools:
@@ -2397,9 +2456,12 @@ def get_deepseek_v4_structural_tag(
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             )
         else:
-            suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
-            )
+            excludes = _text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
+            if v4_1:
+                # With no available tools (including tool_choice="none"), a calls block
+                # must not slip through as unconstrained text.
+                excludes = [*excludes, FUNCTION_CALLS_TRIGGER]
+            suffix_tag = AnyTextFormat(excludes=excludes)
 
     elif tool_choice == "forced":
         if not tools:

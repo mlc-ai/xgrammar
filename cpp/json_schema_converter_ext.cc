@@ -411,6 +411,8 @@ const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
           "",
           // TODO(Linzhang): We do not validate the string's value, and we accept both.
           "</｜DSML｜parameter>"}},
+        {JSONFormat::kDeepSeekV41XML,
+         {"<｜DSML｜ parameter name=\"", "", "", "</｜DSML｜ parameter>"}},
         {JSONFormat::kGlmXML, {"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"}},
         {JSONFormat::kCohereXML, {"<cofl:value", ">", "", "</cofl:value>"}},
         {JSONFormat::kKimiK3XML,
@@ -452,7 +454,7 @@ std::string XMLToolCallingConverter::XMLValue(const std::string& json_value) con
 }
 
 int32_t XMLToolCallingConverter::XMLKeySuffix(const std::optional<std::string>& pinned_type) {
-  if (json_format_ == JSONFormat::kDeepSeekXML) {
+  if (json_format_ == JSONFormat::kDeepSeekXML || json_format_ == JSONFormat::kDeepSeekV41XML) {
     return Sequence(
         {ByteString("\" string=\""),
          Choice({ByteString("true"), ByteString("false")}),
@@ -792,6 +794,10 @@ void XMLToolCallingConverter::AddCache(const std::string& key, int32_t rule_id) 
 std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
+  }
+  if (json_format_ == JSONFormat::kDeepSeekV41XML && nested_object_level_ == 0 && key == "{}") {
+    // Unconstrained tool arguments are an XML parameter list, not one parameter's raw value.
+    return rule_cache_manager_.GetCache(kObjectCacheKey, false);
   }
   // At level 0, {"type":"object"} is the root tool-arguments object and uses XML parameter
   // tags. At level 1 it is the value of one such parameter and must use the inner JSON object

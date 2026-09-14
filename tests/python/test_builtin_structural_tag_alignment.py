@@ -1,11 +1,12 @@
 """Validate builtin structural tags against official model renderers.
 
-Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4)
+Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4/V4.1)
 and Cohere Melody for CMD5 to render model outputs, then checks that xgrammar
 structural tag grammars accept them. Requires encoding_dsv32.py and
-encoding_dsv4.py in the same directory.
+encoding_dsv4.py in the same directory. V4.1 uses a revision-pinned official encoder.
 """
 
+import importlib.util
 import json
 import os
 import sys
@@ -15,6 +16,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+import xgrammar as xgr
 from xgrammar import Grammar
 from xgrammar.builtin_structural_tag import get_model_structural_tag
 from xgrammar.testing import _is_grammar_accept_string
@@ -108,6 +110,8 @@ MODEL_CONFIGS = [
     ("glm_4_7", "zai-org/GLM-4.7-Flash", False, {"enable_thinking": False}),
     ("deepseek_v4", "ENCODER:dsv4", True, {"thinking_mode": "thinking"}),
     ("deepseek_v4", "ENCODER:dsv4", False, {"thinking_mode": "chat"}),
+    ("deepseek_v4_1", "ENCODER:dsv41", True, {"thinking_mode": "thinking"}),
+    ("deepseek_v4_1", "ENCODER:dsv41", False, {"thinking_mode": "chat"}),
     # Command A+'s Hugging Face template still emits CMD4 JSON action blocks. Use
     # Cohere's official Melody renderer, which is the source of truth for CMD5.
     ("cohere", "MELODY:cmd5", True, {"reasoning": True}),
@@ -160,6 +164,7 @@ EOS_SUFFIXES = {
     "glm_4_7": [],
     "deepseek_v3_2": ["<｜end▁of▁sentence｜>"],
     "deepseek_v4": ["<｜end▁of▁sentence｜>"],
+    "deepseek_v4_1": ["<｜end▁of▁sentence｜>"],
     "cohere": ["<|END_OF_TURN_TOKEN|>"],
     "exaone": ["[|endofturn|]"],
 }
@@ -272,9 +277,28 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
     return strip_eos(output, stag_key, tokenizer)
 
 
+@lru_cache(maxsize=1)
+def load_deepseek_v41_encoder():
+    """Load the official, revision-pinned renderer (the release has no Jinja template)."""
+    from huggingface_hub import hf_hub_download
+
+    path = hf_hub_download(
+        "deepseek-ai/DeepSeek-V4.1-Flash",
+        "encoding/encoding.py",
+        revision="dba1be0a40aa45a94ad051997016db3960a90277",
+    )
+    spec = importlib.util.spec_from_file_location("encoding_dsv41", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def extract_output_encoder(encoder_name, stag_key, assistant_msg, tools, template_kwargs):
     if encoder_name == "dsv32":
         from encoding_dsv32 import encode_messages, eos_token
+    elif encoder_name == "dsv41":
+        encoder = load_deepseek_v41_encoder()
+        encode_messages, eos_token = encoder.encode_messages, encoder.eos_token
     else:
         from encoding_dsv4 import encode_messages, eos_token
 
@@ -591,6 +615,68 @@ def test_cohere_melody_property_name_alignment(parameters, arguments, serialized
     validate_output(
         "cohere", tools, tool_choice="required", reasoning=False, model_output=model_output
     )
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("reasoning", [False, True])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced"])
+def test_deepseek_v4_1_official_tokenizer_masks(reasoning, policy):
+    from transformers import AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        "deepseek-ai/DeepSeek-V4.1-Flash", revision="dba1be0a40aa45a94ad051997016db3960a90277"
+    )
+    info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=129280)
+    assert info.vocab_type == xgr.VocabType.BYTE_LEVEL
+    assert info.stop_token_ids == [1]
+    assert tokenizer.encode("｜DSML｜", add_special_tokens=False) == [128825]
+    tool_choice = (
+        {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    )
+    schema = {
+        "type": "object",
+        "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1}},
+        "required": ["query", "limit"],
+        "additionalProperties": False,
+    }
+    tools = [
+        {"type": "function", "function": {"name": name, "parameters": schema}}
+        for name in ("search", "other")
+    ]
+    stag = get_model_structural_tag(
+        "deepseek_v4_1", tools=tools, reasoning=reasoning, tool_choice=tool_choice
+    )
+    compiled = xgr.GrammarCompiler(info).compile_structural_tag(stag)
+    matcher = xgr.GrammarMatcher(compiled)
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    message = {
+        "role": "assistant",
+        "content": "",
+        "reasoning_content": "Plan." if reasoning else "",
+        "tool_calls": [
+            {
+                "type": "function",
+                "function": {"name": name, "arguments": {"query": "北京\n<code>", "limit": 2}},
+            }
+            for name in (["search"] if policy == "forced" else ["search", "other"])
+        ],
+    }
+    output = extract_output_encoder(
+        "dsv41",
+        "deepseek_v4_1",
+        message,
+        tools,
+        {"thinking_mode": "thinking" if reasoning else "chat"},
+    )
+    token_ids = tokenizer.encode(output, add_special_tokens=False)
+    assert tokenizer.decode(token_ids) == output
+    for index, token_id in enumerate(token_ids + [tokenizer.eos_token_id]):
+        matcher.fill_next_token_bitmask(bitmask)
+        if policy != "auto" and index < len(token_ids):
+            assert not (int(bitmask[0, 0]) >> tokenizer.eos_token_id) & 1
+        assert (int(bitmask[0, token_id // 32]) >> (token_id % 32)) & 1, token_id
+        assert matcher.accept_token(token_id), token_id
+    assert matcher.is_terminated()
 
 
 if __name__ == "__main__":

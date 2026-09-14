@@ -202,12 +202,13 @@ enum class JSONFormat : int {
   kCohereXML = 5,
   kKimiK3XML = 6,
   kMiniMaxM3XML = 7,
+  kDeepSeekV41XML = 8,
 };
 
 /*!
  * \brief Convert a format name to JSONFormat.
  * \param format One of "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml",
- * "glm_xml", "cohere_xml", or "kimi_k3_xml".
+ * "glm_xml", "cohere_xml", "kimi_k3_xml", or "deepseek_v4_1_xml".
  * \return The corresponding JSONFormat, or std::nullopt if the name is not recognized.
  */
 std::optional<JSONFormat> JSONFormatFromString(const std::string& format);

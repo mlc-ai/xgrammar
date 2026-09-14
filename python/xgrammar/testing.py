@@ -33,6 +33,7 @@ def _json_schema_to_ebnf(
         "glm_xml",
         "cohere_xml",
         "kimi_k3_xml",
+        "deepseek_v4_1_xml",
     ] = "json",
     any_order: bool = False,
 ) -> str:
@@ -67,9 +68,9 @@ def _json_schema_to_ebnf(
 
     json_format : str, default: "json"
         The generated grammar format. One of "json", "qwen_xml", "minimax_xml",
-        "minimax_m3_xml", "deepseek_xml", "glm_xml", "cohere_xml", or "kimi_k3_xml".
-        MiniMax M3 encodes fixed-name nested objects and arrays recursively; the other XML
-        styles use their existing model-specific encodings.
+        "minimax_m3_xml", "deepseek_xml", "deepseek_v4_1_xml", "glm_xml", "cohere_xml",
+        or "kimi_k3_xml". MiniMax M3 encodes fixed-name nested objects and arrays
+        recursively; the other XML styles use their existing model-specific encodings.
 
     Returns
     -------
