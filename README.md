@@ -85,6 +85,14 @@ For each release, a maintainer selects a reviewed commit from `main` and coordin
 3. Tag the release commit and publish a GitHub release. The [package workflow](.github/workflows/build_and_release.yaml) builds wheels and a source distribution and publishes them to PyPI when the GitHub release is published. Maintainers can also invoke that workflow manually.
 4. Check that the published packages and release notes are available, and follow up on reported regressions with fixes or a subsequent release.
 
+
+The Python package version is generated from Git tags by `setuptools-scm`; no
+manual version update in `pyproject.toml` is needed. For example, `v0.2.7` builds
+as `0.2.7`, and commits after a release get development versions. Builds from Git
+need full history and tags; published source distributions retain their version
+without Git. To publish manually, run the package workflow on a release tag;
+manual branch runs only build artifacts.
+
 ## Third-Party Bindings
 
 - **Rust**: [xgrammar-rs](https://github.com/trymirai/xgrammar-rs) — Community Rust bindings for XGrammar.

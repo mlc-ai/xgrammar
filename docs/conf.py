@@ -2,8 +2,9 @@
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
-import tomli
+import setuptools_scm
 
 # -- General configuration ------------------------------------------------
 
@@ -11,10 +12,9 @@ os.environ["XGRAMMAR_BUILD_DOCS"] = "1"
 sys.path.insert(0, os.path.abspath("../python"))
 sys.path.insert(0, os.path.abspath("../"))
 
-# Load version from pyproject.toml
-with open("../pyproject.toml", "rb") as f:
-    pyproject_data = tomli.load(f)
-__version__ = pyproject_data["project"]["version"]
+# Use Git tags, or the metadata in an extracted source distribution.
+root = Path(__file__).resolve().parents[1]
+__version__ = setuptools_scm.get_version(root=root, fallback_root=root)
 
 project = "XGrammar"
 author = "XGrammar Contributors"
