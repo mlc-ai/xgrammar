@@ -54,30 +54,26 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           DOCS_REF: ${{ inputs.docs_ref }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           if [[ "$EVENT_NAME" == "release" || -n "$DOCS_REF" ]]; then
             echo "mode=version" >> "$GITHUB_OUTPUT"
           else
             echo "mode=latest" >> "$GITHUB_OUTPUT"
           fi
-          if [[ -f scripts/get_version.py ]]; then
-            args=()
-            if [[ "$EVENT_NAME" == "release" ]]; then
-              args=(--tag "$RELEASE_TAG")
-            elif [[ -n "$DOCS_REF" ]] && git show-ref --verify --quiet "refs/tags/${DOCS_REF#refs/tags/}"; then
-              args=(--tag "${DOCS_REF#refs/tags/}")
-            fi
-            version=$(python scripts/get_version.py "${args[@]}")
-          else
-            # Historical checkouts predate the dynamic version helper.
-            version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          python - <<'PYTHON'
+          import os
+          import tomllib
+
+          with open("pyproject.toml", "rb") as source:
+              version = tomllib.load(source)["project"].get("version")
+          if version is None:
+              import setuptools_scm
+              version = setuptools_scm.get_version()
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"version={version}\n")
+          PYTHON
 
       - name: Build Sphinx docs
-        env:
-          XGRAMMAR_DOCS_VERSION: ${{ steps.meta.outputs.version }}
         run: |
           export PYTHONPATH=$PWD/python
           cd docs && ./build_docs.sh

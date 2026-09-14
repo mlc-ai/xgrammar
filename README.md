@@ -85,22 +85,13 @@ For each release, a maintainer selects a reviewed commit from `main` and coordin
 3. Tag the release commit and publish a GitHub release. The [package workflow](.github/workflows/build_and_release.yaml) builds wheels and a source distribution and publishes them to PyPI when the GitHub release is published. Maintainers can also invoke that workflow manually.
 4. Check that the published packages and release notes are available, and follow up on reported regressions with fixes or a subsequent release.
 
-The Python package version is derived from Git tags; do not edit a version in
-`pyproject.toml`. Use tags such as `v0.2.7`, `v0.2.7rc1`, or `v0.2.7.post1`.
-`scripts/release_new_version.sh <tag>` checks that the current checkout is a clean,
-up-to-date `main`, then creates and pushes an annotated tag. Publishing the GitHub
-release starts package publication. To retry publication manually, run the package
-workflow on the release tag; a manual run on a branch only builds artifacts.
 
-Between tags, builds use the nearest reachable version tag and a development
-suffix, for example `0.2.7.dev3+g<commit>` after three commits following `v0.2.6`.
-Uncommitted changes also add a date suffix. The inferred development version does
-not prescribe the next release number. Clone with full Git history and tags
-(`git fetch --unshallow --tags` repairs a shallow clone). Published source
-distributions retain their version in `PKG-INFO` and can build without Git metadata;
-source copies without either Git history or distribution metadata cannot infer a
-version. Installed package versions are available through
-`importlib.metadata.version("xgrammar")` without running Git.
+The Python package version is generated from Git tags by `setuptools-scm`; no
+manual version update in `pyproject.toml` is needed. For example, `v0.2.7` builds
+as `0.2.7`, and commits after a release get development versions. Builds from Git
+need full history and tags; published source distributions retain their version
+without Git. To publish manually, run the package workflow on a release tag;
+manual branch runs only build artifacts.
 
 ## Third-Party Bindings
 

@@ -4,18 +4,17 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import setuptools_scm
+
 # -- General configuration ------------------------------------------------
 
 os.environ["XGRAMMAR_BUILD_DOCS"] = "1"
 sys.path.insert(0, os.path.abspath("../python"))
 sys.path.insert(0, os.path.abspath("../"))
 
-from scripts.get_version import get_project_version
-
-# CI supplies the selected release tag's version when several tags share a commit.
-__version__ = os.environ.get("XGRAMMAR_DOCS_VERSION") or get_project_version(
-    Path(__file__).resolve().parents[1]
-)
+# Use Git tags, or the metadata in an extracted source distribution.
+root = Path(__file__).resolve().parents[1]
+__version__ = setuptools_scm.get_version(root=root, fallback_root=root)
 
 project = "XGrammar"
 author = "XGrammar Contributors"
