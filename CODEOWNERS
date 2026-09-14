@@ -1,3 +1,5 @@
+# Project-wide maintainers and role changes are documented in GOVERNANCE.md.
+
 # source files
 /include @Ubospica  @Seven-Streams @DarkSharpness
 /cpp/tvm_ffi @Ubospica @Seven-Streams
@@ -12,6 +14,10 @@ tests/cpp @Ubospica @Seven-Streams @DarkSharpness
 tests/python @Ubospica @Seven-Streams
 
 # Miscellaneous
+/GOVERNANCE.md @Ubospica @Seven-Streams
+/CONTRIBUTING.md @Ubospica @Seven-Streams
+/CODEOWNERS @Ubospica @Seven-Streams
+/README.md @Ubospica @Seven-Streams
 /.github @Ubospica @Seven-Streams
 /3rdparty @Ubospica
 /assets @Ubospica
