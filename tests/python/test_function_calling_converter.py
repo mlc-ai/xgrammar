@@ -2910,6 +2910,28 @@ def test_xml_property_names_preserve_additional_property_schema(
         )
 
 
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize("declared_properties", [False, True])
+def test_kimi_k3_typed_additional_properties_pin_type_attribute(
+    any_order: bool, declared_properties: bool
+):
+    schema = {"type": "object", "additionalProperties": {"type": "integer"}}
+    instance = '<|open|>argument key="x_key" type="number"<|sep|>3<|close|>argument<|sep|>'
+    if declared_properties:
+        schema.update(properties={"name": {"type": "string"}}, required=["name"])
+        instance = (
+            '<|open|>argument key="name" type="string"<|sep|>n<|close|>argument<|sep|>' + instance
+        )
+    grammar = _json_schema_to_ebnf(
+        schema, json_format="kimi_k3_xml", any_whitespace=False, any_order=any_order
+    )
+    assert _is_grammar_accept_string(grammar, instance)
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace('type="number"', 'type="string"')
+    )
+    assert not _is_grammar_accept_string(grammar, instance.replace("<|sep|>3", "<|sep|>oops"))
+
+
 def test_nested_true_schema():
     schema = {"type": "object", "properties": {"name": True}, "required": ["name"]}
     ebnf_grammar = _json_schema_to_ebnf(schema, json_format="qwen_xml")
