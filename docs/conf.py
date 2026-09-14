@@ -2,8 +2,7 @@
 import os
 import sys
 from datetime import datetime
-
-import tomli
+from pathlib import Path
 
 # -- General configuration ------------------------------------------------
 
@@ -11,10 +10,12 @@ os.environ["XGRAMMAR_BUILD_DOCS"] = "1"
 sys.path.insert(0, os.path.abspath("../python"))
 sys.path.insert(0, os.path.abspath("../"))
 
-# Load version from pyproject.toml
-with open("../pyproject.toml", "rb") as f:
-    pyproject_data = tomli.load(f)
-__version__ = pyproject_data["project"]["version"]
+from scripts.get_version import get_project_version
+
+# CI supplies the selected release tag's version when several tags share a commit.
+__version__ = os.environ.get("XGRAMMAR_DOCS_VERSION") or get_project_version(
+    Path(__file__).resolve().parents[1]
+)
 
 project = "XGrammar"
 author = "XGrammar Contributors"

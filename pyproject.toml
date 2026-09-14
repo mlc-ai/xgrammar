@@ -1,6 +1,6 @@
 [project]
 name = "xgrammar"
-version = "0.2.6"
+dynamic = ["version"]
 description = "Efficient, Flexible and Portable Structured Generation"
 authors = [{ name = "MLC Team" }]
 readme = "README.md"
@@ -52,11 +52,21 @@ test = [
 metal = ["mlx-lm; platform_system == 'Darwin' and platform_machine == 'arm64'"]
 
 [build-system]
-requires = ["scikit-build-core>=0.10.0", "apache-tvm-ffi>=0.1.10"]
+requires = ["scikit-build-core>=0.10.0", "setuptools-scm>=9.2.2", "apache-tvm-ffi>=0.1.10"]
 build-backend = "scikit_build_core.build"
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
+tag_regex = '^v(?P<version>[0-9]+\.[0-9]+\.[0-9]+(?:(?:a|b|rc)[0-9]+)?(?:\.post[0-9]+)?)$'
+
+[tool.setuptools_scm.scm.git]
+describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "v[0-9]*"]
+pre_parse = "fail_on_shallow"
 
 [tool.scikit-build]
 minimum-version = "build-system.requires"
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
 
 # Build configuration
 build-dir = "build"
@@ -101,6 +111,7 @@ sdist.include = [
   "/LICENSE",
   "/README.md",
   "/NOTICE",
+  "/scripts/get_version.py",
 
   # Tests
   "/tests/**/*",
