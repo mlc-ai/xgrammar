@@ -246,22 +246,23 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   static const std::string kCohereAnyScalar;
   static const std::string kCohereAnyList;
 
+  /*! \brief `<cofl:value` plus the optional ` name="..."` attribute of one parameter. */
+  int32_t CohereParamPrefix(
+      const std::optional<std::string>& name, const std::optional<int32_t>& key_pattern_expr
+  );
+  /*!
+   * \brief The type attribute, value and closing tag of one parameter, correlated with
+   * \p schema. The suffix does not depend on the parameter name, so `$ref` schemas get one
+   * memoized rule per URI that is registered before the reference is resolved; recursive
+   * references (directly, or through nested dict/list items) then point back at that rule.
+   */
+  int32_t FormatCohereParamSuffix(const SchemaSpecPtr& schema, int32_t value_rule_id);
+  int32_t FormatCohereSuffixWithType(int32_t type_expression, int32_t value_rule_id);
+  int32_t FormatAnyCohereSuffix();
   int32_t FormatCohereParam(
       const std::optional<std::string>& name,
       const std::optional<int32_t>& key_pattern_expr,
       const SchemaSpecPtr& schema,
-      int32_t value_rule_id
-  );
-  int32_t FormatSingleCohereParam(
-      const std::optional<std::string>& name,
-      const std::optional<int32_t>& key_pattern_expr,
-      const SchemaSpecPtr& schema,
-      int32_t value_rule_id
-  );
-  int32_t FormatCohereParamWithType(
-      const std::optional<std::string>& name,
-      const std::optional<int32_t>& key_pattern_expr,
-      int32_t type_expression,
       int32_t value_rule_id
   );
   int32_t FormatAnyCohereParam(
@@ -281,6 +282,8 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
 
   std::vector<const ObjectSpec*> object_stack_;
   std::vector<SchemaSpecPtr> additional_property_stack_;
+  // Parameter suffix rules keyed by `$ref` URI; see FormatCohereParamSuffix.
+  std::unordered_map<std::string, int32_t> cohere_param_ref_rules_;
   int cohere_array_level_ = 0;
 };
 
