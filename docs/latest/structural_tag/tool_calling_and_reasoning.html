@@ -354,6 +354,7 @@ MiniMax M3 currently requires fixed property names and rejects unconstrained par
 </li>
 <li><p><strong>reasoning</strong> (<code class="docutils literal notranslate"><span class="pre">&quot;enabled&quot;</span> <span class="pre">|</span> <span class="pre">&quot;disabled&quot;</span> <span class="pre">|</span> <span class="pre">&quot;auto&quot;</span> <span class="pre">|</span> <span class="pre">bool</span></code>, optional): Controls the model-specific reasoning section. The string modes are recommended. The boolean aliases <code class="docutils literal notranslate"><span class="pre">True</span></code> and <code class="docutils literal notranslate"><span class="pre">False</span></code> are deprecated but remain supported as <code class="docutils literal notranslate"><span class="pre">&quot;enabled&quot;</span></code> and <code class="docutils literal notranslate"><span class="pre">&quot;disabled&quot;</span></code>, respectively. For models with a leading reasoning block, <code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code> means that the prompt does not prefill its opener, and the model may emit one complete block or answer/call a tool directly. Default <code class="docutils literal notranslate"><span class="pre">&quot;enabled&quot;</span></code> in <code class="docutils literal notranslate"><span class="pre">get_model_structural_tag</span></code>; the model-specific <code class="docutils literal notranslate"><span class="pre">get_minimax_m3_structural_tag</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">&quot;auto&quot;</span></code>. For MiniMax M3, these modes must be paired with the chat template’s <code class="docutils literal notranslate"><span class="pre">enabled</span></code>, <code class="docutils literal notranslate"><span class="pre">disabled</span></code>, and <code class="docutils literal notranslate"><span class="pre">adaptive</span></code> thinking modes; adaptive output may start with <code class="docutils literal notranslate"><span class="pre">&lt;/mm:think&gt;</span></code> when skipping reasoning. Boolean aliases are supported only by <code class="docutils literal notranslate"><span class="pre">get_model_structural_tag</span></code>; model-specific builders take the three explicit string modes.</p></li>
 <li><p><strong>any_order</strong> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, optional): When <code class="docutils literal notranslate"><span class="pre">True</span></code>, applies <code class="docutils literal notranslate"><span class="pre">any_order=True</span></code> to every <code class="docutils literal notranslate"><span class="pre">JSONSchemaFormat</span></code> in the generated structural tag, so each tool’s arguments may be emitted in any property order (see <a class="reference internal" href="structural_tag.html"><span class="doc std std-doc"><code class="docutils literal notranslate"><span class="pre">JSONSchemaFormat</span></code></span></a> for the exact semantics). Default <code class="docutils literal notranslate"><span class="pre">False</span></code>, which keeps the declared property order with full validation.</p></li>
+<li><p><strong>parallel_tool_calls</strong> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, optional): Whether the model may emit more than one tool call in a single response, following the OpenAI Chat Completions parameter of the same name. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>, which keeps the multi-call grammar. When <code class="docutils literal notranslate"><span class="pre">False</span></code>, the structural tag allows at most one tool call: exactly zero or one under <code class="docutils literal notranslate"><span class="pre">tool_choice=&quot;auto&quot;</span></code>, exactly one under <code class="docutils literal notranslate"><span class="pre">&quot;required&quot;</span></code> or a forced tool. Free text is still allowed before the call, but generation must end once the call is closed, since a second call is no longer reachable.</p></li>
 <li><p><strong>max_whitespace_cnt</strong> (<code class="docutils literal notranslate"><span class="pre">Optional[int]</span></code>, optional): Caps the number of consecutive whitespace characters. Setting it (e.g. <code class="docutils literal notranslate"><span class="pre">2</span></code>) bounds runs of whitespace, which avoids the unbounded-whitespace outputs some models emit in bad cases that would otherwise blow up grammar compilation/matching.</p></li>
 </ul>
 <p>Passing an unsupported <code class="docutils literal notranslate"><span class="pre">model</span></code>, invalid <code class="docutils literal notranslate"><span class="pre">tool_choice</span></code>, or invalid <code class="docutils literal notranslate"><span class="pre">reasoning</span></code> mode will raise <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p>
@@ -484,6 +485,21 @@ MiniMax M3 currently requires fixed property names and rejects unconstrained par
 </pre></div>
 </div>
 <p>Defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>. No effect for models without special tokens (e.g. <code class="docutils literal notranslate"><span class="pre">harmony</span></code>).</p>
+</section>
+<section id="parallel-tool-calls">
+<h3>Parallel tool calls<a class="headerlink" href="#parallel-tool-calls" title="Link to this heading">¶</a></h3>
+<p>By default the grammar accepts as many tool calls as the model wants to emit. Pass
+<code class="docutils literal notranslate"><span class="pre">parallel_tool_calls=False</span></code> to cap the response at a single call:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span><span class="p">(</span>
+    <span class="s2">"qwen_3"</span><span class="p">,</span>
+    <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>With <code class="docutils literal notranslate"><span class="pre">tool_choice=&quot;auto&quot;</span></code> the model may still answer with plain text instead, so the response holds
+exactly zero or one call; with <code class="docutils literal notranslate"><span class="pre">&quot;required&quot;</span></code> or a forced tool it holds exactly one. A forced tool
+choice already resolves to a single call, so the flag does not change it.</p>
 </section>
 </section>
 <hr class="docutils" />
@@ -635,6 +651,7 @@ MiniMax M3 currently requires fixed property names and rejects unconstrained par
 <li><a class="reference internal" href="#reasoning-mode">Reasoning mode</a></li>
 <li><a class="reference internal" href="#tool-choice">Tool choice</a></li>
 <li><a class="reference internal" href="#special-tokens-in-text">Special tokens in text</a></li>
+<li><a class="reference internal" href="#parallel-tool-calls">Parallel tool calls</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#supported-models">Supported models</a></li>

@@ -321,6 +321,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Get a structural tag for a model's reasoning and tool-call output format.</span>
 
@@ -493,6 +494,15 @@
 <span class="sd">        of whitespace, which avoids the unbounded-whitespace outputs some models</span>
 <span class="sd">        emit in bad cases that would otherwise blow up grammar</span>
 <span class="sd">        compilation/matching. Default: ``None``.</span>
+<span class="sd">    parallel_tool_calls : bool</span>
+<span class="sd">        Whether the model may emit more than one tool call in a single response.</span>
+<span class="sd">        Follows the OpenAI Chat Completions parameter of the same name. Default</span>
+<span class="sd">        ``True``, which keeps the multi-call grammar. When ``False``, the</span>
+<span class="sd">        structural tag allows at most one tool call, so the response holds</span>
+<span class="sd">        exactly zero or one call under ``tool_choice="auto"`` and exactly one</span>
+<span class="sd">        under ``"required"`` or a forced tool. Because a second call is no</span>
+<span class="sd">        longer reachable, generation must end once the single call is closed:</span>
+<span class="sd">        free text is still allowed *before* the call but not after it.</span>
 
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
@@ -530,6 +540,9 @@
             <span class="s2">"The 'reasoning' argument must be a bool or one of: "</span> <span class="s2">"'enabled', 'disabled', 'auto'."</span>
         <span class="p">)</span>
 
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parallel_tool_calls</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The 'parallel_tool_calls' argument must be a bool."</span><span class="p">)</span>
+
     <span class="k">return</span> <span class="n">func</span><span class="p">(</span>
         <span class="n">function_tools</span><span class="p">,</span>
         <span class="n">builtin_tools</span><span class="p">,</span>
@@ -538,6 +551,7 @@
         <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
         <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
         <span class="n">max_whitespace_cnt</span><span class="o">=</span><span class="n">max_whitespace_cnt</span><span class="p">,</span>
+        <span class="n">parallel_tool_calls</span><span class="o">=</span><span class="n">parallel_tool_calls</span><span class="p">,</span>
     <span class="p">)</span></div>
 
 
@@ -881,6 +895,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get Llama style structural tag format.</span>
@@ -940,6 +955,7 @@
                 <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOLS_TRIGGER</span><span class="p">],</span>
                 <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -983,6 +999,7 @@
             <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
             <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">suffix_tag</span><span class="p">)</span></div>
@@ -1000,6 +1017,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get Kimi-K2 style structural tag format.</span>
@@ -1066,7 +1084,9 @@
             <span class="p">)</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span>
+            <span class="p">)</span>
             <span class="n">tool_calls</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
                 <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALLS_SECTION_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">inner_tool_calls</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALLS_SECTION_END</span>
             <span class="p">)</span>
@@ -1076,6 +1096,7 @@
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span>
                     <span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="p">[</span><span class="o">*</span><span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">,</span> <span class="n">TOOL_CALL_BEGIN</span><span class="p">]</span>
                 <span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -1134,7 +1155,12 @@
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
             <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALLS_SECTION_BEGIN</span><span class="p">),</span>
-                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                    <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                    <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
+                    <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
+                <span class="p">),</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALLS_SECTION_END</span><span class="p">),</span>
             <span class="p">]</span>
         <span class="p">)</span>
@@ -1162,6 +1188,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Get Kimi-K3 style structural tag format.</span>
@@ -1258,7 +1285,12 @@
             <span class="n">tools_part</span> <span class="o">=</span> <span class="n">OptionalFormat</span><span class="p">(</span>
                 <span class="n">content</span><span class="o">=</span><span class="n">TagFormat</span><span class="p">(</span>
                     <span class="n">begin</span><span class="o">=</span><span class="n">TOOLS_SECTION_BEGIN</span><span class="p">,</span>
-                    <span class="n">content</span><span class="o">=</span><span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                    <span class="n">content</span><span class="o">=</span><span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                        <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                        <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
+                        <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                        <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
+                    <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOLS_SECTION_END</span><span class="p">,</span>
                 <span class="p">)</span>
             <span class="p">)</span>
@@ -1280,7 +1312,12 @@
         <span class="n">tools_part</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
             <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOLS_SECTION_BEGIN</span><span class="p">),</span>
-                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                    <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                    <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
+                    <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
+                <span class="p">),</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOLS_SECTION_END</span><span class="p">),</span>
             <span class="p">]</span>
         <span class="p">)</span>
@@ -1327,6 +1364,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get DeepSeek-R1 style structural tag format.</span>
@@ -1372,7 +1410,12 @@
             <span class="p">)</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="n">separator</span><span class="o">=</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span>
+                <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
+            <span class="p">)</span>
             <span class="n">tool_calls</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
                 <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">inner_tool_calls</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALLS_END</span>
             <span class="p">)</span>
@@ -1380,6 +1423,7 @@
                 <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">],</span>
                 <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">tool_calls</span><span class="p">],</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -1418,7 +1462,9 @@
             <span class="p">)</span>
 
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
-        <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+            <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span>
+        <span class="p">)</span>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">inner_tool_calls</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALLS_END</span><span class="p">)</span>
 
     <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
@@ -1443,6 +1489,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get DeepSeek-V3.1 style structural tag format.</span>
@@ -1486,7 +1533,9 @@
             <span class="p">)</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span>
+            <span class="p">)</span>
             <span class="n">tool_calls</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
                 <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">inner_tool_calls</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALLS_END</span>
             <span class="p">)</span>
@@ -1494,6 +1543,7 @@
                 <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">],</span>
                 <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">tool_calls</span><span class="p">],</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -1532,7 +1582,9 @@
             <span class="p">)</span>
 
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span>
-        <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">inner_tool_calls</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+            <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span>
+        <span class="p">)</span>
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">inner_tool_calls</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALLS_END</span><span class="p">)</span>
 
     <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
@@ -1558,6 +1610,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get Qwen XML tool-call structural tag format.</span>
@@ -1620,6 +1673,7 @@
                 <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
                 <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -1666,6 +1720,7 @@
             <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
             <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
@@ -1695,6 +1750,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get Qwen3 style structural tag format.</span>
@@ -1755,6 +1811,7 @@
                 <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
                 <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -1799,6 +1856,7 @@
             <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
             <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
@@ -1824,6 +1882,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get harmony(gpt-oss) style structural tag format.</span>
@@ -1948,8 +2007,37 @@
         <span class="n">analysis_tag</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span><span class="n">begin</span><span class="o">=</span><span class="n">ANALYSIS_BEGIN</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(),</span> <span class="n">end</span><span class="o">=</span><span class="n">FINAL_END</span><span class="p">)</span>
         <span class="n">tags</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">analysis_tag</span><span class="p">)</span>
 
-    <span class="n">tags_with_separator</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">TAG_SEPARATOR</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">tags_with_separator</span><span class="p">)</span></div>
+    <span class="n">call_tags</span> <span class="o">=</span> <span class="p">[</span><span class="n">tag</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span> <span class="k">if</span> <span class="n">tag</span><span class="o">.</span><span class="n">end</span> <span class="o">==</span> <span class="n">CALL_END</span><span class="p">]</span>
+    <span class="n">message_tags</span> <span class="o">=</span> <span class="p">[</span><span class="n">tag</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">tags</span> <span class="k">if</span> <span class="n">tag</span><span class="o">.</span><span class="n">end</span> <span class="o">!=</span> <span class="n">CALL_END</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">parallel_tool_calls</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">call_tags</span><span class="p">:</span>
+        <span class="n">tags_with_separator</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">TAG_SEPARATOR</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">tags_with_separator</span><span class="p">)</span>
+
+    <span class="c1"># Harmony carries tool calls, analysis and final messages in one message stream, so</span>
+    <span class="c1"># capping the stream at a single message would also forbid an ordinary reasoning or</span>
+    <span class="c1"># final message. Cap the tool-call messages alone: any number of other messages, then</span>
+    <span class="c1"># at most one tool call, which ends the turn.</span>
+    <span class="n">one_call</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+        <span class="n">tags</span><span class="o">=</span><span class="n">call_tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">TAG_SEPARATOR</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">stop_after_first</span><span class="o">=</span><span class="kc">True</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">message_tags</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">OptionalFormat</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="n">one_call</span><span class="p">))</span>
+    <span class="n">messages_then_call</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
+        <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+            <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">message_tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">TAG_SEPARATOR</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+            <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TAG_SEPARATOR</span><span class="p">),</span>
+            <span class="n">one_call</span><span class="p">,</span>
+        <span class="p">]</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span>
+        <span class="nb">format</span><span class="o">=</span><span class="n">OrFormat</span><span class="p">(</span>
+            <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">message_tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">TAG_SEPARATOR</span><span class="p">),</span>
+                <span class="n">one_call</span><span class="p">,</span>
+                <span class="n">messages_then_call</span><span class="p">,</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+    <span class="p">)</span></div>
 
 
 
@@ -1964,6 +2052,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get DeepSeek-V3.2 style structural tag format.</span>
@@ -2016,7 +2105,10 @@
         <span class="c1"># generate function calling triggered tag</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">function_calling_tags</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
-                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span>
+                <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
 
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
@@ -2029,6 +2121,7 @@
                     <span class="p">)</span>
                 <span class="p">],</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -2077,7 +2170,12 @@
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
             <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALLS_PREFIX</span> <span class="o">+</span> <span class="n">FUNCTION_CALLS_BEGIN</span><span class="p">),</span>
-                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                    <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                    <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span>
+                    <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
+                <span class="p">),</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">FUNCTION_CALLS_END</span><span class="p">),</span>
             <span class="p">]</span>
         <span class="p">)</span>
@@ -2104,6 +2202,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get MiniMax-M2.5 style structural tag format.</span>
@@ -2157,7 +2256,7 @@
         <span class="c1"># generate function calling triggered tag</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">function_calling_tags</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
-                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span>
             <span class="p">)</span>
 
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
@@ -2168,6 +2267,7 @@
                     <span class="p">)</span>
                 <span class="p">],</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -2216,7 +2316,12 @@
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
             <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span> <span class="o">+</span> <span class="n">TOOL_CALL_BEGIN</span><span class="p">),</span>
-                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                    <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                    <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
+                    <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
+                <span class="p">),</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">),</span>
             <span class="p">]</span>
         <span class="p">)</span>
@@ -2255,6 +2360,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get MiniMax-M3 style structural tag format.</span>
@@ -2316,7 +2422,9 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">make_tool_call_tag</span><span class="p">(</span><span class="n">tags</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">TagFormat</span><span class="p">],</span> <span class="o">*</span><span class="p">,</span> <span class="n">allow_multiple</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TagFormat</span><span class="p">:</span>
         <span class="n">content</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span>
+            <span class="p">)</span>
             <span class="k">if</span> <span class="n">allow_multiple</span>
             <span class="k">else</span> <span class="n">tags</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="p">)</span>
@@ -2328,6 +2436,7 @@
                 <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
                 <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">make_tool_call_tag</span><span class="p">(</span><span class="n">invoke_tags</span><span class="p">)],</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">suffix_excludes</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -2347,6 +2456,7 @@
             <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">make_tool_call_tag</span><span class="p">(</span><span class="n">invoke_tags</span><span class="p">)],</span>
             <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">suffix_excludes</span><span class="p">),</span>
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
         <span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unsupported tool choice: </span><span class="si">{</span><span class="n">tool_choice</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
@@ -2381,6 +2491,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get GLM-4.7/GLM-5 style structural tag format.</span>
@@ -2454,6 +2565,7 @@
                 <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
                 <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">TEXT_EXCLUDES</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -2498,6 +2610,7 @@
             <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
             <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">TEXT_EXCLUDES</span><span class="p">),</span>
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
@@ -2522,6 +2635,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get Gemma 4 style structural tag format.</span>
@@ -2592,6 +2706,7 @@
                 <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
                 <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">GEMMA4_EXCLUDE_TOKENS</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -2635,6 +2750,7 @@
             <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
             <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">GEMMA4_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
@@ -2659,6 +2775,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get DeepSeek-V4 style structural tag format.</span>
@@ -2676,6 +2793,7 @@
         <span class="n">any_order</span><span class="p">,</span>
         <span class="n">exclude_special_tokens</span><span class="p">,</span>
         <span class="n">max_whitespace_cnt</span><span class="p">,</span>
+        <span class="n">parallel_tool_calls</span><span class="p">,</span>
         <span class="n">v4_1</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span></div>
 
@@ -2692,6 +2810,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get DeepSeek-V4.1-Flash reasoning and tool-call structural tag format.</span>
@@ -2716,6 +2835,7 @@
         <span class="n">any_order</span><span class="p">,</span>
         <span class="n">exclude_special_tokens</span><span class="p">,</span>
         <span class="n">max_whitespace_cnt</span><span class="p">,</span>
+        <span class="n">parallel_tool_calls</span><span class="p">,</span>
         <span class="n">v4_1</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
     <span class="p">)</span></div>
 
@@ -2728,6 +2848,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
     <span class="o">*</span><span class="p">,</span>
     <span class="n">v4_1</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
@@ -2772,7 +2893,10 @@
         <span class="c1"># generate function calling triggered tag</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">function_calling_tags</span> <span class="o">=</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
-                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span>
+                <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
 
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
@@ -2785,6 +2909,7 @@
                     <span class="p">)</span>
                 <span class="p">],</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">excludes</span> <span class="o">=</span> <span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">)</span>
@@ -2836,7 +2961,12 @@
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
             <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALLS_PREFIX</span> <span class="o">+</span> <span class="n">FUNCTION_CALLS_BEGIN</span><span class="p">),</span>
-                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                    <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                    <span class="n">separator</span><span class="o">=</span><span class="n">INVOKE_SEPARATOR</span><span class="p">,</span>
+                    <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
+                <span class="p">),</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">FUNCTION_CALLS_END</span><span class="p">),</span>
             <span class="p">]</span>
         <span class="p">)</span>
@@ -2862,6 +2992,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get Cohere style structural tag format.</span>
@@ -2913,13 +3044,19 @@
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">tags</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">tool_calls</span> <span class="o">=</span> <span class="n">TagFormat</span><span class="p">(</span>
                 <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALLS_BEGIN</span><span class="p">,</span>
-                <span class="n">content</span><span class="o">=</span><span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                <span class="n">content</span><span class="o">=</span><span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                    <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                    <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
+                    <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
+                <span class="p">),</span>
                 <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALLS_END</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
                 <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALLS_TRIGGER</span><span class="p">],</span>
                 <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="n">tool_calls</span><span class="p">],</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -2943,7 +3080,12 @@
         <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
             <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALLS_PREFIX</span> <span class="o">+</span> <span class="n">TOOL_CALLS_BEGIN</span><span class="p">),</span>
-                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span><span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span> <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span> <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                <span class="n">TagsWithSeparatorFormat</span><span class="p">(</span>
+                    <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                    <span class="n">separator</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
+                    <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+                    <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
+                <span class="p">),</span>
                 <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">TOOL_CALLS_END</span><span class="p">),</span>
             <span class="p">]</span>
         <span class="p">)</span>
@@ -2970,6 +3112,7 @@
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">"""Get EXAONE 4.0 style structural tag format.</span>
@@ -3017,6 +3160,7 @@
                 <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">],</span>
                 <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
                 <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
@@ -3060,6 +3204,7 @@
             <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
             <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">THINK_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="n">at_least_one</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
         <span class="p">)</span>
 
     <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
