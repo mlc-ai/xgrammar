@@ -620,7 +620,8 @@ def test_cohere_melody_property_name_alignment(parameters, arguments, serialized
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize("reasoning", [False, True])
 @pytest.mark.parametrize("policy", ["auto", "required", "forced"])
-def test_deepseek_v4_1_official_tokenizer_masks(reasoning, policy):
+@pytest.mark.parametrize("schema_kind", ["typed", "union", "unconstrained"])
+def test_deepseek_v4_1_official_tokenizer_masks(reasoning, policy, schema_kind):
     from transformers import AutoTokenizer
 
     tokenizer = AutoTokenizer.from_pretrained(
@@ -643,6 +644,14 @@ def test_deepseek_v4_1_official_tokenizer_masks(reasoning, policy):
         {"type": "function", "function": {"name": name, "parameters": schema}}
         for name in ("search", "other")
     ]
+    for tool in tools:
+        if schema_kind == "union":
+            tool["function"]["parameters"]["properties"] = {
+                "query": {"type": ["string", "null"]},
+                "limit": {"anyOf": [{"type": "integer"}, {"type": "string"}]},
+            }
+        elif schema_kind == "unconstrained":
+            tool["function"]["parameters"] = {}
     stag = get_model_structural_tag(
         "deepseek_v4_1", tools=tools, reasoning=reasoning, tool_choice=tool_choice
     )
@@ -656,7 +665,14 @@ def test_deepseek_v4_1_official_tokenizer_masks(reasoning, policy):
         "tool_calls": [
             {
                 "type": "function",
-                "function": {"name": name, "arguments": {"query": "北京\n<code>", "limit": 2}},
+                "function": {
+                    "name": name,
+                    "arguments": (
+                        {"query": None, "limit": "two"}
+                        if schema_kind == "union" and name == "other"
+                        else {"query": "北京\n<code>", "limit": 2}
+                    ),
+                },
             }
             for name in (["search"] if policy == "forced" else ["search", "other"])
         ],

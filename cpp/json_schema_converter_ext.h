@@ -146,7 +146,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::string EscapeAttrValue(const std::string& value) const;
 
   /*!
-   * \brief Return the Kimi-K3 `type` attribute a value of \p spec is rendered with, or
+   * \brief Return the XML value type a value of \p spec is rendered with, or
    * std::nullopt if the schema does not pin down a single type (\p spec may be nullptr, which
    * is how free-form keys end up unconstrained).
    *
@@ -155,16 +155,22 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
    * with the value grammar, otherwise the decoded argument changes type (e.g. a string
    * property tagged type="number" with body 123 decodes to the integer 123). Mirrors the
    * model's renderer (_xtml_type), which maps both ints and floats to "number".
+   * DeepSeek-V4.1 uses the same distinction via string="true" / string="false".
    */
-  static std::optional<std::string> KimiK3TypeAttr(const SchemaSpecPtr& spec);
+  static std::optional<std::string> XMLTypeAttr(const SchemaSpecPtr& spec);
 
   /*!
    * \brief Build the expression between the property key and its value.
-   * \param pinned_type For kimi_k3_xml, the single type attribute this property must carry.
+   * \param pinned_type The value type for kimi_k3_xml and deepseek_v4_1_xml attributes.
    * std::nullopt keeps every type allowed, which is what free-form keys
    * (additionalProperties / patternProperties) need.
    */
   int32_t XMLKeySuffix(const std::optional<std::string>& pinned_type = std::nullopt);
+
+  /*! \brief Keep DeepSeek-V4.1's string attribute correlated with each value alternative. */
+  int32_t FormatDeepSeekV41Param(
+      int32_t key_expr, const SchemaSpecPtr& schema, int32_t value_rule_id
+  );
 
   JSONFormat json_format_;
   // Track if we're at the root object level
