@@ -3345,5 +3345,70 @@ def test_deepseek_v4_1_mixed_enum_and_string_whitespace(any_order):
         assert _is_grammar_accept_string(grammar, output) == accepted
 
 
+@pytest.mark.parametrize(
+    "value_schema, cases",
+    [
+        (
+            {"type": "integer"},
+            [
+                ("42", "false", True),
+                ("hello", "true", False),
+                ("42", "true", False),
+                ("true", "false", False),
+                ("[1]", "false", False),
+            ],
+        ),
+        (
+            {"type": "string"},
+            [
+                ("hello", "true", True),
+                ("42", "true", True),
+                ("42", "false", False),
+                ("null", "false", False),
+            ],
+        ),
+        (
+            {"enum": ["a", "b"]},
+            [
+                ("a", "true", True),
+                ("a", "false", False),
+                ("zzz", "true", False),
+                ("1", "false", False),
+            ],
+        ),
+        # allOf with several schemas is still generated as an unconstrained value.
+        (
+            {"allOf": [{"type": "string"}, {"minLength": 1}]},
+            [("hello", "true", True), ("42", "false", True), ("hello", "false", False)],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "layout", ["property", "additional", "additional_with_property", "additional_any_order"]
+)
+def test_deepseek_v4_1_typed_parameters_keep_value_constraints(value_schema, cases, layout):
+    schema = {"type": "object"}
+    if layout == "property":
+        schema.update({"properties": {"value": value_schema}, "required": ["value"]})
+    else:
+        schema["additionalProperties"] = value_schema
+        if layout != "additional":
+            schema["properties"] = {"other": {"type": "integer"}}
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(
+            format=JSONSchemaFormat(
+                json_schema=schema,
+                style="deepseek_v4_1_xml",
+                any_order=layout == "additional_any_order",
+            )
+        )
+    )
+    for value, attribute, accepted in cases:
+        output = (
+            f'<｜DSML｜ parameter name="value" string="{attribute}">{value}</｜DSML｜ parameter>'
+        )
+        assert _is_grammar_accept_string(grammar, output) == accepted
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
