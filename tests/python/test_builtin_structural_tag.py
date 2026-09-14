@@ -2647,6 +2647,8 @@ def test_deepseek_v4_1_tool_choice(reasoning, policy):
         _DEEPSEEK_V41_CALLS.replace('name="query"', 'name="unknown"'),
         _DEEPSEEK_V41_CALLS.replace('string="false">2', 'string="false">0'),
         _DEEPSEEK_V41_CALLS.replace('string="false">2', 'string="false">"two"'),
+        _DEEPSEEK_V41_CALLS.replace('name="query" string="true"', 'name="query" string="false"'),
+        _DEEPSEEK_V41_CALLS.replace('name="limit" string="false"', 'name="limit" string="true"'),
         _DEEPSEEK_V41_CALLS.replace(
             '<｜DSML｜ parameter name="limit" string="false">2</｜DSML｜ parameter>\n', ""
         ),
@@ -2756,6 +2758,9 @@ def test_deepseek_v4_1_unconstrained_tool_parameters(function):
         )
     )
     assert _is_grammar_accept_string(grammar, _DEEPSEEK_V41_CALLS)
+    assert not _is_grammar_accept_string(
+        grammar, _DEEPSEEK_V41_CALLS.replace('string="false">2', 'string="false">not-json')
+    )
 
 
 def test_deepseek_v4_1_whitespace_limit_and_serialization():
