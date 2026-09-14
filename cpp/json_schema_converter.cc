@@ -2578,7 +2578,7 @@ int32_t JSONSchemaConverter::GetAnyOrderRuleForProperties(
           value_rule_id,
           rule_name,
           additional_suffix,
-          /*schema=*/nullptr
+          additional
       ));
     }
   }
@@ -2650,7 +2650,7 @@ int32_t JSONSchemaConverter::GetPartialRuleForProperties(
             value_rule_id,
             rule_name,
             additional_suffix,
-            /*schema=*/nullptr
+            additional
         );
       }
     }
@@ -2951,11 +2951,7 @@ int32_t JSONSchemaConverter::GenerateObject(
         int32_t value_rule_id =
             CreateRule(effective_additional, rule_name + "_" + effective_suffix);
         patterns.push_back(FormatOtherProperty(
-            KeyPatternExpression(),
-            value_rule_id,
-            rule_name,
-            effective_suffix,
-            /*schema=*/nullptr
+            KeyPatternExpression(), value_rule_id, rule_name, effective_suffix, effective_additional
         ));
       }
       additional_override = Choice(patterns);
@@ -2974,7 +2970,7 @@ int32_t JSONSchemaConverter::GenerateObject(
           value_rule_id,
           rule_name,
           /*rule_name_suffix=*/"pn",
-          /*schema=*/nullptr
+          effective_additional
       );
       effective_suffix = "pn";
     }
@@ -3073,11 +3069,7 @@ int32_t JSONSchemaConverter::GenerateObject(
     if (spec.max_properties != 0) {
       int32_t value_rule_id = CreateRule(additional_property, rule_name + "_" + additional_suffix);
       int32_t property = FormatOtherProperty(
-          KeyPatternExpression(),
-          value_rule_id,
-          rule_name,
-          additional_suffix,
-          /*schema=*/nullptr
+          KeyPatternExpression(), value_rule_id, rule_name, additional_suffix, additional_property
       );
       content = Sequence(
           {NextSeparatorExpression(),
