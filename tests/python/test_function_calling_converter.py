@@ -3,6 +3,7 @@ import sys
 import pytest
 
 from xgrammar import Grammar
+from xgrammar.structural_tag import JSONSchemaFormat, StructuralTag
 from xgrammar.testing import (
     _get_matcher_from_grammar,
     _is_grammar_accept_string,
@@ -3236,6 +3237,46 @@ def test_minimax_m3_rejects_constrained_strings(string_schema: dict):
     }
     with pytest.raises(RuntimeError, match="String pattern, recognized format, and length"):
         _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+
+
+@pytest.mark.parametrize(
+    "schema,value,string_attr",
+    [
+        ({"type": "string"}, 'raw "quotes" & <tag>\n你好', "true"),
+        ({"type": "integer"}, "42", "false"),
+        ({"type": "number"}, "-1.25", "false"),
+        ({"type": "boolean"}, "true", "false"),
+        ({"type": "null"}, "null", "false"),
+        ({"type": "array", "items": {"type": "integer"}}, "[1, 2]", "false"),
+        (
+            {"type": "object", "properties": {"x": {"type": "string"}}, "required": ["x"]},
+            '{"x": "hi"}',
+            "false",
+        ),
+        ({"const": "fixed"}, "fixed", "true"),
+        ({"enum": [1, 2]}, "2", "false"),
+        ({"anyOf": [{"type": "string"}, {"type": "null"}]}, "null", "false"),
+    ],
+)
+def test_deepseek_v4_1_parameter_style(schema, value, string_attr):
+    schema = {
+        "type": "object",
+        "properties": {"value": schema},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    output = f'<｜DSML｜ parameter name="value" string="{string_attr}">{value}</｜DSML｜ parameter>'
+    stag = StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    # Exercise both the production structural-tag converter and the EBNF conversion path.
+    for grammar in [
+        Grammar.from_structural_tag(stag),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")),
+    ]:
+        assert _is_grammar_accept_string(grammar, output)
+        assert not _is_grammar_accept_string(
+            grammar, output.replace("｜DSML｜ parameter", "｜DSML｜parameter")
+        )
+        assert not _is_grammar_accept_string(grammar, output + output)
 
 
 if __name__ == "__main__":

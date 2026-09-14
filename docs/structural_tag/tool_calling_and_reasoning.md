@@ -218,59 +218,6 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `"cohere"` | Cohere Command models using XML tool calls |
 | `"exaone"` | EXAONE-4.0-32B, EXAONE-4.0-1.2B |
 
-### DeepSeek-V4.1
-
-Use `"deepseek_v4_1"` for V4.1-Flash. Its tool-call syntax differs from V4:
-the outer block is `<｜DSML｜ calls>`, and both `invoke` and `parameter` have a
-space after `｜DSML｜`. Strings are raw text; other parameter values are JSON.
-The corresponding `JSONSchemaFormat` style is `"deepseek_v4_1_xml"`.
-
-```python
-import xgrammar as xgr
-from transformers import AutoTokenizer
-from xgrammar.builtin_structural_tag import get_model_structural_tag
-
-tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-V4.1-Flash")
-tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=129280)
-stag = get_model_structural_tag(
-    "deepseek_v4_1",
-    tools=[{
-        "type": "function",
-        "function": {
-            "name": "get_weather",
-            "parameters": {
-                "type": "object",
-                "properties": {"location": {"type": "string"}},
-                "required": ["location"],
-                "additionalProperties": False,
-            },
-        },
-    }],
-    tool_choice="required",
-    reasoning=True,
-)
-compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(stag)
-matcher = xgr.GrammarMatcher(compiled)
-```
-
-The release supplies a Python [reference encoder](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/main/encoding/encoding.py)
-and [deepseek-recipe](https://github.com/deepseek-ai/deepseek-recipe), rather than a
-Jinja chat template. Build the prompt with one of these encoders and start the
-matcher on the generated continuation. The prompt already ends with `<think>`
-in thinking mode or `</think>` in chat mode; set `reasoning` to match that mode.
-The generated reasoning ends with `</think>`. EOS (`<｜end▁of▁sentence｜>`, token 1)
-is handled by the matcher's stop token. Numeric reasoning effort and image inputs
-affect the prompt, not this output grammar.
-
-The parameter schema uses the same conversion rules as `deepseek_xml`; the
-`string` attribute is currently accepted independently of the value type.
-
-For namespaced tools, pass the qualified wire name (for example, `web::search`)
-in `function.name`, including in named or allowed tool choices. Separate provider
-`namespace` fields must be normalized by the caller before invoking this API.
-When tools are disabled or absent, calls blocks remain forbidden even if
-`exclude_special_tokens=False` allows thinking tokens in free text.
-
 ## Extending with custom models
 
 Use `register_model_structural_tag` to add support for a new model format. See the [Builtin Structural Tag API Reference](../api/python/builtin_structural_tag) for details.

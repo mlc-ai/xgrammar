@@ -16,6 +16,7 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+import xgrammar as xgr
 from xgrammar import Grammar
 from xgrammar.builtin_structural_tag import get_model_structural_tag
 from xgrammar.testing import _is_grammar_accept_string
@@ -614,6 +615,68 @@ def test_cohere_melody_property_name_alignment(parameters, arguments, serialized
     validate_output(
         "cohere", tools, tool_choice="required", reasoning=False, model_output=model_output
     )
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("reasoning", [False, True])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced"])
+def test_deepseek_v4_1_official_tokenizer_masks(reasoning, policy):
+    from transformers import AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        "deepseek-ai/DeepSeek-V4.1-Flash", revision="dba1be0a40aa45a94ad051997016db3960a90277"
+    )
+    info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=129280)
+    assert info.vocab_type == xgr.VocabType.BYTE_LEVEL
+    assert info.stop_token_ids == [1]
+    assert tokenizer.encode("｜DSML｜", add_special_tokens=False) == [128825]
+    tool_choice = (
+        {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    )
+    schema = {
+        "type": "object",
+        "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1}},
+        "required": ["query", "limit"],
+        "additionalProperties": False,
+    }
+    tools = [
+        {"type": "function", "function": {"name": name, "parameters": schema}}
+        for name in ("search", "other")
+    ]
+    stag = get_model_structural_tag(
+        "deepseek_v4_1", tools=tools, reasoning=reasoning, tool_choice=tool_choice
+    )
+    compiled = xgr.GrammarCompiler(info).compile_structural_tag(stag)
+    matcher = xgr.GrammarMatcher(compiled)
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    message = {
+        "role": "assistant",
+        "content": "",
+        "reasoning_content": "Plan." if reasoning else "",
+        "tool_calls": [
+            {
+                "type": "function",
+                "function": {"name": name, "arguments": {"query": "北京\n<code>", "limit": 2}},
+            }
+            for name in (["search"] if policy == "forced" else ["search", "other"])
+        ],
+    }
+    output = extract_output_encoder(
+        "dsv41",
+        "deepseek_v4_1",
+        message,
+        tools,
+        {"thinking_mode": "thinking" if reasoning else "chat"},
+    )
+    token_ids = tokenizer.encode(output, add_special_tokens=False)
+    assert tokenizer.decode(token_ids) == output
+    for index, token_id in enumerate(token_ids + [tokenizer.eos_token_id]):
+        matcher.fill_next_token_bitmask(bitmask)
+        if policy != "auto" and index < len(token_ids):
+            assert not (int(bitmask[0, 0]) >> tokenizer.eos_token_id) & 1
+        assert (int(bitmask[0, token_id // 32]) >> (token_id % 32)) & 1, token_id
+        assert matcher.accept_token(token_id), token_id
+    assert matcher.is_terminated()
 
 
 if __name__ == "__main__":
