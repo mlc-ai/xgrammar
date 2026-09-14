@@ -13,6 +13,7 @@ import sys
 from functools import lru_cache
 
 import pytest
+from tokenizer_utils import load_tokenizer
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -170,13 +171,6 @@ EOS_SUFFIXES = {
 }
 
 
-@lru_cache(maxsize=None)
-def load_tokenizer(model_id):
-    from transformers import AutoTokenizer
-
-    return AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-
-
 def make_tools(num_tools):
     if num_tools == 0:
         return None
@@ -241,7 +235,7 @@ def strip_eos(output, stag_key, tokenizer=None):
 
 
 def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_kwargs):
-    tokenizer = load_tokenizer(model_id)
+    tokenizer = load_tokenizer(model_id, trust_remote_code=True)
     kwargs = dict(tokenize=False, **template_kwargs)
     if tools:
         kwargs["tools"] = tools
@@ -621,9 +615,7 @@ def test_cohere_melody_property_name_alignment(parameters, arguments, serialized
 @pytest.mark.parametrize("reasoning", [False, True])
 @pytest.mark.parametrize("policy", ["auto", "required", "forced"])
 def test_deepseek_v4_1_official_tokenizer_masks(reasoning, policy):
-    from transformers import AutoTokenizer
-
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = load_tokenizer(
         "deepseek-ai/DeepSeek-V4.1-Flash", revision="dba1be0a40aa45a94ad051997016db3960a90277"
     )
     info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=129280)

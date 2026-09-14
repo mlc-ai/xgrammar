@@ -5,7 +5,8 @@ from typing import Dict, List, Tuple
 
 import pytest
 from pydantic import BaseModel, Field
-from transformers import AutoConfig, AutoTokenizer
+from tokenizer_utils import load_tokenizer
+from transformers import AutoConfig
 
 import xgrammar as xgr
 from xgrammar.testing import (
@@ -56,7 +57,7 @@ def test_json_schema_debug_accept_string():
     instance_str = instance.model_dump_json(indent=2, round_trip=True)
 
     tokenizer_path = "meta-llama/Llama-2-7b-chat-hf"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
 
@@ -83,7 +84,7 @@ tokenizer_path = ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-I
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize("tokenizer_path", tokenizer_path)
 def test_fill_next_token_bitmask(tokenizer_path: str):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -242,7 +243,7 @@ class ValidLargeIntSchema(BaseModel):
 )
 @pytest.mark.hf_token_required
 def test_fill_next_token_bitmask_intfloat_range(tokenizer_path: str, schema_class, test_value):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -287,7 +288,7 @@ def test_64bit_limit_validation(
     tokenizer_path: str, schema_class, should_fail: bool, error_pattern: str
 ):
     """Test that schemas exceeding signed 64-bit integer limits are properly rejected"""
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -311,7 +312,7 @@ def test_64bit_limit_validation(
 def test_signed_64bit_boundary_values_work(tokenizer_path: str, boundary_value: int, schema_class):
     """Test that signed 64-bit boundary values work correctly"""
 
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -338,7 +339,7 @@ def test_signed_64bit_boundary_values_work(tokenizer_path: str, boundary_value: 
 @pytest.mark.parametrize("tokenizer_path", tokenizer_path)
 def test_mixed_type_range_schema(tokenizer_path: str):
     """Test the MixedTypeRangeSchema with both integer and float fields"""
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -382,7 +383,7 @@ def test_mixed_type_range_schema(tokenizer_path: str):
 @pytest.mark.parametrize("tokenizer_path", tokenizer_path)
 def test_multiple_boundaries_schema(tokenizer_path: str):
     """Test the complex MultipleBoundariesSchema with multiple integer fields"""
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -461,7 +462,7 @@ def test_mask_generation_format(value: str, format: str):
 
     instance = json.dumps(MainModel(name=value).model_dump(mode="json"))
 
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-8B-Instruct")
+    tokenizer = load_tokenizer("meta-llama/Meta-Llama-3.1-8B-Instruct")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
 
@@ -494,7 +495,7 @@ def test_mask_generation_format(value: str, format: str):
 @pytest.mark.hf_token_required
 def test_implicit_left_recursion_schema():
     model_name = "meta-llama/Llama-3.2-1B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer = load_tokenizer(model_name)
     config = AutoConfig.from_pretrained(model_name)
 
     json_schema = {
@@ -514,7 +515,7 @@ def test_implicit_left_recursion_schema():
 
 @pytest.mark.hf_token_required
 def test_regression_accept_invalid_token():
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-235B-A22B-Instruct-2507-FP8")
+    tokenizer = load_tokenizer("Qwen/Qwen3-235B-A22B-Instruct-2507-FP8")
     vocab_size = 151936
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(
         tokenizer, vocab_size=vocab_size, stop_token_ids=[tokenizer.eos_token_id]
@@ -551,7 +552,7 @@ def test_regression_accept_invalid_token():
 )
 def test_regression_accept_kimi_tokenizer_token():
     config = AutoConfig.from_pretrained("moonshotai/Kimi-K2-Thinking", trust_remote_code=True)
-    tokenizer = AutoTokenizer.from_pretrained("moonshotai/Kimi-K2-Thinking", trust_remote_code=True)
+    tokenizer = load_tokenizer("moonshotai/Kimi-K2-Thinking", trust_remote_code=True)
     vocab_size = config.vocab_size
     ids = tokenizer.encode(
         r'{"command": "find ./ -name *.txt ", "security_risk": "LOW"}', add_special_tokens=True
@@ -915,7 +916,7 @@ def test_rule_level_cache_cross_grammar():
     }"""
 
     tokenizer_path = "meta-llama/Meta-Llama-3-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=True)
     token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)

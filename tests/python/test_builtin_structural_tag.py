@@ -7,7 +7,7 @@ import time
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import pytest
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.builtin_structural_tag import (
@@ -79,9 +79,7 @@ def _input_dict_to_get_stag_kwargs(format_type: str, input_dict: Dict[str, Any])
 
 class Profiler:
     def __init__(self, tokenizer_id: str):
-        tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_id, use_fast=True, trust_remote_code=True
-        )
+        tokenizer = load_tokenizer(tokenizer_id, use_fast=True, trust_remote_code=True)
         self.tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
         self.compiler = xgr.GrammarCompiler(
             self.tokenizer_info, max_threads=16, cache_enabled=False

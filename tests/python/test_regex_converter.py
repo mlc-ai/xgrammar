@@ -2,7 +2,7 @@ import sys
 import time
 
 import pytest
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _is_grammar_accept_string, _regex_to_ebnf
@@ -468,7 +468,7 @@ tokenizer_path_regex_instance = [(t, *ri) for t in tokenizer_paths for ri in reg
 def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     print(f"Tokenizer: {tokenizer_path}, regex: {regex}, instance: {instance}")
 
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = load_tokenizer(tokenizer_path)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
 

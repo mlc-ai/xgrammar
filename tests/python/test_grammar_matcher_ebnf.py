@@ -8,7 +8,7 @@ from typing import List
 
 import pytest
 import torch
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import (
@@ -375,7 +375,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 def test_fill_next_token_bitmask(
     tokenizer_path: str, input_str: str, expected_rejected_sizes: List[int]
 ):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -643,7 +643,7 @@ def test_positive_utf8_single_char_class():
 def test_not_neighbour_character_class():
     raw_grammar = "root ::= [a-cx-z]*"
     tokenizer_path = "meta-llama/Llama-2-7b-chat-hf"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar = xgr.Grammar.from_ebnf(raw_grammar)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
@@ -690,7 +690,7 @@ def test_fill_next_token_bitmask_unicode_char_class(
     This test verifies that the grammar correctly handles mixed UTF-8 character
     classes (ASCII, Cyrillic, CJK) and produces consistent rejected token counts.
     """
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
