@@ -2776,3 +2776,167 @@ def test_deepseek_v4_1_whitespace_limit_and_serialization():
     assert not _is_grammar_accept_string(
         grammar, _DEEPSEEK_V41_CALLS.replace('string="false">2', 'string="false">   2')
     )
+
+
+# ---------- Test: parallel_tool_calls ----------
+
+_PARALLEL_TOOLS = make_tools(["t1", "t2"])
+
+_KIMI_CALL = (
+    '<|tool_call_begin|>functions.{n}:0<|tool_call_argument_begin|>{{"q": "v"}}<|tool_call_end|>'
+)
+_DEEPSEEK_R1_CALL = (
+    '<｜tool▁call▁begin｜>function<｜tool▁sep｜>{n}\n```json\n{{"q": "v"}}\n```<｜tool▁call▁end｜>'
+)
+_COHERE_CALL = (
+    '<cofl:tool_call id="0" name="{n}"><cofl:value name="q" type="raw">v</cofl:value>'
+    "</cofl:tool_call>"
+)
+_KIMI_K3_CALL = (
+    '<|open|>call tool="{n}" index="1"<|sep|>'
+    '<|open|>argument key="q" type="string"<|sep|>v<|close|>argument<|sep|>'
+    "<|close|>call<|sep|>"
+)
+
+# (model, output with one tool call, the same output with two tool calls)
+_parallel_tool_calls_cases = [
+    pytest.param(
+        "llama",
+        '{"name": "t1", "parameters": {"q": "v"}}',
+        '{"name": "t1", "parameters": {"q": "v"}}{"name": "t2", "parameters": {"q": "v"}}',
+        id="llama",
+    ),
+    pytest.param(
+        "qwen_3",
+        '<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+        '<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>'
+        '<tool_call>\n{"name": "t2", "arguments": {"q": "v"}}\n</tool_call>',
+        id="qwen_3",
+    ),
+    pytest.param(
+        "qwen_3_5",
+        "<tool_call>\n<function=t1>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+        "<tool_call>\n<function=t1>\n<parameter=q>v</parameter>\n</function>\n</tool_call>"
+        "<tool_call>\n<function=t2>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+        id="qwen_3_5",
+    ),
+    pytest.param(
+        "glm_4_7",
+        "<tool_call>t1<arg_key>q</arg_key><arg_value>v</arg_value></tool_call>",
+        "<tool_call>t1<arg_key>q</arg_key><arg_value>v</arg_value></tool_call>"
+        "<tool_call>t2<arg_key>q</arg_key><arg_value>v</arg_value></tool_call>",
+        id="glm_4_7",
+    ),
+    pytest.param(
+        "exaone",
+        '<tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>',
+        '<tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>'
+        '<tool_call>{"name": "t2", "arguments": {"q": "v"}}</tool_call>',
+        id="exaone",
+    ),
+    pytest.param(
+        "kimi",
+        "<|tool_calls_section_begin|>" + _KIMI_CALL.format(n="t1") + "<|tool_calls_section_end|>",
+        "<|tool_calls_section_begin|>"
+        + _KIMI_CALL.format(n="t1")
+        + _KIMI_CALL.format(n="t2")
+        + "<|tool_calls_section_end|>",
+        id="kimi",
+    ),
+    pytest.param(
+        "kimi_k3",
+        "<|close|>response<|sep|><|open|>tools<|sep|>"
+        + _KIMI_K3_CALL.format(n="t1")
+        + "<|close|>tools<|sep|><|close|>message<|sep|>",
+        "<|close|>response<|sep|><|open|>tools<|sep|>"
+        + _KIMI_K3_CALL.format(n="t1")
+        + _KIMI_K3_CALL.format(n="t2")
+        + "<|close|>tools<|sep|><|close|>message<|sep|>",
+        id="kimi_k3",
+    ),
+    pytest.param(
+        "deepseek_r1",
+        "<｜tool▁calls▁begin｜>" + _DEEPSEEK_R1_CALL.format(n="t1") + "<｜tool▁calls▁end｜>",
+        "<｜tool▁calls▁begin｜>"
+        + _DEEPSEEK_R1_CALL.format(n="t1")
+        + "\n"
+        + _DEEPSEEK_R1_CALL.format(n="t2")
+        + "<｜tool▁calls▁end｜>",
+        id="deepseek_r1",
+    ),
+    pytest.param(
+        "cohere",
+        "<cofl:tool_calls>" + _COHERE_CALL.format(n="t1") + "</cofl:tool_calls>",
+        "<cofl:tool_calls>"
+        + _COHERE_CALL.format(n="t1")
+        + _COHERE_CALL.format(n="t2")
+        + "</cofl:tool_calls>",
+        id="cohere",
+    ),
+]
+
+
+@pytest.mark.parametrize("tool_choice", ["auto", "required"])
+@pytest.mark.parametrize("model, one_call, two_calls", _parallel_tool_calls_cases)
+def test_parallel_tool_calls_limits_the_response_to_one_call(
+    model: str, one_call: str, two_calls: str, tool_choice: str
+):
+    """parallel_tool_calls=False keeps a single call and rejects a second one."""
+    kwargs: Dict[str, Any] = {
+        "tools": _PARALLEL_TOOLS,
+        "tool_choice": tool_choice,
+        "reasoning": False,
+    }
+    parallel = get_model_structural_tag(model, **kwargs)
+    check_stag_with_instance(parallel, one_call, True)
+    check_stag_with_instance(parallel, two_calls, True)
+
+    single = get_model_structural_tag(model, parallel_tool_calls=False, **kwargs)
+    check_stag_with_instance(single, one_call, True)
+    check_stag_with_instance(single, two_calls, False)
+
+
+_HARMONY_SEPARATOR = "<|start|>assistant"
+_HARMONY_ANALYSIS = "<|channel|>analysis<|message|>plan<|end|>"
+_HARMONY_FINAL = "<|channel|>final<|message|>answer<|return|>"
+
+
+def _harmony_call(name: str) -> str:
+    return (
+        f'<|channel|>commentary to=functions.{name}<|constrain|>json<|message|>{{"q": "v"}}<|call|>'
+    )
+
+
+@pytest.mark.parametrize("tool_choice", ["auto", "required"])
+def test_parallel_tool_calls_harmony_keeps_non_tool_messages(tool_choice: str):
+    """Harmony caps the tool-call messages only, not the whole message stream."""
+    single = get_model_structural_tag(
+        "harmony",
+        tools=_PARALLEL_TOOLS,
+        tool_choice=tool_choice,
+        reasoning=True,
+        parallel_tool_calls=False,
+    )
+    one_call = _HARMONY_ANALYSIS + _HARMONY_SEPARATOR + _harmony_call("t1")
+    two_calls = one_call + _HARMONY_SEPARATOR + _harmony_call("t2")
+
+    # An analysis message keeps its place before the single tool call.
+    check_stag_with_instance(single, _HARMONY_ANALYSIS, True)
+    check_stag_with_instance(single, _harmony_call("t1"), True)
+    check_stag_with_instance(single, one_call, True)
+    check_stag_with_instance(single, two_calls, False)
+
+
+def test_parallel_tool_calls_harmony_auto_keeps_the_final_message():
+    """Only tool calls are capped: analysis plus a final answer stays valid."""
+    single = get_model_structural_tag(
+        "harmony", tools=_PARALLEL_TOOLS, reasoning=True, parallel_tool_calls=False
+    )
+    check_stag_with_instance(single, _HARMONY_ANALYSIS + _HARMONY_SEPARATOR + _HARMONY_FINAL, True)
+
+
+def test_parallel_tool_calls_rejects_non_bool():
+    with pytest.raises(ValueError, match="parallel_tool_calls"):
+        get_model_structural_tag(
+            "qwen_3", tools=_PARALLEL_TOOLS, parallel_tool_calls="no"  # type: ignore[arg-type]
+        )

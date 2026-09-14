@@ -50,6 +50,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
   - `{"type": "allowed_tools", "allowed_tools": {"mode": ..., "tools": [...]}}`: limits available tools before applying its `mode`. The `tools` list may contain both function refs and builtin refs (matched by `type`).
 - **reasoning** (`"enabled" | "disabled" | "auto" | bool`, optional): Controls the model-specific reasoning section. The string modes are recommended. The boolean aliases `True` and `False` are deprecated but remain supported as `"enabled"` and `"disabled"`, respectively. For models with a leading reasoning block, `"auto"` means that the prompt does not prefill its opener, and the model may emit one complete block or answer/call a tool directly. Default `"enabled"` in `get_model_structural_tag`; the model-specific `get_minimax_m3_structural_tag` defaults to `"auto"`. For MiniMax M3, these modes must be paired with the chat template's `enabled`, `disabled`, and `adaptive` thinking modes; adaptive output may start with `</mm:think>` when skipping reasoning. Boolean aliases are supported only by `get_model_structural_tag`; model-specific builders take the three explicit string modes.
 - **any_order** (`bool`, optional): When `True`, applies `any_order=True` to every `JSONSchemaFormat` in the generated structural tag, so each tool's arguments may be emitted in any property order (see [`JSONSchemaFormat`](structural_tag) for the exact semantics). Default `False`, which keeps the declared property order with full validation.
+- **parallel_tool_calls** (`bool`, optional): Whether the model may emit more than one tool call in a single response, following the OpenAI Chat Completions parameter of the same name. Default `True`, which keeps the multi-call grammar. When `False`, the structural tag allows at most one tool call: exactly zero or one under `tool_choice="auto"`, exactly one under `"required"` or a forced tool. Free text is still allowed before the call, but generation must end once the call is closed, since a second call is no longer reachable.
 - **max_whitespace_cnt** (`Optional[int]`, optional): Caps the number of consecutive whitespace characters. Setting it (e.g. `2`) bounds runs of whitespace, which avoids the unbounded-whitespace outputs some models emit in bad cases that would otherwise blow up grammar compilation/matching.
 
 Passing an unsupported `model`, invalid `tool_choice`, or invalid `reasoning` mode will raise `ValueError`.
@@ -191,6 +192,23 @@ structural_tag = get_model_structural_tag(
 ```
 
 Defaults to `True`. No effect for models without special tokens (e.g. `harmony`).
+
+### Parallel tool calls
+
+By default the grammar accepts as many tool calls as the model wants to emit. Pass
+`parallel_tool_calls=False` to cap the response at a single call:
+
+```python
+structural_tag = get_model_structural_tag(
+    "qwen_3",
+    tools=tools,
+    parallel_tool_calls=False,
+)
+```
+
+With `tool_choice="auto"` the model may still answer with plain text instead, so the response holds
+exactly zero or one call; with `"required"` or a forced tool it holds exactly one. A forced tool
+choice already resolves to a single call, so the flag does not change it.
 
 ---
 
