@@ -956,22 +956,8 @@ std::optional<std::vector<SchemaSpecPtr>> CohereXMLToolCallingConverter::GetCohe
   );
 }
 
-int32_t CohereXMLToolCallingConverter::FormatSingleCohereParam(
-    const std::optional<std::string>& name,
-    const std::optional<int32_t>& key_pattern_expr,
-    const SchemaSpecPtr& schema,
-    int32_t value_rule_id
-) {
-  return FormatCohereParamWithType(
-      name, key_pattern_expr, GetCohereTypePattern(schema), value_rule_id
-  );
-}
-
-int32_t CohereXMLToolCallingConverter::FormatCohereParamWithType(
-    const std::optional<std::string>& name,
-    const std::optional<int32_t>& key_pattern_expr,
-    int32_t type_expression,
-    int32_t value_rule_id
+int32_t CohereXMLToolCallingConverter::CohereParamPrefix(
+    const std::optional<std::string>& name, const std::optional<int32_t>& key_pattern_expr
 ) {
   std::vector<int32_t> elements = {ByteString(xml_wrapper_.key_wrapper_prefix)};
   if (name.has_value()) {
@@ -981,10 +967,15 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParamWithType(
     elements.push_back(*key_pattern_expr);
     elements.push_back(ByteString("\""));
   }
-  elements.push_back(ByteString(" type=\""));
-  elements.push_back(type_expression);
-  elements.push_back(ByteString("\"" + xml_wrapper_.key_wrapper_suffix));
+  return Sequence(elements);
+}
 
+int32_t CohereXMLToolCallingConverter::FormatCohereSuffixWithType(
+    int32_t type_expression, int32_t value_rule_id
+) {
+  std::vector<int32_t> elements = {
+      ByteString(" type=\""), type_expression, ByteString("\"" + xml_wrapper_.key_wrapper_suffix)
+  };
   if (!xml_wrapper_.value_wrapper_prefix.empty()) {
     elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
   }
@@ -993,25 +984,21 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParamWithType(
   return Sequence(elements);
 }
 
-int32_t CohereXMLToolCallingConverter::FormatAnyCohereParam(
-    const std::optional<std::string>& name, const std::optional<int32_t>& key_pattern_expr
-) {
+int32_t CohereXMLToolCallingConverter::FormatAnyCohereSuffix() {
   // kXMLAny is the aggregate body-only union. Wrapping it under every type would create a
   // type/body cross product, so each wrapper deliberately references its matching component.
   return Choice(
-      {FormatCohereParamWithType(
-           name, key_pattern_expr, ByteString("raw"), builder_.GetRuleId(kXMLString)
-       ),
-       FormatCohereParamWithType(
-           name, key_pattern_expr, ByteString("json"), builder_.GetRuleId(kCohereAnyScalar)
-       ),
-       FormatCohereParamWithType(
-           name, key_pattern_expr, ByteString("dict"), builder_.GetRuleId(kXMLObject)
-       ),
-       FormatCohereParamWithType(
-           name, key_pattern_expr, ByteString("list"), builder_.GetRuleId(kCohereAnyList)
-       )}
+      {FormatCohereSuffixWithType(ByteString("raw"), builder_.GetRuleId(kXMLString)),
+       FormatCohereSuffixWithType(ByteString("json"), builder_.GetRuleId(kCohereAnyScalar)),
+       FormatCohereSuffixWithType(ByteString("dict"), builder_.GetRuleId(kXMLObject)),
+       FormatCohereSuffixWithType(ByteString("list"), builder_.GetRuleId(kCohereAnyList))}
   );
+}
+
+int32_t CohereXMLToolCallingConverter::FormatAnyCohereParam(
+    const std::optional<std::string>& name, const std::optional<int32_t>& key_pattern_expr
+) {
+  return Sequence({CohereParamPrefix(name, key_pattern_expr), FormatAnyCohereSuffix()});
 }
 
 int32_t CohereXMLToolCallingConverter::FormatCohereParam(
@@ -1020,37 +1007,47 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParam(
     const SchemaSpecPtr& schema,
     int32_t value_rule_id
 ) {
+  return Sequence(
+      {CohereParamPrefix(name, key_pattern_expr), FormatCohereParamSuffix(schema, value_rule_id)}
+  );
+}
+
+int32_t CohereXMLToolCallingConverter::FormatCohereParamSuffix(
+    const SchemaSpecPtr& schema, int32_t value_rule_id
+) {
   // Copy the name before generating: GenerateFromSpec may add rules and reallocate the
   // builder's rule storage, invalidating references into it.
   std::string value_rule_name = builder_.GetRule(value_rule_id).name;
-  SchemaSpecPtr resolved_schema = schema;
-  // Resolve RefSpecs only for Cohere wrapper classification; the value rule is already resolved.
-  if (const auto* ref = std::get_if<RefSpec>(&resolved_schema->spec); ref != nullptr) {
-    std::unordered_set<std::string> visited_ref_uris;
-    do {
-      if (!visited_ref_uris.insert(ref->uri).second) {
-        break;
-      }
-      resolved_schema = ResolveRefSchema(*ref, value_rule_name);
-      ref = std::get_if<RefSpec>(&resolved_schema->spec);
-    } while (ref != nullptr);
+  if (const auto* ref = std::get_if<RefSpec>(&schema->spec); ref != nullptr) {
+    auto cached = cohere_param_ref_rules_.find(ref->uri);
+    if (cached != cohere_param_ref_rules_.end()) {
+      return RuleRef(cached->second);
+    }
+    // Register the rule before resolving the reference. A schema that leads back to this URI,
+    // directly or through nested dict/list items, then reuses the rule instead of expanding
+    // again without bound, and shared acyclic references are built only once.
+    int32_t param_rule_id = builder_.AddEmptyRuleWithHint(value_rule_name + "_cohere_param");
+    cohere_param_ref_rules_.emplace(ref->uri, param_rule_id);
+    SchemaSpecPtr resolved = ResolveRefSchema(*ref, value_rule_name);
+    builder_.UpdateRuleBody(param_rule_id, FormatCohereParamSuffix(resolved, value_rule_id));
+    return RuleRef(param_rule_id);
   }
 
   // CreateRule may return any aggregate rule (cached or freshly generated), but the schema is
-  // retained along this object-property call path so Any can select correlated wrappers here.
-  if (std::holds_alternative<AnySpec>(resolved_schema->spec)) {
-    return FormatAnyCohereParam(name, key_pattern_expr);
+  // retained along this call path so Any can select correlated wrappers here.
+  if (std::holds_alternative<AnySpec>(schema->spec)) {
+    return FormatAnyCohereSuffix();
   }
-  if (const auto* all_of = std::get_if<AllOfSpec>(&resolved_schema->spec);
+  if (const auto* all_of = std::get_if<AllOfSpec>(&schema->spec);
       all_of != nullptr && all_of->schemas.size() != 1) {
     // The base converter intentionally falls back to Any while multi-branch allOf support is
     // incomplete. Keep that fallback canonical instead of wrapping its aggregate body as json.
-    return FormatAnyCohereParam(name, key_pattern_expr);
+    return FormatAnyCohereSuffix();
   }
 
-  auto options = GetCohereCompositeOptions(resolved_schema);
+  auto options = GetCohereCompositeOptions(schema);
   if (!options.has_value()) {
-    return FormatSingleCohereParam(name, key_pattern_expr, resolved_schema, value_rule_id);
+    return FormatCohereSuffixWithType(GetCohereTypePattern(schema), value_rule_id);
   }
 
   std::vector<int32_t> choices;
@@ -1059,7 +1056,7 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParam(
     const SchemaSpecPtr& option = (*options)[index];
     int32_t option_rule_id =
         CreateRule(option, value_rule_name + "_cohere_case_" + std::to_string(index));
-    choices.push_back(FormatCohereParam(name, key_pattern_expr, option, option_rule_id));
+    choices.push_back(FormatCohereParamSuffix(option, option_rule_id));
   }
   return choices.size() == 1 ? choices[0] : Choice(choices);
 }

@@ -2772,6 +2772,143 @@ def test_cohere_resolves_chained_recursive_ref():
     )
 
 
+@pytest.mark.parametrize("keyword", ["anyOf", "oneOf"])
+@pytest.mark.parametrize("property_kind", ["named", "additional", "pattern", "list_item"])
+def test_cohere_recursive_parameter_references(keyword: str, property_kind: str):
+    """A union that refers back to itself renders once and terminates."""
+    value_schema = {"$ref": "#/$defs/V"}
+    schema = {"type": "object", "$defs": {"V": {keyword: [{"type": "string"}, value_schema]}}}
+    if property_kind == "named":
+        schema.update(
+            properties={"value_1": value_schema, "value_2": value_schema},
+            required=["value_1", "value_2"],
+            additionalProperties=False,
+        )
+        accepted = (
+            '<cofl:value name="value_1" type="raw">hello</cofl:value>'
+            '<cofl:value name="value_2" type="raw">hello</cofl:value>'
+        )
+    elif property_kind == "additional":
+        schema["additionalProperties"] = value_schema
+        accepted = (
+            '<cofl:value name="value_1" type="raw">hello</cofl:value>'
+            '<cofl:value name="value_2" type="raw">hello</cofl:value>'
+        )
+    elif property_kind == "pattern":
+        schema.update(patternProperties={"^value_[12]$": value_schema}, additionalProperties=False)
+        accepted = (
+            '<cofl:value name="value_1" type="raw">hello</cofl:value>'
+            '<cofl:value name="value_2" type="raw">hello</cofl:value>'
+        )
+    else:
+        schema.update(
+            properties={"values": {"type": "array", "items": value_schema}},
+            required=["values"],
+            additionalProperties=False,
+        )
+        accepted = (
+            '<cofl:value name="values" type="list">'
+            '<cofl:value type="raw">hello</cofl:value>'
+            '<cofl:value type="raw">hello</cofl:value>'
+            "</cofl:value>"
+        )
+    _check_cohere_grammar(schema, accepted, True)
+    _check_cohere_grammar(schema, accepted.replace('type="raw"', 'type="json"'), False)
+    _check_cohere_grammar(schema, accepted[:-1], False)
+
+
+@pytest.mark.parametrize(
+    "container, accepted",
+    [
+        (
+            {
+                "type": "object",
+                "properties": {"child": {"$ref": "#/$defs/T"}},
+                "required": ["child"],
+            },
+            '<cofl:value name="value" type="dict">'
+            '<cofl:value name="child" type="dict">'
+            '<cofl:value name="child" type="raw">leaf</cofl:value>'
+            "</cofl:value>"
+            "</cofl:value>",
+        ),
+        (
+            {"type": "array", "items": {"$ref": "#/$defs/T"}},
+            '<cofl:value name="value" type="list">'
+            '<cofl:value type="raw">leaf</cofl:value>'
+            '<cofl:value type="list"></cofl:value>'
+            "</cofl:value>",
+        ),
+    ],
+)
+def test_cohere_recursive_references_through_containers(container: dict, accepted: str):
+    """Recursion through nested dict or list items reuses the reference's parameter rule."""
+    schema = {
+        "type": "object",
+        "$defs": {"T": {"anyOf": [{"type": "string"}, container]}},
+        "properties": {"value": {"$ref": "#/$defs/T"}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    _check_cohere_grammar(schema, accepted, True)
+    _check_cohere_grammar(schema, '<cofl:value name="value" type="raw">leaf</cofl:value>', True)
+    _check_cohere_grammar(schema, '<cofl:value name="value" type="json">leaf</cofl:value>', False)
+
+
+def test_cohere_mutually_recursive_parameter_references():
+    """References that cycle through allOf and oneOf keep branch-correlated wrappers."""
+    schema = {
+        "type": "object",
+        "$defs": {
+            "V": {"anyOf": [{"const": "fixed"}, {"$ref": "#/$defs/Alias"}]},
+            "Alias": {"allOf": [{"$ref": "#/$defs/W"}]},
+            "W": {"oneOf": [{"type": "integer", "minimum": 1}, {"$ref": "#/$defs/V"}]},
+        },
+        "properties": {"first": {"$ref": "#/$defs/V"}, "second": {"$ref": "#/$defs/W"}},
+        "required": ["first", "second"],
+        "additionalProperties": False,
+    }
+    for value, type_attr, accepted in [
+        ("fixed", "raw", True),
+        ("2", "json", True),
+        ("fixed", "json", False),
+        ("2", "raw", False),
+        ("0", "json", False),
+    ]:
+        instance = "".join(
+            f'<cofl:value name="{name}" type="{type_attr}">{value}</cofl:value>'
+            for name in ["first", "second"]
+        )
+        _check_cohere_grammar(schema, instance, accepted)
+
+
+def test_cohere_shared_parameter_references_have_linear_grammar_size():
+    rule_counts = []
+    for num_defs in [12, 24]:
+        definitions = {"V0": {"const": "fixed"}, "V1": {"type": "integer", "minimum": 1}}
+        for index in range(2, num_defs):
+            definitions[f"V{index}"] = {
+                "anyOf": [{"$ref": f"#/$defs/V{index - 1}"}, {"$ref": f"#/$defs/V{index - 2}"}]
+            }
+        schema = {
+            "type": "object",
+            "$defs": definitions,
+            "properties": {"value": {"$ref": f"#/$defs/V{num_defs - 1}"}},
+            "required": ["value"],
+            "additionalProperties": False,
+        }
+        rule_counts.append(len(_json_schema_to_ebnf(schema, json_format="cohere_xml").splitlines()))
+        _check_cohere_grammar(
+            schema, '<cofl:value name="value" type="raw">fixed</cofl:value>', True
+        )
+        _check_cohere_grammar(schema, '<cofl:value name="value" type="json">2</cofl:value>', True)
+        _check_cohere_grammar(
+            schema, '<cofl:value name="value" type="json">fixed</cofl:value>', False
+        )
+    # Doubling this shared reference graph must not expand its exponentially many paths.
+    assert rule_counts[1] <= 2 * rule_counts[0], rule_counts
+
+
 _XML_DYNAMIC_PROPERTY_CASES = (
     (
         "deepseek_v4_1_xml",
