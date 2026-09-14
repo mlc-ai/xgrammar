@@ -14,10 +14,9 @@ nbstripout
 pandoc
 pillow
 pydantic
-scikit-build-core>=0.10.0
 sentencepiece
 setuptools==81.0.0
-setuptools-scm>=9.2.2
+setuptools-scm>=8.1
 sphinx>=8.2
 sphinx-autobuild
 sphinx-copybutton
