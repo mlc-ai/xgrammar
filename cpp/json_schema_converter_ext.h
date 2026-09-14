@@ -282,6 +282,7 @@ using XMLWrapperParts = std::array<const char*, 4>;
 XMLWrapperParts GetQwenXMLWrapper();
 XMLWrapperParts GetMiniMaxXMLWrapper();
 XMLWrapperParts GetDeepSeekXMLWrapper();
+XMLWrapperParts GetDeepSeekV41XMLWrapper();
 XMLWrapperParts GetGLMXMLWrapper();
 XMLWrapperParts GetCohereXMLWrapper();
 XMLWrapperParts GetKimiK3XMLWrapper();

@@ -12,6 +12,10 @@ XMLWrapperParts GetDeepSeekXMLWrapper() {
   return {"<｜DSML｜parameter name=\"", "", "", "</｜DSML｜parameter>"};
 }
 
+XMLWrapperParts GetDeepSeekV41XMLWrapper() {
+  return {"<｜DSML｜ parameter name=\"", "", "", "</｜DSML｜ parameter>"};
+}
+
 const XMLKeySuffix& GetDeepSeekXMLKeySuffix() {
   // TODO(Linzhang): We do not validate the string's value, and we accept both.
   static const XMLKeySuffix suffix = {"\" string=\"", {"true", "false"}, "\">"};

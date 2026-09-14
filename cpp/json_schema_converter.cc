@@ -3358,6 +3358,7 @@ const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
           {JSONFormat::kQwenXML, wrapper(converter_ext::GetQwenXMLWrapper())},
           {JSONFormat::kMiniMaxXML, wrapper(converter_ext::GetMiniMaxXMLWrapper())},
           {JSONFormat::kDeepSeekXML, wrapper(converter_ext::GetDeepSeekXMLWrapper())},
+          {JSONFormat::kDeepSeekV41XML, wrapper(converter_ext::GetDeepSeekV41XMLWrapper())},
           {JSONFormat::kGlmXML, wrapper(converter_ext::GetGLMXMLWrapper())},
           {JSONFormat::kCohereXML, wrapper(converter_ext::GetCohereXMLWrapper())},
           {JSONFormat::kKimiK3XML, wrapper(converter_ext::GetKimiK3XMLWrapper())},
@@ -3403,7 +3404,7 @@ int32_t XMLToolCallingConverter::XMLKeySuffix(const std::optional<std::string>& 
     }
     return Choice(choices);
   };
-  if (json_format_ == JSONFormat::kDeepSeekXML) {
+  if (json_format_ == JSONFormat::kDeepSeekXML || json_format_ == JSONFormat::kDeepSeekV41XML) {
     const auto& suffix = converter_ext::GetDeepSeekXMLKeySuffix();
     return Sequence(
         {ByteString(suffix.prefix), value_choices(suffix.values), ByteString(suffix.suffix)}
@@ -3657,6 +3658,10 @@ void XMLToolCallingConverter::AddCache(const std::string& key, int32_t rule_id) 
 std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key) const {
   if (key.empty()) {
     return std::nullopt;
+  }
+  if (json_format_ == JSONFormat::kDeepSeekV41XML && nested_object_level_ == 0 && key == "{}") {
+    // Unconstrained tool arguments are an XML parameter list, not one parameter's raw value.
+    return rule_cache_manager_.GetCache(kObjectCacheKey, false);
   }
   // At level 0, {"type":"object"} is the root tool-arguments object and uses XML parameter
   // tags. At level 1 it is the value of one such parameter and must use the inner JSON object
@@ -4539,6 +4544,7 @@ Grammar JSONSchemaToGrammar(
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
     case JSONFormat::kDeepSeekXML:
+    case JSONFormat::kDeepSeekV41XML:
     case JSONFormat::kGlmXML:
     case JSONFormat::kKimiK3XML: {
       XMLToolCallingConverter converter(
@@ -4643,6 +4649,7 @@ std::string JSONSchemaToEBNF(
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
     case JSONFormat::kDeepSeekXML:
+    case JSONFormat::kDeepSeekV41XML:
     case JSONFormat::kGlmXML:
     case JSONFormat::kKimiK3XML: {
       XMLToolCallingConverter converter(

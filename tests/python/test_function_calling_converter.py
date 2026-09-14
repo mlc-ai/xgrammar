@@ -3279,5 +3279,24 @@ def test_deepseek_v4_1_parameter_style(schema, value, string_attr):
         assert not _is_grammar_accept_string(grammar, output + output)
 
 
+@pytest.mark.parametrize("schema", [{}, {"type": "object"}])
+def test_deepseek_v4_1_unconstrained_parameter_list(schema):
+    stag = StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    output = (
+        '<｜DSML｜ parameter name="first" string="true">hello</｜DSML｜ parameter>'
+        '<｜DSML｜ parameter name="second" string="false">[1, 2]</｜DSML｜ parameter>'
+    )
+    for grammar in [
+        Grammar.from_structural_tag(stag),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")),
+    ]:
+        assert _is_grammar_accept_string(grammar, "")
+        assert _is_grammar_accept_string(grammar, output)
+        assert not _is_grammar_accept_string(grammar, "hello")
+        assert not _is_grammar_accept_string(
+            grammar, output.replace("｜DSML｜ parameter", "｜DSML｜parameter")
+        )
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
