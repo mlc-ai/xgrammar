@@ -70,7 +70,7 @@ Please visit our [documentation](https://xgrammar.mlc.ai/docs/) to get started w
 
 ## Contributing and governance
 
-We welcome contributions of code, tests, documentation, bug reports, and reviews. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
+We welcome contributions of code, tests, documentation, bug reports, and reviews. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started. All participants are expected to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 [GOVERNANCE.md](GOVERNANCE.md) describes the current maintainers, technical decision process, and maintainer role changes. [CODEOWNERS](CODEOWNERS) lists the reviewers responsible for specific parts of the repository.
 
