@@ -29,7 +29,20 @@ rule3 ::= "c"
     grammar = xgr.Grammar.from_ebnf(grammar_str)
     assert _is_grammar_accept_string(grammar, "bab")
     assert not _is_grammar_accept_string(grammar, "abb")
-    assert _is_grammar_accept_string(grammar, "cab")
+
+
+def test_char_class_star_prefix_requires_first_char():
+    """Regression test: [a]* forms a self-loop on the start state of the rule FSM. The
+    FSM state merging used to merge the start state with the state after the first "a",
+    wrongly accepting "bc" without any leading "a"."""
+    grammar = xgr.Grammar.from_ebnf('root ::= [a]* "a" "b" "c"')
+    assert _is_grammar_accept_string(grammar, "abc")
+    assert _is_grammar_accept_string(grammar, "aabc")
+    assert _is_grammar_accept_string(grammar, "aaabc")
+    assert not _is_grammar_accept_string(grammar, "bc")
+    assert not _is_grammar_accept_string(grammar, "c")
+    assert not _is_grammar_accept_string(grammar, "ab")
+    assert not _is_grammar_accept_string(grammar, "cab")
 
 
 input_accepted_test_repetition = (
