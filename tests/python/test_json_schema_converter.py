@@ -2482,6 +2482,71 @@ def test_min_max_length():
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
 
 
+def test_min_max_length_allows_json_escapes():
+    # Issue #800: the length-bounded path used a bare [^"\\\r\n] class with no escape
+    # alternative, so \" \\ \/ \b \f \n \r \t and \uXXXX were unrepresentable and a model
+    # needing one could never close the string.
+    schema = {"type": "string", "maxLength": 10}
+
+    check_schema_with_instance(schema, r'"ab\ncd"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"a\tb"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"say \"hi\""', any_whitespace=True)
+    check_schema_with_instance(schema, r'"back\\slash"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"a\/b"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"a\bb"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"a\fb"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"a\rb"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"a\u0062c"', any_whitespace=True)
+
+    # minLength alone and combined bounds share the same path.
+    check_schema_with_instance({"type": "string", "minLength": 3}, r'"a\nb"')
+    check_schema_with_instance({"type": "string", "minLength": 1, "maxLength": 3}, r'"a\nb"')
+
+
+def test_min_max_length_counts_escape_as_one_character():
+    # maxLength counts characters of the decoded string: one escape is one character.
+    check_schema_with_instance({"type": "string", "minLength": 3}, r'"a\nb"')
+    check_schema_with_instance({"type": "string", "maxLength": 2}, r'"a\nb"', is_accepted=False)
+    check_schema_with_instance(
+        {"type": "string", "maxLength": 10}, r'"\n\n\n\n\n\n\n\n\n\n"', any_whitespace=True
+    )
+    check_schema_with_instance(
+        {"type": "string", "maxLength": 10},
+        r'"\n\n\n\n\n\n\n\n\n\n\n"',
+        is_accepted=False,
+        any_whitespace=True,
+    )
+
+
+def test_min_max_length_rejects_unescaped_controls():
+    # Unescaped U+0000-U+001F are invalid JSON; the old class admitted them (except \r\n).
+    schema = {"type": "string", "minLength": 1, "maxLength": 3}
+
+    check_schema_with_instance(schema, '"a\tb"', is_accepted=False)
+    check_schema_with_instance(schema, '"a\nb"', is_accepted=False)
+
+
+def test_min_max_length_counts_surrogate_pair_as_one_character():
+    # U+1F600 is one code point however it is spelled: raw UTF-8 or a \uXXXX pair.
+    schema = {"type": "string", "maxLength": 1}
+
+    check_schema_with_instance(schema, r'"\uD83D\uDE00"', any_whitespace=True)
+    check_schema_with_instance(schema, '"\U0001f600"', any_whitespace=True)
+    check_schema_with_instance(
+        schema, r'"\uD83D\uDE00\uD83D\uDE00"', is_accepted=False, any_whitespace=True
+    )
+
+
+def test_min_max_length_rejects_lone_surrogate_escapes():
+    schema = {"type": "string", "maxLength": 4}
+
+    check_schema_with_instance(schema, r'"\uD800"', is_accepted=False, any_whitespace=True)
+    check_schema_with_instance(schema, r'"\uDC00"', is_accepted=False, any_whitespace=True)
+    # Non-surrogate \uXXXX stays legal.
+    check_schema_with_instance(schema, r'"\uD7FF"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"\uE000"', any_whitespace=True)
+
+
 def test_type_array():
     schema = {
         "type": ["integer", "string"],
