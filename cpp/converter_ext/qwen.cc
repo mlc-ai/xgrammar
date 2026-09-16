@@ -8,7 +8,7 @@
 namespace xgrammar {
 namespace converter_ext {
 
-XMLWrapperParts GetQwenXMLWrapper() { return {"<parameter=", ">", "", "</parameter>"}; }
+XMLWrapper GetQwenXMLWrapper() { return {"<parameter=", ">", "", "</parameter>"}; }
 
 }  // namespace converter_ext
 }  // namespace xgrammar

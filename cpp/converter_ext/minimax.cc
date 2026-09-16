@@ -8,7 +8,7 @@
 namespace xgrammar {
 namespace converter_ext {
 
-XMLWrapperParts GetMiniMaxXMLWrapper() { return {"<parameter name=\"", "\">", "", "</parameter>"}; }
+XMLWrapper GetMiniMaxXMLWrapper() { return {"<parameter name=\"", "\">", "", "</parameter>"}; }
 
 }  // namespace converter_ext
 }  // namespace xgrammar

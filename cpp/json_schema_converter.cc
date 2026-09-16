@@ -3342,20 +3342,15 @@ const std::string XMLToolCallingConverter::kXMLObject = "xml_object";
 const std::string XMLToolCallingConverter::kXMLVariableName = "xml_variable_name";
 
 const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
-    XMLToolCallingConverter::kKeyWrapperMap = [] {
-      auto wrapper = [](const converter_ext::XMLWrapperParts& parts) {
-        return XMLWrapper{parts[0], parts[1], parts[2], parts[3]};
-      };
-      return std::unordered_map<JSONFormat, XMLWrapper>{
-          {JSONFormat::kQwenXML, wrapper(converter_ext::GetQwenXMLWrapper())},
-          {JSONFormat::kMiniMaxXML, wrapper(converter_ext::GetMiniMaxXMLWrapper())},
-          {JSONFormat::kDeepSeekXML, wrapper(converter_ext::GetDeepSeekXMLWrapper())},
-          {JSONFormat::kDeepSeekV41XML, wrapper(converter_ext::GetDeepSeekV41XMLWrapper())},
-          {JSONFormat::kGlmXML, wrapper(converter_ext::GetGLMXMLWrapper())},
-          {JSONFormat::kCohereXML, wrapper(converter_ext::GetCohereXMLWrapper())},
-          {JSONFormat::kKimiK3XML, wrapper(converter_ext::GetKimiK3XMLWrapper())},
-      };
-    }();
+    XMLToolCallingConverter::kKeyWrapperMap = {
+        {JSONFormat::kQwenXML, converter_ext::GetQwenXMLWrapper()},
+        {JSONFormat::kMiniMaxXML, converter_ext::GetMiniMaxXMLWrapper()},
+        {JSONFormat::kDeepSeekXML, converter_ext::GetDeepSeekXMLWrapper()},
+        {JSONFormat::kDeepSeekV41XML, converter_ext::GetDeepSeekV41XMLWrapper()},
+        {JSONFormat::kGlmXML, converter_ext::GetGLMXMLWrapper()},
+        {JSONFormat::kCohereXML, converter_ext::GetCohereXMLWrapper()},
+        {JSONFormat::kKimiK3XML, converter_ext::GetKimiK3XMLWrapper()},
+};
 
 XMLToolCallingConverter::XMLToolCallingConverter(
     std::optional<int> indent,
@@ -3376,6 +3371,64 @@ XMLToolCallingConverter::XMLToolCallingConverter(
 Grammar XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
   nested_object_level_ = 0;
   return JSONSchemaConverter::Convert(spec);
+}
+
+std::optional<std::string> XMLToolCallingConverter::GetRenderedJSONType(const SchemaSpecPtr& spec) {
+  if (spec == nullptr) {
+    return std::nullopt;
+  }
+  auto type_of_json_value = [](const std::string& json_value) -> std::optional<std::string> {
+    picojson::value value;
+    if (!ParseJSON(value, json_value).empty()) {
+      return std::nullopt;
+    }
+    if (value.is<std::string>()) return "string";
+    if (value.is<bool>()) return "boolean";
+    if (value.is<double>()) return "number";
+    if (value.is<picojson::null>()) return "null";
+    if (value.is<picojson::object>()) return "object";
+    if (value.is<picojson::array>()) return "array";
+    return std::nullopt;
+  };
+
+  return std::visit(
+      [&](auto&& arg) -> std::optional<std::string> {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, StringSpec>) {
+          return "string";
+        } else if constexpr (std::is_same_v<T, IntegerSpec> || std::is_same_v<T, NumberSpec>) {
+          // Both integer and floating-point values have the JSON type "number".
+          return "number";
+        } else if constexpr (std::is_same_v<T, BooleanSpec>) {
+          return "boolean";
+        } else if constexpr (std::is_same_v<T, NullSpec>) {
+          return "null";
+        } else if constexpr (std::is_same_v<T, ArraySpec>) {
+          return "array";
+        } else if constexpr (std::is_same_v<T, ObjectSpec>) {
+          return "object";
+        } else if constexpr (std::is_same_v<T, ConstSpec>) {
+          return type_of_json_value(arg.json_value);
+        } else if constexpr (std::is_same_v<T, EnumSpec>) {
+          // Only pin the attribute when every alternative renders with the same type.
+          std::optional<std::string> common;
+          for (const auto& json_value : arg.json_values) {
+            auto type_name = type_of_json_value(json_value);
+            if (!type_name.has_value()) return std::nullopt;
+            if (!common.has_value()) {
+              common = type_name;
+            } else if (*common != *type_name) {
+              return std::nullopt;
+            }
+          }
+          return common;
+        } else {
+          // Any, $ref and the combinators may render as more than one type; keep them open.
+          return std::nullopt;
+        }
+      },
+      spec->spec
+  );
 }
 
 std::string XMLToolCallingConverter::XMLValue(const std::string& json_value) const {
@@ -3560,7 +3613,7 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
     // discard the result, so don't walk the schema for them.
     std::optional<std::string> pinned_type;
     if (json_format_ == JSONFormat::kKimiK3XML) {
-      pinned_type = KimiK3TypeAttr(schema);
+      pinned_type = GetRenderedJSONType(schema);
     }
     return Sequence(
         {ByteString(xml_wrapper_.key_wrapper_prefix + EscapeAttrValue(key)),
@@ -3568,92 +3621,6 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
     );
   }
   return JSONSchemaConverter::FormatPropertyKey(key, schema);
-}
-
-int32_t XMLToolCallingConverter::FormatDeepSeekV41ParamSuffix(
-    const SchemaSpecPtr& schema, int32_t value_rule_id
-) {
-  // Copy the name: creating alternative rules can reallocate the builder's rule storage.
-  std::string value_rule_name = builder_.GetRule(value_rule_id).name;
-  if (schema != nullptr) {
-    if (const auto* ref = std::get_if<RefSpec>(&schema->spec); ref != nullptr) {
-      auto cached = deepseek_v41_param_ref_rules_.find(ref->uri);
-      if (cached != deepseek_v41_param_ref_rules_.end()) {
-        return RuleRef(cached->second);
-      }
-      // Cache the rule before descending through references or alternatives. A recursive
-      // branch then refers back to this rule, and shared acyclic subgraphs are built only once.
-      int32_t param_rule_id = builder_.AddEmptyRuleWithHint(value_rule_name + "_dsml_param");
-      deepseek_v41_param_ref_rules_.emplace(ref->uri, param_rule_id);
-      auto resolved = ResolveRefSchema(*ref, value_rule_name);
-      builder_.UpdateRuleBody(param_rule_id, FormatDeepSeekV41ParamSuffix(resolved, value_rule_id));
-      return RuleRef(param_rule_id);
-    }
-  }
-
-  // string="true" wraps a raw string whose whitespace is part of the value; string="false"
-  // wraps a JSON value that may be padded with whitespace.
-  auto wrap = [&](int32_t value_expr, bool is_string) {
-    std::vector<int32_t> elements = {
-        ByteString(is_string ? "\" string=\"true\">" : "\" string=\"false\">")
-    };
-    if (!is_string) elements.push_back(WhitespaceExpression());
-    elements.push_back(value_expr);
-    if (!is_string) elements.push_back(WhitespaceExpression());
-    elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
-    return Sequence(elements);
-  };
-
-  // A schema rendered with a single type keeps the value rule built by the caller.
-  std::optional<std::string> pinned_type = KimiK3TypeAttr(schema);
-  if (pinned_type.has_value()) {
-    return wrap(RuleRef(value_rule_id), *pinned_type == "string");
-  }
-
-  // Unions and mixed enums get one alternative per option so each carries its own attribute.
-  std::vector<SchemaSpecPtr> options;
-  if (schema != nullptr) {
-    std::visit(
-        [&](const auto& spec) {
-          using T = std::decay_t<decltype(spec)>;
-          if constexpr (std::is_same_v<T, AnyOfSpec> || std::is_same_v<T, OneOfSpec>) {
-            options = spec.options;
-          } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
-            options = spec.type_schemas;
-          } else if constexpr (std::is_same_v<T, AllOfSpec>) {
-            if (spec.schemas.size() == 1) options = spec.schemas;
-          } else if constexpr (std::is_same_v<T, EnumSpec>) {
-            for (const auto& value : spec.json_values) {
-              options.push_back(SchemaSpec::Make(ConstSpec{value}));
-            }
-          }
-        },
-        schema->spec
-    );
-  }
-  if (options.empty()) {
-    // No schema, {} and allOf with several schemas all render any value.
-    return Choice(
-        {wrap(RuleRef(kXMLString), true),
-         wrap(
-             Choice(
-                 {RuleRef(kBasicNumber),
-                  RuleRef(kBasicBoolean),
-                  RuleRef(kBasicNull),
-                  RuleRef(kBasicArray),
-                  RuleRef(kBasicObject)}
-             ),
-             false
-         )}
-    );
-  }
-  std::vector<int32_t> choices;
-  for (size_t index = 0; index < options.size(); ++index) {
-    int32_t option_rule_id =
-        CreateRule(options[index], value_rule_name + "_dsml_case_" + std::to_string(index));
-    choices.push_back(FormatDeepSeekV41ParamSuffix(options[index], option_rule_id));
-  }
-  return Choice(choices);
 }
 
 int32_t XMLToolCallingConverter::FormatProperty(
@@ -3708,7 +3675,9 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
     std::vector<int32_t> elements = {
         ByteString(xml_wrapper_.key_wrapper_prefix),
         key_pattern_expr,
-        XMLKeySuffix(json_format_ == JSONFormat::kKimiK3XML ? KimiK3TypeAttr(schema) : std::nullopt)
+        XMLKeySuffix(
+            json_format_ == JSONFormat::kKimiK3XML ? GetRenderedJSONType(schema) : std::nullopt
+        )
     };
     if (!xml_wrapper_.value_wrapper_prefix.empty()) {
       elements.push_back(WhitespaceExpression());

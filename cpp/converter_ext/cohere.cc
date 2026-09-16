@@ -21,7 +21,7 @@ namespace xgrammar {
 
 namespace converter_ext {
 
-XMLWrapperParts GetCohereXMLWrapper() { return {"<cofl:value", ">", "", "</cofl:value>"}; }
+XMLWrapper GetCohereXMLWrapper() { return {"<cofl:value", ">", "", "</cofl:value>"}; }
 
 }  // namespace converter_ext
 

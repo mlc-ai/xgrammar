@@ -8,9 +8,7 @@
 namespace xgrammar {
 namespace converter_ext {
 
-XMLWrapperParts GetGLMXMLWrapper() {
-  return {"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"};
-}
+XMLWrapper GetGLMXMLWrapper() { return {"<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"}; }
 
 }  // namespace converter_ext
 }  // namespace xgrammar
