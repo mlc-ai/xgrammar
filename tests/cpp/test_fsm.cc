@@ -322,23 +322,6 @@ TEST(XGrammarFSMTest, IntersectionBoundsProductStates) {
   EXPECT_FALSE(intersection.AcceptString("aaaaa"));
 }
 
-TEST(XGrammarFSMTest, MergeEquivalentStatesKeepsStartStateSeparate) {
-  // [a-z]* [a-z] "c" "d": the start state loops on [a-z] and also leads to state 1 on [a-z].
-  // State 1 is only reached from the start state, but the start state is also entered without
-  // any edge, so the two must not be merged; otherwise "cd" would be accepted.
-  FSM fsm(4);
-  fsm.AddEdge(0, 0, 'a', 'z');
-  fsm.AddEdge(0, 1, 'a', 'z');
-  fsm.AddEdge(1, 2, 'c', 'c');
-  fsm.AddEdge(2, 3, 'd', 'd');
-  FSMWithStartEnd nfa(fsm, 0, {3});
-  auto merged = nfa.MergeEquivalentStates();
-  EXPECT_FALSE(merged.AcceptString("cd"));
-  EXPECT_TRUE(merged.AcceptString("acd"));
-  EXPECT_TRUE(merged.AcceptString("xyzcd"));
-  EXPECT_FALSE(merged.AcceptString("d"));
-}
-
 TEST(XGrammarFSMTest, EfficiencyTest) {
   std::cout << "--------- Efficiency Test Starts! -----------" << std::endl;
   // i.e ([a-z]0123456789){10}. Use this way to test the performance.

@@ -3960,9 +3960,7 @@ Result<FSMWithStartEnd> GrammarFSMBuilder::Regex(const std::string& regex, bool 
   return GrammarFSMBuilderImpl::Regex(regex, json_string);
 }
 
-Result<FSMWithStartEnd> GrammarFSMBuilder::FromRegularGrammar(
-    const Grammar& grammar, int max_num_states
-) {
+Result<FSMWithStartEnd> GrammarFSMBuilder::FromGrammar(const Grammar& grammar, int max_num_states) {
   return RegularGrammarFSMBuilder(grammar, max_num_states).Build();
 }
 
