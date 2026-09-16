@@ -421,24 +421,16 @@ class JSONSchemaConverter {
   int32_t RegexExpression(
       const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
   );
-  /*!
-   * \brief Rules matching the regex (one of the converter's own ASCII string bodies) minus
-   * every string containing one of excludes_, and minus excluded_keys as whole strings. With
-   * close_json_string the closing quote is appended after the filtering, so it is never part of
-   * an exclusion.
-   */
   int32_t ExcludingString(
       const std::string& regex,
+      bool json_string,
       const std::string& rule_name,
-      bool close_json_string,
-      const std::vector<std::string>& excluded_keys = {}
+      const std::vector<std::string>& excluded_keys = {},
+      bool force_cfg_expansion = false,
+      bool close_json_string = false
   );
   bool IsAllowedString(const std::string& text) const;
   bool IsAllowedLiteral(const picojson::value& value, bool raw_string = false) const;
-  /*! \brief Whether the JSON literal contains none of excludes_ (see IsAllowedLiteral). */
-  bool IsAllowedJSONLiteral(const std::string& json_value, bool raw_string = false) const;
-  /*! \brief Log that the string's minLength/maxLength are ignored because excludes_ is set. */
-  void WarnDroppedLengthConstraints(const StringSpec& spec, const std::string& rule_name) const;
 
   /*! \brief Helper to create rule with repetition constraints. */
   int32_t GetPropertyWithNumberConstraints(
