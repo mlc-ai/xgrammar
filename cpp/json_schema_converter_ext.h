@@ -18,6 +18,18 @@
 
 namespace xgrammar {
 
+namespace converter_ext {
+
+// Wrapper strings for XML parameter tags.
+struct XMLWrapper {
+  std::string key_wrapper_prefix;
+  std::string key_wrapper_suffix;
+  std::string value_wrapper_prefix;
+  std::string parameter_suffix;
+};
+
+}  // namespace converter_ext
+
 /*!
  * \brief Converter for MiniMax M3's recursive namespace-prefixed XML format.
  *
@@ -128,13 +140,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::optional<int32_t> GetCache(const std::string& key) const override;
 
  protected:
-  // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
-  struct XMLWrapper {
-    std::string key_wrapper_prefix;
-    std::string key_wrapper_suffix;
-    std::string value_wrapper_prefix;
-    std::string parameter_suffix;
-  };
+  using XMLWrapper = converter_ext::XMLWrapper;
 
   static const std::unordered_map<JSONFormat, XMLWrapper> kKeyWrapperMap;
   static const std::string kXMLString;
@@ -146,17 +152,13 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::string EscapeAttrValue(const std::string& value) const;
 
   /*!
-   * \brief Return the Kimi-K3 `type` attribute a value of \p spec is rendered with, or
-   * std::nullopt if the schema does not pin down a single type (\p spec may be nullptr, which
-   * is how free-form keys end up unconstrained).
+   * \brief Return a single rendered JSON type when it can be determined without resolving
+   * references or combinators, or std::nullopt otherwise (\p spec may be nullptr).
    *
-   * The Kimi-K3 tool-call parser reads the attribute as a decoding switch: type="string"
-   * keeps the value as raw text, anything else JSON-decodes it. So the attribute must agree
-   * with the value grammar, otherwise the decoded argument changes type (e.g. a string
-   * property tagged type="number" with body 123 decodes to the integer 123). Mirrors the
-   * model's renderer (_xtml_type), which maps both ints and floats to "number".
+   * Shared by Kimi-K3 type attributes and DeepSeek string attributes. Both integer and
+   * number schemas render as "number"; string values are rendered as raw text.
    */
-  static std::optional<std::string> KimiK3TypeAttr(const SchemaSpecPtr& spec);
+  static std::optional<std::string> GetRenderedJSONType(const SchemaSpecPtr& spec);
 
   /*!
    * \brief Build the expression between the property key and its value.
@@ -169,7 +171,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   /*!
    * \brief Build a deepseek_v4_1_xml parameter's string attribute, value and closing tag.
    * string="true" wraps raw strings, string="false" wraps JSON values. Unions and mixed enums
-   * produce one alternative per option; KimiK3TypeAttr supplies the type classification.
+   * produce one alternative per option; GetRenderedJSONType supplies the type classification.
    */
   int32_t FormatDeepSeekV41ParamSuffix(const SchemaSpecPtr& schema, int32_t value_rule_id);
 
@@ -287,6 +289,26 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   int cohere_array_level_ = 0;
 };
 
+namespace converter_ext {
+
+XMLWrapper GetQwenXMLWrapper();
+XMLWrapper GetMiniMaxXMLWrapper();
+XMLWrapper GetDeepSeekXMLWrapper();
+XMLWrapper GetDeepSeekV41XMLWrapper();
+XMLWrapper GetGLMXMLWrapper();
+XMLWrapper GetCohereXMLWrapper();
+XMLWrapper GetKimiK3XMLWrapper();
+
+struct XMLKeySuffix {
+  const char* prefix;
+  std::vector<const char*> values;
+  const char* suffix;
+};
+
+const XMLKeySuffix& GetDeepSeekXMLKeySuffix();
+const XMLKeySuffix& GetKimiK3XMLKeySuffix();
+
+}  // namespace converter_ext
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
