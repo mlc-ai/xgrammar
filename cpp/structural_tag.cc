@@ -102,6 +102,9 @@ picojson::value JSONSchemaFormat::ToJSON() const {
   }
   obj["style"] = picojson::value(style);
   obj["any_order"] = picojson::value(any_order);
+  if (!excludes.empty()) {
+    obj["excludes"] = StringVectorToJSONArray(excludes);
+  }
   if (max_whitespace_cnt.has_value()) {
     obj["max_whitespace_cnt"] = picojson::value(static_cast<int64_t>(*max_whitespace_cnt));
   } else {
@@ -588,9 +591,31 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     }
     max_whitespace_cnt = static_cast<int>(max_whitespace_cnt_it->second.get<int64_t>());
   }
+  std::vector<std::string> excludes;
+  if (auto it = obj.find("excludes"); it != obj.end()) {
+    if (!it->second.is<picojson::array>()) {
+      return ResultErr<ISTError>(
+          "JSONSchema format's excludes must be an array of non-empty strings"
+      );
+    }
+    for (const auto& value : it->second.get<picojson::array>()) {
+      if (!value.is<std::string>() || value.get<std::string>().empty()) {
+        return ResultErr<ISTError>(
+            "JSONSchema format's excludes must be an array of non-empty strings"
+        );
+      }
+      excludes.push_back(value.get<std::string>());
+    }
+    std::sort(excludes.begin(), excludes.end());
+    excludes.erase(std::unique(excludes.begin(), excludes.end()), excludes.end());
+  }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
   return ResultOk<JSONSchemaFormat>(
-      json_schema_it->second.serialize(false), style, any_order, max_whitespace_cnt
+      json_schema_it->second.serialize(false),
+      style,
+      any_order,
+      max_whitespace_cnt,
+      std::move(excludes)
   );
 }
 
@@ -1942,7 +1967,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
       /*strict_mode=*/true,
       /*max_whitespace_cnt=*/format.max_whitespace_cnt,
       /*any_order=*/format.any_order,
-      /*json_format=*/*json_format
+      /*json_format=*/*json_format,
+      /*excludes=*/format.excludes
   ));
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);

@@ -266,15 +266,23 @@ TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder3) {
   auto fsm = GrammarFSMBuilder::CharacterClass(grammar_expr);
   auto fsm_printed = fsm.ToString();
   std::string expected_fsm_printed =
-      R"(FSM(num_states=8, start=0, end=[1], edges=[
-0: [[\0-@]->1, [[-`]->1, [{-\x7f]->1, [\xc0-\xdf]->2, [\xe0-\xef]->3, [\xf0-\xf7]->5]
+      R"(FSM(num_states=16, start=0, end=[1], edges=[
+0: [[\0-@]->1, [[-`]->1, [{-\x7f]->1, [\xc2-\xdf]->2, '\xe0'->3, [\xe1-\xef]->5, '\xf0'->7, '\xf4'->10, [\xf1-\xf3]->13]
 1: []
 2: [[\x80-\xbf]->1]
-3: [[\x80-\xbf]->4]
+3: [[\xa0-\xbf]->4]
 4: [[\x80-\xbf]->1]
 5: [[\x80-\xbf]->6]
-6: [[\x80-\xbf]->7]
-7: [[\x80-\xbf]->1]
+6: [[\x80-\xbf]->1]
+7: [[\x90-\xbf]->8]
+8: [[\x80-\xbf]->9]
+9: [[\x80-\xbf]->1]
+10: [[\x80-\x8f]->11]
+11: [[\x80-\xbf]->12]
+12: [[\x80-\xbf]->1]
+13: [[\x80-\xbf]->14]
+14: [[\x80-\xbf]->15]
+15: [[\x80-\xbf]->1]
 ]))";
   EXPECT_EQ(fsm_printed, expected_fsm_printed);
 }
@@ -287,14 +295,22 @@ TEST(XGrammarFSMBuilderTest, TestCharacterClassFSMBuilder4) {
   auto fsm = GrammarFSMBuilder::CharacterClass(grammar_expr);
   auto fsm_printed = fsm.ToString();
   std::string expected_fsm_printed =
-      R"(FSM(num_states=7, start=0, end=[0], edges=[
-0: [[\0-@]->0, [[-`]->0, [{-\x7f]->0, [\xc0-\xdf]->1, [\xe0-\xef]->2, [\xf0-\xf7]->4]
+      R"(FSM(num_states=15, start=0, end=[0], edges=[
+0: [[\0-@]->0, [[-`]->0, [{-\x7f]->0, [\xc2-\xdf]->1, '\xe0'->2, [\xe1-\xef]->4, '\xf0'->6, '\xf4'->9, [\xf1-\xf3]->12]
 1: [[\x80-\xbf]->0]
-2: [[\x80-\xbf]->3]
+2: [[\xa0-\xbf]->3]
 3: [[\x80-\xbf]->0]
 4: [[\x80-\xbf]->5]
-5: [[\x80-\xbf]->6]
-6: [[\x80-\xbf]->0]
+5: [[\x80-\xbf]->0]
+6: [[\x90-\xbf]->7]
+7: [[\x80-\xbf]->8]
+8: [[\x80-\xbf]->0]
+9: [[\x80-\x8f]->10]
+10: [[\x80-\xbf]->11]
+11: [[\x80-\xbf]->0]
+12: [[\x80-\xbf]->13]
+13: [[\x80-\xbf]->14]
+14: [[\x80-\xbf]->0]
 ]))";
   EXPECT_EQ(fsm_printed, expected_fsm_printed);
 }

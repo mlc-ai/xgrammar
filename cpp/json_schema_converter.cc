@@ -12,12 +12,14 @@
 #include <climits>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <iomanip>
 #include <limits>
 #include <map>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -25,6 +27,7 @@
 #include <variant>
 #include <vector>
 
+#include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
@@ -1743,7 +1746,8 @@ JSONSchemaConverter::JSONSchemaConverter(
     bool any_whitespace,
     std::optional<int> max_whitespace_cnt,
     RefResolver ref_resolver,
-    bool any_order
+    bool any_order,
+    std::vector<std::string> excludes
 )
     : indent_manager_(
           indent,
@@ -1755,6 +1759,7 @@ JSONSchemaConverter::JSONSchemaConverter(
       any_whitespace_(any_whitespace),
       max_whitespace_cnt_(max_whitespace_cnt),
       any_order_(any_order),
+      excludes_(std::move(excludes)),
       ref_resolver_(std::move(ref_resolver)) {
   std::string colon_sep =
       separators.has_value() ? separators->second : (any_whitespace ? ":" : ": ");
@@ -1904,6 +1909,19 @@ void JSONSchemaConverter::AddHelperRules() {
        Sequence({ByteString("\\"), RuleRef(kBasicEscape), string_sub_ref})}
   );
   builder_.UpdateRuleBody(kBasicStringSub, string_sub_body);
+  if (!excludes_.empty()) {
+    builder_.UpdateRuleBody(
+        kBasicStringSub,
+        ExcludingString(
+            R"(([^"\\\x00-\x1f]|\\(["\\/bfnrt]|u[0-9a-fA-F]{4}))*)",
+            false,
+            kBasicStringSub,
+            {},
+            false,
+            true
+        )
+    );
+  }
   int32_t closing_context =
       builder_.AddCharacterClass({{',', ','}, {'}', '}'}, {']', ']'}, {':', ':'}});
   builder_.UpdateLookaheadAssertion(
@@ -2100,6 +2118,24 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
   if (properties.empty()) {
     return KeyPatternExpression();
   }
+  if (!excludes_.empty()) {
+    std::vector<std::string> keys;
+    for (const auto& property : properties) {
+      auto encoded = picojson::value(property.name).serialize(false);
+      keys.push_back(encoded.substr(1, encoded.size() - 2));
+    }
+    return Sequence(
+        {ByteString("\""),
+         ExcludingString(
+             R"(([^"\\\x00-\x1f]|\\(["\\/bfnrt]|u[0-9a-fA-F]{4}))*)",
+             false,
+             rule_name + "_addl_key",
+             keys,
+             false,
+             true
+         )}
+    );
+  }
 
   // Build trie from property names
   // TODO(linzhang): The trie only excludes the literal unescaped spelling of each property name.
@@ -2245,6 +2281,248 @@ int32_t JSONSchemaConverter::RegexExpression(
 
 // ==================== Generate Methods ====================
 
+bool JSONSchemaConverter::IsAllowedString(const std::string& text) const {
+  return std::none_of(excludes_.begin(), excludes_.end(), [&](const auto& excluded) {
+    return text.find(excluded) != std::string::npos;
+  });
+}
+
+bool JSONSchemaConverter::IsAllowedLiteral(const picojson::value& value, bool raw_string) const {
+  if (excludes_.empty()) return true;
+  if (value.is<std::string>()) {
+    if (raw_string) return IsAllowedString(value.get<std::string>());
+    auto encoded = value.serialize(false);
+    return IsAllowedString(encoded.substr(1, encoded.size() - 2));
+  }
+  if (value.is<picojson::array>()) {
+    for (const auto& item : value.get<picojson::array>()) {
+      if (!IsAllowedLiteral(item)) return false;
+    }
+  }
+  if (value.is<picojson::object>()) {
+    for (const auto& [key, item] : value.get<picojson::object>()) {
+      if (!IsAllowedLiteral(picojson::value(key)) || !IsAllowedLiteral(item)) return false;
+    }
+  }
+  return true;
+}
+
+int32_t JSONSchemaConverter::ExcludingString(
+    const std::string& regex,
+    bool json_string,
+    const std::string& rule_name,
+    const std::vector<std::string>& excluded_keys,
+    bool force_cfg_expansion,
+    bool close_json_string
+) {
+  // Match RegexExpression's frontend choice exactly. In particular, formats and
+  // Unicode patterns must retain the existing RegexToEBNF semantics before filtering.
+  bool can_use_fsm = !force_cfg_expansion;
+  if (json_string) {
+    can_use_fsm =
+        can_use_fsm && std::all_of(regex.begin(), regex.end(), [](unsigned char character) {
+          return character >= 0x20 && character <= 0x7e;
+        });
+  }
+  auto parsed = [&]() -> Result<FSMWithStartEnd> {
+    if (can_use_fsm) {
+      auto candidate = GrammarFSMBuilder::Regex(regex, json_string);
+      if (candidate.IsOk()) {
+        std::unordered_set<int> reachable_states;
+        candidate.ValueRef().GetReachableStates(&reachable_states);
+        if (std::any_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
+              return candidate.ValueRef().IsEndState(state);
+            })) {
+          return candidate;
+        }
+      }
+    }
+    return GrammarFSMBuilder::FromGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
+  }();
+  XGRAMMAR_CHECK(parsed.IsOk()
+  ) << "Cannot compile string constraints with JSONSchemaFormat.excludes: "
+    << std::move(parsed).UnwrapErr().what();
+  auto exclusion = GrammarFSMBuilder::TagDispatch({{}, false, excludes_});
+  XGRAMMAR_CHECK(exclusion.has_value()) << "Invalid JSONSchemaFormat.excludes";
+  auto intersected = FSMWithStartEnd::Intersect(std::move(parsed).Unwrap(), *exclusion);
+  XGRAMMAR_CHECK(intersected.IsOk()) << "Cannot intersect JSONSchemaFormat.excludes: "
+                                     << std::move(intersected).UnwrapErr().what();
+  auto fsm = std::move(intersected).Unwrap();
+  if (!excluded_keys.empty()) {
+    auto keys = TrieFSMBuilder::Build(excluded_keys, {});
+    XGRAMMAR_CHECK(keys.has_value());
+    auto other_keys = keys->Not();
+    XGRAMMAR_CHECK(other_keys.IsOk());
+    auto filtered = FSMWithStartEnd::Intersect(fsm, std::move(other_keys).Unwrap());
+    XGRAMMAR_CHECK(filtered.IsOk());
+    fsm = std::move(filtered).Unwrap();
+  }
+  // Do not emit paths that can never complete after exclusions. Otherwise a matcher
+  // could accept a forbidden alternative's prefix and reach an all-rejected mask later.
+  std::vector<std::vector<int>> predecessors(fsm.NumStates());
+  for (int state = 0; state < fsm.NumStates(); ++state) {
+    for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+      predecessors[edge.target].push_back(state);
+    }
+  }
+  std::vector<bool> productive(fsm.NumStates(), false);
+  std::vector<int> worklist(fsm.GetEnds().begin(), fsm.GetEnds().end());
+  for (int state : worklist) productive[state] = true;
+  for (size_t index = 0; index < worklist.size(); ++index) {
+    for (int state : predecessors[worklist[index]]) {
+      if (!productive[state]) {
+        productive[state] = true;
+        worklist.push_back(state);
+      }
+    }
+  }
+  if (!productive[fsm.GetStart()]) {
+    return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
+  }
+
+  // Collapse UTF-8 paths into codepoint transitions before emitting character classes.
+  // Emitting individual continuation bytes as string literals would not round-trip through
+  // EBNF, whose escaped string literals represent Unicode codepoints rather than raw bytes.
+  struct CodepointRange {
+    int min, max, target;
+  };
+  using Ranges = std::vector<CodepointRange>;
+  auto merge_ranges = [](Ranges ranges) {
+    std::sort(ranges.begin(), ranges.end(), [](const auto& a, const auto& b) {
+      return std::tie(a.target, a.min, a.max) < std::tie(b.target, b.min, b.max);
+    });
+    Ranges merged;
+    for (const auto& range : ranges) {
+      if (!merged.empty() && merged.back().target == range.target &&
+          range.min <= merged.back().max + 1) {
+        merged.back().max = std::max(merged.back().max, range.max);
+      } else {
+        merged.push_back(range);
+      }
+    }
+    return merged;
+  };
+  auto append_ranges = [](Ranges* ranges, int min, int max, int shift, const CodepointRange& suffix
+                       ) {
+    if (suffix.min == 0 && suffix.max == (1 << shift) - 1) {
+      ranges->push_back({min << shift, (max << shift) | suffix.max, suffix.target});
+    } else {
+      for (int prefix = min; prefix <= max; ++prefix) {
+        ranges->push_back(
+            {(prefix << shift) | suffix.min, (prefix << shift) | suffix.max, suffix.target}
+        );
+      }
+    }
+  };
+  // Memoize suffixes so wide Unicode classes do not enumerate every codepoint.
+  std::map<std::pair<int, int>, Ranges> suffix_cache;
+  std::function<const Ranges&(int, int)> suffix_ranges = [&](int state,
+                                                             int remaining) -> const Ranges& {
+    auto [it, inserted] = suffix_cache.emplace(std::make_pair(state, remaining), Ranges{});
+    if (!inserted) return it->second;
+    Ranges ranges;
+    if (remaining == 0) {
+      ranges.push_back({0, 0, state});
+    } else {
+      for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+        if (!productive[edge.target]) continue;
+        XGRAMMAR_CHECK(edge.IsCharRange());
+        int min = std::max(edge.min, 0x80), max = std::min(edge.max, 0xbf);
+        if (min > max) continue;
+        for (const auto& suffix : suffix_ranges(edge.target, remaining - 1)) {
+          append_ranges(&ranges, min & 0x3f, max & 0x3f, 6 * (remaining - 1), suffix);
+        }
+      }
+    }
+    it->second = merge_ranges(std::move(ranges));
+    return it->second;
+  };
+
+  std::vector<int32_t> rules(fsm.NumStates(), -1);
+  std::vector<int> pending{fsm.GetStart()};
+  // Share complete fallback branches across key prefixes to reuse their token masks.
+  // The key contains the target state followed by every codepoint interval.
+  std::map<std::vector<int32_t>, int32_t> shared_key_continuations;
+  rules[fsm.GetStart()] = builder_.AddEmptyRuleWithHint(rule_name + "_exclude");
+  for (size_t index = 0; index < pending.size(); ++index) {
+    int state = pending[index];
+    Ranges ranges;
+    for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+      if (!productive[edge.target]) continue;
+      XGRAMMAR_CHECK(edge.IsCharRange());
+      if (edge.min < 128) {
+        ranges.push_back({edge.min, std::min(edge.max, 127), edge.target});
+      }
+      const int leading_min[] = {0, 0xc2, 0xe0, 0xf0};
+      const int leading_max[] = {0, 0xdf, 0xef, 0xf4};
+      for (int remaining = 1; remaining <= 3; ++remaining) {
+        int min = std::max(edge.min, leading_min[remaining]);
+        int max = std::min(edge.max, leading_max[remaining]);
+        if (min > max) continue;
+        int mask = (1 << (6 - remaining)) - 1;
+        Ranges unicode_ranges;
+        for (const auto& suffix : suffix_ranges(edge.target, remaining)) {
+          append_ranges(&unicode_ranges, min & mask, max & mask, 6 * remaining, suffix);
+        }
+        // The byte FSM can contain non-canonical UTF-8 paths. Never turn an overlong
+        // encoding into a second transition for an ASCII character (bypassing exclusions).
+        const int codepoint_min[] = {0, 0x80, 0x800, 0x10000};
+        const int codepoint_max[] = {0, 0x7ff, 0xffff, 0x10ffff};
+        for (auto range : unicode_ranges) {
+          range.min = std::max(range.min, codepoint_min[remaining]);
+          range.max = std::min(range.max, codepoint_max[remaining]);
+          if (range.min <= range.max) ranges.push_back(range);
+        }
+      }
+    }
+    std::map<int, std::vector<GrammarBuilder::CharacterClassElement>> transitions;
+    for (const auto& range : merge_ranges(std::move(ranges))) {
+      transitions[range.target].push_back({range.min, range.max});
+    }
+    std::vector<int32_t> choices;
+    // Keep the closing quote on the accepting body states. A nullable body rule
+    // would otherwise finish at every character and force token masks to speculate
+    // across its parent rules. The quote is appended AFTER the exclusion intersection:
+    // it is JSON syntax, not string content subject to excludes.
+    if (fsm.IsEndState(state)) {
+      choices.push_back(close_json_string ? ByteString("\"") : Empty());
+    }
+    for (const auto& [target, codepoints] : transitions) {
+      if (rules[target] == -1) {
+        rules[target] = builder_.AddEmptyRuleWithHint(rule_name + "_exclude");
+        pending.push_back(target);
+      }
+      bool single_ascii = codepoints.size() == 1 && codepoints[0].lower == codepoints[0].upper &&
+                          codepoints[0].upper <= 0x7f;
+      // Keep self-loops local for the compiler's speculative string-mask fast path.
+      if (!excluded_keys.empty() && !single_ascii && target != state) {
+        std::vector<int32_t> key{target};
+        key.reserve(1 + codepoints.size() * 2);
+        for (const auto& range : codepoints) {
+          key.push_back(range.lower);
+          key.push_back(range.upper);
+        }
+        auto [it, inserted] = shared_key_continuations.emplace(std::move(key), -1);
+        if (inserted) {
+          it->second = builder_.AddRuleWithHint(
+              rule_name + "_exclude_continuation",
+              Sequence({builder_.AddCharacterClass(codepoints), RuleRef(rules[target])})
+          );
+        }
+        choices.push_back(RuleRef(it->second));
+      } else {
+        choices.push_back(Sequence({builder_.AddCharacterClass(codepoints), RuleRef(rules[target])})
+        );
+      }
+    }
+    if (choices.empty()) {
+      choices.push_back(builder_.AddCharacterClass({{0, 0x10ffff}}, true));
+    }
+    builder_.UpdateRuleBody(rules[state], Choice(choices));
+  }
+  return RuleRef(rules[fsm.GetStart()]);
+}
+
 int32_t JSONSchemaConverter::GenerateInteger(
     const IntegerSpec& spec, const std::string& rule_name
 ) {
@@ -2376,6 +2654,11 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   if (spec.format.has_value()) {
     auto regex = JSONFormatToRegexPattern(*spec.format);
     if (regex.has_value()) {
+      if (!excludes_.empty()) {
+        return Sequence(
+            {ByteString("\""), ExcludingString(*regex, false, rule_name, {}, true, true)}
+        );
+      }
       // The built-in format regexes use constructs that the FSM regex engine does not fully
       // support yet (e.g. quoted email local parts), so they keep the CFG expansion.
       return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
@@ -2383,12 +2666,22 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   }
   // Check for pattern
   if (spec.pattern.has_value()) {
+    if (!excludes_.empty()) {
+      return Sequence(
+          {ByteString("\""), ExcludingString(*spec.pattern, true, rule_name, {}, false, true)}
+      );
+    }
     return Sequence(
         {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
     );
   }
   // Check for length constraints
   if (spec.min_length != 0 || spec.max_length != -1) {
+    if (!excludes_.empty()) {
+      auto regex = std::string(R"([^"\\\r\n]{)") + std::to_string(spec.min_length) + "," +
+                   (spec.max_length == -1 ? "" : std::to_string(spec.max_length)) + "}";
+      return Sequence({ByteString("\""), ExcludingString(regex, false, rule_name, {}, true, true)});
+    }
     int32_t character =
         builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
     int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
@@ -2506,6 +2799,9 @@ int32_t JSONSchemaConverter::GenerateArray(const ArraySpec& spec, const std::str
 int32_t JSONSchemaConverter::FormatPropertyKey(
     const std::string& key, const SchemaSpecPtr& schema
 ) {
+  if (!IsAllowedLiteral(picojson::value(key))) {
+    return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
+  }
   return ByteString(picojson::value(key).serialize());
 }
 
@@ -3116,6 +3412,13 @@ int32_t JSONSchemaConverter::GenerateAny(const AnySpec& spec, const std::string&
 }
 
 int32_t JSONSchemaConverter::GenerateConst(const ConstSpec& spec, const std::string& rule_name) {
+  if (!excludes_.empty()) {
+    picojson::value value;
+    XGRAMMAR_CHECK(picojson::parse(value, spec.json_value).empty());
+    if (!IsAllowedLiteral(value)) {
+      return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
+    }
+  }
   return ByteString(spec.json_value);
 }
 
@@ -3125,7 +3428,15 @@ int32_t JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::strin
   std::vector<int32_t> values;
   values.reserve(spec.json_values.size());
   for (const auto& value : spec.json_values) {
+    if (!excludes_.empty()) {
+      picojson::value parsed;
+      XGRAMMAR_CHECK(picojson::parse(parsed, value).empty());
+      if (!IsAllowedLiteral(parsed)) continue;
+    }
     values.push_back(ByteString(value));
+  }
+  if (values.empty()) {
+    return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
   }
   return Choice(values);
 }
@@ -3362,14 +3673,30 @@ XMLToolCallingConverter::XMLToolCallingConverter(
     std::optional<int> max_whitespace_cnt,
     RefResolver ref_resolver,
     JSONFormat json_format,
-    bool any_order
+    bool any_order,
+    std::vector<std::string> excludes
 )
     : JSONSchemaConverter(
-          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
+          indent,
+          separators,
+          any_whitespace,
+          max_whitespace_cnt,
+          ref_resolver,
+          any_order,
+          std::move(excludes)
       ),
       json_format_(json_format),
       nested_object_level_(0),
-      xml_wrapper_(kKeyWrapperMap.at(json_format)) {}
+      xml_wrapper_(kKeyWrapperMap.at(json_format)) {
+  // XML formatting can add whitespace outside a constrained raw string's rule.
+  // Reject exclusions that could straddle that boundary instead of silently bypassing them.
+  auto is_padding = [](char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\n'; };
+  for (const auto& excluded : excludes_) {
+    XGRAMMAR_CHECK(
+        excluded.empty() || (!is_padding(excluded.front()) && !is_padding(excluded.back()))
+    ) << "XML JSONSchemaFormat.excludes must not start or end with formatting whitespace";
+  }
+}
 
 Grammar XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
   nested_object_level_ = 0;
@@ -3481,8 +3808,11 @@ void XMLToolCallingConverter::AddBasicRules() {
 
   // The outer part, xml format, is at level 1.
   nested_object_level_ = 1;
-  // Add XML string rule
-  builder_.UpdateRuleBody(kXMLString, TagDispatch(false, {xml_wrapper_.parameter_suffix}));
+  // Keep the unrestricted raw body as a single TagDispatch. The argument suffix is matched
+  // by the enclosing property rule, outside this body's exclusion scope.
+  auto string_excludes = excludes_;
+  string_excludes.push_back(xml_wrapper_.parameter_suffix);
+  builder_.UpdateRuleBody(kXMLString, TagDispatch(false, std::move(string_excludes)));
   AddCache(kStringCacheKey, builder_.GetRuleId(kXMLString));
 
   // Add XML any rule
@@ -3502,10 +3832,12 @@ void XMLToolCallingConverter::AddBasicRules() {
   // Add XML variable name rule
   builder_.UpdateRuleBody(
       kXMLVariableName,
-      Sequence(
-          {builder_.AddCharacterClass({{'a', 'z'}, {'A', 'Z'}, {'_', '_'}}),
-           builder_.AddCharacterClassStar({{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}})}
-      )
+      !excludes_.empty()
+          ? ExcludingString("[a-zA-Z_][a-zA-Z0-9_]*", false, kXMLVariableName)
+          : Sequence(
+                {builder_.AddCharacterClass({{'a', 'z'}, {'A', 'Z'}, {'_', '_'}}),
+                 builder_.AddCharacterClassStar({{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}})}
+            )
   );
 }
 
@@ -3550,11 +3882,44 @@ int32_t XMLToolCallingConverter::GenerateString(
     if (spec.format.has_value()) {
       auto regex = JSONFormatToRegexPattern(*spec.format);
       if (regex.has_value()) {
+        if (!excludes_.empty()) {
+          // XML formats use the CFG regex converter even without excludes. Apply the filter
+          // to that same language instead of switching format validation to RegexFSM.
+          return ExcludingString(
+              *regex,
+              false,
+              rule_name,
+              {},
+              /*force_cfg_expansion=*/true,
+              /*close_json_string=*/false
+          );
+        }
         return RegexExpression(*regex, false, true);
       }
     }
     if (spec.pattern.has_value()) {
+      if (!excludes_.empty()) {
+        return ExcludingString(
+            *spec.pattern,
+            false,
+            rule_name,
+            {},
+            /*force_cfg_expansion=*/true,
+            /*close_json_string=*/false
+        );
+      }
       return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
+    }
+    if (!excludes_.empty()) {
+      return ExcludingString(
+          "[\\s\\S]{" + std::to_string(spec.min_length) + "," +
+              (spec.max_length == -1 ? "" : std::to_string(spec.max_length)) + "}",
+          false,
+          rule_name,
+          {},
+          /*force_cfg_expansion=*/true,
+          /*close_json_string=*/false
+      );
     }
     return Repeat(
         rule_name + "_characters",
@@ -3613,6 +3978,13 @@ int32_t XMLToolCallingConverter::GenerateConst(
     }
   }
   if (nested_object_level_ <= 1) {
+    if (!excludes_.empty()) {
+      picojson::value value;
+      XGRAMMAR_CHECK(picojson::parse(value, spec.json_value).empty());
+      if (!IsAllowedLiteral(value, true)) {
+        return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
+      }
+    }
     return ByteString(XMLValue(spec.json_value));
   }
   return JSONSchemaConverter::GenerateConst(spec, rule_name);
@@ -3642,6 +4014,9 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
     if (json_format_ == JSONFormat::kKimiK3XML) {
       pinned_type = GetRenderedJSONType(schema);
     }
+    if (!IsAllowedString(EscapeAttrValue(key))) {
+      return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
+    }
     return Sequence(
         {ByteString(xml_wrapper_.key_wrapper_prefix + EscapeAttrValue(key)),
          XMLKeySuffix(pinned_type)}
@@ -3659,6 +4034,9 @@ int32_t XMLToolCallingConverter::FormatProperty(
 ) {
   if (nested_object_level_ <= 1) {
     if (json_format_ == JSONFormat::kDeepSeekV41XML) {
+      if (!IsAllowedString(key)) {
+        return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
+      }
       return Sequence(
           {ByteString(xml_wrapper_.key_wrapper_prefix + key),
            FormatDeepSeekV41ParamSuffix(schema, value_rule_id)}
@@ -4600,7 +4978,8 @@ Grammar JSONSchemaToGrammar(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     bool any_order,
-    JSONFormat json_format
+    JSONFormat json_format,
+    std::vector<std::string> excludes
 ) {
   picojson::value schema_value;
   std::string error = ParseJSON(schema_value, schema);
@@ -4628,7 +5007,8 @@ Grammar JSONSchemaToGrammar(
           any_whitespace,
           max_whitespace_cnt,
           std::move(ref_resolver),
-          any_order
+          any_order,
+          std::move(excludes)
       );
       return converter.Convert(spec);
     }
@@ -4645,11 +5025,14 @@ Grammar JSONSchemaToGrammar(
           max_whitespace_cnt,
           std::move(ref_resolver),
           json_format,
-          any_order
+          any_order,
+          std::move(excludes)
       );
       return converter.Convert(spec);
     }
     case JSONFormat::kMiniMaxM3XML: {
+      XGRAMMAR_CHECK(excludes.empty())
+          << "JSONSchemaFormat.excludes is not supported for minimax_m3_xml";
       MiniMaxM3XMLToolCallingConverter converter(
           indent,
           std::move(separators),
@@ -4661,6 +5044,8 @@ Grammar JSONSchemaToGrammar(
       return converter.Convert(spec);
     }
     case JSONFormat::kCohereXML: {
+      XGRAMMAR_CHECK(excludes.empty())
+          << "JSONSchemaFormat.excludes is not supported for cohere_xml";
       CohereXMLToolCallingConverter converter(
           indent,
           std::move(separators),
