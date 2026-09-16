@@ -1,3 +1,4 @@
+import json
 import sys
 
 import pytest
@@ -3699,6 +3700,58 @@ def test_deepseek_v4_1_unconstrained_parameter_list(schema):
         assert not _is_grammar_accept_string(
             grammar, output.replace("｜DSML｜ parameter", "｜DSML｜parameter")
         )
+
+
+def _deepseek_v4_1_parameter(name, value):
+    is_string = isinstance(value, str)
+    body = value if is_string else json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return (
+        f'<｜DSML｜ parameter name="{name}" string="{str(is_string).lower()}">'
+        f"{body}</｜DSML｜ parameter>\n"
+    )
+
+
+@pytest.mark.parametrize("keyword", ["const", "enum"])
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize("value", [{}, {"s": "hello"}, {"z": None, "a": {"s": [1, "x"]}}])
+def test_deepseek_v4_1_root_object_literals(keyword, any_order, value):
+    schema = {keyword: value if keyword == "const" else [value]}
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(
+            format=JSONSchemaFormat(
+                json_schema=schema, style="deepseek_v4_1_xml", any_order=any_order
+            )
+        )
+    )
+    parameters = [_deepseek_v4_1_parameter(k, v) for k, v in value.items()]
+    output = "".join(parameters)
+    assert _is_grammar_accept_string(grammar, output)
+    assert not _is_grammar_accept_string(grammar, json.dumps(value))
+    assert not _is_grammar_accept_string(grammar, output + _deepseek_v4_1_parameter("extra", 1))
+    if value:
+        assert not _is_grammar_accept_string(grammar, "".join(parameters[1:]))
+        first = next(iter(value))
+        assert not _is_grammar_accept_string(
+            grammar, _deepseek_v4_1_parameter(first, False) + "".join(parameters[1:])
+        )
+    if len(parameters) > 1:
+        assert not _is_grammar_accept_string(grammar, parameters[0] * len(parameters))
+
+
+def test_deepseek_v4_1_root_enum_keeps_object_alternatives_separate():
+    schema = {"enum": [{"s": "hello"}, {"n": 42}]}
+    for grammar in (
+        Grammar.from_structural_tag(
+            StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+        ),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")),
+    ):
+        a = _deepseek_v4_1_parameter("s", "hello")
+        b = _deepseek_v4_1_parameter("n", 42)
+        assert _is_grammar_accept_string(grammar, a)
+        assert _is_grammar_accept_string(grammar, b)
+        assert not _is_grammar_accept_string(grammar, a + b)
+        assert not _is_grammar_accept_string(grammar, "")
 
 
 if __name__ == "__main__":

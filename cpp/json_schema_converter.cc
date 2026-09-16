@@ -3585,6 +3585,30 @@ int32_t XMLToolCallingConverter::GenerateArray(
 int32_t XMLToolCallingConverter::GenerateConst(
     const ConstSpec& spec, const std::string& rule_name
 ) {
+  if (nested_object_level_ == 0) {
+    picojson::value value;
+    XGRAMMAR_CHECK(ParseJSON(value, spec.json_value).empty());
+    if (value.is<picojson::object>()) {
+      // A root object is a parameter list, including when all its values are fixed.
+      // Nested object constants still use the JSON representation below.
+      ObjectSpec object;
+      object.allow_unevaluated_properties = false;
+      const auto& properties = value.get<picojson::object>();
+      for (const auto& key : properties.ordered_keys()) {
+        object.properties.push_back(
+            {key, SchemaSpec::Make(ConstSpec{properties.at(key).serialize()})}
+        );
+        object.required.insert(key);
+      }
+      // As with JSON literals, keep a fixed order even when any_order is enabled.
+      // The general any-order object rule permits repeated keys and is not exact for const.
+      bool saved_any_order = any_order_;
+      any_order_ = false;
+      int32_t result = GenerateObject(object, rule_name);
+      any_order_ = saved_any_order;
+      return result;
+    }
+  }
   if (nested_object_level_ <= 1) {
     return ByteString(XMLValue(spec.json_value));
   }
@@ -3598,7 +3622,7 @@ int32_t XMLToolCallingConverter::GenerateEnum(const EnumSpec& spec, const std::s
     std::vector<int32_t> values;
     values.reserve(spec.json_values.size());
     for (const auto& value : spec.json_values) {
-      values.push_back(ByteString(XMLValue(value)));
+      values.push_back(GenerateConst(ConstSpec{value}, rule_name));
     }
     return Choice(values);
   }
