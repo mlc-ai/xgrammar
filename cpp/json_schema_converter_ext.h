@@ -7,6 +7,7 @@
 #ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 #define XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 
+#include <algorithm>
 #include <map>
 #include <optional>
 #include <string>
@@ -138,6 +139,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
 
   void AddCache(const std::string& key, int32_t rule_id) override;
   std::optional<int32_t> GetCache(const std::string& key) const override;
+  std::string RefCacheKey(const std::string& uri) const override;
 
  protected:
   using XMLWrapper = converter_ext::XMLWrapper;
@@ -180,6 +182,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::unordered_map<std::string, int32_t> deepseek_v41_param_ref_rules_;
 
   JSONFormat json_format_;
+  // Root parameter lists, raw parameter values, and nested JSON have distinct grammars.
+  int EncodingContext() const { return std::min(nested_object_level_, 2); }
   // Track if we're at the root object level
   int nested_object_level_ = 0;
   const XMLWrapper xml_wrapper_;
@@ -237,6 +241,7 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   void AddBasicRules() override;
   void AddCache(const std::string& key, int32_t rule_id) override;
   std::optional<int32_t> GetCache(const std::string& key) const override;
+  std::string RefCacheKey(const std::string& uri) const override;
 
  private:
   struct CohereKeyTrieNode {
