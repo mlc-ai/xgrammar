@@ -1771,7 +1771,7 @@ Grammar JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
   // This allows $ref: "#" to resolve to "root"
   int32_t root_rule_id = builder_.AddEmptyRuleWithHint("root");
   std::string root_rule_name = builder_.GetRule(root_rule_id).name;
-  uri_to_rule_id_["#"] = root_rule_id;
+  uri_to_rule_id_[RefCacheKey("#")] = root_rule_id;
 
   // Check if the spec can be directly mapped to an existing rule
   auto cached_rule = GetCache(spec->cache_key);
@@ -3139,10 +3139,13 @@ SchemaSpecPtr JSONSchemaConverter::ResolveRefSchema(
   return ref_resolver_(spec.uri, rule_name_hint);
 }
 
+std::string JSONSchemaConverter::RefCacheKey(const std::string& uri) const { return uri; }
+
 int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string& rule_name) {
+  const std::string cache_key = RefCacheKey(spec.uri);
   // First check if we have a direct URI mapping (for circular references)
-  if (uri_to_rule_id_.count(spec.uri)) {
-    return RuleRef(uri_to_rule_id_[spec.uri]);
+  if (uri_to_rule_id_.count(cache_key)) {
+    return RuleRef(uri_to_rule_id_[cache_key]);
   }
 
   // Derive rule name from URI path (like original URIToRule) so that the same
@@ -3172,7 +3175,7 @@ int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string&
 
   int32_t allocated_rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
   std::string allocated_rule_name = builder_.GetRule(allocated_rule_id).name;
-  uri_to_rule_id_[spec.uri] = allocated_rule_id;
+  uri_to_rule_id_[cache_key] = allocated_rule_id;
   SchemaSpecPtr resolved = ResolveRefSchema(spec, allocated_rule_name);
   builder_.UpdateRuleBody(allocated_rule_id, GenerateFromSpec(resolved, allocated_rule_name));
   if (!resolved->cache_key.empty()) {

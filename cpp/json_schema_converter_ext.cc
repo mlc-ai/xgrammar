@@ -911,7 +911,7 @@ void XMLToolCallingConverter::AddCache(const std::string& key, int32_t rule_id) 
   if (key.empty()) {
     return;
   }
-  rule_cache_manager_.AddCache(key, nested_object_level_ > 1, rule_id);
+  rule_cache_manager_.AddCache(key, EncodingContext(), rule_id);
 }
 
 std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key) const {
@@ -920,16 +920,20 @@ std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key)
   }
   if (json_format_ == JSONFormat::kDeepSeekV41XML && nested_object_level_ == 0 && key == "{}") {
     // Unconstrained tool arguments are an XML parameter list, not one parameter's raw value.
-    return rule_cache_manager_.GetCache(kObjectCacheKey, false);
+    return rule_cache_manager_.GetCache(kObjectCacheKey, 0);
   }
   // At level 0, {"type":"object"} is the root tool-arguments object and uses XML parameter
   // tags. At level 1 it is the value of one such parameter and must use the inner JSON object
   // rule, including braces. Without this distinction, the outer XML object cache is reused for
   // the value before GenerateObject() can advance nested_object_level_.
   if (nested_object_level_ == 1 && key == kObjectCacheKey) {
-    return rule_cache_manager_.GetCache(key, true);
+    return rule_cache_manager_.GetCache(key, 2);
   }
-  return rule_cache_manager_.GetCache(key, nested_object_level_ > 1);
+  return rule_cache_manager_.GetCache(key, EncodingContext());
+}
+
+std::string XMLToolCallingConverter::RefCacheKey(const std::string& uri) const {
+  return std::to_string(EncodingContext()) + ":" + uri;
 }
 
 CohereXMLToolCallingConverter::CohereXMLToolCallingConverter(
@@ -978,6 +982,12 @@ bool CohereXMLToolCallingConverter::AtCohereRoot() const {
 
 bool CohereXMLToolCallingConverter::InCohereValueContext() const {
   return nested_object_level_ <= 1 || !object_stack_.empty() || cohere_array_level_ > 0;
+}
+
+std::string CohereXMLToolCallingConverter::RefCacheKey(const std::string& uri) const {
+  // Recursive Cohere dict/list contents remain tagged values, regardless of nesting depth.
+  int context = AtCohereRoot() ? 0 : (InCohereValueContext() ? 1 : 2);
+  return std::to_string(context) + ":" + uri;
 }
 
 int32_t CohereXMLToolCallingConverter::FormatCohereValue(int32_t value_rule_id) {
