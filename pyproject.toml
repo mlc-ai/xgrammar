@@ -15,7 +15,7 @@ classifiers = [
 keywords = ["machine learning", "inference"]
 requires-python = ">=3.8, <4"
 dependencies = [
-  "apache-tvm-ffi>=0.1.10",
+  "apache-tvm-ffi>=0.1.11",
   "pydantic",
   "torch>=1.10.0",
   # Keep the transformers bound in sync with docs/requirements.txt and the CI workflows.
