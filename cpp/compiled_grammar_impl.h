@@ -59,6 +59,27 @@ struct AdaptiveTokenMask {
 
   std::vector<int32_t> uncertain_indices;
 
+  /*!
+   * \brief Fast path for the body state of a counted repetition of a single character class.
+   *
+   * `repeat_interior_bitsets[i]` holds every token whose bytes decode to a non-empty sequence of
+   * codepoints accepted by that class and whose codepoint count is at most
+   * `repeat_interior_char_counts[i]`; the counts are strictly increasing. Consuming such a token
+   * keeps the parser inside the repetition and costs one repetition per codepoint, so the token is
+   * legal exactly when the repetition budget left in the parent state covers its codepoint count.
+   * That budget is not part of the compiled state, so the matcher reads it from the parse history
+   * and picks the matching bitset; the mask itself stays count-independent.
+   *
+   * These tokens are removed from the mask's own accepted/rejected/uncertain classes, which keeps
+   * over-budget tokens classified exactly as the Earley replay would have classified them.
+   *
+   * This is derived data: it is deliberately not part of the serialized form (see
+   * XGRAMMAR_MEMBER_TABLE below) and is recomputed by PopulateRepeatInteriorBitsets whenever a
+   * compiled grammar is built or deserialized.
+   */
+  std::vector<int32_t> repeat_interior_char_counts;
+  std::vector<DynamicBitset> repeat_interior_bitsets;
+
   /*! \brief Default constructor. Only for deserialization. */
   AdaptiveTokenMask() = default;
 
@@ -81,7 +102,9 @@ struct AdaptiveTokenMask {
 
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask) {
     return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
-           MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset);
+           MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset) +
+           MemorySize(mask.repeat_interior_char_counts) +
+           MemorySize(mask.repeat_interior_bitsets);
   }
 };
 
@@ -132,6 +155,19 @@ class CompiledGrammar::Impl {
   );
   friend std::size_t MemorySize(const Impl& impl);
 };
+
+/*!
+ * \brief Compute the repeat-interior fast path data for every mask in `cache`.
+ *
+ * For the body state of a rule whose body is a single character class, record the tokens that
+ * stay inside that class, grouped by codepoint count, and take them out of the mask's own
+ * accepted/rejected/uncertain classes so that the matcher can decide them with a budget check.
+ */
+void PopulateRepeatInteriorBitsets(
+    const Grammar& grammar,
+    const TokenizerInfo& tokenizer_info,
+    std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>* cache
+);
 
 XGRAMMAR_MEMBER_TABLE(
     CompiledGrammar::Impl,
