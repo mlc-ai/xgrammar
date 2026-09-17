@@ -523,6 +523,55 @@ TEST(XGrammarFSMTest, MergeEquivalentStatesNoCrossRuleChaining) {
   EXPECT_FALSE(merged.AcceptString("ybn"));
 }
 
+TEST(XGrammarFSMTest, MergeEquivalentStatesKeepsStartStateUnmerged) {
+  // FSM of (ab)*abc after epsilon simplification. In the first round states 1 and 2 are
+  // merged as equivalent successors of state 0. After that, the start state 0 and state 3
+  // share the single predecessor {1,2} with identical incoming edges 'b'. Merging them
+  // would wrongly accept "c", because the start state is also reached by the empty prefix.
+  FSMWithStartEnd fsm_wse;
+  for (int i = 0; i < 5; ++i) {
+    fsm_wse.AddState();
+  }
+  fsm_wse.SetStartState(0);
+  fsm_wse.AddEndState(4);
+  fsm_wse.GetFsm().AddEdge(0, 1, 'a', 'a');
+  fsm_wse.GetFsm().AddEdge(1, 0, 'b', 'b');
+  fsm_wse.GetFsm().AddEdge(0, 2, 'a', 'a');
+  fsm_wse.GetFsm().AddEdge(2, 3, 'b', 'b');
+  fsm_wse.GetFsm().AddEdge(3, 4, 'c', 'c');
+
+  auto merged = fsm_wse.MergeEquivalentStates();
+
+  // States 1 and 2 are still merged.
+  EXPECT_EQ(merged.NumStates(), 4);
+  EXPECT_TRUE(merged.AcceptString("abc"));
+  EXPECT_TRUE(merged.AcceptString("ababc"));
+  EXPECT_FALSE(merged.AcceptString("c"));
+  EXPECT_FALSE(merged.AcceptString("ab"));
+  EXPECT_FALSE(merged.AcceptString(""));
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesStartStateWithSelfLoop) {
+  // [a]*abc: the character class star is a self-loop on the start state, so the start
+  // state has incoming edges identical to its successor's. Merging them would wrongly
+  // accept "bc".
+  auto fsm_wse = RegexFSMBuilder::Build("[a]*abc").Unwrap();
+  fsm_wse = fsm_wse.SimplifyEpsilon();
+  auto merged = fsm_wse.MergeEquivalentStates();
+  EXPECT_TRUE(merged.AcceptString("abc"));
+  EXPECT_TRUE(merged.AcceptString("aaabc"));
+  EXPECT_FALSE(merged.AcceptString("bc"));
+  EXPECT_FALSE(merged.AcceptString("c"));
+
+  fsm_wse = RegexFSMBuilder::Build("(ab)*abc").Unwrap();
+  fsm_wse = fsm_wse.SimplifyEpsilon();
+  merged = fsm_wse.MergeEquivalentStates();
+  EXPECT_TRUE(merged.AcceptString("abc"));
+  EXPECT_TRUE(merged.AcceptString("ababc"));
+  EXPECT_FALSE(merged.AcceptString("c"));
+  EXPECT_FALSE(merged.AcceptString("ab"));
+}
+
 TEST(XGrammarFSMTest, SimplifyEpsilonPreservesAcceptance) {
   // (ab)+ : the accepting state's only edge is an epsilon back to the non-accepting start.
   // Merging the two states would wrongly make the start state accepting.
