@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <variant>
@@ -36,6 +37,24 @@ namespace xgrammar {
 // ----- Error handling -----
 
 // ----- Helpers: convert FFI types to/from xgrammar types -----
+
+/*!
+ * \brief Convert a token id from the FFI int64 domain to the matcher's int32 domain.
+ * \details An id that does not fit in int32 is not a token id of any vocabulary, so
+ * silently truncating it would turn corrupted input into a different, possibly valid id.
+ * Reject it here so it never reaches AcceptToken.
+ */
+static int32_t TokenIdToInt32(int64_t token_id) {
+  if (token_id < static_cast<int64_t>(std::numeric_limits<int32_t>::min()) ||
+      token_id > static_cast<int64_t>(std::numeric_limits<int32_t>::max())) {
+    TVM_FFI_THROW(RuntimeError)
+        << "Token id " << token_id << " is out of the int32 range ["
+        << std::numeric_limits<int32_t>::min() << ", "
+        << std::numeric_limits<int32_t>::max()
+        << "] supported by the grammar matcher.";
+  }
+  return static_cast<int32_t>(token_id);
+}
 
 static std::string BytesToString(const tvm::ffi::Bytes& bytes) {
   std::string result(bytes.data(), bytes.size());
@@ -664,7 +683,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
             std::vector<int32_t> token_id_vector;
             token_id_vector.reserve(token_ids.size());
             for (int64_t i = 0; i < static_cast<int64_t>(token_ids.size()); ++i) {
-              token_id_vector.push_back(static_cast<int32_t>(token_ids[i]));
+              token_id_vector.push_back(TokenIdToInt32(token_ids[i]));
             }
             std::vector<uint8_t> acceptance_results =
                 BatchGrammarMatcher::BatchAcceptToken(&matchers, token_id_vector, debug_print);
@@ -695,7 +714,7 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       .def(
           "accept_token",
           [](GrammarMatcherObj* o, int64_t token_id, bool debug_print) {
-            return o->value.AcceptToken(static_cast<int32_t>(token_id), debug_print);
+            return o->value.AcceptToken(TokenIdToInt32(token_id), debug_print);
           }
       )
       .def(
@@ -772,6 +791,12 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           "fork",
           [](GrammarMatcherObj* o) {
             return ffi::ObjectRef(ffi::make_object<GrammarMatcherObj>(o->value.Fork()));
+          }
+      )
+      .def(
+          "vocab_size",
+          [](const GrammarMatcherObj* o) {
+            return static_cast<int64_t>(o->value.GetVocabSize());
           }
       )
       .def("is_terminated", [](const GrammarMatcherObj* o) { return o->value.IsTerminated(); })
