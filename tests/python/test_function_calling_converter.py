@@ -1,3 +1,4 @@
+import json
 import sys
 
 import pytest
@@ -3699,6 +3700,172 @@ def test_deepseek_v4_1_unconstrained_parameter_list(schema):
         assert not _is_grammar_accept_string(
             grammar, output.replace("｜DSML｜ parameter", "｜DSML｜parameter")
         )
+
+
+def _deepseek_v4_1_parameter(name, value):
+    is_string = isinstance(value, str)
+    body = value if is_string else json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return (
+        f'<｜DSML｜ parameter name="{name}" string="{str(is_string).lower()}">'
+        f"{body}</｜DSML｜ parameter>\n"
+    )
+
+
+@pytest.mark.parametrize("keyword", ["const", "enum"])
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize("value", [{}, {"s": "hello"}, {"z": None, "a": {"s": [1, "x"]}}])
+def test_deepseek_v4_1_root_object_literals(keyword, any_order, value):
+    schema = {keyword: value if keyword == "const" else [value]}
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(
+            format=JSONSchemaFormat(
+                json_schema=schema, style="deepseek_v4_1_xml", any_order=any_order
+            )
+        )
+    )
+    parameters = [_deepseek_v4_1_parameter(k, v) for k, v in value.items()]
+    output = "".join(parameters)
+    assert _is_grammar_accept_string(grammar, output)
+    assert not _is_grammar_accept_string(grammar, json.dumps(value))
+    assert not _is_grammar_accept_string(grammar, output + _deepseek_v4_1_parameter("extra", 1))
+    if value:
+        assert not _is_grammar_accept_string(grammar, "".join(parameters[1:]))
+        first = next(iter(value))
+        assert not _is_grammar_accept_string(
+            grammar, _deepseek_v4_1_parameter(first, False) + "".join(parameters[1:])
+        )
+    if len(parameters) > 1:
+        assert not _is_grammar_accept_string(grammar, parameters[0] * len(parameters))
+
+
+def test_deepseek_v4_1_root_enum_keeps_object_alternatives_separate():
+    schema = {"enum": [{"s": "hello"}, {"n": 42}]}
+    for grammar in (
+        Grammar.from_structural_tag(
+            StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+        ),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")),
+    ):
+        a = _deepseek_v4_1_parameter("s", "hello")
+        b = _deepseek_v4_1_parameter("n", 42)
+        assert _is_grammar_accept_string(grammar, a)
+        assert _is_grammar_accept_string(grammar, b)
+        assert not _is_grammar_accept_string(grammar, a + b)
+        assert not _is_grammar_accept_string(grammar, "")
+
+
+@pytest.mark.parametrize("nested_first", [False, True])
+@pytest.mark.parametrize(
+    "definition", [{"type": "string"}, {"const": "hello"}, {"enum": ["hello", "bye"]}]
+)
+@pytest.mark.parametrize("style", ["deepseek_v4_1_xml", "qwen_xml"])
+def test_xml_reference_encoding_context(nested_first, definition, style):
+    ref = {"$ref": "#/$defs/Text"}
+    properties = {
+        "direct": ref,
+        "nested": {
+            "type": "object",
+            "properties": {"text": ref},
+            "required": ["text"],
+            "additionalProperties": False,
+        },
+    }
+    if nested_first:
+        properties = dict(reversed(list(properties.items())))
+    schema = {
+        "$defs": {"Text": definition},
+        "type": "object",
+        "properties": properties,
+        "required": list(properties),
+        "additionalProperties": False,
+    }
+    if style == "deepseek_v4_1_xml":
+        values = {
+            "direct": _deepseek_v4_1_parameter("direct", "hello"),
+            "nested": _deepseek_v4_1_parameter("nested", {"text": "hello"}),
+        }
+    else:
+        values = {
+            "direct": "<parameter=direct>hello</parameter>",
+            "nested": '<parameter=nested>{"text":"hello"}</parameter>',
+        }
+    output = "".join(values[name] for name in properties)
+    for grammar in (
+        Grammar.from_structural_tag(
+            StructuralTag(format=JSONSchemaFormat(json_schema=schema, style=style))
+        ),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format=style)),
+    ):
+        assert _is_grammar_accept_string(grammar, output)
+        assert not _is_grammar_accept_string(
+            grammar, output.replace('{"text":"hello"}', '{"text":hello}')
+        )
+        if "type" not in definition:
+            assert not _is_grammar_accept_string(grammar, output.replace(">hello<", '>"hello"<'))
+
+
+def test_deepseek_v4_1_recursive_root_reference_uses_json_values():
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "child": {"$ref": "#"}},
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    )
+    output = _deepseek_v4_1_parameter("name", "parent") + _deepseek_v4_1_parameter(
+        "child", {"name": "child", "child": {"name": "leaf"}}
+    )
+    assert _is_grammar_accept_string(grammar, output)
+    assert not _is_grammar_accept_string(grammar, output.replace('"leaf"', "leaf"))
+    assert not _is_grammar_accept_string(
+        grammar, output.replace('{"name":"leaf"}', _deepseek_v4_1_parameter("name", "leaf"))
+    )
+
+
+@pytest.mark.parametrize("literal_first", [False, True])
+def test_deepseek_v4_1_root_and_parameter_literal_caches_are_distinct(literal_first):
+    literal = {"const": {"x": 1}}
+    alternatives = [
+        {"$ref": "#/$defs/Value"},
+        {
+            "type": "object",
+            "properties": {"wrapped": literal},
+            "required": ["wrapped"],
+            "additionalProperties": False,
+        },
+    ]
+    if not literal_first:
+        alternatives.reverse()
+    schema = {"$defs": {"Value": literal}, "anyOf": alternatives}
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    )
+    assert _is_grammar_accept_string(grammar, _deepseek_v4_1_parameter("x", 1))
+    assert _is_grammar_accept_string(grammar, _deepseek_v4_1_parameter("wrapped", {"x": 1}))
+    assert not _is_grammar_accept_string(grammar, _deepseek_v4_1_parameter("wrapped", {"x": 2}))
+
+
+def test_cohere_recursive_root_reference_keeps_tagged_values():
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "child": {"$ref": "#"}},
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+    output = (
+        '<cofl:value name="name" type="raw">parent</cofl:value>'
+        '<cofl:value name="child" type="dict">'
+        '<cofl:value name="name" type="raw">leaf</cofl:value>'
+        "</cofl:value>"
+    )
+    _check_cohere_grammar(schema, output, True)
+    _check_cohere_grammar(
+        schema,
+        output.replace('<cofl:value name="name" type="raw">leaf</cofl:value>', '{"name":"leaf"}'),
+        False,
+    )
 
 
 if __name__ == "__main__":

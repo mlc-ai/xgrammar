@@ -1609,7 +1609,12 @@ class TrieFSMBuilderImpl {
       bool allow_overlap,
       bool add_back_edges
   );
-  void AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends);
+  void AddBackEdges(
+      FSM* fsm,
+      int start,
+      const std::unordered_set<int>& ends,
+      std::unordered_set<int32_t>* dead_states
+  );
 };
 
 std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
@@ -1686,7 +1691,7 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
     }
 
     // Add back edges.
-    AddBackEdges(&fsm, start, ends);
+    AddBackEdges(&fsm, start, ends, &dead_state_set);
 
     // Remove the edges to excluded end states.
     if (dead_state_set.size() != 0) {
@@ -1708,7 +1713,12 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
   return FSMWithStartEnd(fsm, start, std::vector<int32_t>(ends.begin(), ends.end()));
 }
 
-void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends) {
+void TrieFSMBuilderImpl::AddBackEdges(
+    FSM* fsm,
+    int start,
+    const std::unordered_set<int>& ends,
+    std::unordered_set<int32_t>* dead_states
+) {
   // Build an Aho-Corasick automaton by adding back edges.
   // When matching on the trie fails at state u on byte b, the matcher must resume from
   // the longest proper suffix of u's prefix that is still a path in the trie (the
@@ -1748,6 +1758,13 @@ void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_
     }
   }
   for (int u : bfs_order) {
+    // An explicit trie child can complete an excluded suffix without entering its
+    // terminal state: with excludes {"abc", "xabcq"}, the state for "xabc" has
+    // failure state "abc". It must be dead too, even if more trie edges remain.
+    // BFS ensures the failure state's excluded status has already been propagated.
+    if (dead_states->count(fail[u]) > 0) {
+      dead_states->insert(u);
+    }
     for (int byte = 0; byte < 256; byte++) {
       // Entries of deeper states are untouched so far, so a non-empty entry here is
       // exactly a trie child of u.

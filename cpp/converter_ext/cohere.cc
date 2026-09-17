@@ -154,6 +154,12 @@ bool CohereXMLToolCallingConverter::InCohereValueContext() const {
   return nested_object_level_ <= 1 || !object_stack_.empty() || cohere_array_level_ > 0;
 }
 
+std::string CohereXMLToolCallingConverter::RefCacheKey(const std::string& uri) const {
+  // Recursive Cohere dict/list contents remain tagged values, regardless of nesting depth.
+  int context = AtCohereRoot() ? 0 : (InCohereValueContext() ? 1 : 2);
+  return std::to_string(context) + ":" + uri;
+}
+
 int32_t CohereXMLToolCallingConverter::FormatCohereValue(int32_t value_rule_id) {
   if (value_rule_id == builder_.GetRuleId(kXMLString)) {
     return RuleRef(value_rule_id);

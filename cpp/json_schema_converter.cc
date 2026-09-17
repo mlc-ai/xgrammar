@@ -1771,7 +1771,7 @@ Grammar JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
   // This allows $ref: "#" to resolve to "root"
   int32_t root_rule_id = builder_.AddEmptyRuleWithHint("root");
   std::string root_rule_name = builder_.GetRule(root_rule_id).name;
-  uri_to_rule_id_["#"] = root_rule_id;
+  uri_to_rule_id_[RefCacheKey("#")] = root_rule_id;
 
   // Check if the spec can be directly mapped to an existing rule
   auto cached_rule = GetCache(spec->cache_key);
@@ -3139,10 +3139,13 @@ SchemaSpecPtr JSONSchemaConverter::ResolveRefSchema(
   return ref_resolver_(spec.uri, rule_name_hint);
 }
 
+std::string JSONSchemaConverter::RefCacheKey(const std::string& uri) const { return uri; }
+
 int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string& rule_name) {
+  const std::string cache_key = RefCacheKey(spec.uri);
   // First check if we have a direct URI mapping (for circular references)
-  if (uri_to_rule_id_.count(spec.uri)) {
-    return RuleRef(uri_to_rule_id_[spec.uri]);
+  if (uri_to_rule_id_.count(cache_key)) {
+    return RuleRef(uri_to_rule_id_[cache_key]);
   }
 
   // Derive rule name from URI path (like original URIToRule) so that the same
@@ -3172,7 +3175,7 @@ int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string&
 
   int32_t allocated_rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
   std::string allocated_rule_name = builder_.GetRule(allocated_rule_id).name;
-  uri_to_rule_id_[spec.uri] = allocated_rule_id;
+  uri_to_rule_id_[cache_key] = allocated_rule_id;
   SchemaSpecPtr resolved = ResolveRefSchema(spec, allocated_rule_name);
   builder_.UpdateRuleBody(allocated_rule_id, GenerateFromSpec(resolved, allocated_rule_name));
   if (!resolved->cache_key.empty()) {
@@ -3585,6 +3588,30 @@ int32_t XMLToolCallingConverter::GenerateArray(
 int32_t XMLToolCallingConverter::GenerateConst(
     const ConstSpec& spec, const std::string& rule_name
 ) {
+  if (nested_object_level_ == 0) {
+    picojson::value value;
+    XGRAMMAR_CHECK(ParseJSON(value, spec.json_value).empty());
+    if (value.is<picojson::object>()) {
+      // A root object is a parameter list, including when all its values are fixed.
+      // Nested object constants still use the JSON representation below.
+      ObjectSpec object;
+      object.allow_unevaluated_properties = false;
+      const auto& properties = value.get<picojson::object>();
+      for (const auto& key : properties.ordered_keys()) {
+        object.properties.push_back(
+            {key, SchemaSpec::Make(ConstSpec{properties.at(key).serialize()})}
+        );
+        object.required.insert(key);
+      }
+      // As with JSON literals, keep a fixed order even when any_order is enabled.
+      // The general any-order object rule permits repeated keys and is not exact for const.
+      bool saved_any_order = any_order_;
+      any_order_ = false;
+      int32_t result = GenerateObject(object, rule_name);
+      any_order_ = saved_any_order;
+      return result;
+    }
+  }
   if (nested_object_level_ <= 1) {
     return ByteString(XMLValue(spec.json_value));
   }
@@ -3598,7 +3625,7 @@ int32_t XMLToolCallingConverter::GenerateEnum(const EnumSpec& spec, const std::s
     std::vector<int32_t> values;
     values.reserve(spec.json_values.size());
     for (const auto& value : spec.json_values) {
-      values.push_back(ByteString(XMLValue(value)));
+      values.push_back(GenerateConst(ConstSpec{value}, rule_name));
     }
     return Choice(values);
   }
@@ -3712,7 +3739,7 @@ void XMLToolCallingConverter::AddCache(const std::string& key, int32_t rule_id) 
   if (key.empty()) {
     return;
   }
-  rule_cache_manager_.AddCache(key, nested_object_level_ > 1, rule_id);
+  rule_cache_manager_.AddCache(key, EncodingContext(), rule_id);
 }
 
 std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key) const {
@@ -3721,16 +3748,20 @@ std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key)
   }
   if (json_format_ == JSONFormat::kDeepSeekV41XML && nested_object_level_ == 0 && key == "{}") {
     // Unconstrained tool arguments are an XML parameter list, not one parameter's raw value.
-    return rule_cache_manager_.GetCache(kObjectCacheKey, false);
+    return rule_cache_manager_.GetCache(kObjectCacheKey, 0);
   }
   // At level 0, {"type":"object"} is the root tool-arguments object and uses XML parameter
   // tags. At level 1 it is the value of one such parameter and must use the inner JSON object
   // rule, including braces. Without this distinction, the outer XML object cache is reused for
   // the value before GenerateObject() can advance nested_object_level_.
   if (nested_object_level_ == 1 && key == kObjectCacheKey) {
-    return rule_cache_manager_.GetCache(key, true);
+    return rule_cache_manager_.GetCache(key, 2);
   }
-  return rule_cache_manager_.GetCache(key, nested_object_level_ > 1);
+  return rule_cache_manager_.GetCache(key, EncodingContext());
+}
+
+std::string XMLToolCallingConverter::RefCacheKey(const std::string& uri) const {
+  return std::to_string(EncodingContext()) + ":" + uri;
 }
 
 // ==================== Range Regex Generation ====================

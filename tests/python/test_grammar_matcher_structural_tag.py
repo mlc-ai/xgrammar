@@ -379,6 +379,108 @@ def test_excludes_overlapping_prefixes():
     )
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize(
+    "excludes, invalid, valid",
+    [
+        (["abc", "xabcq"], ["xabc", "xabcr", "xabcq"], ["xab", "xabxr"]),
+        (["bc", "abcq", "xabcde"], ["xabc", "xabcr"], ["xab", "xabr"]),
+        (["好", "x好吗"], ["x好", "x好呀"], ["x你", "你"]),
+        (["｜DSML｜", "<｜DSML｜ calls>"], ["<｜DSML｜", "<｜DSML｜ callsX>"], ["<｜DS", "hello"]),
+    ],
+)
+def test_excludes_contained_patterns(reverse, excludes, invalid, valid):
+    """A redundant longer pattern must not weaken an exclusion, in either entry point."""
+    if reverse:
+        excludes = list(reversed(excludes))
+    grammar_text = (
+        "root ::= TagDispatch(excludes=("
+        + ", ".join(json.dumps(value, ensure_ascii=False) for value in excludes)
+        + "), loop_after_dispatch=false)"
+    )
+    grammars = [
+        xgr.Grammar.from_ebnf(grammar_text),
+        xgr.Grammar.from_structural_tag({"format": {"type": "any_text", "excludes": excludes}}),
+    ]
+    for grammar in grammars:
+        for text in invalid:
+            assert not _is_grammar_accept_string(grammar, text)
+        for text in valid:
+            assert _is_grammar_accept_string(grammar, text)
+
+
+@pytest.mark.parametrize("excludes", [["abc", "xabcq"], ["｜DSML｜", "<｜DSML｜ calls>"]])
+def test_contained_excludes_token_masks(excludes):
+    vocab = [
+        "<eos>",
+        "x",
+        "a",
+        "b",
+        "c",
+        "q",
+        "r",
+        "abc",
+        "xabc",
+        "xabcr",
+        "hello",
+        "<",
+        "｜",
+        "DSML",
+        "<｜DSML｜",
+        "<｜DSML｜ callsX>",
+    ]
+    info = xgr.TokenizerInfo(vocab, stop_token_ids=0)
+    grammar = xgr.Grammar.from_structural_tag(
+        {"format": {"type": "any_text", "excludes": excludes}}
+    )
+    compiled = xgr.GrammarCompiler(info, max_threads=1).compile_grammar(grammar)
+    mask = xgr.allocate_token_bitmask(1, len(vocab))
+    for prefix in ["", "x", "xa", "xab", "<", "<｜", "<｜DSML", "hello"]:
+        matcher = xgr.GrammarMatcher(compiled)
+        assert matcher.accept_string(prefix)
+        matcher.fill_next_token_bitmask(mask)
+        for token_id, token in enumerate(vocab):
+            expected = token_id == 0 or not any(value in prefix + token for value in excludes)
+            allowed = bool((int(mask[0, token_id // 32]) >> (token_id % 32)) & 1)
+            assert allowed == expected, (prefix, token)
+            assert matcher.fork().accept_token(token_id) == expected, (prefix, token)
+
+
+@pytest.mark.parametrize("trigger", ["abc", "abcq", "xabc", "xabcq"])
+def test_excludes_take_precedence_over_trigger(trigger):
+    grammar_text = f'root ::= TagDispatch(("{trigger}", body), excludes=("abc"))\nbody ::= "!"'
+    # Exact/prefix conflicts are already rejected by the EBNF parser. A trigger
+    # containing a forbidden suffix must not bypass the exclusion either.
+    if trigger.startswith("abc"):
+        with pytest.raises(RuntimeError, match="Exclude string must not be a prefix"):
+            xgr.Grammar.from_ebnf(grammar_text)
+        return
+    grammar = xgr.Grammar.from_ebnf(grammar_text)
+    assert not _is_grammar_accept_string(grammar, trigger + "!")
+
+
+@pytest.mark.parametrize("end", ["abc", "xabcq"])
+def test_contained_excludes_preserve_dispatch_body_and_tag_end(end):
+    grammar = xgr.Grammar.from_ebnf(
+        'root ::= TagDispatch(("<tool>", body), excludes=("abc", "xabcq"))\n' 'body ::= "abc"'
+    )
+    # Excludes constrain free text, not the dispatched rule's body.
+    assert _is_grammar_accept_string(grammar, "hello<tool>abc")
+    assert not _is_grammar_accept_string(grammar, "xabcr<tool>abc")
+    tag = {
+        "format": {
+            "type": "tag",
+            "begin": "<think>",
+            "content": {"type": "any_text", "excludes": ["abc", "xabcq"]},
+            "end": end,
+        }
+    }
+    grammar = xgr.Grammar.from_structural_tag(tag)
+    # The enclosing tag still consumes its delimiter outside the AnyText rule.
+    assert _is_grammar_accept_string(grammar, "<think>hello" + end)
+    assert not _is_grammar_accept_string(grammar, "<think>xabcr" + end)
+
+
 @pytest.mark.hf_token_required
 def test_utf8_structural_tag_begin_end():
     model = "deepseek-ai/DeepSeek-V3-0324"

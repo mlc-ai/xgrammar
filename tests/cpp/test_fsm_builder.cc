@@ -55,6 +55,41 @@ TEST(XGrammarFSMBuilderTest, TestTrieFSMBuilder) {
   EXPECT_EQ(fsm.GetFsm().GetNextState(16, 'e'), -1);
 }
 
+TEST(XGrammarFSMBuilderTest, TestTrieExcludedSuffixes) {
+  // Following a longer pattern must not hide an excluded suffix at an explicit
+  // trie node, including suffixes inherited through multiple failure links.
+  const std::vector<std::vector<std::string>> excluded_sets = {
+      {"b", "abx"}, {"abx", "b"}, {"b", "abx", "xabxx"}, {"ab", "ab", "abx"}
+  };
+  for (const auto& excludes : excluded_sets) {
+    auto result = TrieFSMBuilder::Build({}, excludes, nullptr, true, true);
+    ASSERT_TRUE(result.has_value());
+    const auto& fsm = result->GetFsm();
+    // Compare the byte FSM against an independent substring predicate for every
+    // string up to length five, rather than depending on generated state numbers.
+    std::vector<std::string> inputs = {""};
+    for (int length = 0; length <= 5; ++length) {
+      std::vector<std::string> next;
+      for (const auto& input : inputs) {
+        bool expected = true;
+        for (const auto& excluded : excludes) {
+          expected = expected && input.find(excluded) == std::string::npos;
+        }
+        int state = result->GetStart();
+        for (uint8_t byte : input) {
+          state = fsm.GetNextState(state, byte);
+          if (state == FSM::kNoNextState) break;
+        }
+        EXPECT_EQ(state != FSM::kNoNextState, expected) << input;
+        if (length < 5) {
+          for (char byte : {'a', 'b', 'x'}) next.push_back(input + byte);
+        }
+      }
+      inputs = std::move(next);
+    }
+  }
+}
+
 TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder1) {
   // Case 1. loop_after_dispatch = true
   Grammar::Impl::TagDispatch tag_dispatch = {
