@@ -2383,6 +2383,10 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   }
   // Check for pattern
   if (spec.pattern.has_value()) {
+    if (spec.min_length != 0 || spec.max_length != -1) {
+      XGRAMMAR_LOG(WARNING) << "pattern combined with minLength/maxLength is not "
+                               "supported; the length constraints will be ignored";
+    }
     return Sequence(
         {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
     );
