@@ -480,7 +480,8 @@ class GrammarMatcher::Impl : public EarleyParser {
         stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
         terminate_without_stop_token_(terminate_without_stop_token),
         default_temperature_(default_temperature),
-        tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
+        tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()),
+        tmp_budget_rejected_bitset_(tokenizer_info_.GetVocabSize()) {
     if (override_stop_tokens.has_value()) {
       XGRAMMAR_CHECK(!override_stop_tokens->empty())
           << "The override_stop_tokens should not be empty";
@@ -575,7 +576,8 @@ class GrammarMatcher::Impl : public EarleyParser {
       const DynamicBitset& accepted_bitset,
       const std::vector<int32_t>& rejected_indices,
       bool can_reach_end,
-      bool allow_special_token = false
+      bool allow_special_token = false,
+      const DynamicBitset* budget_rejected = nullptr
   );
 
   /*!
@@ -770,6 +772,10 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
   DynamicBitset tmp_accepted_bitset_;
+  /*! \brief Over-budget tokens of the counted-repeat fast path, indexed by token id.
+   * They are rejected unless another state accepts them, exactly like
+   * `tmp_rejected_indices_`. */
+  DynamicBitset tmp_budget_rejected_bitset_;
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
 };
@@ -1866,6 +1872,28 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
   temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
 }
 
+/*!
+ * \brief The upper bound of the counted repetition `state` sits on.
+ * \return Nullopt when `state` is not on a repetition edge; a negative value means the
+ * repetition is unbounded.
+ */
+static std::optional<int32_t> GetRepeatUpperBound(const Grammar& grammar, const ParserState& state) {
+  if (state.rule_id < 0) {
+    return std::nullopt;
+  }
+  const auto& rule_fsm = grammar->per_rule_fsms[state.rule_id];
+  if (!rule_fsm.has_value()) {
+    return std::nullopt;
+  }
+  for (const auto& edge : rule_fsm->GetFsm().GetFsm().GetEdges(state.element_id)) {
+    if (!edge.IsRepeatRef()) {
+      continue;
+    }
+    return grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).Upper();
+  }
+  return std::nullopt;
+}
+
 void GrammarMatcher::Impl::FillBitmaskForStates(
     int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
 ) {
@@ -1889,6 +1917,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
   // Note these indices store the indices in sorted_decoded_vocab, instead of the token ids.
   tmp_accepted_bitset_.Reset();
+  tmp_budget_rejected_bitset_.Reset();
   // {-1} means the universal set, i.e. all tokens initially
   tmp_rejected_indices_.assign({-1});
 
@@ -1917,6 +1946,49 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
       for (auto idx : adaptive_token_mask.accepted_indices) {
         tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
+      }
+    }
+    // Tokens that stay inside a counted repetition of a character class consume one repetition per
+    // codepoint, so they are legal exactly when the budget left in the repetition state that
+    // predicted this body state covers their codepoint count. The compiled mask is shared by every
+    // repeat count, so the budget is read from the parse history here and the matching bitset is
+    // accepted in one operation instead of replaying every in-class token.
+    if (!has_char_budget_rules_ && !adaptive_token_mask.repeat_interior_bitsets.empty() &&
+        state.rule_start_pos != ParserState::kNoPrevInputPos) {
+      int32_t remaining = -1;
+      bool on_repeat = false;
+      for (const auto& [ref_rule_id, parent_state] :
+           rule_id_to_completable_states_[state.rule_start_pos]) {
+        if (ref_rule_id != state.rule_id) {
+          continue;
+        }
+        const auto upper = GetRepeatUpperBound(grammar_, parent_state);
+        if (!upper.has_value()) {
+          continue;
+        }
+        on_repeat = true;
+        if (*upper < 0) {
+          remaining = INT32_MAX;
+          break;
+        }
+        remaining = std::max(remaining, *upper - parent_state.repeat_count);
+      }
+      if (on_repeat && !adaptive_token_mask.repeat_interior_bitsets.empty()) {
+        const auto& char_counts = adaptive_token_mask.repeat_interior_char_counts;
+        const auto it = std::upper_bound(char_counts.begin(), char_counts.end(), remaining);
+        // The last cumulative entry is the whole interior set, so its difference from the fitting
+        // entry is exactly the set of tokens that would overrun the repetition.
+        const auto& all_interior = adaptive_token_mask.repeat_interior_bitsets.back();
+        const DynamicBitset* fitting = nullptr;
+        if (it != char_counts.begin()) {
+          const size_t index = static_cast<size_t>(it - char_counts.begin()) - 1;
+          fitting = &adaptive_token_mask.repeat_interior_bitsets[index];
+          tmp_accepted_bitset_ |= *fitting;
+        }
+        for (int word = 0; word < all_interior.BufferSize(); ++word) {
+          const uint32_t fitting_word = fitting == nullptr ? 0u : fitting->Word(word);
+          tmp_budget_rejected_bitset_.SetBits(word, all_interior.Word(word) & ~fitting_word);
+        }
       }
     }
   }
@@ -2083,7 +2155,12 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   // Finally update the rejected_ids bitset
   bool can_reach_end = IsCompleted();
   SetTokenBitmask(
-      bitmask_data_ptr, tmp_accepted_bitset_, tmp_rejected_indices_, can_reach_end, false
+      bitmask_data_ptr,
+      tmp_accepted_bitset_,
+      tmp_rejected_indices_,
+      can_reach_end,
+      false,
+      &tmp_budget_rejected_bitset_
   );
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
@@ -2476,7 +2553,8 @@ void GrammarMatcher::Impl::SetTokenBitmask(
     const DynamicBitset& accepted_bitset,
     const std::vector<int32_t>& rejected_indices,
     bool can_reach_end,
-    bool allow_special_token
+    bool allow_special_token,
+    const DynamicBitset* budget_rejected
 ) {
   // next_token_bitmask = set(all accepted tokens) =
   // 1. all_tokens - (rejected_ids / accepted_ids)
@@ -2506,6 +2584,17 @@ void GrammarMatcher::Impl::SetTokenBitmask(
       auto id = sorted_decoded_vocab[i].first;
       if (!accepted_bitset[id]) {
         next_token_bitset.Set(id, false);
+      }
+    }
+    if (budget_rejected != nullptr) {
+      // Over-budget tokens are rejected unless some state accepted them, the same rule the
+      // explicit rejected indices follow, but applied word by word: the set can be the whole
+      // in-class vocabulary, and walking it index by index would dominate the fill.
+      const int words = std::min(budget_rejected->BufferSize(), next_token_bitset.BufferSize());
+      for (int word = 0; word < words; ++word) {
+        next_token_bitset.ClearBits(
+            word, budget_rejected->Word(word) & ~accepted_bitset.Word(word)
+        );
       }
     }
     if (!allow_special_token) {

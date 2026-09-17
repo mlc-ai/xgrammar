@@ -40,6 +40,30 @@ namespace xgrammar {
 /*! \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcherForTokenMaskCache : public EarleyParser {
  public:
+  /*!
+   * \brief Constructor whose parse stack differs from the state being classified.
+   *
+   * `stack_state` seeds the Earley stack, so a repetition parent brings its predicted body and its
+   * exit into the stack as at run time, while `analysis_state` drives the first-character mask, the
+   * speculative path and the per-token simulation.
+   */
+  GrammarMatcherForTokenMaskCache(
+      const Grammar& grammar,
+      const ParserState& stack_state,
+      const ParserState& analysis_state,
+      const std::unordered_map<int32_t, DynamicBitset>&
+          tag_dispatch_rule_id_to_second_slicing_bitset,
+      const TokenizerInfo& tokenizer_info,
+      std::optional<RuleLevelCache>& rule_level_cache
+  )
+      : EarleyParser(grammar, stack_state),
+        init_rule_id_(analysis_state.rule_id),
+        initial_state_(analysis_state),
+        tag_dispatch_rule_id_to_second_slicing_bitset_(tag_dispatch_rule_id_to_second_slicing_bitset
+        ),
+        tokenizer_info_(tokenizer_info),
+        rule_level_cache_(rule_level_cache) {}
+
   GrammarMatcherForTokenMaskCache(
       const Grammar& grammar,
       const ParserState& init_state,
@@ -1091,7 +1115,55 @@ static void CheckTokenIdsInVocab(const Grammar& grammar, int vocab_size) {
   }
 }
 
-CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
+/*!
+ * \brief The repetition state that predicted `state`, when `state` starts the body rule of a
+ * counted repetition whose lower bound is 0.
+ */
+static bool FindZeroLowerRepeatParent(
+    const Grammar& grammar, const ParserState& state, ParserState* parent
+) {
+  if (state.rule_id < 0) {
+    return false;
+  }
+  const auto& child_fsm = grammar->per_rule_fsms[state.rule_id];
+  if (!child_fsm.has_value() || child_fsm->GetFsm().GetStart() != state.element_id) {
+    return false;
+  }
+  for (int32_t rule_id = 0; rule_id < static_cast<int32_t>(grammar->NumRules()); ++rule_id) {
+    const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
+    if (!rule_fsm.has_value()) {
+      continue;
+    }
+    std::unordered_set<int> reachable_states;
+    rule_fsm->GetFsm().GetReachableStates(&reachable_states);
+    for (int element_id : reachable_states) {
+      for (const auto& edge : rule_fsm->GetFsm().GetFsm().GetEdges(element_id)) {
+        if (!edge.IsRepeatRef()) {
+          continue;
+        }
+        const auto info = grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+        if (info.RuleId() != state.rule_id || info.Lower() != 0) {
+          continue;
+        }
+        *parent = ParserState(
+            rule_id,
+            grammar->GetRule(rule_id).body_expr_id,
+            element_id,
+            ParserState::kNoPrevInputPos,
+            0,
+            0,
+            0
+        );
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(
+    Grammar grammar_unoptimized
+) {
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
   compiled_grammar_impl->grammar = GrammarOptimizer::Apply(grammar_unoptimized);
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
@@ -1122,13 +1194,24 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
     adaptive_token_mask_cache_mutex.emplace();
   }
 
+  // A repeat body state cannot see the exit of its repetition, so every token that leaves the
+  // repetition comes out uncertain. Seeding the parse stack with the repetition parent puts the
+  // predicted body and the exit into the stack, exactly as at run time, while the analysis stays on
+  // the body state (design-mask-budget.md, section 12).
+  std::optional<RuleLevelCache> seeded_rule_level_cache;
   auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
+    ParserState parent_state;
+    const bool seeded =
+        FindZeroLowerRepeatParent(compiled_grammar_impl->grammar, state, &parent_state);
+    std::optional<RuleLevelCache>& rule_level_cache_ref =
+        seeded ? seeded_rule_level_cache : rule_level_cache_;
     auto grammar_matcher = GrammarMatcherForTokenMaskCache(
         compiled_grammar_impl->grammar,
+        seeded ? parent_state : state,
         state,
         tag_dispatch_rule_id_to_second_slicing_bitset,
         tokenizer_info_,
-        rule_level_cache_
+        rule_level_cache_ref
     );
     auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(is_root_rule);
     if (max_threads_ > 1) {
@@ -1173,6 +1256,12 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   if (max_threads_ > 1) {
     thread_pool->Join();
   }
+
+  PopulateRepeatInteriorBitsets(
+      compiled_grammar_impl->grammar,
+      tokenizer_info_,
+      &compiled_grammar_impl->adaptive_token_mask_cache
+  );
 
   return CompiledGrammar(compiled_grammar_impl);
 }

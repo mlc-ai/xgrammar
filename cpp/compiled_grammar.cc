@@ -10,13 +10,152 @@
 #include <vector>
 
 #include "compiled_grammar_impl.h"
+#include "support/encoding.h"
+#include "support/int_set.h"
 #include "support/json_parse.h"
 #include "support/json_serializer.h"
 #include "testing.h"
 #include "tokenizer_info_impl.h"
 #include "xgrammar/exception.h"
 
+#include <map>
+
 namespace xgrammar {
+
+namespace {
+
+/*!
+ * \brief Follow single-element choice/sequence wrappers down to the element that is actually
+ * matched; the optimizer may or may not leave those wrappers in place.
+ */
+Grammar::Impl::GrammarExpr UnwrapSingleElement(
+    const Grammar& grammar, Grammar::Impl::GrammarExpr expr
+) {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  for (int depth = 0; depth < 4; ++depth) {
+    const bool wrapper =
+        expr.type == GrammarExprType::kChoices || expr.type == GrammarExprType::kSequence;
+    if (!wrapper || expr.size() != 1) {
+      break;
+    }
+    expr = grammar->GetGrammarExpr(expr[0]);
+  }
+  return expr;
+}
+
+/*!
+ * \brief The character class matched by a rule body that is exactly one character class, which is
+ * the shape of a repetition body that consumes one codepoint per repetition.
+ * \return False for any other body, and for FSM states that do not start a fresh codepoint:
+ * continuation states of a multi-byte class expect trailing bytes, for which the per-token
+ * codepoint count used by the fast path does not apply.
+ */
+bool GetBodyCharacterClass(
+    const Grammar& grammar,
+    int32_t rule_id,
+    int32_t element_id,
+    Grammar::Impl::GrammarExpr* class_expr
+) {
+  using GrammarExprType = Grammar::Impl::GrammarExprType;
+  if (rule_id < 0) {
+    return false;
+  }
+  const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
+  if (!rule_fsm.has_value() || rule_fsm->GetFsm().GetStart() != element_id) {
+    return false;
+  }
+  const auto body = UnwrapSingleElement(
+      grammar, grammar->GetGrammarExpr(grammar->GetRule(rule_id).body_expr_id)
+  );
+  if (body.type != GrammarExprType::kCharacterClass) {
+    return false;
+  }
+  *class_expr = body;
+  return true;
+}
+
+/*! \brief Whether `codepoint` is accepted by the character class expression. */
+bool CharacterClassAccepts(const Grammar::Impl::GrammarExpr& class_expr, int32_t codepoint) {
+  bool in_ranges = false;
+  for (int i = 1; i + 1 < class_expr.size(); i += 2) {
+    if (codepoint >= class_expr[i] && codepoint <= class_expr[i + 1]) {
+      in_ranges = true;
+      break;
+    }
+  }
+  return class_expr[0] != 0 ? !in_ranges : in_ranges;
+}
+
+}  // namespace
+
+void PopulateRepeatInteriorBitsets(
+    const Grammar& grammar,
+    const TokenizerInfo& tokenizer_info,
+    std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>*
+        cache
+) {
+  const auto& sorted_vocab = tokenizer_info.GetSortedDecodedVocab();
+  for (auto& [state, mask] : *cache) {
+    mask.repeat_interior_char_counts.clear();
+    mask.repeat_interior_bitsets.clear();
+    Grammar::Impl::GrammarExpr class_expr;
+    if (!GetBodyCharacterClass(grammar, state.rule_id, state.element_id, &class_expr)) {
+      continue;
+    }
+    // Bucket the interior tokens by codepoint count, keeping the sorted-vocabulary order.
+    std::map<int32_t, std::vector<int32_t>> interior_by_count;
+    for (int32_t index = 0; index < static_cast<int32_t>(sorted_vocab.size()); ++index) {
+      const auto& token = sorted_vocab[index].second;
+      if (token.empty()) {
+        continue;
+      }
+      int32_t num_chars = 0;
+      bool inside = true;
+      for (size_t offset = 0; offset < token.size();) {
+        auto [codepoint, num_bytes] = ParseNextUTF8(token.data() + offset);
+        if (codepoint == CharHandlingError::kInvalidUTF8 || num_bytes <= 0 ||
+            !CharacterClassAccepts(class_expr, codepoint)) {
+          inside = false;
+          break;
+        }
+        offset += static_cast<size_t>(num_bytes);
+        ++num_chars;
+      }
+      if (inside && num_chars > 0) {
+        interior_by_count[num_chars].push_back(index);
+      }
+    }
+    if (interior_by_count.empty()) {
+      continue;
+    }
+
+    std::vector<int32_t> interior_indices;
+    for (auto& [char_count, indices] : interior_by_count) {
+      DynamicBitset cumulative =
+          mask.repeat_interior_bitsets.empty() ? DynamicBitset(tokenizer_info.GetVocabSize())
+                                               : mask.repeat_interior_bitsets.back();
+      for (int32_t index : indices) {
+        cumulative.Set(sorted_vocab[index].first, true);
+        interior_indices.push_back(index);
+      }
+      mask.repeat_interior_char_counts.push_back(char_count);
+      mask.repeat_interior_bitsets.push_back(std::move(cumulative));
+    }
+    std::sort(interior_indices.begin(), interior_indices.end());
+
+    // Hand these tokens over to the fast path: they leave every static class, and the matcher
+    // accepts the ones that fit the remaining repetition budget and rejects the rest with a bitset.
+    // Nothing is added to `rejected_indices`, which would otherwise carry the whole in-class
+    // vocabulary and be merged and intersected on every fill.
+    IntsetDifference(&mask.uncertain_indices, interior_indices);
+    if (mask.store_type == AdaptiveTokenMask::StoreType::kAcceptedBitset) {
+      for (int32_t index : interior_indices) {
+        mask.accepted_bitset.Set(sorted_vocab[index].first, false);
+      }
+    }
+    IntsetDifference(&mask.accepted_indices, interior_indices);
+  }
+}
 
 /******************* AdaptiveTokenMask *******************/
 
@@ -236,6 +375,9 @@ std::optional<SerializationError> DeserializeJSONValue(
       );
     }
   }
+  // The repeat-interior fast path is derived from the grammar, so it is rebuilt here instead of
+  // being part of the serialized form.
+  PopulateRepeatInteriorBitsets(impl->grammar, tokenizer_info, &impl->adaptive_token_mask_cache);
   return std::nullopt;
 }
 
