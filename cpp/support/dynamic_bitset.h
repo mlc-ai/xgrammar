@@ -129,6 +129,18 @@ class DynamicBitset {
   /*! \brief Get the size of the bitset. */
   int Size() const { return size_; }
 
+  /*! \brief Number of 32-bit words backing the bitset. */
+  int BufferSize() const { return buffer_size_; }
+
+  /*! \brief The i-th 32-bit word, read-only. */
+  uint32_t Word(int index) const { return data_[index]; }
+
+  /*! \brief OR `mask` into the i-th word. */
+  void SetBits(int index, uint32_t mask) { data_[index] |= mask; }
+
+  /*! \brief Clear the bits selected by `mask` in the i-th word. */
+  void ClearBits(int index, uint32_t mask) { data_[index] &= ~mask; }
+
   /*! \brief Set the whole bitset to true. */
   void Set() {
     XGRAMMAR_DCHECK(data_);
