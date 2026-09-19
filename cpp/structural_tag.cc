@@ -20,6 +20,7 @@
 #include "grammar_functor.h"
 #include "grammar_impl.h"
 #include "json_schema_converter.h"
+#include "support/json_parse.h"
 #include "support/logging.h"
 #include "support/recursion_guard.h"
 #include "support/utils.h"
@@ -94,7 +95,7 @@ picojson::value JSONSchemaFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
   picojson::value schema_val;
-  if (picojson::parse(schema_val, json_schema).empty()) {
+  if (ParseJSON(schema_val, json_schema).empty()) {
     obj["json_schema"] = schema_val;
   } else {
     obj["json_schema"] = picojson::value(json_schema);
@@ -371,7 +372,7 @@ class StructuralTagParser {
 
 Result<StructuralTag, StructuralTagError> StructuralTagParser::FromJSON(const std::string& json) {
   picojson::value value;
-  std::string err = picojson::parse(value, json);
+  std::string err = ParseJSON(value, json);
   if (!err.empty()) {
     return ResultErr<InvalidJSONError>("Failed to parse JSON: " + err);
   }
@@ -405,6 +406,15 @@ Result<StructuralTag, ISTError> StructuralTagParser::ParseStructuralTag(const pi
 
 Result<Format, ISTError> StructuralTagParser::ParseFormat(const picojson::value& value) {
   RecursionGuard guard(&parse_format_recursion_depth_);
+  // The global recursion limit is far deeper than the native stack allows for the recursive passes
+  // over the format tree (a few KB per level, and Windows has a 1 MB main-thread stack), so cap
+  // the nesting of formats explicitly.
+  static constexpr int kMaxFormatDepth = 100;
+  if (parse_format_recursion_depth_ > kMaxFormatDepth) {
+    return ResultErr<ISTError>(
+        "Formats are nested deeper than " + std::to_string(kMaxFormatDepth) + " levels"
+    );
+  }
   if (!value.is<picojson::object>()) {
     return ResultErr<ISTError>("Format must be an object");
   }
@@ -552,11 +562,12 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     if (it != obj.end() && it->second.is<std::string>()) {
       style = it->second.get<std::string>();
       if (style != "json" && style != "qwen_xml" && style != "minimax_xml" &&
-          style != "deepseek_xml" && style != "glm_xml" && style != "cohere_xml" &&
-          style != "kimi_k3_xml") {
+          style != "minimax_m3_xml" && style != "deepseek_xml" && style != "glm_xml" &&
+          style != "cohere_xml" && style != "kimi_k3_xml" && style != "deepseek_v4_1_xml") {
         return ResultErr<ISTError>(
-            "style must be \"json\", \"qwen_xml\", \"minimax_xml\", \"deepseek_xml\", "
-            "\"glm_xml\", \"cohere_xml\", or \"kimi_k3_xml\""
+            "style must be \"json\", \"qwen_xml\", \"minimax_xml\", \"minimax_m3_xml\", "
+            "\"deepseek_xml\", \"glm_xml\", \"cohere_xml\", \"kimi_k3_xml\", or "
+            "\"deepseek_v4_1_xml\""
         );
       }
     }

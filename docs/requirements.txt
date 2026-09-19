@@ -16,6 +16,7 @@ pillow
 pydantic
 sentencepiece
 setuptools==81.0.0
+setuptools-scm>=8.1
 sphinx>=8.2
 sphinx-autobuild
 sphinx-copybutton

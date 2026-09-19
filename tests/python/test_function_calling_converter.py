@@ -1,8 +1,10 @@
+import json
 import sys
 
 import pytest
 
 from xgrammar import Grammar
+from xgrammar.structural_tag import JSONSchemaFormat, StructuralTag
 from xgrammar.testing import (
     _get_matcher_from_grammar,
     _is_grammar_accept_string,
@@ -79,22 +81,22 @@ test_string_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", test_string_schema_input_str_accepted)
 def test_string_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=  [ \n\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= [ \n\r\t]* "<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" ""
+root ::=  [ \n\r\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
 
     schema = {
@@ -122,24 +124,24 @@ test_additional_properties_schema_input_str_accepted = (
 )
 def test_additional_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=  [ \n\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= [ \n\r\t]* "<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -164,24 +166,24 @@ test_not_required_properties_schema_input_str_accepted = (
 )
 def test_not_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::= ( [ \n\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0) | ("<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1) | "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>" root_part_1) [ \n\t]*) | [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::= ( [ \n\r\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0) | ("<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1) | "<parameter=" xml_variable_name ">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>" root_part_1) [ \n\r\t]*) | [ \n\r\t]*
 """
 
     schema = {
@@ -210,24 +212,24 @@ test_part_required_properties_schema_input_str_accepted = (
 )
 def test_part_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=  [ \n\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
 
     schema = {
@@ -255,22 +257,22 @@ test_inner_object_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", test_inner_object_schema_input_str_accepted)
 def test_inner_object_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"city\"" [ \n\t]* ":" [ \n\t]* basic_string ""
-root_prop_0 ::= "{" [ \n\t]* (("\"street\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_0)) [ \n\t]* "}"
-root ::=  [ \n\t]* (("<parameter=address>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" "")) [ \n\t]*
+root_prop_0_part_0 ::= [ \n\r\t]* "," [ \n\r\t]* "\"city\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string ""
+root_prop_0 ::= "{" [ \n\r\t]* (("\"street\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_0)) [ \n\r\t]* "}"
+root ::=  [ \n\r\t]* (("<parameter=address>" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</parameter>" "")) [ \n\r\t]*
 """
 
     schema = {
@@ -304,29 +306,29 @@ test_numbers_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", test_numbers_schema_input_str_accepted)
 def test_numbers_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_2 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_3 ::= "true" | "false"
-root_part_2_1 ::= [ \n\t]* "<parameter=is_student>" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
-root_part_2_2 ::= "" | [ \n\t]* "<parameter=is_student>" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
+root_part_2_1 ::= [ \n\r\t]* "<parameter=is_student>" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</parameter>" ""
+root_part_2_2 ::= "" | [ \n\r\t]* "<parameter=is_student>" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</parameter>" ""
 root_part_2_3 ::= ""
-root_part_1_1 ::= root_part_2_1 | [ \n\t]* "<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_2
-root_part_1_2 ::= root_part_2_2 | [ \n\t]* "<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_3
-root_part_0_1 ::= root_part_1_1 | [ \n\t]* "<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_2
-root ::=  [ \n\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0_1) | ("<parameter=age>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_1) | ("<parameter=ID>" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_1)) [ \n\t]*
+root_part_1_1 ::= root_part_2_1 | [ \n\r\t]* "<parameter=ID>" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_2
+root_part_1_2 ::= root_part_2_2 | [ \n\r\t]* "<parameter=ID>" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_3
+root_part_0_1 ::= root_part_1_1 | [ \n\r\t]* "<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1_2
+root ::=  [ \n\r\t]* (("<parameter=name>" xml_string "</parameter>" root_part_0_1) | ("<parameter=age>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1_1) | ("<parameter=ID>" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_1)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -380,26 +382,26 @@ test_string_format_length_schema_input_str_accepted = {
 @pytest.mark.parametrize("input_str, accepted", test_string_format_length_schema_input_str_accepted)
 def test_string_format_length_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0 ::= [^]{1,}
 root_prop_1_prop_0 ::= "\"" Regex("[0-9]{5}$", json_string=true) "\""
 root_prop_1_prop_1 ::= "\"" ( ( [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ ( "." [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ )* ) | "\\" "\"" ( "\\" [ -~] | [ !#-[\]-~] )* "\\" "\"" ) "@" ( [A-Za-z0-9] ( [\-A-Za-z0-9]* [A-Za-z0-9] )? ) ( ( "." [A-Za-z0-9] [\-A-Za-z0-9]* [A-Za-z0-9] )* ) "\""
-root_prop_1_part_0 ::= [ \n\t]* "," [ \n\t]* "\"email\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_1 ""
-root_prop_1 ::= "{" [ \n\t]* (("\"phone\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_0 root_prop_1_part_0)) [ \n\t]* "}"
-root_part_0 ::= [ \n\t]* "<parameter=contact_info>" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=  [ \n\t]* (("<parameter=name>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
+root_prop_1_part_0 ::= [ \n\r\t]* "," [ \n\r\t]* "\"email\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1_prop_1 ""
+root_prop_1 ::= "{" [ \n\r\t]* (("\"phone\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1_prop_0 root_prop_1_part_0)) [ \n\r\t]* "}"
+root_part_0 ::= [ \n\r\t]* "<parameter=contact_info>" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" ""
+root ::=  [ \n\r\t]* (("<parameter=name>" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -431,21 +433,21 @@ test_array_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", test_array_schema_input_str_accepted)
 def test_array_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter=" xml_variable_name ">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter=" xml_variable_name ">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
-root_prop_0 ::= (("[" [ \n\t]* basic_string ([ \n\t]* "," [ \n\t]* basic_string)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-root ::=  [ \n\t]* (("<parameter=array>" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" "")) [ \n\t]*
+root_prop_0 ::= (("[" [ \n\r\t]* basic_string ([ \n\r\t]* "," [ \n\r\t]* basic_string)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+root ::=  [ \n\r\t]* (("<parameter=array>" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</parameter>" "")) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -476,22 +478,22 @@ minimax_test_string_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", minimax_test_string_schema_input_str_accepted)
 def test_minimax_string_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=  [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" ""
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
 
     schema = {
@@ -519,24 +521,24 @@ minimax_test_additional_properties_schema_input_str_accepted = (
 )
 def test_minimax_additional_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=  [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -561,24 +563,24 @@ minimax_test_not_required_properties_schema_input_str_accepted = (
 )
 def test_minimax_not_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::= ( [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0) | ("<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1) | "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>" root_part_1) [ \n\t]*) | [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::= ( [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0) | ("<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1) | "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>" root_part_1) [ \n\r\t]*) | [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -609,24 +611,24 @@ minimax_test_part_required_properties_schema_input_str_accepted = (
 )
 def test_minimax_part_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1
-root ::=  [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -664,27 +666,27 @@ minimax_test_inner_object_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", minimax_test_inner_object_schema_input_str_accepted)
 def test_minimax_inner_object_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-root_prop_0_addl_key ::= ["] (("\"" | [^cs\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "c" ("\"" | [^i\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "i" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^y\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "y" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))) | "s" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))))))) (= [ \n\t]* [,}\]:])
-root_prop_0_part_1 ::= ([ \n\t]* "," [ \n\t]* root_prop_0_addl_key [ \n\t]* ":" [ \n\t]* root_prop_0_addl)*
-root_prop_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"city\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_1
-root_prop_0 ::= "{" [ \n\t]* (("\"street\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_0)) [ \n\t]* "}"
+root_prop_0_addl_key ::= ["] (("\"" | [^cs\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "c" ("\"" | [^i\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "i" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^y\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "y" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))) | "s" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))))))) (= [ \n\r\t]* [,}\]:])
+root_prop_0_part_1 ::= ([ \n\r\t]* "," [ \n\r\t]* root_prop_0_addl_key [ \n\r\t]* ":" [ \n\r\t]* root_prop_0_addl)*
+root_prop_0_part_0 ::= [ \n\r\t]* "," [ \n\r\t]* "\"city\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_1
+root_prop_0 ::= "{" [ \n\r\t]* (("\"street\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_0)) [ \n\r\t]* "}"
 root_addl ::= xml_string | basic_array | basic_object
-root_part_0 ::= ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* root_addl [ \n\t]* "</parameter>")*
-root ::=  [ \n\t]* (("<parameter name=\"address\">" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</parameter>")*
+root ::=  [ \n\r\t]* (("<parameter name=\"address\">" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -719,29 +721,29 @@ minimax_test_numbers_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", minimax_test_numbers_schema_input_str_accepted)
 def test_minimax_numbers_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_2 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_3 ::= "true" | "false"
-root_part_2_1 ::= [ \n\t]* "<parameter name=\"is_student\">" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
-root_part_2_2 ::= "" | [ \n\t]* "<parameter name=\"is_student\">" [ \n\t]* root_prop_3 [ \n\t]* "</parameter>" ""
+root_part_2_1 ::= [ \n\r\t]* "<parameter name=\"is_student\">" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</parameter>" ""
+root_part_2_2 ::= "" | [ \n\r\t]* "<parameter name=\"is_student\">" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</parameter>" ""
 root_part_2_3 ::= ""
-root_part_1_1 ::= root_part_2_1 | [ \n\t]* "<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_2
-root_part_1_2 ::= root_part_2_2 | [ \n\t]* "<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_3
-root_part_0_1 ::= root_part_1_1 | [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_2
-root ::=  [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0_1) | ("<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" root_part_1_1) | ("<parameter name=\"ID\">" [ \n\t]* root_prop_2 [ \n\t]* "</parameter>" root_part_2_1)) [ \n\t]*
+root_part_1_1 ::= root_part_2_1 | [ \n\r\t]* "<parameter name=\"ID\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_2
+root_part_1_2 ::= root_part_2_2 | [ \n\r\t]* "<parameter name=\"ID\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_3
+root_part_0_1 ::= root_part_1_1 | [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1_2
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0_1) | ("<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" root_part_1_1) | ("<parameter name=\"ID\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</parameter>" root_part_2_1)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -799,26 +801,26 @@ minimax_test_string_format_length_schema_input_str_accepted = (
 )
 def test_minimax_string_format_length_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0 ::= [^]{1,}
 root_prop_1_prop_0 ::= "\"" Regex("[0-9]{5}$", json_string=true) "\""
 root_prop_1_prop_1 ::= "\"" ( ( [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ ( "." [a-zA-Z0-9_!#$%&'*+/=?^`{|}~-]+ )* ) | "\\" "\"" ( "\\" [ -~] | [ !#-[\]-~] )* "\\" "\"" ) "@" ( [A-Za-z0-9] ( [\-A-Za-z0-9]* [A-Za-z0-9] )? ) ( ( "." [A-Za-z0-9] [\-A-Za-z0-9]* [A-Za-z0-9] )* ) "\""
-root_prop_1_part_0 ::= [ \n\t]* "," [ \n\t]* "\"email\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_1 ""
-root_prop_1 ::= "{" [ \n\t]* (("\"phone\"" [ \n\t]* ":" [ \n\t]* root_prop_1_prop_0 root_prop_1_part_0)) [ \n\t]* "}"
-root_part_0 ::= [ \n\t]* "<parameter name=\"contact_info\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=  [ \n\t]* (("<parameter name=\"name\">" [ \n\t]* root_prop_0 [ \n\t]* "</parameter>" root_part_0)) [ \n\t]*
+root_prop_1_part_0 ::= [ \n\r\t]* "," [ \n\r\t]* "\"email\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1_prop_1 ""
+root_prop_1 ::= "{" [ \n\r\t]* (("\"phone\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1_prop_0 root_prop_1_part_0)) [ \n\r\t]* "}"
+root_part_0 ::= [ \n\r\t]* "<parameter name=\"contact_info\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" ""
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -858,22 +860,22 @@ minimax_reject_wrong_parameter_format_input_str_accepted = (
 def test_minimax_reject_wrong_parameter_format(input_str: str, accepted: bool):
     """MiniMax grammar must accept <parameter name=\"key\"> but reject <parameter=key> and <parameter name=key>."""
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>" ([ \n\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\t]* xml_any [ \n\t]* "</parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>" ([ \n\r\t]* "<parameter name=\"" xml_variable_name "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\t]* "<parameter name=\"age\">" [ \n\t]* root_prop_1 [ \n\t]* "</parameter>" ""
-root ::=  [ \n\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= [ \n\r\t]* "<parameter name=\"age\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</parameter>" ""
+root ::=  [ \n\r\t]* (("<parameter name=\"name\">" xml_string "</parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -927,22 +929,22 @@ deepseek_test_string_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", deepseek_test_string_schema_input_str_accepted)
 def test_deepseek_string_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" ""
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" ""
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -968,21 +970,21 @@ def test_deepseek_pattern_empty_leading_alternative(input_str: str, accepted: bo
     # leading '|' (root_prop_0 ::= | ...) and crash the grammar parser on the deepseek_xml path.
     # It must now be emitted as root_prop_0 ::= "" | ...
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0 ::= "" | "h" "t" "t" "p" "s" ":" "/" "/" "x" "." "c" "o" "m" "/"
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"url\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_0 [ \n\t]* "</｜DSML｜parameter>" "")) [ \n\t]*
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"url\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</｜DSML｜parameter>" "")) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1015,24 +1017,24 @@ deepseek_test_additional_properties_schema_input_str_accepted = (
 )
 def test_deepseek_additional_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root_part_0 ::= [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
+root_part_0 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1063,24 +1065,24 @@ deepseek_test_not_required_properties_schema_input_str_accepted = (
 )
 def test_deepseek_not_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
-root ::= ( [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1) | "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>" root_part_1) [ \n\t]*) | [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1
+root ::= ( [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1) | "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>" root_part_1) [ \n\r\t]*) | [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1114,24 +1116,24 @@ deepseek_test_part_required_properties_schema_input_str_accepted = (
 )
 def test_deepseek_part_required_properties_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_addl ::= xml_string | basic_array | basic_object
-root_part_1 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root_part_0 ::= root_part_1 | [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
+root_part_1 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
+root_part_0 ::= root_part_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1183,27 +1185,27 @@ deepseek_test_inner_object_schema_input_str_accepted = (
 )
 def test_deepseek_inner_object_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_0_addl ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
-root_prop_0_addl_key ::= ["] (("\"" | [^cs\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "c" ("\"" | [^i\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "i" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^y\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "y" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))) | "s" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))))))) (= [ \n\t]* [,}\]:])
-root_prop_0_part_1 ::= ([ \n\t]* "," [ \n\t]* root_prop_0_addl_key [ \n\t]* ":" [ \n\t]* root_prop_0_addl)*
-root_prop_0_part_0 ::= [ \n\t]* "," [ \n\t]* "\"city\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_1
-root_prop_0 ::= "{" [ \n\t]* (("\"street\"" [ \n\t]* ":" [ \n\t]* basic_string root_prop_0_part_0)) [ \n\t]* "}"
+root_prop_0_addl_key ::= ["] (("\"" | [^cs\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "c" ("\"" | [^i\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "i" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^y\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "y" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))) | "s" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ("\"" | [^r\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "r" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^e\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "e" ("\"" | [^t\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub | "t" ([^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub)))))))) (= [ \n\r\t]* [,}\]:])
+root_prop_0_part_1 ::= ([ \n\r\t]* "," [ \n\r\t]* root_prop_0_addl_key [ \n\r\t]* ":" [ \n\r\t]* root_prop_0_addl)*
+root_prop_0_part_0 ::= [ \n\r\t]* "," [ \n\r\t]* "\"city\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_1
+root_prop_0 ::= "{" [ \n\r\t]* (("\"street\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_prop_0_part_0)) [ \n\r\t]* "}"
 root_addl ::= xml_string | basic_array | basic_object
-root_part_0 ::= ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* root_addl [ \n\t]* "</｜DSML｜parameter>")*
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"address\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_0 [ \n\t]* "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_addl [ \n\r\t]* "</｜DSML｜parameter>")*
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"address\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_0 [ \n\r\t]* "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1241,29 +1243,29 @@ deepseek_test_numbers_schema_input_str_accepted = (
 @pytest.mark.parametrize("input_str, accepted", deepseek_test_numbers_schema_input_str_accepted)
 def test_deepseek_numbers_schema(input_str: str, accepted: bool):
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_2 ::= ("0" | "-"? [1-9] [0-9]*)
 root_prop_3 ::= "true" | "false"
-root_part_2_1 ::= [ \n\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</｜DSML｜parameter>" ""
-root_part_2_2 ::= "" | [ \n\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_3 [ \n\t]* "</｜DSML｜parameter>" ""
+root_part_2_1 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</｜DSML｜parameter>" ""
+root_part_2_2 ::= "" | [ \n\r\t]* "<｜DSML｜parameter name=\"is_student\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_3 [ \n\r\t]* "</｜DSML｜parameter>" ""
 root_part_2_3 ::= ""
-root_part_1_1 ::= root_part_2_1 | [ \n\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_2
-root_part_1_2 ::= root_part_2_2 | [ \n\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_3
-root_part_0_1 ::= root_part_1_1 | [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1_2
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0_1) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" root_part_1_1) | ("<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_2 [ \n\t]* "</｜DSML｜parameter>" root_part_2_1)) [ \n\t]*
+root_part_1_1 ::= root_part_2_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</｜DSML｜parameter>" root_part_2_2
+root_part_1_2 ::= root_part_2_2 | [ \n\r\t]* "<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</｜DSML｜parameter>" root_part_2_3
+root_part_0_1 ::= root_part_1_1 | [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1_2
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0_1) | ("<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" root_part_1_1) | ("<｜DSML｜parameter name=\"ID\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_2 [ \n\r\t]* "</｜DSML｜parameter>" root_part_2_1)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1299,22 +1301,22 @@ deepseek_reject_wrong_parameter_format_input_str_accepted = (
 def test_deepseek_reject_wrong_parameter_format(input_str: str, accepted: bool):
     """DeepSeek grammar must accept <｜DSML｜parameter name=\"key\" string=\"true|false\">, reject Qwen and Minimax formats."""
     expected_grammar = r"""basic_escape ::= ["\\/bfnrt] | "u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]
-basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\t]* [,}\]:])
+basic_string_sub ::= ("\"" | [^\0-\x1f\"\\\r\n] basic_string_sub | "\\" basic_escape basic_string_sub) (= [ \n\r\t]* [,}\]:])
 basic_any ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 basic_integer ::= ("0" | "-"? [1-9] [0-9]*)
 basic_number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 basic_string ::= ["] basic_string_sub
 basic_boolean ::= "true" | "false"
 basic_null ::= "null"
-basic_array ::= (("[" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_any)* [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= ("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any ([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any)* [ \n\t]* "}") | "{" [ \n\t]* "}"
+basic_array ::= (("[" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_any)* [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= ("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any ([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any)* [ \n\r\t]* "}") | "{" [ \n\r\t]* "}"
 xml_string ::= TagDispatch(loop_after_dispatch=false,excludes=("</｜DSML｜parameter>"))
 xml_any ::= xml_string | basic_array | basic_object
-xml_object ::= ( [ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>" ([ \n\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\t]* xml_any [ \n\t]* "</｜DSML｜parameter>")* [ \n\t]*) | [ \n\t]*
+xml_object ::= ( [ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>" ([ \n\r\t]* "<｜DSML｜parameter name=\"" xml_variable_name "\" string=\"" ("true" | "false") "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</｜DSML｜parameter>")* [ \n\r\t]*) | [ \n\r\t]*
 xml_variable_name ::= [a-zA-Z_][a-zA-Z0-9_]*
 root_prop_1 ::= ("0" | "-"? [1-9] [0-9]*)
-root_part_0 ::= [ \n\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\t]* root_prop_1 [ \n\t]* "</｜DSML｜parameter>" ""
-root ::=  [ \n\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\t]*
+root_part_0 ::= [ \n\r\t]* "<｜DSML｜parameter name=\"age\" string=\"" ("true" | "false") "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</｜DSML｜parameter>" ""
+root ::=  [ \n\r\t]* (("<｜DSML｜parameter name=\"name\" string=\"" ("true" | "false") "\">" xml_string "</｜DSML｜parameter>" root_part_0)) [ \n\r\t]*
 """
     schema = {
         "type": "object",
@@ -1476,8 +1478,8 @@ def test_cohere_nested_dict_and_list_values():
     _check_cohere_grammar(schema, named_list_item, False)
 
 
-def test_cohere_additional_properties_do_not_match_declared_keys():
-    """Additional Cohere properties cannot reuse names declared in properties."""
+def test_cohere_additional_properties_with_declared_keys():
+    """Additional properties support Cohere keys without reusing declared names."""
     schema = {
         "type": "object",
         "properties": {"foo": {"type": "integer"}},
@@ -1485,33 +1487,106 @@ def test_cohere_additional_properties_do_not_match_declared_keys():
         "additionalProperties": {"type": "string"},
     }
 
-    _check_cohere_grammar(schema, '<cofl:value name="foo" type="json">1</cofl:value>', True)
-    _check_cohere_grammar(
-        schema,
+    accepted = (
         '<cofl:value name="foo" type="json">1</cofl:value>'
-        '<cofl:value name="bar" type="raw">extra</cofl:value>',
-        True,
+        '<cofl:value name="x" type="raw">one unit</cofl:value>'
+        '<cofl:value name="extra-key" type="raw">ordinary suffix</cofl:value>'
+        '<cofl:value name="&amp;x" type="raw">entity suffix</cofl:value>'
     )
+    _check_cohere_grammar(schema, accepted, True)
     _check_cohere_grammar(schema, '<cofl:value name="foo" type="raw">wrong</cofl:value>', False)
 
 
-_COHERE_ARBITRARY_JSON_CASES = (
-    # Scalar JSON values.
-    pytest.param("text", '"extra"', id="string"),
-    pytest.param("count", "2", id="number"),
-    pytest.param("enabled", "true", id="boolean"),
-    pytest.param("nothing", "null", id="null"),
-    # Composite JSON values remain serialized inside type="json".
-    pytest.param("items", '[1, "two"]', id="array"),
-    pytest.param("metadata", '{"id": 2}', id="object"),
+@pytest.mark.parametrize(
+    "serialized_key, accepted",
+    (
+        pytest.param("my-key", True, id="hyphen"),
+        pytest.param("a.b", True, id="period"),
+        pytest.param("0", True, id="leading-digit"),
+        pytest.param("日本語", True, id="unicode"),
+        pytest.param("a&amp;b", True, id="escaped-ampersand"),
+        pytest.param("a&lt;b", True, id="escaped-less-than"),
+        pytest.param("a&gt;b", True, id="escaped-greater-than"),
+        pytest.param("a&quot;b", True, id="escaped-quote"),
+        pytest.param("", False, id="empty"),
+        pytest.param("a&b", False, id="unescaped-ampersand"),
+        pytest.param("a<b", False, id="unescaped-less-than"),
+        pytest.param("a>b", False, id="unescaped-greater-than"),
+        pytest.param("a&ampb", False, id="incomplete-entity"),
+        pytest.param("a\0b", False, id="embedded-null"),
+    ),
+)
+def test_cohere_nested_any_dynamic_attribute_keys(serialized_key: str, accepted: bool):
+    """Nested Any dictionaries accept only canonical, nonempty XML attribute keys."""
+    schema = {
+        "type": "object",
+        "properties": {"meta": True},
+        "required": ["meta"],
+        "additionalProperties": False,
+    }
+    instance = (
+        '<cofl:value name="meta" type="dict">'
+        f'<cofl:value name="{serialized_key}" type="json">1</cofl:value>'
+        "</cofl:value>"
+    )
+
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+@pytest.mark.parametrize(
+    "declared_key, serialized_key",
+    (
+        pytest.param("my-key", "my-key", id="hyphen"),
+        pytest.param("a.b", "a.b", id="period"),
+        pytest.param("0", "0", id="leading-digit"),
+        pytest.param("日本語", "日本語", id="unicode"),
+        pytest.param("a&b", "a&amp;b", id="escaped-ampersand"),
+        pytest.param("a<b", "a&lt;b", id="escaped-less-than"),
+        pytest.param("a>b", "a&gt;b", id="escaped-greater-than"),
+        pytest.param('a"b', "a&quot;b", id="escaped-quote"),
+    ),
+)
+def test_cohere_additional_properties_exclude_nonidentifier_declared_keys(
+    declared_key: str, serialized_key: str
+):
+    """Declared non-identifier keys are serialized and excluded from additional properties."""
+    schema = {
+        "type": "object",
+        "properties": {declared_key: {"type": "integer"}},
+        "required": [declared_key],
+        "additionalProperties": {"type": "string"},
+    }
+
+    _check_cohere_grammar(
+        schema, f'<cofl:value name="{serialized_key}" type="json">1</cofl:value>', True
+    )
+    _check_cohere_grammar(
+        schema, f'<cofl:value name="{serialized_key}" type="raw">wrong</cofl:value>', False
+    )
+
+
+_COHERE_CANONICAL_ANY_CASES = (
+    pytest.param("text", "raw", "extra", id="string"),
+    pytest.param("count", "json", "2", id="number"),
+    pytest.param("enabled", "json", "true", id="boolean"),
+    pytest.param("nothing", "json", "null", id="null"),
+    pytest.param(
+        "items",
+        "list",
+        '<cofl:value type="json">1</cofl:value>' '<cofl:value type="raw">two</cofl:value>',
+        id="array",
+    ),
+    pytest.param(
+        "metadata", "dict", '<cofl:value name="id" type="json">2</cofl:value>', id="object"
+    ),
 )
 
 
-@pytest.mark.parametrize("property_name, json_value", _COHERE_ARBITRARY_JSON_CASES)
-def test_cohere_additional_properties_true_accepts_arbitrary_json_values(
-    property_name: str, json_value: str
+@pytest.mark.parametrize("property_name, value_type, body", _COHERE_CANONICAL_ANY_CASES)
+def test_cohere_additional_properties_true_accepts_canonical_any_values(
+    property_name: str, value_type: str, body: str
 ):
-    """Unconstrained Cohere properties accept any JSON value through type=json."""
+    """Unconstrained dynamic properties recursively use canonical Cohere wrappers."""
     schema = {
         "type": "object",
         "properties": {"foo": {"type": "integer"}},
@@ -1520,12 +1595,303 @@ def test_cohere_additional_properties_true_accepts_arbitrary_json_values(
     }
     declared_property = '<cofl:value name="foo" type="json">1</cofl:value>'
     additional_property = (
-        f'<cofl:value name="{property_name}" type="json">{json_value}</cofl:value>'
+        f'<cofl:value name="{property_name}" type="{value_type}">{body}</cofl:value>'
     )
-    wrong_wrapper = f'<cofl:value name="{property_name}" type="raw">{json_value}</cofl:value>'
 
     _check_cohere_grammar(schema, declared_property + additional_property, True)
-    _check_cohere_grammar(schema, declared_property + wrong_wrapper, False)
+
+
+_COHERE_ROOT_ANY_INSTANCE = (
+    '<cofl:value name="text" type="raw">hello</cofl:value>'
+    '<cofl:value name="nested" type="dict">'
+    '<cofl:value name="items" type="list">'
+    '<cofl:value type="json">1</cofl:value>'
+    "</cofl:value>"
+    "</cofl:value>"
+)
+
+
+@pytest.mark.parametrize(
+    "schema", (pytest.param("true", id="true"), pytest.param({}, id="empty-schema"))
+)
+@pytest.mark.parametrize(
+    "instance, accepted",
+    (
+        pytest.param("", True, id="empty-object"),
+        pytest.param(_COHERE_ROOT_ANY_INSTANCE, True, id="populated-object"),
+        pytest.param(
+            f'<cofl:value type="dict">{_COHERE_ROOT_ANY_INSTANCE}</cofl:value>',
+            False,
+            id="outer-dict-wrapper",
+        ),
+    ),
+)
+def test_cohere_root_any_is_unrestricted_object_body(schema, instance: str, accepted: bool):
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+@pytest.mark.parametrize(
+    "instance, accepted",
+    (
+        ('<cofl:value name="value" type="raw">text</cofl:value>', True),
+        ('<cofl:value name="value" type="json">2.5</cofl:value>', True),
+        ('<cofl:value name="value" type="json">false</cofl:value>', True),
+        ('<cofl:value name="value" type="json">null</cofl:value>', True),
+        ('<cofl:value name="value" type="dict"></cofl:value>', True),
+        (
+            '<cofl:value name="value" type="dict">'
+            '<cofl:value name="items" type="list">'
+            '<cofl:value type="raw">first</cofl:value>'
+            '<cofl:value type="dict">'
+            '<cofl:value name="enabled" type="json">true</cofl:value>'
+            "</cofl:value>"
+            "</cofl:value>"
+            "</cofl:value>",
+            True,
+        ),
+        ('<cofl:value name="value" type="list"></cofl:value>', True),
+        (
+            '<cofl:value name="value" type="list">'
+            '<cofl:value type="dict">'
+            '<cofl:value name="inner" type="list">'
+            '<cofl:value type="dict">'
+            '<cofl:value name="leaf" type="raw">done</cofl:value>'
+            "</cofl:value>"
+            "</cofl:value>"
+            "</cofl:value>"
+            "</cofl:value>",
+            True,
+        ),
+        ('<cofl:value name="value" type="json">"text"</cofl:value>', False),
+        ('<cofl:value name="value" type="json">{"id":2}</cofl:value>', False),
+        ('<cofl:value name="value" type="json">[1,2]</cofl:value>', False),
+        (
+            '<cofl:value name="value" type="list">'
+            '<cofl:value name="item" type="raw">text</cofl:value>'
+            "</cofl:value>",
+            False,
+        ),
+        (
+            '<cofl:value name="value" type="dict">'
+            '<cofl:value type="raw">text</cofl:value>'
+            "</cofl:value>",
+            False,
+        ),
+    ),
+)
+def test_cohere_nested_property_true_uses_correlated_any_wrappers(instance: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {"value": True},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+@pytest.mark.parametrize(
+    "instance, accepted",
+    (
+        pytest.param('<cofl:value name="value" type="raw">text</cofl:value>', True, id="raw"),
+        pytest.param(
+            '<cofl:value name="value" type="list">'
+            '<cofl:value type="dict"></cofl:value>'
+            "</cofl:value>",
+            True,
+            id="recursive-list",
+        ),
+        pytest.param(
+            '<cofl:value name="value" type="json">"text"</cofl:value>',
+            False,
+            id="quoted-string-under-json",
+        ),
+    ),
+)
+def test_cohere_nested_property_empty_schema_uses_correlated_any_wrappers(
+    instance: str, accepted: bool
+):
+    schema = {
+        "type": "object",
+        "properties": {"value": {}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+def test_cohere_any_supports_deep_recursive_container_references():
+    schema = {
+        "type": "object",
+        "properties": {"value": True},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    unnamed_dict = (
+        '<cofl:value type="dict">'
+        '<cofl:value name="leaf" type="json">null</cofl:value>'
+        "</cofl:value>"
+    )
+    for _ in range(32):
+        unnamed_dict = (
+            '<cofl:value type="dict">'
+            '<cofl:value name="child" type="list">'
+            f"{unnamed_dict}"
+            "</cofl:value>"
+            "</cofl:value>"
+        )
+    instance = f'<cofl:value name="value" type="list">{unnamed_dict}</cofl:value>'
+
+    _check_cohere_grammar(schema, instance, True)
+
+
+@pytest.mark.parametrize(
+    "instance, accepted",
+    (
+        pytest.param(
+            '<cofl:value name="values" type="list">'
+            '<cofl:value type="raw">text</cofl:value>'
+            '<cofl:value type="json">3</cofl:value>'
+            '<cofl:value type="dict"></cofl:value>'
+            '<cofl:value type="list"></cofl:value>'
+            "</cofl:value>",
+            True,
+            id="unnamed-items",
+        ),
+        pytest.param(
+            '<cofl:value name="values" type="list">'
+            '<cofl:value name="0" type="raw">text</cofl:value>'
+            "</cofl:value>",
+            False,
+            id="named-item",
+        ),
+    ),
+)
+def test_cohere_array_items_true_use_unnamed_correlated_any_wrappers(instance: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {"values": {"type": "array", "items": True}},
+        "required": ["values"],
+        "additionalProperties": False,
+    }
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+@pytest.mark.parametrize(
+    "instance, accepted",
+    (
+        pytest.param(
+            '<cofl:value name="values" type="list">'
+            '<cofl:value type="list">'
+            '<cofl:value type="dict">'
+            '<cofl:value name="leaf" type="null"></cofl:value>'
+            "</cofl:value>"
+            "</cofl:value>"
+            "</cofl:value>",
+            False,
+            id="invalid-null-type",
+        ),
+        pytest.param(
+            '<cofl:value name="values" type="list">'
+            '<cofl:value type="list">'
+            '<cofl:value type="dict">'
+            '<cofl:value name="leaf" type="json">null</cofl:value>'
+            "</cofl:value>"
+            "</cofl:value>"
+            "</cofl:value>",
+            True,
+            id="recursive-values",
+        ),
+    ),
+)
+def test_cohere_array_items_empty_schema_use_unnamed_recursive_values(
+    instance: str, accepted: bool
+):
+    schema = {
+        "type": "object",
+        "properties": {"values": {"type": "array", "items": {}}},
+        "required": ["values"],
+        "additionalProperties": False,
+    }
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+@pytest.mark.parametrize(
+    "instance, accepted",
+    (
+        pytest.param('<cofl:value name="value" type="raw">text</cofl:value>', True, id="raw"),
+        pytest.param(
+            '<cofl:value name="value" type="dict">'
+            '<cofl:value name="items" type="list"></cofl:value>'
+            "</cofl:value>",
+            True,
+            id="recursive-dict",
+        ),
+        pytest.param(
+            '<cofl:value name="value" type="json">{"items":[]}</cofl:value>',
+            False,
+            id="serialized-dict",
+        ),
+    ),
+)
+def test_cohere_ref_resolving_to_any_uses_correlated_wrappers(instance: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "$defs": {"Value": {}},
+        "properties": {"value": {"$ref": "#/$defs/Value"}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+@pytest.mark.parametrize(
+    "instance, accepted",
+    (
+        pytest.param('<cofl:value name="value" type="raw">text</cofl:value>', True, id="raw"),
+        pytest.param('<cofl:value name="value" type="json">2</cofl:value>', True, id="scalar"),
+        pytest.param('<cofl:value name="value" type="list"></cofl:value>', True, id="list"),
+        pytest.param(
+            '<cofl:value name="value" type="json">[2]</cofl:value>', False, id="serialized-list"
+        ),
+    ),
+)
+def test_cohere_any_inside_composite_uses_correlated_wrappers(instance: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {"value": {"anyOf": [True, {"type": "integer", "minimum": 10}]}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+@pytest.mark.parametrize(
+    "instance, accepted",
+    (
+        pytest.param('<cofl:value name="value" type="raw">text</cofl:value>', True, id="raw"),
+        pytest.param('<cofl:value name="value" type="json">2</cofl:value>', True, id="scalar"),
+        pytest.param(
+            '<cofl:value name="value" type="dict">'
+            '<cofl:value name="nested" type="list"></cofl:value>'
+            "</cofl:value>",
+            True,
+            id="recursive-dict",
+        ),
+        pytest.param(
+            '<cofl:value name="value" type="json">{"nested":[]}</cofl:value>',
+            False,
+            id="serialized-dict",
+        ),
+    ),
+)
+def test_cohere_multi_all_of_any_fallback_uses_correlated_wrappers(instance: str, accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {"value": {"allOf": [{"type": "string"}, {"type": "integer"}]}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    _check_cohere_grammar(schema, instance, accepted)
 
 
 def test_cohere_additional_properties_support_nested_schema():
@@ -1668,11 +2034,13 @@ def test_cohere_nested_pattern_properties():
     _check_cohere_grammar(schema, accepted.replace("item_name", "other"), False)
 
 
-@pytest.mark.parametrize("property_name, json_value", _COHERE_ARBITRARY_JSON_CASES)
-def test_cohere_property_names_accept_arbitrary_json_values(property_name: str, json_value: str):
-    """Property-name constraints leave Cohere values unconstrained JSON."""
+@pytest.mark.parametrize("property_name, value_type, body", _COHERE_CANONICAL_ANY_CASES)
+def test_cohere_property_names_accept_canonical_any_values(
+    property_name: str, value_type: str, body: str
+):
+    """Property-name constraints leave Cohere values canonically unconstrained."""
     schema = {"type": "object", "propertyNames": {"pattern": "^[a-z_]+$"}}
-    instance = f'<cofl:value name="{property_name}" type="json">{json_value}</cofl:value>'
+    instance = f'<cofl:value name="{property_name}" type="{value_type}">{body}</cofl:value>'
 
     _check_cohere_grammar(schema, instance, True)
 
@@ -1680,8 +2048,10 @@ def test_cohere_property_names_accept_arbitrary_json_values(property_name: str, 
 @pytest.mark.parametrize(
     "instance",
     (
-        pytest.param('<cofl:value name="Bad" type="json">"extra"</cofl:value>', id="invalid-name"),
-        pytest.param('<cofl:value name="text" type="raw">extra</cofl:value>', id="wrong-wrapper"),
+        pytest.param('<cofl:value name="Bad" type="raw">extra</cofl:value>', id="invalid-name"),
+        pytest.param(
+            '<cofl:value name="text" type="json">"extra"</cofl:value>', id="wrong-wrapper"
+        ),
     ),
 )
 def test_cohere_property_names_reject_invalid_name_or_wrapper(instance: str):
@@ -1690,8 +2060,80 @@ def test_cohere_property_names_reject_invalid_name_or_wrapper(instance: str):
     _check_cohere_grammar(schema, instance, False)
 
 
+@pytest.mark.parametrize("keyword", ["additionalProperties", "unevaluatedProperties"])
+@pytest.mark.parametrize("nested", [False, True], ids=["root", "nested"])
+@pytest.mark.parametrize(
+    "body, accepted",
+    [
+        ("123", True),
+        ("-1", True),
+        ("oops", False),
+        ("1.5", False),
+        ("true", False),
+        ('"oops"', False),
+    ],
+)
+def test_cohere_property_names_preserve_integer_body(
+    keyword: str, nested: bool, body: str, accepted: bool
+):
+    """A json wrapper must use the typed value rule, not the aggregate XML Any body."""
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z]+$"},
+        keyword: {"type": "integer"},
+    }
+    instance = f'<cofl:value name="a" type="json">{body}</cofl:value>'
+    if nested:
+        schema = {
+            "type": "object",
+            "properties": {"config": schema},
+            "required": ["config"],
+            "additionalProperties": False,
+        }
+        instance = f'<cofl:value name="config" type="dict">{instance}</cofl:value>'
+
+    _check_cohere_grammar(schema, instance, accepted)
+
+
+@pytest.mark.parametrize(
+    "value_schema, value_type, valid_body, invalid_body",
+    [
+        ({"type": "integer", "minimum": 1}, "json", "1", "0"),
+        ({"type": "string", "pattern": "^[a-z]+$"}, "raw", "hello", "123"),
+        (
+            {"type": "array", "items": {"type": "integer"}},
+            "list",
+            '<cofl:value type="json">1</cofl:value>',
+            '<cofl:value type="json">1.5</cofl:value>',
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"id": {"type": "integer"}},
+                "required": ["id"],
+                "additionalProperties": False,
+            },
+            "dict",
+            '<cofl:value name="id" type="json">1</cofl:value>',
+            "",
+        ),
+    ],
+)
+def test_cohere_property_names_preserve_value_constraints(
+    value_schema: dict, value_type: str, valid_body: str, invalid_body: str
+):
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z]+$"},
+        "additionalProperties": value_schema,
+    }
+    for body, accepted in [(valid_body, True), (invalid_body, False)]:
+        instance = f'<cofl:value name="a" type="{value_type}">{body}</cofl:value>'
+        _check_cohere_grammar(schema, instance, accepted)
+
+
 def test_cohere_nested_property_names():
-    """Nested Cohere dictionaries retain property-name constraints and JSON values."""
+    """Nested Cohere dictionaries retain property-name constraints and canonical values."""
     schema = {
         "type": "object",
         "properties": {"config": {"type": "object", "propertyNames": {"pattern": "^item_[a-z]+$"}}},
@@ -1699,7 +2141,9 @@ def test_cohere_nested_property_names():
     }
     accepted = (
         '<cofl:value name="config" type="dict">'
-        '<cofl:value name="item_data" type="json">{"id": 1}</cofl:value>'
+        '<cofl:value name="item_data" type="dict">'
+        '<cofl:value name="id" type="json">1</cofl:value>'
+        "</cofl:value>"
         "</cofl:value>"
     )
 
@@ -2329,7 +2773,150 @@ def test_cohere_resolves_chained_recursive_ref():
     )
 
 
+@pytest.mark.parametrize("keyword", ["anyOf", "oneOf"])
+@pytest.mark.parametrize("property_kind", ["named", "additional", "pattern", "list_item"])
+def test_cohere_recursive_parameter_references(keyword: str, property_kind: str):
+    """A union that refers back to itself renders once and terminates."""
+    value_schema = {"$ref": "#/$defs/V"}
+    schema = {"type": "object", "$defs": {"V": {keyword: [{"type": "string"}, value_schema]}}}
+    if property_kind == "named":
+        schema.update(
+            properties={"value_1": value_schema, "value_2": value_schema},
+            required=["value_1", "value_2"],
+            additionalProperties=False,
+        )
+        accepted = (
+            '<cofl:value name="value_1" type="raw">hello</cofl:value>'
+            '<cofl:value name="value_2" type="raw">hello</cofl:value>'
+        )
+    elif property_kind == "additional":
+        schema["additionalProperties"] = value_schema
+        accepted = (
+            '<cofl:value name="value_1" type="raw">hello</cofl:value>'
+            '<cofl:value name="value_2" type="raw">hello</cofl:value>'
+        )
+    elif property_kind == "pattern":
+        schema.update(patternProperties={"^value_[12]$": value_schema}, additionalProperties=False)
+        accepted = (
+            '<cofl:value name="value_1" type="raw">hello</cofl:value>'
+            '<cofl:value name="value_2" type="raw">hello</cofl:value>'
+        )
+    else:
+        schema.update(
+            properties={"values": {"type": "array", "items": value_schema}},
+            required=["values"],
+            additionalProperties=False,
+        )
+        accepted = (
+            '<cofl:value name="values" type="list">'
+            '<cofl:value type="raw">hello</cofl:value>'
+            '<cofl:value type="raw">hello</cofl:value>'
+            "</cofl:value>"
+        )
+    _check_cohere_grammar(schema, accepted, True)
+    _check_cohere_grammar(schema, accepted.replace('type="raw"', 'type="json"'), False)
+    _check_cohere_grammar(schema, accepted[:-1], False)
+
+
+@pytest.mark.parametrize(
+    "container, accepted",
+    [
+        (
+            {
+                "type": "object",
+                "properties": {"child": {"$ref": "#/$defs/T"}},
+                "required": ["child"],
+            },
+            '<cofl:value name="value" type="dict">'
+            '<cofl:value name="child" type="dict">'
+            '<cofl:value name="child" type="raw">leaf</cofl:value>'
+            "</cofl:value>"
+            "</cofl:value>",
+        ),
+        (
+            {"type": "array", "items": {"$ref": "#/$defs/T"}},
+            '<cofl:value name="value" type="list">'
+            '<cofl:value type="raw">leaf</cofl:value>'
+            '<cofl:value type="list"></cofl:value>'
+            "</cofl:value>",
+        ),
+    ],
+)
+def test_cohere_recursive_references_through_containers(container: dict, accepted: str):
+    """Recursion through nested dict or list items reuses the reference's parameter rule."""
+    schema = {
+        "type": "object",
+        "$defs": {"T": {"anyOf": [{"type": "string"}, container]}},
+        "properties": {"value": {"$ref": "#/$defs/T"}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    _check_cohere_grammar(schema, accepted, True)
+    _check_cohere_grammar(schema, '<cofl:value name="value" type="raw">leaf</cofl:value>', True)
+    _check_cohere_grammar(schema, '<cofl:value name="value" type="json">leaf</cofl:value>', False)
+
+
+def test_cohere_mutually_recursive_parameter_references():
+    """References that cycle through allOf and oneOf keep branch-correlated wrappers."""
+    schema = {
+        "type": "object",
+        "$defs": {
+            "V": {"anyOf": [{"const": "fixed"}, {"$ref": "#/$defs/Alias"}]},
+            "Alias": {"allOf": [{"$ref": "#/$defs/W"}]},
+            "W": {"oneOf": [{"type": "integer", "minimum": 1}, {"$ref": "#/$defs/V"}]},
+        },
+        "properties": {"first": {"$ref": "#/$defs/V"}, "second": {"$ref": "#/$defs/W"}},
+        "required": ["first", "second"],
+        "additionalProperties": False,
+    }
+    for value, type_attr, accepted in [
+        ("fixed", "raw", True),
+        ("2", "json", True),
+        ("fixed", "json", False),
+        ("2", "raw", False),
+        ("0", "json", False),
+    ]:
+        instance = "".join(
+            f'<cofl:value name="{name}" type="{type_attr}">{value}</cofl:value>'
+            for name in ["first", "second"]
+        )
+        _check_cohere_grammar(schema, instance, accepted)
+
+
+def test_cohere_shared_parameter_references_have_linear_grammar_size():
+    rule_counts = []
+    for num_defs in [12, 24]:
+        definitions = {"V0": {"const": "fixed"}, "V1": {"type": "integer", "minimum": 1}}
+        for index in range(2, num_defs):
+            definitions[f"V{index}"] = {
+                "anyOf": [{"$ref": f"#/$defs/V{index - 1}"}, {"$ref": f"#/$defs/V{index - 2}"}]
+            }
+        schema = {
+            "type": "object",
+            "$defs": definitions,
+            "properties": {"value": {"$ref": f"#/$defs/V{num_defs - 1}"}},
+            "required": ["value"],
+            "additionalProperties": False,
+        }
+        rule_counts.append(len(_json_schema_to_ebnf(schema, json_format="cohere_xml").splitlines()))
+        _check_cohere_grammar(
+            schema, '<cofl:value name="value" type="raw">fixed</cofl:value>', True
+        )
+        _check_cohere_grammar(schema, '<cofl:value name="value" type="json">2</cofl:value>', True)
+        _check_cohere_grammar(
+            schema, '<cofl:value name="value" type="json">fixed</cofl:value>', False
+        )
+    # Doubling this shared reference graph must not expand its exponentially many paths.
+    assert rule_counts[1] <= 2 * rule_counts[0], rule_counts
+
+
 _XML_DYNAMIC_PROPERTY_CASES = (
+    (
+        "deepseek_v4_1_xml",
+        '<｜DSML｜ parameter name="name" string="true">n</｜DSML｜ parameter>',
+        '<｜DSML｜ parameter name="x_key" string="false">3</｜DSML｜ parameter>',
+        '<｜DSML｜ parameter name="x_key" string="true">v</｜DSML｜ parameter>',
+    ),
     (
         "qwen_xml",
         "<parameter=name>n</parameter>",
@@ -2364,7 +2951,7 @@ _XML_DYNAMIC_PROPERTY_CASES = (
         "cohere_xml",
         '<cofl:value name="name" type="raw">n</cofl:value>',
         '<cofl:value name="x_key" type="json">3</cofl:value>',
-        '<cofl:value name="x_key" type="json">"v"</cofl:value>',
+        '<cofl:value name="x_key" type="raw">v</cofl:value>',
     ),
 )
 
@@ -2430,6 +3017,59 @@ def test_xml_property_names_use_property_format_hook(
         assert not _is_grammar_accept_string(grammar, instance.replace("x_key", "Bad"))
 
 
+@pytest.mark.parametrize(
+    "json_format, _declared_property, integer_property, _property_name", _XML_DYNAMIC_PROPERTY_CASES
+)
+@pytest.mark.parametrize("keyword", ["additionalProperties", "unevaluatedProperties"])
+def test_xml_property_names_preserve_additional_property_schema(
+    json_format: str,
+    _declared_property: str,
+    integer_property: str,
+    _property_name: str,
+    keyword: str,
+):
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z_]+$"},
+        keyword: {"type": "integer"},
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format=json_format)
+    assert _is_grammar_accept_string(grammar, integer_property)
+    assert not _is_grammar_accept_string(grammar, integer_property.replace("3", "oops"))
+    assert not _is_grammar_accept_string(grammar, integer_property.replace("3", "1.5"))
+    assert not _is_grammar_accept_string(grammar, integer_property.replace("x_key", "Bad"))
+    if json_format == "kimi_k3_xml":
+        assert not _is_grammar_accept_string(
+            grammar, integer_property.replace('type="number"', 'type="string"')
+        )
+    elif json_format == "cohere_xml":
+        assert not _is_grammar_accept_string(
+            grammar, integer_property.replace('type="json"', 'type="raw"')
+        )
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize("declared_properties", [False, True])
+def test_kimi_k3_typed_additional_properties_pin_type_attribute(
+    any_order: bool, declared_properties: bool
+):
+    schema = {"type": "object", "additionalProperties": {"type": "integer"}}
+    instance = '<|open|>argument key="x_key" type="number"<|sep|>3<|close|>argument<|sep|>'
+    if declared_properties:
+        schema.update(properties={"name": {"type": "string"}}, required=["name"])
+        instance = (
+            '<|open|>argument key="name" type="string"<|sep|>n<|close|>argument<|sep|>' + instance
+        )
+    grammar = _json_schema_to_ebnf(
+        schema, json_format="kimi_k3_xml", any_whitespace=False, any_order=any_order
+    )
+    assert _is_grammar_accept_string(grammar, instance)
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace('type="number"', 'type="string"')
+    )
+    assert not _is_grammar_accept_string(grammar, instance.replace("<|sep|>3", "<|sep|>oops"))
+
+
 def test_nested_true_schema():
     schema = {"type": "object", "properties": {"name": True}, "required": ["name"]}
     ebnf_grammar = _json_schema_to_ebnf(schema, json_format="qwen_xml")
@@ -2450,6 +3090,782 @@ def test_true_schema():
         ebnf_grammar, '<parameter=cdef>\n{"name": "Tom"}\n</parameter>'
     )
     assert not _is_grammar_accept_string(ebnf_grammar, "anything")
+
+
+# ---------- MiniMax M3 fixed-name recursive XML ----------
+
+M3_NS = "]<]minimax[>["
+
+
+def _m3_element(name: str, value: str) -> str:
+    return f"{M3_NS}<{name}>{value}{M3_NS}</{name}>"
+
+
+M3_FIXED_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "count": {"type": "integer"},
+        "active": {"type": "boolean"},
+        "details": {
+            "type": "object",
+            "properties": {
+                "city": {"type": "string"},
+                "scores": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 1,
+                    "maxItems": 2,
+                },
+            },
+            "required": ["city", "scores"],
+            "additionalProperties": False,
+        },
+        "stops": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"label": {"type": "string"}},
+                "required": ["label"],
+                "additionalProperties": False,
+            },
+            "minItems": 1,
+            "maxItems": 2,
+        },
+        "note": {"enum": ["short", "long"]},
+    },
+    "required": ["name", "count", "active", "details", "stops"],
+    "additionalProperties": False,
+}
+
+M3_DETAILS = _m3_element(
+    "details",
+    _m3_element("city", "Hangzhou")
+    + _m3_element("scores", _m3_element("item", "1.5") + _m3_element("item", "2")),
+)
+M3_STOPS = _m3_element(
+    "stops",
+    _m3_element("item", _m3_element("label", "West Lake"))
+    + _m3_element("item", _m3_element("label", "Lingyin")),
+)
+M3_FIXED_INSTANCE = (
+    _m3_element("name", "Alice")
+    + _m3_element("count", "2")
+    + _m3_element("active", "true")
+    + M3_DETAILS
+    + M3_STOPS
+)
+
+
+@pytest.mark.parametrize(
+    "instance, accepted",
+    [
+        (M3_FIXED_INSTANCE, True),
+        (M3_FIXED_INSTANCE + _m3_element("note", "short"), True),
+        (M3_FIXED_INSTANCE.replace(f"{M3_NS}</name>", f"{M3_NS}</wrong>", 1), False),
+        (M3_FIXED_INSTANCE.replace(M3_DETAILS, _m3_element("details", '{"city":"x"}')), False),
+        (M3_FIXED_INSTANCE.replace(_m3_element("active", "true"), ""), False),
+        (
+            M3_FIXED_INSTANCE.replace(
+                M3_STOPS,
+                _m3_element(
+                    "stops",
+                    _m3_element("item", _m3_element("label", "A"))
+                    + _m3_element("item", _m3_element("label", "B"))
+                    + _m3_element("item", _m3_element("label", "C")),
+                ),
+            ),
+            False,
+        ),
+        (
+            M3_FIXED_INSTANCE.replace(
+                _m3_element("scores", _m3_element("item", "1.5") + _m3_element("item", "2")),
+                _m3_element("scores", ""),
+            ),
+            False,
+        ),
+        (
+            M3_FIXED_INSTANCE.replace(
+                _m3_element("name", "Alice"),
+                _m3_element("name", f"A{M3_NS}<unexpected>x{M3_NS}</unexpected>"),
+            ),
+            False,
+        ),
+    ],
+)
+def test_minimax_m3_fixed_nested_schema(instance: str, accepted: bool):
+    grammar = _json_schema_to_ebnf(M3_FIXED_SCHEMA, json_format="minimax_m3_xml")
+    assert _is_grammar_accept_string(grammar, instance) == accepted
+
+
+def test_minimax_m3_any_order_and_ref():
+    schema = {
+        "$defs": {
+            "point": {
+                "type": "object",
+                "properties": {"x": {"type": "integer"}, "y": {"type": "integer"}},
+                "required": ["x", "y"],
+                "additionalProperties": False,
+            }
+        },
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "point": {"$ref": "#/$defs/point"}},
+        "required": ["name", "point"],
+        "additionalProperties": False,
+    }
+    reordered = _m3_element("point", _m3_element("y", "2") + _m3_element("x", "1"))
+    reordered += _m3_element("name", "p")
+    ordered = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+    any_order = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml", any_order=True)
+    assert not _is_grammar_accept_string(ordered, reordered)
+    assert _is_grammar_accept_string(any_order, reordered)
+
+
+def test_minimax_m3_empty_values_const_and_unknown_string_format():
+    schema = {
+        "type": "object",
+        "properties": {
+            "empty_object": {"type": "object", "properties": {}, "additionalProperties": False},
+            "empty_array": {"type": "array", "items": False, "maxItems": 0},
+            "fixed": {"const": {"x": [1, True]}},
+            "vendor": {"type": "string", "format": "vendor-custom"},
+        },
+        "required": ["empty_object", "empty_array", "fixed", "vendor"],
+        "additionalProperties": False,
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+    fixed = _m3_element(
+        "fixed", _m3_element("x", _m3_element("item", "1") + _m3_element("item", "true"))
+    )
+    instance = (
+        _m3_element("empty_object", "")
+        + _m3_element("empty_array", "")
+        + fixed
+        + _m3_element("vendor", "plain text")
+    )
+    assert _is_grammar_accept_string(grammar, instance)
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace(_m3_element("empty_object", ""), _m3_element("empty_object", " "))
+    )
+    assert not _is_grammar_accept_string(
+        grammar, instance.replace(fixed, _m3_element("fixed", "{}"))
+    )
+    assert not _is_grammar_accept_string(
+        grammar,
+        instance.replace(
+            _m3_element("vendor", "plain text"),
+            _m3_element("vendor", f"text{M3_NS}<nested>x{M3_NS}</nested>"),
+        ),
+    )
+
+
+def test_minimax_m3_self_ref_stays_recursive_xml():
+    schema = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "child": {"anyOf": [{"type": "null"}, {"$ref": "#"}]},
+        },
+        "required": ["name", "child"],
+        "additionalProperties": False,
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+    recursive_xml = _m3_element("name", "root") + _m3_element(
+        "child", _m3_element("name", "leaf") + _m3_element("child", "null")
+    )
+    nested_json = _m3_element("name", "root") + _m3_element("child", '{"name":"leaf","child":null}')
+    assert _is_grammar_accept_string(grammar, recursive_xml)
+    assert not _is_grammar_accept_string(grammar, nested_json)
+
+
+def test_minimax_m3_array_bounds_outside_repeat_range():
+    # Schema parsing treats oversized upper bounds as unbounded but rejects lower bounds.
+    grammar = _json_schema_to_ebnf(
+        {"type": "array", "items": {"type": "string"}, "maxItems": 2**31},
+        json_format="minimax_m3_xml",
+    )
+    assert _is_grammar_accept_string(grammar, "")
+    assert _is_grammar_accept_string(grammar, _m3_element("item", "a") + _m3_element("item", "b"))
+    with pytest.raises(RuntimeError, match="minItems and minContains must not exceed"):
+        _json_schema_to_ebnf(
+            {"type": "array", "items": {"type": "string"}, "minItems": 2**31},
+            json_format="minimax_m3_xml",
+        )
+
+
+def test_minimax_m3_prefix_items_and_whitespace_limit():
+    array_schema = {
+        "type": "array",
+        "prefixItems": [{"type": "string"}, {"type": "integer"}],
+        "items": False,
+    }
+    array_grammar = _json_schema_to_ebnf(array_schema, json_format="minimax_m3_xml")
+    valid = _m3_element("item", "alpha") + _m3_element("item", "2")
+    assert _is_grammar_accept_string(array_grammar, "")
+    assert _is_grammar_accept_string(array_grammar, _m3_element("item", "alpha"))
+    assert _is_grammar_accept_string(array_grammar, valid)
+    assert not _is_grammar_accept_string(array_grammar, valid + _m3_element("item", "extra"))
+
+    required_prefix_grammar = _json_schema_to_ebnf(
+        {**array_schema, "minItems": 2}, json_format="minimax_m3_xml"
+    )
+    assert not _is_grammar_accept_string(required_prefix_grammar, "")
+    assert not _is_grammar_accept_string(required_prefix_grammar, _m3_element("item", "alpha"))
+    assert _is_grammar_accept_string(required_prefix_grammar, valid)
+
+    object_schema = {
+        "type": "object",
+        "properties": {"a": {"type": "string"}, "b": {"type": "string"}},
+        "required": ["a", "b"],
+        "additionalProperties": False,
+    }
+    object_grammar = _json_schema_to_ebnf(
+        object_schema, json_format="minimax_m3_xml", max_whitespace_cnt=1
+    )
+    first, second = _m3_element("a", "x"), _m3_element("b", "y")
+    assert _is_grammar_accept_string(object_grammar, first + "\n" + second)
+    assert not _is_grammar_accept_string(object_grammar, first + "\n\n" + second)
+
+
+def test_minimax_m3_fixed_element_names_are_escaped_as_grammar_literals():
+    key = 'line\n"quoted"\\key'
+    schema = {
+        "type": "object",
+        "properties": {key: {"type": "string"}},
+        "required": [key],
+        "additionalProperties": False,
+    }
+    grammar = _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+    assert _is_grammar_accept_string(grammar, _m3_element(key, "value"))
+
+
+@pytest.mark.parametrize("key", ["", "/closing", "has>delimiter", " \t\n", "\ud800"])
+def test_minimax_m3_rejects_unparseable_element_names(key: str):
+    schema = {
+        "type": "object",
+        "properties": {key: {"type": "string"}},
+        "required": [key],
+        "additionalProperties": False,
+    }
+    with pytest.raises(RuntimeError, match="element name|cannot be blank|Failed to parse JSON"):
+        _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "object", "additionalProperties": True},
+        {"type": "object", "additionalProperties": {"type": "string"}},
+        {
+            "type": "object",
+            "patternProperties": {"^x.*": {"type": "string"}},
+            "additionalProperties": False,
+        },
+        {"type": "object", "propertyNames": {"pattern": "^[a-z]+$"}, "additionalProperties": False},
+        {
+            "type": "object",
+            "properties": {"runtime": {}},
+            "required": ["runtime"],
+            "additionalProperties": False,
+        },
+    ],
+)
+def test_minimax_m3_rejects_runtime_property_schemas(schema: dict):
+    with pytest.raises(RuntimeError, match="fixed object property names|unconstrained schemas"):
+        _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+
+
+def test_minimax_m3_strict_false_rejected():
+    with pytest.raises(RuntimeError, match="fixed object property names"):
+        _json_schema_to_ebnf({"type": "object"}, json_format="minimax_m3_xml", strict_mode=False)
+
+
+@pytest.mark.parametrize(
+    "string_schema",
+    [
+        {"type": "string", "pattern": ".*"},
+        {"type": "string", "format": "email"},
+        {"type": "string", "minLength": 1},
+    ],
+)
+def test_minimax_m3_rejects_constrained_strings(string_schema: dict):
+    schema = {
+        "type": "object",
+        "properties": {"value": string_schema},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    with pytest.raises(RuntimeError, match="String pattern, recognized format, and length"):
+        _json_schema_to_ebnf(schema, json_format="minimax_m3_xml")
+
+
+@pytest.mark.parametrize(
+    "schema,value,string_attr",
+    [
+        ({"type": "string"}, 'raw "quotes" & <tag>\n你好', "true"),
+        ({"type": "integer"}, "42", "false"),
+        ({"type": "number"}, "-1.25", "false"),
+        ({"type": "boolean"}, "true", "false"),
+        ({"type": "null"}, "null", "false"),
+        ({"type": "array", "items": {"type": "integer"}}, "[1, 2]", "false"),
+        (
+            {"type": "object", "properties": {"x": {"type": "string"}}, "required": ["x"]},
+            '{"x": "hi"}',
+            "false",
+        ),
+        ({"const": "fixed"}, "fixed", "true"),
+        ({"enum": [1, 2]}, "2", "false"),
+        ({"anyOf": [{"type": "integer"}, {"type": "null"}]}, "null", "false"),
+    ],
+)
+def test_deepseek_v4_1_parameter_style(schema, value, string_attr):
+    schema = {
+        "type": "object",
+        "properties": {"value": schema},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    output = f'<｜DSML｜ parameter name="value" string="{string_attr}">{value}</｜DSML｜ parameter>'
+    stag = StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    # Exercise both the production structural-tag converter and the EBNF conversion path.
+    for grammar in [
+        Grammar.from_structural_tag(stag),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")),
+    ]:
+        assert _is_grammar_accept_string(grammar, output)
+        wrong_attr = "false" if string_attr == "true" else "true"
+        assert not _is_grammar_accept_string(
+            grammar, output.replace(f'string="{string_attr}"', f'string="{wrong_attr}"')
+        )
+        assert not _is_grammar_accept_string(
+            grammar, output.replace("｜DSML｜ parameter", "｜DSML｜parameter")
+        )
+        assert not _is_grammar_accept_string(grammar, output + output)
+
+
+@pytest.mark.parametrize(
+    "value_schema",
+    [
+        {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+        {"oneOf": [{"type": "string"}, {"type": "integer"}]},
+        {"type": ["string", "integer"]},
+        {"$ref": "#/$defs/value"},
+        {"allOf": [{"type": ["string", "integer"]}]},
+        {},
+    ],
+)
+@pytest.mark.parametrize("dynamic", [False, True])
+def test_deepseek_v4_1_type_attribute_tracks_value_alternatives(value_schema, dynamic):
+    schema = {"type": "object", "$defs": {"value": {"type": ["string", "integer"]}}}
+    if dynamic:
+        schema["additionalProperties"] = value_schema
+    else:
+        schema.update({"properties": {"value": value_schema}, "required": ["value"]})
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    )
+    for value, attribute, accepted in [
+        ("text", "true", True),
+        ("42", "true", True),
+        ("42", "false", True),
+        ("not-json", "false", False),
+        ('"text"', "false", False),
+    ]:
+        output = (
+            f'<｜DSML｜ parameter name="value" string="{attribute}">{value}</｜DSML｜ parameter>'
+        )
+        assert _is_grammar_accept_string(grammar, output) == accepted
+
+
+@pytest.mark.parametrize("keyword", ["anyOf", "oneOf"])
+@pytest.mark.parametrize("property_kind", ["named", "additional", "pattern"])
+def test_deepseek_v4_1_recursive_parameter_references(keyword, property_kind):
+    value_schema = {"$ref": "#/$defs/V"}
+    schema = {"type": "object", "$defs": {"V": {keyword: [{"type": "string"}, value_schema]}}}
+    if property_kind == "named":
+        schema.update(
+            properties={"value_1": value_schema, "value_2": value_schema},
+            required=["value_1", "value_2"],
+            additionalProperties=False,
+        )
+    elif property_kind == "additional":
+        schema["additionalProperties"] = value_schema
+    else:
+        schema.update(patternProperties={"^value_[12]$": value_schema}, additionalProperties=False)
+
+    output = "".join(
+        f'<｜DSML｜ parameter name="{name}" string="true">hello</｜DSML｜ parameter>'
+        for name in ["value_1", "value_2"]
+    )
+    stag = StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    for grammar in [
+        Grammar.from_structural_tag(stag),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")),
+    ]:
+        assert _is_grammar_accept_string(grammar, output)
+        assert not _is_grammar_accept_string(
+            grammar, output.replace('string="true"', 'string="false"')
+        )
+        assert not _is_grammar_accept_string(grammar, output[:-1])
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+def test_deepseek_v4_1_mutually_recursive_parameter_references(any_order):
+    schema = {
+        "type": "object",
+        "$defs": {
+            "V": {"anyOf": [{"const": "fixed"}, {"$ref": "#/$defs/Alias"}]},
+            "Alias": {"allOf": [{"$ref": "#/$defs/W"}]},
+            "W": {"oneOf": [{"type": "integer", "minimum": 1}, {"$ref": "#/$defs/V"}]},
+        },
+        "properties": {"first": {"$ref": "#/$defs/V"}, "second": {"$ref": "#/$defs/W"}},
+        "required": ["first", "second"],
+        "additionalProperties": False,
+    }
+    stag = StructuralTag(
+        format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml", any_order=any_order)
+    )
+    for grammar in [
+        Grammar.from_structural_tag(stag),
+        Grammar.from_ebnf(
+            _json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml", any_order=any_order)
+        ),
+    ]:
+        for value, attribute, accepted in [
+            ("fixed", "true", True),
+            ("2", "false", True),
+            (" 2 ", "false", True),
+            ("fixed", "false", False),
+            ('"fixed"', "false", False),
+            ("2", "true", False),
+            ("0", "false", False),
+            (" fixed ", "true", False),
+        ]:
+            parameters = [
+                f'<｜DSML｜ parameter name="{name}" string="{attribute}">{value}</｜DSML｜ parameter>'
+                for name in ["first", "second"]
+            ]
+            assert _is_grammar_accept_string(grammar, "".join(parameters)) == accepted
+            assert _is_grammar_accept_string(grammar, "".join(reversed(parameters))) == (
+                accepted and any_order
+            )
+
+
+@pytest.mark.parametrize("from_ebnf", [False, True])
+def test_deepseek_v4_1_shared_parameter_references_have_linear_grammar_size(from_ebnf):
+    rule_counts = []
+    for num_defs in [12, 24]:
+        definitions = {"V0": {"const": "fixed"}, "V1": {"type": "integer", "minimum": 1}}
+        for index in range(2, num_defs):
+            definitions[f"V{index}"] = {
+                "anyOf": [{"$ref": f"#/$defs/V{index - 1}"}, {"$ref": f"#/$defs/V{index - 2}"}]
+            }
+        schema = {
+            "type": "object",
+            "$defs": definitions,
+            "properties": {"value": {"$ref": f"#/$defs/V{num_defs - 1}"}},
+            "required": ["value"],
+            "additionalProperties": False,
+        }
+        if from_ebnf:
+            grammar = Grammar.from_ebnf(
+                _json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")
+            )
+        else:
+            grammar = Grammar.from_structural_tag(
+                StructuralTag(
+                    format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml")
+                )
+            )
+        rule_counts.append(len(str(grammar).splitlines()))
+        for value, attribute, accepted in [
+            ("fixed", "true", True),
+            ("2", "false", True),
+            ("fixed", "false", False),
+            ("2", "true", False),
+        ]:
+            output = f'<｜DSML｜ parameter name="value" string="{attribute}">{value}</｜DSML｜ parameter>'
+            assert _is_grammar_accept_string(grammar, output) == accepted
+    # Doubling this shared reference graph must not expand its exponentially many paths.
+    assert rule_counts[1] <= 2 * rule_counts[0], rule_counts
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+def test_deepseek_v4_1_mixed_enum_and_string_whitespace(any_order):
+    schema = {
+        "type": "object",
+        "properties": {"value": {"enum": ["fixed", 2]}},
+        "required": ["value"],
+    }
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(
+            format=JSONSchemaFormat(
+                json_schema=schema, style="deepseek_v4_1_xml", any_order=any_order
+            )
+        )
+    )
+    for value, attribute, accepted in [
+        ("fixed", "true", True),
+        ("2", "false", True),
+        (" 2 ", "false", True),
+        ("fixed", "false", False),
+        ("2", "true", False),
+        (" fixed ", "true", False),
+    ]:
+        output = (
+            f'<｜DSML｜ parameter name="value" string="{attribute}">{value}</｜DSML｜ parameter>'
+        )
+        assert _is_grammar_accept_string(grammar, output) == accepted
+
+
+@pytest.mark.parametrize(
+    "value_schema, cases",
+    [
+        (
+            {"type": "integer"},
+            [
+                ("42", "false", True),
+                ("hello", "true", False),
+                ("42", "true", False),
+                ("true", "false", False),
+                ("[1]", "false", False),
+            ],
+        ),
+        (
+            {"type": "string"},
+            [
+                ("hello", "true", True),
+                ("42", "true", True),
+                ("42", "false", False),
+                ("null", "false", False),
+            ],
+        ),
+        (
+            {"enum": ["a", "b"]},
+            [
+                ("a", "true", True),
+                ("a", "false", False),
+                ("zzz", "true", False),
+                ("1", "false", False),
+            ],
+        ),
+        # allOf with several schemas is still generated as an unconstrained value.
+        (
+            {"allOf": [{"type": "string"}, {"minLength": 1}]},
+            [("hello", "true", True), ("42", "false", True), ("hello", "false", False)],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "layout", ["property", "additional", "additional_with_property", "additional_any_order"]
+)
+def test_deepseek_v4_1_typed_parameters_keep_value_constraints(value_schema, cases, layout):
+    schema = {"type": "object"}
+    if layout == "property":
+        schema.update({"properties": {"value": value_schema}, "required": ["value"]})
+    else:
+        schema["additionalProperties"] = value_schema
+        if layout != "additional":
+            schema["properties"] = {"other": {"type": "integer"}}
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(
+            format=JSONSchemaFormat(
+                json_schema=schema,
+                style="deepseek_v4_1_xml",
+                any_order=layout == "additional_any_order",
+            )
+        )
+    )
+    for value, attribute, accepted in cases:
+        output = (
+            f'<｜DSML｜ parameter name="value" string="{attribute}">{value}</｜DSML｜ parameter>'
+        )
+        assert _is_grammar_accept_string(grammar, output) == accepted
+
+
+@pytest.mark.parametrize("schema", [{}, {"type": "object"}])
+def test_deepseek_v4_1_unconstrained_parameter_list(schema):
+    stag = StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    output = (
+        '<｜DSML｜ parameter name="first" string="true">hello</｜DSML｜ parameter>'
+        '<｜DSML｜ parameter name="second" string="false">[1, 2]</｜DSML｜ parameter>'
+    )
+    for grammar in [
+        Grammar.from_structural_tag(stag),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")),
+    ]:
+        assert _is_grammar_accept_string(grammar, "")
+        assert _is_grammar_accept_string(grammar, output)
+        assert not _is_grammar_accept_string(grammar, "hello")
+        assert not _is_grammar_accept_string(
+            grammar, output.replace("｜DSML｜ parameter", "｜DSML｜parameter")
+        )
+
+
+def _deepseek_v4_1_parameter(name, value):
+    is_string = isinstance(value, str)
+    body = value if is_string else json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    return (
+        f'<｜DSML｜ parameter name="{name}" string="{str(is_string).lower()}">'
+        f"{body}</｜DSML｜ parameter>\n"
+    )
+
+
+@pytest.mark.parametrize("keyword", ["const", "enum"])
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize("value", [{}, {"s": "hello"}, {"z": None, "a": {"s": [1, "x"]}}])
+def test_deepseek_v4_1_root_object_literals(keyword, any_order, value):
+    schema = {keyword: value if keyword == "const" else [value]}
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(
+            format=JSONSchemaFormat(
+                json_schema=schema, style="deepseek_v4_1_xml", any_order=any_order
+            )
+        )
+    )
+    parameters = [_deepseek_v4_1_parameter(k, v) for k, v in value.items()]
+    output = "".join(parameters)
+    assert _is_grammar_accept_string(grammar, output)
+    assert not _is_grammar_accept_string(grammar, json.dumps(value))
+    assert not _is_grammar_accept_string(grammar, output + _deepseek_v4_1_parameter("extra", 1))
+    if value:
+        assert not _is_grammar_accept_string(grammar, "".join(parameters[1:]))
+        first = next(iter(value))
+        assert not _is_grammar_accept_string(
+            grammar, _deepseek_v4_1_parameter(first, False) + "".join(parameters[1:])
+        )
+    if len(parameters) > 1:
+        assert not _is_grammar_accept_string(grammar, parameters[0] * len(parameters))
+
+
+def test_deepseek_v4_1_root_enum_keeps_object_alternatives_separate():
+    schema = {"enum": [{"s": "hello"}, {"n": 42}]}
+    for grammar in (
+        Grammar.from_structural_tag(
+            StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+        ),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format="deepseek_v4_1_xml")),
+    ):
+        a = _deepseek_v4_1_parameter("s", "hello")
+        b = _deepseek_v4_1_parameter("n", 42)
+        assert _is_grammar_accept_string(grammar, a)
+        assert _is_grammar_accept_string(grammar, b)
+        assert not _is_grammar_accept_string(grammar, a + b)
+        assert not _is_grammar_accept_string(grammar, "")
+
+
+@pytest.mark.parametrize("nested_first", [False, True])
+@pytest.mark.parametrize(
+    "definition", [{"type": "string"}, {"const": "hello"}, {"enum": ["hello", "bye"]}]
+)
+@pytest.mark.parametrize("style", ["deepseek_v4_1_xml", "qwen_xml"])
+def test_xml_reference_encoding_context(nested_first, definition, style):
+    ref = {"$ref": "#/$defs/Text"}
+    properties = {
+        "direct": ref,
+        "nested": {
+            "type": "object",
+            "properties": {"text": ref},
+            "required": ["text"],
+            "additionalProperties": False,
+        },
+    }
+    if nested_first:
+        properties = dict(reversed(list(properties.items())))
+    schema = {
+        "$defs": {"Text": definition},
+        "type": "object",
+        "properties": properties,
+        "required": list(properties),
+        "additionalProperties": False,
+    }
+    if style == "deepseek_v4_1_xml":
+        values = {
+            "direct": _deepseek_v4_1_parameter("direct", "hello"),
+            "nested": _deepseek_v4_1_parameter("nested", {"text": "hello"}),
+        }
+    else:
+        values = {
+            "direct": "<parameter=direct>hello</parameter>",
+            "nested": '<parameter=nested>{"text":"hello"}</parameter>',
+        }
+    output = "".join(values[name] for name in properties)
+    for grammar in (
+        Grammar.from_structural_tag(
+            StructuralTag(format=JSONSchemaFormat(json_schema=schema, style=style))
+        ),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format=style)),
+    ):
+        assert _is_grammar_accept_string(grammar, output)
+        assert not _is_grammar_accept_string(
+            grammar, output.replace('{"text":"hello"}', '{"text":hello}')
+        )
+        if "type" not in definition:
+            assert not _is_grammar_accept_string(grammar, output.replace(">hello<", '>"hello"<'))
+
+
+def test_deepseek_v4_1_recursive_root_reference_uses_json_values():
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "child": {"$ref": "#"}},
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    )
+    output = _deepseek_v4_1_parameter("name", "parent") + _deepseek_v4_1_parameter(
+        "child", {"name": "child", "child": {"name": "leaf"}}
+    )
+    assert _is_grammar_accept_string(grammar, output)
+    assert not _is_grammar_accept_string(grammar, output.replace('"leaf"', "leaf"))
+    assert not _is_grammar_accept_string(
+        grammar, output.replace('{"name":"leaf"}', _deepseek_v4_1_parameter("name", "leaf"))
+    )
+
+
+@pytest.mark.parametrize("literal_first", [False, True])
+def test_deepseek_v4_1_root_and_parameter_literal_caches_are_distinct(literal_first):
+    literal = {"const": {"x": 1}}
+    alternatives = [
+        {"$ref": "#/$defs/Value"},
+        {
+            "type": "object",
+            "properties": {"wrapped": literal},
+            "required": ["wrapped"],
+            "additionalProperties": False,
+        },
+    ]
+    if not literal_first:
+        alternatives.reverse()
+    schema = {"$defs": {"Value": literal}, "anyOf": alternatives}
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="deepseek_v4_1_xml"))
+    )
+    assert _is_grammar_accept_string(grammar, _deepseek_v4_1_parameter("x", 1))
+    assert _is_grammar_accept_string(grammar, _deepseek_v4_1_parameter("wrapped", {"x": 1}))
+    assert not _is_grammar_accept_string(grammar, _deepseek_v4_1_parameter("wrapped", {"x": 2}))
+
+
+def test_cohere_recursive_root_reference_keeps_tagged_values():
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "child": {"$ref": "#"}},
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+    output = (
+        '<cofl:value name="name" type="raw">parent</cofl:value>'
+        '<cofl:value name="child" type="dict">'
+        '<cofl:value name="name" type="raw">leaf</cofl:value>'
+        "</cofl:value>"
+    )
+    _check_cohere_grammar(schema, output, True)
+    _check_cohere_grammar(
+        schema,
+        output.replace('<cofl:value name="name" type="raw">leaf</cofl:value>', '{"name":"leaf"}'),
+        False,
+    )
 
 
 if __name__ == "__main__":

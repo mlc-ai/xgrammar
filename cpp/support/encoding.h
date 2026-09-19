@@ -299,13 +299,9 @@ inline std::optional<CharHandlingError> Latin1ToBytes(
 */
 inline void ByteToLatin1(const std::string& bytes, std::string* result) {
   result->clear();
-  const size_t len = bytes.size();
+  result->reserve(bytes.size());
 
-  // Iterate by length rather than via c_str() so that embedded NUL bytes are not treated as the
-  // end of the string.
-  for (size_t i = 0; i < len; ++i) {
-    const unsigned char current_char = static_cast<unsigned char>(bytes[i]);
-
+  for (unsigned char current_char : bytes) {
     // Ascii character, directly add to result.
     if (current_char <= 0x7F) {
       result->push_back(static_cast<char>(current_char));

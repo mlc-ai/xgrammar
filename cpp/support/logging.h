@@ -25,6 +25,48 @@
 
 namespace xgrammar {
 
+/*!
+ * \brief Error type for errors from XGRAMMAR_CHECK, XGRAMMAR_ICHECK, and XGRAMMAR_LOG(FATAL). This
+ * error contains a backtrace of where it occurred.
+ */
+class LogFatalError : public std::runtime_error {
+ public:
+  /*! \brief Construct an error. Not recommended to use directly. Instead use XGRAMMAR_LOG(FATAL).
+   *
+   * \param file The file where the error occurred.
+   * \param lineno The line number where the error occurred.
+   * \param message The error message to display.
+   * \param time The time at which the error occurred. This should be in local time.
+   */
+  LogFatalError(
+      const std::string& file,
+      int lineno,
+      const std::string& message,
+      std::time_t time = std::time(nullptr)
+  )
+      : std::runtime_error(message), file_(file), lineno_(lineno), time_(time) {
+    std::ostringstream s;
+    s << "[" << std::put_time(std::localtime(&time), "%H:%M:%S") << "] " << file << ":" << lineno
+      << ": " << message << "\n";
+    full_message_ = s.str();
+  }
+
+  /*! \return The file in which the error occurred. */
+  const std::string& file() const { return file_; }
+  /*! \return The time at which this error occurred. */
+  const std::time_t& time() const { return time_; }
+  /*! \return The line number at which this error occurred. */
+  int lineno() const { return lineno_; }
+  /*! \return The error message. */
+  const char* what() const noexcept override { return full_message_.c_str(); }
+
+ private:
+  std::string file_;
+  int lineno_;
+  std::time_t time_;
+  std::string full_message_;
+};
+
 // Provide support for customized logging.
 #if XGRAMMAR_LOG_CUSTOMIZE
 /*!
@@ -83,48 +125,6 @@ class LogMessage {
 };
 
 #else  // if XGRAMMAR_LOG_CUSTOMIZE
-
-/*!
- * \brief Error type for errors from XGRAMMAR_CHECK, XGRAMMAR_ICHECK, and XGRAMMAR_LOG(FATAL). This
- * error contains a backtrace of where it occurred.
- */
-class LogFatalError : public std::runtime_error {
- public:
-  /*! \brief Construct an error. Not recommended to use directly. Instead use XGRAMMAR_LOG(FATAL).
-   *
-   * \param file The file where the error occurred.
-   * \param lineno The line number where the error occurred.
-   * \param message The error message to display.
-   * \param time The time at which the error occurred. This should be in local time.
-   */
-  LogFatalError(
-      const std::string& file,
-      int lineno,
-      const std::string& message,
-      std::time_t time = std::time(nullptr)
-  )
-      : std::runtime_error(message), file_(file), lineno_(lineno), time_(time) {
-    std::ostringstream s;
-    s << "[" << std::put_time(std::localtime(&time), "%H:%M:%S") << "] " << file << ":" << lineno
-      << ": " << message << "\n";
-    full_message_ = s.str();
-  }
-
-  /*! \return The file in which the error occurred. */
-  const std::string& file() const { return file_; }
-  /*! \return The time at which this error occurred. */
-  const std::time_t& time() const { return time_; }
-  /*! \return The line number at which this error occurred. */
-  int lineno() const { return lineno_; }
-  /*! \return The error message. */
-  const char* what() const noexcept override { return full_message_.c_str(); }
-
- private:
-  std::string file_;
-  int lineno_;
-  std::time_t time_;
-  std::string full_message_;
-};
 
 /*!
  * \brief Class to accumulate an error message and throw it. Do not use

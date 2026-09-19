@@ -7,7 +7,7 @@ from typing import List
 
 import pytest
 from pydantic import BaseModel
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
@@ -40,20 +40,20 @@ def test_utf8():
 
 
 expected_grammar_test_structural_tag_after_optimization = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub))
-basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
-basic_string ::= (("\"" basic_string_sub)) (=(root_part_0 [ \n\t]* "}"))
-root_0 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0 [ \n\t]* "}"))
-root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer)) (=([ \n\t]* "}"))
+basic_string ::= (("\"" basic_string_sub)) (=(root_part_0 [ \n\r\t]* "}"))
+root_0 ::= (("{" [ \n\r\t]* "\"arg1\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_part_0 [ \n\r\t]* "}"))
+root_part_0 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"arg2\"" [ \n\r\t]* ":" [ \n\r\t]* basic_integer)) (=([ \n\r\t]* "}"))
 basic_integer_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub_1))
-basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
-basic_number_6 ::= ((basic_number_1_1 basic_number_2_1 basic_number_3_1 basic_number_5_1)) (=(root_part_0_1 [ \n\t]* "}"))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\r\t]* [,}\]:]))
+basic_number_6 ::= ((basic_number_1_1 basic_number_2_1 basic_number_3_1 basic_number_5_1)) (=(root_part_0_1 [ \n\r\t]* "}"))
 basic_string_1 ::= (("\"" basic_string_sub_1))
-root_1 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number_6 root_part_0_1 [ \n\t]* "}")) (=("</function>"))
-root_prop_1 ::= (("[" [ \n\t]* basic_string_1 root_prop_1_2 [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-root_prop_1_items ::= (([ \n\t]* "," [ \n\t]* basic_string_1)) (=(root_prop_1_1))
-root_part_0_1 ::= (([ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1)) (=([ \n\t]* "}"))
+root_1 ::= (("{" [ \n\r\t]* "\"arg3\"" [ \n\r\t]* ":" [ \n\r\t]* basic_number_6 root_part_0_1 [ \n\r\t]* "}")) (=("</function>"))
+root_prop_1 ::= (("[" [ \n\r\t]* basic_string_1 root_prop_1_2 [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+root_prop_1_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string_1)) (=(root_prop_1_1))
+root_part_0_1 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"arg4\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1)) (=([ \n\r\t]* "}"))
 basic_number_1_1 ::= ("" | ("-")) (=(basic_number_2_1 basic_number_3_1 basic_number_5_1))
 basic_number_2_1 ::= (("0") | ([1-9] [0-9]*)) (=(basic_number_3_1 basic_number_5_1))
 basic_number_3_1 ::= ("" | ("." basic_number_3_3)) (=(basic_number_5_1))
@@ -71,24 +71,24 @@ root ::= ((triggered_tags))
 basic_number_3_2 ::= ("" | ([0-9] basic_number_3_2))
 basic_number_3_3 ::= (([0-9] basic_number_3_2))
 root_prop_1_1 ::= ("" | (root_prop_1_items root_prop_1_1))
-root_prop_1_2 ::= ((root_prop_1_1)) (=([ \n\t]* "]"))
+root_prop_1_2 ::= ((root_prop_1_1)) (=([ \n\r\t]* "]"))
 """
 
 expected_grammar_test_structural_tag_before_optimization = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
-basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\t]* [,}\]:]))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
 basic_any ::= ((basic_number) | (basic_string) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
 basic_number ::= ((basic_number_1 basic_number_2 basic_number_3 basic_number_5))
 basic_string ::= (("\"" basic_string_sub))
 basic_boolean ::= (("true") | ("false"))
 basic_null ::= (("null"))
-basic_array ::= (("[" [ \n\t]* basic_any basic_array_items{0, -1} [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object ::= (("{" [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any basic_object_properties{0, -1} [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_array ::= (("[" [ \n\r\t]* basic_any basic_array_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any basic_object_properties{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
 basic_number_digits ::= (([0-9]))
-basic_array_items ::= (([ \n\t]* "," [ \n\t]* basic_any))
-basic_object_properties ::= (([ \n\t]* "," [ \n\t]* basic_string [ \n\t]* ":" [ \n\t]* basic_any))
-root_0 ::= (("{" [ \n\t]* "\"arg1\"" [ \n\t]* ":" [ \n\t]* basic_string root_part_0 [ \n\t]* "}"))
-root_part_0 ::= (([ \n\t]* "," [ \n\t]* "\"arg2\"" [ \n\t]* ":" [ \n\t]* basic_integer))
+basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
+basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
+root_0 ::= (("{" [ \n\r\t]* "\"arg1\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_part_0 [ \n\r\t]* "}"))
+root_part_0 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"arg2\"" [ \n\r\t]* ":" [ \n\r\t]* basic_integer))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (("0") | ([1-9] [0-9]*))
@@ -96,22 +96,22 @@ basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
 basic_number_4 ::= ("" | ([+\-]))
 basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
-basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\t]* [,}\]:]))
+basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\r\t]* [,}\]:]))
 basic_any_1 ::= ((basic_number_6) | (basic_string_1) | (basic_boolean_1) | (basic_null_1) | (basic_array_1) | (basic_object_1))
 basic_integer_2 ::= (("0") | (basic_integer_1_1 [1-9] [0-9]*))
 basic_number_6 ::= ((basic_number_1_1 basic_number_2_1 basic_number_3_1 basic_number_5_1))
 basic_string_1 ::= (("\"" basic_string_sub_1))
 basic_boolean_1 ::= (("true") | ("false"))
 basic_null_1 ::= (("null"))
-basic_array_1 ::= (("[" [ \n\t]* basic_any_1 basic_array_items_1{0, -1} [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-basic_object_1 ::= (("{" [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1 basic_object_properties_1{0, -1} [ \n\t]* "}") | ("{" [ \n\t]* "}"))
+basic_array_1 ::= (("[" [ \n\r\t]* basic_any_1 basic_array_items_1{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+basic_object_1 ::= (("{" [ \n\r\t]* basic_string_1 [ \n\r\t]* ":" [ \n\r\t]* basic_any_1 basic_object_properties_1{0, -1} [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
 basic_number_digits_1 ::= (([0-9]))
-basic_array_items_1 ::= (([ \n\t]* "," [ \n\t]* basic_any_1))
-basic_object_properties_1 ::= (([ \n\t]* "," [ \n\t]* basic_string_1 [ \n\t]* ":" [ \n\t]* basic_any_1))
-root_1 ::= (("{" [ \n\t]* "\"arg3\"" [ \n\t]* ":" [ \n\t]* basic_number_6 root_part_0_1 [ \n\t]* "}"))
-root_prop_1 ::= (("[" [ \n\t]* basic_string_1 root_prop_1_items{0, -1} [ \n\t]* "]") | ("[" [ \n\t]* "]"))
-root_prop_1_items ::= (([ \n\t]* "," [ \n\t]* basic_string_1))
-root_part_0_1 ::= (([ \n\t]* "," [ \n\t]* "\"arg4\"" [ \n\t]* ":" [ \n\t]* root_prop_1))
+basic_array_items_1 ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any_1))
+basic_object_properties_1 ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string_1 [ \n\r\t]* ":" [ \n\r\t]* basic_any_1))
+root_1 ::= (("{" [ \n\r\t]* "\"arg3\"" [ \n\r\t]* ":" [ \n\r\t]* basic_number_6 root_part_0_1 [ \n\r\t]* "}"))
+root_prop_1 ::= (("[" [ \n\r\t]* basic_string_1 root_prop_1_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+root_prop_1_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string_1))
+root_part_0_1 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"arg4\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1))
 basic_integer_1_1 ::= ("" | ("-"))
 basic_number_1_1 ::= ("" | ("-"))
 basic_number_2_1 ::= (("0") | ([1-9] [0-9]*))
@@ -209,7 +209,7 @@ def test_structural_tag_mask_gen():
 
     # Set up tokenizer
     tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_id, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
 
     # Compile grammar and create matcher
@@ -379,10 +379,112 @@ def test_excludes_overlapping_prefixes():
     )
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize(
+    "excludes, invalid, valid",
+    [
+        (["abc", "xabcq"], ["xabc", "xabcr", "xabcq"], ["xab", "xabxr"]),
+        (["bc", "abcq", "xabcde"], ["xabc", "xabcr"], ["xab", "xabr"]),
+        (["好", "x好吗"], ["x好", "x好呀"], ["x你", "你"]),
+        (["｜DSML｜", "<｜DSML｜ calls>"], ["<｜DSML｜", "<｜DSML｜ callsX>"], ["<｜DS", "hello"]),
+    ],
+)
+def test_excludes_contained_patterns(reverse, excludes, invalid, valid):
+    """A redundant longer pattern must not weaken an exclusion, in either entry point."""
+    if reverse:
+        excludes = list(reversed(excludes))
+    grammar_text = (
+        "root ::= TagDispatch(excludes=("
+        + ", ".join(json.dumps(value, ensure_ascii=False) for value in excludes)
+        + "), loop_after_dispatch=false)"
+    )
+    grammars = [
+        xgr.Grammar.from_ebnf(grammar_text),
+        xgr.Grammar.from_structural_tag({"format": {"type": "any_text", "excludes": excludes}}),
+    ]
+    for grammar in grammars:
+        for text in invalid:
+            assert not _is_grammar_accept_string(grammar, text)
+        for text in valid:
+            assert _is_grammar_accept_string(grammar, text)
+
+
+@pytest.mark.parametrize("excludes", [["abc", "xabcq"], ["｜DSML｜", "<｜DSML｜ calls>"]])
+def test_contained_excludes_token_masks(excludes):
+    vocab = [
+        "<eos>",
+        "x",
+        "a",
+        "b",
+        "c",
+        "q",
+        "r",
+        "abc",
+        "xabc",
+        "xabcr",
+        "hello",
+        "<",
+        "｜",
+        "DSML",
+        "<｜DSML｜",
+        "<｜DSML｜ callsX>",
+    ]
+    info = xgr.TokenizerInfo(vocab, stop_token_ids=0)
+    grammar = xgr.Grammar.from_structural_tag(
+        {"format": {"type": "any_text", "excludes": excludes}}
+    )
+    compiled = xgr.GrammarCompiler(info, max_threads=1).compile_grammar(grammar)
+    mask = xgr.allocate_token_bitmask(1, len(vocab))
+    for prefix in ["", "x", "xa", "xab", "<", "<｜", "<｜DSML", "hello"]:
+        matcher = xgr.GrammarMatcher(compiled)
+        assert matcher.accept_string(prefix)
+        matcher.fill_next_token_bitmask(mask)
+        for token_id, token in enumerate(vocab):
+            expected = token_id == 0 or not any(value in prefix + token for value in excludes)
+            allowed = bool((int(mask[0, token_id // 32]) >> (token_id % 32)) & 1)
+            assert allowed == expected, (prefix, token)
+            assert matcher.fork().accept_token(token_id) == expected, (prefix, token)
+
+
+@pytest.mark.parametrize("trigger", ["abc", "abcq", "xabc", "xabcq"])
+def test_excludes_take_precedence_over_trigger(trigger):
+    grammar_text = f'root ::= TagDispatch(("{trigger}", body), excludes=("abc"))\nbody ::= "!"'
+    # Exact/prefix conflicts are already rejected by the EBNF parser. A trigger
+    # containing a forbidden suffix must not bypass the exclusion either.
+    if trigger.startswith("abc"):
+        with pytest.raises(RuntimeError, match="Exclude string must not be a prefix"):
+            xgr.Grammar.from_ebnf(grammar_text)
+        return
+    grammar = xgr.Grammar.from_ebnf(grammar_text)
+    assert not _is_grammar_accept_string(grammar, trigger + "!")
+
+
+@pytest.mark.parametrize("end", ["abc", "xabcq"])
+def test_contained_excludes_preserve_dispatch_body_and_tag_end(end):
+    grammar = xgr.Grammar.from_ebnf(
+        'root ::= TagDispatch(("<tool>", body), excludes=("abc", "xabcq"))\n' 'body ::= "abc"'
+    )
+    # Excludes constrain free text, not the dispatched rule's body.
+    assert _is_grammar_accept_string(grammar, "hello<tool>abc")
+    assert not _is_grammar_accept_string(grammar, "xabcr<tool>abc")
+    tag = {
+        "format": {
+            "type": "tag",
+            "begin": "<think>",
+            "content": {"type": "any_text", "excludes": ["abc", "xabcq"]},
+            "end": end,
+        }
+    }
+    grammar = xgr.Grammar.from_structural_tag(tag)
+    # The enclosing tag still consumes its delimiter outside the AnyText rule.
+    assert _is_grammar_accept_string(grammar, "<think>hello" + end)
+    assert not _is_grammar_accept_string(grammar, "<think>xabcr" + end)
+
+
 @pytest.mark.hf_token_required
 def test_utf8_structural_tag_begin_end():
     model = "deepseek-ai/DeepSeek-V3-0324"
-    tokenizer = AutoTokenizer.from_pretrained(model)
+    tokenizer = load_tokenizer(model)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
     structures = [
@@ -395,7 +497,7 @@ def test_utf8_structural_tag_begin_end():
 @pytest.mark.hf_token_required
 def test_pressure_structural_tag():
     model = "meta-llama/Llama-3.1-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(model, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(model, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1)
     threads = []
@@ -571,7 +673,7 @@ def test_tag_dispatch_perf(ebnf, input_str):
     import statistics
 
     tokenizer_id = "meta-llama/Llama-3.1-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_id, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_id, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar = xgr.Grammar.from_ebnf(ebnf)
     input_tokens = tokenizer.encode(input_str, add_special_tokens=False)

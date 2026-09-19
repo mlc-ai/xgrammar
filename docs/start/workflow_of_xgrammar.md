@@ -68,7 +68,7 @@ To accelerate mask generation, XGrammar performs preprocessing on the grammar us
 * Simplify the grammar and build automata
 * Compute an adaptive token mask cache. It will be used at runtime to generate the real mask
 
-[`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) processes the grammar and produces a [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object. Each [`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) is bound to a specific [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) object. When given a grammar, it uses this tokenizer info to compile it. You can pass in a Grammar object directly, or provide a raw EBNF string, JSON Schema, or regex pattern:
+[`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) processes the grammar and produces a [`xgr.CompiledGrammar`](xgrammar.CompiledGrammar) object. Each [`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) is bound to a specific [`xgr.TokenizerInfo`](xgrammar.TokenizerInfo) object. When given a grammar, it uses this tokenizer info to compile it. You can pass in a Grammar object directly, or provide a raw EBNF string, Lark grammar, JSON Schema, or regex pattern:
 
 ```python
 grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
@@ -82,6 +82,8 @@ compiled_grammar = grammar_compiler.compile_builtin_json_grammar()
 compiled_grammar = grammar_compiler.compile_regex(regex_string)
 # or
 compiled_grammar = grammar_compiler.compile_grammar(ebnf_string)
+# or
+compiled_grammar = grammar_compiler.compile_lark(lark_string)
 ```
 
 ### Multi-threaded Compilation
@@ -112,7 +114,12 @@ compiled_grammar1, compiled_grammar2 = asyncio.run(compile_grammars())
 
 [`xgr.GrammarCompiler`](xgrammar.GrammarCompiler) also includes a cache. If the same grammar is compiled again, the cached result is returned directly. Set `cache_enabled` to `True` to enable the cache, and `cache_limit_bytes` to control the maximum memory usage for the cache. The cache uses LRU (Least Recently Used) eviction policy.
 
-The EBNF string, JSON Schema string, regex pattern are used as the cache key for [`compile_grammar`](xgrammar.GrammarCompiler.compile_grammar), [`compile_json_schema`](xgrammar.GrammarCompiler.compile_json_schema), [`compile_regex`](xgrammar.GrammarCompiler.compile_regex), respectively. By caching the input string directly, we further reduce the time spent constructing the grammar.
+The EBNF string, Lark source and named grammars, JSON Schema string, and regex pattern are used as
+cache keys for [`compile_grammar`](xgrammar.GrammarCompiler.compile_grammar),
+[`compile_lark`](xgrammar.GrammarCompiler.compile_lark),
+[`compile_json_schema`](xgrammar.GrammarCompiler.compile_json_schema), and
+[`compile_regex`](xgrammar.GrammarCompiler.compile_regex), respectively. By caching the source
+input directly, XGrammar also avoids reconstructing the grammar on a cache hit.
 
 ```python
 grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=True, cache_limit_bytes=128 * 1024 * 1024)

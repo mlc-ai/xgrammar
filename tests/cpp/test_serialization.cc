@@ -4,7 +4,9 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 #include "fsm.h"
@@ -12,6 +14,7 @@
 #include "support/dynamic_bitset.h"
 #include "support/json_serializer.h"
 #include "test_utils.h"
+#include "tokenizer_info_impl.h"
 
 namespace xgrammar {
 
@@ -272,6 +275,26 @@ TEST(XGrammarSerializationTest, TestString) {
     ASSERT_FALSE(error.has_value());
     ASSERT_EQ(deserialized, value);
   }
+}
+
+TEST(XGrammarSerializationTest, TestTokenizerInfoRoundtripPreservesDerivedData) {
+  using namespace xgrammar;
+
+  TokenizerInfo original(
+      {std::string("\0", 1), "a", "</s>"}, VocabType::RAW, 4, std::vector<int32_t>{2}
+  );
+  auto recovered_or_error = TokenizerInfo::DeserializeJSON(original.SerializeJSON());
+
+  ASSERT_TRUE(std::holds_alternative<TokenizerInfo>(recovered_or_error));
+  const auto& recovered = std::get<TokenizerInfo>(recovered_or_error);
+  EXPECT_EQ(recovered.GetDecodedVocab(), original.GetDecodedVocab());
+  EXPECT_EQ(
+      recovered.ImplPtr()->GetTokenIdToSortedVocabIndex(),
+      original.ImplPtr()->GetTokenIdToSortedVocabIndex()
+  );
+  EXPECT_EQ(
+      recovered.ImplPtr()->GetTokenIdToSortedVocabIndex(), (std::vector<int32_t>{0, 1, -1, -1})
+  );
 }
 
 TEST(XGrammarSerializationTest, TestFSMEdge) {

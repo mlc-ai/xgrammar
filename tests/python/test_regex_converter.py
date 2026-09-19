@@ -2,7 +2,7 @@ import sys
 import time
 
 import pytest
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _is_grammar_accept_string, _regex_to_ebnf
@@ -468,7 +468,7 @@ tokenizer_path_regex_instance = [(t, *ri) for t in tokenizer_paths for ri in reg
 def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     print(f"Tokenizer: {tokenizer_path}, regex: {regex}, instance: {instance}")
 
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = load_tokenizer(tokenizer_path)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
 
@@ -507,6 +507,19 @@ def test_empty(regex: str):
     assert str(grammar) == expected_grammar
     assert _is_grammar_accept_string(grammar, "")
     assert not _is_grammar_accept_string(grammar, "a")
+
+
+# A NUL makes the std::string non-empty while its c_str() is empty (leading NUL)
+# or truncated (later NUL). ParseUTF8 consumes the C string, so a leading NUL
+# used to yield an empty codepoint vector and an out-of-bounds read, and a later
+# one silently compiled just the prefix.
+null_regex = ["\0", "\0abc", "a\0b", "[0-9]+\0"]
+
+
+@pytest.mark.parametrize("regex", null_regex)
+def test_null_character(regex: str):
+    with pytest.raises(RuntimeError, match="The regex must not contain null characters."):
+        xgr.Grammar.from_regex(regex)
 
 
 if __name__ == "__main__":

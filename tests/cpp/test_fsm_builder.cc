@@ -10,6 +10,7 @@
 
 #include "fsm.h"
 #include "fsm_builder.h"
+#include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "xgrammar/grammar.h"
 
@@ -52,6 +53,41 @@ TEST(XGrammarFSMBuilderTest, TestTrieFSMBuilder) {
   EXPECT_EQ(fsm.GetFsm().GetNextState(state, 'g'), 15);
   EXPECT_EQ(fsm.GetFsm().GetNextState(15, 'o'), 16);
   EXPECT_EQ(fsm.GetFsm().GetNextState(16, 'e'), -1);
+}
+
+TEST(XGrammarFSMBuilderTest, TestTrieExcludedSuffixes) {
+  // Following a longer pattern must not hide an excluded suffix at an explicit
+  // trie node, including suffixes inherited through multiple failure links.
+  const std::vector<std::vector<std::string>> excluded_sets = {
+      {"b", "abx"}, {"abx", "b"}, {"b", "abx", "xabxx"}, {"ab", "ab", "abx"}
+  };
+  for (const auto& excludes : excluded_sets) {
+    auto result = TrieFSMBuilder::Build({}, excludes, nullptr, true, true);
+    ASSERT_TRUE(result.has_value());
+    const auto& fsm = result->GetFsm();
+    // Compare the byte FSM against an independent substring predicate for every
+    // string up to length five, rather than depending on generated state numbers.
+    std::vector<std::string> inputs = {""};
+    for (int length = 0; length <= 5; ++length) {
+      std::vector<std::string> next;
+      for (const auto& input : inputs) {
+        bool expected = true;
+        for (const auto& excluded : excludes) {
+          expected = expected && input.find(excluded) == std::string::npos;
+        }
+        int state = result->GetStart();
+        for (uint8_t byte : input) {
+          state = fsm.GetNextState(state, byte);
+          if (state == FSM::kNoNextState) break;
+        }
+        EXPECT_EQ(state != FSM::kNoNextState, expected) << input;
+        if (length < 5) {
+          for (char byte : {'a', 'b', 'x'}) next.push_back(input + byte);
+        }
+      }
+      inputs = std::move(next);
+    }
+  }
 }
 
 TEST(XGrammarFSMBuilderTest, TestTagDispatchFSMBuilder1) {
@@ -409,6 +445,34 @@ TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenChars) {
   // Multi-byte UTF-8 characters (bytes >= 0x80) are not affected by the JSON exclusion.
   fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars(".+", forbidden).Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("你好"));
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenCharsPreservesRepeatAuxData) {
+  const auto& forbidden = GrammarFSMBuilder::JSONStringForbiddenChars();
+  GrammarBuilder builder;
+
+  auto fsm_wse =
+      RegexFSMBuilder::BuildWithForbiddenChars("[^\\n\\r]{1,129}", forbidden, &builder).Unwrap();
+  const auto& fsm = fsm_wse.GetFsm();
+  const auto& aux_data = fsm.GetEdgeAuxData();
+  ASSERT_FALSE(aux_data.empty());
+
+  bool found_repeat_edge = false;
+  for (int state = 0; state < fsm.NumStates(); ++state) {
+    for (const auto& edge : fsm.GetEdges(state)) {
+      if (!edge.IsRepeatRef()) {
+        continue;
+      }
+      found_repeat_edge = true;
+      ASSERT_GE(edge.GetAuxIndex(), 0);
+      ASSERT_LT(edge.GetAuxIndex() + 2, static_cast<int32_t>(aux_data.size()));
+
+      auto repeat_info = fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+      EXPECT_EQ(repeat_info.Lower(), 1);
+      EXPECT_EQ(repeat_info.Upper(), 129);
+    }
+  }
+  EXPECT_TRUE(found_repeat_edge);
 }
 
 TEST(XGrammarFSMBuilderTest, TestGrammarFSMBuilderRegex) {

@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -733,6 +734,12 @@ const std::vector<int32_t>& GrammarMatcherForTokenMaskCache::GetTokenEdgeAccepte
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   int32_t sorted_size = static_cast<int32_t>(sorted_decoded_vocab.size());
   const auto& tid_to_sorted = tokenizer_info_.ImplPtr()->GetTokenIdToSortedVocabIndex();
+  // Out-of-vocabulary ids are rejected before compilation starts (CheckTokenIdsInVocab); guard
+  // here as well because this runs on worker threads, where an out-of-bounds read cannot be
+  // reported as an error.
+  auto sorted_index = [&](int32_t tid) {
+    return tid >= 0 && tid < static_cast<int32_t>(tid_to_sorted.size()) ? tid_to_sorted[tid] : -1;
+  };
 
   bool has_exclude_token = false;
 
@@ -740,20 +747,16 @@ const std::vector<int32_t>& GrammarMatcherForTokenMaskCache::GetTokenEdgeAccepte
     if (edge.IsToken()) {
       auto info = fsm.GetFsm().GetFsm().GetTokenEdgeInfo(edge.GetAuxIndex());
       for (int32_t i = 0; i < info.Count(); ++i) {
-        int32_t tid = info.TokenIds()[i];
-        XGRAMMAR_DCHECK(tid >= 0 && tid < static_cast<int32_t>(tid_to_sorted.size()));
-        if (tid_to_sorted[tid] >= 0) {
-          tmp_token_edge_accepted_.push_back(tid_to_sorted[tid]);
+        if (int32_t index = sorted_index(info.TokenIds()[i]); index >= 0) {
+          tmp_token_edge_accepted_.push_back(index);
         }
       }
     } else if (edge.IsExcludeToken()) {
       has_exclude_token = true;
       auto info = fsm.GetFsm().GetFsm().GetExcludeTokenEdgeInfo(edge.GetAuxIndex());
       for (int32_t i = 0; i < info.Count(); ++i) {
-        int32_t tid = info.TokenIds()[i];
-        XGRAMMAR_DCHECK(tid >= 0 && tid < static_cast<int32_t>(tid_to_sorted.size()));
-        if (tid_to_sorted[tid] >= 0) {
-          tmp_token_edge_excluded_.push_back(tid_to_sorted[tid]);
+        if (int32_t index = sorted_index(info.TokenIds()[i]); index >= 0) {
+          tmp_token_edge_excluded_.push_back(index);
         }
       }
     }
@@ -1033,6 +1036,10 @@ class GrammarCompilerSub {
 
   CompiledGrammar CompileRegex(const std::string& regex);
 
+  CompiledGrammar CompileLark(
+      const std::string& lark_string, const std::vector<NamedGrammar>& named_grammars
+  );
+
   CompiledGrammar CompileStructuralTag(const std::string& structural_tag_json);
 
   CompiledGrammar CompileGrammar(const Grammar& grammar);
@@ -1061,10 +1068,34 @@ class GrammarCompilerSub {
   std::optional<RuleLevelCache> rule_level_cache_;
 };
 
+/*!
+ * \brief Check that every token id written in Token(...), ExcludeToken(...) and TokenTagDispatch
+ * exists in the vocabulary. They are used as indices into per-token arrays during compilation,
+ * which runs on worker threads where an error cannot be reported.
+ */
+static void CheckTokenIdsInVocab(const Grammar& grammar, int vocab_size) {
+  const CompactFSM& fsm = grammar->complete_fsm;
+  for (int state = 0; state < fsm.NumStates(); ++state) {
+    for (const auto& edge : fsm.GetEdges(state)) {
+      if (!edge.IsToken() && !edge.IsExcludeToken()) {
+        continue;
+      }
+      // Token and exclude-token edges share the [count, token_id_0, ...] aux layout.
+      const auto info = fsm.GetTokenEdgeInfo(edge.GetAuxIndex());
+      for (int32_t i = 0; i < info.Count(); ++i) {
+        XGRAMMAR_CHECK(info.TokenIds()[i] >= 0 && info.TokenIds()[i] < vocab_size)
+            << "Token id " << info.TokenIds()[i]
+            << " in the grammar is out of the vocabulary range [0, " << vocab_size << ")";
+      }
+    }
+  }
+}
+
 CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
   compiled_grammar_impl->grammar = GrammarOptimizer::Apply(grammar_unoptimized);
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
+  CheckTokenIdsInVocab(compiled_grammar_impl->grammar, tokenizer_info_.GetVocabSize());
   if (tokenizer_info_.GetVocabSize() == 0) {
     return CompiledGrammar(compiled_grammar_impl);
   }
@@ -1182,6 +1213,12 @@ CompiledGrammar GrammarCompilerSub::CompileRegex(const std::string& regex) {
   return MultiThreadCompileGrammar(Grammar::FromRegex(regex));
 }
 
+CompiledGrammar GrammarCompilerSub::CompileLark(
+    const std::string& lark_string, const std::vector<NamedGrammar>& named_grammars
+) {
+  return MultiThreadCompileGrammar(Grammar::FromLark(lark_string, tokenizer_info_, named_grammars));
+}
+
 CompiledGrammar GrammarCompilerSub::CompileGrammar(const Grammar& grammar) {
   return MultiThreadCompileGrammar(grammar);
 }
@@ -1292,12 +1329,32 @@ class GrammarCompilerCacheKeys {
     XGRAMMAR_EQUAL_BY_MEMBERS(RegexKey, &RegexKey::regex);
   };
 
+  struct LarkNamedGrammarKey {
+    std::string name;
+    bool is_lark_source;
+    std::string source_or_ebnf;
+    std::string root_rule_name;
+    std::variant<Grammar, std::string> value;
+
+    bool operator==(const LarkNamedGrammarKey& other) const {
+      return std::tie(name, is_lark_source, source_or_ebnf, root_rule_name) ==
+             std::tie(other.name, other.is_lark_source, other.source_or_ebnf, other.root_rule_name);
+    }
+  };
+
+  struct LarkKey {
+    std::string lark_string;
+    std::vector<LarkNamedGrammarKey> named_grammars;
+
+    XGRAMMAR_EQUAL_BY_MEMBERS(LarkKey, &LarkKey::lark_string, &LarkKey::named_grammars);
+  };
+
   struct BuiltinJSONGrammarKey {
     XGRAMMAR_EQUAL_BY_MEMBERS_EMPTY(BuiltinJSONGrammarKey);
   };
 
-  using UnionKey =
-      std::variant<SchemaKey, StructuralTagKey, GrammarKey, RegexKey, BuiltinJSONGrammarKey>;
+  using UnionKey = std::
+      variant<SchemaKey, StructuralTagKey, GrammarKey, RegexKey, LarkKey, BuiltinJSONGrammarKey>;
 };
 
 }  // namespace xgrammar
@@ -1328,6 +1385,29 @@ XGRAMMAR_HASH_BY_MEMBERS(
     xgrammar::GrammarCompilerCacheKeys::RegexKey,
     &xgrammar::GrammarCompilerCacheKeys::RegexKey::regex
 );
+
+XGRAMMAR_HASH_BY_MEMBERS(
+    xgrammar::GrammarCompilerCacheKeys::LarkNamedGrammarKey,
+    &xgrammar::GrammarCompilerCacheKeys::LarkNamedGrammarKey::name,
+    &xgrammar::GrammarCompilerCacheKeys::LarkNamedGrammarKey::is_lark_source,
+    &xgrammar::GrammarCompilerCacheKeys::LarkNamedGrammarKey::source_or_ebnf,
+    &xgrammar::GrammarCompilerCacheKeys::LarkNamedGrammarKey::root_rule_name
+);
+
+namespace std {
+template <>
+struct hash<xgrammar::GrammarCompilerCacheKeys::LarkKey> {
+  std::size_t operator()(const xgrammar::GrammarCompilerCacheKeys::LarkKey& key) const noexcept {
+    uint64_t seed = std::hash<std::string>{}(key.lark_string);
+    for (const auto& named_grammar : key.named_grammars) {
+      xgrammar::HashCombineBinary(
+          seed, std::hash<xgrammar::GrammarCompilerCacheKeys::LarkNamedGrammarKey>{}(named_grammar)
+      );
+    }
+    return seed;
+  }
+};
+}  // namespace std
 
 XGRAMMAR_HASH_BY_MEMBERS_EMPTY(xgrammar::GrammarCompilerCacheKeys::BuiltinJSONGrammarKey);
 
@@ -1383,6 +1463,10 @@ class GrammarCompiler::Impl {
 
   CompiledGrammar CompileRegex(const std::string& regex);
 
+  CompiledGrammar CompileLark(
+      const std::string& lark_string, const std::vector<NamedGrammar>& named_grammars
+  );
+
   CompiledGrammar CompileGrammar(const Grammar& grammar);
 
   CompiledGrammar CompileGrammar(const std::string& ebnf_str, std::string root_rule_name);
@@ -1398,6 +1482,8 @@ class GrammarCompiler::Impl {
   using StructuralTagKey = GrammarCompilerCacheKeys::StructuralTagKey;
   using GrammarKey = GrammarCompilerCacheKeys::GrammarKey;
   using RegexKey = GrammarCompilerCacheKeys::RegexKey;
+  using LarkNamedGrammarKey = GrammarCompilerCacheKeys::LarkNamedGrammarKey;
+  using LarkKey = GrammarCompilerCacheKeys::LarkKey;
   using BuiltinJSONGrammarKey = GrammarCompilerCacheKeys::BuiltinJSONGrammarKey;
   using UnionKey = GrammarCompilerCacheKeys::UnionKey;
 
@@ -1446,6 +1532,13 @@ CompiledGrammar GrammarCompiler::Impl::Compute(const UnionKey& key) {
         } else if constexpr (std::is_same_v<KeyType, RegexKey>) {
           const auto& [regex] = key;
           return this->no_cache_compiler_.CompileRegex(regex);
+        } else if constexpr (std::is_same_v<KeyType, LarkKey>) {
+          std::vector<NamedGrammar> named_grammars;
+          named_grammars.reserve(key.named_grammars.size());
+          for (const auto& named_grammar : key.named_grammars) {
+            named_grammars.push_back({named_grammar.name, named_grammar.value});
+          }
+          return this->no_cache_compiler_.CompileLark(key.lark_string, named_grammars);
         } else if constexpr (std::is_same_v<KeyType, BuiltinJSONGrammarKey>) {
           return this->no_cache_compiler_.CompileBuiltinJSONGrammar();
         } else {
@@ -1495,6 +1588,43 @@ CompiledGrammar GrammarCompiler::Impl::CompileRegex(const std::string& regex) {
     return no_cache_compiler_.CompileRegex(regex);
   }
   return grammar_level_cache_.Get(RegexKey{regex});
+}
+
+CompiledGrammar GrammarCompiler::Impl::CompileLark(
+    const std::string& lark_string, const std::vector<NamedGrammar>& named_grammars
+) {
+  if (!cache_enabled_) {
+    return no_cache_compiler_.CompileLark(lark_string, named_grammars);
+  }
+
+  std::vector<LarkNamedGrammarKey> named_grammar_keys;
+  named_grammar_keys.reserve(named_grammars.size());
+  for (const auto& named_grammar : named_grammars) {
+    if (std::holds_alternative<std::string>(named_grammar.grammar)) {
+      const auto& source = std::get<std::string>(named_grammar.grammar);
+      named_grammar_keys.push_back(
+          {named_grammar.name, /*is_lark_source=*/true, source, "", named_grammar.grammar}
+      );
+    } else {
+      const auto& grammar = std::get<Grammar>(named_grammar.grammar);
+      named_grammar_keys.push_back(
+          {named_grammar.name,
+           /*is_lark_source=*/false,
+           grammar.ToString(),
+           grammar->GetRootRule().name,
+           named_grammar.grammar}
+      );
+    }
+  }
+  std::sort(
+      named_grammar_keys.begin(),
+      named_grammar_keys.end(),
+      [](const LarkNamedGrammarKey& lhs, const LarkNamedGrammarKey& rhs) {
+        return std::tie(lhs.name, lhs.is_lark_source, lhs.source_or_ebnf, lhs.root_rule_name) <
+               std::tie(rhs.name, rhs.is_lark_source, rhs.source_or_ebnf, rhs.root_rule_name);
+      }
+  );
+  return grammar_level_cache_.Get(LarkKey{lark_string, std::move(named_grammar_keys)});
 }
 
 CompiledGrammar GrammarCompiler::Impl::CompileGrammar(const Grammar& grammar) {
@@ -1568,6 +1698,12 @@ CompiledGrammar GrammarCompiler::CompileStructuralTag(const std::string& structu
 
 CompiledGrammar GrammarCompiler::CompileRegex(const std::string& regex) {
   return pimpl_->CompileRegex(regex);
+}
+
+CompiledGrammar GrammarCompiler::CompileLark(
+    const std::string& lark_string, const std::vector<NamedGrammar>& named_grammars
+) {
+  return pimpl_->CompileLark(lark_string, named_grammars);
 }
 
 CompiledGrammar GrammarCompiler::CompileGrammar(const Grammar& grammar) {

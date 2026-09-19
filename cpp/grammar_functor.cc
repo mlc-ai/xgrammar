@@ -2036,7 +2036,7 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
    * upper) to the resulting grammar_expr_id.
    *
    * Grammars may contain a large number of identical repetitions. E.g. a JSON schema converted
-   * with max_whitespace_cnt emits one [ \n\t]{0,n} repetition per whitespace position, so a
+   * with max_whitespace_cnt emits one [ \n\r\t]{0,n} repetition per whitespace position, so a
    * schema with 50k properties produces 200k+ identical repetitions. Expanding each occurrence
    * into its own chain of rules multiplies the rule count by more than an order of magnitude,
    * which blows up all downstream compilation stages (FSM building, token mask cache) in both
@@ -2159,8 +2159,8 @@ int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
     const std::string& cur_rule_name, int32_t grammar_expr_id, int64_t lower, int64_t upper
 ) {
   static const int64_t kUnzipThreshold = 128;
-  XGRAMMAR_DCHECK(lower >= 0);
-  XGRAMMAR_DCHECK(upper == -1 || upper >= lower);
+  XGRAMMAR_CHECK(lower >= 0 && (upper == -1 || upper >= lower))
+      << "Invalid repetition range {" << lower << ", " << upper << "}";
 
   // Case 1.1 small upper (<=threshold), unzip the repetition.
   // Case 1.2 unbounded upper, and lower is also small (<=threshold), unzip the lower part.

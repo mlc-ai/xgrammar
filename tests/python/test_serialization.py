@@ -7,10 +7,10 @@ from typing import Any, List, Tuple
 
 import pytest
 from pydantic import BaseModel, RootModel
-from transformers import AutoTokenizer  # type: ignore
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import _is_grammar_accept_string
+from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
 
 
 def construct_grammar():
@@ -40,6 +40,13 @@ def construct_compiled_grammar():
     grammar = construct_grammar()
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
     return grammar_compiler.compile_grammar(grammar), tokenizer_info
+
+
+def _set_path(obj, path, value):
+    """Set obj[path[0]][path[1]]... = value on a parsed JSON object."""
+    for key in path[:-1]:
+        obj = obj[key]
+    obj[path[-1]] = value
 
 
 def test_get_serialization_version():
@@ -196,6 +203,30 @@ def test_serialize_tokenizer_info_functional():
     assert matcher_original.accept_string(test_input) == matcher_recovered.accept_string(test_input)
 
 
+def test_serialize_tokenizer_info_token_grammar_functional():
+    """Test binary vocab preservation and token masks after deserialization."""
+    original_tokenizer_info = xgr.TokenizerInfo(
+        [b"\x00", b"a", b"</s>"], vocab_type=xgr.VocabType.RAW, vocab_size=4, stop_token_ids=[2]
+    )
+    recovered_tokenizer_info = xgr.TokenizerInfo.deserialize_json(
+        original_tokenizer_info.serialize_json()
+    )
+
+    assert recovered_tokenizer_info.decoded_vocab == original_tokenizer_info.decoded_vocab
+
+    grammar = xgr.Grammar.from_ebnf("root ::= Token(1)\n")
+    compiled_grammar = xgr.GrammarCompiler(
+        recovered_tokenizer_info, cache_enabled=False
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    token_bitmask = xgr.allocate_token_bitmask(1, recovered_tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(
+        token_bitmask, recovered_tokenizer_info.vocab_size
+    )
+    assert rejected_token_ids == [0, 2, 3]
+
+
 def test_serialize_compiled_grammar():
     """Test CompiledGrammar serialization produces expected JSON string. We verify the adaptive
     token mask part separately.
@@ -332,7 +363,7 @@ def test_serialize_compiled_grammar_functional():
 @pytest.mark.hf_token_required
 def test_serialize_compiled_grammar_with_hf_tokenizer():
     """Test CompiledGrammar serialization with a real HuggingFace tokenizer."""
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = load_tokenizer(
         "meta-llama/Llama-3.1-8B-Instruct", use_fast=True, trust_remote_code=True
     )
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
@@ -417,6 +448,117 @@ def test_serialized_output_survives_pickle():
     )
     assert result.returncode == 0, f"returncode={result.returncode}\n{result.stderr[-2000:]}"
     assert "PICKLE_OK" in result.stdout
+
+
+# The reflection-based deserializer restores fields verbatim, so corrupted ids and offsets used to
+# be dereferenced later and crash the process. They must be rejected at deserialization time.
+@pytest.mark.parametrize(
+    "path, value",
+    [
+        (["root_rule_id"], 2**31 - 1),
+        (["grammar_expr_indptr"], [10**9]),
+        (["grammar_expr_data"], []),
+        (["rules", 0, 1], 10**6),  # body_expr_id
+        (["allow_empty_rule_ids"], [10**6]),
+    ],
+)
+def test_deserialize_grammar_rejects_out_of_range(path, value):
+    obj = json.loads(construct_grammar().serialize_json())
+    _set_path(obj, path, value)
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.Grammar.deserialize_json(json.dumps(obj))
+
+
+def test_deserialize_grammar_rejects_rule_ref_out_of_range():
+    obj = json.loads(construct_grammar().serialize_json())
+    data, indptr = obj["grammar_expr_data"], obj["grammar_expr_indptr"]
+    # Every expr is stored as [type, length, data...]; type 4 is a rule reference.
+    rule_ref_starts = [start for start in indptr if data[start] == 4]
+    assert rule_ref_starts
+    data[rule_ref_starts[0] + 2] = 10**6
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.Grammar.deserialize_json(json.dumps(obj))
+
+
+@pytest.mark.parametrize(
+    "path, value",
+    [
+        (["grammar", "per_rule_fsms"], []),  # optimized grammar without per-rule FSMs
+        (["grammar", "complete_fsm"], None),
+        (["grammar", "complete_fsm", "edges", "data_", 0, 2], 10**6),  # edge target
+        (["grammar", "complete_fsm", "edges", "indptr_"], [0]),  # CSR does not cover the data
+        (["grammar", "complete_fsm", "edge_num"], 0),
+        (["grammar", "per_rule_fsms", 0, 0, 1], 10**6),  # start state
+        (["grammar", "per_rule_fsms", 0, 0, 2], [10**6]),  # end states
+    ],
+)
+def test_deserialize_compiled_grammar_rejects_corrupted_fsm(path, value):
+    compiled_grammar, tokenizer_info = construct_compiled_grammar()
+    obj = json.loads(compiled_grammar.serialize_json())
+    _set_path(obj, path, value)
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.CompiledGrammar.deserialize_json(json.dumps(obj), tokenizer_info)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"accepted_indices": [10**6]},
+        {"rejected_indices": [-1]},
+        {"uncertain_indices": [10**6]},
+        {"store_type": 7},
+        {"accepted_bitset": [64, 2]},  # declares 2 words but provides none
+        {"store_type": 2, "accepted_bitset": [1, 1, 0]},  # bitset smaller than vocab_size
+    ],
+)
+def test_deserialize_compiled_grammar_rejects_corrupted_mask(fields):
+    compiled_grammar, tokenizer_info = construct_compiled_grammar()
+    obj = json.loads(compiled_grammar.serialize_json())
+    obj["adaptive_token_mask_cache"][0][1].update(fields)
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.CompiledGrammar.deserialize_json(json.dumps(obj), tokenizer_info)
+
+
+@pytest.mark.parametrize(
+    "path, value",
+    [
+        (["vocab_size"], 3),  # smaller than the number of real tokens
+        (["sorted_decoded_vocab", 0, 0], 10**6),
+        (["trie_subtree_nodes_range"], []),
+        (["stop_token_ids"], [10**6]),
+        (["special_token_ids"], [-1]),
+    ],
+)
+def test_deserialize_tokenizer_info_rejects_out_of_range(path, value):
+    obj = json.loads(construct_tokenizer_info().serialize_json())
+    _set_path(obj, path, value)
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.TokenizerInfo.deserialize_json(json.dumps(obj))
+
+
+def test_deserialized_tokenizer_info_compiles_token_edges():
+    # token_id_to_sorted_vocab_index is derived data that is not serialized; compiling a grammar
+    # with Token() edges against a deserialized TokenizerInfo used to read the missing array.
+    tokenizer_info = construct_tokenizer_info()
+    recovered = xgr.TokenizerInfo.deserialize_json(tokenizer_info.serialize_json())
+    grammar = xgr.Grammar.from_ebnf('root ::= Token(2, 3) "a"\n')
+    masks = []
+    for info in (tokenizer_info, recovered):
+        matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(info).compile_grammar(grammar))
+        mask = xgr.allocate_token_bitmask(1, info.vocab_size)
+        matcher.fill_next_token_bitmask(mask)
+        masks.append(mask.tolist())
+        assert matcher.accept_token(2)
+    assert masks[0] == masks[1]
+
+
+@pytest.mark.thread_unsafe
+def test_deserialize_deeply_nested_json_rejected():
+    # The JSON parser recurses once per nesting level; the depth is bounded by the maximum
+    # recursion depth and reported as an invalid JSON error.
+    with xgr.max_recursion_depth(50):
+        with pytest.raises(xgr.InvalidJSONError, match="Maximum recursion depth exceeded"):
+            xgr.Grammar.deserialize_json("[" * 60 + "]" * 60)
 
 
 if __name__ == "__main__":

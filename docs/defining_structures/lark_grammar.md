@@ -46,14 +46,18 @@ xgr.Grammar.from_lark(
 - `named_grammars` supplies external grammars referenced with `@name` in the Lark source. See
   [Named Grammars](#named-grammars).
 
-The returned grammar is compiled and matched like any other grammar:
+Use `GrammarCompiler.compile_lark` to parse and compile a Lark source in one call. The compiler's
+tokenizer information is used to resolve special tokens, and repeated calls with the same source
+and named grammars reuse the cached result when caching is enabled:
 
 ```python
 tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
 compiler = xgr.GrammarCompiler(tokenizer_info)
-compiled = compiler.compile_grammar(xgr.Grammar.from_lark('start: "a" | "b"'))
+compiled = compiler.compile_lark('start: "a" | "b"')
 matcher = xgr.GrammarMatcher(compiled)
 ```
+
+Use `Grammar.from_lark` instead when an uncompiled `Grammar` object is needed.
 
 Errors in the grammar raise `RuntimeError` with the line, the column, and the offending source
 line:

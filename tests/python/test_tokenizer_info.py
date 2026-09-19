@@ -3,7 +3,8 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 import pytest
-from transformers import AutoTokenizer, PreTrainedTokenizerBase
+from tokenizer_utils import load_tokenizer
+from transformers import PreTrainedTokenizerBase
 
 import xgrammar as xgr
 from xgrammar.tokenizer_info import _BYTE_LEVEL_CHARSET
@@ -44,6 +45,7 @@ tokenizer_path__vocab_type__prepend_space = [
     ("THUDM/glm-4-9b-chat", xgr.VocabType.RAW, False),
     ("THUDM/chatglm3-6b", xgr.VocabType.BYTE_FALLBACK, True),
     ("deepseek-ai/DeepSeek-R1", xgr.VocabType.BYTE_LEVEL, False),
+    ("deepseek-ai/DeepSeek-V4.1-Flash", xgr.VocabType.BYTE_LEVEL, False),
     ("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B", xgr.VocabType.BYTE_LEVEL, False),
     ("deepseek-ai/DeepSeek-R1-Distill-Llama-8B", xgr.VocabType.BYTE_LEVEL, False),
     ("openGPT-X/Teuken-7B-instruct-v0.6", xgr.VocabType.BYTE_FALLBACK, True),
@@ -68,7 +70,7 @@ def test_build_tokenizer_info(
     tokenizer_path: str,
     tokenizer_info_storage: Dict[str, Tuple[PreTrainedTokenizerBase, xgr.TokenizerInfo]],
 ):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     tokenizer_info_storage[tokenizer_path] = (tokenizer, tokenizer_info)
 
@@ -209,7 +211,7 @@ tokenizer_path__token_ids__raw_tokens = [
     "tokenizer_path, token_ids, raw_tokens", tokenizer_path__token_ids__raw_tokens
 )
 def test_vocab_conversion(tokenizer_path: str, token_ids: List[int], raw_tokens: List[bytes]):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     vocab = tokenizer_info.decoded_vocab
     for token_id, raw_token in zip(token_ids, raw_tokens):
@@ -235,7 +237,7 @@ tokenizer_path__metadata_str = [
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize("tokenizer_path, metadata_str", tokenizer_path__metadata_str)
 def test_dump_metadata_load(tokenizer_path: str, metadata_str: str):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     assert tokenizer_info.dump_metadata() == metadata_str
 
@@ -264,7 +266,7 @@ def test_special_token_detection():
     "tokenizer_path", ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
 )
 def test_customize_stop_token_ids(tokenizer_path: str):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = load_tokenizer(tokenizer_path)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, stop_token_ids=[1, 2, 3])
     assert tokenizer_info.stop_token_ids == [1, 2, 3]
 
@@ -274,7 +276,7 @@ def test_customize_stop_token_ids(tokenizer_path: str):
     "tokenizer_path", ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
 )
 def test_padding_vocab_size(tokenizer_path: str):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = load_tokenizer(tokenizer_path)
     original_vocab_size = len(tokenizer.get_vocab())
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(
         tokenizer, vocab_size=original_vocab_size + 5
@@ -293,7 +295,7 @@ tokenizer_path__model_vocab_size = [
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize("tokenizer_path, model_vocab_size", tokenizer_path__model_vocab_size)
 def test_model_vocab_size_smaller_than_tokenizer(tokenizer_path: str, model_vocab_size: int):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = load_tokenizer(tokenizer_path)
     original_vocab_size = len(tokenizer.get_vocab())
     assert original_vocab_size > model_vocab_size
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=model_vocab_size)
@@ -301,6 +303,23 @@ def test_model_vocab_size_smaller_than_tokenizer(tokenizer_path: str, model_voca
     assert len(tokenizer_info.decoded_vocab) == model_vocab_size
     print(tokenizer_info.special_token_ids)
     print(len(tokenizer_info.decoded_vocab))
+
+
+def test_tokenizer_info_vocab_size_smaller_than_vocab_raises():
+    # vocab_size only ever pads the vocab; a value below the number of real tokens leaves token ids
+    # without a slot and used to corrupt an internal table. It must be rejected.
+    vocab = [str(i) for i in range(100)]
+    with pytest.raises(RuntimeError):
+        xgr.TokenizerInfo(vocab, vocab_size=1)
+
+
+def test_matcher_accept_padding_token_id():
+    # With a padded vocab, ids in [len(vocab), vocab_size) are padding/special ids with no decoded
+    # token. Accepting one must be rejected gracefully instead of reading out of bounds.
+    tokenizer_info = xgr.TokenizerInfo(["a", "b"], vocab_size=1000, stop_token_ids=[])
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_builtin_json_grammar()
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_token(500) is False
 
 
 if __name__ == "__main__":

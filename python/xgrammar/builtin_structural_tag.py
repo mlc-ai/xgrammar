@@ -15,8 +15,10 @@ from .openai_tool_call_schema import (
 from .structural_tag import (
     AnyTextFormat,
     ConstStringFormat,
+    Format,
     JSONSchemaFormat,
     OptionalFormat,
+    OrFormat,
     RegexFormat,
     SequenceFormat,
     StructuralTag,
@@ -32,11 +34,12 @@ def get_model_structural_tag(
     model: str,
     tools: Optional[List[Union[ToolParam, dict]]] = None,
     tool_choice: Union[ToolChoiceOptionParam, dict, None] = "auto",
-    reasoning: bool = True,
+    reasoning: Union[bool, Literal["enabled", "disabled", "auto"]] = "enabled",
     force_reasoning: bool = False,
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
 ) -> StructuralTag:
     r"""Get a structural tag for a model's reasoning and tool-call output format.
 
@@ -177,12 +180,14 @@ def get_model_structural_tag(
           available tools before applying its ``mode``. Its ``tools`` list may
           contain both function refs and builtin refs. Builtin refs are matched
           by ``type``.
-    reasoning : bool
-        Whether to enable the reasoning part. Some models, such as Qwen 3.6
-        and DeepSeek V4, support both reasoning and non-reasoning modes. If
-        ``False``, use the non-reasoning mode. For models that do not support
-        reasoning, this has no effect. For models that only support reasoning,
-        ``False`` means reasoning with empty content.
+    reasoning : Union[bool, Literal["enabled", "disabled", "auto"]]
+        Controls the model-specific reasoning section. Use the recommended
+        string modes ``"enabled"``, ``"disabled"``, or ``"auto"``.
+        For models with a leading reasoning block, ``"auto"`` allows either a
+        complete block or a direct response/tool call. Defaults to ``"enabled"``.
+        The boolean aliases ``True`` and ``False`` are deprecated but remain
+        supported by this dispatcher as ``"enabled"`` and ``"disabled"``,
+        respectively. Model-specific builders accept the three string modes.
     force_reasoning : bool
         Deprecated. Control whether to keep the reasoning part but leave its content empty.
         Now we will embed the model's specific behavior into the structural tag function, so
@@ -207,12 +212,22 @@ def get_model_structural_tag(
         of whitespace, which avoids the unbounded-whitespace outputs some models
         emit in bad cases that would otherwise blow up grammar
         compilation/matching. Default: ``None``.
+    parallel_tool_calls : bool
+        Whether the model may emit more than one tool call in a single response.
+        Follows the OpenAI Chat Completions parameter of the same name. Default
+        ``True``, which keeps the multi-call grammar. When ``False``, the
+        structural tag allows at most one tool call, so the response holds
+        exactly zero or one call under ``tool_choice="auto"`` and exactly one
+        under ``"required"`` or a forced tool. Because a second call is no
+        longer reachable, generation must end once the single call is closed:
+        free text is still allowed *before* the call but not after it.
 
     Notes
     -----
     If a tool's ``parameters`` field is omitted or ``None``, its generated
     arguments are unconstrained JSON. If a function tool has ``strict=False``,
-    its ``parameters`` schema is also treated as unconstrained.
+    its ``parameters`` schema is also treated as unconstrained. MiniMax M3's
+    fixed-name XML converter currently rejects such unconstrained schemas.
 
     Returns
     -------
@@ -222,7 +237,7 @@ def get_model_structural_tag(
     Raises
     ------
     ValueError
-        If tool lists, tool choices, or required tool availability are invalid.
+        If tool lists, tool choices, reasoning modes, or required tool availability are invalid.
     """
 
     func = _structural_tag_registry.get(model)
@@ -234,14 +249,27 @@ def get_model_structural_tag(
         tools, tool_choice
     )
 
+    if isinstance(reasoning, bool):
+        reasoning_mode = "enabled" if reasoning else "disabled"
+    elif isinstance(reasoning, str) and reasoning in ("enabled", "disabled", "auto"):
+        reasoning_mode = reasoning
+    else:
+        raise ValueError(
+            "The 'reasoning' argument must be a bool or one of: " "'enabled', 'disabled', 'auto'."
+        )
+
+    if not isinstance(parallel_tool_calls, bool):
+        raise ValueError("The 'parallel_tool_calls' argument must be a bool.")
+
     return func(
         function_tools,
         builtin_tools,
         simplified_tool_choice,
-        reasoning,
+        reasoning_mode,
         any_order=any_order,
         exclude_special_tokens=exclude_special_tokens,
         max_whitespace_cnt=max_whitespace_cnt,
+        parallel_tool_calls=parallel_tool_calls,
     )
 
 
@@ -345,7 +373,7 @@ def normalize_tool_choice(
             function_tools,
             builtin_tools,
             tool_choice,
-            reasoning=True,
+            reasoning="enabled",
         )
     """
 
@@ -451,6 +479,53 @@ def _text_excludes(exclude_special_tokens: bool, tokens: List[str]) -> List[str]
     return list(tokens) if exclude_special_tokens else []
 
 
+def _build_reasoning_prefix(
+    *,
+    reasoning_mode: Literal["enabled", "disabled", "auto"],
+    think_tag_begin: str,
+    think_tag_end: str,
+    exclude_special_tokens: bool,
+    reasoning_exclude_tokens: List[str],
+    prompt_end_with_think: bool = True,
+    reasoning_suffix: str = "",
+) -> Optional[Format]:
+    """Build a conventional leading reasoning block.
+
+    ``enabled`` continues an opener already present in the prompt by default.
+    ``auto`` makes a complete reasoning block optional. ``disabled`` omits the
+    block. Models with a different protocol keep their model-specific assembly.
+    """
+
+    if reasoning_mode not in ("enabled", "disabled", "auto"):
+        raise ValueError(
+            "The 'reasoning_mode' argument must be one of: 'enabled', 'disabled', 'auto'."
+        )
+    if reasoning_mode == "disabled":
+        return None
+
+    begin = "" if reasoning_mode == "enabled" and prompt_end_with_think else think_tag_begin
+    prefix: Format = TagFormat(
+        begin=begin,
+        content=AnyTextFormat(
+            excludes=_text_excludes(exclude_special_tokens, reasoning_exclude_tokens)
+        ),
+        end=think_tag_end,
+    )
+    if reasoning_suffix:
+        prefix = SequenceFormat(elements=[prefix, ConstStringFormat(value=reasoning_suffix)])
+    if reasoning_mode == "auto":
+        prefix = OptionalFormat(content=prefix)
+    return prefix
+
+
+def _assemble_structural_tag(prefix: Optional[Format], suffix: Format) -> StructuralTag:
+    """Assemble an optional reasoning prefix and a model-specific suffix."""
+
+    if prefix is None:
+        return StructuralTag(format=suffix)
+    return StructuralTag(format=SequenceFormat(elements=[prefix, suffix]))
+
+
 def _filter_allowed_tools(
     tools: List[FunctionToolParam],
     builtin_tools: List[BuiltinToolParam],
@@ -505,7 +580,7 @@ def register_model_structural_tag(name: str):
         @register_model_structural_tag("my_model")
         def get_my_model_structural_tag(
             tools=None, builtin_tools=None, tool_choice="auto",
-            reasoning=True, **kwargs,
+            reasoning="enabled", **kwargs,
         ):
             ...
     """
@@ -525,10 +600,11 @@ def get_llama_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Llama style structural tag format.
@@ -588,6 +664,7 @@ def get_llama_structural_tag(
                 triggers=[TOOLS_TRIGGER],
                 tags=tags,
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -631,6 +708,7 @@ def get_llama_structural_tag(
             tags=tags,
             excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             at_least_one=True,
+            stop_after_first=not parallel_tool_calls,
         )
 
     return StructuralTag(format=suffix_tag)
@@ -641,10 +719,11 @@ def get_kimi_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Kimi-K2 style structural tag format.
@@ -658,8 +737,9 @@ def get_kimi_structural_tag(
 
     - ``tools``: a list of function tools. Each tool should have a ``function``
       object containing ``name`` and ``parameters`` fields.
-    - ``reasoning``: whether to enable reasoning mode. If ``False``, remove
-      the reasoning part and constrain only the following part.
+    - ``reasoning``: ``"enabled"`` keeps the reasoning part,
+      ``"disabled"`` removes it, and ``"auto"`` makes a complete reasoning
+      block optional.
 
     Supported models:
 
@@ -679,6 +759,7 @@ def get_kimi_structural_tag(
     TOOL_CALL_END = "<|tool_call_end|>"
     TOOL_CALLS_SECTION_BEGIN = "<|tool_calls_section_begin|>"
     TOOL_CALLS_SECTION_END = "<|tool_calls_section_end|>"
+    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
 
@@ -709,7 +790,9 @@ def get_kimi_structural_tag(
             )
 
         if len(tags) > 0:
-            inner_tool_calls = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+            inner_tool_calls = TagsWithSeparatorFormat(
+                tags=tags, separator="", at_least_one=True, stop_after_first=not parallel_tool_calls
+            )
             tool_calls = TagFormat(
                 begin=TOOL_CALLS_SECTION_BEGIN, content=inner_tool_calls, end=TOOL_CALLS_SECTION_END
             )
@@ -719,6 +802,7 @@ def get_kimi_structural_tag(
                 excludes=_text_excludes(
                     exclude_special_tokens, [*THINK_EXCLUDE_TOKENS, TOOL_CALL_BEGIN]
                 ),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -777,16 +861,25 @@ def get_kimi_structural_tag(
         suffix_tag = SequenceFormat(
             elements=[
                 ConstStringFormat(value=TOOL_CALLS_SECTION_BEGIN),
-                TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True),
+                TagsWithSeparatorFormat(
+                    tags=tags,
+                    separator="",
+                    at_least_one=True,
+                    stop_after_first=not parallel_tool_calls,
+                ),
                 ConstStringFormat(value=TOOL_CALLS_SECTION_END),
             ]
         )
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
-    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        # Kimi-K2 does not prefill <think>; preserve enabled mode's acceptance of it.
+        reasoning_exclude_tokens=THINK_EXCLUDE_TOKENS if reasoning == "auto" else [],
+    )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 @register_model_structural_tag("kimi_k3")
@@ -794,10 +887,11 @@ def get_kimi_k3_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     r"""Get Kimi-K3 style structural tag format.
@@ -836,8 +930,8 @@ def get_kimi_k3_structural_tag(
 
     - ``tools``: a list of function tools. Each tool should have a ``function``
       object containing ``name`` and ``parameters`` fields.
-    - ``reasoning``: whether to enable reasoning mode. If ``False``, remove
-      the leading think block and constrain only the following part.
+    - ``reasoning``: selects ``"enabled"``, ``"disabled"``, or adaptive
+      ``"auto"`` reasoning.
 
     Supported models:
 
@@ -852,6 +946,7 @@ def get_kimi_k3_structural_tag(
     OPEN = "<|open|>"
     CLOSE = "<|close|>"
     SEP = "<|sep|>"
+    THINK_BEGIN = f"{OPEN}think{SEP}"
     THINK_END = f"{CLOSE}think{SEP}"
     RESPONSE_BEGIN = f"{OPEN}response{SEP}"
     RESPONSE_END = f"{CLOSE}response{SEP}"
@@ -893,7 +988,12 @@ def get_kimi_k3_structural_tag(
             tools_part = OptionalFormat(
                 content=TagFormat(
                     begin=TOOLS_SECTION_BEGIN,
-                    content=TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True),
+                    content=TagsWithSeparatorFormat(
+                        tags=tags,
+                        separator="",
+                        at_least_one=True,
+                        stop_after_first=not parallel_tool_calls,
+                    ),
                     end=TOOLS_SECTION_END,
                 )
             )
@@ -915,7 +1015,12 @@ def get_kimi_k3_structural_tag(
         tools_part = SequenceFormat(
             elements=[
                 ConstStringFormat(value=TOOLS_SECTION_BEGIN),
-                TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True),
+                TagsWithSeparatorFormat(
+                    tags=tags,
+                    separator="",
+                    at_least_one=True,
+                    stop_after_first=not parallel_tool_calls,
+                ),
                 ConstStringFormat(value=TOOLS_SECTION_END),
             ]
         )
@@ -923,20 +1028,19 @@ def get_kimi_k3_structural_tag(
     # The generation prompt already emitted the first block's opening marker, so the
     # constrained output starts inside its body: the think body in reasoning mode, the
     # response body otherwise. Only the remaining markers are generated by the model.
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_BEGIN,
+        think_tag_end=THINK_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=SPECIAL_EXCLUDE_TOKENS,
+    )
     elements: List[Any] = []
-    if reasoning:
-        elements.append(
-            TagFormat(
-                begin="",
-                content=AnyTextFormat(
-                    excludes=_text_excludes(exclude_special_tokens, SPECIAL_EXCLUDE_TOKENS)
-                ),
-                end=THINK_END,
-            )
-        )
+    if prefix_tag is not None:
+        elements.append(prefix_tag)
     elements.append(
         TagFormat(
-            begin=RESPONSE_BEGIN if reasoning else "",
+            begin="" if reasoning == "disabled" else RESPONSE_BEGIN,
             content=AnyTextFormat(
                 excludes=_text_excludes(exclude_special_tokens, SPECIAL_EXCLUDE_TOKENS)
             ),
@@ -956,10 +1060,11 @@ def get_deepseek_r1_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-R1 style structural tag format.
@@ -980,6 +1085,7 @@ def get_deepseek_r1_structural_tag(
     TOOL_SEP = "<｜tool▁sep｜>"
     JSON_RENDER_BEGIN = "\n```json\n"
     JSON_RENDER_END = "\n```"
+    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
 
@@ -1004,7 +1110,12 @@ def get_deepseek_r1_structural_tag(
             )
 
         if len(tags) > 0:
-            inner_tool_calls = TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True)
+            inner_tool_calls = TagsWithSeparatorFormat(
+                tags=tags,
+                separator="\n",
+                at_least_one=True,
+                stop_after_first=not parallel_tool_calls,
+            )
             tool_calls = TagFormat(
                 begin=TOOL_CALLS_BEGIN, content=inner_tool_calls, end=TOOL_CALLS_END
             )
@@ -1012,6 +1123,7 @@ def get_deepseek_r1_structural_tag(
                 triggers=[TOOL_CALLS_BEGIN],
                 tags=[tool_calls],
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -1050,15 +1162,19 @@ def get_deepseek_r1_structural_tag(
             )
 
         assert len(tags) > 0
-        inner_tool_calls = TagsWithSeparatorFormat(tags=tags, separator="\n", at_least_one=True)
+        inner_tool_calls = TagsWithSeparatorFormat(
+            tags=tags, separator="\n", at_least_one=True, stop_after_first=not parallel_tool_calls
+        )
         suffix_tag = TagFormat(begin=TOOL_CALLS_BEGIN, content=inner_tool_calls, end=TOOL_CALLS_END)
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
-
-    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=THINK_EXCLUDE_TOKENS,
+    )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 @register_model_structural_tag("deepseek_v3_1")
@@ -1066,10 +1182,11 @@ def get_deepseek_v3_1_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V3.1 style structural tag format.
@@ -1088,6 +1205,7 @@ def get_deepseek_v3_1_structural_tag(
     TOOL_CALL_BEGIN = "<｜tool▁call▁begin｜>"
     TOOL_CALL_END = "<｜tool▁call▁end｜>"
     TOOL_SEP = "<｜tool▁sep｜>"
+    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
 
@@ -1112,7 +1230,9 @@ def get_deepseek_v3_1_structural_tag(
             )
 
         if len(tags) > 0:
-            inner_tool_calls = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+            inner_tool_calls = TagsWithSeparatorFormat(
+                tags=tags, separator="", at_least_one=True, stop_after_first=not parallel_tool_calls
+            )
             tool_calls = TagFormat(
                 begin=TOOL_CALLS_BEGIN, content=inner_tool_calls, end=TOOL_CALLS_END
             )
@@ -1120,6 +1240,7 @@ def get_deepseek_v3_1_structural_tag(
                 triggers=[TOOL_CALLS_BEGIN],
                 tags=[tool_calls],
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -1158,15 +1279,19 @@ def get_deepseek_v3_1_structural_tag(
             )
 
         assert len(tags) > 0
-        inner_tool_calls = TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True)
+        inner_tool_calls = TagsWithSeparatorFormat(
+            tags=tags, separator="", at_least_one=True, stop_after_first=not parallel_tool_calls
+        )
         suffix_tag = TagFormat(begin=TOOL_CALLS_BEGIN, content=inner_tool_calls, end=TOOL_CALLS_END)
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
-
-    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=THINK_EXCLUDE_TOKENS,
+    )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 @register_model_structural_tag("qwen_3_5")
@@ -1175,10 +1300,11 @@ def get_qwen_3_5_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Qwen XML tool-call structural tag format.
@@ -1192,8 +1318,8 @@ def get_qwen_3_5_structural_tag(
 
     - ``tools``: a list of function tools. Each tool should have a ``function``
       object containing ``name`` and ``parameters`` fields.
-    - ``reasoning``: whether to add the ``</think>`` reasoning prefix before
-      the tool/text suffix.
+    - ``reasoning``: controls whether the reasoning prefix is required,
+      omitted, or optional before the tool/text suffix.
 
     Supported models:
 
@@ -1211,6 +1337,7 @@ def get_qwen_3_5_structural_tag(
     TOOL_CALL_BEGIN_SUFFIX = ">\n"
     TOOL_CALL_END = "\n</function>\n</tool_call>"
     TOOL_CALL_TRIGGER = "<tool_call>\n<function="
+    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_SUFFIX = "\n\n"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
@@ -1240,6 +1367,7 @@ def get_qwen_3_5_structural_tag(
                 triggers=[TOOL_CALL_TRIGGER],
                 tags=tags,
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -1286,18 +1414,18 @@ def get_qwen_3_5_structural_tag(
             tags=tags,
             excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             at_least_one=True,
+            stop_after_first=not parallel_tool_calls,
         )
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = SequenceFormat(
-        elements=[
-            TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END),
-            ConstStringFormat(value=THINK_SUFFIX),
-        ]
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=THINK_EXCLUDE_TOKENS,
+        reasoning_suffix=THINK_SUFFIX,
     )
-    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 get_qwen_3_coder_structural_tag = get_qwen_3_5_structural_tag
@@ -1309,10 +1437,11 @@ def get_qwen_3_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Qwen3 style structural tag format.
@@ -1326,8 +1455,8 @@ def get_qwen_3_structural_tag(
 
     - ``tools``: a list of function tools. Each tool should have a ``function``
       object containing ``name`` and ``parameters`` fields.
-    - ``reasoning``: whether to enable reasoning mode. If ``False``, remove
-      the reasoning part.
+    - ``reasoning``: controls whether the reasoning block is required,
+      omitted, or optional.
 
     Supported models:
 
@@ -1344,6 +1473,7 @@ def get_qwen_3_structural_tag(
     ARGUMENTS_FIELD_PREFIX = '", "arguments": '
     TOOL_CALL_END = "}\n</tool_call>"
     TOOL_CALL_TRIGGER = "<tool_call>"
+    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_SUFFIX = "\n\n"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
@@ -1372,6 +1502,7 @@ def get_qwen_3_structural_tag(
                 triggers=[TOOL_CALL_TRIGGER],
                 tags=tags,
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -1416,18 +1547,18 @@ def get_qwen_3_structural_tag(
             tags=tags,
             excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             at_least_one=True,
+            stop_after_first=not parallel_tool_calls,
         )
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = SequenceFormat(
-        elements=[
-            TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END),
-            ConstStringFormat(value=THINK_SUFFIX),
-        ]
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=THINK_EXCLUDE_TOKENS,
+        reasoning_suffix=THINK_SUFFIX,
     )
-    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 @register_model_structural_tag("harmony")
@@ -1435,10 +1566,11 @@ def get_harmony_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get harmony(gpt-oss) style structural tag format.
@@ -1455,7 +1587,7 @@ def get_harmony_structural_tag(
       object containing ``name`` and ``parameters`` fields.
     - ``builtin_tools``: a list of builtin tools. Each builtin tool should
       provide ``type``, optional ``name``, and ``parameters`` fields.
-    - ``reasoning``: whether to enable the analysis channel.
+    - ``reasoning``: controls whether the analysis channel is available.
 
     Supported models:
 
@@ -1559,12 +1691,41 @@ def get_harmony_structural_tag(
             tags.extend(_function_tool_tags(function.name, parameters))
         assert len(tags) > 0
 
-    if reasoning:
+    if reasoning != "disabled":
         analysis_tag = TagFormat(begin=ANALYSIS_BEGIN, content=AnyTextFormat(), end=FINAL_END)
         tags.append(analysis_tag)
 
-    tags_with_separator = TagsWithSeparatorFormat(tags=tags, separator=TAG_SEPARATOR)
-    return StructuralTag(format=tags_with_separator)
+    call_tags = [tag for tag in tags if tag.end == CALL_END]
+    message_tags = [tag for tag in tags if tag.end != CALL_END]
+    if parallel_tool_calls or not call_tags:
+        tags_with_separator = TagsWithSeparatorFormat(tags=tags, separator=TAG_SEPARATOR)
+        return StructuralTag(format=tags_with_separator)
+
+    # Harmony carries tool calls, analysis and final messages in one message stream, so
+    # capping the stream at a single message would also forbid an ordinary reasoning or
+    # final message. Cap the tool-call messages alone: any number of other messages, then
+    # at most one tool call, which ends the turn.
+    one_call = TagsWithSeparatorFormat(
+        tags=call_tags, separator=TAG_SEPARATOR, at_least_one=True, stop_after_first=True
+    )
+    if not message_tags:
+        return StructuralTag(format=OptionalFormat(content=one_call))
+    messages_then_call = SequenceFormat(
+        elements=[
+            TagsWithSeparatorFormat(tags=message_tags, separator=TAG_SEPARATOR, at_least_one=True),
+            ConstStringFormat(value=TAG_SEPARATOR),
+            one_call,
+        ]
+    )
+    return StructuralTag(
+        format=OrFormat(
+            elements=[
+                TagsWithSeparatorFormat(tags=message_tags, separator=TAG_SEPARATOR),
+                one_call,
+                messages_then_call,
+            ]
+        )
+    )
 
 
 @register_model_structural_tag("deepseek_v3_2")
@@ -1572,10 +1733,11 @@ def get_deepseek_v3_2_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V3.2 style structural tag format.
@@ -1599,6 +1761,7 @@ def get_deepseek_v3_2_structural_tag(
     FUNCTION_CALLS_BEGIN = "<｜DSML｜function_calls>\n"
     FUNCTION_CALLS_END = "</｜DSML｜function_calls>"
     FUNCTION_CALLS_TRIGGER = "<｜DSML｜function_calls>"
+    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
     XML_STYLE = "deepseek_xml"
@@ -1627,7 +1790,10 @@ def get_deepseek_v3_2_structural_tag(
         # generate function calling triggered tag
         if len(tags) > 0:
             function_calling_tags = TagsWithSeparatorFormat(
-                tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True
+                tags=tags,
+                separator=INVOKE_SEPARATOR,
+                at_least_one=True,
+                stop_after_first=not parallel_tool_calls,
             )
 
             suffix_tag = TriggeredTagsFormat(
@@ -1640,6 +1806,7 @@ def get_deepseek_v3_2_structural_tag(
                     )
                 ],
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -1688,18 +1855,24 @@ def get_deepseek_v3_2_structural_tag(
         suffix_tag = SequenceFormat(
             elements=[
                 ConstStringFormat(value=TOOL_CALLS_PREFIX + FUNCTION_CALLS_BEGIN),
-                TagsWithSeparatorFormat(tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True),
+                TagsWithSeparatorFormat(
+                    tags=tags,
+                    separator=INVOKE_SEPARATOR,
+                    at_least_one=True,
+                    stop_after_first=not parallel_tool_calls,
+                ),
                 ConstStringFormat(value=FUNCTION_CALLS_END),
             ]
         )
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
-
-    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
-    return StructuralTag(format=sequence_format)
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=THINK_EXCLUDE_TOKENS,
+    )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 @register_model_structural_tag("minimax")
@@ -1707,10 +1880,11 @@ def get_minimax_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get MiniMax-M2.5 style structural tag format.
@@ -1733,6 +1907,7 @@ def get_minimax_structural_tag(
     TOOL_CALL_BEGIN = "<minimax:tool_call>\n"
     TOOL_CALL_END = "</minimax:tool_call>"
     TOOL_CALL_TRIGGER = "<minimax:tool_call>"
+    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_SUFFIX = "\n\n"
     EMPTY_THINK_CONTENT = "\n</think>\n\n"
@@ -1763,7 +1938,7 @@ def get_minimax_structural_tag(
         # generate function calling triggered tag
         if len(tags) > 0:
             function_calling_tags = TagsWithSeparatorFormat(
-                tags=tags, separator="", at_least_one=True
+                tags=tags, separator="", at_least_one=True, stop_after_first=not parallel_tool_calls
             )
 
             suffix_tag = TriggeredTagsFormat(
@@ -1774,6 +1949,7 @@ def get_minimax_structural_tag(
                     )
                 ],
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -1822,20 +1998,164 @@ def get_minimax_structural_tag(
         suffix_tag = SequenceFormat(
             elements=[
                 ConstStringFormat(value="\n" + TOOL_CALL_BEGIN),
-                TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True),
+                TagsWithSeparatorFormat(
+                    tags=tags,
+                    separator="",
+                    at_least_one=True,
+                    stop_after_first=not parallel_tool_calls,
+                ),
                 ConstStringFormat(value=TOOL_CALL_END),
             ]
         )
 
-    if reasoning:
-        think_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
-    else:
-        think_tag = ConstStringFormat(value=EMPTY_THINK_CONTENT)
-    return StructuralTag(
-        format=SequenceFormat(
-            elements=[think_tag, ConstStringFormat(value=THINK_SUFFIX), suffix_tag]
+    if reasoning == "disabled":
+        return StructuralTag(
+            format=SequenceFormat(
+                elements=[
+                    ConstStringFormat(value=EMPTY_THINK_CONTENT),
+                    ConstStringFormat(value=THINK_SUFFIX),
+                    suffix_tag,
+                ]
+            )
         )
+
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=[] if reasoning == "enabled" else THINK_EXCLUDE_TOKENS,
+        reasoning_suffix=THINK_SUFFIX,
     )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
+
+
+@register_model_structural_tag("minimax_m3")
+def get_minimax_m3_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: Literal["enabled", "disabled", "auto"] = "auto",
+    any_order: bool = False,
+    exclude_special_tokens: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get MiniMax-M3 style structural tag format.
+
+    MiniMax M3 recursively encodes tool arguments as namespace-prefixed XML.
+    With ``reasoning="enabled"``, the matching generation prompt has
+    already emitted ``<mm:think>`` and constrained output starts inside its
+    body. ``"disabled"`` starts directly at the response body after the matching
+    prompt. ``"auto"`` matches the ``adaptive`` prompt and accepts
+    either a complete reasoning block or a direct response/tool call, optionally
+    prefixed by ``</mm:think>`` when skipping reasoning. ``"auto"`` is the default
+    for this model-specific builder.
+
+    Corresponding model key: ``"minimax_m3"``.
+
+    Supported models:
+
+    - MiniMax-M3
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for MiniMax M3 reasoning and function calling.
+    """
+    NAMESPACE = "]<]minimax[>["
+    INVOKE_BEGIN_PREFIX = NAMESPACE + '<invoke name="'
+    INVOKE_BEGIN_SUFFIX = '">'
+    INVOKE_END = NAMESPACE + "</invoke>\n"
+    TOOL_CALL_BEGIN = NAMESPACE + "<tool_call>\n"
+    TOOL_CALL_END = NAMESPACE + "</tool_call>"
+    TOOL_CALL_TRIGGER = NAMESPACE + "<tool_call>"
+    THINK_TAG_BEGIN = "<mm:think>"
+    THINK_TAG_END = "</mm:think>"
+    XML_STYLE = "minimax_m3_xml"
+
+    # Do not exclude the bare namespace: every M3 element and the tool-call trigger share it.
+    stray_tool_markers = [TOOL_CALL_END, NAMESPACE + "<invoke", NAMESPACE + "</invoke>"]
+    suffix_excludes = [THINK_TAG_BEGIN, THINK_TAG_END, *stray_tool_markers]
+    reasoning_excludes = [TOOL_CALL_TRIGGER, *suffix_excludes]
+
+    tools = tools or []
+    builtin_tools = builtin_tools or []
+    if builtin_tools:
+        raise ValueError("MiniMax M3 does not support builtin tools.")
+
+    invoke_tags = [
+        TagFormat(
+            begin=INVOKE_BEGIN_PREFIX + tool.function.name + INVOKE_BEGIN_SUFFIX,
+            content=JSONSchemaFormat(
+                json_schema=_get_function_parameters(tool.function),
+                style=XML_STYLE,
+                any_order=any_order,
+                max_whitespace_cnt=max_whitespace_cnt,
+            ),
+            end=INVOKE_END,
+        )
+        for tool in tools
+    ]
+
+    def make_tool_call_tag(tags: List[TagFormat], *, allow_multiple: bool = True) -> TagFormat:
+        content = (
+            TagsWithSeparatorFormat(
+                tags=tags, separator="", at_least_one=True, stop_after_first=not parallel_tool_calls
+            )
+            if allow_multiple
+            else tags[0]
+        )
+        return TagFormat(begin=TOOL_CALL_BEGIN, content=content, end=TOOL_CALL_END)
+
+    if tool_choice == "auto":
+        if invoke_tags:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[TOOL_CALL_TRIGGER],
+                tags=[make_tool_call_tag(invoke_tags)],
+                excludes=_text_excludes(exclude_special_tokens, suffix_excludes),
+                stop_after_first=not parallel_tool_calls,
+            )
+        else:
+            suffix_tag = AnyTextFormat(
+                excludes=_text_excludes(
+                    exclude_special_tokens, [TOOL_CALL_TRIGGER, *suffix_excludes]
+                )
+            )
+    elif tool_choice == "forced":
+        if not invoke_tags:
+            raise ValueError("Forced tool choice must resolve to exactly one tool.")
+        suffix_tag = make_tool_call_tag([invoke_tags[0]], allow_multiple=False)
+    elif tool_choice == "required":
+        if not invoke_tags:
+            raise ValueError("Required tool choice needs at least one function tool.")
+        suffix_tag = TriggeredTagsFormat(
+            triggers=[TOOL_CALL_TRIGGER],
+            tags=[make_tool_call_tag(invoke_tags)],
+            excludes=_text_excludes(exclude_special_tokens, suffix_excludes),
+            at_least_one=True,
+            stop_after_first=not parallel_tool_calls,
+        )
+    else:
+        raise ValueError(f"Unsupported tool choice: {tool_choice}")
+
+    # The generation prompt already emitted the first block's opening marker, so the
+    # constrained output starts inside its body: the think body in reasoning mode, the
+    # response body otherwise. Only the remaining markers are generated by the model.
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=reasoning_excludes,
+    )
+    if isinstance(prefix_tag, OptionalFormat):
+        # The adaptive template emits a lone closing marker when skipping reasoning.
+        prefix_tag.content = OrFormat(
+            elements=[prefix_tag.content, ConstStringFormat(value=THINK_TAG_END)]
+        )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 @register_model_structural_tag("glm_4_7")
@@ -1843,10 +2163,11 @@ def get_glm_4_7_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get GLM-4.7/GLM-5 style structural tag format.
@@ -1863,8 +2184,7 @@ def get_glm_4_7_structural_tag(
 
     - ``tools``: a list of function tools. Each tool should have a ``function``
       object containing ``name`` and ``parameters`` fields.
-    - ``reasoning``: whether to enable reasoning mode. If ``False``, use the
-      non-reasoning mode.
+    - ``reasoning``: selects enabled, disabled, or automatic reasoning mode.
 
     Supported models:
 
@@ -1879,6 +2199,7 @@ def get_glm_4_7_structural_tag(
     TOOL_CALL_BEGIN_PREFIX = "<tool_call>"
     TOOL_CALL_END = "</tool_call>"
     TOOL_CALL_TRIGGER = "<tool_call>"
+    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
     XML_STYLE = "glm_xml"
@@ -1920,6 +2241,7 @@ def get_glm_4_7_structural_tag(
                 triggers=[TOOL_CALL_TRIGGER],
                 tags=tags,
                 excludes=_text_excludes(exclude_special_tokens, TEXT_EXCLUDES),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -1964,18 +2286,17 @@ def get_glm_4_7_structural_tag(
             tags=tags,
             excludes=_text_excludes(exclude_special_tokens, TEXT_EXCLUDES),
             at_least_one=True,
+            stop_after_first=not parallel_tool_calls,
         )
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = TagFormat(
-        begin="",
-        content=AnyTextFormat(excludes=_text_excludes(exclude_special_tokens, REASONING_EXCLUDES)),
-        end=THINK_TAG_END,
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=REASONING_EXCLUDES,
     )
-
-    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 # TODO: We are dropping Gemma support because its parameter format is special and not supported
@@ -1985,10 +2306,11 @@ def _get_gemma_4_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Gemma 4 style structural tag format.
@@ -2009,8 +2331,8 @@ def _get_gemma_4_structural_tag(
 
     - ``tools``: a list of function tools. Each tool should have a
       ``function`` object containing ``name`` and ``parameters`` fields.
-    - ``reasoning``: whether to enable reasoning mode. If ``False``, the
-      reasoning channel is omitted.
+    - ``reasoning``: controls whether the reasoning channel is required,
+      omitted, or optional.
     - ``tool_choice``: ``"auto"`` or ``"required"``. ``"required"`` forces at
       least one tool call.
 
@@ -2059,6 +2381,7 @@ def _get_gemma_4_structural_tag(
                 triggers=[TOOL_CALL_TRIGGER],
                 tags=tags,
                 excludes=_text_excludes(exclude_special_tokens, GEMMA4_EXCLUDE_TOKENS),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -2102,13 +2425,18 @@ def _get_gemma_4_structural_tag(
             tags=tags,
             excludes=_text_excludes(exclude_special_tokens, GEMMA4_EXCLUDE_TOKENS),
             at_least_one=True,
+            stop_after_first=not parallel_tool_calls,
         )
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = TagFormat(begin=THINK_TAG_BEGIN, content=AnyTextFormat(), end=THINK_TAG_END)
-    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=GEMMA4_EXCLUDE_TOKENS,
+        prompt_end_with_think=False,
+    )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 @register_model_structural_tag("deepseek_v4")
@@ -2116,10 +2444,11 @@ def get_deepseek_v4_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get DeepSeek-V4 style structural tag format.
@@ -2130,23 +2459,87 @@ def get_deepseek_v4_structural_tag(
 
     - DeepSeek-V4
     """
-    INVOKE_BEGIN_PREFIX = '<｜DSML｜invoke name="'
+    return _get_deepseek_v4_structural_tag(
+        tools,
+        tool_choice,
+        reasoning,
+        any_order,
+        exclude_special_tokens,
+        max_whitespace_cnt,
+        parallel_tool_calls,
+        v4_1=False,
+    )
+
+
+@register_model_structural_tag("deepseek_v4_1")
+def get_deepseek_v4_1_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
+    any_order: bool = False,
+    exclude_special_tokens: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get DeepSeek-V4.1-Flash reasoning and tool-call structural tag format.
+
+    Corresponding model key: ``"deepseek_v4_1"``.
+
+    Reference: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/main/encoding/encoding.py
+
+    V4.1 uses ``<｜DSML｜ calls>`` with space-prefixed ``invoke`` and
+    ``parameter`` tags. String arguments are raw text; other values are JSON.
+    Namespace-qualified tools use ``namespace::name`` as the function name.
+
+    Apply this tag after the generation prompt, which already ends in
+    ``<think>`` (reasoning) or ``</think>`` (chat). EOS is handled by the
+    tokenizer's stop token. Reasoning effort and image inputs are encoded
+    in the prompt and do not change the output grammar.
+    """
+    return _get_deepseek_v4_structural_tag(
+        tools,
+        tool_choice,
+        reasoning,
+        any_order,
+        exclude_special_tokens,
+        max_whitespace_cnt,
+        parallel_tool_calls,
+        v4_1=True,
+    )
+
+
+def _get_deepseek_v4_structural_tag(
+    tools: Optional[List[FunctionToolParam]],
+    tool_choice: Literal["auto", "required", "forced"],
+    reasoning: Literal["enabled", "disabled", "auto"],
+    any_order: bool,
+    exclude_special_tokens: bool,
+    max_whitespace_cnt: Optional[int],
+    parallel_tool_calls: bool,
+    *,
+    v4_1: bool,
+) -> StructuralTag:
+    invoke = " invoke" if v4_1 else "invoke"
+    calls = " calls" if v4_1 else "tool_calls"
+    INVOKE_BEGIN_PREFIX = f'<｜DSML｜{invoke} name="'
     INVOKE_BEGIN_SUFFIX = '">\n'
     # See get_deepseek_v3_2_structural_tag for the rationale on INVOKE_END +
     # INVOKE_SEPARATOR splitting the single "\n" join that the chat template
     # uses between consecutive <｜DSML｜invoke> blocks.
-    INVOKE_END = "</｜DSML｜invoke>\n"
+    INVOKE_END = f"</｜DSML｜{invoke}>\n"
     INVOKE_SEPARATOR = ""
     TOOL_CALLS_PREFIX = "\n\n"
-    FUNCTION_CALLS_BEGIN = "<｜DSML｜tool_calls>\n"
-    FUNCTION_CALLS_END = "</｜DSML｜tool_calls>"
-    FUNCTION_CALLS_TRIGGER = "<｜DSML｜tool_calls>"
+    FUNCTION_CALLS_BEGIN = f"<｜DSML｜{calls}>\n"
+    FUNCTION_CALLS_END = f"</｜DSML｜{calls}>"
+    FUNCTION_CALLS_TRIGGER = f"<｜DSML｜{calls}>"
+    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
-    XML_STYLE = "deepseek_xml"
+    XML_STYLE = "deepseek_v4_1_xml" if v4_1 else "deepseek_xml"
 
     tools = tools or []
-    builtin_tools = builtin_tools or []
     if tool_choice == "auto":
         tags = []
         for tool in tools:
@@ -2169,7 +2562,10 @@ def get_deepseek_v4_structural_tag(
         # generate function calling triggered tag
         if len(tags) > 0:
             function_calling_tags = TagsWithSeparatorFormat(
-                tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True
+                tags=tags,
+                separator=INVOKE_SEPARATOR,
+                at_least_one=True,
+                stop_after_first=not parallel_tool_calls,
             )
 
             suffix_tag = TriggeredTagsFormat(
@@ -2182,11 +2578,15 @@ def get_deepseek_v4_structural_tag(
                     )
                 ],
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
-            suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
-            )
+            excludes = _text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
+            if v4_1:
+                # With no available tools (including tool_choice="none"), a calls block
+                # must not slip through as unconstrained text.
+                excludes = [*excludes, FUNCTION_CALLS_TRIGGER]
+            suffix_tag = AnyTextFormat(excludes=excludes)
 
     elif tool_choice == "forced":
         if not tools:
@@ -2230,18 +2630,24 @@ def get_deepseek_v4_structural_tag(
         suffix_tag = SequenceFormat(
             elements=[
                 ConstStringFormat(value=TOOL_CALLS_PREFIX + FUNCTION_CALLS_BEGIN),
-                TagsWithSeparatorFormat(tags=tags, separator=INVOKE_SEPARATOR, at_least_one=True),
+                TagsWithSeparatorFormat(
+                    tags=tags,
+                    separator=INVOKE_SEPARATOR,
+                    at_least_one=True,
+                    stop_after_first=not parallel_tool_calls,
+                ),
                 ConstStringFormat(value=FUNCTION_CALLS_END),
             ]
         )
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
-
-    sequence_format = SequenceFormat(elements=[prefix_tag, suffix_tag])
-    return StructuralTag(format=sequence_format)
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=THINK_EXCLUDE_TOKENS,
+    )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 @register_model_structural_tag("cohere")
@@ -2249,10 +2655,11 @@ def get_cohere_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Cohere style structural tag format.
@@ -2271,6 +2678,7 @@ def get_cohere_structural_tag(
     TOOL_CALLS_BEGIN = "<cofl:tool_calls>"
     TOOL_CALLS_END = "</cofl:tool_calls>"
     TOOL_CALLS_TRIGGER = "<cofl:tool_calls>"
+    THINK_TAG_BEGIN = "<|START_THINKING|>"
     THINK_TAG_END = "<|END_THINKING|>"
     THINK_EXCLUDE_TOKENS = ["<|START_THINKING|>", "<|END_THINKING|>"]
     XML_STYLE = "cohere_xml"
@@ -2303,13 +2711,19 @@ def get_cohere_structural_tag(
         if len(tags) > 0:
             tool_calls = TagFormat(
                 begin=TOOL_CALLS_BEGIN,
-                content=TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True),
+                content=TagsWithSeparatorFormat(
+                    tags=tags,
+                    separator="",
+                    at_least_one=True,
+                    stop_after_first=not parallel_tool_calls,
+                ),
                 end=TOOL_CALLS_END,
             )
             suffix_tag = TriggeredTagsFormat(
                 triggers=[TOOL_CALLS_TRIGGER],
                 tags=[tool_calls],
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -2333,16 +2747,24 @@ def get_cohere_structural_tag(
         suffix_tag = SequenceFormat(
             elements=[
                 ConstStringFormat(value=TOOL_CALLS_PREFIX + TOOL_CALLS_BEGIN),
-                TagsWithSeparatorFormat(tags=tags, separator="", at_least_one=True),
+                TagsWithSeparatorFormat(
+                    tags=tags,
+                    separator="",
+                    at_least_one=True,
+                    stop_after_first=not parallel_tool_calls,
+                ),
                 ConstStringFormat(value=TOOL_CALLS_END),
             ]
         )
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END)
-    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=[] if reasoning == "enabled" else THINK_EXCLUDE_TOKENS,
+    )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 @register_model_structural_tag("exaone")
@@ -2350,10 +2772,11 @@ def get_exaone_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
-    reasoning: bool = True,
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
     any_order: bool = False,
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get EXAONE 4.0 style structural tag format.
@@ -2371,6 +2794,7 @@ def get_exaone_structural_tag(
     ARGUMENTS_FIELD_PREFIX = '", "arguments": '
     TOOL_CALL_END = "}</tool_call>"
     TOOL_CALL_TRIGGER = "<tool_call>"
+    THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_SUFFIX = "\n\n"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
@@ -2400,6 +2824,7 @@ def get_exaone_structural_tag(
                 triggers=[TOOL_CALL_TRIGGER],
                 tags=tags,
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+                stop_after_first=not parallel_tool_calls,
             )
         else:
             suffix_tag = AnyTextFormat(
@@ -2443,18 +2868,18 @@ def get_exaone_structural_tag(
             tags=tags,
             excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
             at_least_one=True,
+            stop_after_first=not parallel_tool_calls,
         )
 
-    if not reasoning:
-        return StructuralTag(format=suffix_tag)
-
-    prefix_tag = SequenceFormat(
-        elements=[
-            TagFormat(begin="", content=AnyTextFormat(), end=THINK_TAG_END),
-            ConstStringFormat(value=THINK_SUFFIX),
-        ]
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=THINK_TAG_BEGIN,
+        think_tag_end=THINK_TAG_END,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=[] if reasoning == "enabled" else THINK_EXCLUDE_TOKENS,
+        reasoning_suffix=THINK_SUFFIX,
     )
-    return StructuralTag(format=SequenceFormat(elements=[prefix_tag, suffix_tag]))
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 # Backward-compatible alias
