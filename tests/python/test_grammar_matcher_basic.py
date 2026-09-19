@@ -528,6 +528,58 @@ def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[in
     assert matcher_2.stop_token_ids == override_stop_tokens
 
 
+@pytest.mark.parametrize(
+    "extra_vocab",
+    [[], ["\n", "\r", "\t", "\x00", "\x01", "\x02"]],
+    ids=["rejected-set", "accepted-set"],
+)
+def test_override_stop_tokens_mask_until_json_complete(extra_vocab: List[str]):
+    # Control characters are invalid inside a JSON string. Adding enough of them makes the
+    # compiler store the accepted set; without them, it stores the rejected set.
+    vocab = ["</s>", "<stop>", "text", '"}'] + extra_vocab
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[0])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        json_grammar, tokenizer_info, override_stop_tokens=[1]
+    )
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    # The compiler treats <stop> as valid string content, but the matcher treats it as EOS.
+    assert matcher.accept_string('{"name":"')
+    assert not matcher.is_completed()
+    matcher.fill_next_token_bitmask(bitmask)
+    rejected_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert 1 in rejected_tokens
+    assert 2 not in rejected_tokens
+    assert not matcher.accept_token(1)
+
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(3)
+    assert matcher.is_completed()
+    matcher.fill_next_token_bitmask(bitmask)
+    rejected_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert 1 not in rejected_tokens
+    assert matcher.accept_token(1)
+    assert matcher.is_terminated()
+
+
+def test_override_stop_tokens_allowed_when_grammar_complete():
+    # Most tokens match a*, selecting the rejected-set path. The overridden stop token's text
+    # does not match, but it must still be allowed once the grammar can terminate.
+    tokenizer_info = xgr.TokenizerInfo(["</s>", "<stop>", "a", "aa", "aaa"], stop_token_ids=[0])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= "a"*', tokenizer_info, override_stop_tokens=[1]
+    )
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    assert matcher.accept_token(2)
+    assert matcher.is_completed()
+    matcher.fill_next_token_bitmask(bitmask)
+    rejected_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert 1 not in rejected_tokens
+    assert matcher.accept_token(1)
+    assert matcher.is_terminated()
+
+
 @pytest.mark.hf_token_required
 def test_fill_next_token_bitmask_errors():
     # llama 3.1 8b

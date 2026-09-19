@@ -2471,13 +2471,6 @@ void GrammarMatcher::Impl::SetTokenBitmask(
         next_token_bitset.Set(id, true);
       }
     }
-
-    if (can_reach_end) {
-      // add end tokens
-      for (int id : stop_token_ids_) {
-        next_token_bitset.Set(id, true);
-      }
-    }
   } else {
     // Otherwise, the final rejected token set is (rejected_indices \ accepted_indices)
     next_token_bitset.Set();
@@ -2493,11 +2486,11 @@ void GrammarMatcher::Impl::SetTokenBitmask(
         next_token_bitset.Set(id, false);
       }
     }
-    if (!can_reach_end) {
-      for (int id : stop_token_ids_) {
-        next_token_bitset.Set(id, false);
-      }
-    }
+  }
+  // Overridden stop tokens can occur in the compiler's accepted token set.
+  // Apply their termination policy after constructing either mask representation.
+  for (int id : stop_token_ids_) {
+    next_token_bitset.Set(id, can_reach_end);
   }
 }
 
