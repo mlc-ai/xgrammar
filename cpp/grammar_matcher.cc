@@ -504,6 +504,9 @@ class GrammarMatcher::Impl : public EarleyParser {
         }
       }
     }
+    if (has_char_budget_rules_) {
+      InitCharBudgetScope();
+    }
     XGRAMMAR_CHECK(
         !default_temperature_.has_value() ||
         (std::isfinite(default_temperature_.value()) && default_temperature_.value() >= 0)
@@ -730,6 +733,96 @@ class GrammarMatcher::Impl : public EarleyParser {
   bool record_char_budget_relaxation_ = false;
   /*! \brief Whether byte history is needed to recognize a budgeted suffix/stop body boundary. */
   bool has_budget_marker_rules_ = false;
+  /*! \brief Whether the grammar has Token or ExcludeToken edges. Only those edges can accept a
+   * token that the byte-level walk rejected, so without them FillNextTokenBitmask skips the
+   * atomic retry of rejected tokens. Fixed at construction. */
+  bool has_token_edges_ = false;
+  /*! \brief Per rule, whether an occurrence can be under a character budget: the rule has
+   * max_chars, or it references (transitively) a rule that does. States of other rules never see
+   * an expired character deadline, so they take the plain matching paths. Empty when the grammar
+   * has no character budgets. */
+  std::vector<bool> rule_in_char_budget_scope_;
+
+  /*! \brief Whether a state may see a character deadline while matching a token. */
+  bool InCharBudgetScope(const ParserState& state) const {
+    return state.char_budget_deadline >= 0 || state.rule_id < 0 ||
+           rule_in_char_budget_scope_[state.rule_id];
+  }
+
+  /*! \brief Compute has_token_edges_ and rule_in_char_budget_scope_. */
+  void InitCharBudgetScope() {
+    const auto& fsm = grammar_->complete_fsm;
+    for (int state = 0; state < fsm.NumStates() && !has_token_edges_; ++state) {
+      for (const auto& edge : fsm.GetEdges(state)) {
+        if (edge.IsToken() || edge.IsExcludeToken()) {
+          has_token_edges_ = true;
+          break;
+        }
+      }
+    }
+    // Reverse reachability over rule references: a rule is in scope when it is budgeted or when
+    // it references a rule in scope.
+    const int32_t num_rules = grammar_->NumRules();
+    std::vector<std::vector<int32_t>> referrers(num_rules);
+    std::vector<int32_t> worklist;
+    rule_in_char_budget_scope_.assign(num_rules, false);
+    for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
+      const auto& rule = grammar_->GetRule(rule_id);
+      if (rule.max_chars >= 0) {
+        rule_in_char_budget_scope_[rule_id] = true;
+        worklist.push_back(rule_id);
+      }
+      CollectReferencedRules(rule.body_expr_id, [&](int32_t referenced) {
+        referrers[referenced].push_back(rule_id);
+      });
+      const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
+      if (suffix_stop_info != nullptr && suffix_stop_info->body_rule_id >= 0) {
+        referrers[suffix_stop_info->body_rule_id].push_back(rule_id);
+      }
+    }
+    for (size_t i = 0; i < worklist.size(); ++i) {
+      for (int32_t referrer : referrers[worklist[i]]) {
+        if (!rule_in_char_budget_scope_[referrer]) {
+          rule_in_char_budget_scope_[referrer] = true;
+          worklist.push_back(referrer);
+        }
+      }
+    }
+  }
+
+  /*! \brief Call callback(rule_id) for every rule the expression references. */
+  template <typename Callback>
+  void CollectReferencedRules(int32_t expr_id, const Callback& callback) const {
+    using ExprType = Grammar::Impl::GrammarExprType;
+    const auto expr = grammar_->GetGrammarExpr(expr_id);
+    switch (expr.type) {
+      case ExprType::kRuleRef:
+      case ExprType::kRepeat:
+        callback(expr[0]);
+        break;
+      case ExprType::kSequence:
+      case ExprType::kChoices:
+        for (int32_t child : expr) {
+          CollectReferencedRules(child, callback);
+        }
+        break;
+      case ExprType::kTagDispatch:
+        for (const auto& [tag, rule_id] : grammar_->GetTagDispatch(expr).tag_rule_pairs) {
+          callback(rule_id);
+        }
+        break;
+      case ExprType::kTokenTagDispatch: {
+        // [trigger_cnt, (token_id, rule_id) x N, loop_after_dispatch, exclude_cnt, token_id x M]
+        const int32_t trigger_cnt = expr[0];
+        for (int32_t i = 0; i < trigger_cnt; ++i) {
+          callback(expr[2 + 2 * i]);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
 
   struct BudgetBodyMatchProgress {
     int64_t begin_byte;
@@ -1903,6 +1996,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     }
   }
 
+  const auto& token_char_counts = tokenizer_info_.ImplPtr()->GetTokenCharCounts();
   for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
 
@@ -1917,12 +2011,10 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
     tmp_rejected_indices_delta_.clear();
 
-    // Examine only the current one ParserState
-    std::optional<Impl> atomic_trial_base;
-    if (has_char_budget_rules_ && !adaptive_token_mask.uncertain_indices.empty()) {
-      atomic_trial_base.emplace(*this);
-      atomic_trial_base->capture_recording_ = false;
-    }
+    // Examine only the current one ParserState. States that are not under a character budget and
+    // whose rule cannot enter a budgeted rule while matching a token never see an expired
+    // deadline, so they take the plain byte path.
+    const bool use_char_budget = has_char_budget_rules_ && InCharBudgetScope(state);
     PushOneStateToCheck(state);
     bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
     int32_t saved_temporary_input_start_row = -1;
@@ -1992,7 +2084,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       // Step 2.2. Find if the current token is accepted or rejected.
       if (accepted) {
         for (int j = prev_matched_size; j < static_cast<int>(cur_token.size()); ++j) {
-          bool byte_accepted = has_char_budget_rules_
+          bool byte_accepted = use_char_budget
                                    ? AdvanceWithCharacterBudget(static_cast<uint8_t>(cur_token[j]))
                                    : Advance(static_cast<uint8_t>(cur_token[j]));
           if (!byte_accepted) {
@@ -2007,17 +2099,31 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         }
       }
 
-      if (!accepted && has_char_budget_rules_) {
-        int32_t token_char_count = 0;
-        for (uint8_t byte : cur_token) {
-          token_char_count += StartsUTF8Codepoint(byte);
+      bool retried_atomically = false;
+      if (!accepted && has_char_budget_rules_ && has_token_edges_) {
+        // Only Token/ExcludeToken edges can accept a token that the byte walk rejected. Retry
+        // through them in place: rebuild the single-state row (dropping the rows of the partially
+        // matched previous token), run the atomic token path, then rebuild the row once more so
+        // budget enforcement performed by the trial does not leak into the following tokens.
+        // Copying the whole matcher for this trial made every mask O(generated length).
+        retried_atomically = true;
+        PopLastStates(prev_matched_size + 1);
+        if (track_temporary_input) {
+          temporary_input_bytes_.clear();
         }
-        XGRAMMAR_DCHECK(atomic_trial_base.has_value());
-        Impl atomic_trial(atomic_trial_base.value());
-        atomic_trial.PushOneStateToCheck(state);
-        accepted = atomic_trial.AdvanceAtomicTokenWithCharacterBudget(
-            sorted_decoded_vocab[cur_token_idx].first, token_char_count
+        PushOneStateToCheck(state);
+        const bool saved_capture_recording = capture_recording_;
+        const bool saved_record_relaxation = record_char_budget_relaxation_;
+        capture_recording_ = false;
+        record_char_budget_relaxation_ = false;
+        accepted = AdvanceAtomicTokenWithCharacterBudget(
+            sorted_decoded_vocab[cur_token_idx].first, token_char_counts[cur_token_idx]
         );
+        capture_recording_ = saved_capture_recording;
+        record_char_budget_relaxation_ = saved_record_relaxation;
+        PopLastStates(accepted ? 2 : 1);
+        PushOneStateToCheck(state);
+        prev_matched_size = 0;
         if (accepted) {
           last_rejected_uncertain_range = cur_token_idx + 1;
         }
@@ -2035,7 +2141,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         }
       }
 
-      prev_token = &cur_token;
+      // After an in-place retry the rows of this token are gone, so its prefix cannot be reused.
+      prev_token = retried_atomically ? nullptr : &cur_token;
     }
 
     PopLastStates(prev_matched_size + 1);
