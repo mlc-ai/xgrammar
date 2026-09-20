@@ -18,31 +18,25 @@ XMLWrapper GetDeepSeekV41XMLWrapper() {
   return {"<｜DSML｜ parameter name=\"", "", "", "</｜DSML｜ parameter>"};
 }
 
-const XMLKeySuffix& GetDeepSeekXMLKeySuffix() {
-  // TODO(Linzhang): We do not validate the string's value, and we accept both.
-  static const XMLKeySuffix suffix = {"\" string=\"", {"true", "false"}, "\">"};
-  return suffix;
-}
-
 }  // namespace converter_ext
 
-int32_t XMLToolCallingConverter::FormatDeepSeekV41ParamSuffix(
+int32_t XMLToolCallingConverter::FormatDeepSeekParamSuffix(
     const SchemaSpecPtr& schema, int32_t value_rule_id
 ) {
   // Copy the name: creating alternative rules can reallocate the builder's rule storage.
   std::string value_rule_name = builder_.GetRule(value_rule_id).name;
   if (schema != nullptr) {
     if (const auto* ref = std::get_if<RefSpec>(&schema->spec); ref != nullptr) {
-      auto cached = deepseek_v41_param_ref_rules_.find(ref->uri);
-      if (cached != deepseek_v41_param_ref_rules_.end()) {
+      auto cached = deepseek_param_ref_rules_.find(ref->uri);
+      if (cached != deepseek_param_ref_rules_.end()) {
         return RuleRef(cached->second);
       }
       // Cache the rule before descending through references or alternatives. A recursive
       // branch then refers back to this rule, and shared acyclic subgraphs are built only once.
       int32_t param_rule_id = builder_.AddEmptyRuleWithHint(value_rule_name + "_dsml_param");
-      deepseek_v41_param_ref_rules_.emplace(ref->uri, param_rule_id);
+      deepseek_param_ref_rules_.emplace(ref->uri, param_rule_id);
       auto resolved = ResolveRefSchema(*ref, value_rule_name);
-      builder_.UpdateRuleBody(param_rule_id, FormatDeepSeekV41ParamSuffix(resolved, value_rule_id));
+      builder_.UpdateRuleBody(param_rule_id, FormatDeepSeekParamSuffix(resolved, value_rule_id));
       return RuleRef(param_rule_id);
     }
   }
@@ -107,7 +101,7 @@ int32_t XMLToolCallingConverter::FormatDeepSeekV41ParamSuffix(
   for (size_t index = 0; index < options.size(); ++index) {
     int32_t option_rule_id =
         CreateRule(options[index], value_rule_name + "_dsml_case_" + std::to_string(index));
-    choices.push_back(FormatDeepSeekV41ParamSuffix(options[index], option_rule_id));
+    choices.push_back(FormatDeepSeekParamSuffix(options[index], option_rule_id));
   }
   return Choice(choices);
 }
