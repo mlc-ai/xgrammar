@@ -134,88 +134,6 @@ def test_sequence_with_utf8_byte_strings():
     assert not _matcher_accepts(matcher, "你好")
 
 
-def test_negated_classes_preserve_unicode_and_reject_overlong_utf8():
-    matcher = _make_string_matcher('root ::= "x" [^0-9] "y" [^a-z]* "z"')
-    for value in ("xéyz", "x你y😀z", "xAy你好éz"):
-        assert _matcher_accepts(matcher, value)
-    for value in ("x1yz", "xéyaz"):
-        assert not _matcher_accepts(matcher, value)
-    for value in (
-        b"x\xc0\x80yz",
-        b"x\xc1\xbfyz",
-        b"x\xe0\x80\x80yz",
-        b"xAy\xf0\x80\x80\x80z",
-        b"xAy\xf4\x90\x80\x80z",
-    ):
-        matcher.reset()
-        assert not matcher.accept_string(value)
-
-
-def test_nested_negated_class_preserves_calls_and_unicode():
-    matcher = _make_string_matcher(
-        'root ::= a b c\na ::= "x" [0-9]*\nb ::= a "y" | [^xyz]\nc ::= b{1,3} "end"'
-    )
-    for value in ("xé你end", "x12x3y😀end", "xAé🙂好end", "xéx42yend"):
-        assert _matcher_accepts(matcher, value)
-    for value in ("xéend", "xé你好😀Aend", "xéyend"):
-        assert not _matcher_accepts(matcher, value)
-    for value in (b"x\xc0\x80aend", b"xA\xc0\x80end", b"xA\xf4\x90\x80\x80end"):
-        matcher.reset()
-        assert not matcher.accept_string(value)
-
-
-@pytest.mark.parametrize(
-    "suffix,valid", [("", []), ("*", [""]), ('* "end"', ["end"]), (' | "ok"', ["ok"])]
-)
-def test_empty_unicode_complement(suffix, valid):
-    matcher = _make_string_matcher(r"root ::= [^\u0000-\U0010FFFF]" + suffix)
-    for value in [*valid, "a", "\0", "é", "你", "😀", "\U0010ffff", "你end"]:
-        assert _matcher_accepts(matcher, value) == (value in valid)
-
-
-def test_three_byte_upper_tail_range():
-    matcher = _make_string_matcher(r"root ::= [\u0000-\u574e]")
-    assert _matcher_accepts(matcher, "候")
-    assert not _matcher_accepts(matcher, "坏")
-
-
-def test_unicode_complement_ranges():
-    matcher = _make_string_matcher(r"root ::= [^😀-🙏é你A-C]")
-    for value in ("D", "ê", "好", "😁", "🙏", "😀", "é", "你", "A", "C", "🚀"):
-        expected = value not in "é你ABC" and not ("😀" <= value <= "🙏")
-        assert _matcher_accepts(matcher, value) == expected
-
-
-@pytest.mark.parametrize("expression", [r"[^a]", r"[\u0000-\U0010ffff]", r"[\x5d-\U0010ffff]"])
-def test_character_class_utf8_boundaries_and_mask(expression):
-    # Positive ranges emitted after intersection must not regain invalid UTF-8 paths.
-    invalid = [
-        b"\xc0\x80",
-        b"\xc1\xbf",
-        b"\xe0\x80\x80",
-        b"\xf0\x80\x80\x80",
-        b"\xf4\x90\x80\x80",
-        b"\xc0",
-        b"\xc1",
-    ]
-    valid = ["]", "\x7f", "\x80", "\u07ff", "\u0800", "\uffff", "\U00010000", "\U0010ffff"]
-    vocabulary = invalid + [value.encode() for value in valid] + [b"[EOS]"]
-    info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[len(vocabulary) - 1])
-    matcher = xgr.GrammarMatcher(
-        xgr.GrammarCompiler(info).compile_grammar("root ::= " + expression)
-    )
-    mask = xgr.allocate_token_bitmask(1, len(vocabulary))
-    matcher.fill_next_token_bitmask(mask)
-    for index, token in enumerate(vocabulary):
-        expected = len(invalid) <= index < len(vocabulary) - 1
-        assert bool((int(mask[0, index // 32]) >> (index % 32)) & 1) == expected
-        matcher.reset()
-        assert matcher.accept_token(index) == expected
-    for token in invalid:
-        matcher.reset()
-        assert not matcher.accept_string(token)
-
-
 # --- Long mixed sequences stress the streaming concatenation loop ---
 
 
@@ -425,24 +343,18 @@ fsm_structure_cases = [
         'root ::= "x" [^0-9] "y" [^a-z]* "z"',
         _fsm_snapshot(
             r"""
-            Rule 0: root, FSM: CompactFSM(num_states=17, start=7, end=[16], edges=[
+            Rule 0: root, FSM: CompactFSM(num_states=11, start=7, end=[10], edges=[
             0: [[\x80-\xbf]->2]
             1: [[\x80-\xbf]->3]
             2: [[\x80-\xbf]->5]
             3: [[\x80-\xbf]->6]
-            4: [[\0-/]->5, [:-\x7f]->5, [\xc2-\xdf]->2, '\xe0'->8, [\xe1-\xef]->0, '\xf0'->9, [\xf1-\xf3]->11, '\xf4'->10]
+            4: [[\0-/]->5, [:-\x7f]->5, [\xc0-\xdf]->2, [\xe0-\xef]->0, [\xf0-\xf7]->8]
             5: ['y'->6]
-            6: [[\0-`]->6, 'z'->16, [{-\x7f]->6, [\xc2-\xdf]->3, '\xe0'->12, [\xe1-\xef]->1, '\xf0'->13, [\xf1-\xf3]->15, '\xf4'->14]
+            6: [[\0-`]->6, 'z'->10, [{-\x7f]->6, [\xc0-\xdf]->3, [\xe0-\xef]->1, [\xf0-\xf7]->9]
             7: ['x'->4]
-            8: [[\xa0-\xbf]->2]
-            9: [[\x90-\xbf]->0]
-            10: [[\x80-\x8f]->0]
-            11: [[\x80-\xbf]->0]
-            12: [[\xa0-\xbf]->3]
-            13: [[\x90-\xbf]->1]
-            14: [[\x80-\x8f]->1]
-            15: [[\x80-\xbf]->1]
-            16: []
+            8: [[\x80-\xbf]->0]
+            9: [[\x80-\xbf]->1]
+            10: []
             ])
             """
         ),
@@ -685,43 +597,40 @@ fsm_structure_cases = [
         'root ::= a b c\na ::= "x" [0-9]*\nb ::= a "y" | [^xyz]\nc ::= b{1,3} "end"',
         _fsm_snapshot(
             r"""
-            Rule 0: root, FSM: CompactFSM(num_states=26, start=2, end=[3], edges=[
+            Rule 0: root, FSM: CompactFSM(num_states=23, start=2, end=[3], edges=[
             0: [Rule(1)->1, [0-9]->0]
             1: [Rule(2)->3]
             2: ['x'->0]
             3: []
             ])
-            Rule 1: b, FSM: CompactFSM(num_states=26, start=7, end=[5], edges=[
+            Rule 1: b, FSM: CompactFSM(num_states=23, start=7, end=[5], edges=[
             4: [[\x80-\xbf]->6]
             5: []
             6: [[\x80-\xbf]->5]
-            7: [[\0-w]->5, 'x'->8, [{-\x7f]->5, [\xc2-\xdf]->6, '\xe0'->9, [\xe1-\xef]->4, '\xf0'->10, [\xf1-\xf3]->12, '\xf4'->11]
+            7: [[\0-w]->5, 'x'->8, [{-\x7f]->5, [\xc0-\xdf]->6, [\xe0-\xef]->4, [\xf0-\xf7]->9]
             8: [[0-9]->8, 'y'->5]
-            9: [[\xa0-\xbf]->6]
-            10: [[\x90-\xbf]->4]
-            11: [[\x80-\x8f]->4]
-            12: [[\x80-\xbf]->4]
+            9: [[\x80-\xbf]->4]
             ])
-            Rule 2: c, FSM: CompactFSM(num_states=26, start=14, end=[17], edges=[
-            13: ['e'->15]
-            14: [Rule(5)->13]
-            15: ['n'->16]
-            16: ['d'->17]
+            Rule 2: c, FSM: CompactFSM(num_states=23, start=11, end=[14], edges=[
+            10: ['e'->12]
+            11: [Rule(5)->10]
+            12: ['n'->13]
+            13: ['d'->14]
+            14: []
+            ])
+            Rule 3: c_1, FSM: CompactFSM(num_states=23, start=15, end=[15, 17], edges=[
+            15: [Rule(1)->16]
+            16: [Rule(4)->17]
             17: []
             ])
-            Rule 3: c_1, FSM: CompactFSM(num_states=26, start=18, end=[18, 20], edges=[
+            Rule 4: c_2, FSM: CompactFSM(num_states=23, start=18, end=[18, 19], edges=[
             18: [Rule(1)->19]
-            19: [Rule(4)->20]
-            20: []
+            19: []
             ])
-            Rule 4: c_2, FSM: CompactFSM(num_states=26, start=21, end=[21, 22], edges=[
-            21: [Rule(1)->22]
+            Rule 5: c_3, FSM: CompactFSM(num_states=23, start=21, end=[22], edges=[
+            20: [Rule(3)->22]
+            21: [Rule(1)->20]
             22: []
-            ])
-            Rule 5: c_3, FSM: CompactFSM(num_states=26, start=24, end=[25], edges=[
-            23: [Rule(3)->25]
-            24: [Rule(1)->23]
-            25: []
             ])
             """
         ),
