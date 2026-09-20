@@ -1981,6 +1981,182 @@ Result<FSMWithStartEnd> GrammarFSMBuilderImpl::Regex(const std::string& regex, b
   return ResultOk(std::move(result));
 }
 
+/*!
+ * \brief Lower the regular subset used by RegexToEBNF without changing terminal semantics.
+ *
+ * A shared callee entry/exit would let one call return to another call's continuation. Inline
+ * each finite call instead, and connect only direct tail self-references to that call's own
+ * entry. The entry is private even when the caller's start also has an optional exit.
+ */
+class RegularGrammarFSMBuilder {
+ public:
+  RegularGrammarFSMBuilder(const Grammar& grammar, int max_num_states)
+      : grammar_(grammar), max_num_states_(max_num_states), active_(grammar->NumRules(), false) {}
+
+  Result<FSMWithStartEnd> Build() {
+    if (max_num_states_ < 2) {
+      return ResultErr("Regular grammar FSM state limit must be at least 2");
+    }
+    int start = fsm_.AddState();
+    int end = fsm_.AddState();
+    if (!BuildRule(grammar_->GetRootRuleId(), start, end)) {
+      return ResultErr(error_);
+    }
+    auto result = FSMWithStartEnd(fsm_, start, {end}).SimplifyEpsilon();
+    return ResultOk(result.MergeEquivalentStates());
+  }
+
+ private:
+  bool Fail(const std::string& message) {
+    error_ = "Cannot flatten regular grammar: " + message;
+    return false;
+  }
+
+  int AddState() {
+    if (fsm_.NumStates() >= max_num_states_) {
+      Fail("intermediate FSM exceeds " + std::to_string(max_num_states_) + " states");
+      return -1;
+    }
+    return fsm_.AddState();
+  }
+
+  bool Append(const FSMWithStartEnd& leaf, int start, int end) {
+    if (leaf.GetFsm().NumStates() > max_num_states_ - fsm_.NumStates()) {
+      return Fail("intermediate FSM exceeds " + std::to_string(max_num_states_) + " states");
+    }
+    std::vector<int> mapping;
+    fsm_.AddFSM(leaf.GetFsm(), &mapping);
+    fsm_.AddEpsilonEdge(start, mapping[leaf.GetStart()]);
+    for (int leaf_end : leaf.GetEnds()) {
+      fsm_.AddEpsilonEdge(mapping[leaf_end], end);
+    }
+    return true;
+  }
+
+  bool BuildRule(int rule_id, int start, int end) {
+    const auto& rule = grammar_->GetRule(rule_id);
+    if (active_[rule_id]) {
+      return Fail("mutual or non-tail recursion involving rule " + rule.name);
+    }
+    if (depth_ >= 256) {
+      return Fail("rule call depth exceeds 256");
+    }
+    if (rule.lookahead_assertion_id >= 0 || rule.max_tokens >= 0 || rule.max_chars >= 0 ||
+        !rule.capture_name.empty() || rule.is_lazy || rule.temperature.has_value() ||
+        grammar_->GetSuffixStopInfo(rule_id) != nullptr) {
+      return Fail("annotated rule " + rule.name + " is not a plain regular rule");
+    }
+    int entry = AddState();
+    if (entry < 0) {
+      return false;
+    }
+    fsm_.AddEpsilonEdge(start, entry);
+    active_[rule_id] = true;
+    ++depth_;
+    bool ok = BuildExpression(
+        grammar_->GetGrammarExpr(rule.body_expr_id), entry, end, rule_id, entry, true
+    );
+    --depth_;
+    active_[rule_id] = false;
+    return ok;
+  }
+
+  bool BuildExpression(
+      const GrammarExpr& expr, int start, int end, int rule_id, int rule_start, bool tail
+  ) {
+    switch (expr.type) {
+      case ExprType::kEmptyStr:
+        fsm_.AddEpsilonEdge(start, end);
+        return true;
+      case ExprType::kByteString:
+        if (expr.size() >= max_num_states_ - fsm_.NumStates()) {
+          return Fail("byte string exceeds the intermediate FSM state limit");
+        }
+        return Append(GrammarFSMBuilderImpl::ByteString(expr), start, end);
+      case ExprType::kCharacterClass:
+      case ExprType::kCharacterClassStar:
+        return Append(GrammarFSMBuilderImpl::CharacterClass(expr), start, end);
+      case ExprType::kRuleRef:
+        if (expr[0] == rule_id) {
+          if (!tail) {
+            return Fail("non-tail self-recursion in rule " + grammar_->GetRule(rule_id).name);
+          }
+          fsm_.AddEpsilonEdge(start, rule_start);
+          return true;
+        }
+        return BuildRule(expr[0], start, end);
+      case ExprType::kChoices:
+        for (int child : expr) {
+          if (!BuildExpression(
+                  grammar_->GetGrammarExpr(child), start, end, rule_id, rule_start, tail
+              )) {
+            return false;
+          }
+        }
+        return true;
+      case ExprType::kSequence: {
+        int current = start;
+        for (int i = 0; i < expr.size(); ++i) {
+          int next = i + 1 == expr.size() ? end : AddState();
+          if (next < 0 || !BuildExpression(
+                              grammar_->GetGrammarExpr(expr[i]),
+                              current,
+                              next,
+                              rule_id,
+                              rule_start,
+                              tail && i + 1 == expr.size()
+                          )) {
+            return false;
+          }
+          current = next;
+        }
+        if (expr.size() == 0) {
+          fsm_.AddEpsilonEdge(start, end);
+        }
+        return true;
+      }
+      case ExprType::kRepeat: {
+        int64_t lower = expr[1], upper = expr[2];
+        if (lower < 0 || (upper != -1 && upper < lower)) {
+          return Fail("invalid repetition bounds");
+        }
+        // Even empty callees should not make an enormous explicit repetition consume
+        // unbounded compilation time. Large bounded patterns need a different representation.
+        int64_t count = upper == -1 ? lower : upper;
+        if (count > max_num_states_) {
+          return Fail("repetition exceeds the intermediate FSM state limit");
+        }
+        int current = start;
+        for (int64_t i = 0; i <= count; ++i) {
+          if (i >= lower) {
+            fsm_.AddEpsilonEdge(current, end);
+          }
+          if (i == count) {
+            break;
+          }
+          int next = AddState();
+          if (next < 0 || !BuildRule(expr[0], current, next)) {
+            return false;
+          }
+          current = next;
+        }
+        return upper != -1 || BuildRule(expr[0], current, current);
+      }
+      default:
+        return Fail(
+            "unsupported terminal or expression in rule " + grammar_->GetRule(rule_id).name
+        );
+    }
+  }
+
+  const Grammar& grammar_;
+  int max_num_states_;
+  FSM fsm_;
+  std::vector<bool> active_;
+  int depth_ = 0;
+  std::string error_;
+};
+
 class RepetitionRangeExpanderImpl : public GrammarMutator {
  public:
   using GrammarMutator::Apply;
@@ -3782,6 +3958,12 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilder::Choices(
 
 Result<FSMWithStartEnd> GrammarFSMBuilder::Regex(const std::string& regex, bool json_string) {
   return GrammarFSMBuilderImpl::Regex(regex, json_string);
+}
+
+Result<FSMWithStartEnd> GrammarFSMBuilder::FromRegularGrammar(
+    const Grammar& grammar, int max_num_states
+) {
+  return RegularGrammarFSMBuilder(grammar, max_num_states).Build();
 }
 
 const std::bitset<256>& GrammarFSMBuilder::JSONStringForbiddenChars() {
