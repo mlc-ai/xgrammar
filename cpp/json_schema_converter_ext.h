@@ -171,15 +171,18 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   int32_t XMLKeySuffix(const std::optional<std::string>& pinned_type = std::nullopt);
 
   /*!
-   * \brief Build a deepseek_v4_1_xml parameter's string attribute, value and closing tag.
+   * \brief Build a DeepSeek XML parameter's string attribute, value and closing tag.
    * string="true" wraps raw strings, string="false" wraps JSON values. Unions and mixed enums
    * produce one alternative per option; GetRenderedJSONType supplies the type classification.
+   * A negative value_rule_id defers value-rule creation until a typed leaf is reached.
    */
-  int32_t FormatDeepSeekV41ParamSuffix(const SchemaSpecPtr& schema, int32_t value_rule_id);
+  int32_t FormatDeepSeekParamSuffix(
+      const SchemaSpecPtr& schema, int32_t value_rule_id, const std::string& rule_name_hint = ""
+  );
 
   // Parameter suffix rules are independent of the key, so references can be shared across
   // named and dynamic parameters. Allocate them before resolving refs to handle cycles.
-  std::unordered_map<std::string, int32_t> deepseek_v41_param_ref_rules_;
+  std::unordered_map<std::string, int32_t> deepseek_param_ref_rules_;
 
   JSONFormat json_format_;
   // Root parameter lists, raw parameter values, and nested JSON have distinct grammars.
@@ -310,7 +313,6 @@ struct XMLKeySuffix {
   const char* suffix;
 };
 
-const XMLKeySuffix& GetDeepSeekXMLKeySuffix();
 const XMLKeySuffix& GetKimiK3XMLKeySuffix();
 
 }  // namespace converter_ext
