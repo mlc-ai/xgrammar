@@ -174,8 +174,11 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
    * \brief Build a DeepSeek XML parameter's string attribute, value and closing tag.
    * string="true" wraps raw strings, string="false" wraps JSON values. Unions and mixed enums
    * produce one alternative per option; GetRenderedJSONType supplies the type classification.
+   * A negative value_rule_id defers value-rule creation until a typed leaf is reached.
    */
-  int32_t FormatDeepSeekParamSuffix(const SchemaSpecPtr& schema, int32_t value_rule_id);
+  int32_t FormatDeepSeekParamSuffix(
+      const SchemaSpecPtr& schema, int32_t value_rule_id, const std::string& rule_name_hint = ""
+  );
 
   // Parameter suffix rules are independent of the key, so references can be shared across
   // named and dynamic parameters. Allocate them before resolving refs to handle cycles.

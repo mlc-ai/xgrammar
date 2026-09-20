@@ -3566,20 +3566,29 @@ def test_deepseek_mutually_recursive_parameter_references(any_order, style, para
 
 @pytest.mark.parametrize("from_ebnf", [False, True])
 @pytest.mark.parametrize("style, parameter_tag", _DEEPSEEK_PARAMETER_STYLES)
-def test_deepseek_shared_parameter_references_have_linear_grammar_size(
-    from_ebnf, style, parameter_tag
+@pytest.mark.parametrize("schema_kind", ["shared_refs", "anyOf", "oneOf"])
+def test_deepseek_parameter_alternatives_have_linear_grammar_size(
+    from_ebnf, style, parameter_tag, schema_kind
 ):
     rule_counts = []
     for num_defs in [12, 24]:
-        definitions = {"V0": {"const": "fixed"}, "V1": {"type": "integer", "minimum": 1}}
-        for index in range(2, num_defs):
-            definitions[f"V{index}"] = {
-                "anyOf": [{"$ref": f"#/$defs/V{index - 1}"}, {"$ref": f"#/$defs/V{index - 2}"}]
-            }
+        integer = {"type": "integer", "minimum": 1}
+        definitions = {}
+        if schema_kind == "shared_refs":
+            definitions = {"V0": {"const": "fixed"}, "V1": integer}
+            for index in range(2, num_defs):
+                definitions[f"V{index}"] = {
+                    "anyOf": [{"$ref": f"#/$defs/V{index - 1}"}, {"$ref": f"#/$defs/V{index - 2}"}]
+                }
+            value_schema = {"$ref": f"#/$defs/V{num_defs - 1}"}
+        else:
+            value_schema = {"const": "fixed"}
+            for _ in range(num_defs):
+                value_schema = {schema_kind: [integer, value_schema]}
         schema = {
             "type": "object",
             "$defs": definitions,
-            "properties": {"value": {"$ref": f"#/$defs/V{num_defs - 1}"}},
+            "properties": {"value": value_schema},
             "required": ["value"],
             "additionalProperties": False,
         }
@@ -3598,7 +3607,7 @@ def test_deepseek_shared_parameter_references_have_linear_grammar_size(
         ]:
             output = f'<{parameter_tag} name="value" string="{attribute}">{value}</{parameter_tag}>'
             assert _is_grammar_accept_string(grammar, output) == accepted
-    # Doubling this shared reference graph must not expand its exponentially many paths.
+    # Neither shared reference paths nor inline union subtrees should be repeatedly expanded.
     assert rule_counts[1] <= 2 * rule_counts[0], rule_counts
 
 

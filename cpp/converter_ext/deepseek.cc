@@ -21,10 +21,11 @@ XMLWrapper GetDeepSeekV41XMLWrapper() {
 }  // namespace converter_ext
 
 int32_t XMLToolCallingConverter::FormatDeepSeekParamSuffix(
-    const SchemaSpecPtr& schema, int32_t value_rule_id
+    const SchemaSpecPtr& schema, int32_t value_rule_id, const std::string& rule_name_hint
 ) {
   // Copy the name: creating alternative rules can reallocate the builder's rule storage.
-  std::string value_rule_name = builder_.GetRule(value_rule_id).name;
+  std::string value_rule_name =
+      value_rule_id >= 0 ? builder_.GetRule(value_rule_id).name : rule_name_hint;
   if (schema != nullptr) {
     if (const auto* ref = std::get_if<RefSpec>(&schema->spec); ref != nullptr) {
       auto cached = deepseek_param_ref_rules_.find(ref->uri);
@@ -36,7 +37,9 @@ int32_t XMLToolCallingConverter::FormatDeepSeekParamSuffix(
       int32_t param_rule_id = builder_.AddEmptyRuleWithHint(value_rule_name + "_dsml_param");
       deepseek_param_ref_rules_.emplace(ref->uri, param_rule_id);
       auto resolved = ResolveRefSchema(*ref, value_rule_name);
-      builder_.UpdateRuleBody(param_rule_id, FormatDeepSeekParamSuffix(resolved, value_rule_id));
+      builder_.UpdateRuleBody(
+          param_rule_id, FormatDeepSeekParamSuffix(resolved, value_rule_id, value_rule_name)
+      );
       return RuleRef(param_rule_id);
     }
   }
@@ -57,6 +60,9 @@ int32_t XMLToolCallingConverter::FormatDeepSeekParamSuffix(
   // A schema rendered with a single type keeps the value rule built by the caller.
   std::optional<std::string> pinned_type = GetRenderedJSONType(schema);
   if (pinned_type.has_value()) {
+    if (value_rule_id < 0) {
+      value_rule_id = CreateRule(schema, value_rule_name);
+    }
     return wrap(RuleRef(value_rule_id), *pinned_type == "string");
   }
 
@@ -99,9 +105,11 @@ int32_t XMLToolCallingConverter::FormatDeepSeekParamSuffix(
   }
   std::vector<int32_t> choices;
   for (size_t index = 0; index < options.size(); ++index) {
-    int32_t option_rule_id =
-        CreateRule(options[index], value_rule_name + "_dsml_case_" + std::to_string(index));
-    choices.push_back(FormatDeepSeekParamSuffix(options[index], option_rule_id));
+    // Only leaves need value rules. Rebuilding a nested union's whole value subtree at each
+    // level would create quadratically many rules before assembling its typed alternatives.
+    choices.push_back(FormatDeepSeekParamSuffix(
+        options[index], -1, value_rule_name + "_dsml_case_" + std::to_string(index)
+    ));
   }
   return Choice(choices);
 }
