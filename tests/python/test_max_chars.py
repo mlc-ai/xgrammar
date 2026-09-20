@@ -342,9 +342,8 @@ def _allowed_token_ids_after(
 
 
 def test_token_edges_are_retried_in_place_under_char_budget() -> None:
-    # "<|x|>" is only reachable through the Token edge, so the byte-level walk rejects it and the
-    # mask filler must retry it through the atomic token path. The retry used to copy the whole
-    # matcher per rejected token; it now works in place and must give the same masks.
+    # "<|x|>" is only reachable through the Token edge, so the mask filler must retry it through
+    # the atomic token path after the byte-level walk rejects it.
     vocab = ["<s>", "</s>", "a", "b", "ab", "abcd", "<", ">", "<|x|>", "|", '"', ","]
     tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
     compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
@@ -365,8 +364,8 @@ def test_token_edges_are_retried_in_place_under_char_budget() -> None:
 
 
 def test_rules_outside_char_budget_scope_keep_plain_masks() -> None:
-    # `t` is never under a budget and cannot reach one, so its masks must be the same as in the
-    # grammar without the budget, also after a long prefix; `b` still enforces its budget.
+    # `t` can never be under a budget, so its masks match the budget-free grammar even after a
+    # long prefix; `b` still enforces its budget.
     vocab = ["<s>", "</s>", "a", "b", "ab", "abcd", "<", ">", "<|x|>", "|", '"', ","]
     tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
     compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)

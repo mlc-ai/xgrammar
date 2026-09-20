@@ -733,17 +733,14 @@ class GrammarMatcher::Impl : public EarleyParser {
   bool record_char_budget_relaxation_ = false;
   /*! \brief Whether byte history is needed to recognize a budgeted suffix/stop body boundary. */
   bool has_budget_marker_rules_ = false;
-  /*! \brief Whether the grammar has Token or ExcludeToken edges. Only those edges can accept a
-   * token that the byte-level walk rejected, so without them FillNextTokenBitmask skips the
-   * atomic retry of rejected tokens. Fixed at construction. */
+  /*! \brief Whether the grammar has Token/ExcludeToken edges, the only edges that can accept a
+   * token the byte-level walk rejected. */
   bool has_token_edges_ = false;
-  /*! \brief Per rule, whether an occurrence can be under a character budget: the rule has
-   * max_chars, or it references (transitively) a rule that does. States of other rules never see
-   * an expired character deadline, so they take the plain matching paths. Empty when the grammar
-   * has no character budgets. */
+  /*! \brief Per rule: has max_chars or transitively references a rule that does. States of other
+   * rules never see a character deadline. Empty without character budgets. */
   std::vector<bool> rule_in_char_budget_scope_;
 
-  /*! \brief Whether a state may see a character deadline while matching a token. */
+  /*! \brief Whether the state may hit a character deadline within a token. */
   bool InCharBudgetScope(const ParserState& state) const {
     return state.char_budget_deadline >= 0 || state.rule_id < 0 ||
            rule_in_char_budget_scope_[state.rule_id];
@@ -760,8 +757,7 @@ class GrammarMatcher::Impl : public EarleyParser {
         }
       }
     }
-    // Reverse reachability over rule references: a rule is in scope when it is budgeted or when
-    // it references a rule in scope.
+    // A rule is in scope if it is budgeted or references a rule in scope.
     const int32_t num_rules = grammar_->NumRules();
     std::vector<std::vector<int32_t>> referrers(num_rules);
     std::vector<int32_t> worklist;
@@ -812,7 +808,7 @@ class GrammarMatcher::Impl : public EarleyParser {
         }
         break;
       case ExprType::kTokenTagDispatch: {
-        // [trigger_cnt, (token_id, rule_id) x N, loop_after_dispatch, exclude_cnt, token_id x M]
+        // [trigger_cnt, (token_id, rule_id) x N, ...]
         const int32_t trigger_cnt = expr[0];
         for (int32_t i = 0; i < trigger_cnt; ++i) {
           callback(expr[2 + 2 * i]);
@@ -2011,9 +2007,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
     tmp_rejected_indices_delta_.clear();
 
-    // Examine only the current one ParserState. States that are not under a character budget and
-    // whose rule cannot enter a budgeted rule while matching a token never see an expired
-    // deadline, so they take the plain byte path.
+    // Examine only the current one ParserState. States outside every character budget never see
+    // a deadline, so they take the plain byte path.
     const bool use_char_budget = has_char_budget_rules_ && InCharBudgetScope(state);
     PushOneStateToCheck(state);
     bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
@@ -2101,11 +2096,9 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
       bool retried_atomically = false;
       if (!accepted && has_char_budget_rules_ && has_token_edges_) {
-        // Only Token/ExcludeToken edges can accept a token that the byte walk rejected. Retry
-        // through them in place: rebuild the single-state row (dropping the rows of the partially
-        // matched previous token), run the atomic token path, then rebuild the row once more so
-        // budget enforcement performed by the trial does not leak into the following tokens.
-        // Copying the whole matcher for this trial made every mask O(generated length).
+        // Retry through Token/ExcludeToken edges in place: rebuild the single-state row, run the
+        // atomic path, then rebuild it again so trial-time enforcement does not leak. A full
+        // matcher copy here made every mask O(generated length).
         retried_atomically = true;
         PopLastStates(prev_matched_size + 1);
         if (track_temporary_input) {
@@ -2141,7 +2134,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         }
       }
 
-      // After an in-place retry the rows of this token are gone, so its prefix cannot be reused.
+      // The retry dropped this token's rows, so its prefix cannot be reused.
       prev_token = retried_atomically ? nullptr : &cur_token;
     }
 
