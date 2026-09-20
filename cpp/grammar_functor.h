@@ -413,7 +413,9 @@ class GrammarFSMBuilder {
    * an error. Intended for the existing RegexToEBNF fallback, not arbitrary CFGs.
    * \param max_num_states Bound on the intermediate automaton size.
    */
-  static Result<FSMWithStartEnd> FromGrammar(const Grammar& grammar, int max_num_states = 100000);
+  static Result<FSMWithStartEnd> FromRegularGrammar(
+      const Grammar& grammar, int max_num_states = 100000
+  );
   /*! \brief The characters that must be escaped inside a JSON string literal: the control
    * characters 0x00-0x1F, the quote '"' and the backslash '\\'. */
   static const std::bitset<256>& JSONStringForbiddenChars();

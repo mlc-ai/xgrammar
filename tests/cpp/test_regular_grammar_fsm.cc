@@ -15,7 +15,7 @@ TEST(RegularGrammarFSM, RepeatedCallsHaveSeparateReturns) {
 root ::= part "x" part "y"
 part ::= "a" part | "b"
 )");
-  auto result = GrammarFSMBuilder::FromGrammar(grammar);
+  auto result = GrammarFSMBuilder::FromRegularGrammar(grammar);
   ASSERT_TRUE(result.IsOk());
   auto fsm = std::move(result).Unwrap();
   for (const auto* text : {"bxby", "abxby", "bxaaby", "aaabxaaaby"}) {
@@ -31,7 +31,7 @@ TEST(RegularGrammarFSM, RecursiveCalleeCannotUseCallersOptionalExit) {
 root ::= part? "z" part*
 part ::= "a" part | "b"
 )");
-  auto result = GrammarFSMBuilder::FromGrammar(grammar);
+  auto result = GrammarFSMBuilder::FromRegularGrammar(grammar);
   ASSERT_TRUE(result.IsOk());
   auto fsm = std::move(result).Unwrap();
   for (const auto* text : {"z", "bz", "abz", "zb", "zaab", "bzab", "abzbaab"}) {
@@ -80,7 +80,7 @@ TEST(RegularGrammarFSM, RegexFallbackMatchesOriginalGrammar) {
   };
   for (const auto& pattern : patterns) {
     auto grammar = Grammar::FromRegex(pattern);
-    auto result = GrammarFSMBuilder::FromGrammar(grammar);
+    auto result = GrammarFSMBuilder::FromRegularGrammar(grammar);
     ASSERT_TRUE(result.IsOk()) << pattern;
     auto fsm = std::move(result).Unwrap();
     GrammarMatcher matcher(compiler.CompileGrammar(grammar), std::nullopt, true);
@@ -97,8 +97,8 @@ TEST(RegularGrammarFSM, RejectsUnsupportedRecursionAndBounds) {
        {"root ::= \"a\" root \"b\" | \"\"",
         "root ::= \"a\" child | \"\"\nchild ::= \"b\" root | \"c\"",
         "root ::= Token(1)"}) {
-    EXPECT_TRUE(GrammarFSMBuilder::FromGrammar(Grammar::FromEBNF(source)).IsErr()) << source;
+    EXPECT_TRUE(GrammarFSMBuilder::FromRegularGrammar(Grammar::FromEBNF(source)).IsErr()) << source;
   }
   auto grammar = Grammar::FromRegex("(ab){100}");
-  EXPECT_TRUE(GrammarFSMBuilder::FromGrammar(grammar, 10).IsErr());
+  EXPECT_TRUE(GrammarFSMBuilder::FromRegularGrammar(grammar, 10).IsErr());
 }
