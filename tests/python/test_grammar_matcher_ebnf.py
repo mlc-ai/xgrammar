@@ -983,3 +983,18 @@ def test_sparse_end_state_fsm_operations(
 
 if __name__ == "__main__":
     pytest.main(sys.argv)
+
+
+def test_character_class_star_followed_by_same_class():
+    # The FSM start state loops on [a-z] and also moves to the next state on [a-z]. Merging
+    # those two states would let the grammar skip the mandatory character and accept "cd".
+    grammar = xgr.Grammar.from_ebnf('root ::= [a-z]* [a-z] "c" "d"')
+    assert not _is_grammar_accept_string(grammar, "cd")
+    assert not _is_grammar_accept_string(grammar, "d")
+    assert _is_grammar_accept_string(grammar, "acd")
+    assert _is_grammar_accept_string(grammar, "xyzcd")
+
+    schema_grammar = xgr.Grammar.from_json_schema('{"type": "string", "pattern": "^a*acd$"}')
+    assert not _is_grammar_accept_string(schema_grammar, '"cd"')
+    assert _is_grammar_accept_string(schema_grammar, '"acd"')
+    assert _is_grammar_accept_string(schema_grammar, '"aaacd"')

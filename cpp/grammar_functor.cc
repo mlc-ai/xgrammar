@@ -2132,7 +2132,9 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
       ref_rule_body.size() == 1) {
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
     if (ref_choice.size() == 1) {
-      grammar_expr_id = builder_->AddGrammarExpr(base_grammar_->GetGrammarExpr(ref_choice[0]));
+      // Visit the element instead of copying it verbatim: a nested repetition such as
+      // b ::= a{2,} must be expanded too, or an unbounded kRepeat reaches the parser.
+      grammar_expr_id = VisitExpr(ref_choice[0]);
     }
   }
 
