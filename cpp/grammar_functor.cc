@@ -1420,6 +1420,7 @@ class GrammarFSMBuilderImpl {
   void BuildNegativeCharacterClass(const GrammarExpr& expr, int start_state, int end_state);
   void AppendFSM(FSMWithStartEnd fsm, int start_state, std::vector<int32_t>* end_states);
   void AddCharacterRange(int from, int to, uint32_t min, uint32_t max);
+  void AddCodepointRange(int from, int to, uint32_t low, uint32_t high);
 
   FSM& target_fsm_;
   const std::string* rule_name_;
@@ -1432,6 +1433,19 @@ void GrammarFSMBuilderImpl::AddCharacterRange(int from, int to, uint32_t min, ui
   AddPackedUTF8RangeEdges(target_fsm_, from, to, min, max);
 }
 
+void GrammarFSMBuilderImpl::AddCodepointRange(int from, int to, uint32_t low, uint32_t high) {
+  // Do not bridge UTF-8 widths with the packed-byte range helper: its historical minimum
+  // byte sequences include overlong encodings (e.g. C0 80), which are not codepoints.
+  constexpr uint32_t width_ends[] = {0x7F, 0x7FF, 0xFFFF, 0x10FFFF};
+  for (uint32_t width_end : width_ends) {
+    if (low <= high && low <= width_end) {
+      auto end = std::min(high, width_end);
+      AddCharacterRange(from, to, CodepointToPackedUTF8(low), CodepointToPackedUTF8(end));
+      low = end + 1;
+    }
+  }
+}
+
 void GrammarFSMBuilderImpl::BuildNegativeCharacterClass(
     const GrammarExpr& expr, int start_state, int end_state
 ) {
@@ -1439,38 +1453,27 @@ void GrammarFSMBuilderImpl::BuildNegativeCharacterClass(
       expr.type == ExprType::kCharacterClass || expr.type == ExprType::kCharacterClassStar
   );
   XGRAMMAR_DCHECK(expr[0]);  // Negative character class should be true.
-  std::bitset<128> char_set;
+  // Complement codepoint ranges before encoding them. Truncating their endpoints to bytes
+  // incorrectly made, for example, [^\x00-\U0010ffff] accept every multi-byte character.
+  constexpr uint32_t kMaxCodepoint = 0x10FFFF;
+  std::vector<std::pair<uint32_t, uint32_t>> excluded_ranges;
   for (int i = 1; i < static_cast<int>(expr.size()); i += 2) {
-    uint8_t byte_min = static_cast<uint8_t>(expr[i]);
-    uint8_t byte_max = static_cast<uint8_t>(expr[i + 1]);
-    if (byte_max > 128) {
-      XGRAMMAR_LOG(WARNING) << "Negative Character class contains byte greater than 127, "
-                            << "clamping to 127.";
-      byte_max = 127;
-    }
-    for (uint8_t j = byte_min; j <= byte_max; ++j) {
-      char_set.set(j);
-    }
+    excluded_ranges.emplace_back(expr[i], expr[i + 1]);
   }
-
-  int left_bound = -1;
-  for (int i = 0; i < 128; ++i) {
-    if (!char_set[i]) {
-      left_bound = i;
-      int right_bound = i + 1;
-      while (right_bound < 128 && !char_set[right_bound]) {
-        right_bound++;
-      }
-      target_fsm_.AddEdge(
-          start_state,
-          end_state,
-          static_cast<uint8_t>(left_bound),
-          static_cast<uint8_t>(right_bound - 1)
-      );
-      i = right_bound;
+  std::sort(excluded_ranges.begin(), excluded_ranges.end());
+  uint32_t next = 0;
+  for (const auto& [low, high] : excluded_ranges) {
+    if (low > next) {
+      AddCodepointRange(start_state, end_state, next, std::min(low - 1, kMaxCodepoint));
     }
+    if (high >= kMaxCodepoint) {
+      return;
+    }
+    next = std::max(next, high + 1);
   }
-  AddCharacterRange(start_state, end_state, kMin2BytesUnicode, kMax4BytesUnicode);
+  if (next <= kMaxCodepoint) {
+    AddCodepointRange(start_state, end_state, next, kMaxCodepoint);
+  }
 }
 
 void GrammarFSMBuilderImpl::AddCharacterClassTransitions(
@@ -1486,10 +1489,7 @@ void GrammarFSMBuilderImpl::AddCharacterClassTransitions(
     for (int i = 1; i < static_cast<int>(expr.size()); i += 2) {
       uint32_t codepoint_min = static_cast<uint32_t>(expr[i]);
       uint32_t codepoint_max = static_cast<uint32_t>(expr[i + 1]);
-      // Convert Unicode codepoints to packed UTF-8 format for AddCharacterRange
-      uint32_t packed_min = CodepointToPackedUTF8(codepoint_min);
-      uint32_t packed_max = CodepointToPackedUTF8(codepoint_max);
-      AddCharacterRange(start_state, end_state, packed_min, packed_max);
+      AddCodepointRange(start_state, end_state, codepoint_min, codepoint_max);
     }
   }
 }
