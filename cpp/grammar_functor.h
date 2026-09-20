@@ -406,14 +406,6 @@ class GrammarFSMBuilder {
    * the characters in JSONStringForbiddenChars() are excluded from every character match.
    */
   static Result<FSMWithStartEnd> Regex(const std::string& regex, bool json_string = false);
-  /*!
-   * \brief Flatten a regular EBNF grammar without reinterpreting its terminal expressions.
-   * Supports finite rule calls, direct tail self-recursion, and repetition. Each call gets
-   * separate return states. Other recursion, non-byte terminals, and rule annotations return
-   * an error. Intended for the existing RegexToEBNF fallback, not arbitrary CFGs.
-   * \param max_num_states Bound on the intermediate automaton size.
-   */
-  static Result<FSMWithStartEnd> FromGrammar(const Grammar& grammar, int max_num_states = 100000);
   /*! \brief The characters that must be escaped inside a JSON string literal: the control
    * characters 0x00-0x1F, the quote '"' and the backslash '\\'. */
   static const std::bitset<256>& JSONStringForbiddenChars();
