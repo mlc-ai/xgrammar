@@ -286,8 +286,7 @@ class JSONSchemaConverter {
       bool any_whitespace,
       std::optional<int> max_whitespace_cnt,
       RefResolver ref_resolver = nullptr,
-      bool any_order = false,
-      std::vector<std::string> excludes = {}
+      bool any_order = false
   );
 
   virtual ~JSONSchemaConverter() = default;
@@ -419,16 +418,6 @@ class JSONSchemaConverter {
   int32_t RegexExpression(
       const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
   );
-  int32_t ExcludingString(
-      const std::string& regex,
-      bool json_string,
-      const std::string& rule_name,
-      const std::vector<std::string>& excluded_keys = {},
-      bool force_cfg_expansion = false,
-      bool close_json_string = false
-  );
-  bool IsAllowedString(const std::string& text) const;
-  bool IsAllowedLiteral(const picojson::value& value, bool raw_string = false) const;
 
   /*! \brief Helper to create rule with repetition constraints. */
   int32_t GetPropertyWithNumberConstraints(
@@ -481,7 +470,6 @@ class JSONSchemaConverter {
   // Applies to all objects (including nested ones). Default false preserves the fixed-order
   // behavior.
   bool any_order_ = false;
-  std::vector<std::string> excludes_;
 
  public:
   // Basic rule names
@@ -556,8 +544,7 @@ Grammar JSONSchemaToGrammar(
     bool strict_mode = true,
     std::optional<int> max_whitespace_cnt = std::nullopt,
     bool any_order = false,
-    JSONFormat json_format = JSONFormat::kJSON,
-    std::vector<std::string> excludes = {}
+    JSONFormat json_format = JSONFormat::kJSON
 );
 
 // ==================== Public API functions (backward compatible) ====================

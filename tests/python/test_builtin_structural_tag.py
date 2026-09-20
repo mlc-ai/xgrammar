@@ -169,7 +169,7 @@ def _collect_json_schema_values(structural_tag: StructuralTag) -> List[Any]:
 
 
 def _collect_excludes(structural_tag: StructuralTag) -> List[List[str]]:
-    """Collect every ``excludes`` list from nested formats."""
+    """Collect every ``excludes`` list from nested AnyText / TriggeredTags nodes."""
 
     return [
         list(format_obj.excludes)
@@ -770,7 +770,7 @@ _kimi_k3_auto_instances = [
         True,
         id="empty-string-arg",
     ),
-    # A complete close control must finish the argument terminator.
+    # Raw string values may contain a partial close marker.
     pytest.param(
         "Some reasoning.<|close|>think<|sep|>"
         "<|open|>response<|sep|><|close|>response<|sep|>"
@@ -782,8 +782,8 @@ _kimi_k3_auto_instances = [
         "<|close|>call<|sep|>"
         "<|close|>tools<|sep|>"
         "<|close|>message<|sep|>",
-        False,
-        id="malformed-argument-end-in-string",
+        True,
+        id="partial-close-in-string",
     ),
     # The model must not re-emit the think block's opening marker: the prompt sent it
     # already, so emitting it again would nest a second marker inside the reasoning text.
@@ -1076,68 +1076,19 @@ def test_kimi_k3_free_form_arguments_keep_every_type_attribute():
     check_stag_with_instance(structural_tag, instance("bogus", "x"), False)
 
 
-@pytest.mark.parametrize(
-    "tool_choice", ["auto", "required", {"type": "function", "function": {"name": "get_weather"}}]
-)
-def test_kimi_k3_exclude_special_tokens(tool_choice):
-    """Free-text and argument strings exclude the K3 controls unless opted out."""
+def test_kimi_k3_exclude_special_tokens():
+    """Free-text spans exclude the K3 structural tokens unless opted out."""
 
-    on = get_model_structural_tag(
-        "kimi_k3", tools=_tools_kimi_k3, reasoning=True, tool_choice=tool_choice
-    )
+    on = get_model_structural_tag("kimi_k3", tools=_tools_kimi_k3, reasoning=True)
     flat = [token for excludes in _collect_excludes(on) for token in excludes]
     assert "<|open|>" in flat
     assert "<|close|>" in flat
-    nodes = _collect_json_schema_nodes(on)
-    assert nodes
-    assert all(node.excludes == ["<|open|>", "<|close|>", "<|sep|>"] for node in nodes)
 
     off = get_model_structural_tag(
-        "kimi_k3",
-        tools=_tools_kimi_k3,
-        reasoning=True,
-        tool_choice=tool_choice,
-        exclude_special_tokens=False,
+        "kimi_k3", tools=_tools_kimi_k3, reasoning=True, exclude_special_tokens=False
     )
     assert all(excludes == [] for excludes in _collect_excludes(off))
     xgr.Grammar.from_structural_tag(off)
-
-
-@pytest.mark.parametrize("nested", [False, True])
-@pytest.mark.parametrize("exclude_special_tokens", [False, True])
-def test_kimi_k3_tool_argument_exclusions(nested, exclude_special_tokens):
-    value_schema = {"type": "string"}
-    if nested:
-        value_schema = {
-            "type": "object",
-            "properties": {"text": value_schema},
-            "required": ["text"],
-            "additionalProperties": False,
-        }
-    schema = {"type": "object", "properties": {"q": value_schema}, "required": ["q"]}
-    tag = get_model_structural_tag(
-        "kimi_k3",
-        tools=make_tools(["get_weather"], schema),
-        reasoning="disabled",
-        exclude_special_tokens=exclude_special_tokens,
-    )
-    grammar = xgr.Grammar.from_structural_tag(tag)
-
-    def instance(text):
-        value = json.dumps({"text": text}, ensure_ascii=False) if nested else text
-        return (
-            "<|close|>response<|sep|><|open|>tools<|sep|>"
-            '<|open|>call tool="get_weather" index="1"<|sep|>'
-            f'<|open|>argument key="q" type="{value_schema["type"]}"<|sep|>{value}'
-            "<|close|>argument<|sep|><|close|>call<|sep|>"
-            "<|close|>tools<|sep|><|close|>message<|sep|>"
-        )
-
-    assert _is_grammar_accept_string(grammar, instance("北京 <|close]"))
-    for control in ["<|open|>", "<|close|>", "<|sep|>"]:
-        assert _is_grammar_accept_string(grammar, instance(f"before{control}response")) == (
-            not exclude_special_tokens
-        )
 
 
 def test_cohere_required_accepts_multicall_shape():
