@@ -1144,6 +1144,22 @@ Result<StringSpec, SchemaError> SchemaParser::ParseString(const picojson::object
             std::to_string(spec.max_length)
     );
   }
+  // A pattern or built-in format takes the whole GenerateString branch, so minLength/maxLength
+  // would be dropped silently (issue #749). Warn here rather than in GenerateString: the XML
+  // tool-calling converter overrides that method, but every converter goes through ParseString.
+  if (spec.min_length != 0 || spec.max_length != -1) {
+    const char* generative = nullptr;
+    if (spec.pattern.has_value()) {
+      generative = "pattern";
+    } else if (spec.format.has_value() && JSONSchemaConverter::IsBuiltinFormat(*spec.format)) {
+      generative = "format";
+    }
+    if (generative != nullptr) {
+      XGRAMMAR_LOG(WARNING) << generative
+                            << " combined with minLength/maxLength is not supported; ignoring "
+                               "minLength/maxLength";
+    }
+  }
   return ResultOk(std::move(spec));
 }
 
