@@ -1502,7 +1502,9 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
     // Case 1: Like ab | ac | ad, then they can be merged into a(b | c | d).
     bool is_equiv_successor = false;
     for (int i = 0; i < n; i++) {
-      if (incoming_distinct_count[i] != 1 || union_find_set.Count(i)) {
+      // The start state is also entered without taking any edge, so it is never equivalent to
+      // a state that is only reached through the start state's own self-loop label.
+      if (incoming_distinct_count[i] != 1 || union_find_set.Count(i) || i == result.GetStart()) {
         continue;
       }
       int previous_state = single_incoming_source[i];
@@ -1517,7 +1519,7 @@ FSMWithStartEnd FSMWithStartEnd::MergeEquivalentStates(int max_result_num_states
         }
         auto edges_to_sibling = siblings.Slice(group_begin, group_end);
         group_begin = group_end;
-        if (sibling <= i || incoming_distinct_count[sibling] != 1 ||
+        if (sibling <= i || incoming_distinct_count[sibling] != 1 || sibling == result.GetStart() ||
             result.IsEndState(sibling) != result.IsEndState(i)) {
           continue;
         }
