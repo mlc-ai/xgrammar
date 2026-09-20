@@ -505,7 +505,7 @@ class GrammarMatcher::Impl : public EarleyParser {
       }
     }
     if (has_char_budget_rules_) {
-      InitCharBudgetScope();
+      has_token_edges_ = HasTokenEdges();
     }
     XGRAMMAR_CHECK(
         !default_temperature_.has_value() ||
@@ -736,88 +736,17 @@ class GrammarMatcher::Impl : public EarleyParser {
   /*! \brief Whether the grammar has Token/ExcludeToken edges, the only edges that can accept a
    * token the byte-level walk rejected. */
   bool has_token_edges_ = false;
-  /*! \brief Per rule: has max_chars or transitively references a rule that does. States of other
-   * rules never see a character deadline. Empty without character budgets. */
-  std::vector<bool> rule_in_char_budget_scope_;
-
-  /*! \brief Whether the state may hit a character deadline within a token. */
-  bool InCharBudgetScope(const ParserState& state) const {
-    return state.char_budget_deadline >= 0 || state.rule_id < 0 ||
-           rule_in_char_budget_scope_[state.rule_id];
-  }
-
-  /*! \brief Compute has_token_edges_ and rule_in_char_budget_scope_. */
-  void InitCharBudgetScope() {
+  /*! \brief Whether the complete FSM has any Token/ExcludeToken edge. */
+  bool HasTokenEdges() const {
     const auto& fsm = grammar_->complete_fsm;
-    for (int state = 0; state < fsm.NumStates() && !has_token_edges_; ++state) {
+    for (int state = 0; state < fsm.NumStates(); ++state) {
       for (const auto& edge : fsm.GetEdges(state)) {
         if (edge.IsToken() || edge.IsExcludeToken()) {
-          has_token_edges_ = true;
-          break;
+          return true;
         }
       }
     }
-    // A rule is in scope if it is budgeted or references a rule in scope.
-    const int32_t num_rules = grammar_->NumRules();
-    std::vector<std::vector<int32_t>> referrers(num_rules);
-    std::vector<int32_t> worklist;
-    rule_in_char_budget_scope_.assign(num_rules, false);
-    for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
-      const auto& rule = grammar_->GetRule(rule_id);
-      if (rule.max_chars >= 0) {
-        rule_in_char_budget_scope_[rule_id] = true;
-        worklist.push_back(rule_id);
-      }
-      CollectReferencedRules(rule.body_expr_id, [&](int32_t referenced) {
-        referrers[referenced].push_back(rule_id);
-      });
-      const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(rule_id);
-      if (suffix_stop_info != nullptr && suffix_stop_info->body_rule_id >= 0) {
-        referrers[suffix_stop_info->body_rule_id].push_back(rule_id);
-      }
-    }
-    for (size_t i = 0; i < worklist.size(); ++i) {
-      for (int32_t referrer : referrers[worklist[i]]) {
-        if (!rule_in_char_budget_scope_[referrer]) {
-          rule_in_char_budget_scope_[referrer] = true;
-          worklist.push_back(referrer);
-        }
-      }
-    }
-  }
-
-  /*! \brief Call callback(rule_id) for every rule the expression references. */
-  template <typename Callback>
-  void CollectReferencedRules(int32_t expr_id, const Callback& callback) const {
-    using ExprType = Grammar::Impl::GrammarExprType;
-    const auto expr = grammar_->GetGrammarExpr(expr_id);
-    switch (expr.type) {
-      case ExprType::kRuleRef:
-      case ExprType::kRepeat:
-        callback(expr[0]);
-        break;
-      case ExprType::kSequence:
-      case ExprType::kChoices:
-        for (int32_t child : expr) {
-          CollectReferencedRules(child, callback);
-        }
-        break;
-      case ExprType::kTagDispatch:
-        for (const auto& [tag, rule_id] : grammar_->GetTagDispatch(expr).tag_rule_pairs) {
-          callback(rule_id);
-        }
-        break;
-      case ExprType::kTokenTagDispatch: {
-        // [trigger_cnt, (token_id, rule_id) x N, ...]
-        const int32_t trigger_cnt = expr[0];
-        for (int32_t i = 0; i < trigger_cnt; ++i) {
-          callback(expr[2 + 2 * i]);
-        }
-        break;
-      }
-      default:
-        break;
-    }
+    return false;
   }
 
   struct BudgetBodyMatchProgress {
@@ -2007,9 +1936,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
     tmp_rejected_indices_delta_.clear();
 
-    // Examine only the current one ParserState. States outside every character budget never see
-    // a deadline, so they take the plain byte path.
-    const bool use_char_budget = has_char_budget_rules_ && InCharBudgetScope(state);
+    // Examine only the current one ParserState
     PushOneStateToCheck(state);
     bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
     int32_t saved_temporary_input_start_row = -1;
@@ -2079,7 +2006,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       // Step 2.2. Find if the current token is accepted or rejected.
       if (accepted) {
         for (int j = prev_matched_size; j < static_cast<int>(cur_token.size()); ++j) {
-          bool byte_accepted = use_char_budget
+          bool byte_accepted = has_char_budget_rules_
                                    ? AdvanceWithCharacterBudget(static_cast<uint8_t>(cur_token[j]))
                                    : Advance(static_cast<uint8_t>(cur_token[j]));
           if (!byte_accepted) {
