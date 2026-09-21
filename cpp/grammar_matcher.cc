@@ -463,6 +463,24 @@ void ApplyTokenBitmaskInplaceCPU(
  * process.
  */
 
+/*!
+ * \brief Per-seed context for the repeat fast-path token-acceptance certificate.
+ *
+ * The token-independent part of the certificate — matcher machinery, clean
+ * seed, and exact body restart — depends only on the seed state and immutable
+ * grammar data, so it is evaluated once per FillBitmaskForStates seed by
+ * PrepareRepeatFastPathContext and recorded here. The per-token check then
+ * performs only the token-specific certification. An ineligible seed makes
+ * every token fail immediately with no further work. The context is valid only
+ * for the seed it was prepared for, is never retained beyond that seed's token
+ * loop, and nothing here is cached across fills.
+ */
+struct RepeatFastPathContext {
+  bool eligible = false;
+  const CompactFSM* child_fsm = nullptr;
+  int32_t child_start = -1;
+};
+
 /* \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcher::Impl : public EarleyParser {
  public:
@@ -634,6 +652,27 @@ class GrammarMatcher::Impl : public EarleyParser {
   void FillBitmaskForCharBudgetBoundary(
       const AdaptiveTokenMask& adaptive_token_mask, int32_t remaining_chars
   );
+
+  /*!
+   * \brief Conservative repeat fast-path token-acceptance certificate for one (seed, token)
+   * pair. Returns true only when the token is proven acceptable without a byte-level trial;
+   * read-only with respect to parser state. A false result means only "not certified" and the
+   * ordinary trial runs unchanged. The token-independent gates are evaluated once per seed by
+   * PrepareRepeatFastPathContext into \p context; this method performs only the token-specific
+   * certification.
+   */
+  bool CanFastAcceptRepeatToken(
+      const RepeatFastPathContext& context, const ParserState& state, const std::string& token
+  );
+
+  /*!
+   * \brief Evaluate the token-independent part of the repeat fast-path certificate once for a
+   * FillBitmaskForStates seed and record the outcome in \p context. On success the context
+   * carries the immutable byte-certification info for the token-specific check; on refusal
+   * \p context->eligible is false and the ordinary parser behavior applies unchanged. Read-only
+   * with respect to parser state.
+   */
+  void PrepareRepeatFastPathContext(const ParserState& state, RepeatFastPathContext* context);
 
   bool AdvanceWithCharacterBudget(uint8_t byte, bool debug_print = false);
 
@@ -1955,6 +1994,14 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                          << adaptive_token_mask.Print(tokenizer_info_);
     }
     int last_rejected_uncertain_range = 0;
+    // Evaluate the token-independent part of the repeat fast-path certificate
+    // once per seed instead of once per uncertain token; the per-token check
+    // below then does only the token-specific work, and an ineligible seed
+    // fails it immediately.
+    RepeatFastPathContext repeat_context;
+    if (!adaptive_token_mask.uncertain_indices.empty()) {
+      PrepareRepeatFastPathContext(state, &repeat_context);
+    }
     const auto& uncertain_indices = adaptive_token_mask.uncertain_indices;
     for (auto token_it = uncertain_indices.begin(); token_it != uncertain_indices.end();) {
       const auto cur_token_idx = *token_it++;
@@ -1981,6 +2028,18 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
       }
 
       const auto& cur_token = sorted_decoded_vocab[cur_token_idx].second;
+
+      // Repeat fast path: if the certificate proves this token is accepted from this seed,
+      // record it directly and skip the byte-level trial. The certificate is
+      // acceptance-only; a negative verdict leaves the ordinary trial below completely
+      // unchanged. On success we only set the token's bit with the actual token id — no LCP
+      // bookkeeping, no trial rows, no rejected-range updates; the end-of-seed PopLastStates
+      // remains responsible for the retained speculative rows.
+      if (CanFastAcceptRepeatToken(repeat_context, state, cur_token)) {
+        tmp_accepted_bitset_.Set(sorted_decoded_vocab[cur_token_idx].first, true);
+        continue;
+      }
+
       bool accepted = !cur_token.empty() || !has_char_budget_rules_;
 
       // Step 2.1. Find the longest common prefix with the accepted part of the previous token.
@@ -2088,6 +2147,230 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   if (debug_print) {
     XGRAMMAR_LOG(INFO) << "Filled bitmask: " << PrintBitmask(bitmask_data_ptr, tokenizer_info_);
   }
+}
+
+/*!
+ * Repeat fast-path token-acceptance certificate for the repeat-body hot path.
+ *
+ * Claim: if (a) the seed is a clean occurrence of a repeat body C sitting at
+ * C's exact FSM entry node, (b) the token is non-empty pure-ASCII and every
+ * distinct byte of it has exactly one char edge from the entry node, landing
+ * on a rule-specific terminal end of C with no byte-relevant outgoing edges,
+ * and (c) some parent registration at the seed's birth row holds an exact
+ * bounded RepeatRef of C with q + m < Upper strictly, then the token is
+ * accepted: each byte advances the current occurrence into its end, the
+ * continue registration keeps the repeat count strictly below Upper for all m
+ * bytes, and the spawn guard re-creates the next occurrence.
+ *
+ * A false result means only "not certified" — the ordinary byte-level trial
+ * runs unchanged. There is no rejection optimization and no lower-bound
+ * requirement: the lower repeat bound controls rule exit, not continuation.
+ *
+ * \brief Prepare the per-seed repeat fast-path context: evaluate the
+ * token-independent part of the certificate once for a FillBitmaskForStates
+ * seed. On success the context carries the immutable byte-certification info
+ * (child FSM and its entry node) for the token-specific check; on refusal the
+ * context stays ineligible and the ordinary parser behavior applies unchanged.
+ * Read-only with respect to parser state.
+ */
+void GrammarMatcher::Impl::PrepareRepeatFastPathContext(
+    const ParserState& state, RepeatFastPathContext* context
+) {
+  // Matcher-wide machinery (budgets and captures) can invalidate the
+  // certificate, so refuse when any of it is active.
+  if (has_budget_rules_ || has_char_budget_rules_ || has_budget_marker_rules_ ||
+      capture_tracking_) {
+    return;
+  }
+
+  // The seed occurrence must be clean and fresh (repeat counts live on the
+  // parent's continuation states; child-rule states always start at zero).
+  if (state.rule_id < 0) {
+    return;
+  }
+  if (state.budget_deadline != -1 || state.char_budget_deadline != -1 ||
+      state.active_temperature_rule_id != -1) {
+    return;
+  }
+  if (state.sub_element_id != 0 || state.partial_codepoint != 0 || state.repeat_count != 0) {
+    return;
+  }
+  if (!grammar_->per_rule_fsms[state.rule_id].has_value()) {
+    return;
+  }
+  const auto& child_rule = grammar_->GetRule(state.rule_id);
+  if (child_rule.is_lazy || child_rule.max_tokens != -1 || child_rule.max_chars != -1 ||
+      !child_rule.capture_name.empty() || child_rule.temperature.has_value()) {
+    return;
+  }
+  // child_rule.lookahead_assertion_id is deliberately NOT gated (lookahead
+  // assertions are never evaluated by the byte-level trial).
+
+  // Exact body restart: the seed must sit on the child rule's actual FSM entry
+  // node (a seed at a later body position cannot simply repeat the local
+  // transition). The entry must not itself be an end, and must have only
+  // character-range edges.
+  const auto& child_fsm_view = grammar_->per_rule_fsms[state.rule_id]->GetFsm();
+  const auto& child_fsm = child_fsm_view.GetFsm();
+  const int32_t child_start = child_fsm_view.GetStart();
+  if (state.element_id < 0 || state.element_id >= child_fsm.NumStates()) {
+    return;
+  }
+  if (state.element_id != child_start) {
+    return;
+  }
+  if (GetFsmStateFlags(state.rule_id, child_start) & kFsmStateEnd) {
+    // The body can complete without consuming a byte from its own entry.
+    return;
+  }
+  {
+    const auto entry_edges = child_fsm.GetEdges(child_start);
+    for (const auto& edge : entry_edges) {
+      if (!edge.IsCharRange()) {
+        return;
+      }
+    }
+  }
+
+  // Seed eligible: record the immutable byte-certification info. The FSM
+  // pointer references grammar data that is immutable for the matcher's
+  // lifetime; the context is never retained beyond this seed's token loop.
+  context->eligible = true;
+  context->child_fsm = &child_fsm;
+  context->child_start = child_start;
+}
+
+bool GrammarMatcher::Impl::CanFastAcceptRepeatToken(
+    const RepeatFastPathContext& context, const ParserState& state, const std::string& token
+) {
+  if (!context.eligible) {
+    // The token-independent checks already ran once per seed in
+    // PrepareRepeatFastPathContext; an ineligible seed has no per-token work.
+    return false;
+  }
+
+  // Token-local ASCII edge certification: token non-empty, pure ASCII. For
+  // each distinct byte: exactly one char edge from the exact
+  // restart node must match it, and its target must be a rule-specific
+  // terminal end of THIS child rule (per-rule FSM flag, not a global node
+  // flag) with no outgoing edges relevant to continuing the occurrence
+  // (Token/ExcludeToken edges are not followed by the byte-level Advance
+  // path, so they do not affect this byte-path acceptance certificate and
+  // are allowed). Unused UTF-8 branches of the entry are NOT required to
+  // terminate.
+  const int64_t m = static_cast<int64_t>(token.size());
+  if (m == 0) {
+    return false;
+  }
+  {
+    // At most 256 distinct ASCII bytes can occur, so a fixed local table
+    // avoids a heap allocation on the hot refusal path.
+    uint8_t distinct[256];
+    bool seen[256] = {};
+    int32_t n_distinct = 0;
+    for (const char c : token) {
+      const uint8_t b = static_cast<uint8_t>(c);
+      if (b >= 0x80) {
+        return false;
+      }
+      if (!seen[b]) {
+        seen[b] = true;
+        distinct[n_distinct++] = b;
+      }
+    }
+    const auto entry_edges = context.child_fsm->GetEdges(context.child_start);
+    for (int32_t i = 0; i < n_distinct; ++i) {
+      const uint8_t b = distinct[i];
+      int32_t match_target = -1;
+      int32_t n_match = 0;
+      for (const auto& edge : entry_edges) {
+        if (!edge.IsCharRange()) {
+          continue;  // already excluded by the entry gate; defensive
+        }
+        if (edge.min <= static_cast<int32_t>(b) && static_cast<int32_t>(b) <= edge.max) {
+          ++n_match;
+          if (n_match == 1) {
+            match_target = edge.target;
+          }
+        }
+      }
+      if (n_match == 0) {
+        return false;
+      }
+      if (n_match > 1) {
+        return false;
+      }
+      const uint8_t target_flags = GetFsmStateFlags(state.rule_id, match_target);
+      if (!(target_flags & kFsmStateEnd)) {
+        return false;
+      }
+      for (const auto& target_edge : context.child_fsm->GetEdges(match_target)) {
+        if (!target_edge.IsToken() && !target_edge.IsExcludeToken()) {
+          return false;
+        }
+      }
+    }
+  }
+
+  // Exact repeat parent: at the seed's actual birth row, an exact
+  // registration (ref_id == C) whose parent node has EXACTLY ONE outgoing
+  // edge — the qualifying RepeatRef — with child ID exactly the current child
+  // rule, finite positive upper U, and q taken from THIS registration.
+  // Capacity: m < U - q STRICTLY, in widened arithmetic (overflow-safe; no
+  // narrow addition). Multiple registrations are evaluated independently;
+  // one coherent qualifying derivation suffices; q from one parent is never
+  // combined with U or context from another.
+  if (state.rule_start_pos < 0 ||
+      state.rule_start_pos >= static_cast<int32_t>(rule_id_to_completable_states_.size())) {
+    return false;
+  }
+  {
+    const auto& parent_states_map = rule_id_to_completable_states_[state.rule_start_pos];
+    for (const auto& [ref_id, parent_state] : parent_states_map) {
+      if (ref_id != state.rule_id) continue;
+      if (parent_state.rule_id < 0 || !grammar_->per_rule_fsms[parent_state.rule_id].has_value()) {
+        continue;  // non-FSM parent (grammar-expr path): cannot be a qualifying FSM repeat
+      }
+      if (parent_state.budget_deadline != -1 || parent_state.char_budget_deadline != -1 ||
+          parent_state.active_temperature_rule_id != -1 || parent_state.sub_element_id != 0 ||
+          parent_state.partial_codepoint != 0) {
+        continue;
+      }
+      const auto& parent_rule = grammar_->GetRule(parent_state.rule_id);
+      if (parent_rule.is_lazy || parent_rule.max_tokens != -1 || parent_rule.max_chars != -1 ||
+          !parent_rule.capture_name.empty() || parent_rule.temperature.has_value()) {
+        continue;
+      }
+      const auto& parent_fsm = grammar_->per_rule_fsms[parent_state.rule_id]->GetFsm().GetFsm();
+      if (parent_state.element_id < 0 || parent_state.element_id >= parent_fsm.NumStates()) {
+        continue;
+      }
+      const auto parent_edges = parent_fsm.GetEdges(parent_state.element_id);
+      if (parent_edges.size() != 1) {
+        continue;  // the parent node must hold EXACTLY the qualifying RepeatRef
+      }
+      const auto& edge = parent_edges[0];
+      if (!edge.IsRepeatRef()) {
+        continue;
+      }
+      const auto info = grammar_->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+      if (info.RuleId() != state.rule_id) {
+        continue;
+      }
+      const int64_t upper = info.Upper();
+      if (upper <= 0) {
+        continue;  // unbounded (-1) or degenerate upper: refuse to qualify
+      }
+      const int64_t q = parent_state.repeat_count;
+      if (q < 0 || q >= upper) {
+        continue;
+      }
+      if (m < upper - q) {  // strict; int64 arithmetic, q < upper so no overflow
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 std::string GrammarMatcher::Impl::FindJumpForwardString() {
