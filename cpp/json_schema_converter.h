@@ -429,6 +429,8 @@ class JSONSchemaConverter {
   );
   bool IsAllowedString(const std::string& text) const;
   bool IsAllowedLiteral(const picojson::value& value, bool raw_string = false) const;
+  /*! \brief Log that the string's minLength/maxLength are ignored because excludes_ is set. */
+  void WarnDroppedLengthConstraints(const StringSpec& spec, const std::string& rule_name) const;
 
   /*! \brief Helper to create rule with repetition constraints. */
   int32_t GetPropertyWithNumberConstraints(

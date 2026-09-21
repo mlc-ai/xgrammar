@@ -60,7 +60,6 @@ def test_string_excludes(style, schema):
     [
         ({"type": "string", "pattern": "^a[abc]*z$"}, "aabz", ["acbz", "aab"]),
         ({"type": "string", "pattern": "^你好[abc]*$"}, "你好aa", ["你好bc", "hello"]),
-        ({"type": "string", "minLength": 2, "maxLength": 3}, "你好", ["a", "abcd", "abc"]),
         ({"type": "string", "format": "email"}, "aa@example.com", ["bc@example.com", "aa"]),
     ],
 )
@@ -69,6 +68,41 @@ def test_excludes_preserve_string_constraints(style, schema, good, bad):
     assert _is_grammar_accept_string(grammar, string_instance(good, style))
     for value in bad:
         assert not _is_grammar_accept_string(grammar, string_instance(value, style))
+
+
+@pytest.mark.parametrize("style", ["json", "kimi_k3_xml"])
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "string", "minLength": 2},
+        {"type": "string", "maxLength": 3},
+        {"type": "string", "minLength": 2, "maxLength": 3},
+    ],
+)
+def test_excludes_drop_length_constraints(style, schema, capfd):
+    # Bounding the length of a filtered string multiplies the grammar by the bound, so the
+    # length constraints are dropped when exclusions are present; the exclusions still apply.
+    bounded = leaf_grammar(schema, style, excludes=[])
+    assert "Ignoring" not in capfd.readouterr().err
+    unbounded = leaf_grammar(schema, style, excludes=["bc", "cb"])
+    warning = capfd.readouterr().err
+    assert "Ignoring" in warning and "JSONSchemaFormat.excludes" in warning
+    for keyword in ("minLength", "maxLength"):
+        if keyword in schema:
+            assert f"{keyword}={schema[keyword]}" in warning
+        else:
+            assert keyword not in warning
+    plain = leaf_grammar({"type": "string"}, style, excludes=["bc", "cb"])
+    # Same rules as the unbounded string (up to the reference to the shared string rule), not
+    # one rule per position and exclusion state.
+    assert str(unbounded).count("::=") <= str(plain).count("::=") + 1
+    for value in ("a", "abde", "ax" * 10):
+        assert _is_grammar_accept_string(unbounded, string_instance(value, style))
+        assert _is_grammar_accept_string(bounded, string_instance(value, style)) == (
+            schema.get("minLength", 0) <= len(value) <= schema.get("maxLength", 10**9)
+        )
+    for value in ("bc", "acbz", "a" * 20 + "bc"):
+        assert not _is_grammar_accept_string(unbounded, string_instance(value, style))
 
 
 @pytest.mark.parametrize("style", ["json", "kimi_k3_xml"])

@@ -2297,6 +2297,22 @@ int32_t JSONSchemaConverter::RegexExpression(
 
 // ==================== Generate Methods ====================
 
+void JSONSchemaConverter::WarnDroppedLengthConstraints(
+    const StringSpec& spec, const std::string& rule_name
+) const {
+  std::string bounds;
+  if (spec.min_length != 0) {
+    bounds += "minLength=" + std::to_string(spec.min_length);
+  }
+  if (spec.max_length != -1) {
+    bounds +=
+        (bounds.empty() ? "" : ", ") + std::string("maxLength=") + std::to_string(spec.max_length);
+  }
+  XGRAMMAR_LOG(WARNING) << "Ignoring " << bounds << " of string " << rule_name
+                        << ": length constraints are not applied together with "
+                           "JSONSchemaFormat.excludes";
+}
+
 bool JSONSchemaConverter::IsAllowedString(const std::string& text) const {
   return std::none_of(excludes_.begin(), excludes_.end(), [&](const auto& excluded) {
     return text.find(excluded) != std::string::npos;
@@ -2691,17 +2707,18 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
         {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
     );
   }
-  // Check for length constraints
+  // Check for length constraints. They are dropped when there are exclusions: intersecting the
+  // unrolled bound with the exclusion automaton emits one rule per position and automaton state
+  // (about 18 rules per character for three markers), so the string keeps only the exclusions.
   if (spec.min_length != 0 || spec.max_length != -1) {
     if (!excludes_.empty()) {
-      auto regex = std::string(R"([^"\\\r\n]{)") + std::to_string(spec.min_length) + "," +
-                   (spec.max_length == -1 ? "" : std::to_string(spec.max_length)) + "}";
-      return Sequence({ByteString("\""), ExcludingString(regex, false, rule_name, {}, true, true)});
+      WarnDroppedLengthConstraints(spec, rule_name);
+    } else {
+      int32_t character =
+          builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
+      int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
+      return Sequence({ByteString("\""), body, ByteString("\"")});
     }
-    int32_t character =
-        builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
-    int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
-    return Sequence({ByteString("\""), body, ByteString("\"")});
   }
   // Default string
   return Sequence({ByteString("\""), RuleRef(kBasicStringSub)});
@@ -3885,8 +3902,13 @@ int32_t XMLToolCallingConverter::GenerateString(
     const StringSpec& spec, const std::string& rule_name
 ) {
   if (nested_object_level_ <= 1) {
-    if (!spec.pattern.has_value() && !spec.format.has_value() && spec.min_length == 0 &&
-        spec.max_length == -1) {
+    // Length constraints are dropped when there are exclusions (see
+    // JSONSchemaConverter::GenerateString): the raw string keeps only the exclusions.
+    if (!spec.pattern.has_value() && !spec.format.has_value() &&
+        ((spec.min_length == 0 && spec.max_length == -1) || !excludes_.empty())) {
+      if (spec.min_length != 0 || spec.max_length != -1) {
+        WarnDroppedLengthConstraints(spec, rule_name);
+      }
       return RuleRef(kXMLString);
     }
     if (spec.format.has_value()) {
@@ -3920,17 +3942,7 @@ int32_t XMLToolCallingConverter::GenerateString(
       }
       return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
     }
-    if (!excludes_.empty()) {
-      return ExcludingString(
-          "[\\s\\S]{" + std::to_string(spec.min_length) + "," +
-              (spec.max_length == -1 ? "" : std::to_string(spec.max_length)) + "}",
-          false,
-          rule_name,
-          {},
-          /*force_cfg_expansion=*/true,
-          /*close_json_string=*/false
-      );
-    }
+    XGRAMMAR_DCHECK(excludes_.empty());
     return Repeat(
         rule_name + "_characters",
         builder_.AddCharacterClass({{0, 0x10ffff}}),

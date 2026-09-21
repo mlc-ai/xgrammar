@@ -173,21 +173,14 @@ Matches content that conforms to a JSON Schema.
 `any_order` relaxes object property ordering (see [below](#property-ordering-with-any-order)). It
 works with every `style`.
 
-`excludes` forbids non-empty substrings in string values and property names, including nested
-JSON strings, in addition to the converter's existing string constraints. Conflicting
-`const`/`enum` alternatives are removed; an omitted or empty list applies no substring filter.
-Matches use emitted text before JSON/XML unescaping (excluding `ab` still allows
-`"\u0061b"`), may span tokens, and do not span separate strings. JSON delimiter quotes,
-numbers, punctuation, and XML parameter wrappers are outside the exclusion scope.
-For XML styles, exclusions starting or ending with space, tab, CR, or LF are rejected
-at compilation because formatting whitespace can sit outside the raw string rule.
-
-For Kimi-K3, `excludes=["<|open|>", "<|close|>", "<|sep|>"]` prevents controls inside
-string content while still allowing `<|close|>argument<|sep|>` after the value finishes.
-Compilation fails explicitly if the string constraints cannot be lowered safely or exceed
-construction budgets; exclusions are never silently dropped.
-Non-empty exclusions are not supported for `cohere_xml` or
-`minimax_m3_xml`.
+`excludes` forbids non-empty substrings in string values and property names, nested JSON
+strings included; `pattern` and `format` still apply, while `minLength`/`maxLength` are dropped
+with a warning. Matching uses the emitted text, so excluding `ab` still allows `"\u0061b"`, and
+stops at the string: quotes, punctuation and XML parameter wrappers are never part of a match,
+so for Kimi-K3 `excludes=["<|open|>", "<|close|>", "<|sep|>"]` still allows the
+`<|close|>argument<|sep|>` terminator. `const`/`enum` alternatives that contain an excluded
+substring are removed. XML styles reject exclusions that start or end with whitespace, and
+`cohere_xml`/`minimax_m3_xml` reject non-empty lists.
 
 ```json
 {
