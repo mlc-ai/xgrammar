@@ -236,6 +236,15 @@ class GrammarBuilder {
   void UpdateMaxChars(std::string rule_name, int32_t max_chars);
 
   /*!
+   * \brief Update the excluded substrings of the rule referred by the given rule_id. The list is
+   * sorted and deduplicated; empty strings are rejected. An empty list means no exclusion.
+   */
+  void UpdateExcludes(int32_t rule_id, std::vector<std::string> excludes);
+
+  /*! \brief Update the excluded substrings of the rule referred by the given name. */
+  void UpdateExcludes(std::string rule_name, std::vector<std::string> excludes);
+
+  /*!
    * \brief Update the capture group name of the rule referred by the given rule_id. An empty
    * string means no capture.
    */

@@ -54,7 +54,8 @@ struct ParserState {
       const int32_t& repeat_count = 0,
       const int32_t& partial_codepoint = 0,
       const int32_t& active_temperature_rule_id = -1,
-      const int32_t& char_budget_deadline = -1
+      const int32_t& char_budget_deadline = -1,
+      const int32_t& exclusion_state = -1
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
@@ -65,7 +66,8 @@ struct ParserState {
         repeat_count(repeat_count),
         partial_codepoint(partial_codepoint),
         active_temperature_rule_id(active_temperature_rule_id),
-        char_budget_deadline(char_budget_deadline) {}
+        char_budget_deadline(char_budget_deadline),
+        exclusion_state(exclusion_state) {}
 
   /*!
    * \brief A rule_start_pos value of kNoPrevInputPos means this ParserState is the root of the
@@ -109,6 +111,13 @@ struct ParserState {
    * character budget expires; -1 means unlimited. Stored as an absolute input position. */
   int32_t char_budget_deadline = -1;
 
+  /*! \brief The state of the exclusion automaton (Grammar::Impl::exclusion_transitions) over the
+   * bytes this derivation consumed since it entered an excluding rule (Rule::excludes); -1 when
+   * the derivation is not inside an excluding rule. Started when an excluding rule is predicted
+   * from outside, inherited by the rules predicted inside it, advanced on every scanned byte, and
+   * handed back to the parent when a rule inside the region completes. */
+  int32_t exclusion_state = -1;
+
   /*!
    * \brief Lexicographic order over all fields. It is only used to sort the states for
    * deterministic serialization, and is not needed during parsing.
@@ -127,7 +136,10 @@ struct ParserState {
     if (active_temperature_rule_id != other.active_temperature_rule_id) {
       return active_temperature_rule_id < other.active_temperature_rule_id;
     }
-    return char_budget_deadline < other.char_budget_deadline;
+    if (char_budget_deadline != other.char_budget_deadline) {
+      return char_budget_deadline < other.char_budget_deadline;
+    }
+    return exclusion_state < other.exclusion_state;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
@@ -156,6 +168,9 @@ struct ParserState {
     if (char_budget_deadline != -1) {
       result += ", char_budget_deadline=" + std::to_string(char_budget_deadline);
     }
+    if (exclusion_state != -1) {
+      result += ", exclusion_state=" + std::to_string(exclusion_state);
+    }
     result += ")";
     return result;
   }
@@ -172,7 +187,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &ParserState::repeat_count,
     &ParserState::partial_codepoint,
     &ParserState::active_temperature_rule_id,
-    &ParserState::char_budget_deadline
+    &ParserState::char_budget_deadline,
+    &ParserState::exclusion_state
 );
 
 /*!
@@ -212,7 +228,8 @@ class StateEqualForParsing {
            lhs.partial_codepoint == rhs.partial_codepoint &&
            lhs.budget_deadline == rhs.budget_deadline &&
            lhs.active_temperature_rule_id == rhs.active_temperature_rule_id &&
-           lhs.char_budget_deadline == rhs.char_budget_deadline;
+           lhs.char_budget_deadline == rhs.char_budget_deadline &&
+           lhs.exclusion_state == rhs.exclusion_state;
   }
 };
 
@@ -233,7 +250,8 @@ class StateHashForParsing {
         state.partial_codepoint,
         state.budget_deadline,
         state.active_temperature_rule_id,
-        state.char_budget_deadline
+        state.char_budget_deadline,
+        state.exclusion_state
     );
   }
 };
@@ -449,6 +467,20 @@ class EarleyParser {
   /*! \brief Whether the state's derivation may not consume another Unicode codepoint. */
   bool IsCharExpiredState(const ParserState& state) const {
     return state.char_budget_deadline >= 0 && GetCurrentCharIndex() >= state.char_budget_deadline;
+  }
+
+  /*! \brief Whether any rule of the grammar has excludes (Grammar::Impl::exclusion_transitions is
+   * non-empty). When false, the exclusion machinery has no overhead. */
+  bool has_exclusion_rules_ = false;
+
+  /*! \brief The exclusion state for a newly predicted occurrence of the rule. Inside an excluding
+   * region the state is inherited, so recursive occurrences and the helper rules of the region
+   * continue the same automaton; entering an excluding rule from outside starts its automaton. */
+  int32_t ExclusionStateForRule(int32_t rule_id, int32_t inherited_state) const {
+    if (inherited_state >= 0 || !has_exclusion_rules_) {
+      return inherited_state;
+    }
+    return grammar_->rule_exclusion_start_states[rule_id];
   }
 
   static bool StartsUTF8Codepoint(uint8_t byte) { return (byte & 0xC0) != 0x80; }

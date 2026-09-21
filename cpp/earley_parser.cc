@@ -156,6 +156,10 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
     XGRAMMAR_DCHECK(
         parent_state.rule_id == -1 || grammar_->per_rule_fsms[parent_state.rule_id].has_value()
     );
+    // A parent inside an excluding region continues from the automaton state the child reached:
+    // the child's bytes are part of the region. A parent outside stays outside.
+    const int32_t parent_exclusion_state =
+        parent_state.exclusion_state >= 0 ? state.exclusion_state : -1;
     if (parent_state.rule_id == -1) {
       const auto& parent_expr = grammar_->GetGrammarExpr(parent_state.sequence_id);
       const auto& element_expr = grammar_->GetGrammarExpr(parent_expr[parent_state.element_id]);
@@ -175,13 +179,15 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_exclusion_state
         });
         continue;
       }
       XGRAMMAR_DCHECK(element_expr.type == GrammarExprType::kRepeat);
       // The parent state is a repeat, we need to increase the repeat count.
       auto new_state = parent_state;
+      new_state.exclusion_state = parent_exclusion_state;
       const int32_t& min_repeat_count = element_expr[1];
       const int32_t& max_repeat_count = element_expr[2];
       new_state.repeat_count++;
@@ -198,7 +204,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_exclusion_state
         });
       }
       // If the repeat count is less than the max repeat count, we can continue to
@@ -232,7 +239,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_exclusion_state
         });
       }
       if (new_count < info.Upper()) {
@@ -246,13 +254,16 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             new_count,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_exclusion_state
         });
       }
       break;
     }
     if (!handled_as_repeat) {
-      Enqueue(parent_state);
+      auto new_state = parent_state;
+      new_state.exclusion_state = parent_exclusion_state;
+      Enqueue(std::move(new_state));
     }
   }
 }
@@ -296,7 +307,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             0,
             0,
             state.active_temperature_rule_id,
-            state.char_budget_deadline
+            state.char_budget_deadline,
+            state.exclusion_state
         });
       }
       return std::make_pair(true, false);
@@ -319,7 +331,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             0,
             0,
             state.active_temperature_rule_id,
-            state.char_budget_deadline
+            state.char_budget_deadline,
+            state.exclusion_state
         });
       }
       return std::make_pair(false, false);
@@ -469,6 +482,11 @@ EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> in
       break;
     }
   }
+  has_exclusion_rules_ = !grammar_->exclusion_transitions.empty();
+  XGRAMMAR_DCHECK(
+      !has_exclusion_rules_ ||
+      static_cast<int32_t>(grammar_->rule_exclusion_start_states.size()) == grammar_->NumRules()
+  );
   for (int32_t i = 0; i < grammar_->NumRules(); ++i) {
     const auto& rule = grammar_->GetRule(i);
     const auto* suffix_stop_info = grammar_->GetSuffixStopInfo(i);
@@ -533,7 +551,8 @@ ParserState EarleyParser::RootInitialState() const {
       0,
       0,
       ResolveActiveTemperatureRule(root_rule_id, -1),
-      CharDeadlineForRule(root_rule_id, -1)
+      CharDeadlineForRule(root_rule_id, -1),
+      ExclusionStateForRule(root_rule_id, -1)
   );
 }
 
@@ -657,7 +676,8 @@ void EarleyParser::ExpandNextRuleRefElement(
         0,
         0,
         state.active_temperature_rule_id,
-        state.char_budget_deadline
+        state.char_budget_deadline,
+        state.exclusion_state
     });
   }
 
@@ -681,7 +701,8 @@ void EarleyParser::ExpandNextRuleRefElement(
       0,
       0,
       ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id),
-      CharDeadlineForRule(ref_rule_id, state.char_budget_deadline)
+      CharDeadlineForRule(ref_rule_id, state.char_budget_deadline),
+      ExclusionStateForRule(ref_rule_id, state.exclusion_state)
   });
 }
 
@@ -702,7 +723,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           0,
           0,
           state.active_temperature_rule_id,
-          state.char_budget_deadline
+          state.char_budget_deadline,
+          state.exclusion_state
       });
       continue;
     }
@@ -732,7 +754,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
             0,
             0,
             state.active_temperature_rule_id,
-            state.char_budget_deadline
+            state.char_budget_deadline,
+            state.exclusion_state
         });
       }
       if (state.repeat_count >= repeat_info.Upper()) {
@@ -795,7 +818,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  state.repeat_count,
                  0,
                  state.active_temperature_rule_id,
-                 state.char_budget_deadline
+                 state.char_budget_deadline,
+                 state.exclusion_state
              }}
         );
       } else {
@@ -812,7 +836,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  0,
                  0,
                  state.active_temperature_rule_id,
-                 state.char_budget_deadline
+                 state.char_budget_deadline,
+                 state.exclusion_state
              }}
         );
       }
@@ -830,7 +855,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           0,
           0,
           state.active_temperature_rule_id,
-          state.char_budget_deadline
+          state.char_budget_deadline,
+          state.exclusion_state
       });
     }
 
@@ -854,7 +880,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
         0,
         0,
         ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id),
-        CharDeadlineForRule(ref_rule_id, state.char_budget_deadline)
+        CharDeadlineForRule(ref_rule_id, state.char_budget_deadline),
+        ExclusionStateForRule(ref_rule_id, state.exclusion_state)
     });
   }
 }
@@ -1150,6 +1177,16 @@ void EarleyParser::AdvanceFsm(const ParserState& state, const uint8_t ch) {
     }
     auto new_state = state;
     new_state.element_id = edge.target;
+    if (state.exclusion_state >= 0) {
+      // Inside an excluding region: advance the exclusion automaton, and drop the derivation when
+      // the byte completes an excluded substring.
+      const int32_t next_exclusion_state =
+          grammar_->exclusion_transitions[state.exclusion_state * 256 + ch];
+      if (next_exclusion_state < 0) {
+        continue;
+      }
+      new_state.exclusion_state = next_exclusion_state;
+    }
     const uint8_t flags = GetFsmStateFlags(state.rule_id, edge.target);
     if (!(flags & kFsmStateNonTerminal) && !(flags & kFsmStateEnd) && (flags & kFsmStateScanable)) {
       EnqueueWithoutProcessing(std::move(new_state));

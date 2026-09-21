@@ -100,6 +100,29 @@ XGRAMMAR_MEMBER_TABLE(
 );
 
 /*!
+ * \brief The tokens that an exclusion automaton state (Grammar::Impl::exclusion_transitions)
+ * forbids: reading the token's bytes from that state completes an excluded substring. Derived from
+ * the grammar and the tokenizer, so it is rebuilt on deserialization instead of being serialized.
+ * All indices are indices into the sorted decoded vocabulary, sorted ascending.
+ */
+struct ExclusionTokenFilter {
+  /*! \brief Per automaton: the tokens that contain an excluded substring. Forbidden from every
+   * state of the automaton. */
+  std::vector<std::vector<int32_t>> containing_tokens;
+  /*! \brief Per automaton state: the index of its automaton in containing_tokens, or -1 for a
+   * state that is never entered. */
+  std::vector<int32_t> state_automaton;
+  /*! \brief Per automaton state: the tokens whose prefix completes an excluded substring that
+   * started before the token, i.e. the tokens starting with a completion of that state. */
+  std::vector<std::vector<int32_t>> completing_tokens;
+
+  friend std::size_t MemorySize(const ExclusionTokenFilter& filter) {
+    return MemorySize(filter.containing_tokens) + MemorySize(filter.state_automaton) +
+           MemorySize(filter.completing_tokens);
+  }
+};
+
+/*!
  * \brief All information that we need to match tokens in the tokenizer to the specified grammar.
  * It is the result of preprocessing.
  * \sa xgrammar::GrammarMatcher
@@ -118,6 +141,10 @@ class CompiledGrammar::Impl {
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>
       adaptive_token_mask_cache;
+
+  /*! \brief The tokens forbidden by each exclusion automaton state. Empty when the grammar has no
+   * rule with excludes. */
+  ExclusionTokenFilter exclusion_token_filter;
 
   Grammar GetGrammar() const { return grammar; }
 
@@ -142,6 +169,12 @@ XGRAMMAR_MEMBER_TABLE(
     "adaptive_token_mask_cache",
     &CompiledGrammar::Impl::adaptive_token_mask_cache
 );
+
+/*!
+ * \brief Build impl->exclusion_token_filter from impl->grammar (its exclusion automata and the
+ * excludes of its rules) and impl->tokenizer_info. Both must be set.
+ */
+void BuildExclusionTokenFilter(CompiledGrammar::Impl* impl);
 
 }  // namespace xgrammar
 

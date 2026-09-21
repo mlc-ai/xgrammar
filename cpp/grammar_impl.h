@@ -98,6 +98,11 @@ class Grammar::Impl {
     bool is_lazy = false;
     /*! \brief The sampling temperature to use while matching this rule. */
     std::optional<float> temperature = std::nullopt;
+    /*! \brief Substrings that must not appear in the text matched by an occurrence of this rule,
+     * including the text matched by the rules it references. Enforced at runtime by the parser:
+     * a derivation that produces one of these substrings is dropped. Sorted and deduplicated,
+     * no empty strings. Empty means no exclusion. */
+    std::vector<std::string> excludes = {};
   };
 
   /*! \brief Sparse per-rule metadata used to materialize suffix and stop captures. */
@@ -427,6 +432,20 @@ class Grammar::Impl {
   /*! \brief The ids of the rules that are allowed to be empty. */
   std::vector<int32_t> allow_empty_rule_ids;
 
+  /*!
+   * \brief The byte-level Aho-Corasick automata of all distinct Rule::excludes sets, stored as one
+   * flat transition table: entry [state * 256 + byte] is the next state, or -1 when the byte
+   * completes an excluded substring (a dead state). States of all automata are numbered
+   * consecutively. Empty when no rule has excludes. Built by ExclusionAutomatonBuilder.
+   */
+  std::vector<int32_t> exclusion_transitions;
+
+  /*!
+   * \brief For each rule, the start state of the exclusion automaton of its excludes in
+   * exclusion_transitions, or -1 when the rule has no excludes. Empty when no rule has excludes.
+   */
+  std::vector<int32_t> rule_exclusion_start_states;
+
   /*! \brief Whether the grammar is optimized. */
   bool optimized = false;
 
@@ -447,7 +466,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::Rule::max_chars,
     &Grammar::Impl::Rule::capture_name,
     &Grammar::Impl::Rule::is_lazy,
-    &Grammar::Impl::Rule::temperature
+    &Grammar::Impl::Rule::temperature,
+    &Grammar::Impl::Rule::excludes
 );
 
 XGRAMMAR_MEMBER_ARRAY(
@@ -478,6 +498,10 @@ XGRAMMAR_MEMBER_TABLE(
     &Grammar::Impl::per_rule_fsms,
     "allow_empty_rule_ids",
     &Grammar::Impl::allow_empty_rule_ids,
+    "exclusion_transitions",
+    &Grammar::Impl::exclusion_transitions,
+    "rule_exclusion_start_states",
+    &Grammar::Impl::rule_exclusion_start_states,
     "optimized",
     &Grammar::Impl::optimized
 );

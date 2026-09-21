@@ -77,6 +77,7 @@ class GrammarFunctor {
         }
         builder_->UpdateLazy(i, rule.is_lazy);
         builder_->UpdateRuleTemperature(i, rule.temperature);
+        builder_->UpdateExcludes(i, rule.excludes);
       }
       return builder_->Get(base_grammar_->GetRootRule().name);
     } else {
@@ -427,6 +428,17 @@ class GrammarFSMBuilder {
  * normalized from {m, n} to {0, n} to reduce uncertainty.
  */
 class RepetitionNormalizer {
+ public:
+  static void Apply(Grammar* grammar);
+};
+
+/*!
+ * \brief Build the exclusion automata of the rules that carry excludes into
+ * Grammar::Impl::exclusion_transitions and Grammar::Impl::rule_exclusion_start_states, and check
+ * that the excluding regions are well-formed: every rule reachable from an excluding rule has the
+ * same excludes or none, and contains no token edges. Must run after GrammarFSMBuilder.
+ */
+class ExclusionAutomatonBuilder {
  public:
   static void Apply(Grammar* grammar);
 };

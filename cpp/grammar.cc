@@ -33,7 +33,8 @@ std::size_t MemorySize(const Grammar::Impl& impl) {
          impl.suffix_stop_infos_.size() * sizeof(Grammar::Impl::SuffixStopInfo) +
          MemorySize(impl.grammar_expr_data_) + MemorySize(impl.grammar_expr_indptr_) +
          MemorySize(impl.complete_fsm) + MemorySize(impl.per_rule_fsms) +
-         MemorySize(impl.allow_empty_rule_ids);
+         MemorySize(impl.allow_empty_rule_ids) + MemorySize(impl.exclusion_transitions) +
+         MemorySize(impl.rule_exclusion_start_states);
 }
 
 /******************* Grammar *******************/
@@ -340,6 +341,38 @@ std::optional<std::string> Grammar::Impl::Validate() const {
           return "The FSM of rule " + std::to_string(rule_id) +
                  " has a repeat edge that is out of range of complete_fsm";
         }
+      }
+    }
+  }
+
+  // The exclusion automaton is a flat table of 256 transitions per state; every transition and
+  // every rule's start state must point into it.
+  if (exclusion_transitions.size() % 256 != 0) {
+    return "exclusion_transitions must hold 256 entries per state";
+  }
+  const int64_t num_exclusion_states = exclusion_transitions.size() / 256;
+  for (int64_t i = 0; i < static_cast<int64_t>(exclusion_transitions.size()); ++i) {
+    if (exclusion_transitions[i] < -1 || exclusion_transitions[i] >= num_exclusion_states) {
+      return "exclusion_transitions[" + std::to_string(i) + "] is out of range";
+    }
+  }
+  if (!rule_exclusion_start_states.empty() &&
+      static_cast<int64_t>(rule_exclusion_start_states.size()) != num_rules) {
+    return "rule_exclusion_start_states must have one entry per rule";
+  }
+  for (int64_t rule_id = 0; rule_id < static_cast<int64_t>(rule_exclusion_start_states.size());
+       ++rule_id) {
+    const int64_t start = rule_exclusion_start_states[rule_id];
+    if (start < -1 || start >= num_exclusion_states ||
+        ((start >= 0) != !rules_[rule_id].excludes.empty())) {
+      return "rule_exclusion_start_states[" + std::to_string(rule_id) +
+             "] does not match the excludes of the rule";
+    }
+  }
+  for (int64_t rule_id = 0; rule_id < num_rules; ++rule_id) {
+    for (const auto& excluded : rules_[rule_id].excludes) {
+      if (excluded.empty()) {
+        return "Rule " + std::to_string(rule_id) + " excludes the empty string";
       }
     }
   }

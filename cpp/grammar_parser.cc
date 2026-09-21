@@ -151,8 +151,8 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
   // name[capture="x"] ::= ...,
   // name[capture_hidden_suffix_bytes=3] ::= ..., name[capture_hidden_stop_bytes=3] ::= ...,
   // name[capture_hidden_body_rule_id=1, capture_hidden_marker_rule_id=2] ::= ...,
-  // name[stop_capture="marker"] ::= ..., name[lazy] ::= ..., name[temperature=0.7] ::= ..., or a
-  // comma-separated combination.
+  // name[stop_capture="marker"] ::= ..., name[lazy] ::= ..., name[temperature=0.7] ::= ...,
+  // name[excludes=("a", "b")] ::= ..., or a comma-separated combination.
   // The bracket group is treated as an attribute block only when it is followed by "::=";
   // otherwise it is left to be lexed as a character class.
   if (*cur_ == '[') {
@@ -185,7 +185,9 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
     bool has_stop_capture = false;
     bool has_lazy = false;
     bool has_temperature = false;
+    bool has_excludes = false;
     double temperature_value = 0;
+    std::vector<std::string> excludes_value;
     int64_t max_tokens_value = -1;
     int64_t max_chars_value = -1;
     int64_t capture_hidden_suffix_bytes_value = 0;
@@ -261,6 +263,55 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
       }
       return true;
     };
+    // Parse `= ("...", "...")`. Unlike parse_string_value, the strings may contain escape
+    // sequences, so that any excluded substring can be written down and printed back.
+    auto parse_string_list_value = [&](std::vector<std::string>* values) {
+      skip_space();
+      if (Peek(delta) != '=') {
+        return false;
+      }
+      ++delta;
+      skip_space();
+      if (Peek(delta) != '(') {
+        return false;
+      }
+      ++delta;
+      while (true) {
+        skip_space();
+        if (Peek(delta) == ')') {
+          ++delta;
+          return true;
+        }
+        if (Peek(delta) != '"') {
+          return false;
+        }
+        ++delta;
+        std::string value;
+        while (Peek(delta) != '"') {
+          char c = Peek(delta);
+          if (c == '\0' || c == '\n' || c == '\r') {
+            return false;
+          }
+          auto [codepoint, len] = ParseNextUTF8OrEscaped(cur_ + delta);
+          if (codepoint == CharHandlingError::kInvalidUTF8 ||
+              codepoint == CharHandlingError::kInvalidEscape) {
+            return false;
+          }
+          value += CharToUTF8(codepoint);
+          delta += len;
+        }
+        ++delta;
+        values->push_back(std::move(value));
+        skip_space();
+        if (Peek(delta) == ',') {
+          ++delta;
+          continue;
+        }
+        if (Peek(delta) != ')') {
+          return false;
+        }
+      }
+    };
     // Parse a comma-separated attribute list. Each attribute may appear at most once.
     while (matched) {
       skip_space();
@@ -299,6 +350,9 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
       } else if (!has_temperature && match_keyword("temperature")) {
         has_temperature = true;
         matched = parse_float_value(&temperature_value);
+      } else if (!has_excludes && match_keyword("excludes")) {
+        has_excludes = true;
+        matched = parse_string_list_value(&excludes_value);
       } else {
         matched = false;
       }
@@ -369,6 +423,17 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
             "The temperature must be a finite non-negative number", start_line, start_column
         );
       }
+      if (has_excludes) {
+        for (const auto& excluded : excludes_value) {
+          if (excluded.empty()) {
+            ReportLexerError(
+                "The excludes rule attribute must not contain the empty string",
+                start_line,
+                start_column
+            );
+          }
+        }
+      }
       Consume(delta);
       Token token{TokenType::Identifier, identifier, identifier, start_line, start_column};
       token.max_tokens = static_cast<int32_t>(max_tokens_value);
@@ -384,6 +449,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
       if (has_temperature) {
         token.temperature = static_cast<float>(temperature_value);
       }
+      token.excludes = std::move(excludes_value);
       return token;
     }
   }
@@ -1509,6 +1575,7 @@ EBNFParser::ParsedRule EBNFParser::ParseRule() {
   std::string stop_capture_name = Peek().stop_capture_name;
   bool is_lazy = Peek().is_lazy;
   std::optional<float> temperature = Peek().temperature;
+  std::vector<std::string> excludes = Peek().excludes;
   Consume();
 
   PeekAndConsume(TokenType::Assign, "Expect ::=");
@@ -1527,6 +1594,7 @@ EBNFParser::ParsedRule EBNFParser::ParseRule() {
   result.rule.capture_name = capture_name;
   result.rule.is_lazy = is_lazy;
   result.rule.temperature = temperature;
+  result.rule.excludes = std::move(excludes);
   result.suffix_stop_info.hidden_suffix_bytes = capture_hidden_suffix_bytes;
   result.suffix_stop_info.hidden_stop_bytes = capture_hidden_stop_bytes;
   result.suffix_stop_info.body_rule_id = capture_hidden_body_rule_id;
@@ -1578,6 +1646,7 @@ Grammar EBNFParser::Parse(
     builder_.UpdateSuffixStopInfo(rule.name, parsed_rule.suffix_stop_info);
     builder_.UpdateLazy(rule.name, rule.is_lazy);
     builder_.UpdateRuleTemperature(builder_.GetRuleId(rule.name), rule.temperature);
+    builder_.UpdateExcludes(rule.name, rule.excludes);
   }
 
   return builder_.Get(root_rule_name);

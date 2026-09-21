@@ -334,6 +334,23 @@ void GrammarBuilder::UpdateMaxChars(std::string rule_name, int32_t max_chars) {
   UpdateMaxChars(rule_id, max_chars);
 }
 
+void GrammarBuilder::UpdateExcludes(int32_t rule_id, std::vector<std::string> excludes) {
+  XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
+      << "Rule id " << rule_id << " is out of range.";
+  std::sort(excludes.begin(), excludes.end());
+  excludes.erase(std::unique(excludes.begin(), excludes.end()), excludes.end());
+  XGRAMMAR_CHECK(excludes.empty() || !excludes.front().empty())
+      << "The excludes of rule " << grammar_->rules_[rule_id].name
+      << " must not contain the empty string.";
+  grammar_->rules_[rule_id].excludes = std::move(excludes);
+}
+
+void GrammarBuilder::UpdateExcludes(std::string rule_name, std::vector<std::string> excludes) {
+  int32_t rule_id = GetRuleId(rule_name);
+  XGRAMMAR_CHECK(rule_id != -1) << "Rule " << rule_name << " is not found.";
+  UpdateExcludes(rule_id, std::move(excludes));
+}
+
 void GrammarBuilder::UpdateCaptureName(int32_t rule_id, const std::string& capture_name) {
   XGRAMMAR_CHECK(rule_id >= 0 && rule_id < static_cast<int32_t>(grammar_->rules_.size()))
       << "Rule id " << rule_id << " is out of range.";

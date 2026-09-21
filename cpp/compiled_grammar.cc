@@ -7,6 +7,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <map>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "compiled_grammar_impl.h"
@@ -169,6 +172,88 @@ std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const 
 
 /************** CompiledGrammar::Impl **************/
 
+void BuildExclusionTokenFilter(CompiledGrammar::Impl* impl) {
+  auto& filter = impl->exclusion_token_filter;
+  filter = ExclusionTokenFilter();
+  const auto& grammar = impl->grammar;
+  const auto& transitions = grammar->exclusion_transitions;
+  if (transitions.empty()) {
+    return;
+  }
+  const int32_t num_states = static_cast<int32_t>(transitions.size() / 256);
+  const auto& vocab = impl->tokenizer_info.GetSortedDecodedVocab();
+  filter.state_automaton.assign(num_states, -1);
+  filter.completing_tokens.assign(num_states, {});
+
+  // The tokens starting with the given bytes: a contiguous range of the sorted vocabulary.
+  auto append_tokens_with_prefix = [&](const std::string& prefix, std::vector<int32_t>* out) {
+    auto it = std::lower_bound(
+        vocab.begin(),
+        vocab.end(),
+        prefix,
+        [](const std::pair<int32_t, std::string>& token, const std::string& value) {
+          return token.second < value;
+        }
+    );
+    for (; it != vocab.end() && it->second.compare(0, prefix.size(), prefix) == 0; ++it) {
+      out->push_back(static_cast<int32_t>(it - vocab.begin()));
+    }
+  };
+
+  // Every distinct start state is one automaton; its patterns are the excludes of any rule that
+  // uses it (ExclusionAutomatonBuilder shares automata between rules with equal excludes).
+  std::map<int32_t, const std::vector<std::string>*> automata;
+  for (int32_t rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
+    const int32_t start = grammar->rule_exclusion_start_states[rule_id];
+    if (start >= 0) {
+      automata.emplace(start, &grammar->GetRule(rule_id).excludes);
+    }
+  }
+  for (const auto& [start, patterns] : automata) {
+    const int32_t automaton = static_cast<int32_t>(filter.containing_tokens.size());
+    std::vector<int32_t> containing;
+    for (int32_t index = 0; index < static_cast<int32_t>(vocab.size()); ++index) {
+      int32_t state = start;
+      for (unsigned char byte : vocab[index].second) {
+        state = transitions[state * 256 + byte];
+        if (state < 0) {
+          containing.push_back(index);
+          break;
+        }
+      }
+    }
+    filter.containing_tokens.push_back(std::move(containing));
+
+    // BFS from the start reaches every live state through its trie edge first, so the path found
+    // is the string the state stands for: the longest excluded-substring prefix that ends here.
+    std::vector<std::pair<int32_t, std::string>> queue{{start, std::string()}};
+    filter.state_automaton[start] = automaton;
+    for (size_t head = 0; head < queue.size(); ++head) {
+      const int32_t state = queue[head].first;
+      const std::string state_string = queue[head].second;
+      std::vector<int32_t>& completing = filter.completing_tokens[state];
+      for (const auto& pattern : *patterns) {
+        for (size_t matched = 1; matched < pattern.size(); ++matched) {
+          if (state_string.size() >= matched &&
+              state_string.compare(state_string.size() - matched, matched, pattern, 0, matched) ==
+                  0) {
+            append_tokens_with_prefix(pattern.substr(matched), &completing);
+          }
+        }
+      }
+      std::sort(completing.begin(), completing.end());
+      completing.erase(std::unique(completing.begin(), completing.end()), completing.end());
+      for (int byte = 0; byte < 256; ++byte) {
+        const int32_t target = transitions[state * 256 + byte];
+        if (target >= 0 && filter.state_automaton[target] < 0) {
+          filter.state_automaton[target] = automaton;
+          queue.emplace_back(target, state_string + static_cast<char>(byte));
+        }
+      }
+    }
+  }
+}
+
 picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   auto result = picojson::object{};
   result["grammar"] = AutoSerializeJSONValue(impl.grammar);
@@ -236,13 +321,15 @@ std::optional<SerializationError> DeserializeJSONValue(
       );
     }
   }
+  BuildExclusionTokenFilter(impl);
   return std::nullopt;
 }
 
 /************** CompiledGrammar **************/
 
 std::size_t MemorySize(const CompiledGrammar::Impl& impl) {
-  return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache);
+  return MemorySize(impl.grammar) + MemorySize(impl.adaptive_token_mask_cache) +
+         MemorySize(impl.exclusion_token_filter);
 }
 
 std::size_t CompiledGrammar::MemorySizeBytes() const { return MemorySize(*pimpl_); }

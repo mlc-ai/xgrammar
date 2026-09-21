@@ -632,7 +632,30 @@ class GrammarMatcher::Impl : public EarleyParser {
   );
 
   void FillBitmaskForCharBudgetBoundary(
-      const AdaptiveTokenMask& adaptive_token_mask, int32_t remaining_chars
+      const ParserState& state,
+      const AdaptiveTokenMask& adaptive_token_mask,
+      int32_t remaining_chars
+  );
+
+  /*!
+   * \brief The tokens (sorted vocab indices, ascending) that the exclusion automaton state
+   * forbids: reading them from that state completes an excluded substring. The returned reference
+   * is valid until the next call.
+   */
+  const std::vector<int32_t>& ForbiddenTokens(int32_t exclusion_state);
+
+  /*!
+   * \brief Add the cached accepted set of a state inside an excluding region to
+   * tmp_accepted_bitset_. Tokens the state's exclusion automaton forbids are left out and
+   * collected into extra_uncertain instead: a token consumed entirely inside the region is
+   * indeed invalid, but a token that leaves the region first (e.g. one accepted through the
+   * rule's lookahead) may complete the excluded substring only outside it, so both are settled by
+   * the exact byte walk.
+   */
+  void AddAcceptedSetWithExclusion(
+      const ParserState& state,
+      const AdaptiveTokenMask& adaptive_token_mask,
+      std::vector<int32_t>* extra_uncertain
   );
 
   bool AdvanceWithCharacterBudget(uint8_t byte, bool debug_print = false);
@@ -772,6 +795,9 @@ class GrammarMatcher::Impl : public EarleyParser {
   DynamicBitset tmp_accepted_bitset_;
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
+  std::vector<int32_t> tmp_forbidden_tokens_;
+  std::vector<int32_t> tmp_walk_indices_;
+  std::vector<char> tmp_forbidden_was_set_;
 };
 
 class BatchGrammarMatcher::Impl {
@@ -1740,17 +1766,90 @@ bool GrammarMatcher::Impl::FillNextTokenBitmask(
   return !IsTokenBitmaskAllTrue(bitmask_data_ptr);
 }
 
+const std::vector<int32_t>& GrammarMatcher::Impl::ForbiddenTokens(int32_t exclusion_state) {
+  const auto& filter = compiled_grammar_->exclusion_token_filter;
+  XGRAMMAR_DCHECK(
+      exclusion_state >= 0 && exclusion_state < static_cast<int32_t>(filter.state_automaton.size())
+  );
+  const int32_t automaton = filter.state_automaton[exclusion_state];
+  XGRAMMAR_DCHECK(automaton >= 0) << "Exclusion state " << exclusion_state << " is never entered";
+  const auto& containing = filter.containing_tokens[automaton];
+  const auto& completing = filter.completing_tokens[exclusion_state];
+  if (completing.empty()) {
+    return containing;
+  }
+  tmp_forbidden_tokens_ = containing;
+  IntsetUnion(&tmp_forbidden_tokens_, completing);
+  return tmp_forbidden_tokens_;
+}
+
+void GrammarMatcher::Impl::AddAcceptedSetWithExclusion(
+    const ParserState& state,
+    const AdaptiveTokenMask& adaptive_token_mask,
+    std::vector<int32_t>* extra_uncertain
+) {
+  const auto& vocab = tokenizer_info_.GetSortedDecodedVocab();
+  const auto& forbidden = ForbiddenTokens(state.exclusion_state);
+  switch (adaptive_token_mask.store_type) {
+    case StoreType::kAcceptedBitset: {
+      // Bits already set by another state stay set: that state accepts the token on its own.
+      tmp_forbidden_was_set_.resize(forbidden.size());
+      for (size_t i = 0; i < forbidden.size(); ++i) {
+        tmp_forbidden_was_set_[i] = tmp_accepted_bitset_[vocab[forbidden[i]].first];
+      }
+      tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
+      for (size_t i = 0; i < forbidden.size(); ++i) {
+        const int32_t token_id = vocab[forbidden[i]].first;
+        if (adaptive_token_mask.accepted_bitset[token_id] && !tmp_forbidden_was_set_[i]) {
+          tmp_accepted_bitset_.Set(token_id, false);
+          extra_uncertain->push_back(forbidden[i]);
+        }
+      }
+      break;
+    }
+    case StoreType::kAccepted: {
+      auto forbidden_it = forbidden.begin();
+      for (int32_t index : adaptive_token_mask.accepted_indices) {
+        while (forbidden_it != forbidden.end() && *forbidden_it < index) {
+          ++forbidden_it;
+        }
+        if (forbidden_it != forbidden.end() && *forbidden_it == index) {
+          extra_uncertain->push_back(index);
+        } else {
+          tmp_accepted_bitset_.Set(vocab[index].first, true);
+        }
+      }
+      break;
+    }
+    case StoreType::kRejected: {
+      // The implicitly accepted tokens are the complement of rejected and uncertain.
+      *extra_uncertain = forbidden;
+      IntsetDifference(extra_uncertain, adaptive_token_mask.rejected_indices);
+      IntsetDifference(extra_uncertain, adaptive_token_mask.uncertain_indices);
+      break;
+    }
+  }
+}
+
 void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
-    const AdaptiveTokenMask& adaptive_token_mask, int32_t remaining_chars
+    const ParserState& state, const AdaptiveTokenMask& adaptive_token_mask, int32_t remaining_chars
 ) {
   const auto& token_char_counts = tokenizer_info_.ImplPtr()->GetTokenCharCounts();
   const auto& vocab = tokenizer_info_.GetSortedDecodedVocab();
+
+  // Inside an excluding region, a token the exclusion automaton forbids is re-verified by the
+  // byte walk below instead of being accepted from the cache.
+  const std::vector<int32_t>* forbidden =
+      state.exclusion_state >= 0 ? &ForbiddenTokens(state.exclusion_state) : nullptr;
+  auto is_forbidden = [&](int32_t index) {
+    return forbidden != nullptr && std::binary_search(forbidden->begin(), forbidden->end(), index);
+  };
 
   std::vector<int32_t> tokens_to_check = adaptive_token_mask.uncertain_indices;
   switch (adaptive_token_mask.store_type) {
     case StoreType::kAccepted:
       for (int32_t index : adaptive_token_mask.accepted_indices) {
-        if (token_char_counts[index] <= remaining_chars) {
+        if (token_char_counts[index] <= remaining_chars && !is_forbidden(index)) {
           tmp_accepted_bitset_.Set(vocab[index].first, true);
         } else {
           tokens_to_check.push_back(index);
@@ -1763,7 +1862,7 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
         if (!adaptive_token_mask.accepted_bitset[token_id]) {
           continue;
         }
-        if (token_char_counts[index] <= remaining_chars) {
+        if (token_char_counts[index] <= remaining_chars && !is_forbidden(index)) {
           tmp_accepted_bitset_.Set(token_id, true);
         } else {
           tokens_to_check.push_back(index);
@@ -1781,7 +1880,11 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
       for (int32_t index = 0; index < static_cast<int32_t>(vocab.size()); ++index) {
         if (token_char_counts[index] <= remaining_chars) {
           if (!std::binary_search(blocked.begin(), blocked.end(), index)) {
-            tmp_accepted_bitset_.Set(vocab[index].first, true);
+            if (is_forbidden(index)) {
+              tokens_to_check.push_back(index);
+            } else {
+              tmp_accepted_bitset_.Set(vocab[index].first, true);
+            }
           }
         } else if (!std::binary_search(
                        adaptive_token_mask.rejected_indices.begin(),
@@ -1899,6 +2002,9 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
   std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
       latest_states_with_masks;
+  // Per entry of latest_states_with_masks: cached accepted tokens that the state's exclusion
+  // automaton forbids, to be settled by the byte walk together with the uncertain tokens.
+  std::vector<std::vector<int32_t>> extra_uncertain_per_state;
 
   for (const auto& state : latest_states) {
     auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
@@ -1907,11 +2013,16 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     if (state.char_budget_deadline >= 0) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
-        FillBitmaskForCharBudgetBoundary(adaptive_token_mask, std::max(remaining_chars, 0));
+        FillBitmaskForCharBudgetBoundary(state, adaptive_token_mask, std::max(remaining_chars, 0));
         continue;
       }
     }
     latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
+    extra_uncertain_per_state.emplace_back();
+    if (state.exclusion_state >= 0) {
+      AddAcceptedSetWithExclusion(state, adaptive_token_mask, &extra_uncertain_per_state.back());
+      continue;
+    }
     if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
       tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
     } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
@@ -1922,8 +2033,10 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   }
 
   const auto& token_char_counts = tokenizer_info_.ImplPtr()->GetTokenCharCounts();
-  for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
+  for (size_t state_index = 0; state_index < latest_states_with_masks.size(); ++state_index) {
+    const auto& [state, adaptive_token_mask_it] = latest_states_with_masks[state_index];
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+    const auto& extra_uncertain = extra_uncertain_per_state[state_index];
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
     // rejected list.
@@ -1955,7 +2068,13 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                          << adaptive_token_mask.Print(tokenizer_info_);
     }
     int last_rejected_uncertain_range = 0;
-    const auto& uncertain_indices = adaptive_token_mask.uncertain_indices;
+    const std::vector<int32_t>* walk_indices = &adaptive_token_mask.uncertain_indices;
+    if (!extra_uncertain.empty()) {
+      tmp_walk_indices_ = adaptive_token_mask.uncertain_indices;
+      IntsetUnion(&tmp_walk_indices_, extra_uncertain);
+      walk_indices = &tmp_walk_indices_;
+    }
+    const auto& uncertain_indices = *walk_indices;
     for (auto token_it = uncertain_indices.begin(); token_it != uncertain_indices.end();) {
       const auto cur_token_idx = *token_it++;
       // Check if the current token is already accepted. If it is, we can skip it.

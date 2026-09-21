@@ -1783,6 +1783,38 @@ JSONSchemaConverter::JSONSchemaConverter(
   colon_expr_id_ = FormattingExpression(
       any_whitespace ? whitespace + " \"" + colon_sep + "\" " + whitespace : "\"" + colon_sep + "\""
   );
+  runtime_excludes_ =
+      !excludes_.empty() && std::none_of(excludes_.begin(), excludes_.end(), [](const auto& s) {
+        return s.find('"') != std::string::npos;
+      });
+}
+
+int32_t JSONSchemaConverter::RuleWithExcludes(const std::string& rule_name_hint, int32_t expr_id) {
+  int32_t rule_id = builder_.AddRuleWithHint(rule_name_hint, expr_id);
+  builder_.UpdateExcludes(rule_id, excludes_);
+  return RuleRef(rule_id);
+}
+
+int32_t JSONSchemaConverter::BasicStringSubForRoot() {
+  if (basic_string_sub_root_id_.has_value()) {
+    return *basic_string_sub_root_id_;
+  }
+  int32_t rule_id = builder_.AddEmptyRuleWithHint(kBasicStringSub + "_root");
+  int32_t normal_character = builder_.AddCharacterClass(
+      {{0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true
+  );
+  int32_t self_ref = RuleRef(rule_id);
+  builder_.UpdateRuleBody(
+      rule_id,
+      Choice(
+          {ByteString("\""),
+           Sequence({normal_character, self_ref}),
+           Sequence({ByteString("\\"), RuleRef(kBasicEscape), self_ref})}
+      )
+  );
+  builder_.UpdateExcludes(rule_id, excludes_);
+  basic_string_sub_root_id_ = rule_id;
+  return rule_id;
 }
 
 Grammar JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
@@ -1792,16 +1824,21 @@ Grammar JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
   // This allows $ref: "#" to resolve to "root"
   int32_t root_rule_id = builder_.AddEmptyRuleWithHint("root");
   std::string root_rule_name = builder_.GetRule(root_rule_id).name;
+  root_rule_name_ = root_rule_name;
   uri_to_rule_id_[RefCacheKey("#")] = root_rule_id;
 
   // Check if the spec can be directly mapped to an existing rule
   auto cached_rule = GetCache(spec->cache_key);
-  if (cached_rule.has_value()) {
+  // A root-level plain string gets its own lookahead-free rule (see GenerateString), which must
+  // neither come from nor go into the cache shared with the nested strings.
+  const bool root_string_with_excludes = UseRuntimeExcludes() && cached_rule.has_value() &&
+                                         *cached_rule == builder_.GetRuleId(kBasicString);
+  if (cached_rule.has_value() && !root_string_with_excludes) {
     // Root schema matches a basic type, just reference it
     builder_.UpdateRuleBody(root_rule_id, RuleRef(*cached_rule));
   } else {
     // Generate the rule body
-    if (!spec->cache_key.empty()) {
+    if (!spec->cache_key.empty() && !root_string_with_excludes) {
       AddCache(spec->cache_key, root_rule_id);
     }
     builder_.UpdateRuleBody(root_rule_id, GenerateFromSpec(spec, root_rule_name));
@@ -1925,7 +1962,12 @@ void JSONSchemaConverter::AddHelperRules() {
        Sequence({ByteString("\\"), RuleRef(kBasicEscape), string_sub_ref})}
   );
   builder_.UpdateRuleBody(kBasicStringSub, string_sub_body);
-  if (!excludes_.empty()) {
+  if (UseRuntimeExcludes()) {
+    // The parser drops any derivation of the string (escapes included, as they are emitted
+    // text) that produces an excluded substring. The closing quote is scanned inside the rule as
+    // well, which is harmless because excludes containing a quote take the path below.
+    builder_.UpdateExcludes(kBasicStringSub, excludes_);
+  } else if (!excludes_.empty()) {
     builder_.UpdateRuleBody(
         kBasicStringSub,
         ExcludingString(
@@ -2134,7 +2176,7 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
   if (properties.empty()) {
     return KeyPatternExpression();
   }
-  if (!excludes_.empty()) {
+  if (!excludes_.empty() && !UseRuntimeExcludes()) {
     std::vector<std::string> keys;
     for (const auto& property : properties) {
       auto encoded = picojson::value(property.name).serialize(false);
@@ -2176,6 +2218,9 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
            builder_.AddCharacterClass({{',', ','}, {'}', '}'}, {']', ']'}, {':', ':'}})}
       )
   );
+  if (UseRuntimeExcludes()) {
+    builder_.UpdateExcludes(key_rule_id, excludes_);
+  }
   return RuleRef(key_rule_id);
 }
 
@@ -2670,30 +2715,36 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   if (spec.format.has_value()) {
     auto regex = JSONFormatToRegexPattern(*spec.format);
     if (regex.has_value()) {
-      if (!excludes_.empty()) {
+      if (!excludes_.empty() && !UseRuntimeExcludes()) {
         return Sequence(
             {ByteString("\""), ExcludingString(*regex, false, rule_name, {}, true, true)}
         );
       }
       // The built-in format regexes use constructs that the FSM regex engine does not fully
       // support yet (e.g. quoted email local parts), so they keep the CFG expansion.
-      return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
+      int32_t body = RegexExpression(*regex, false, true);
+      if (UseRuntimeExcludes()) {
+        body = RuleWithExcludes(rule_name + "_body", body);
+      }
+      return Sequence({ByteString("\""), body, ByteString("\"")});
     }
   }
   // Check for pattern
   if (spec.pattern.has_value()) {
-    if (!excludes_.empty()) {
+    if (!excludes_.empty() && !UseRuntimeExcludes()) {
       return Sequence(
           {ByteString("\""), ExcludingString(*spec.pattern, true, rule_name, {}, false, true)}
       );
     }
-    return Sequence(
-        {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
-    );
+    int32_t body = RegexExpression(*spec.pattern, /*json_string=*/true);
+    if (UseRuntimeExcludes()) {
+      body = RuleWithExcludes(rule_name + "_body", body);
+    }
+    return Sequence({ByteString("\""), body, ByteString("\"")});
   }
   // Check for length constraints
   if (spec.min_length != 0 || spec.max_length != -1) {
-    if (!excludes_.empty()) {
+    if (!excludes_.empty() && !UseRuntimeExcludes()) {
       auto regex = std::string(R"([^"\\\r\n]{)") + std::to_string(spec.min_length) + "," +
                    (spec.max_length == -1 ? "" : std::to_string(spec.max_length)) + "}";
       return Sequence({ByteString("\""), ExcludingString(regex, false, rule_name, {}, true, true)});
@@ -2701,9 +2752,18 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
     int32_t character =
         builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
     int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
+    if (UseRuntimeExcludes()) {
+      body = RuleWithExcludes(rule_name + "_body", body);
+    }
     return Sequence({ByteString("\""), body, ByteString("\"")});
   }
   // Default string
+  if (UseRuntimeExcludes() && rule_name == root_rule_name_) {
+    // The shared basic_string_sub asserts that JSON punctuation follows the string, which does
+    // not hold for the root value of a structural tag; its exclusion-carrying copy without the
+    // lookahead keeps a token that closes the string and continues the tag legal.
+    return Sequence({ByteString("\""), RuleRef(BasicStringSubForRoot())});
+  }
   return Sequence({ByteString("\""), RuleRef(kBasicStringSub)});
 }
 
@@ -3842,13 +3902,14 @@ void XMLToolCallingConverter::AddBasicRules() {
   // Add XML variable name rule
   builder_.UpdateRuleBody(
       kXMLVariableName,
-      !excludes_.empty()
-          ? ExcludingString("[a-zA-Z_][a-zA-Z0-9_]*", false, kXMLVariableName)
-          : Sequence(
-                {builder_.AddCharacterClass({{'a', 'z'}, {'A', 'Z'}, {'_', '_'}}),
-                 builder_.AddCharacterClassStar({{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}})}
-            )
+      Sequence(
+          {builder_.AddCharacterClass({{'a', 'z'}, {'A', 'Z'}, {'_', '_'}}),
+           builder_.AddCharacterClassStar({{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}})}
+      )
   );
+  if (!excludes_.empty()) {
+    builder_.UpdateExcludes(kXMLVariableName, excludes_);
+  }
 }
 
 std::string XMLToolCallingConverter::GetKeyPattern() const {
@@ -3889,54 +3950,26 @@ int32_t XMLToolCallingConverter::GenerateString(
         spec.max_length == -1) {
       return RuleRef(kXMLString);
     }
+    // The raw body is matched by its own rule, and the argument suffix by the enclosing property
+    // rule, so a rule carrying the excludes covers exactly the string content.
+    auto with_excludes = [&](int32_t body) {
+      return excludes_.empty() ? body : RuleWithExcludes(rule_name + "_body", body);
+    };
     if (spec.format.has_value()) {
       auto regex = JSONFormatToRegexPattern(*spec.format);
       if (regex.has_value()) {
-        if (!excludes_.empty()) {
-          // XML formats use the CFG regex converter even without excludes. Apply the filter
-          // to that same language instead of switching format validation to RegexFSM.
-          return ExcludingString(
-              *regex,
-              false,
-              rule_name,
-              {},
-              /*force_cfg_expansion=*/true,
-              /*close_json_string=*/false
-          );
-        }
-        return RegexExpression(*regex, false, true);
+        return with_excludes(RegexExpression(*regex, false, true));
       }
     }
     if (spec.pattern.has_value()) {
-      if (!excludes_.empty()) {
-        return ExcludingString(
-            *spec.pattern,
-            false,
-            rule_name,
-            {},
-            /*force_cfg_expansion=*/true,
-            /*close_json_string=*/false
-        );
-      }
-      return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
+      return with_excludes(RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true));
     }
-    if (!excludes_.empty()) {
-      return ExcludingString(
-          "[\\s\\S]{" + std::to_string(spec.min_length) + "," +
-              (spec.max_length == -1 ? "" : std::to_string(spec.max_length)) + "}",
-          false,
-          rule_name,
-          {},
-          /*force_cfg_expansion=*/true,
-          /*close_json_string=*/false
-      );
-    }
-    return Repeat(
+    return with_excludes(Repeat(
         rule_name + "_characters",
         builder_.AddCharacterClass({{0, 0x10ffff}}),
         spec.min_length,
         spec.max_length
-    );
+    ));
   }
   return JSONSchemaConverter::GenerateString(spec, rule_name);
 }

@@ -83,6 +83,7 @@ class SubGrammarAdderImpl : public GrammarMutator {
       }
       builder_->UpdateLazy(new_rule_ids_names[i].first, rule.is_lazy);
       builder_->UpdateRuleTemperature(new_rule_ids_names[i].first, rule.temperature);
+      builder_->UpdateExcludes(new_rule_ids_names[i].first, rule.excludes);
     }
     return new_rule_ids_names[base_grammar_->GetRootRuleId()].first;
   }
@@ -295,6 +296,7 @@ class StructureNormalizerImpl : public GrammarMutator {
       }
       builder_->UpdateLazy(i, rule.is_lazy);
       builder_->UpdateRuleTemperature(i, rule.temperature);
+      builder_->UpdateExcludes(i, rule.excludes);
     }
     return builder_->Get(base_grammar_->GetRootRule().name);
   }
@@ -807,7 +809,7 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
     // Inlining a temperature rule would erase the rule its sampling temperature applies to.
     if (rule.max_tokens >= 0 || rule.max_chars >= 0 || !rule.capture_name.empty() ||
         (*grammar_)->GetSuffixStopInfo(rule_id) != nullptr || rule.is_lazy ||
-        rule.temperature.has_value()) {
+        rule.temperature.has_value() || !rule.excludes.empty()) {
       can_rule_be_inlined_[rule_id] = false;
       return false;
     }
@@ -939,6 +941,7 @@ class DeadCodeEliminatorImpl : public GrammarMutator {
       }
       builder_->UpdateLazy(rule_id_map_[rule_id], rule.is_lazy);
       builder_->UpdateRuleTemperature(rule_id_map_[rule_id], rule.temperature);
+      builder_->UpdateExcludes(rule_id_map_[rule_id], rule.excludes);
     }
     XGRAMMAR_CHECK(rule_id_map_.count(grammar->GetRootRuleId()) > 0);
     return builder_->Get(rule_id_map_[grammar->GetRootRuleId()]);
@@ -2043,7 +2046,7 @@ class RegularGrammarFSMBuilder {
     }
     if (rule.lookahead_assertion_id >= 0 || rule.max_tokens >= 0 || rule.max_chars >= 0 ||
         !rule.capture_name.empty() || rule.is_lazy || rule.temperature.has_value() ||
-        grammar_->GetSuffixStopInfo(rule_id) != nullptr) {
+        !rule.excludes.empty() || grammar_->GetSuffixStopInfo(rule_id) != nullptr) {
       return Fail("annotated rule " + rule.name + " is not a plain regular rule");
     }
     int entry = AddState();
@@ -2299,11 +2302,11 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   int32_t grammar_expr_id = builder_->AddRuleRef(rule_id);
   const auto& ref_rule = base_grammar_->GetRule(rule_id);
   const auto& ref_rule_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
-  // Keep the reference to budgeted, suffix/stop, lazy, and temperature rules: replacing it with
-  // the rule's content would erase the rule that the runtime semantics apply to.
+  // Keep the reference to budgeted, suffix/stop, lazy, temperature, and excluding rules: replacing
+  // it with the rule's content would erase the rule that the runtime semantics apply to.
   if (ref_rule.max_tokens < 0 && ref_rule.max_chars < 0 &&
       base_grammar_->GetSuffixStopInfo(rule_id) == nullptr && !ref_rule.is_lazy &&
-      !ref_rule.temperature.has_value() &&
+      !ref_rule.temperature.has_value() && ref_rule.excludes.empty() &&
       ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
       ref_rule_body.size() == 1) {
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
@@ -2481,6 +2484,7 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
       }
       builder_->UpdateLazy(i, rule.is_lazy);
       builder_->UpdateRuleTemperature(i, rule.temperature);
+      builder_->UpdateExcludes(i, rule.excludes);
     }
     return builder_->Get(base_grammar_->GetRootRule().name);
   }
@@ -2995,6 +2999,7 @@ class GrammarOptimizerImpl {
     ValidateLazyRules(result);
     RepetitionNormalizer::Apply(&result);
     GrammarFSMBuilder::Apply(&result);
+    ExclusionAutomatonBuilder::Apply(&result);
     result->optimized = true;
     return result;
   }
@@ -3141,6 +3146,15 @@ class RootRuleRenamerImpl {
     return grammar_copy;
   }
 };
+
+/*! \brief Hash of a rule's excludes; 0 when the rule has none. */
+inline uint64_t HashRuleExcludes(const Grammar::Impl::Rule& rule) {
+  uint64_t hash = 0;
+  for (const auto& excluded : rule.excludes) {
+    hash = HashCombine(hash, std::hash<std::string>{}(excluded));
+  }
+  return hash;
+}
 
 class GrammarFSMHasherImpl {
  public:
@@ -3396,7 +3410,9 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
 }
 
 std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index) {
-  uint64_t hash_result = 0;
+  // Excludes change the token masks at runtime without changing the FSM, so a rule with excludes
+  // must never share the rule-level mask cache with an otherwise identical rule.
+  uint64_t hash_result = HashRuleExcludes((*grammar_)->GetRule(fsm_index));
   XGRAMMAR_DCHECK(fsm_index >= 0 && fsm_index < (*grammar_)->NumRules())
       << "Invalid fsm index: " << fsm_index << " num_rules: " << (*grammar_)->NumRules();
   XGRAMMAR_DCHECK(grammar_->ImplPtr()->per_rule_fsms[fsm_index].has_value());
@@ -3509,7 +3525,9 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
 }
 
 uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
-  uint64_t hash_result = 0;
+  // Excludes change the token masks at runtime without changing the FSM, so a rule with excludes
+  // must never share the rule-level mask cache with an otherwise identical rule.
+  uint64_t hash_result = HashRuleExcludes((*grammar_)->GetRule(fsm_index));
   XGRAMMAR_DCHECK(fsm_index >= 0 && fsm_index < (*grammar_)->NumRules())
       << "Invalid fsm index: " << fsm_index << " num_rules: " << (*grammar_)->NumRules();
   XGRAMMAR_DCHECK(grammar_->ImplPtr()->per_rule_fsms[fsm_index].has_value());
@@ -3907,6 +3925,140 @@ Grammar StructureNormalizer::Apply(const Grammar& grammar) {
 /*************************** Forward grammar optimizers to their impl ***************************/
 
 void GrammarFSMBuilder::Apply(Grammar* grammar) { GrammarFSMBuilderImpl::Apply(grammar); }
+
+/*!
+ * \brief Append the byte-level Aho-Corasick automaton of the patterns to the flat transition
+ * table (256 entries per state; -1 marks a transition that completes a pattern) and return the
+ * global id of its start state.
+ */
+static int32_t AppendExclusionAutomaton(
+    const std::vector<std::string>& patterns, std::vector<int32_t>* transitions
+) {
+  std::vector<std::array<int32_t, 256>> next;
+  std::vector<bool> completes_pattern;
+  auto add_state = [&]() {
+    next.emplace_back();
+    next.back().fill(-1);
+    completes_pattern.push_back(false);
+    return static_cast<int32_t>(next.size()) - 1;
+  };
+  add_state();  // The root.
+  for (const auto& pattern : patterns) {
+    int32_t state = 0;
+    for (unsigned char byte : pattern) {
+      if (next[state][byte] < 0) {
+        next[state][byte] = add_state();
+      }
+      state = next[state][byte];
+    }
+    completes_pattern[state] = true;
+  }
+  // Complete the transition function through the failure links in BFS order, and mark every
+  // state whose failure chain contains a pattern end as completing a pattern as well.
+  std::vector<int32_t> fail(next.size(), 0);
+  std::queue<int32_t> queue;
+  for (int byte = 0; byte < 256; ++byte) {
+    if (next[0][byte] >= 0) {
+      queue.push(next[0][byte]);
+    } else {
+      next[0][byte] = 0;
+    }
+  }
+  while (!queue.empty()) {
+    int32_t state = queue.front();
+    queue.pop();
+    completes_pattern[state] = completes_pattern[state] || completes_pattern[fail[state]];
+    for (int byte = 0; byte < 256; ++byte) {
+      int32_t child = next[state][byte];
+      if (child >= 0) {
+        fail[child] = next[fail[state]][byte];
+        queue.push(child);
+      } else {
+        next[state][byte] = next[fail[state]][byte];
+      }
+    }
+  }
+  const int32_t offset = static_cast<int32_t>(transitions->size() / 256);
+  transitions->reserve(transitions->size() + next.size() * 256);
+  for (const auto& row : next) {
+    for (int byte = 0; byte < 256; ++byte) {
+      transitions->push_back(completes_pattern[row[byte]] ? -1 : offset + row[byte]);
+    }
+  }
+  return offset;
+}
+
+/*!
+ * \brief The parser inherits the exclusion state into every rule reached from an excluding rule
+ * and does not advance it over token edges, so those rules must carry the same excludes or none,
+ * and must not use token edges.
+ */
+static void CheckExcludingRegions(const Grammar& grammar) {
+  const auto* impl = grammar.ImplPtr();
+  const int32_t num_rules = grammar->NumRules();
+  const auto& repeat_aux = impl->complete_fsm.GetEdgeAuxData();
+  for (int32_t root = 0; root < num_rules; ++root) {
+    const auto& root_rule = grammar->GetRule(root);
+    if (root_rule.excludes.empty()) continue;
+    std::vector<bool> visited(num_rules, false);
+    std::vector<int32_t> stack{root};
+    visited[root] = true;
+    while (!stack.empty()) {
+      const int32_t rule_id = stack.back();
+      stack.pop_back();
+      const auto& rule = grammar->GetRule(rule_id);
+      XGRAMMAR_CHECK(rule.excludes.empty() || rule.excludes == root_rule.excludes)
+          << "Rule " << rule.name << " is reachable from rule " << root_rule.name
+          << " but has different excludes; nested exclusions are not supported";
+      XGRAMMAR_CHECK(impl->per_rule_fsms[rule_id].has_value());
+      const auto& fsm = impl->per_rule_fsms[rule_id]->GetFsm().GetFsm();
+      for (int state = 0; state < fsm.NumStates(); ++state) {
+        for (const auto& edge : fsm.GetEdges(state)) {
+          XGRAMMAR_CHECK(!edge.IsToken() && !edge.IsExcludeToken())
+              << "Rule " << rule.name << " uses token edges inside the excluding rule "
+              << root_rule.name << "; excludes only apply to byte-level rules";
+          int32_t target = -1;
+          if (edge.IsRuleRef()) {
+            target = edge.max;
+          } else if (edge.IsRepeatRef()) {
+            target = repeat_aux[edge.max];
+          }
+          if (target >= 0 && !visited[target]) {
+            visited[target] = true;
+            stack.push_back(target);
+          }
+        }
+      }
+    }
+  }
+}
+
+void ExclusionAutomatonBuilder::Apply(Grammar* grammar) {
+  auto* impl = grammar->ImplPtr();
+  impl->exclusion_transitions.clear();
+  impl->rule_exclusion_start_states.clear();
+  const int32_t num_rules = (*grammar)->NumRules();
+  bool has_excludes = false;
+  for (int32_t rule_id = 0; rule_id < num_rules && !has_excludes; ++rule_id) {
+    has_excludes = !(*grammar)->GetRule(rule_id).excludes.empty();
+  }
+  if (!has_excludes) return;
+
+  impl->rule_exclusion_start_states.assign(num_rules, -1);
+  std::map<std::vector<std::string>, int32_t> start_states;
+  for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
+    const auto& excludes = (*grammar)->GetRule(rule_id).excludes;
+    if (excludes.empty()) continue;
+    auto it = start_states.find(excludes);
+    if (it == start_states.end()) {
+      it = start_states
+               .emplace(excludes, AppendExclusionAutomaton(excludes, &impl->exclusion_transitions))
+               .first;
+    }
+    impl->rule_exclusion_start_states[rule_id] = it->second;
+  }
+  CheckExcludingRegions(*grammar);
+}
 
 void RepetitionNormalizer::Apply(Grammar* grammar) { RepetitionNormalizerImpl().Apply(grammar); }
 

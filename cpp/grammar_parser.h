@@ -78,6 +78,9 @@ class EBNFLexer {
     bool is_lazy = false;
     // The sampling temperature attached to a rule-definition identifier via name[temperature=T].
     std::optional<float> temperature = std::nullopt;
+    // The excluded substrings attached to a rule-definition identifier via
+    // name[excludes=("a", "b")], or empty.
+    std::vector<std::string> excludes = {};
   };
 
   EBNFLexer();

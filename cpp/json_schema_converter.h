@@ -429,6 +429,15 @@ class JSONSchemaConverter {
   );
   bool IsAllowedString(const std::string& text) const;
   bool IsAllowedLiteral(const picojson::value& value, bool raw_string = false) const;
+  /*! \brief Whether excludes_ are enforced by the parser through Rule::excludes on the plain
+   * string rules, instead of being compiled into them by ExcludingString. */
+  bool UseRuntimeExcludes() const { return runtime_excludes_; }
+  /*! \brief Wrap the expression in a new rule that carries excludes_, so that the parser filters
+   * the text the expression matches. Returns a reference to the rule. */
+  int32_t RuleWithExcludes(const std::string& rule_name_hint, int32_t expr_id);
+  /*! \brief A copy of basic_string_sub carrying excludes_ but no lookahead assertion, for the
+   * root-level string value: what follows the root is not JSON punctuation. */
+  int32_t BasicStringSubForRoot();
 
   /*! \brief Helper to create rule with repetition constraints. */
   int32_t GetPropertyWithNumberConstraints(
@@ -482,6 +491,12 @@ class JSONSchemaConverter {
   // behavior.
   bool any_order_ = false;
   std::vector<std::string> excludes_;
+  // Excludes are enforced at runtime on the plain string rules, unless one of them contains a
+  // quote: the closing quote of a JSON string is syntax that must stay legal, so such excludes
+  // keep the compiled ExcludingString path, which appends the quote after the exclusion.
+  bool runtime_excludes_ = false;
+  std::string root_rule_name_;
+  std::optional<int32_t> basic_string_sub_root_id_;
 
  public:
   // Basic rule names

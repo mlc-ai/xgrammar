@@ -1173,6 +1173,7 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   if (max_threads_ > 1) {
     thread_pool->Join();
   }
+  BuildExclusionTokenFilter(compiled_grammar_impl.get());
 
   return CompiledGrammar(compiled_grammar_impl);
 }
