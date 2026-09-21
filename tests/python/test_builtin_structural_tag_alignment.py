@@ -762,7 +762,7 @@ def test_mimo_official_tokenizer_masks(model_id, revision, reasoning, policy, sc
             for name in (["search"] if policy == "forced" else ["search", "other"])
         ],
     }
-    kwargs = dict(tools=tools, tokenize=False, enable_thinking=reasoning)
+    kwargs = {"tools": tools, "tokenize": False, "enable_thinking": reasoning}
     prompt = tokenizer.apply_chat_template([USER_MSG], add_generation_prompt=True, **kwargs)
     full = tokenizer.apply_chat_template([USER_MSG, message], **kwargs)
     assert prompt.endswith("assistant\n" if reasoning else "assistant\n<think></think>")
