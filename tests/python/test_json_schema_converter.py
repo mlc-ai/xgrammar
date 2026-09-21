@@ -3301,7 +3301,9 @@ def test_qwen_xml_empty_object_emits_nothing():
     )
     root_lines = [line for line in ebnf.splitlines() if line.startswith("root ")]
     assert len(root_lines) == 1
-    assert "[ \\n\\t]*" not in root_lines[0]
+    # Pin the whole production: the whitespace class the converter prints is "[ \n\r\t]*", so a
+    # substring check for "[ \n\t]*" would stay true even when the self-loop is back.
+    assert root_lines[0] == 'root ::= ("")', root_lines[0]
 
 
 def test_qwen_xml_nonempty_object_keeps_parameter_zone():
