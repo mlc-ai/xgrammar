@@ -1144,6 +1144,22 @@ Result<StringSpec, SchemaError> SchemaParser::ParseString(const picojson::object
             std::to_string(spec.max_length)
     );
   }
+  // A pattern or built-in format takes the whole GenerateString branch, so minLength/maxLength
+  // would be dropped silently (issue #749). Warn here rather than in GenerateString: the XML
+  // tool-calling converter overrides that method, but every converter goes through ParseString.
+  if (spec.min_length != 0 || spec.max_length != -1) {
+    const char* generative = nullptr;
+    if (spec.pattern.has_value()) {
+      generative = "pattern";
+    } else if (spec.format.has_value() && JSONSchemaConverter::IsBuiltinFormat(*spec.format)) {
+      generative = "format";
+    }
+    if (generative != nullptr) {
+      XGRAMMAR_LOG(WARNING) << generative
+                            << " combined with minLength/maxLength is not supported; ignoring "
+                               "minLength/maxLength";
+    }
+  }
   return ResultOk(std::move(spec));
 }
 
@@ -3507,12 +3523,6 @@ int32_t XMLToolCallingConverter::XMLKeySuffix(const std::optional<std::string>& 
     }
     return Choice(choices);
   };
-  if (json_format_ == JSONFormat::kDeepSeekXML || json_format_ == JSONFormat::kDeepSeekV41XML) {
-    const auto& suffix = converter_ext::GetDeepSeekXMLKeySuffix();
-    return Sequence(
-        {ByteString(suffix.prefix), value_choices(suffix.values), ByteString(suffix.suffix)}
-    );
-  }
   if (json_format_ == JSONFormat::kKimiK3XML) {
     const auto& suffix = converter_ext::GetKimiK3XMLKeySuffix();
     // A declared property carries exactly the type its value grammar is rendered with, so the
@@ -3713,10 +3723,10 @@ int32_t XMLToolCallingConverter::FormatProperty(
     const SchemaSpecPtr& schema
 ) {
   if (nested_object_level_ <= 1) {
-    if (json_format_ == JSONFormat::kDeepSeekV41XML) {
+    if (json_format_ == JSONFormat::kDeepSeekXML || json_format_ == JSONFormat::kDeepSeekV41XML) {
       return Sequence(
           {ByteString(xml_wrapper_.key_wrapper_prefix + key),
-           FormatDeepSeekV41ParamSuffix(schema, value_rule_id)}
+           FormatDeepSeekParamSuffix(schema, value_rule_id)}
       );
     }
     std::vector<int32_t> elements = {FormatPropertyKey(key, schema)};
@@ -3747,11 +3757,11 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
     const SchemaSpecPtr& schema
 ) {
   if (nested_object_level_ <= 1) {
-    if (json_format_ == JSONFormat::kDeepSeekV41XML) {
+    if (json_format_ == JSONFormat::kDeepSeekXML || json_format_ == JSONFormat::kDeepSeekV41XML) {
       return Sequence(
           {ByteString(xml_wrapper_.key_wrapper_prefix),
            key_pattern_expr,
-           FormatDeepSeekV41ParamSuffix(schema, value_rule_id)}
+           FormatDeepSeekParamSuffix(schema, value_rule_id)}
       );
     }
     std::vector<int32_t> elements = {
@@ -3801,7 +3811,8 @@ std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key)
   if (key.empty()) {
     return std::nullopt;
   }
-  if (json_format_ == JSONFormat::kDeepSeekV41XML && nested_object_level_ == 0 && key == "{}") {
+  if ((json_format_ == JSONFormat::kDeepSeekXML || json_format_ == JSONFormat::kDeepSeekV41XML) &&
+      nested_object_level_ == 0 && key == "{}") {
     // Unconstrained tool arguments are an XML parameter list, not one parameter's raw value.
     return rule_cache_manager_.GetCache(kObjectCacheKey, 0);
   }

@@ -298,6 +298,11 @@ class JSONSchemaConverter {
    */
   Grammar Convert(const SchemaSpecPtr& spec);
 
+  /*! \brief Whether \p format is compiled to a regex, which shadows minLength/maxLength. */
+  static bool IsBuiltinFormat(const std::string& format) {
+    return JSONFormatToRegexPattern(format).has_value();
+  }
+
  protected:
   using CharacterClassElement = GrammarBuilder::CharacterClassElement;
 

@@ -2240,6 +2240,80 @@ def test_min_max_length_rejects_lone_surrogate_escapes():
     check_schema_with_instance(schema, r'"\uE000"', any_whitespace=True)
 
 
+# --- pattern/format combined with minLength/maxLength (issue #749) ----------------------------
+#
+# GenerateString takes exactly one branch, so a pattern or a built-in format shadows the
+# minLength/maxLength branch and the bounds are dropped. Composing them is not supported yet; the
+# converter warns so the dropped bounds are at least observable. These tests pin down both halves:
+# the warning fires for every shape that drops a bound, and for nothing else.
+
+
+def _compile_and_capture(capfd, schema, json_format="json"):
+    if json_format == "json":
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+    else:
+        _json_schema_to_ebnf(schema, json_format=json_format)
+    captured = capfd.readouterr()
+    return captured.err + captured.out
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "string", "pattern": "^a+$", "maxLength": 2},
+        {"type": "string", "pattern": "^a+$", "minLength": 1},
+        {"type": "string", "pattern": "^a+$", "minLength": 1, "maxLength": 5},
+        # A built-in format is compiled to a regex, so it shadows the bounds exactly like a pattern.
+        {"type": "string", "format": "email", "maxLength": 10},
+        {"type": "string", "format": "date", "minLength": 1},
+    ],
+)
+def test_string_generative_with_length_warns(capfd, schema):
+    output = _compile_and_capture(capfd, schema)
+    assert "minLength/maxLength" in output, output
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "string", "pattern": "^a+$"},
+        {"type": "string", "format": "email"},
+        {"type": "string", "minLength": 1, "maxLength": 10},
+        # An unrecognized format is a plain annotation: it does not shadow the length branch, so
+        # the bounds are still enforced and there is nothing to warn about.
+        {"type": "string", "format": "not-a-builtin-format", "maxLength": 5},
+        # minLength 0 is the default bound; nothing is dropped.
+        {"type": "string", "pattern": "^a+$", "minLength": 0},
+    ],
+)
+def test_string_without_the_combination_does_not_warn(capfd, schema):
+    output = _compile_and_capture(capfd, schema)
+    assert "minLength/maxLength" not in output, output
+
+
+def test_string_generative_with_length_warns_for_xml_tool_calls(capfd):
+    # XMLToolCallingConverter::GenerateString returns from its own pattern branch without calling
+    # the base version, so a warning placed there would never reach XML tool calls.
+    schema = {
+        "type": "object",
+        "properties": {"k": {"type": "string", "pattern": "^[a-z]+$", "maxLength": 3}},
+        "required": ["k"],
+    }
+    output = _compile_and_capture(capfd, schema, json_format="qwen_xml")
+    assert "minLength/maxLength" in output, output
+
+
+def test_string_pattern_with_length_still_ignores_the_bound(capfd):
+    # The warning does not change the grammar: this documents the behavior it warns about, so the
+    # day the bounds are actually composed this test fails and has to be updated deliberately.
+    bounded = {"type": "string", "pattern": "^[a-z]+$", "maxLength": 3}
+    unbounded = {"type": "string", "pattern": "^[a-z]+$"}
+    grammar = xgr.Grammar.from_json_schema(json.dumps(bounded))
+    capfd.readouterr()
+    assert str(grammar) == str(xgr.Grammar.from_json_schema(json.dumps(unbounded)))
+    assert _is_grammar_accept_string(grammar, '"abcd"')
+
+
 def test_type_array():
     schema = {
         "type": ["integer", "string"],
