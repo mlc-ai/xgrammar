@@ -18,6 +18,7 @@ export interface JSONSchemaFormat {
     | "minimax_xml"
     | "minimax_m3_xml"
     | "deepseek_xml"
+    | "deepseek_v4_1_xml"
     | "glm_xml"
     | "cohere_xml";
 }

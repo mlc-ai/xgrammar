@@ -9,6 +9,16 @@
 
 using namespace xgrammar;
 
+TEST(LarkConverterTest, DefaultArguments) {
+  const std::string source = R"(start: "x")";
+  const auto expected = Grammar::FromLark(source, std::nullopt, {}).ToString();
+  EXPECT_EQ(Grammar::FromLark(source).ToString(), expected);
+  EXPECT_EQ(Grammar::FromLark(source, std::nullopt).ToString(), expected);
+
+  auto from_lark = &Grammar::FromLark;
+  EXPECT_EQ(from_lark(source, std::nullopt, {}).ToString(), expected);
+}
+
 TEST(LarkConverterTest, CoreSyntaxAndImports) {
   auto grammar = Grammar::FromLark(R"(
     %import common.INT

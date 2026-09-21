@@ -4,7 +4,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pytest
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.structural_tag import JSONSchemaFormat, SequenceFormat, StructuralTag, TagFormat
@@ -13,9 +13,7 @@ from xgrammar.testing import _is_grammar_accept_string
 
 class Profiler:
     def __init__(self, tokenizer_id: str):
-        tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_id, use_fast=True, trust_remote_code=True
-        )
+        tokenizer = load_tokenizer(tokenizer_id, use_fast=True, trust_remote_code=True)
         self.tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
         self.compiler = xgr.GrammarCompiler(
             self.tokenizer_info, max_threads=16, cache_enabled=False
@@ -350,11 +348,11 @@ deepseek_xml_instance_is_accepted = [
     ),
     (
         '<｜DSML｜parameter name="name" string="true">Bob</｜DSML｜parameter>\t\n<｜DSML｜parameter name="age" string="true">\t100\n</｜DSML｜parameter>',
-        True,
+        False,
     ),
     (
         '<｜DSML｜parameter name="name" string="false">Bob</｜DSML｜parameter><｜DSML｜parameter name="age" string="true">100</｜DSML｜parameter>',
-        True,
+        False,
     ),
     (
         """<｜DSML｜parameter name="name" string="true"><!DOCTYPE html>
@@ -390,26 +388,26 @@ xml_string ::= TagDispatch(
   excludes=("</\uff5cDSML\uff5cparameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))
-xml_object ::= ("" | ([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_1 "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</\uff5cDSML\uff5cparameter>" xml_object_properties{0, -1} [ \n\r\t]*))
+xml_object ::= ("" | ([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name xml_object_2 xml_object_properties{0, -1} [ \n\r\t]*))
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 basic_number_digits ::= (([0-9]))
 basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
 basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
-xml_object_properties ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name "\" string=\"" xml_object_properties_1 "\">" [ \n\r\t]* xml_any [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
-root_0 ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"name" "\" string=\"" root_1 "\">" xml_string "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\r\t]*))
+xml_object_properties ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name xml_object_properties_2))
+root_0 ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"name" "\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>" root_part_0 [ \n\r\t]*))
 root_prop_1 ::= (("0") | (root_prop_1_1 [1-9] [0-9]*))
-root_part_0 ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"age" "\" string=\"" root_part_0_1 "\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+root_part_0 ::= (([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"age" "\" string=\"false\">" [ \n\r\t]* root_prop_1 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (("0") | ([1-9] [0-9]*))
 basic_number_3 ::= ("" | ("." basic_number_digits{1, -1}))
 basic_number_4 ::= ("" | ([+\-]))
 basic_number_5 ::= ("" | ([eE] basic_number_4 basic_number_digits{1, -1}))
-xml_object_1 ::= (("true") | ("false"))
-xml_object_properties_1 ::= (("true") | ("false"))
-root_1 ::= (("true") | ("false"))
+xml_object_1 ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object_2 ::= (("\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("\" string=\"false\">" [ \n\r\t]* xml_object_1 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
+xml_object_properties_1 ::= ((basic_number) | (basic_boolean) | (basic_null) | (basic_array) | (basic_object))
+xml_object_properties_2 ::= (("\" string=\"true\">" xml_string "</\uff5cDSML\uff5cparameter>") | ("\" string=\"false\">" [ \n\r\t]* xml_object_properties_1 [ \n\r\t]* "</\uff5cDSML\uff5cparameter>"))
 root_prop_1_1 ::= ("" | ("-"))
-root_part_0_1 ::= (("true") | ("false"))
 root ::= ((root_0))
 """,
     )
@@ -3291,7 +3289,7 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "style": "not_string"}}',
-        'style must be "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml", "glm_xml", "cohere_xml", or "kimi_k3_xml"',
+        'style must be "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml", "glm_xml", "cohere_xml", "kimi_k3_xml", or "deepseek_v4_1_xml"',
     ),
     # RepeatFormat Errors - illegal min/max
     (

@@ -1,11 +1,13 @@
 """Tests for get_structural_tag_for_model and generated structural tags."""
 
+import copy
+import json
 import re
 import time
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import pytest
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.builtin_structural_tag import (
@@ -13,6 +15,7 @@ from xgrammar.builtin_structural_tag import (
     get_deepseek_r1_structural_tag,
     get_deepseek_v3_1_structural_tag,
     get_deepseek_v3_2_structural_tag,
+    get_deepseek_v4_1_structural_tag,
     get_deepseek_v4_structural_tag,
     get_glm_4_7_structural_tag,
     get_harmony_structural_tag,
@@ -76,9 +79,7 @@ def _input_dict_to_get_stag_kwargs(format_type: str, input_dict: Dict[str, Any])
 
 class Profiler:
     def __init__(self, tokenizer_id: str):
-        tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_id, use_fast=True, trust_remote_code=True
-        )
+        tokenizer = load_tokenizer(tokenizer_id, use_fast=True, trust_remote_code=True)
         self.tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
         self.compiler = xgr.GrammarCompiler(
             self.tokenizer_info, max_threads=16, cache_enabled=False
@@ -279,6 +280,7 @@ def test_reasoning_boolean_aliases(boolean_value: bool, mode: Literal["enabled",
         "minimax_m3",
         "glm_4_7",
         "deepseek_v4",
+        "deepseek_v4_1",
         "cohere",
         "exaone",
     ],
@@ -303,6 +305,7 @@ def test_reasoning_auto_builds_for_every_model(model: str):
         "minimax_m3",
         "glm_4_7",
         "deepseek_v4",
+        "deepseek_v4_1",
         "cohere",
         "exaone",
     ],
@@ -314,7 +317,16 @@ def test_reasoning_auto_uses_an_optional_complete_prefix(model: str):
 
 
 @pytest.mark.parametrize(
-    "model", ["kimi", "deepseek_r1", "deepseek_v3_1", "deepseek_v3_2", "deepseek_v4", "glm_4_7"]
+    "model",
+    [
+        "kimi",
+        "deepseek_r1",
+        "deepseek_v3_1",
+        "deepseek_v3_2",
+        "deepseek_v4",
+        "deepseek_v4_1",
+        "glm_4_7",
+    ],
 )
 def test_standard_reasoning_auto_accepts_complete_reasoning_or_direct_response(model: str):
     structural_tag = get_model_structural_tag(model, tools=[], reasoning="auto")
@@ -1362,6 +1374,7 @@ def test_qwen_reasoning_suffix_stays_inside_the_optional_prefix(model: str):
         get_harmony_structural_tag,
         get_deepseek_v3_2_structural_tag,
         get_deepseek_v4_structural_tag,
+        get_deepseek_v4_1_structural_tag,
         get_minimax_structural_tag,
         get_glm_4_7_structural_tag,
         get_cohere_structural_tag,
@@ -1451,6 +1464,7 @@ _EXCLUDE_TOKEN_MODELS = [
     "deepseek_v3_1",
     "deepseek_v3_2",
     "deepseek_v4",
+    "deepseek_v4_1",
     "qwen_3",
     "qwen_3_5",
     "minimax",
@@ -1477,13 +1491,16 @@ def test_exclude_special_tokens_default_excludes_think_tokens(model, tools):
 
 @pytest.mark.parametrize("model", _EXCLUDE_TOKEN_MODELS)
 @pytest.mark.parametrize("tools", [make_tools(["search"]), []])
-def test_exclude_special_tokens_false_excludes_nothing(model, tools):
-    """Opting out with ``exclude_special_tokens=False`` excludes nothing from free text."""
+def test_exclude_special_tokens_false_keeps_format_constraints(model, tools):
+    """Opting out allows special tokens while retaining tool availability constraints."""
 
     structural_tag = get_model_structural_tag(
         model, tools=tools, reasoning=True, exclude_special_tokens=False
     )
-    assert all(excludes == [] for excludes in _collect_excludes(structural_tag))
+    allowed_excludes = (
+        [[], ["<｜DSML｜ calls>"]] if model == "deepseek_v4_1" and not tools else [[]]
+    )
+    assert all(excludes in allowed_excludes for excludes in _collect_excludes(structural_tag))
     # The less-restrictive grammar must still build.
     xgr.Grammar.from_structural_tag(structural_tag)
 
@@ -2473,6 +2490,7 @@ _ANY_ORDER_MODELS = [
     "deepseek_v3_1",
     "deepseek_v3_2",
     "deepseek_v4",
+    "deepseek_v4_1",
     "minimax",
     "minimax_m3",
     "glm_4_7",
@@ -2554,3 +2572,371 @@ def test_get_model_structural_tag_max_whitespace_cnt_propagates():
     )
     assert nodes_bounded
     assert all(n.max_whitespace_cnt == 2 for n in nodes_bounded)
+
+
+_DEEPSEEK_V41_SCHEMA = {
+    "type": "object",
+    "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1}},
+    "required": ["query", "limit"],
+    "additionalProperties": False,
+}
+
+
+_DEEPSEEK_V41_TOOLS = [
+    {"type": "function", "function": {"name": name, "parameters": _DEEPSEEK_V41_SCHEMA}}
+    for name in ("search", "other")
+]
+
+
+_DEEPSEEK_V41_CALL = (
+    '<｜DSML｜ invoke name="search">\n'
+    '<｜DSML｜ parameter name="query" string="true">北京\n<code>"hi"</code></｜DSML｜ parameter>\n'
+    '<｜DSML｜ parameter name="limit" string="false">2</｜DSML｜ parameter>\n'
+    "</｜DSML｜ invoke>\n"
+)
+
+
+_DEEPSEEK_V41_CALLS = "\n\n<｜DSML｜ calls>\n" + _DEEPSEEK_V41_CALL + "</｜DSML｜ calls>"
+
+
+def _make_deepseek_v4_1_grammar(reasoning=False, choice="required", **kwargs):
+    return xgr.Grammar.from_structural_tag(
+        get_model_structural_tag(
+            "deepseek_v4_1",
+            tools=_DEEPSEEK_V41_TOOLS,
+            reasoning=reasoning,
+            tool_choice=choice,
+            **kwargs,
+        )
+    )
+
+
+@pytest.mark.parametrize("reasoning", [False, True])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced", "none", "allowed"])
+def test_deepseek_v4_1_tool_choice(reasoning, policy):
+    choice = policy
+    if policy == "forced":
+        choice = {"type": "function", "function": {"name": "search"}}
+    elif policy == "allowed":
+        choice = {
+            "type": "allowed_tools",
+            "allowed_tools": {
+                "mode": "required",
+                "tools": [{"type": "function", "function": {"name": "search"}}],
+            },
+        }
+    grammar = _make_deepseek_v4_1_grammar(reasoning, choice)
+    prefix = "Plan the search.</think>" if reasoning else ""
+    assert _is_grammar_accept_string(grammar, prefix + _DEEPSEEK_V41_CALLS) == (policy != "none")
+    assert _is_grammar_accept_string(grammar, prefix + "Hello") == (policy in ["auto", "none"])
+    parallel = _DEEPSEEK_V41_CALLS.replace(
+        "</｜DSML｜ calls>", _DEEPSEEK_V41_CALL + "</｜DSML｜ calls>"
+    )
+    assert _is_grammar_accept_string(grammar, prefix + parallel) == (
+        policy in ["auto", "required", "allowed"]
+    )
+    other = _DEEPSEEK_V41_CALLS.replace('name="search"', 'name="other"')
+    assert _is_grammar_accept_string(grammar, prefix + other) == (policy in ["auto", "required"])
+
+
+@pytest.mark.parametrize("policy", ["auto", "required"])
+@pytest.mark.parametrize(
+    "output",
+    [
+        _DEEPSEEK_V41_CALLS.replace('name="search"', 'name="unknown"'),
+        _DEEPSEEK_V41_CALLS.replace('name="query"', 'name="unknown"'),
+        _DEEPSEEK_V41_CALLS.replace('string="false">2', 'string="false">0'),
+        _DEEPSEEK_V41_CALLS.replace('string="false">2', 'string="false">"two"'),
+        _DEEPSEEK_V41_CALLS.replace('name="query" string="true"', 'name="query" string="false"'),
+        _DEEPSEEK_V41_CALLS.replace('name="limit" string="false"', 'name="limit" string="true"'),
+        _DEEPSEEK_V41_CALLS.replace(
+            '<｜DSML｜ parameter name="limit" string="false">2</｜DSML｜ parameter>\n', ""
+        ),
+        _DEEPSEEK_V41_CALLS.replace("</｜DSML｜ invoke>\n", "</｜DSML｜ invoke>\n\n"),
+        _DEEPSEEK_V41_CALLS.replace("｜DSML｜ parameter", "｜DSML｜parameter"),
+        _DEEPSEEK_V41_CALLS.replace("｜DSML｜ invoke", "｜DSML｜invoke"),
+        "\n\n<｜DSML｜ calls>\n</｜DSML｜ calls>",
+        _DEEPSEEK_V41_CALLS[: -len("</｜DSML｜ calls>")],
+    ],
+)
+def test_deepseek_v4_1_invalid_calls(policy, output):
+    assert not _is_grammar_accept_string(_make_deepseek_v4_1_grammar(choice=policy), output)
+
+
+def test_deepseek_v4_1_reasoning_and_prompt_boundary():
+    grammar = _make_deepseek_v4_1_grammar(reasoning=True)
+    assert _is_grammar_accept_string(grammar, "</think>" + _DEEPSEEK_V41_CALLS)
+    assert not _is_grammar_accept_string(grammar, _DEEPSEEK_V41_CALLS)
+    assert not _is_grammar_accept_string(grammar, "thinking</think>")
+    assert not _is_grammar_accept_string(
+        _make_deepseek_v4_1_grammar(), "</think>" + _DEEPSEEK_V41_CALLS
+    )
+
+
+def test_deepseek_v4_1_v4_is_a_different_wire_format():
+    legacy = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag(
+            "deepseek_v4", tools=_DEEPSEEK_V41_TOOLS, reasoning=False, tool_choice="required"
+        )
+    )
+    legacy_output = _DEEPSEEK_V41_CALLS.replace("｜DSML｜ calls", "｜DSML｜tool_calls").replace(
+        "｜DSML｜ ", "｜DSML｜"
+    )
+    assert _is_grammar_accept_string(legacy, legacy_output)
+    assert not _is_grammar_accept_string(legacy, _DEEPSEEK_V41_CALLS)
+    assert not _is_grammar_accept_string(_make_deepseek_v4_1_grammar(), legacy_output)
+
+
+@pytest.mark.parametrize("exclude_special_tokens", [False, True])
+def test_deepseek_v4_1_no_tools(exclude_special_tokens):
+    grammar = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag(
+            "deepseek_v4_1", reasoning=False, exclude_special_tokens=exclude_special_tokens
+        )
+    )
+    assert _is_grammar_accept_string(grammar, "Hello")
+    assert not _is_grammar_accept_string(grammar, _DEEPSEEK_V41_CALLS)
+
+
+def test_deepseek_v4_1_namespaced_tool():
+    tool = copy.deepcopy(_DEEPSEEK_V41_TOOLS[0])
+    tool["function"]["name"] = "web::search"
+    grammar = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag(
+            "deepseek_v4_1",
+            tools=[tool],
+            reasoning=False,
+            tool_choice={"type": "function", "function": {"name": "web::search"}},
+        )
+    )
+    assert _is_grammar_accept_string(
+        grammar, _DEEPSEEK_V41_CALLS.replace('name="search"', 'name="web::search"')
+    )
+    assert not _is_grammar_accept_string(grammar, _DEEPSEEK_V41_CALLS)
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+def test_deepseek_v4_1_parameter_order(any_order):
+    lines = _DEEPSEEK_V41_CALLS.splitlines(keepends=True)
+    # query's raw string spans two lines; reverse the two complete parameters.
+    output = "".join(lines[:4] + lines[6:7] + lines[4:6] + lines[7:])
+    assert output != _DEEPSEEK_V41_CALLS
+    assert (
+        _is_grammar_accept_string(_make_deepseek_v4_1_grammar(any_order=any_order), output)
+        == any_order
+    )
+
+
+@pytest.mark.parametrize("parameters", [{}, {"type": "object", "properties": {}}, None])
+def test_deepseek_v4_1_empty_arguments(parameters):
+    tool = {"type": "function", "function": {"name": "ping", "parameters": parameters}}
+    grammar = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag(
+            "deepseek_v4_1", tools=[tool], reasoning=False, tool_choice="required"
+        )
+    )
+    output = '\n\n<｜DSML｜ calls>\n<｜DSML｜ invoke name="ping">\n\n</｜DSML｜ invoke>\n</｜DSML｜ calls>'
+    assert _is_grammar_accept_string(grammar, output)
+
+
+@pytest.mark.parametrize(
+    "function",
+    [
+        {"name": "search"},
+        {"name": "search", "parameters": None},
+        {"name": "search", "parameters": {}},
+        {"name": "search", "parameters": _DEEPSEEK_V41_SCHEMA, "strict": False},
+    ],
+)
+def test_deepseek_v4_1_unconstrained_tool_parameters(function):
+    grammar = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag(
+            "deepseek_v4_1",
+            tools=[{"type": "function", "function": function}],
+            reasoning=False,
+            tool_choice="required",
+        )
+    )
+    assert _is_grammar_accept_string(grammar, _DEEPSEEK_V41_CALLS)
+    assert not _is_grammar_accept_string(
+        grammar, _DEEPSEEK_V41_CALLS.replace('string="false">2', 'string="false">not-json')
+    )
+
+
+def test_deepseek_v4_1_whitespace_limit_and_serialization():
+    stag = get_model_structural_tag(
+        "deepseek_v4_1",
+        tools=_DEEPSEEK_V41_TOOLS,
+        tool_choice="required",
+        reasoning=False,
+        max_whitespace_cnt=2,
+    )
+    grammar = xgr.Grammar.from_structural_tag(json.loads(stag.model_dump_json()))
+    assert _is_grammar_accept_string(grammar, _DEEPSEEK_V41_CALLS)
+    assert not _is_grammar_accept_string(
+        grammar, _DEEPSEEK_V41_CALLS.replace('string="false">2', 'string="false">   2')
+    )
+
+
+# ---------- Test: parallel_tool_calls ----------
+
+_PARALLEL_TOOLS = make_tools(["t1", "t2"])
+
+_KIMI_CALL = (
+    '<|tool_call_begin|>functions.{n}:0<|tool_call_argument_begin|>{{"q": "v"}}<|tool_call_end|>'
+)
+_DEEPSEEK_R1_CALL = (
+    '<｜tool▁call▁begin｜>function<｜tool▁sep｜>{n}\n```json\n{{"q": "v"}}\n```<｜tool▁call▁end｜>'
+)
+_COHERE_CALL = (
+    '<cofl:tool_call id="0" name="{n}"><cofl:value name="q" type="raw">v</cofl:value>'
+    "</cofl:tool_call>"
+)
+_KIMI_K3_CALL = (
+    '<|open|>call tool="{n}" index="1"<|sep|>'
+    '<|open|>argument key="q" type="string"<|sep|>v<|close|>argument<|sep|>'
+    "<|close|>call<|sep|>"
+)
+
+# (model, output with one tool call, the same output with two tool calls)
+_parallel_tool_calls_cases = [
+    pytest.param(
+        "llama",
+        '{"name": "t1", "parameters": {"q": "v"}}',
+        '{"name": "t1", "parameters": {"q": "v"}}{"name": "t2", "parameters": {"q": "v"}}',
+        id="llama",
+    ),
+    pytest.param(
+        "qwen_3",
+        '<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>',
+        '<tool_call>\n{"name": "t1", "arguments": {"q": "v"}}\n</tool_call>'
+        '<tool_call>\n{"name": "t2", "arguments": {"q": "v"}}\n</tool_call>',
+        id="qwen_3",
+    ),
+    pytest.param(
+        "qwen_3_5",
+        "<tool_call>\n<function=t1>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+        "<tool_call>\n<function=t1>\n<parameter=q>v</parameter>\n</function>\n</tool_call>"
+        "<tool_call>\n<function=t2>\n<parameter=q>v</parameter>\n</function>\n</tool_call>",
+        id="qwen_3_5",
+    ),
+    pytest.param(
+        "glm_4_7",
+        "<tool_call>t1<arg_key>q</arg_key><arg_value>v</arg_value></tool_call>",
+        "<tool_call>t1<arg_key>q</arg_key><arg_value>v</arg_value></tool_call>"
+        "<tool_call>t2<arg_key>q</arg_key><arg_value>v</arg_value></tool_call>",
+        id="glm_4_7",
+    ),
+    pytest.param(
+        "exaone",
+        '<tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>',
+        '<tool_call>{"name": "t1", "arguments": {"q": "v"}}</tool_call>'
+        '<tool_call>{"name": "t2", "arguments": {"q": "v"}}</tool_call>',
+        id="exaone",
+    ),
+    pytest.param(
+        "kimi",
+        "<|tool_calls_section_begin|>" + _KIMI_CALL.format(n="t1") + "<|tool_calls_section_end|>",
+        "<|tool_calls_section_begin|>"
+        + _KIMI_CALL.format(n="t1")
+        + _KIMI_CALL.format(n="t2")
+        + "<|tool_calls_section_end|>",
+        id="kimi",
+    ),
+    pytest.param(
+        "kimi_k3",
+        "<|close|>response<|sep|><|open|>tools<|sep|>"
+        + _KIMI_K3_CALL.format(n="t1")
+        + "<|close|>tools<|sep|><|close|>message<|sep|>",
+        "<|close|>response<|sep|><|open|>tools<|sep|>"
+        + _KIMI_K3_CALL.format(n="t1")
+        + _KIMI_K3_CALL.format(n="t2")
+        + "<|close|>tools<|sep|><|close|>message<|sep|>",
+        id="kimi_k3",
+    ),
+    pytest.param(
+        "deepseek_r1",
+        "<｜tool▁calls▁begin｜>" + _DEEPSEEK_R1_CALL.format(n="t1") + "<｜tool▁calls▁end｜>",
+        "<｜tool▁calls▁begin｜>"
+        + _DEEPSEEK_R1_CALL.format(n="t1")
+        + "\n"
+        + _DEEPSEEK_R1_CALL.format(n="t2")
+        + "<｜tool▁calls▁end｜>",
+        id="deepseek_r1",
+    ),
+    pytest.param(
+        "cohere",
+        "<cofl:tool_calls>" + _COHERE_CALL.format(n="t1") + "</cofl:tool_calls>",
+        "<cofl:tool_calls>"
+        + _COHERE_CALL.format(n="t1")
+        + _COHERE_CALL.format(n="t2")
+        + "</cofl:tool_calls>",
+        id="cohere",
+    ),
+]
+
+
+@pytest.mark.parametrize("tool_choice", ["auto", "required"])
+@pytest.mark.parametrize("model, one_call, two_calls", _parallel_tool_calls_cases)
+def test_parallel_tool_calls_limits_the_response_to_one_call(
+    model: str, one_call: str, two_calls: str, tool_choice: str
+):
+    """parallel_tool_calls=False keeps a single call and rejects a second one."""
+    kwargs: Dict[str, Any] = {
+        "tools": _PARALLEL_TOOLS,
+        "tool_choice": tool_choice,
+        "reasoning": False,
+    }
+    parallel = get_model_structural_tag(model, **kwargs)
+    check_stag_with_instance(parallel, one_call, True)
+    check_stag_with_instance(parallel, two_calls, True)
+
+    single = get_model_structural_tag(model, parallel_tool_calls=False, **kwargs)
+    check_stag_with_instance(single, one_call, True)
+    check_stag_with_instance(single, two_calls, False)
+
+
+_HARMONY_SEPARATOR = "<|start|>assistant"
+_HARMONY_ANALYSIS = "<|channel|>analysis<|message|>plan<|end|>"
+_HARMONY_FINAL = "<|channel|>final<|message|>answer<|return|>"
+
+
+def _harmony_call(name: str) -> str:
+    return (
+        f'<|channel|>commentary to=functions.{name}<|constrain|>json<|message|>{{"q": "v"}}<|call|>'
+    )
+
+
+@pytest.mark.parametrize("tool_choice", ["auto", "required"])
+def test_parallel_tool_calls_harmony_keeps_non_tool_messages(tool_choice: str):
+    """Harmony caps the tool-call messages only, not the whole message stream."""
+    single = get_model_structural_tag(
+        "harmony",
+        tools=_PARALLEL_TOOLS,
+        tool_choice=tool_choice,
+        reasoning=True,
+        parallel_tool_calls=False,
+    )
+    one_call = _HARMONY_ANALYSIS + _HARMONY_SEPARATOR + _harmony_call("t1")
+    two_calls = one_call + _HARMONY_SEPARATOR + _harmony_call("t2")
+
+    # An analysis message keeps its place before the single tool call.
+    check_stag_with_instance(single, _HARMONY_ANALYSIS, True)
+    check_stag_with_instance(single, _harmony_call("t1"), True)
+    check_stag_with_instance(single, one_call, True)
+    check_stag_with_instance(single, two_calls, False)
+
+
+def test_parallel_tool_calls_harmony_auto_keeps_the_final_message():
+    """Only tool calls are capped: analysis plus a final answer stays valid."""
+    single = get_model_structural_tag(
+        "harmony", tools=_PARALLEL_TOOLS, reasoning=True, parallel_tool_calls=False
+    )
+    check_stag_with_instance(single, _HARMONY_ANALYSIS + _HARMONY_SEPARATOR + _HARMONY_FINAL, True)
+
+
+def test_parallel_tool_calls_rejects_non_bool():
+    with pytest.raises(ValueError, match="parallel_tool_calls"):
+        get_model_structural_tag(
+            "qwen_3", tools=_PARALLEL_TOOLS, parallel_tool_calls="no"  # type: ignore[arg-type]
+        )

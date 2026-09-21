@@ -202,12 +202,13 @@ enum class JSONFormat : int {
   kCohereXML = 5,
   kKimiK3XML = 6,
   kMiniMaxM3XML = 7,
+  kDeepSeekV41XML = 8,
 };
 
 /*!
  * \brief Convert a format name to JSONFormat.
  * \param format One of "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml",
- * "glm_xml", "cohere_xml", or "kimi_k3_xml".
+ * "glm_xml", "cohere_xml", "kimi_k3_xml", or "deepseek_v4_1_xml".
  * \return The corresponding JSONFormat, or std::nullopt if the name is not recognized.
  */
 std::optional<JSONFormat> JSONFormatFromString(const std::string& format);
@@ -219,13 +220,13 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format);
 class GenerateCacheManager {
  public:
   /*! \brief Add a key-value pair to the cache. */
-  void AddCache(const std::string& key, bool is_inner_layer, int32_t rule_id) {
-    cache_[{key, is_inner_layer}] = rule_id;
+  void AddCache(const std::string& key, int context, int32_t rule_id) {
+    cache_[{key, context}] = rule_id;
   }
 
   /*! \brief Get cached rule id by key. Returns std::nullopt if not found. */
-  std::optional<int32_t> GetCache(const std::string& key, bool is_inner_layer) const {
-    auto it = cache_.find({key, is_inner_layer});
+  std::optional<int32_t> GetCache(const std::string& key, int context) const {
+    auto it = cache_.find({key, context});
     if (it != cache_.end()) {
       return it->second;
     }
@@ -233,7 +234,7 @@ class GenerateCacheManager {
   }
 
  private:
-  std::unordered_map<std::pair<std::string, bool>, int32_t> cache_;
+  std::unordered_map<std::pair<std::string, int>, int32_t> cache_;
 };
 
 /*!
@@ -297,6 +298,11 @@ class JSONSchemaConverter {
    */
   Grammar Convert(const SchemaSpecPtr& spec);
 
+  /*! \brief Whether \p format is compiled to a regex, which shadows minLength/maxLength. */
+  static bool IsBuiltinFormat(const std::string& format) {
+    return JSONFormatToRegexPattern(format).has_value();
+  }
+
  protected:
   using CharacterClassElement = GrammarBuilder::CharacterClassElement;
 
@@ -316,6 +322,8 @@ class JSONSchemaConverter {
   virtual int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateRef(const RefSpec& spec, const std::string& rule_name);
+  /*! \brief Key reference rules by their output encoding context. */
+  virtual std::string RefCacheKey(const std::string& uri) const;
   virtual int32_t GenerateAnyOf(const AnyOfSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateOneOf(const OneOfSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateAllOf(const AllOfSpec& spec, const std::string& rule_name);

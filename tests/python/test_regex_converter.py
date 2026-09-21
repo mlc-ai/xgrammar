@@ -2,7 +2,7 @@ import sys
 import time
 
 import pytest
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _is_grammar_accept_string, _regex_to_ebnf
@@ -468,7 +468,7 @@ tokenizer_path_regex_instance = [(t, *ri) for t in tokenizer_paths for ri in reg
 def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     print(f"Tokenizer: {tokenizer_path}, regex: {regex}, instance: {instance}")
 
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = load_tokenizer(tokenizer_path)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
 
@@ -524,3 +524,26 @@ def test_null_character(regex: str):
 
 if __name__ == "__main__":
     pytest.main(sys.argv)
+
+
+@pytest.mark.parametrize(
+    "regex, accepted, rejected",
+    [
+        ("(a{2,}){1,2}", ["aa", "aaa", "aaaa", "aaaaaa"], ["", "a"]),
+        ("(a{2,}){2}", ["aaaa", "aaaaa"], ["", "a", "aa", "aaa"]),
+        ("(a{1,}){1,2}", ["a", "aa", "aaa"], [""]),
+        ("(a{2,}){1,2}b", ["aab", "aaab"], ["b", "ab"]),
+    ],
+)
+def test_bounded_repetition_of_unbounded_repetition(regex: str, accepted, rejected):
+    # The repetition expander inlines single-element rules into the outer repetition. The
+    # inlined a{2,} used to be copied verbatim, so an unbounded kRepeat reached the parser,
+    # which then never entered it and rejected every input.
+    grammar = xgr.Grammar.from_regex(regex)
+    for s in accepted:
+        assert _is_grammar_accept_string(grammar, s), (regex, s)
+    for s in rejected:
+        assert not _is_grammar_accept_string(grammar, s), (regex, s)
+    ebnf_grammar = xgr.Grammar.from_ebnf('root ::= b{1,2}\nb ::= a{2,}\na ::= "a"')
+    assert _is_grammar_accept_string(ebnf_grammar, "aa")
+    assert not _is_grammar_accept_string(ebnf_grammar, "a")

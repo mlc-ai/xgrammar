@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple
 import pytest
 import torch
 from pydantic import BaseModel
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _get_allow_empty_rule_ids
@@ -18,7 +18,7 @@ from xgrammar.testing import _get_allow_empty_rule_ids
 @pytest.mark.hf_token_required
 def test_compiled_grammar():
     grammar = xgr.Grammar.builtin_json_grammar()
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
+    tokenizer = load_tokenizer("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
     time_start = time.monotonic_ns()
@@ -48,7 +48,7 @@ def test_compiled_grammar():
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize("max_threads", (8, 1))
 def test_grammar_compiler_json(max_threads):
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
+    tokenizer = load_tokenizer("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     time_start = time.monotonic_ns()
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=max_threads)
@@ -87,7 +87,7 @@ def test_grammar_compiler_json(max_threads):
 
 @pytest.mark.hf_token_required
 def test_grammar_compiler_json_schema():
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
+    tokenizer = load_tokenizer("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -229,7 +229,7 @@ schema_instances = [
 
 @pytest.mark.hf_token_required
 def test_grammar_compiler_json_schema_concurrent():
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
+    tokenizer = load_tokenizer("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -266,7 +266,7 @@ def test_grammar_compiler_json_schema_concurrent():
 
 @pytest.mark.hf_token_required
 def test_grammar_compiler_cache_unlimited():
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.1-8B-Instruct")
+    tokenizer = load_tokenizer("meta-llama/Llama-3.1-8B-Instruct")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
 
     def make_schema(name_str: str):
@@ -297,7 +297,7 @@ def test_grammar_compiler_cache_unlimited():
 
 @pytest.mark.hf_token_required
 def test_grammar_compiler_cache_limited():
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-3.1-8B-Instruct")
+    tokenizer = load_tokenizer("meta-llama/Llama-3.1-8B-Instruct")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
 
     def make_schema(name_str: str):
@@ -332,7 +332,7 @@ def test_grammar_compiler_cache_limited():
 @pytest.mark.hf_token_required
 def test_grammar_compiler_crossing_cache_same_grammar():
     grammar = xgr.Grammar.builtin_json_grammar()
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
+    tokenizer = load_tokenizer("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
     time_start = time.monotonic_ns()
@@ -358,7 +358,7 @@ def test_grammar_compiler_crossing_cache_different_grammar_with_same_fsm():
     string ::= "\\"" [^"]* "\\"" | "'" [^']* "'"
     """
 
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf")
+    tokenizer = load_tokenizer("meta-llama/Llama-2-7b-chat-hf")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 

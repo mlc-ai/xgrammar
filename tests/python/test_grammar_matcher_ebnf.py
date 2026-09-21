@@ -8,7 +8,7 @@ from typing import List
 
 import pytest
 import torch
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import (
@@ -322,8 +322,8 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         '{"id": 1,"name": "Example"}',
         [
             # fmt: off
-            31989, 31912, 270, 270, 270, 31973, 31846, 31846, 31948, 31915, 270, 270, 270, 270,
-            270, 31973, 31846, 31846, 263, 263, 263, 263, 263, 263, 263, 263, 31974, 31999,
+            31989, 31912, 275, 275, 275, 31973, 31846, 31846, 31948, 31915, 275, 275, 275, 275, 275,
+            31973, 31846, 31846, 268, 268, 268, 268, 268, 268, 268, 268, 31974, 31999,
             # fmt: on
         ],
     ),
@@ -340,15 +340,15 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 }""",
         [
             # fmt: off
-            31989, 31912, 31912, 270, 270, 270, 31973, 31846, 31846, 31948, 31915, 31915, 270, 270,
-            270, 31973, 31846, 31846, 263, 263, 263, 31974, 31915, 31915, 270, 270, 270, 31973,
-            31846, 31846, 31997, 31997, 31998, 31974, 31915, 31915, 270, 270, 31973, 31846, 31846,
-            31840, 262, 262, 262, 31969, 31846, 31846, 262, 262, 262, 31969, 31974, 31915, 31915,
-            270, 270, 270, 31973, 31846, 31846, 31908, 270, 270, 270, 270, 31973, 31846, 31846,
-            31906, 270, 270, 270, 270, 31973, 31846, 31846, 262, 262, 262, 31968, 31970, 31915,
-            31915, 270, 270, 270, 270, 31973, 31846, 31846, 31840, 31943, 31846, 31846, 31943,
-            31846, 31846, 31943, 31970, 31974, 31915, 31915, 270, 270, 270, 270, 31973, 31846,
-            31846, 263, 263, 263, 263, 31974, 31974, 31999,
+            31989, 31912, 31912, 275, 275, 275, 31973, 31846, 31846, 31948, 31915, 31915, 275, 275,
+            275, 31973, 31846, 31846, 268, 268, 268, 31974, 31915, 31915, 275, 275, 275, 31973,
+            31846, 31846, 31997, 31997, 31998, 31974, 31915, 31915, 275, 275, 31973, 31846, 31846,
+            31840, 267, 267, 267, 31969, 31846, 31846, 267, 267, 267, 31969, 31974, 31915, 31915,
+            275, 275, 275, 31973, 31846, 31846, 31908, 275, 275, 275, 275, 31973, 31846, 31846,
+            31906, 275, 275, 275, 275, 31973, 31846, 31846, 267, 267, 267, 31968, 31970, 31915,
+            31915, 275, 275, 275, 275, 31973, 31846, 31846, 31840, 31943, 31846, 31846, 31943,
+            31846, 31846, 31943, 31970, 31974, 31915, 31915, 275, 275, 275, 275, 31973, 31846,
+            31846, 268, 268, 268, 268, 31974, 31974, 31999,
             # fmt: on
         ],
     ),
@@ -358,9 +358,9 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         '{"id": 1,"name": "Example哈哈"}',
         [
             # fmt: off
-            128235, 127497, 4744, 4744, 4744, 127849, 126399, 126399, 126760, 127499, 4744, 4744,
-            4744, 4744, 4744, 127849, 126399, 126399, 4694, 4694, 4694, 4694, 4694, 4694, 4694,
-            4694, 128066, 128111, 4694, 128066, 128111, 4694, 127873, 128255,
+            128235, 127497, 4749, 4749, 4749, 127849, 126399, 126399, 126760, 127499, 4749, 4749,
+            4749, 4749, 4749, 127849, 126399, 126399, 4699, 4699, 4699, 4699, 4699, 4699, 4699,
+            4699, 128066, 128111, 4699, 128066, 128111, 4699, 127873, 128255,
             # fmt: on
         ],
     ),
@@ -375,7 +375,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 def test_fill_next_token_bitmask(
     tokenizer_path: str, input_str: str, expected_rejected_sizes: List[int]
 ):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -643,7 +643,7 @@ def test_positive_utf8_single_char_class():
 def test_not_neighbour_character_class():
     raw_grammar = "root ::= [a-cx-z]*"
     tokenizer_path = "meta-llama/Llama-2-7b-chat-hf"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar = xgr.Grammar.from_ebnf(raw_grammar)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
@@ -676,7 +676,7 @@ rule3 ::= [a-n] [b-c] "x" | ""
             # Input: "aбя中" - ASCII 'a', Cyrillic 'б' (2 bytes), 'я' (2 bytes), CJK '中' (3 bytes)
             "aбя中",
             # fmt: off
-            [22129, 22128, 31984, 22128, 31984, 22128, 31992, 31936, 22128],
+            [22051, 22050, 31984, 22050, 31984, 22050, 31992, 31936, 22050],
             # fmt: on
         )
     ],
@@ -690,7 +690,7 @@ def test_fill_next_token_bitmask_unicode_char_class(
     This test verifies that the grammar correctly handles mixed UTF-8 character
     classes (ASCII, Cyrillic, CJK) and produces consistent rejected token counts.
     """
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -983,3 +983,18 @@ def test_sparse_end_state_fsm_operations(
 
 if __name__ == "__main__":
     pytest.main(sys.argv)
+
+
+def test_character_class_star_followed_by_same_class():
+    # The FSM start state loops on [a-z] and also moves to the next state on [a-z]. Merging
+    # those two states would let the grammar skip the mandatory character and accept "cd".
+    grammar = xgr.Grammar.from_ebnf('root ::= [a-z]* [a-z] "c" "d"')
+    assert not _is_grammar_accept_string(grammar, "cd")
+    assert not _is_grammar_accept_string(grammar, "d")
+    assert _is_grammar_accept_string(grammar, "acd")
+    assert _is_grammar_accept_string(grammar, "xyzcd")
+
+    schema_grammar = xgr.Grammar.from_json_schema('{"type": "string", "pattern": "^a*acd$"}')
+    assert not _is_grammar_accept_string(schema_grammar, '"cd"')
+    assert _is_grammar_accept_string(schema_grammar, '"acd"')
+    assert _is_grammar_accept_string(schema_grammar, '"aaacd"')
