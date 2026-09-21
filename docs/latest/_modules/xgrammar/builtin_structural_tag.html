@@ -7,7 +7,7 @@
         <link rel="prefetch" href="../../_static/img/logo_dark.svg" as="image">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>xgrammar.builtin_structural_tag - XGrammar 0.2.8.dev15+gb2b860bf4</title>
+        <title>xgrammar.builtin_structural_tag - XGrammar 0.2.8.dev16+g40ef65110</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
@@ -164,7 +164,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">XGrammar 0.2.8.dev15+gb2b860bf4</div></a>
+      <a href="../../index.html"><div class="brand">XGrammar 0.2.8.dev16+g40ef65110</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -189,7 +189,7 @@
     <img class="sidebar-logo only-dark" src="../../_static/img/logo_dark.svg" alt="Dark Logo"/>
   </div>
   
-  <span class="sidebar-brand-text">XGrammar 0.2.8.dev15+gb2b860bf4</span>
+  <span class="sidebar-brand-text">XGrammar 0.2.8.dev16+g40ef65110</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -488,6 +488,9 @@
 <span class="sd">        free-text spans constrained to exclude those tokens. Set to ``False``</span>
 <span class="sd">        to allow them to appear as plain text. For models that have no special</span>
 <span class="sd">        tokens to exclude (such as ``"harmony"``), this has no effect.</span>
+<span class="sd">        For Kimi-K3, this also applies to tool-argument string values without</span>
+<span class="sd">        ``pattern``/``format`` and to property names, nested JSON strings included;</span>
+<span class="sd">        ``minLength``/``maxLength`` on such strings are dropped with a warning.</span>
 <span class="sd">    max_whitespace_cnt : Optional[int]</span>
 <span class="sd">        Applied to every tool-argument :class:`JSONSchemaFormat`. Caps the number</span>
 <span class="sd">        of consecutive whitespace characters. Setting it (e.g. ``2``) bounds runs</span>
@@ -1220,7 +1223,10 @@
 
 <span class="sd">    The tool-call arguments are emitted one tag per argument and are constrained</span>
 <span class="sd">    by :class:`JSONSchemaFormat` with ``style="kimi_k3_xml"``: string values are</span>
-<span class="sd">    raw text, and other value types remain JSON-style.</span>
+<span class="sd">    raw text, and other value types remain JSON-style. With ``exclude_special_tokens=True``,</span>
+<span class="sd">    string values without ``pattern``/``format`` and property names exclude ``&lt;|open|&gt;``,</span>
+<span class="sd">    ``&lt;|close|&gt;``, and ``&lt;|sep|&gt;`` (see :class:`JSONSchemaFormat` for the exact rules);</span>
+<span class="sd">    argument and call wrappers remain outside this exclusion scope.</span>
 
 <span class="sd">    Parameters are normalized by :func:`get_model_structural_tag` before this</span>
 <span class="sd">    function is called:</span>
@@ -1270,6 +1276,7 @@
                         <span class="n">style</span><span class="o">=</span><span class="n">XML_STYLE</span><span class="p">,</span>
                         <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
                         <span class="n">max_whitespace_cnt</span><span class="o">=</span><span class="n">max_whitespace_cnt</span><span class="p">,</span>
+                        <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="p">[</span><span class="n">OPEN</span><span class="p">,</span> <span class="n">CLOSE</span><span class="p">,</span> <span class="n">SEP</span><span class="p">]),</span>
                     <span class="p">),</span>
                 <span class="p">]</span>
             <span class="p">),</span>
@@ -3254,7 +3261,7 @@
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=cff073ed"></script>
+</div><script src="../../_static/documentation_options.js?v=16bdfed7"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>

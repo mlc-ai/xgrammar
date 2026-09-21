@@ -7,7 +7,7 @@
         <link rel="prefetch" href="../../_static/img/logo_dark.svg" as="image">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>xgrammar.structural_tag - XGrammar 0.2.8.dev15+gb2b860bf4</title>
+        <title>xgrammar.structural_tag - XGrammar 0.2.8.dev16+g40ef65110</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
@@ -164,7 +164,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">XGrammar 0.2.8.dev15+gb2b860bf4</div></a>
+      <a href="../../index.html"><div class="brand">XGrammar 0.2.8.dev16+g40ef65110</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -189,7 +189,7 @@
     <img class="sidebar-logo only-dark" src="../../_static/img/logo_dark.svg" alt="Dark Logo"/>
   </div>
   
-  <span class="sidebar-brand-text">XGrammar 0.2.8.dev15+gb2b860bf4</span>
+  <span class="sidebar-brand-text">XGrammar 0.2.8.dev16+g40ef65110</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -350,12 +350,14 @@
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
 <span class="w">    </span><span class="sd">"""Max consecutive whitespace characters in this content. None means no limit."""</span>
     <span class="n">excludes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="w">    </span><span class="sd">"""Non-empty substrings forbidden in string values and property names, nested JSON strings</span>
-<span class="sd">    included. Matches the emitted text before JSON/XML unescaping; quotes, punctuation and XML</span>
-<span class="sd">    parameter wrappers are never part of a match. Applies to the strings without ``pattern`` or</span>
-<span class="sd">    ``format``, which are matched as is; ``minLength``/``maxLength`` are dropped with a warning.</span>
-<span class="sd">    XML styles reject exclusions that</span>
-<span class="sd">    start or end with whitespace; ``cohere_xml`` and ``minimax_m3_xml`` reject non-empty lists."""</span></div>
+<span class="w">    </span><span class="sd">"""Non-empty substrings forbidden in the string values without ``pattern``/``format`` and in</span>
+<span class="sd">    property names, nested JSON strings included. Matches the emitted text before JSON/XML</span>
+<span class="sd">    unescaping; quotes, punctuation and XML parameter wrappers are never part of a match. A string</span>
+<span class="sd">    with ``pattern`` or ``format`` is matched by that constraint alone and is not filtered;</span>
+<span class="sd">    ``minLength``/``maxLength`` are dropped with a warning and the string is filtered;</span>
+<span class="sd">    ``const``/``enum`` alternatives containing an excluded substring are removed. XML styles reject</span>
+<span class="sd">    exclusions that start or end with whitespace; ``cohere_xml`` and ``minimax_m3_xml`` reject</span>
+<span class="sd">    non-empty lists."""</span></div>
 
 
 
@@ -1009,7 +1011,7 @@
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=cff073ed"></script>
+</div><script src="../../_static/documentation_options.js?v=16bdfed7"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
