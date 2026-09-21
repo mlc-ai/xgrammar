@@ -64,6 +64,18 @@ def _check_cohere_grammar(schema: dict, instance: str, accepted: bool):
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 
+@pytest.mark.parametrize("schema", [{}, True, {"$defs": {"Any": {}}, "$ref": "#/$defs/Any"}])
+def test_qwen_unconstrained_root_is_a_parameter_list(schema):
+    grammar = Grammar.from_ebnf(_json_schema_to_ebnf(json.dumps(schema), json_format="qwen_xml"))
+    for output in [
+        "",
+        '<parameter=text>raw string</parameter><parameter=data>{"nested": [1, null]}</parameter>',
+    ]:
+        assert _is_grammar_accept_string(grammar, output)
+    for output in ["unwrapped text", '{"text": "raw string"}', "<parameter=text>unclosed"]:
+        assert not _is_grammar_accept_string(grammar, output)
+
+
 test_string_schema_input_str_accepted = (
     ("<parameter=name>Bob</parameter><parameter=age>\t100\n</parameter>", True),
     ("<parameter=name>Bob</parameter>\t\n<parameter=age>\t100\n</parameter>", True),

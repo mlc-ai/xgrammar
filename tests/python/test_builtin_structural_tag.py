@@ -2827,6 +2827,122 @@ def test_deepseek_v4_1_whitespace_limit_and_serialization():
     )
 
 
+# ---------- Test: MiMo ----------
+
+_MIMO_SCHEMA = {
+    "type": "object",
+    "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1}},
+    "required": ["query", "limit"],
+    "additionalProperties": False,
+}
+_MIMO_TOOLS = [
+    {"type": "function", "function": {"name": name, "parameters": _MIMO_SCHEMA}}
+    for name in ("search", "other")
+]
+_MIMO_CALL = (
+    "<tool_call><function=search><parameter=query>北京 &amp;\n</parameter>"
+    "<parameter=limit>2</parameter></function></tool_call>"
+)
+
+
+@pytest.mark.parametrize("reasoning", ["enabled", "disabled", "auto"])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced", "none"])
+def test_mimo_reasoning_and_tool_choice(reasoning, policy):
+    choice = {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    grammar = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag("mimo", tools=_MIMO_TOOLS, reasoning=reasoning, tool_choice=choice)
+    )
+    prefix = "<think>Plan.</think>" if reasoning != "disabled" else ""
+    assert _is_grammar_accept_string(grammar, prefix + _MIMO_CALL) == (policy != "none")
+    assert _is_grammar_accept_string(grammar, prefix + "Answer.") == (policy in ("auto", "none"))
+    assert _is_grammar_accept_string(grammar, prefix + _MIMO_CALL * 2) == (
+        policy in ("auto", "required")
+    )
+    assert _is_grammar_accept_string(
+        grammar, prefix + _MIMO_CALL.replace("function=search", "function=other")
+    ) == (policy in ("auto", "required"))
+    if reasoning == "auto":
+        assert _is_grammar_accept_string(grammar, _MIMO_CALL) == (policy != "none")
+    if reasoning == "enabled":
+        assert not _is_grammar_accept_string(grammar, "Plan.</think>" + _MIMO_CALL)
+        assert not _is_grammar_accept_string(grammar, _MIMO_CALL)
+
+
+@pytest.mark.parametrize("policy", ["auto", "required", "forced"])
+@pytest.mark.parametrize(
+    "output",
+    [
+        _MIMO_CALL.replace("function=search", "function=unknown"),
+        _MIMO_CALL[len("<tool_call>") :],
+        _MIMO_CALL.replace("<parameter=limit>2</parameter>", ""),
+        _MIMO_CALL.replace("<parameter=limit>2", "<parameter=limit>wrong"),
+        _MIMO_CALL.replace("<parameter=limit>2", "<parameter=limit>0"),
+        _MIMO_CALL.replace("<parameter=limit>2", "<parameter=unknown>2"),
+        _MIMO_CALL.replace("</function>", "<parameter=limit>3</parameter></function>"),
+        _MIMO_CALL.replace("</tool_call>", ""),
+        "</tool_call>",
+    ],
+)
+def test_mimo_rejects_invalid_calls(policy, output):
+    choice = {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    tag = get_model_structural_tag("mimo", tools=_MIMO_TOOLS, reasoning=False, tool_choice=choice)
+    check_stag_with_instance(tag, output, False)
+
+
+@pytest.mark.parametrize(
+    "parameters", [None, {}, {"type": "object", "properties": {}, "additionalProperties": False}]
+)
+def test_mimo_empty_arguments(parameters):
+    tag = get_model_structural_tag(
+        "mimo",
+        tools=[{"type": "function", "function": {"name": "run", "parameters": parameters}}],
+        reasoning=False,
+        tool_choice="required",
+    )
+    check_stag_with_instance(tag, "<tool_call><function=run></function></tool_call>", True)
+
+
+@pytest.mark.parametrize(
+    "function",
+    [
+        {"name": "search"},
+        {"name": "search", "parameters": {}},
+        {"name": "search", "parameters": _MIMO_SCHEMA, "strict": False},
+    ],
+)
+def test_mimo_unconstrained_parameters(function):
+    tag = get_model_structural_tag(
+        "mimo",
+        tools=[{"type": "function", "function": function}],
+        reasoning=False,
+        tool_choice="required",
+    )
+    check_stag_with_instance(
+        tag,
+        "<tool_call><function=search><parameter=extra>free text</parameter></function></tool_call>",
+        True,
+    )
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+def test_mimo_parameter_order_and_serialization(any_order):
+    tag = get_model_structural_tag(
+        "mimo",
+        tools=_MIMO_TOOLS,
+        reasoning=False,
+        tool_choice="required",
+        any_order=any_order,
+        max_whitespace_cnt=2,
+    )
+    grammar = xgr.Grammar.from_structural_tag(tag.model_dump_json())
+    reversed_call = "<tool_call><function=search><parameter=limit>2</parameter><parameter=query>北京</parameter></function></tool_call>"
+    assert _is_grammar_accept_string(grammar, reversed_call) == any_order
+    assert _is_grammar_accept_string(grammar, _MIMO_CALL)
+    assert not _is_grammar_accept_string(
+        grammar, _MIMO_CALL.replace("<parameter=limit>", "   <parameter=limit>")
+    )
+
+
 # ---------- Test: parallel_tool_calls ----------
 
 _PARALLEL_TOOLS = make_tools(["t1", "t2"])
@@ -2849,6 +2965,13 @@ _KIMI_K3_CALL = (
 
 # (model, output with one tool call, the same output with two tool calls)
 _parallel_tool_calls_cases = [
+    pytest.param(
+        "mimo",
+        "<tool_call><function=t1><parameter=q>v</parameter></function></tool_call>",
+        "<tool_call><function=t1><parameter=q>v</parameter></function></tool_call>"
+        "<tool_call><function=t2><parameter=q>v</parameter></function></tool_call>",
+        id="mimo",
+    ),
     pytest.param(
         "llama",
         '{"name": "t1", "parameters": {"q": "v"}}',

@@ -23,7 +23,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 ### Parameters
 
-- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"kimi_k3"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"minimax_m3"`, `"glm_4_7"`, `"deepseek_v4"`, `"deepseek_v4_1"`, `"cohere"`, `"exaone"`.
+- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"kimi_k3"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"minimax_m3"`, `"glm_4_7"`, `"deepseek_v4"`, `"deepseek_v4_1"`, `"mimo"`, `"cohere"`, `"exaone"`.
 - **tools** (`List[ToolParam | dict]`, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:
   - **Function tools** use the OpenAI Chat Completions shape:
     ```json
@@ -233,6 +233,7 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `"glm_4_7"` | GLM-5, GLM-4.7 |
 | `"deepseek_v4"` | DeepSeek-V4 |
 | `"deepseek_v4_1"` | DeepSeek-V4.1-Flash |
+| `"mimo"` | MiMo-V2.6-Pro-RL, MiMo-V2.6-Flash-RL |
 | `"cohere"` | Cohere Command models using XML tool calls |
 | `"exaone"` | EXAONE-4.0-32B, EXAONE-4.0-1.2B |
 
@@ -245,3 +246,29 @@ Use `register_model_structural_tag` to add support for a new model format. See t
 * For function and tool choice schema definitions, see [OpenAI Tool Call Schema API Reference](../api/python/openai_tool_call_schema).
 * For builtin structural tag API reference, see [Builtin Structural Tag API Reference](../api/python/builtin_structural_tag).
 * For advanced usage, see [Advanced Topics of the Structural Tag](advanced_usage).
+
+### MiMo-V2.6
+
+Use `model="mimo"` for both [MiMo-V2.6-Pro-RL](https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Pro-RL)
+and [MiMo-V2.6-Flash-RL](https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL).
+Their official chat templates emit compact Qwen XML parameters:
+
+```text
+<tool_call><function=search><parameter=query>北京</parameter><parameter=limit>2</parameter></function></tool_call>
+```
+
+Strings are emitted verbatim; other values use JSON. Unlike Qwen3-Coder,
+MiMo requires no newlines between the wrapper tags. Tool schemas are enforced
+with the existing `qwen_xml` converter, including nested JSON values.
+
+With `enable_thinking=True`, the official generation prompt ends at
+`<|im_start|>assistant\n`; use `reasoning="enabled"` to generate the complete
+`<think>...</think>` block. With `enable_thinking=False`, the template puts
+`<think></think>` in the prompt; use `reasoning="disabled"`. Serving engines
+that manage reasoning separately should also use `reasoning="disabled"`.
+
+Both checkpoints use a Qwen2 byte-level BPE tokenizer with EOS `<|im_end|>`
+(token 151645). `<tool_call>`, `</tool_call>`, `<think>`, and `</think>` each
+occupy one token; function and parameter delimiters span multiple tokens.
+Use the model's padded `vocab_size=152576` when constructing `TokenizerInfo`
+to match its logits dimension.
