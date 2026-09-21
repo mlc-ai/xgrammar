@@ -18,6 +18,7 @@
 #include <stack>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -2163,16 +2164,57 @@ class RegularGrammarFSMBuilder {
 
 class RepetitionRangeExpanderImpl : public GrammarMutator {
  public:
-  using GrammarMutator::Apply;
   using GrammarMutator::GrammarMutator;
 
+  Grammar Apply(const Grammar& grammar) final {
+    // An excluding rule whose whole body is one repetition is expanded in place, so that the rule
+    // itself is the expansion. Wrapping the expansion in a separate rule would leave the
+    // expansion without the lookahead assertion the analyzer derives from the excluding rule's
+    // context, which makes the masks of a bounded string an order of magnitude slower.
+    in_place_body_rules_.clear();
+    for (int32_t rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
+      const auto& rule = grammar->GetRule(rule_id);
+      if (rule.excludes.empty()) {
+        continue;
+      }
+      const auto& body = grammar->GetGrammarExpr(rule.body_expr_id);
+      if (body.type != GrammarExprType::kChoices || body.size() != 1) {
+        continue;
+      }
+      const auto& sequence = grammar->GetGrammarExpr(body[0]);
+      if (sequence.type != GrammarExprType::kSequence || sequence.size() != 1) {
+        continue;
+      }
+      if (grammar->GetGrammarExpr(sequence[0]).type == GrammarExprType::kRepeat) {
+        in_place_body_rules_[rule.body_expr_id] = rule_id;
+      }
+    }
+    return GrammarMutator::Apply(grammar);
+  }
+
  private:
+  using GrammarMutator::VisitExpr;
+
+  int32_t VisitExpr(int32_t old_grammar_expr_id) final {
+    auto it = in_place_body_rules_.find(old_grammar_expr_id);
+    if (it == in_place_body_rules_.end()) {
+      return GrammarMutator::VisitExpr(old_grammar_expr_id);
+    }
+    const auto& body = base_grammar_->GetGrammarExpr(old_grammar_expr_id);
+    const auto& sequence = base_grammar_->GetGrammarExpr(body[0]);
+    const auto& repeat = base_grammar_->GetGrammarExpr(sequence[0]);
+    return HandleRepetitionRange(cur_rule_name_, repeat[0], repeat[1], repeat[2], it->second);
+  }
+
   int32_t VisitRepeat(const GrammarExpr& grammar_expr) final {
     int32_t ref_rule_id = grammar_expr[0];
     int64_t lower = grammar_expr[1];
     int64_t upper = grammar_expr[2];
     return HandleRepetitionRange(cur_rule_name_, ref_rule_id, lower, upper);
   }
+
+  /*! \brief Body expr id -> rule id of the rules whose body is expanded in place. */
+  std::unordered_map<int32_t, int32_t> in_place_body_rules_;
 
   /*!
    * \brief Handle repetition range by unzipping into explicit sequence/choice (for small bounds).
@@ -2193,10 +2235,17 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
    * \param rule_id The rule to repeat.
    * \param lower Minimum count (inclusive).
    * \param upper Maximum count (inclusive), or -1 for unbounded.
+   * \param in_place_rule_id When non-negative, the rule whose whole body is this repetition: the
+   * expansion's body is returned (and memoized as a reference to that rule) instead of a
+   * reference to a new rule.
    * \return grammar_expr_id of the repetition result.
    */
   int32_t HandleRepetitionRange(
-      const std::string& cur_rule_name, int32_t rule_id, int64_t lower, int64_t upper
+      const std::string& cur_rule_name,
+      int32_t rule_id,
+      int64_t lower,
+      int64_t upper,
+      int32_t in_place_rule_id = -1
   );
 
   /*!
@@ -2296,7 +2345,11 @@ int32_t RepetitionRangeExpanderImpl::LegacyHandleRepetitionRange(
 }
 
 int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
-    const std::string& cur_rule_name, int32_t rule_id, int64_t lower, int64_t upper
+    const std::string& cur_rule_name,
+    int32_t rule_id,
+    int64_t lower,
+    int64_t upper,
+    int32_t in_place_rule_id
 ) {
   // Check if the referred rule is only one single element. If so, we can directly use the element
   // for further optimization.
@@ -2329,10 +2382,21 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   cache_key.push_back(upper);
   auto it = repetition_cache_.find(cache_key);
   if (it != repetition_cache_.end()) {
+    if (in_place_rule_id >= 0) {
+      return builder_->AddChoices({builder_->AddSequence({it->second})});
+    }
     return it->second;
   }
 
   int32_t result = ExpandRepetitionRange(cur_rule_name, grammar_expr_id, lower, upper);
+  if (in_place_rule_id >= 0) {
+    // Take over the body of the rule the expansion created; that rule becomes unreferenced and
+    // is removed by the dead code elimination that follows.
+    const auto result_ref = builder_->GetGrammarExpr(result);
+    XGRAMMAR_DCHECK(result_ref.type == GrammarExprType::kRuleRef);
+    repetition_cache_.emplace(std::move(cache_key), builder_->AddRuleRef(in_place_rule_id));
+    return builder_->GetRule(result_ref[0]).body_expr_id;
+  }
   repetition_cache_.emplace(std::move(cache_key), result);
   return result;
 }
