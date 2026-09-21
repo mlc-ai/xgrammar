@@ -1931,15 +1931,7 @@ void JSONSchemaConverter::AddHelperRules() {
   builder_.UpdateRuleBody(kBasicStringSub, string_sub_body);
   if (!excludes_.empty()) {
     builder_.UpdateRuleBody(
-        kBasicStringSub,
-        ExcludingString(
-            R"(([^"\\\x00-\x1f]|\\(["\\/bfnrt]|u[0-9a-fA-F]{4}))*)",
-            false,
-            kBasicStringSub,
-            {},
-            false,
-            true
-        )
+        kBasicStringSub, ExcludingString(kJSONStringBodyRegex, kBasicStringSub, true)
     );
   }
   int32_t closing_context =
@@ -2153,14 +2145,7 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
     }
     return Sequence(
         {ByteString("\""),
-         ExcludingString(
-             R"(([^"\\\x00-\x1f]|\\(["\\/bfnrt]|u[0-9a-fA-F]{4}))*)",
-             false,
-             rule_name + "_addl_key",
-             keys,
-             false,
-             true
-         )}
+         ExcludingString(kJSONStringBodyRegex, rule_name + "_addl_key", true, keys)}
     );
   }
 
@@ -2308,6 +2293,14 @@ int32_t JSONSchemaConverter::RegexExpression(
 
 // ==================== Generate Methods ====================
 
+void JSONSchemaConverter::WarnDroppedLengthConstraints(
+    const StringSpec& spec, const std::string& rule_name
+) const {
+  XGRAMMAR_LOG(WARNING) << "Ignoring the length constraints of string " << rule_name
+                        << " (minLength=" << spec.min_length << ", maxLength=" << spec.max_length
+                        << "): they are not applied together with JSONSchemaFormat.excludes";
+}
+
 bool JSONSchemaConverter::IsAllowedString(const std::string& text) const {
   return std::none_of(excludes_.begin(), excludes_.end(), [&](const auto& excluded) {
     return text.find(excluded) != std::string::npos;
@@ -2334,41 +2327,23 @@ bool JSONSchemaConverter::IsAllowedLiteral(const picojson::value& value, bool ra
   return true;
 }
 
+bool JSONSchemaConverter::IsAllowedJSONLiteral(const std::string& json_value, bool raw_string)
+    const {
+  if (excludes_.empty()) return true;
+  picojson::value value;
+  XGRAMMAR_CHECK(picojson::parse(value, json_value).empty());
+  return IsAllowedLiteral(value, raw_string);
+}
+
 int32_t JSONSchemaConverter::ExcludingString(
     const std::string& regex,
-    bool json_string,
     const std::string& rule_name,
-    const std::vector<std::string>& excluded_keys,
-    bool force_cfg_expansion,
-    bool close_json_string
+    bool close_json_string,
+    const std::vector<std::string>& excluded_keys
 ) {
-  // Match RegexExpression's frontend choice exactly. In particular, formats and
-  // Unicode patterns must retain the existing RegexToEBNF semantics before filtering.
-  bool can_use_fsm = !force_cfg_expansion;
-  if (json_string) {
-    can_use_fsm =
-        can_use_fsm && std::all_of(regex.begin(), regex.end(), [](unsigned char character) {
-          return character >= 0x20 && character <= 0x7e;
-        });
-  }
-  auto parsed = [&]() -> Result<FSMWithStartEnd> {
-    if (can_use_fsm) {
-      auto candidate = GrammarFSMBuilder::Regex(regex, json_string);
-      if (candidate.IsOk()) {
-        std::unordered_set<int> reachable_states;
-        candidate.ValueRef().GetReachableStates(&reachable_states);
-        if (std::any_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
-              return candidate.ValueRef().IsEndState(state);
-            })) {
-          return candidate;
-        }
-      }
-    }
-    return GrammarFSMBuilder::FromGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
-  }();
-  XGRAMMAR_CHECK(parsed.IsOk()
-  ) << "Cannot compile string constraints with JSONSchemaFormat.excludes: "
-    << std::move(parsed).UnwrapErr().what();
+  auto parsed = GrammarFSMBuilder::Regex(regex, false);
+  XGRAMMAR_CHECK(parsed.IsOk()) << "Cannot build the FSM of " << regex << ": "
+                                << std::move(parsed).UnwrapErr().what();
   auto exclusion = GrammarFSMBuilder::TagDispatch({{}, false, excludes_});
   XGRAMMAR_CHECK(exclusion.has_value()) << "Invalid JSONSchemaFormat.excludes";
   auto intersected = FSMWithStartEnd::Intersect(std::move(parsed).Unwrap(), *exclusion);
@@ -2404,7 +2379,7 @@ int32_t JSONSchemaConverter::ExcludingString(
     }
   }
   if (!productive[fsm.GetStart()]) {
-    return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
+    return Unsatisfiable();
   }
 
   // Collapse UTF-8 paths into codepoint transitions before emitting character classes.
@@ -2543,7 +2518,7 @@ int32_t JSONSchemaConverter::ExcludingString(
       }
     }
     if (choices.empty()) {
-      choices.push_back(builder_.AddCharacterClass({{0, 0x10ffff}}, true));
+      choices.push_back(Unsatisfiable());
     }
     builder_.UpdateRuleBody(rules[state], Choice(choices));
   }
@@ -2681,11 +2656,6 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   if (spec.format.has_value()) {
     auto regex = JSONFormatToRegexPattern(*spec.format);
     if (regex.has_value()) {
-      if (!excludes_.empty()) {
-        return Sequence(
-            {ByteString("\""), ExcludingString(*regex, false, rule_name, {}, true, true)}
-        );
-      }
       // The built-in format regexes use constructs that the FSM regex engine does not fully
       // support yet (e.g. quoted email local parts), so they keep the CFG expansion.
       return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
@@ -2693,11 +2663,6 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   }
   // Check for pattern
   if (spec.pattern.has_value()) {
-    if (!excludes_.empty()) {
-      return Sequence(
-          {ByteString("\""), ExcludingString(*spec.pattern, true, rule_name, {}, false, true)}
-      );
-    }
     return Sequence(
         {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
     );
@@ -2709,14 +2674,13 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   // are the schema's own contract for the string.
   if (spec.min_length != 0 || spec.max_length != -1) {
     if (!excludes_.empty()) {
-      auto regex = std::string(R"([^"\\\r\n]{)") + std::to_string(spec.min_length) + "," +
-                   (spec.max_length == -1 ? "" : std::to_string(spec.max_length)) + "}";
-      return Sequence({ByteString("\""), ExcludingString(regex, false, rule_name, {}, true, true)});
+      WarnDroppedLengthConstraints(spec, rule_name);
+    } else {
+      int32_t character =
+          builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
+      int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
+      return Sequence({ByteString("\""), body, ByteString("\"")});
     }
-    int32_t character =
-        builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
-    int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
-    return Sequence({ByteString("\""), body, ByteString("\"")});
   }
   // Default string
   return Sequence({ByteString("\""), RuleRef(kBasicStringSub)});
@@ -2831,7 +2795,7 @@ int32_t JSONSchemaConverter::FormatPropertyKey(
     const std::string& key, const SchemaSpecPtr& schema
 ) {
   if (!IsAllowedLiteral(picojson::value(key))) {
-    return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
+    return Unsatisfiable();
   }
   return ByteString(picojson::value(key).serialize());
 }
@@ -3443,12 +3407,8 @@ int32_t JSONSchemaConverter::GenerateAny(const AnySpec& spec, const std::string&
 }
 
 int32_t JSONSchemaConverter::GenerateConst(const ConstSpec& spec, const std::string& rule_name) {
-  if (!excludes_.empty()) {
-    picojson::value value;
-    XGRAMMAR_CHECK(picojson::parse(value, spec.json_value).empty());
-    if (!IsAllowedLiteral(value)) {
-      return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
-    }
+  if (!IsAllowedJSONLiteral(spec.json_value)) {
+    return Unsatisfiable();
   }
   return ByteString(spec.json_value);
 }
@@ -3459,15 +3419,12 @@ int32_t JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::strin
   std::vector<int32_t> values;
   values.reserve(spec.json_values.size());
   for (const auto& value : spec.json_values) {
-    if (!excludes_.empty()) {
-      picojson::value parsed;
-      XGRAMMAR_CHECK(picojson::parse(parsed, value).empty());
-      if (!IsAllowedLiteral(parsed)) continue;
+    if (IsAllowedJSONLiteral(value)) {
+      values.push_back(ByteString(value));
     }
-    values.push_back(ByteString(value));
   }
   if (values.empty()) {
-    return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
+    return Unsatisfiable();
   }
   return Choice(values);
 }
@@ -3858,7 +3815,7 @@ void XMLToolCallingConverter::AddBasicRules() {
   builder_.UpdateRuleBody(
       kXMLVariableName,
       !excludes_.empty()
-          ? ExcludingString("[a-zA-Z_][a-zA-Z0-9_]*", false, kXMLVariableName)
+          ? ExcludingString("[a-zA-Z_][a-zA-Z0-9_]*", kXMLVariableName, false)
           : Sequence(
                 {builder_.AddCharacterClass({{'a', 'z'}, {'A', 'Z'}, {'_', '_'}}),
                  builder_.AddCharacterClassStar({{'a', 'z'}, {'A', 'Z'}, {'0', '9'}, {'_', '_'}})}
@@ -3903,51 +3860,28 @@ int32_t XMLToolCallingConverter::GenerateString(
     if (spec.format.has_value()) {
       auto regex = JSONFormatToRegexPattern(*spec.format);
       if (regex.has_value()) {
-        if (!excludes_.empty()) {
-          // XML formats use the CFG regex converter even without excludes. Apply the filter
-          // to that same language instead of switching format validation to RegexFSM.
-          return ExcludingString(
-              *regex,
-              false,
-              rule_name,
-              {},
-              /*force_cfg_expansion=*/true,
-              /*close_json_string=*/false
-          );
-        }
         return RegexExpression(*regex, false, true);
       }
     }
     if (spec.pattern.has_value()) {
-      if (!excludes_.empty()) {
-        return ExcludingString(
-            *spec.pattern,
-            false,
-            rule_name,
-            {},
-            /*force_cfg_expansion=*/true,
-            /*close_json_string=*/false
-        );
-      }
       return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
     }
-    if (!excludes_.empty()) {
-      return ExcludingString(
-          "[\\s\\S]{" + std::to_string(spec.min_length) + "," +
-              (spec.max_length == -1 ? "" : std::to_string(spec.max_length)) + "}",
-          false,
-          rule_name,
-          {},
-          /*force_cfg_expansion=*/true,
-          /*close_json_string=*/false
+    const bool bounded = spec.min_length != 0 || spec.max_length != -1;
+    // Without exclusions, a length bound or an unrecognized format keeps the plain repetition.
+    if (excludes_.empty() && (bounded || spec.format.has_value())) {
+      return Repeat(
+          rule_name + "_characters",
+          builder_.AddCharacterClass({{0, 0x10ffff}}),
+          spec.min_length,
+          spec.max_length
       );
     }
-    return Repeat(
-        rule_name + "_characters",
-        builder_.AddCharacterClass({{0, 0x10ffff}}),
-        spec.min_length,
-        spec.max_length
-    );
+    // With exclusions the raw string keeps only the exclusions: length constraints are dropped
+    // (see JSONSchemaConverter::GenerateString) and an unrecognized format is unconstrained.
+    if (bounded) {
+      WarnDroppedLengthConstraints(spec, rule_name);
+    }
+    return RuleRef(kXMLString);
   }
   return JSONSchemaConverter::GenerateString(spec, rule_name);
 }
@@ -3999,12 +3933,8 @@ int32_t XMLToolCallingConverter::GenerateConst(
     }
   }
   if (nested_object_level_ <= 1) {
-    if (!excludes_.empty()) {
-      picojson::value value;
-      XGRAMMAR_CHECK(picojson::parse(value, spec.json_value).empty());
-      if (!IsAllowedLiteral(value, true)) {
-        return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
-      }
+    if (!IsAllowedJSONLiteral(spec.json_value, /*raw_string=*/true)) {
+      return Unsatisfiable();
     }
     return ByteString(XMLValue(spec.json_value));
   }
@@ -4036,7 +3966,7 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
       pinned_type = GetRenderedJSONType(schema);
     }
     if (!IsAllowedString(EscapeAttrValue(key))) {
-      return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
+      return Unsatisfiable();
     }
     return Sequence(
         {ByteString(xml_wrapper_.key_wrapper_prefix + EscapeAttrValue(key)),
@@ -4054,9 +3984,9 @@ int32_t XMLToolCallingConverter::FormatProperty(
     const SchemaSpecPtr& schema
 ) {
   if (nested_object_level_ <= 1) {
-    if (json_format_ == JSONFormat::kDeepSeekV41XML) {
+    if (json_format_ == JSONFormat::kDeepSeekXML || json_format_ == JSONFormat::kDeepSeekV41XML) {
       if (!IsAllowedString(key)) {
-        return builder_.AddCharacterClass({{0, 0x10ffff}}, true);
+        return Unsatisfiable();
       }
       return Sequence(
           {ByteString(xml_wrapper_.key_wrapper_prefix + key),

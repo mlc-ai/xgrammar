@@ -65,11 +65,12 @@ class JSONSchemaFormat(BaseModel):
     max_whitespace_cnt: Optional[int] = None
     """Max consecutive whitespace characters in this content. None means no limit."""
     excludes: List[str] = []
-    """Non-empty substrings forbidden in string values and property names, including nested
-    JSON strings. Matches the emitted text, before JSON/XML unescaping. XML parameter wrappers
-    are not affected. An omitted or empty list applies no substring filter.
-    XML styles reject exclusions starting or ending with space, tab, CR, or LF.
-    Non-empty exclusions are not supported for ``cohere_xml`` or ``minimax_m3_xml``."""
+    """Non-empty substrings forbidden in string values and property names, nested JSON strings
+    included. Matches the emitted text before JSON/XML unescaping; quotes, punctuation and XML
+    parameter wrappers are never part of a match. Applies to the strings without ``pattern`` or
+    ``format``, which are matched as is; ``minLength``/``maxLength`` are dropped with a warning.
+    XML styles reject exclusions that
+    start or end with whitespace; ``cohere_xml`` and ``minimax_m3_xml`` reject non-empty lists."""
 
 
 class AnyTextFormat(BaseModel):
