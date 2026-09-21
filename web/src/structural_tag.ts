@@ -21,6 +21,7 @@ export interface JSONSchemaFormat {
     | "deepseek_v4_1_xml"
     | "glm_xml"
     | "cohere_xml";
+  excludes?: string[];
 }
 
 export interface QwenXMLParameterFormat {

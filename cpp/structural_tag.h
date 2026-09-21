@@ -91,16 +91,20 @@ struct JSONSchemaFormat {
   bool any_order = false;
   // Per-tag cap on consecutive whitespace characters in the JSON-schema content.
   std::optional<int> max_whitespace_cnt = std::nullopt;
+  // Substrings forbidden within string values and property names.
+  std::vector<std::string> excludes;
   JSONSchemaFormat(
       std::string json_schema,
       std::string style = "json",
       bool any_order = false,
-      std::optional<int> max_whitespace_cnt = std::nullopt
+      std::optional<int> max_whitespace_cnt = std::nullopt,
+      std::vector<std::string> excludes = {}
   )
       : json_schema(std::move(json_schema)),
         style(std::move(style)),
         any_order(any_order),
-        max_whitespace_cnt(max_whitespace_cnt) {}
+        max_whitespace_cnt(max_whitespace_cnt),
+        excludes(std::move(excludes)) {}
   picojson::value ToJSON() const;
 };
 
