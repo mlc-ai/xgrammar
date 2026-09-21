@@ -18,6 +18,7 @@
 #include <stack>
 #include <string>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
 
 #include "compiled_grammar_impl.h"
@@ -4011,8 +4012,13 @@ static void CheckExcludingRegions(const Grammar& grammar) {
           << "Rule " << rule.name << " is reachable from rule " << root_rule.name
           << " but has different excludes; nested exclusions are not supported";
       XGRAMMAR_CHECK(impl->per_rule_fsms[rule_id].has_value());
-      const auto& fsm = impl->per_rule_fsms[rule_id]->GetFsm().GetFsm();
-      for (int state = 0; state < fsm.NumStates(); ++state) {
+      // The per-rule FSMs share one state space (complete_fsm), so only visit the states this
+      // rule can reach from its start.
+      const auto& rule_fsm = impl->per_rule_fsms[rule_id]->GetFsm();
+      const auto& fsm = rule_fsm.GetFsm();
+      std::unordered_set<int> reachable_states;
+      rule_fsm.GetReachableStates(&reachable_states);
+      for (int state : reachable_states) {
         for (const auto& edge : fsm.GetEdges(state)) {
           XGRAMMAR_CHECK(!edge.IsToken() && !edge.IsExcludeToken())
               << "Rule " << rule.name << " uses token edges inside the excluding rule "
