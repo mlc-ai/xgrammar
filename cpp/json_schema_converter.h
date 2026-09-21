@@ -21,6 +21,7 @@
 #include <variant>
 #include <vector>
 
+#include "fsm.h"
 #include "grammar_builder.h"
 #include "support/utils.h"
 
@@ -400,6 +401,8 @@ class JSONSchemaConverter {
   std::string GetWhitespacePattern() const;
 
   int32_t Empty();
+  /*! \brief An expression that matches nothing, for alternatives ruled out by excludes_. */
+  int32_t Unsatisfiable();
   int32_t ByteString(const std::string& value);
   int32_t TagDispatch(bool loop_after_dispatch, std::vector<std::string> excludes);
   int32_t RuleRef(int32_t rule_id);
@@ -419,16 +422,42 @@ class JSONSchemaConverter {
   int32_t RegexExpression(
       const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
   );
+  /*!
+   * \brief The FSM of a regex when RegexExpression would match it with the regex FSM builder:
+   * not forced to the CFG expansion, ASCII when it is a JSON string, and buildable with a
+   * non-empty language.
+   */
+  std::optional<FSMWithStartEnd> TryRegexFSM(
+      const std::string& regex, bool json_string, bool force_cfg_expansion
+  );
+  /*!
+   * \brief A string matching the regex, filtered by excludes_ when there are any. With
+   * json_quotes the result includes the surrounding JSON quotes.
+   */
+  int32_t RegexString(
+      const std::string& regex,
+      bool json_string,
+      bool force_cfg_expansion,
+      const std::string& rule_name,
+      bool json_quotes
+  );
+  /*!
+   * \brief Rules matching the regex minus every string containing one of excludes_ (and minus
+   * excluded_keys as whole strings). With close_json_string the closing quote is appended after
+   * the filtering, so it is never part of an exclusion.
+   */
   int32_t ExcludingString(
       const std::string& regex,
       bool json_string,
+      bool force_cfg_expansion,
       const std::string& rule_name,
-      const std::vector<std::string>& excluded_keys = {},
-      bool force_cfg_expansion = false,
-      bool close_json_string = false
+      bool close_json_string,
+      const std::vector<std::string>& excluded_keys = {}
   );
   bool IsAllowedString(const std::string& text) const;
   bool IsAllowedLiteral(const picojson::value& value, bool raw_string = false) const;
+  /*! \brief Whether the JSON literal contains none of excludes_ (see IsAllowedLiteral). */
+  bool IsAllowedJSONLiteral(const std::string& json_value, bool raw_string = false) const;
   /*! \brief Log that the string's minLength/maxLength are ignored because excludes_ is set. */
   void WarnDroppedLengthConstraints(const StringSpec& spec, const std::string& rule_name) const;
 
@@ -516,6 +545,7 @@ class JSONSchemaConverter {
 
   // Reused grammar expression ids
   std::optional<int32_t> empty_expr_id_;
+  std::optional<int32_t> unsatisfiable_expr_id_;
   std::unordered_map<std::string, int32_t> byte_string_expr_ids_;
   std::unordered_map<int32_t, int32_t> rule_ref_expr_ids_;
   std::optional<int32_t> whitespace_expr_id_;

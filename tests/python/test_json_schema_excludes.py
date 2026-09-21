@@ -87,11 +87,8 @@ def test_excludes_drop_length_constraints(style, schema, capfd):
     unbounded = leaf_grammar(schema, style, excludes=["bc", "cb"])
     warning = capfd.readouterr().err
     assert "Ignoring" in warning and "JSONSchemaFormat.excludes" in warning
-    for keyword in ("minLength", "maxLength"):
-        if keyword in schema:
-            assert f"{keyword}={schema[keyword]}" in warning
-        else:
-            assert keyword not in warning
+    assert f"minLength={schema.get('minLength', 0)}" in warning
+    assert f"maxLength={schema.get('maxLength', -1)}" in warning
     plain = leaf_grammar({"type": "string"}, style, excludes=["bc", "cb"])
     # Same rules as the unbounded string (up to the reference to the shared string rule), not
     # one rule per position and exclusion state.
@@ -224,6 +221,20 @@ def test_excludes_unicode_boundaries_and_grammar_roundtrip():
             assert _is_grammar_accept_string(restored, string_instance(value, "json"))
         for value in ("坏", "x<|open|>y"):
             assert not _is_grammar_accept_string(restored, string_instance(value, "json"))
+
+
+@pytest.mark.parametrize("style", ["json", "kimi_k3_xml"])
+def test_unrecognized_format_keeps_exclusions(style):
+    # A format without a built-in regex leaves the string unconstrained; the exclusions still
+    # apply, and without exclusions the grammar is the one main produces.
+    schema = {"type": "string", "format": "password"}
+    grammar = leaf_grammar(schema, style, excludes=["BAD"])
+    assert _is_grammar_accept_string(grammar, string_instance("safe", style))
+    assert not _is_grammar_accept_string(grammar, string_instance("xBADy", style))
+    plain = leaf_grammar(schema, style, excludes=[])
+    assert _is_grammar_accept_string(plain, string_instance("xBADy", style))
+    if style == "kimi_k3_xml":
+        assert "root_prop_0 ::= (([\\0-\\U0010ffff]*))" in str(plain)
 
 
 @pytest.mark.parametrize(
