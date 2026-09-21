@@ -280,6 +280,24 @@ completion for each occurrence. This is exact when a following delimiter cannot 
 by the captured body. Use `get_captures(deduplicate=False)` to retrieve every raw completion
 event.
 
+### Excluded Substrings
+
+The `excludes` option forbids substrings in the text matched by a rule:
+
+```text
+root ::= "<" body ">"
+body[excludes=("<|open|>", "<|close|>")] ::= [^>]*
+```
+
+The exclusion covers everything an occurrence of the rule matches, including the text matched by
+the rules it references. A derivation that produces one of the listed substrings is dropped, in
+token masks as well as in `accept_string`. The strings are compared byte by byte with the emitted
+text, so an escape sequence is matched as written, not as the character it denotes. A substring
+that starts inside the rule and ends after it is allowed. Rules reached from an excluding rule
+must carry the same `excludes` or none; a rule inside the region continues the enclosing
+exclusion. The strings may use the same escape sequences as string literals and must not be
+empty.
+
 ### Committed-Shortest Matching
 
 The `lazy` option makes a rule commit to its earliest possible completion:
