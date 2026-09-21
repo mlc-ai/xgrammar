@@ -21,7 +21,6 @@
 #include <variant>
 #include <vector>
 
-#include "fsm.h"
 #include "grammar_builder.h"
 #include "support/utils.h"
 
@@ -423,33 +422,13 @@ class JSONSchemaConverter {
       const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
   );
   /*!
-   * \brief The FSM of a regex when RegexExpression would match it with the regex FSM builder:
-   * not forced to the CFG expansion, ASCII when it is a JSON string, and buildable with a
-   * non-empty language.
-   */
-  std::optional<FSMWithStartEnd> TryRegexFSM(
-      const std::string& regex, bool json_string, bool force_cfg_expansion
-  );
-  /*!
-   * \brief A string matching the regex, filtered by excludes_ when there are any. With
-   * json_quotes the result includes the surrounding JSON quotes.
-   */
-  int32_t RegexString(
-      const std::string& regex,
-      bool json_string,
-      bool force_cfg_expansion,
-      const std::string& rule_name,
-      bool json_quotes
-  );
-  /*!
-   * \brief Rules matching the regex minus every string containing one of excludes_ (and minus
-   * excluded_keys as whole strings). With close_json_string the closing quote is appended after
-   * the filtering, so it is never part of an exclusion.
+   * \brief Rules matching the regex (one of the converter's own ASCII string bodies) minus
+   * every string containing one of excludes_, and minus excluded_keys as whole strings. With
+   * close_json_string the closing quote is appended after the filtering, so it is never part of
+   * an exclusion.
    */
   int32_t ExcludingString(
       const std::string& regex,
-      bool json_string,
-      bool force_cfg_expansion,
       const std::string& rule_name,
       bool close_json_string,
       const std::vector<std::string>& excluded_keys = {}

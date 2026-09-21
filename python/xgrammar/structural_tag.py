@@ -67,8 +67,9 @@ class JSONSchemaFormat(BaseModel):
     excludes: List[str] = []
     """Non-empty substrings forbidden in string values and property names, nested JSON strings
     included. Matches the emitted text before JSON/XML unescaping; quotes, punctuation and XML
-    parameter wrappers are never part of a match. ``pattern`` and ``format`` still apply,
-    ``minLength``/``maxLength`` are dropped with a warning. XML styles reject exclusions that
+    parameter wrappers are never part of a match. Applies to the strings without ``pattern`` or
+    ``format``, which are matched as is; ``minLength``/``maxLength`` are dropped with a warning.
+    XML styles reject exclusions that
     start or end with whitespace; ``cohere_xml`` and ``minimax_m3_xml`` reject non-empty lists."""
 
 

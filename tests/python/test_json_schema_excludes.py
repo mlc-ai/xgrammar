@@ -41,7 +41,6 @@ def string_instance(value, style):
     "schema",
     [
         {"type": "string"},
-        {"type": "string", "pattern": r"^[\s\S]*$"},
         {"type": "string", "minLength": 1, "maxLength": 16},
         {"enum": ["safe", "你好🦋", *(f"x{control}y" for control in CONTROLS)]},
     ],
@@ -56,17 +55,20 @@ def test_string_excludes(style, schema):
 
 @pytest.mark.parametrize("style", ["json", "kimi_k3_xml"])
 @pytest.mark.parametrize(
-    "schema,good,bad",
+    "schema,accepted,rejected",
     [
-        ({"type": "string", "pattern": "^a[abc]*z$"}, "aabz", ["acbz", "aab"]),
-        ({"type": "string", "pattern": "^你好[abc]*$"}, "你好aa", ["你好bc", "hello"]),
-        ({"type": "string", "format": "email"}, "aa@example.com", ["bc@example.com", "aa"]),
+        ({"type": "string", "pattern": "^a[abc]*z$"}, ["aabz", "acbz"], ["aab"]),
+        ({"type": "string", "pattern": "^你好[abc]*$"}, ["你好aa", "你好bc"], ["hello"]),
+        ({"type": "string", "format": "email"}, ["aa@example.com", "bc@example.com"], ["aa"]),
     ],
 )
-def test_excludes_preserve_string_constraints(style, schema, good, bad):
+def test_pattern_and_format_strings_are_not_filtered(style, schema, accepted, rejected):
+    # A pattern or format is the schema's own contract for the string: it is matched as is, and
+    # the exclusions do not apply to it.
     grammar = leaf_grammar(schema, style, excludes=["bc", "cb"])
-    assert _is_grammar_accept_string(grammar, string_instance(good, style))
-    for value in bad:
+    for value in accepted:
+        assert _is_grammar_accept_string(grammar, string_instance(value, style))
+    for value in rejected:
         assert not _is_grammar_accept_string(grammar, string_instance(value, style))
 
 
@@ -136,34 +138,51 @@ def test_nested_excludes(style, any_order):
 
 
 @pytest.mark.parametrize(
-    "schema",
+    "schema,filtered",
     [
-        True,
-        {"type": "object", "additionalProperties": True},
-        {"type": "object", "properties": {"": {"type": "integer"}}, "additionalProperties": True},
-        {
-            "type": "object",
-            "patternProperties": {"^[a-z]*$": {"type": "integer"}},
-            "additionalProperties": False,
-        },
-        {
-            "type": "object",
-            "properties": {"fixed": {"type": "integer"}},
-            "patternProperties": {"^[a-z]*$": {"type": "integer"}},
-            "additionalProperties": False,
-        },
-        {
-            "type": "object",
-            "propertyNames": {"pattern": "^[a-z]*$"},
-            "additionalProperties": {"type": "integer"},
-        },
+        (True, True),
+        ({"type": "object", "additionalProperties": True}, True),
+        (
+            {
+                "type": "object",
+                "properties": {"": {"type": "integer"}},
+                "additionalProperties": True,
+            },
+            True,
+        ),
+        # Keys constrained by a pattern are matched as is, like patterned values.
+        (
+            {
+                "type": "object",
+                "patternProperties": {"^[a-z]*$": {"type": "integer"}},
+                "additionalProperties": False,
+            },
+            False,
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"fixed": {"type": "integer"}},
+                "patternProperties": {"^[a-z]*$": {"type": "integer"}},
+                "additionalProperties": False,
+            },
+            False,
+        ),
+        (
+            {
+                "type": "object",
+                "propertyNames": {"pattern": "^[a-z]*$"},
+                "additionalProperties": {"type": "integer"},
+            },
+            False,
+        ),
     ],
 )
-def test_property_name_excludes(schema):
+def test_property_name_excludes(schema, filtered):
     grammar = xgr.Grammar.from_structural_tag(schema_tag(schema, excludes=["bad"]))
     assert _is_grammar_accept_string(grammar, '{"good":1}')
-    assert not _is_grammar_accept_string(grammar, '{"bad":1}')
-    assert not _is_grammar_accept_string(grammar, '{"xbady":1}')
+    assert _is_grammar_accept_string(grammar, '{"bad":1}') == (not filtered)
+    assert _is_grammar_accept_string(grammar, '{"xbady":1}') == (not filtered)
 
 
 @pytest.mark.parametrize("literal", [{"text": "BAD"}, {"BAD": "text"}, ["BAD"]])
@@ -209,7 +228,7 @@ def test_unicode_and_overlapping_excludes(style):
 
 
 def test_excludes_unicode_boundaries_and_grammar_roundtrip():
-    grammar = leaf_grammar({"type": "string", "pattern": r"^[\s\S]*$"}, "json", ["坏", *CONTROLS])
+    grammar = leaf_grammar({"type": "string"}, "json", ["坏", *CONTROLS])
     for restored in (
         grammar,
         xgr.Grammar.deserialize_json(grammar.serialize_json()),
@@ -307,12 +326,8 @@ def test_excludes_default_and_cache_isolation():
     assert not _is_grammar_accept_string(grammar, '"bad""safe"')
 
 
-@pytest.mark.parametrize("constrained", [False, True])
-def test_k3_excludes_token_mask_and_argument_end(constrained):
-    schema = {"type": "string"}
-    if constrained:
-        schema["pattern"] = r"^[\s\S]*$"
-    grammar = leaf_grammar(schema, "kimi_k3_xml")
+def test_k3_excludes_token_mask_and_argument_end():
+    grammar = leaf_grammar({"type": "string"}, "kimi_k3_xml")
     vocab = [
         ARG_BEGIN,
         "hello",
@@ -389,11 +404,11 @@ def test_excludes_preserve_unicode_pattern_and_json_escaping(style):
 @pytest.mark.parametrize(
     "pattern,excludes,accepted,rejected",
     [
-        ("^(BAD|safe)$", ["BAD"], ["safe"], ["BAD", "BA你", "BA🦋"]),
-        ("^你.*好$", ["你"], [], ["", "你好", "你🦋好", "safe", "🦋"]),
+        ("^(BAD|safe)$", ["BAD"], ["safe", "BAD"], ["BA你", "BA🦋"]),
+        ("^你.*好$", ["你"], ["你好", "你🦋好"], ["", "safe", "🦋"]),
     ],
 )
-def test_excluded_pattern_branches(style, pattern, excludes, accepted, rejected):
+def test_pattern_branches_are_not_filtered(style, pattern, excludes, accepted, rejected):
     grammar = leaf_grammar({"type": "string", "pattern": pattern}, style, excludes)
     for value in accepted:
         assert _is_grammar_accept_string(grammar, string_instance(value, style))
@@ -401,9 +416,7 @@ def test_excluded_pattern_branches(style, pattern, excludes, accepted, rejected)
         assert not _is_grammar_accept_string(grammar, string_instance(value, style))
 
 
-@pytest.mark.parametrize(
-    "schema", [{"const": "BAD"}, {"enum": ["BAD"]}, {"type": "string", "pattern": "^BAD$"}]
-)
+@pytest.mark.parametrize("schema", [{"const": "BAD"}, {"enum": ["BAD"]}])
 @pytest.mark.parametrize("safe_branch", [False, True])
 def test_excluded_branch_mask_rejects_unicode_and_stop_token(schema, safe_branch):
     if safe_branch:
@@ -567,9 +580,8 @@ def test_nested_k3_three_controls_mask_and_argument_boundary():
         assert matcher.is_terminated()
 
 
-@pytest.mark.parametrize("constrained", [False, True])
-def test_json_string_response_schema_keeps_k3_response_end(constrained):
-    schema = {"type": "string", **({"pattern": r"^[\s\S]*$"} if constrained else {})}
+def test_json_string_response_schema_keeps_k3_response_end():
+    schema = {"type": "string"}
     end = "<|close|>response<|sep|>"
     tag = StructuralTag(
         format=TagFormat(

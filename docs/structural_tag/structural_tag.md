@@ -174,8 +174,10 @@ Matches content that conforms to a JSON Schema.
 works with every `style`.
 
 `excludes` forbids non-empty substrings in string values and property names, nested JSON
-strings included; `pattern` and `format` still apply, while `minLength`/`maxLength` are dropped
-with a warning. Matching uses the emitted text, so excluding `ab` still allows `"\u0061b"`, and
+strings included. It applies to the strings without `pattern` or `format`: a `pattern` or
+`format` is the schema's own contract for that string and is matched as is, and
+`minLength`/`maxLength` are dropped with a warning. Matching uses the emitted text, so
+excluding `ab` still allows `"\u0061b"`, and
 stops at the string: quotes, punctuation and XML parameter wrappers are never part of a match,
 so for Kimi-K3 `excludes=["<|open|>", "<|close|>", "<|sep|>"]` still allows the
 `<|close|>argument<|sep|>` terminator. `const`/`enum` alternatives that contain an excluded
