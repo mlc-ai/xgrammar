@@ -154,6 +154,7 @@ Matches content that conforms to a JSON Schema.
 | `json_schema` | `object` | (required) |
 | `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"minimax_m3_xml"` \| `"deepseek_xml"` \| `"deepseek_v4_1_xml"` \| `"glm_xml"` \| `"cohere_xml"` \| `"kimi_k3_xml"` | `"json"` |
 | `any_order` | `bool` | `false` |
+| `excludes` | `string[]` | `[]` |
 
 - **Use it when**: the structured part is naturally expressed as schema-constrained data
 
@@ -171,6 +172,17 @@ Matches content that conforms to a JSON Schema.
 
 `any_order` relaxes object property ordering (see [below](#property-ordering-with-any-order)). It
 works with every `style`.
+
+`excludes` forbids non-empty substrings in string values and property names, nested JSON
+strings included. It applies to the strings without `pattern` or `format`: a `pattern` or
+`format` is the schema's own contract for that string and is matched as is, and
+`minLength`/`maxLength` are dropped with a warning. Matching uses the emitted text, so
+excluding `ab` still allows `"\u0061b"`, and
+stops at the string: quotes, punctuation and XML parameter wrappers are never part of a match,
+so for Kimi-K3 `excludes=["<|open|>", "<|close|>", "<|sep|>"]` still allows the
+`<|close|>argument<|sep|>` terminator. `const`/`enum` alternatives that contain an excluded
+substring are removed. XML styles reject exclusions that start or end with whitespace, and
+`cohere_xml`/`minimax_m3_xml` reject non-empty lists.
 
 ```json
 {

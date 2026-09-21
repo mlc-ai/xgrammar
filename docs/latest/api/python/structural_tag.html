@@ -8,7 +8,7 @@
         <link rel="prefetch" href="../../_static/img/logo_dark.svg" as="image">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Structural Tag - XGrammar 0.2.8.dev14+g0b586e9bf</title>
+        <title>Structural Tag - XGrammar 0.2.8.dev15+gb2b860bf4</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
@@ -165,7 +165,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">XGrammar 0.2.8.dev14+g0b586e9bf</div></a>
+      <a href="../../index.html"><div class="brand">XGrammar 0.2.8.dev15+gb2b860bf4</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -190,7 +190,7 @@
     <img class="sidebar-logo only-dark" src="../../_static/img/logo_dark.svg" alt="Dark Logo"/>
   </div>
   
-  <span class="sidebar-brand-text">XGrammar 0.2.8.dev14+g0b586e9bf</span>
+  <span class="sidebar-brand-text">XGrammar 0.2.8.dev15+gb2b860bf4</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -476,6 +476,14 @@
 <span class="w">         </span><span class="p">],</span>
 <span class="w">         </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">         </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">      </span><span class="p">},</span>
+<span class="w">      </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">         </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">         </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">         </span><span class="p">},</span>
+<span class="w">         </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">         </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">      </span><span class="p">}</span>
 <span class="w">   </span><span class="p">},</span>
 <span class="w">   </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -529,6 +537,17 @@ keys may repeat. The entry count is bounded to <code class="docutils literal not
 <dt class="sig sig-object py" id="xgrammar.structural_tag.JSONSchemaFormat.max_whitespace_cnt">
 <span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">max_whitespace_cnt</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#xgrammar.structural_tag.JSONSchemaFormat.max_whitespace_cnt" title="Link to this definition">¶</a></dt>
 <dd><p>Max consecutive whitespace characters in this content. None means no limit.</p>
+</dd></dl>
+
+<dl class="py attribute pydantic_field">
+<dt class="sig sig-object py" id="xgrammar.structural_tag.JSONSchemaFormat.excludes">
+<span class="property"><span class="pre">field</span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">excludes</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></span><a class="headerlink" href="#xgrammar.structural_tag.JSONSchemaFormat.excludes" title="Link to this definition">¶</a></dt>
+<dd><p>Non-empty substrings forbidden in string values and property names, nested JSON strings
+included. Matches the emitted text before JSON/XML unescaping; quotes, punctuation and XML
+parameter wrappers are never part of a match. Applies to the strings without <code class="docutils literal notranslate"><span class="pre">pattern</span></code> or
+<code class="docutils literal notranslate"><span class="pre">format</span></code>, which are matched as is; <code class="docutils literal notranslate"><span class="pre">minLength</span></code>/<code class="docutils literal notranslate"><span class="pre">maxLength</span></code> are dropped with a warning.
+XML styles reject exclusions that
+start or end with whitespace; <code class="docutils literal notranslate"><span class="pre">cohere_xml</span></code> and <code class="docutils literal notranslate"><span class="pre">minimax_m3_xml</span></code> reject non-empty lists.</p>
 </dd></dl>
 
 </dd></dl>
@@ -1325,6 +1344,14 @@ during token-mask-driven generation.</p>
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -2899,6 +2926,14 @@ during token-mask-driven generation.</p>
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -4485,6 +4520,14 @@ ending for the tag.</p>
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -6103,6 +6146,14 @@ For token-level dispatch, use <code class="docutils literal notranslate"><span c
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -7704,6 +7755,14 @@ For string-level dispatch, use <code class="docutils literal notranslate"><span 
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -9321,6 +9380,14 @@ by the separator, with no other text allowed.</p>
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -10914,6 +10981,14 @@ by the separator, with no other text allowed.</p>
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -12489,6 +12564,14 @@ by the separator, with no other text allowed.</p>
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -14064,6 +14147,14 @@ by the separator, with no other text allowed.</p>
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -15639,6 +15730,14 @@ by the separator, with no other text allowed.</p>
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -17238,6 +17337,14 @@ ends the matching of the format when LLM generates &lt;end&gt;.</p>
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -18839,6 +18946,14 @@ ends the matching of the format when LLM generates &lt;end&gt;.</p>
 <span class="w">               </span><span class="p">],</span>
 <span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
 <span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Max Whitespace Cnt"</span>
+<span class="w">            </span><span class="p">},</span>
+<span class="w">            </span><span class="nt">"excludes"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">               </span><span class="nt">"default"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<span class="w">               </span><span class="nt">"items"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                  </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span>
+<span class="w">               </span><span class="p">},</span>
+<span class="w">               </span><span class="nt">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Excludes"</span><span class="p">,</span>
+<span class="w">               </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"array"</span>
 <span class="w">            </span><span class="p">}</span>
 <span class="w">         </span><span class="p">},</span>
 <span class="w">         </span><span class="nt">"required"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
@@ -20162,6 +20277,7 @@ first dispatched format.</p>
 <li><a class="reference internal" href="#xgrammar.structural_tag.JSONSchemaFormat.style"><code class="docutils literal notranslate"><span class="pre">JSONSchemaFormat.style</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.structural_tag.JSONSchemaFormat.any_order"><code class="docutils literal notranslate"><span class="pre">JSONSchemaFormat.any_order</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.structural_tag.JSONSchemaFormat.max_whitespace_cnt"><code class="docutils literal notranslate"><span class="pre">JSONSchemaFormat.max_whitespace_cnt</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.structural_tag.JSONSchemaFormat.excludes"><code class="docutils literal notranslate"><span class="pre">JSONSchemaFormat.excludes</span></code></a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#xgrammar.structural_tag.AnyTextFormat"><code class="docutils literal notranslate"><span class="pre">AnyTextFormat</span></code></a><ul>
@@ -20297,7 +20413,7 @@ first dispatched format.</p>
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=24cec76c"></script>
+</div><script src="../../_static/documentation_options.js?v=cff073ed"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>

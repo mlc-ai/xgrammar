@@ -8,7 +8,7 @@
         <link rel="prefetch" href="../_static/img/logo_dark.svg" as="image">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Structural Tag Usage - XGrammar 0.2.8.dev14+g0b586e9bf</title>
+        <title>Structural Tag Usage - XGrammar 0.2.8.dev15+gb2b860bf4</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -165,7 +165,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">XGrammar 0.2.8.dev14+g0b586e9bf</div></a>
+      <a href="../index.html"><div class="brand">XGrammar 0.2.8.dev15+gb2b860bf4</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -190,7 +190,7 @@
     <img class="sidebar-logo only-dark" src="../_static/img/logo_dark.svg" alt="Dark Logo"/>
   </div>
   
-  <span class="sidebar-brand-text">XGrammar 0.2.8.dev14+g0b586e9bf</span>
+  <span class="sidebar-brand-text">XGrammar 0.2.8.dev15+gb2b860bf4</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -495,6 +495,10 @@ structured region after seeing a trigger.</p>
 <td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">false</span></code></p></td>
 </tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">excludes</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">string[]</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">[]</span></code></p></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -515,6 +519,16 @@ structured region after seeing a trigger.</p>
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">any_order</span></code> relaxes object property ordering (see <a class="reference internal" href="#property-ordering-with-any-order"><span class="std std-ref">below</span></a>). It
 works with every <code class="docutils literal notranslate"><span class="pre">style</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">excludes</span></code> forbids non-empty substrings in string values and property names, nested JSON
+strings included. It applies to the strings without <code class="docutils literal notranslate"><span class="pre">pattern</span></code> or <code class="docutils literal notranslate"><span class="pre">format</span></code>: a <code class="docutils literal notranslate"><span class="pre">pattern</span></code> or
+<code class="docutils literal notranslate"><span class="pre">format</span></code> is the schema’s own contract for that string and is matched as is, and
+<code class="docutils literal notranslate"><span class="pre">minLength</span></code>/<code class="docutils literal notranslate"><span class="pre">maxLength</span></code> are dropped with a warning. Matching uses the emitted text, so
+excluding <code class="docutils literal notranslate"><span class="pre">ab</span></code> still allows <code class="docutils literal notranslate"><span class="pre">&quot;\u0061b&quot;</span></code>, and
+stops at the string: quotes, punctuation and XML parameter wrappers are never part of a match,
+so for Kimi-K3 <code class="docutils literal notranslate"><span class="pre">excludes=[&quot;&lt;|open|&gt;&quot;,</span> <span class="pre">&quot;&lt;|close|&gt;&quot;,</span> <span class="pre">&quot;&lt;|sep|&gt;&quot;]</span></code> still allows the
+<code class="docutils literal notranslate"><span class="pre">&lt;|close|&gt;argument&lt;|sep|&gt;</span></code> terminator. <code class="docutils literal notranslate"><span class="pre">const</span></code>/<code class="docutils literal notranslate"><span class="pre">enum</span></code> alternatives that contain an excluded
+substring are removed. XML styles reject exclusions that start or end with whitespace, and
+<code class="docutils literal notranslate"><span class="pre">cohere_xml</span></code>/<code class="docutils literal notranslate"><span class="pre">minimax_m3_xml</span></code> reject non-empty lists.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"json_schema"</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">"json_schema"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
@@ -1622,7 +1636,7 @@ the model expects a pure separated list of calls</p></li>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=24cec76c"></script>
+</div><script src="../_static/documentation_options.js?v=cff073ed"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
