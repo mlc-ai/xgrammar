@@ -206,6 +206,9 @@ def get_model_structural_tag(
         free-text spans constrained to exclude those tokens. Set to ``False``
         to allow them to appear as plain text. For models that have no special
         tokens to exclude (such as ``"harmony"``), this has no effect.
+        For Kimi-K3, this also applies to tool-argument string values without
+        ``pattern``/``format`` and to property names, nested JSON strings included;
+        ``minLength``/``maxLength`` on such strings are dropped with a warning.
     max_whitespace_cnt : Optional[int]
         Applied to every tool-argument :class:`JSONSchemaFormat`. Caps the number
         of consecutive whitespace characters. Setting it (e.g. ``2``) bounds runs
@@ -923,7 +926,10 @@ def get_kimi_k3_structural_tag(
 
     The tool-call arguments are emitted one tag per argument and are constrained
     by :class:`JSONSchemaFormat` with ``style="kimi_k3_xml"``: string values are
-    raw text, and other value types remain JSON-style.
+    raw text, and other value types remain JSON-style. With ``exclude_special_tokens=True``,
+    string values without ``pattern``/``format`` and property names exclude ``<|open|>``,
+    ``<|close|>``, and ``<|sep|>`` (see :class:`JSONSchemaFormat` for the exact rules);
+    argument and call wrappers remain outside this exclusion scope.
 
     Parameters are normalized by :func:`get_model_structural_tag` before this
     function is called:
@@ -973,6 +979,7 @@ def get_kimi_k3_structural_tag(
                         style=XML_STYLE,
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
+                        excludes=_text_excludes(exclude_special_tokens, [OPEN, CLOSE, SEP]),
                     ),
                 ]
             ),
