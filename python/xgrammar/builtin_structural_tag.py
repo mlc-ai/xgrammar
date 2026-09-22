@@ -1439,6 +1439,109 @@ get_qwen_3_coder_structural_tag = get_qwen_3_5_structural_tag
 """Deprecated alias for :func:`get_qwen_3_5_structural_tag`."""
 
 
+@register_model_structural_tag("mimo")
+def get_mimo_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
+    any_order: bool = False,
+    exclude_special_tokens: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get MiMo-V2.6 style structural tag format.
+
+    Corresponding model key: ``"mimo"``.
+
+    Reference: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Pro-RL/blob/main/chat_template.jinja
+
+    MiMo uses the Qwen XML parameter format, but without the newlines that
+    Qwen3-Coder puts between the wrapper tags::
+
+        <tool_call><function=NAME><parameter=KEY>VALUE</parameter></function></tool_call>
+
+    String arguments are raw text; other values are JSON. Arguments are
+    constrained by :class:`JSONSchemaFormat` with ``style="qwen_xml"``.
+
+    With ``enable_thinking=True`` the chat template ends the generation prompt
+    at ``<|im_start|>assistant\\n``, so ``reasoning="enabled"`` generates the
+    complete ``<think>...</think>`` block. With ``enable_thinking=False`` the
+    template renders ``<think></think>`` into the prompt; use
+    ``reasoning="disabled"``, also when the serving engine manages reasoning
+    itself.
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: selects ``"enabled"``, ``"disabled"``, or adaptive
+      ``"auto"`` reasoning.
+
+    Supported models:
+
+    - MiMo-V2.6-Pro-RL
+    - MiMo-V2.6-Flash-RL
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for MiMo function calling format.
+    """
+    if builtin_tools:
+        raise ValueError("MiMo does not support builtin tools.")
+
+    tool_start = "<tool_call>"
+    text_excludes = ["<think>", "</think>", "</tool_call>", "<function="]
+    reasoning_excludes = [tool_start, *text_excludes]
+    tags = [
+        TagFormat(
+            begin=f"{tool_start}<function={tool.function.name}>",
+            content=JSONSchemaFormat(
+                json_schema=_get_function_parameters(tool.function),
+                style="qwen_xml",
+                any_order=any_order,
+                max_whitespace_cnt=max_whitespace_cnt,
+            ),
+            end="</function></tool_call>",
+        )
+        for tool in tools or []
+    ]
+    if tool_choice == "forced":
+        if not tags:
+            raise ValueError("Forced tool choice must resolve to exactly one tool.")
+        suffix_tag = tags[0]
+    elif tool_choice in ("auto", "required"):
+        if tool_choice == "required" and not tags:
+            raise ValueError("Required tool choice needs at least one function tool.")
+        if tags:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[tool_start],
+                tags=tags,
+                excludes=_text_excludes(exclude_special_tokens, text_excludes),
+                at_least_one=tool_choice == "required",
+                stop_after_first=not parallel_tool_calls,
+            )
+        else:
+            suffix_tag = AnyTextFormat(
+                excludes=_text_excludes(exclude_special_tokens, reasoning_excludes)
+            )
+    else:
+        raise ValueError(f"Unsupported tool choice: {tool_choice}")
+
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin="<think>",
+        think_tag_end="</think>",
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=reasoning_excludes,
+        prompt_end_with_think=False,
+    )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
+
+
 @register_model_structural_tag("qwen_3")
 def get_qwen_3_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,

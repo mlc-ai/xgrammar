@@ -687,5 +687,98 @@ def test_deepseek_v4_1_official_tokenizer_masks(reasoning, policy, schema_kind):
     assert matcher.is_terminated()
 
 
+_MIMO_CHECKPOINTS = [
+    ("XiaomiMiMo/MiMo-V2.6-Pro-RL", "54b10491b1811c76aa9681a9d0ff872396a4064c"),
+    ("XiaomiMiMo/MiMo-V2.6-Flash-RL", "3b38d063180c3e4aed9691fdc735f3d10b266ee4"),
+]
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("model_id,revision", _MIMO_CHECKPOINTS)
+@pytest.mark.parametrize("reasoning", [False, True])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced"])
+@pytest.mark.parametrize("schema_kind", ["typed", "union", "ref", "unconstrained"])
+def test_mimo_official_tokenizer_masks(model_id, revision, reasoning, policy, schema_kind):
+    """Replay actual template completions, including tokens crossing XML boundaries."""
+    tokenizer = load_tokenizer(model_id, revision=revision)
+    info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=152576)
+    assert info.vocab_type == xgr.VocabType.BYTE_LEVEL
+    assert info.stop_token_ids == [151645]
+    assert len(tokenizer) == 151675
+    for text, token_id in [
+        ("<tool_call>", 151657),
+        ("</tool_call>", 151658),
+        ("<think>", 151667),
+        ("</think>", 151668),
+    ]:
+        assert tokenizer.encode(text, add_special_tokens=False) == [token_id]
+
+    arguments = {
+        "query": '\n北京 &amp; "quoted"\n',
+        "limit": 2,
+        "data": {"items": [True, None, "é"]},
+    }
+    schema = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "limit": {"type": "integer", "minimum": 1},
+            "data": {
+                "type": "object",
+                "properties": {"items": {"type": "array"}},
+                "required": ["items"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["query", "limit", "data"],
+        "additionalProperties": False,
+    }
+    if schema_kind == "union":
+        schema["properties"]["limit"] = {"anyOf": [{"type": "integer"}, {"type": "null"}]}
+        arguments["limit"] = None
+    elif schema_kind == "ref":
+        schema["$defs"] = {"Limit": schema["properties"]["limit"]}
+        schema["properties"]["limit"] = {"$ref": "#/$defs/Limit"}
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": name,
+                "parameters": schema,
+                "strict": schema_kind != "unconstrained",
+            },
+        }
+        for name in ("search", "other")
+    ]
+    choice = {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    tag = get_model_structural_tag("mimo", tools=tools, reasoning=reasoning, tool_choice=choice)
+    matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(info).compile_structural_tag(tag))
+    message = {
+        "role": "assistant",
+        "content": "",
+        "reasoning_content": "Plan." if reasoning else "",
+        "tool_calls": [
+            {"type": "function", "function": {"name": name, "arguments": arguments}}
+            for name in (["search"] if policy == "forced" else ["search", "other"])
+        ],
+    }
+    kwargs = {"tools": tools, "tokenize": False, "enable_thinking": reasoning}
+    prompt = tokenizer.apply_chat_template([USER_MSG], add_generation_prompt=True, **kwargs)
+    full = tokenizer.apply_chat_template([USER_MSG, message], **kwargs)
+    assert prompt.endswith("assistant\n" if reasoning else "assistant\n<think></think>")
+    assert full.startswith(prompt)
+    output = full[len(prompt) :]
+    token_ids = tokenizer.encode(output, add_special_tokens=False)
+    assert tokenizer.decode(token_ids) == output
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    for index, token_id in enumerate(token_ids):
+        matcher.fill_next_token_bitmask(bitmask)
+        if policy != "auto" and (index == 0 or token_ids[index - 1] != 151658):
+            assert not (int(bitmask[0, 151645 // 32]) >> (151645 % 32)) & 1
+        assert (int(bitmask[0, token_id // 32]) >> (token_id % 32)) & 1, (index, token_id)
+        assert matcher.accept_token(token_id), (index, token_id)
+    assert matcher.is_terminated()
+
+
 if __name__ == "__main__":
     pytest.main(["-v", __file__])

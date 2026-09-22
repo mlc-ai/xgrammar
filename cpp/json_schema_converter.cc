@@ -4075,7 +4075,8 @@ std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key)
   if (key.empty()) {
     return std::nullopt;
   }
-  if ((json_format_ == JSONFormat::kDeepSeekXML || json_format_ == JSONFormat::kDeepSeekV41XML) &&
+  if ((json_format_ == JSONFormat::kQwenXML || json_format_ == JSONFormat::kDeepSeekXML ||
+       json_format_ == JSONFormat::kDeepSeekV41XML) &&
       nested_object_level_ == 0 && key == "{}") {
     // Unconstrained tool arguments are an XML parameter list, not one parameter's raw value.
     return rule_cache_manager_.GetCache(kObjectCacheKey, 0);
