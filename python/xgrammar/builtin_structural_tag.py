@@ -1451,16 +1451,44 @@ def get_mimo_structural_tag(
     parallel_tool_calls: bool = True,
     **kwargs: Any,
 ) -> StructuralTag:
-    """Get MiMo-V2.6-Pro-RL / MiMo-V2.6-Flash-RL structural tags.
+    """Get MiMo-V2.6 style structural tag format.
+
+    Corresponding model key: ``"mimo"``.
 
     Reference: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Pro-RL/blob/main/chat_template.jinja
 
-    MiMo uses Qwen XML parameters without mandatory newlines between tags.
-    With thinking enabled, the generation prompt ends at ``assistant\\n``:
-    the model generates the complete ``<think>...</think>`` block. With
-    ``enable_thinking=False``, the prompt includes ``<think></think>``, so
-    ``reasoning="disabled"`` starts directly at the response or tool call.
-    Serving engines that own the reasoning boundary should also use disabled.
+    MiMo uses the Qwen XML parameter format, but without the newlines that
+    Qwen3-Coder puts between the wrapper tags::
+
+        <tool_call><function=NAME><parameter=KEY>VALUE</parameter></function></tool_call>
+
+    String arguments are raw text; other values are JSON. Arguments are
+    constrained by :class:`JSONSchemaFormat` with ``style="qwen_xml"``.
+
+    With ``enable_thinking=True`` the chat template ends the generation prompt
+    at ``<|im_start|>assistant\\n``, so ``reasoning="enabled"`` generates the
+    complete ``<think>...</think>`` block. With ``enable_thinking=False`` the
+    template renders ``<think></think>`` into the prompt; use
+    ``reasoning="disabled"``, also when the serving engine manages reasoning
+    itself.
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: selects ``"enabled"``, ``"disabled"``, or adaptive
+      ``"auto"`` reasoning.
+
+    Supported models:
+
+    - MiMo-V2.6-Pro-RL
+    - MiMo-V2.6-Flash-RL
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for MiMo function calling format.
     """
     if builtin_tools:
         raise ValueError("MiMo does not support builtin tools.")
