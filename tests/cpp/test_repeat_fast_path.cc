@@ -16,6 +16,7 @@
  * test knows which fills exercise the fast path even though the assertions
  * only observe the resulting masks and parser behavior.
  */
+#include <dlpack/dlpack.h>
 #include <gtest/gtest.h>
 
 #include <cstdint>
@@ -49,7 +50,7 @@ void FillMask(GrammarMatcher* matcher, int vocab_size, std::vector<int32_t>* mas
 }
 
 bool MaskHas(const std::vector<int32_t>& mask, int token_id) {
-  return ((mask[token_id >> 5] >> (token_id & 31)) & 1) != 0;
+  return ((static_cast<uint32_t>(mask[token_id >> 5]) >> (token_id & 31)) & 1u) != 0;
 }
 
 std::vector<int32_t> MaskCopy(const std::vector<int32_t>& mask) { return mask; }
