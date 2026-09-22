@@ -7,7 +7,7 @@
         <link rel="prefetch" href="../../_static/img/logo_dark.svg" as="image">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>xgrammar.builtin_structural_tag - XGrammar 0.2.8.dev16+g40ef65110</title>
+        <title>xgrammar.builtin_structural_tag - XGrammar 0.2.8.dev17+g97787376f</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
@@ -164,7 +164,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">XGrammar 0.2.8.dev16+g40ef65110</div></a>
+      <a href="../../index.html"><div class="brand">XGrammar 0.2.8.dev17+g97787376f</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -189,7 +189,7 @@
     <img class="sidebar-logo only-dark" src="../../_static/img/logo_dark.svg" alt="Dark Logo"/>
   </div>
   
-  <span class="sidebar-brand-text">XGrammar 0.2.8.dev16+g40ef65110</span>
+  <span class="sidebar-brand-text">XGrammar 0.2.8.dev17+g97787376f</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -1746,6 +1746,112 @@
 <span class="sd">"""Deprecated alias for :func:`get_qwen_3_5_structural_tag`."""</span>
 
 
+<div class="viewcode-block" id="get_mimo_structural_tag">
+<a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_mimo_structural_tag">[docs]</a>
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"mimo"</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_mimo_structural_tag</span><span class="p">(</span>
+    <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Get MiMo-V2.6 style structural tag format.</span>
+
+<span class="sd">    Corresponding model key: ``"mimo"``.</span>
+
+<span class="sd">    Reference: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Pro-RL/blob/main/chat_template.jinja</span>
+
+<span class="sd">    MiMo uses the Qwen XML parameter format, but without the newlines that</span>
+<span class="sd">    Qwen3-Coder puts between the wrapper tags::</span>
+
+<span class="sd">        &lt;tool_call&gt;&lt;function=NAME&gt;&lt;parameter=KEY&gt;VALUE&lt;/parameter&gt;&lt;/function&gt;&lt;/tool_call&gt;</span>
+
+<span class="sd">    String arguments are raw text; other values are JSON. Arguments are</span>
+<span class="sd">    constrained by :class:`JSONSchemaFormat` with ``style="qwen_xml"``.</span>
+
+<span class="sd">    With ``enable_thinking=True`` the chat template ends the generation prompt</span>
+<span class="sd">    at ``&lt;|im_start|&gt;assistant\\n``, so ``reasoning="enabled"`` generates the</span>
+<span class="sd">    complete ``&lt;think&gt;...&lt;/think&gt;`` block. With ``enable_thinking=False`` the</span>
+<span class="sd">    template renders ``&lt;think&gt;&lt;/think&gt;`` into the prompt; use</span>
+<span class="sd">    ``reasoning="disabled"``, also when the serving engine manages reasoning</span>
+<span class="sd">    itself.</span>
+
+<span class="sd">    Parameters are normalized by :func:`get_model_structural_tag` before this</span>
+<span class="sd">    function is called:</span>
+
+<span class="sd">    - ``tools``: a list of function tools. Each tool should have a ``function``</span>
+<span class="sd">      object containing ``name`` and ``parameters`` fields.</span>
+<span class="sd">    - ``reasoning``: selects ``"enabled"``, ``"disabled"``, or adaptive</span>
+<span class="sd">      ``"auto"`` reasoning.</span>
+
+<span class="sd">    Supported models:</span>
+
+<span class="sd">    - MiMo-V2.6-Pro-RL</span>
+<span class="sd">    - MiMo-V2.6-Flash-RL</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    StructuralTag</span>
+<span class="sd">        A structural tag for MiMo function calling format.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">builtin_tools</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"MiMo does not support builtin tools."</span><span class="p">)</span>
+
+    <span class="n">tool_start</span> <span class="o">=</span> <span class="s2">"&lt;tool_call&gt;"</span>
+    <span class="n">text_excludes</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/tool_call&gt;"</span><span class="p">,</span> <span class="s2">"&lt;function="</span><span class="p">]</span>
+    <span class="n">reasoning_excludes</span> <span class="o">=</span> <span class="p">[</span><span class="n">tool_start</span><span class="p">,</span> <span class="o">*</span><span class="n">text_excludes</span><span class="p">]</span>
+    <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">TagFormat</span><span class="p">(</span>
+            <span class="n">begin</span><span class="o">=</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">tool_start</span><span class="si">}</span><span class="s2">&lt;function=</span><span class="si">{</span><span class="n">tool</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">&gt;"</span><span class="p">,</span>
+            <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">tool</span><span class="o">.</span><span class="n">function</span><span class="p">),</span>
+                <span class="n">style</span><span class="o">=</span><span class="s2">"qwen_xml"</span><span class="p">,</span>
+                <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
+                <span class="n">max_whitespace_cnt</span><span class="o">=</span><span class="n">max_whitespace_cnt</span><span class="p">,</span>
+            <span class="p">),</span>
+            <span class="n">end</span><span class="o">=</span><span class="s2">"&lt;/function&gt;&lt;/tool_call&gt;"</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"forced"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tags</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Forced tool choice must resolve to exactly one tool."</span><span class="p">)</span>
+        <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">tags</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="n">tool_choice</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"required"</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">tags</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Required tool choice needs at least one function tool."</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">tags</span><span class="p">:</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">TriggeredTagsFormat</span><span class="p">(</span>
+                <span class="n">triggers</span><span class="o">=</span><span class="p">[</span><span class="n">tool_start</span><span class="p">],</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">text_excludes</span><span class="p">),</span>
+                <span class="n">at_least_one</span><span class="o">=</span><span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"required"</span><span class="p">,</span>
+                <span class="n">stop_after_first</span><span class="o">=</span><span class="ow">not</span> <span class="n">parallel_tool_calls</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">reasoning_excludes</span><span class="p">)</span>
+            <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unsupported tool choice: </span><span class="si">{</span><span class="n">tool_choice</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="n">prefix_tag</span> <span class="o">=</span> <span class="n">_build_reasoning_prefix</span><span class="p">(</span>
+        <span class="n">reasoning_mode</span><span class="o">=</span><span class="n">reasoning</span><span class="p">,</span>
+        <span class="n">think_tag_begin</span><span class="o">=</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span>
+        <span class="n">think_tag_end</span><span class="o">=</span><span class="s2">"&lt;/think&gt;"</span><span class="p">,</span>
+        <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">reasoning_excludes</span><span class="p">,</span>
+        <span class="n">prompt_end_with_think</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
+
+
+
 <div class="viewcode-block" id="get_qwen_3_structural_tag">
 <a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_qwen_3_structural_tag">[docs]</a>
 <span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"qwen_3"</span><span class="p">)</span>
@@ -3261,7 +3367,7 @@
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=16bdfed7"></script>
+</div><script src="../../_static/documentation_options.js?v=fd08d4d4"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
