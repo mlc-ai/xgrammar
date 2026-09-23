@@ -2767,12 +2767,10 @@ def test_integer_range_acceptance_sweep(bounds):
 
 def test_limited_whitespace_cnt():
     expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub))
-basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_string_sub_4 [,}\]:]))
-basic_string ::= (("\"" basic_string_sub)) (=(basic_string_sub_4 "}"))
-root ::= (("{" basic_string_sub_4 "\"key\"" basic_string_sub_4 ":" basic_string_sub_4 basic_string basic_string_sub_4 "}"))
-basic_string_sub_2 ::= ("" | ([ \n\r\t] basic_string_sub_3))
-basic_string_sub_3 ::= ("" | ([ \n\r\t]))
-basic_string_sub_4 ::= ((basic_string_sub_2))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_string_sub_characters{0, 2} [,}\]:]))
+basic_string ::= (("\"" basic_string_sub)) (=(basic_string_sub_characters{0, 2} "}"))
+root ::= (("{" basic_string_sub_characters{0, 2} "\"key\"" basic_string_sub_characters{0, 2} ":" basic_string_sub_characters{0, 2} basic_string basic_string_sub_characters{0, 2} "}"))
+basic_string_sub_characters ::= (([ \n\r\t]))
 """
     schema = {"type": "object", "properties": {"key": {"type": "string"}}, "required": ["key"]}
     grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=True, max_whitespace_cnt=2)
@@ -2789,12 +2787,10 @@ basic_string_sub_4 ::= ((basic_string_sub_2))
 
 def test_limited_whitespace_compile():
     expected_grammar = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub))
-basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_string_sub_4 [,}\]:]))
-basic_string ::= (("\"" basic_string_sub)) (=(basic_string_sub_4 "}"))
-root ::= (("{" basic_string_sub_4 "\"key\"" basic_string_sub_4 ":" basic_string_sub_4 basic_string basic_string_sub_4 "}"))
-basic_string_sub_2 ::= ("" | ([ \n\r\t] basic_string_sub_3))
-basic_string_sub_3 ::= ("" | ([ \n\r\t]))
-basic_string_sub_4 ::= ((basic_string_sub_2))
+basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=(basic_string_sub_characters{0, 2} [,}\]:]))
+basic_string ::= (("\"" basic_string_sub)) (=(basic_string_sub_characters{0, 2} "}"))
+root ::= (("{" basic_string_sub_characters{0, 2} "\"key\"" basic_string_sub_characters{0, 2} ":" basic_string_sub_characters{0, 2} basic_string basic_string_sub_characters{0, 2} "}"))
+basic_string_sub_characters ::= (([ \n\r\t]))
 """
     schema = {"type": "object", "properties": {"key": {"type": "string"}}, "required": ["key"]}
     tokenizer_info = xgr.TokenizerInfo([])
