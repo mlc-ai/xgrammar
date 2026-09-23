@@ -3532,8 +3532,9 @@ std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(const s
 
     std::string atext = "[\\w!#$%&'*+/=?^`{|}~-]";
     std::string dot_string = "(" + atext + "+(\\." + atext + "+)*)";
+    std::string quoted_pair = R"(\\\\([\x20-\x21\x23-\x5B\x5D-\x7E]|\\\"|\\\\))";
     std::string quoted_string =
-        "\\\\\"(\\\\[\\x20-\\x7E]|[\\x20\\x21\\x23-\\x5B\\x5D-\\x7E])*\\\\\"";
+        "\\\\\"(" + quoted_pair + "|[\\x20\\x21\\x23-\\x5B\\x5D-\\x7E])*\\\\\"";
     std::string domain =
         "([A-Za-z0-9]([\\-A-Za-z0-9]*[A-Za-z0-9])?)((\\.[A-Za-z0-9][\\-A-Za-z0-9]*[A-Za-z0-9])*"
         ")";
@@ -3615,9 +3616,10 @@ std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(const s
     std::string expression = "\\{(" + op + ")?" + variable_list + "\\}";
     m["uri-template"] = "^(" + literals + "|" + expression + ")*$";
 
-    m["json-pointer"] = "^(/([\\x00-\\x2E]|[\\x30-\\x7D]|[\\x7F-\\U0010FFFF]|~[01])*)*$";
-    m["relative-json-pointer"] =
-        "^(0|[1-9][0-9]*)(#|(/([\\x00-\\x2E]|[\\x30-\\x7D]|[\\x7F-\\U0010FFFF]|~[01])*)*)$";
+    std::string pointer_char =
+        R"(([\x20-\x21\x23-\x2E]|[\x30-\x5B\x5D-\x7D]|[\x7F-\U0010FFFF]|\\[\"\\/bfnrt]|\\u[0-9A-Fa-f]{4}|~[01]))";
+    m["json-pointer"] = "^(/" + pointer_char + "*)*$";
+    m["relative-json-pointer"] = "^(0|[1-9][0-9]*)(#|(/" + pointer_char + "*)*)$";
 
     return m;
   }();
