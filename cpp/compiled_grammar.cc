@@ -169,28 +169,6 @@ std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const 
 
 /************** CompiledGrammar::Impl **************/
 
-void CompiledGrammar::Impl::IndexAcceptedBitsets() {
-  std::unordered_map<std::size_t, std::vector<const AdaptiveTokenMask*>> buckets;
-  num_unique_accepted_bitsets = 0;
-  for (auto& [state, mask] : adaptive_token_mask_cache) {
-    mask.accepted_bitset_id = -1;
-    if (mask.store_type != AdaptiveTokenMask::StoreType::kAcceptedBitset) {
-      continue;
-    }
-    auto& candidates = buckets[mask.accepted_bitset.Hash()];
-    for (const auto* candidate : candidates) {
-      if (mask.accepted_bitset == candidate->accepted_bitset) {
-        mask.accepted_bitset_id = candidate->accepted_bitset_id;
-        break;
-      }
-    }
-    if (mask.accepted_bitset_id == -1) {
-      mask.accepted_bitset_id = num_unique_accepted_bitsets++;
-      candidates.push_back(&mask);
-    }
-  }
-}
-
 picojson::value SerializeJSONValue(const CompiledGrammar::Impl& impl) {
   auto result = picojson::object{};
   result["grammar"] = AutoSerializeJSONValue(impl.grammar);
@@ -258,7 +236,6 @@ std::optional<SerializationError> DeserializeJSONValue(
       );
     }
   }
-  impl->IndexAcceptedBitsets();
   return std::nullopt;
 }
 

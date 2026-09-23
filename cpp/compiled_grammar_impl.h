@@ -57,9 +57,6 @@ struct AdaptiveTokenMask {
   std::vector<int32_t> rejected_indices;
   DynamicBitset accepted_bitset;
 
-  /*! \brief Compilation-local ID of identical accepted bitsets; rebuilt on deserialization. */
-  int32_t accepted_bitset_id = -1;
-
   std::vector<int32_t> uncertain_indices;
 
   /*! \brief Default constructor. Only for deserialization. */
@@ -121,11 +118,6 @@ class CompiledGrammar::Impl {
   /*! \brief Mapping from the parser state to the adaptive token mask. */
   std::unordered_map<ParserState, AdaptiveTokenMask, StateHashForCache, StateEqualForCache>
       adaptive_token_mask_cache;
-
-  int32_t num_unique_accepted_bitsets = 0;
-
-  /*! \brief Index identical bitsets so runtime fills can avoid redundant unions. */
-  void IndexAcceptedBitsets();
 
   Grammar GetGrammar() const { return grammar; }
 
