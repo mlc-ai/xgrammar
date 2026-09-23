@@ -23,7 +23,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 ### Parameters
 
-- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"kimi_k3"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"minimax_m3"`, `"glm_4_7"`, `"deepseek_v4"`, `"deepseek_v4_1"`, `"mimo"`, `"cohere"`, `"exaone"`.
+- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"kimi_k3"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"minimax_m3"`, `"glm_4_7"`, `"deepseek_v4"`, `"deepseek_v4_1"`, `"mimo"`, `"cohere"`, `"exaone"`, `"gemma_4"`.
 - **tools** (`List[ToolParam | dict]`, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:
   - **Function tools** use the OpenAI Chat Completions shape:
     ```json
@@ -236,6 +236,7 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `"mimo"` | MiMo-V2.6-Pro-RL, MiMo-V2.6-Flash-RL |
 | `"cohere"` | Cohere Command models using XML tool calls |
 | `"exaone"` | EXAONE-4.0-32B, EXAONE-4.0-1.2B |
+| `"gemma_4"` | Gemma 4 (gemma-4-E2B-it, gemma-4-12b-it, gemma-4-26b-a4b-it, gemma-4-31b-it); arguments use the `"gemma"` JSON-schema style |
 
 ## Extending with custom models
 

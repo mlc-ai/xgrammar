@@ -152,7 +152,7 @@ Matches content that conforms to a JSON Schema.
 | Field | Type | Default |
 | --- | --- | --- |
 | `json_schema` | `object` | (required) |
-| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"minimax_m3_xml"` \| `"deepseek_xml"` \| `"deepseek_v4_1_xml"` \| `"glm_xml"` \| `"cohere_xml"` \| `"kimi_k3_xml"` | `"json"` |
+| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"minimax_m3_xml"` \| `"deepseek_xml"` \| `"deepseek_v4_1_xml"` \| `"glm_xml"` \| `"cohere_xml"` \| `"kimi_k3_xml"` \| `"gemma"` | `"json"` |
 | `any_order` | `bool` | `false` |
 | `excludes` | `string[]` | `[]` |
 
@@ -169,6 +169,7 @@ Matches content that conforms to a JSON Schema.
 - `"glm_xml"`: GLM-style XML parameter format, such as `<arg_key>name</arg_key><arg_value>value</arg_value>`
 - `"cohere_xml"`: Cohere-style XML values, such as `<cofl:value name="name" type="raw">value</cofl:value>`
 - `"kimi_k3_xml"`: Kimi-K3 argument format, such as `<|open|>argument key="name" type="string"<|sep|>value<|close|>argument<|sep|>`. The `type` attribute is fixed to the type each declared property is rendered with (`integer` and `number` schemas both render as `number`); keys with no declared schema accept any type name.
+- `"gemma"`: Gemma 4 tool-call arguments, such as `{location:<|"|>Paris<|"|>,days:3}`. Object keys are unquoted and strings are delimited by the `<|"|>` token with no escape sequences, at every nesting level. String `pattern`, `format` and length constraints are intersected with "does not contain `<|"|>`" where the regex engine supports the pattern; a `patternProperties` key pattern whose language contains `:` cannot round-trip because keys are unquoted.
 
 `any_order` relaxes object property ordering (see [below](#property-ordering-with-any-order)). It
 works with every `style`.

@@ -2820,6 +2820,25 @@ int32_t JSONSchemaConverter::FormatOtherProperty(
   return Sequence({key_pattern_expr, colon_expr_id_, RuleRef(value_rule_id)});
 }
 
+int32_t JSONSchemaConverter::CreatePatternKeyRule(
+    const std::string& pattern, const std::string& rule_name_hint
+) {
+  // Build a key rule through GenerateString rather than spelling out a JSON string here. At the
+  // JSON root this still produces `"key"`, while XML-style converters override GenerateString to
+  // produce the unquoted key body expected inside their parameter wrappers.
+  StringSpec key_spec;
+  key_spec.pattern = pattern;
+  return CreateRule(
+      SchemaSpec::Make(std::move(key_spec), /*cache_key=*/"", rule_name_hint), rule_name_hint
+  );
+}
+
+int32_t JSONSchemaConverter::CreatePropertyNamesKeyRule(
+    const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+) {
+  return CreateRule(property_names, rule_name_hint);
+}
+
 int32_t JSONSchemaConverter::GetPropertyWithNumberConstraints(
     int32_t pattern,
     int min_properties,
@@ -3202,18 +3221,6 @@ int32_t JSONSchemaConverter::GenerateObject(
   bool could_be_empty = false;
   int32_t content = Empty();
 
-  // Build a key rule through GenerateString rather than spelling out a JSON string here. At the
-  // JSON root this still produces `"key"`, while XML-style converters override GenerateString to
-  // produce the unquoted key body expected inside their parameter wrappers.
-  auto create_pattern_key_rule = [&](const std::string& pattern,
-                                     const std::string& rule_name_hint) -> int32_t {
-    StringSpec key_spec;
-    key_spec.pattern = pattern;
-    return CreateRule(
-        SchemaSpec::Make(std::move(key_spec), /*cache_key=*/"", rule_name_hint), rule_name_hint
-    );
-  };
-
   if (!spec.properties.empty() && (!spec.pattern_properties.empty() || spec.property_names)) {
     // Case 1a: properties coexist with patternProperties and/or propertyNames.
     // Use GetPartialRuleForProperties for named properties, and build
@@ -3228,7 +3235,7 @@ int32_t JSONSchemaConverter::GenerateObject(
       for (size_t index = 0; index < spec.pattern_properties.size(); ++index) {
         const auto& pattern_property = spec.pattern_properties[index];
         std::string pattern_suffix = "pp_" + std::to_string(index);
-        int32_t key_rule_id = create_pattern_key_rule(
+        int32_t key_rule_id = CreatePatternKeyRule(
             pattern_property.pattern, rule_name + "_" + pattern_suffix + "_key"
         );
         int32_t value_rule_id =
@@ -3254,7 +3261,7 @@ int32_t JSONSchemaConverter::GenerateObject(
       // propertyNames constrains keys of additional properties.
       // Only apply when additional properties are allowed - when additionalProperties
       // is false, no extra keys beyond named properties should be permitted.
-      int32_t key_rule_id = CreateRule(spec.property_names, rule_name + "_name");
+      int32_t key_rule_id = CreatePropertyNamesKeyRule(spec.property_names, rule_name + "_name");
       int32_t value_rule_id = CreateRule(effective_additional, rule_name + "_" + effective_suffix);
       additional_override = FormatOtherProperty(
           RuleRef(key_rule_id),
@@ -3287,7 +3294,7 @@ int32_t JSONSchemaConverter::GenerateObject(
         for (size_t index = 0; index < spec.pattern_properties.size(); ++index) {
           const auto& pattern_property = spec.pattern_properties[index];
           std::string pattern_suffix = "prop_" + std::to_string(index);
-          int32_t key_rule_id = create_pattern_key_rule(
+          int32_t key_rule_id = CreatePatternKeyRule(
               pattern_property.pattern, rule_name + "_" + pattern_suffix + "_key"
           );
           int32_t value_rule_id =
@@ -3304,7 +3311,7 @@ int32_t JSONSchemaConverter::GenerateObject(
           ));
         }
       } else {
-        int32_t key_rule_id = CreateRule(spec.property_names, rule_name + "_name");
+        int32_t key_rule_id = CreatePropertyNamesKeyRule(spec.property_names, rule_name + "_name");
         // propertyNames constrains only the key, so a typed additionalProperties
         // schema still applies to the value (issue #826).
         int32_t value_rule_id;
@@ -4915,6 +4922,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"glm_xml", JSONFormat::kGlmXML},
       {"cohere_xml", JSONFormat::kCohereXML},
       {"kimi_k3_xml", JSONFormat::kKimiK3XML},
+      {"gemma", JSONFormat::kGemma},
   };
   auto it = kNameToFormat.find(format);
   if (it == kNameToFormat.end()) {
@@ -5009,6 +5017,18 @@ Grammar JSONSchemaToGrammar(
       );
       return converter.Convert(spec);
     }
+    case JSONFormat::kGemma: {
+      GemmaToolCallingConverter converter(
+          indent,
+          std::move(separators),
+          any_whitespace,
+          max_whitespace_cnt,
+          std::move(ref_resolver),
+          any_order,
+          std::move(excludes)
+      );
+      return converter.Convert(spec);
+    }
     default:
       XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);
   }
@@ -5100,6 +5120,12 @@ std::string JSONSchemaToEBNF(
     }
     case JSONFormat::kCohereXML: {
       CohereXMLToolCallingConverter converter(
+          indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
+      );
+      return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();
+    }
+    case JSONFormat::kGemma: {
+      GemmaToolCallingConverter converter(
           indent, separators, any_whitespace, max_whitespace_cnt, ref_resolver, any_order
       );
       return GrammarNormalizer::Apply(converter.Convert(spec)).ToString();

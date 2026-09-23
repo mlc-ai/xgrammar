@@ -1,9 +1,13 @@
 """Validate builtin structural tags against official model renderers.
 
-Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4/V4.1)
-and Cohere Melody for CMD5 to render model outputs, then checks that xgrammar
-structural tag grammars accept them. Requires encoding_dsv32.py and
-encoding_dsv4.py in the same directory. V4.1 uses a revision-pinned official encoder.
+Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4/V4.1,
+the vendored Gemma-4 templates, and Cohere Melody for CMD5) to render model outputs,
+then checks that xgrammar structural tag grammars accept them. Requires
+encoding_dsv32.py, encoding_dsv4.py and encoding_gemma4.py in the same directory.
+V4.1 uses a revision-pinned official encoder.
+
+GEMMA: model ids render the vendored templates with jinja2 and need neither
+transformers nor a HF token, so those cases are not marked hf_token_required.
 """
 
 import importlib.util
@@ -75,7 +79,6 @@ PARALLEL_TOOL_SCENARIOS = [(2, "auto", 2), (2, "required", 2)]
 # (stag_key, model_id, reasoning, template_kwargs)
 # Excluded:
 #   - Llama-4: pythonic tool call format, needs separate structural tag
-#   - gemma_4: tool calls use <|"|> quoting, not JSON
 #   - deepseek_r1 thinking=True: template drops <think> in history rendering,
 #     prompt diff extraction doesn't work
 #   - Kimi-K2-Thinking thinking=False: model always outputs <think></think>,
@@ -124,11 +127,27 @@ MODEL_CONFIGS = [
         False,
         {"skip_think": True, "enable_thinking": False},
     ),
+    # Gemma-4 tokenizers need transformers >= 5.5; the vendored templates render offline.
+    ("gemma_4", "GEMMA:gemma4_e2b", True, {"enable_thinking": True}),
+    ("gemma_4", "GEMMA:gemma4_e2b", False, {"enable_thinking": False}),
+    ("gemma_4", "GEMMA:gemma4_31b", True, {"enable_thinking": True}),
+    ("gemma_4", "GEMMA:gemma4_31b", False, {"enable_thinking": False}),
 ]
 
 # Models whose renderer cannot produce a turn with an empty reasoning block: the DeepSeek
-# V3.2 encoder rejects it, the other templates drop the block entirely.
-SKIP_EMPTY_REASONING = {"ENCODER:dsv32", "MiniMaxAI/MiniMax-M2.5", "moonshotai/Kimi-K3"}
+# V3.2 encoder rejects it, the other templates (including Gemma-4's) drop the block entirely.
+SKIP_EMPTY_REASONING = {
+    "ENCODER:dsv32",
+    "MiniMaxAI/MiniMax-M2.5",
+    "moonshotai/Kimi-K3",
+    "GEMMA:gemma4_e2b",
+    "GEMMA:gemma4_31b",
+}
+
+# Templates that pre-render an empty thought block in the generation prompt when thinking
+# is disabled; history rendering omits it, so it is stripped before diffing.
+PRERENDERED_EMPTY_THOUGHT_MODELS = {"GEMMA:gemma4_31b"}
+PRERENDERED_EMPTY_THOUGHT = "<|channel>thought\n<channel|>"
 
 # Models where tool call format in template doesn't match structural tag.
 SKIP_TOOLS = set()
@@ -168,6 +187,8 @@ EOS_SUFFIXES = {
     "deepseek_v4_1": ["<｜end▁of▁sentence｜>"],
     "cohere": ["<|END_OF_TURN_TOKEN|>"],
     "exaone": ["[|endofturn|]"],
+    # <|tool_response> is the halt signal the template appends after a tool call.
+    "gemma_4": ["<turn|>", "<|tool_response>"],
 }
 
 
@@ -234,8 +255,17 @@ def strip_eos(output, stag_key, tokenizer=None):
     return output
 
 
+def load_renderer(model_id):
+    """A tokenizer, or a vendored-template renderer that mimics apply_chat_template."""
+    if model_id.startswith("GEMMA:"):
+        from encoding_gemma4 import GemmaTemplateRenderer
+
+        return GemmaTemplateRenderer(model_id.split(":")[1])
+    return load_tokenizer(model_id, trust_remote_code=True)
+
+
 def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_kwargs):
-    tokenizer = load_tokenizer(model_id, trust_remote_code=True)
+    tokenizer = load_renderer(model_id)
     kwargs = dict(tokenize=False, **template_kwargs)
     if tools:
         kwargs["tools"] = tools
@@ -243,6 +273,9 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
     full = tokenizer.apply_chat_template(
         [USER_MSG, assistant_msg], add_generation_prompt=False, **kwargs
     )
+
+    if model_id in PRERENDERED_EMPTY_THOUGHT_MODELS and not full.startswith(prompt):
+        prompt = prompt.removesuffix(PRERENDERED_EMPTY_THOUGHT)
 
     if model_id in STRIP_THINK_MODELS and assistant_msg.get("reasoning_content") is not None:
         if not full.startswith(prompt):
@@ -388,6 +421,8 @@ def extract_model_output(stag_key, model_id, assistant_msg, tools, template_kwar
         return extract_output_encoder(encoder_name, stag_key, assistant_msg, tools, template_kwargs)
     if model_id == "MELODY:cmd5":
         return extract_output_melody_cmd5(assistant_msg, tools, template_kwargs)
+    # GEMMA: renderers mimic apply_chat_template, so they share the tokenizer path
+    # (prompt diff, prerendered-thought stripping, EOS stripping).
     return extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_kwargs)
 
 
@@ -463,7 +498,7 @@ def case_id(case):
         _,
         num_tool_calls,
     ) = case
-    model_short = model_id.split("/")[-1] if "/" in model_id else model_id.replace("ENCODER:", "")
+    model_short = model_id.split("/")[-1] if "/" in model_id else model_id.split(":")[-1]
     if reasoning in (False, "disabled"):
         r_tag = "off"
     elif reasoning_content:
@@ -484,7 +519,7 @@ def make_test_param(case):
     if model_id.startswith("MELODY:"):
         if sys.version_info < (3, 10):
             marks.append(pytest.mark.skip(reason="cohere_melody requires Python >= 3.10"))
-    else:
+    elif not model_id.startswith("GEMMA:"):
         marks.append(pytest.mark.hf_token_required)
     return pytest.param(case, id=case_id(case), marks=marks)
 
@@ -778,6 +813,53 @@ def test_mimo_official_tokenizer_masks(model_id, revision, reasoning, policy, sc
         assert (int(bitmask[0, token_id // 32]) >> (token_id % 32)) & 1, (index, token_id)
         assert matcher.accept_token(token_id), (index, token_id)
     assert matcher.is_terminated()
+
+
+# Official model ids for the vendored gemma-4 templates (drift guard below).
+GEMMA4_OFFICIAL_MODELS = {
+    "gemma4_e2b": "google/gemma-4-E2B-it",
+    "gemma4_31b": "google/gemma-4-31B-it",
+}
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("variant", sorted(GEMMA4_OFFICIAL_MODELS))
+def test_gemma_4_vendored_template_matches_official(variant):
+    """The vendored gemma-4 templates must render exactly like the official ones.
+
+    Guards against upstream chat-template updates drifting from the vendored copies used
+    by the GEMMA: cases. Loading the official tokenizer requires transformers >= 5.5
+    (gemma-4 support), so this only runs where that is available.
+    """
+    import transformers
+
+    major, minor = (int(p) for p in transformers.__version__.split(".")[:2])
+    if (major, minor) < (5, 5):
+        pytest.skip("gemma-4 tokenizer requires transformers >= 5.5")
+
+    from encoding_gemma4 import GemmaTemplateRenderer
+
+    tokenizer = load_tokenizer(GEMMA4_OFFICIAL_MODELS[variant])
+    renderer = GemmaTemplateRenderer(variant)
+
+    assistant_tool_calls = make_assistant_msg("gemma_4", REASONING_CONTENT, 2)
+    assistant_text = make_assistant_msg("gemma_4", None, 0)
+    for enable_thinking in (True, False):
+        for messages in ([USER_MSG], [USER_MSG, assistant_tool_calls], [USER_MSG, assistant_text]):
+            for tools in (None, [TOOL_A], [TOOL_A, TOOL_B]):
+                for add_generation_prompt in (True, False):
+                    kwargs = {
+                        "tools": tools,
+                        "add_generation_prompt": add_generation_prompt,
+                        "enable_thinking": enable_thinking,
+                    }
+                    official = tokenizer.apply_chat_template(messages, tokenize=False, **kwargs)
+                    vendored = renderer.apply_chat_template(messages, tokenize=False, **kwargs)
+                    assert official == vendored, (
+                        f"Vendored template drifted (enable_thinking={enable_thinking}, "
+                        f"messages={len(messages)}, tools={len(tools or [])}, "
+                        f"add_generation_prompt={add_generation_prompt})"
+                    )
 
 
 if __name__ == "__main__":

@@ -203,12 +203,13 @@ enum class JSONFormat : int {
   kKimiK3XML = 6,
   kMiniMaxM3XML = 7,
   kDeepSeekV41XML = 8,
+  kGemma = 9,
 };
 
 /*!
  * \brief Convert a format name to JSONFormat.
  * \param format One of "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml",
- * "glm_xml", "cohere_xml", "kimi_k3_xml", or "deepseek_v4_1_xml".
+ * "glm_xml", "cohere_xml", "kimi_k3_xml", "deepseek_v4_1_xml", or "gemma".
  * \return The corresponding JSONFormat, or std::nullopt if the name is not recognized.
  */
 std::optional<JSONFormat> JSONFormatFromString(const std::string& format);
@@ -363,6 +364,24 @@ class JSONSchemaConverter {
 
   /*! \brief Get the basic string rule name. Override for different formats. */
   virtual std::string GetKeyPattern() const;
+
+  /*!
+   * \brief Create the key rule of a patternProperties entry and return its rule id. Builds a
+   * string rule through GenerateString by default; formats whose keys are not JSON strings
+   * override it to emit the bare key body.
+   */
+  virtual int32_t CreatePatternKeyRule(
+      const std::string& pattern, const std::string& rule_name_hint
+  );
+
+  /*!
+   * \brief Create the key rule of a propertyNames constraint and return its rule id. Converts the
+   * propertyNames schema like any value schema by default; formats whose keys are not JSON strings
+   * override it to constrain the bare key.
+   */
+  virtual int32_t CreatePropertyNamesKeyRule(
+      const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+  );
 
   /*! \brief Get a key pattern that excludes specific property names. */
   virtual int32_t GetKeyPatternExcluding(
