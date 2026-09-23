@@ -11,6 +11,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <functional>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -157,8 +159,14 @@ class DynamicBitset {
   /*! \brief Perform a bitwise OR operation between the current bitset and another bitset. */
   DynamicBitset& operator|=(const DynamicBitset& other) {
     XGRAMMAR_DCHECK(buffer_size_ <= other.buffer_size_);
-    for (int i = 0; i < buffer_size_; ++i) {
-      data_[i] |= other.data_[i];
+    // Keep the loop bounds and pointers independent of writes through the buffer.
+    // Reloading the members can prevent vectorization because uint32_t writes may
+    // alias the integer buffer_size_ member under C++ aliasing rules.
+    const int size = buffer_size_;
+    uint32_t* const dest = data_;
+    const uint32_t* const src = other.data_;
+    for (int i = 0; i < size; ++i) {
+      dest[i] |= src[i];
     }
     return *this;
   }
@@ -297,6 +305,13 @@ class DynamicBitset {
       if (data_[i] != other.data_[i]) return false;
     }
     return true;
+  }
+
+  /*! \brief Hash the backing words. Equality must still be checked on collisions. */
+  std::size_t Hash() const {
+    if (buffer_size_ == 0) return 0;
+    return std::hash<std::string_view>{
+    }(std::string_view(reinterpret_cast<const char*>(data_), buffer_size_ * sizeof(uint32_t)));
   }
 
  private:

@@ -1,11 +1,13 @@
 """Compare materialized string masks with the original counted-character grammar."""
 
 import json
+from itertools import product
 
 import pytest
 import torch
 
 import xgrammar as xgr
+from xgrammar.testing import _get_masked_tokens_from_bitmask
 
 
 @pytest.mark.parametrize(
@@ -182,3 +184,56 @@ def test_large_string_capacity_and_rollback(upper, near_lower_bound):
     assert matcher.accept_token(len(candidates) - 1)
     assert matcher.accept_token(len(candidates))
     assert matcher.is_terminated()
+
+
+def test_duplicate_bitsets_preserve_uncertain_alternatives_after_serialization():
+    # Thousands of accepted and rejected tokens force bitset storage. The two
+    # alternatives share accepted bitsets but have different length/exit rules;
+    # deduplicating the bitset union must not skip either uncertain-token trial.
+    vocabulary = [
+        "".join(chars)
+        for alphabet in ["abcdefghijklm", "ABCDEFGHIJKLM"]
+        for chars in product(alphabet, repeat=3)
+    ]
+    vocabulary += [
+        body + ending for body in ["", "a", "a" * 128, "a" * 300] for ending in ["!", "?"]
+    ]
+    vocabulary += ["a", "<eos>"]
+    info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[len(vocabulary) - 1])
+    grammar = 'root ::= left "!" | right "?"\nleft ::= [a-z]{0,256}\nright ::= [a-z]{200,512}'
+    compiled = xgr.GrammarCompiler(info).compile_grammar(grammar)
+    serialized = compiled.serialize_json()
+    assert any(
+        mask[1]["store_type"] == 2 for mask in json.loads(serialized)["adaptive_token_mask_cache"]
+    )
+    contexts = [compiled, xgr.CompiledGrammar.deserialize_json(serialized, info)]
+    mask = xgr.allocate_token_bitmask(1, len(vocabulary))
+    for context in contexts:
+        matcher = xgr.GrammarMatcher(context)
+        previous = 0
+        for position in [0, 1, 127, 128, 129, 199, 200, 255, 256, 257, 511, 512]:
+            assert matcher.accept_string("a" * (position - previous))
+            previous = position
+            matcher.fill_next_token_bitmask(mask)
+            expected_rejected = []
+            for token_id, token in enumerate(vocabulary):
+                end = token[-1] if token[-1] in "!?" else ""
+                body = token[:-1] if end else token
+                length = position + len(body)
+                allowed = all("a" <= c <= "z" for c in body)
+                allowed &= (
+                    length <= 256
+                    if end == "!"
+                    else 200 <= length <= 512 if end == "?" else length <= 512
+                )
+                if not allowed:
+                    expected_rejected.append(token_id)
+            assert _get_masked_tokens_from_bitmask(mask, len(vocabulary)) == expected_rejected
+            before = mask.clone()
+            matcher.fill_next_token_bitmask(mask)
+            assert torch.equal(mask, before)
+        assert matcher.accept_token(vocabulary.index("?"))
+        assert matcher.accept_token(len(vocabulary) - 1)
+        matcher.reset()
+        matcher.fill_next_token_bitmask(mask)
+        assert matcher.accept_token(vocabulary.index("!"))

@@ -480,7 +480,8 @@ class GrammarMatcher::Impl : public EarleyParser {
         stop_token_ids_(override_stop_tokens.value_or(tokenizer_info_.GetStopTokenIds())),
         terminate_without_stop_token_(terminate_without_stop_token),
         default_temperature_(default_temperature),
-        tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()) {
+        tmp_accepted_bitset_(tokenizer_info_.GetVocabSize()),
+        tmp_bitset_seen_epoch_(compiled_grammar->num_unique_accepted_bitsets, 0) {
     if (override_stop_tokens.has_value()) {
       XGRAMMAR_CHECK(!override_stop_tokens->empty())
           << "The override_stop_tokens should not be empty";
@@ -770,6 +771,8 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   // Temporary data for FillNextTokenBitmask. They are stored here to avoid repeated allocation.
   DynamicBitset tmp_accepted_bitset_;
+  std::vector<uint32_t> tmp_bitset_seen_epoch_;
+  uint32_t tmp_bitset_epoch_ = 0;
   std::vector<int32_t> tmp_rejected_indices_;
   std::vector<int32_t> tmp_rejected_indices_delta_;
 };
@@ -1889,6 +1892,10 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
   // Note these indices store the indices in sorted_decoded_vocab, instead of the token ids.
   tmp_accepted_bitset_.Reset();
+  if (++tmp_bitset_epoch_ == 0) {
+    std::fill(tmp_bitset_seen_epoch_.begin(), tmp_bitset_seen_epoch_.end(), 0);
+    tmp_bitset_epoch_ = 1;
+  }
   // {-1} means the universal set, i.e. all tokens initially
   tmp_rejected_indices_.assign({-1});
 
@@ -1911,13 +1918,26 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         continue;
       }
     }
-    latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
     if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
-      tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
+      int32_t id = adaptive_token_mask.accepted_bitset_id;
+      XGRAMMAR_DCHECK(id >= 0 && id < static_cast<int32_t>(tmp_bitset_seen_epoch_.size()));
+      if (tmp_bitset_seen_epoch_[id] != tmp_bitset_epoch_) {
+        tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
+        tmp_bitset_seen_epoch_[id] = tmp_bitset_epoch_;
+      }
     } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
       for (auto idx : adaptive_token_mask.accepted_indices) {
         tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
       }
+    }
+    if (adaptive_token_mask.uncertain_indices.empty()) {
+      // A fully classified mask needs no temporary parser state. In particular,
+      // materialized repetition tails can contribute many such states per fill.
+      if (adaptive_token_mask.store_type == StoreType::kRejected) {
+        IntsetIntersection(&tmp_rejected_indices_, adaptive_token_mask.rejected_indices);
+      }
+    } else {
+      latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
     }
   }
 
