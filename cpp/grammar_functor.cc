@@ -2274,6 +2274,8 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
    */
   std::map<std::vector<int64_t>, int32_t> repetition_cache_;
   int32_t character_repeat_window_;
+  // Bound the extra character positions introduced by context specialization.
+  int32_t remaining_context_window_states_ = 4096;
 };
 
 /****************** Repetition range helpers ******************/
@@ -2388,6 +2390,15 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   cache_key.push_back(upper);
   auto it = repetition_cache_.find(cache_key);
   if (it != repetition_cache_.end()) {
+    const auto& cached = builder_->GetGrammarExpr(it->second);
+    if (repeated_expr.type == GrammarExprType::kCharacterClass &&
+        upper > character_repeat_window_ && cached.type == GrammarExprType::kRuleRef &&
+        character_repeat_window_ <= remaining_context_window_states_) {
+      remaining_context_window_states_ -= character_repeat_window_;
+      // Keep the outer continuation local while sharing the counted body.
+      int32_t body = builder_->GetRule(cached[0]).body_expr_id;
+      return builder_->AddRuleRef(builder_->AddRuleWithHint(cur_rule_name, body));
+    }
     return it->second;
   }
 
