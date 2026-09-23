@@ -3093,6 +3093,40 @@ def test_nested_true_schema():
     assert not _is_grammar_accept_string(ebnf_grammar, "anything")
 
 
+def test_qwen_xml_nested_json_pattern_uses_search():
+    schema = {
+        "type": "object",
+        "properties": {
+            "data": {
+                "type": "object",
+                "properties": {"label": {"type": "string", "pattern": "cat"}},
+                "required": ["label"],
+            }
+        },
+        "required": ["data"],
+    }
+    grammar = Grammar.from_ebnf(
+        _json_schema_to_ebnf(json.dumps(schema), json_format="qwen_xml", any_whitespace=False)
+    )
+    assert _is_grammar_accept_string(
+        grammar, '<parameter=data>{"label": "concatenate"}</parameter>'
+    )
+    assert not _is_grammar_accept_string(grammar, '<parameter=data>{"label": "dog"}</parameter>')
+
+
+def test_qwen_xml_top_level_parameter_pattern_keeps_full_match():
+    schema = {
+        "type": "object",
+        "properties": {"comment": {"type": "string", "pattern": "cat"}},
+        "required": ["comment"],
+    }
+    grammar = Grammar.from_ebnf(
+        _json_schema_to_ebnf(json.dumps(schema), json_format="qwen_xml", any_whitespace=False)
+    )
+    assert _is_grammar_accept_string(grammar, "<parameter=comment>cat</parameter>")
+    assert not _is_grammar_accept_string(grammar, "<parameter=comment>concatenate</parameter>")
+
+
 def test_true_schema():
     schema = "true"
     ebnf_grammar = _json_schema_to_ebnf(schema, json_format="qwen_xml")

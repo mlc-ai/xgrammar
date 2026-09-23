@@ -2,7 +2,7 @@
 
 import json
 import sys
-from typing import Optional
+from typing import List, Optional
 
 import pytest
 
@@ -464,6 +464,164 @@ def test_json_schema_pattern_properties():
     assert "json_string=true" in str(grammar)
     assert _is_grammar_accept_string(grammar, '{"ab": 1}')
     assert not _is_grammar_accept_string(grammar, '{"AB": 1}')
+
+
+@pytest.mark.parametrize(
+    "value, accepted",
+    [("cat", True), ("concatenate", True), ("dog", False), ("x\ncat", True), ('x"cat', True)],
+)
+def test_json_schema_pattern_search(value: str, accepted: bool):
+    schema = json.dumps({"type": "string", "pattern": "cat"})
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    assert 'Regex("cat", json_string=true)' in str(grammar)
+    assert _is_grammar_accept_string(grammar, json.dumps(value)) is accepted
+
+
+@pytest.mark.parametrize(
+    "pattern, accepted_values, rejected_values",
+    [
+        ("^cat$", ["cat"], ["concatenate"]),
+        ("^cat", ["catfish"], ["bobcat"]),
+        ("cat$", ["bobcat"], ["catfish"]),
+        ("^cat|dog$", ["catfish", "hotdog"], ["hotcatfish"]),
+        ("^(?:cat|dog)$", ["cat", "dog"], ["hotdog"]),
+        ("cat|", ["", "dog", "cat"], []),
+        ("|cat", ["", "dog", "cat"], []),
+        ("^$", [""], ["cat"]),
+        ("", ["", "cat", "dog"], []),
+        (r"\$", ["cost$1"], ["cost1"]),
+        (r"a\|b", ["prefixa|bsuffix"], ["prefixabsuffix"]),
+        (r"[|()]", ["left(right", "left|right"], ["plain"]),
+        (r"[\]$]", ["left]right", "left$right"], ["plain"]),
+        (r"\^cat\$", ["prefix^cat$suffix"], ["prefixcatsuffix"]),
+        (r"[^a]", ["b"], ["a"]),
+    ],
+)
+def test_json_schema_pattern_search_anchors_and_alternatives(
+    pattern: str, accepted_values: List[str], rejected_values: List[str]
+):
+    schema = json.dumps({"type": "string", "pattern": pattern})
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    for value in accepted_values:
+        assert _is_grammar_accept_string(grammar, json.dumps(value))
+    for value in rejected_values:
+        assert not _is_grammar_accept_string(grammar, json.dumps(value))
+
+
+def test_json_schema_pattern_search_cfg_backend():
+    schema = json.dumps({"type": "string", "pattern": "^猫|犬$"})
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    assert "Regex(" not in str(grammar)
+    assert _is_grammar_accept_string(grammar, '"猫咪"')
+    assert _is_grammar_accept_string(grammar, '"小犬"')
+    assert not _is_grammar_accept_string(grammar, '"招き猫"')
+
+
+def test_json_schema_pattern_search_cfg_outer_group_anchors():
+    schema = json.dumps({"type": "string", "pattern": "^(?:猫|犬)$"})
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    assert "Regex(" not in str(grammar)
+    assert _is_grammar_accept_string(grammar, '"猫"')
+    assert _is_grammar_accept_string(grammar, '"犬"')
+    assert not _is_grammar_accept_string(grammar, '"子猫"')
+
+
+@pytest.mark.parametrize(
+    "pattern, accepted_values, rejected_values",
+    [
+        ("(?i)cat|dog", ["CAT", "DOG"], ["cow"]),
+        ("(?i)^cat$", ["CAT"], ["concatenate"]),
+        ("(?i)^cat|dog$", ["CATFISH", "HOTDOG"], ["HOTCATFISH"]),
+    ],
+)
+def test_json_schema_pattern_search_preserves_leading_case_flag(
+    pattern: str, accepted_values: List[str], rejected_values: List[str]
+):
+    schema = json.dumps({"type": "string", "pattern": pattern})
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    for value in accepted_values:
+        assert _is_grammar_accept_string(grammar, json.dumps(value))
+    for value in rejected_values:
+        assert not _is_grammar_accept_string(grammar, json.dumps(value))
+
+
+@pytest.mark.parametrize("ensure_ascii", [True, False])
+def test_json_schema_pattern_search_valid_json_escapes(ensure_ascii: bool):
+    schema = json.dumps({"type": "string", "pattern": "cat"})
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    for value in ["line\ncat", 'quote"cat', "猫cat"]:
+        serialized = json.dumps(value, ensure_ascii=ensure_ascii)
+        assert _is_grammar_accept_string(grammar, serialized)
+    assert not _is_grammar_accept_string(grammar, '"line\x01cat"')
+    assert not _is_grammar_accept_string(grammar, '"quote"cat"')
+
+
+def test_json_schema_pattern_properties_search():
+    schema = json.dumps(
+        {
+            "type": "object",
+            "patternProperties": {"cat": {"type": "integer"}},
+            "additionalProperties": False,
+        }
+    )
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    assert "Regex(" in str(grammar)
+    assert _is_grammar_accept_string(grammar, '{"concatenate": 1}')
+    assert not _is_grammar_accept_string(grammar, '{"dog": 1}')
+
+
+def test_json_schema_pattern_properties_search_cfg_backend():
+    schema = json.dumps(
+        {
+            "type": "object",
+            "patternProperties": {"猫": {"type": "integer"}},
+            "additionalProperties": False,
+        },
+        ensure_ascii=False,
+    )
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    assert "Regex(" not in str(grammar)
+    assert _is_grammar_accept_string(grammar, '{"招き猫": 1}')
+    assert not _is_grammar_accept_string(grammar, '{"犬": 1}')
+
+
+def test_json_schema_property_names_pattern_search():
+    schema = json.dumps({"type": "object", "propertyNames": {"pattern": "cat"}})
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    assert _is_grammar_accept_string(grammar, '{"concatenate": 1}')
+    assert not _is_grammar_accept_string(grammar, '{"dog": 1}')
+
+
+def test_json_schema_property_names_pattern_search_cfg_backend():
+    schema = json.dumps({"type": "object", "propertyNames": {"pattern": "猫"}}, ensure_ascii=False)
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    assert "Regex(" not in str(grammar)
+    assert _is_grammar_accept_string(grammar, '{"招き猫": 1}')
+    assert not _is_grammar_accept_string(grammar, '{"犬": 1}')
+
+
+def test_standalone_regex_keeps_full_match_semantics():
+    grammar = xgr.Grammar.from_ebnf('root ::= Regex("cat")')
+    assert _is_grammar_accept_string(grammar, "cat")
+    assert not _is_grammar_accept_string(grammar, "concatenate")
+
+    flagged_grammar = xgr.Grammar.from_ebnf('root ::= Regex("(?i)cat|dog")')
+    assert _is_grammar_accept_string(flagged_grammar, "DOG")
+    assert not _is_grammar_accept_string(flagged_grammar, "hotdog")
+
+
+@pytest.mark.parametrize("pattern", ["cat$dog", "(cat$)", "^cat^"])
+def test_json_schema_pattern_search_rejects_unsupported_anchors(pattern: str):
+    schema = json.dumps({"type": "string", "pattern": pattern})
+    with pytest.raises(RuntimeError, match="anchor"):
+        xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+
+
+def test_json_schema_pattern_search_still_rejects_invalid_regex():
+    schema = json.dumps({"type": "string", "pattern": "("})
+    with pytest.raises(RuntimeError):
+        grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+        _is_grammar_accept_string(grammar, '"cat"')
 
 
 if __name__ == "__main__":
