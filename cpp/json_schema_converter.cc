@@ -3112,16 +3112,16 @@ int32_t JSONSchemaConverter::GenerateObject(
 
   int32_t result = need_braces ? Sequence({ByteString("{"), content, ByteString("}")}) : content;
   if (could_be_empty) {
-    // Outside braces (XML parameter zones) an empty object must emit
-    // nothing: the surrounding tag template already supplies the whitespace,
-    // and a whitespace-only alternative would be a self-loop that burns the
-    // whole generation budget on tabs (issue #802).
-    int32_t empty_content = any_whitespace_ && need_braces ? WhitespaceExpression() : Empty();
+    int32_t empty_content = EmptyObjectContentExpression(need_braces);
     int32_t empty_result =
         need_braces ? Sequence({ByteString("{"), empty_content, ByteString("}")}) : empty_content;
     return has_content ? Choice({result, empty_result}) : empty_result;
   }
   return result;
+}
+
+int32_t JSONSchemaConverter::EmptyObjectContentExpression(bool) {
+  return any_whitespace_ ? WhitespaceExpression() : Empty();
 }
 
 int32_t JSONSchemaConverter::GenerateAny(const AnySpec& spec, const std::string& rule_name) {
@@ -3747,6 +3747,19 @@ int32_t XMLToolCallingConverter::GenerateObject(
   auto result = JSONSchemaConverter::GenerateObject(spec, rule_name, need_brace);
   nested_object_level_--;
   return result;
+}
+
+int32_t XMLToolCallingConverter::EmptyObjectContentExpression(bool need_braces) {
+  if (need_braces || !any_whitespace_ || max_whitespace_cnt_.has_value()) {
+    return JSONSchemaConverter::EmptyObjectContentExpression(need_braces);
+  }
+  if (json_format_ == JSONFormat::kDeepSeekXML || json_format_ == JSONFormat::kDeepSeekV41XML) {
+    // DeepSeek's empty invoke representation permits one blank line, but an
+    // unbounded whitespace rule lets generation loop on tabs before the end tag.
+    return Choice({Empty(), ByteString("\n")});
+  }
+  // Other XML parameter formats hand control directly to their closing tag.
+  return Empty();
 }
 
 void XMLToolCallingConverter::AddCache(const std::string& key, int32_t rule_id) {

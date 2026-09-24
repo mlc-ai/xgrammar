@@ -388,7 +388,7 @@ xml_string ::= TagDispatch(
   excludes=("</\uff5cDSML\uff5cparameter>")
 )
 xml_any ::= ((xml_string) | (basic_array) | (basic_object))
-xml_object ::= ("" | ([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name xml_object_2 xml_object_properties{0, -1} [ \n\r\t]*))
+xml_object ::= ("" | ([ \n\r\t]* "<\uff5cDSML\uff5cparameter name=\"" xml_variable_name xml_object_2 xml_object_properties{0, -1} [ \n\r\t]*) | ("\n"))
 xml_variable_name ::= (([a-zA-Z_] [a-zA-Z0-9_]*))
 basic_number_digits ::= (([0-9]))
 basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))

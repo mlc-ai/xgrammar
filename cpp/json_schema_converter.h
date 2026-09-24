@@ -318,6 +318,8 @@ class JSONSchemaConverter {
   virtual int32_t GenerateObject(
       const ObjectSpec& spec, const std::string& rule_name, bool need_brace = true
   );
+  /*! \brief Generate whitespace allowed inside an empty object. */
+  virtual int32_t EmptyObjectContentExpression(bool need_braces);
   virtual int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name);
   virtual int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name);

@@ -105,6 +105,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   int32_t GenerateObject(
       const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
   ) override;
+  int32_t EmptyObjectContentExpression(bool need_braces) override;
   int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
   int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
   int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
