@@ -893,18 +893,20 @@ def test_repeat_ref_nested_inner():
 
 def test_repeat_ref_nested_outer():
     """Test repeat used as part of a larger sequence (other rules wrap repeat)."""
+    # Keep the counted part larger than the materialization threshold after the
+    # compiler splits off its fixed 128-character suffix.
     grammar_str = """
         root ::= "start-" body "-end"
-        body ::= [a-z]{200}
+        body ::= [a-z]{400}
     """
     grammar = xgr.Grammar.from_ebnf(grammar_str)
     _assert_repeat_ref_active(grammar)
 
-    assert _is_grammar_accept_string(grammar, "start-" + "a" * 200 + "-end")
-    assert _is_grammar_accept_string(grammar, "start-" + "xyz" * 66 + "xy" + "-end")
-    assert not _is_grammar_accept_string(grammar, "start-" + "a" * 199 + "-end")
-    assert not _is_grammar_accept_string(grammar, "start-" + "a" * 201 + "-end")
-    assert not _is_grammar_accept_string(grammar, "a" * 200)
+    assert _is_grammar_accept_string(grammar, "start-" + "a" * 400 + "-end")
+    assert _is_grammar_accept_string(grammar, "start-" + "xyz" * 133 + "x" + "-end")
+    assert not _is_grammar_accept_string(grammar, "start-" + "a" * 399 + "-end")
+    assert not _is_grammar_accept_string(grammar, "start-" + "a" * 401 + "-end")
+    assert not _is_grammar_accept_string(grammar, "a" * 400)
 
 
 def test_repeat_ref_sequence_with_repeat():
