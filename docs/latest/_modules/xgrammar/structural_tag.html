@@ -7,7 +7,7 @@
         <link rel="prefetch" href="../../_static/img/logo_dark.svg" as="image">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>xgrammar.structural_tag - XGrammar 0.2.8.dev17+g97787376f</title>
+        <title>xgrammar.structural_tag - XGrammar 0.2.9.dev1+g4221346f3</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
@@ -164,7 +164,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">XGrammar 0.2.8.dev17+g97787376f</div></a>
+      <a href="../../index.html"><div class="brand">XGrammar 0.2.9.dev1+g4221346f3</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -189,7 +189,7 @@
     <img class="sidebar-logo only-dark" src="../../_static/img/logo_dark.svg" alt="Dark Logo"/>
   </div>
   
-  <span class="sidebar-brand-text">XGrammar 0.2.8.dev17+g97787376f</span>
+  <span class="sidebar-brand-text">XGrammar 0.2.9.dev1+g4221346f3</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -326,6 +326,7 @@
         <span class="s2">"cohere_xml"</span><span class="p">,</span>
         <span class="s2">"kimi_k3_xml"</span><span class="p">,</span>
         <span class="s2">"deepseek_v4_1_xml"</span><span class="p">,</span>
+        <span class="s2">"gemma"</span><span class="p">,</span>
     <span class="p">]</span> <span class="o">=</span> <span class="s2">"json"</span>
 <span class="w">    </span><span class="sd">"""How to parse the content. Valid values: \"json\" (standard JSON), \"qwen_xml\" (Qwen XML:</span>
 <span class="sd">    &lt;parameter=key&gt;value&lt;/parameter&gt;), \"minimax_xml\" (MiniMax XML:</span>
@@ -335,7 +336,9 @@
 <span class="sd">    \"deepseek_v4_1_xml\" (DeepSeek-V4.1: &lt;{dsml_token} parameter name=\"key\" string=\"true|false\"&gt;value&lt;/{dsml_token} parameter&gt;),</span>
 <span class="sd">    \"glm_xml\" (GLM XML: &lt;arg_key&gt;key&lt;/arg_key&gt;&lt;arg_value&gt;value&lt;/arg_value&gt;),</span>
 <span class="sd">    \"cohere_xml\" (Cohere XML: &lt;cofl:value name=\"key\" type=\"raw|json|dict|list\"&gt;value&lt;/cofl:value&gt;),</span>
-<span class="sd">    \"kimi_k3_xml\" (Kimi-K3: &lt;|open|&gt;argument key=\"key\" type=\"type\"&lt;|sep|&gt;value&lt;|close|&gt;argument&lt;|sep|&gt;)."""</span>
+<span class="sd">    \"kimi_k3_xml\" (Kimi-K3: &lt;|open|&gt;argument key=\"key\" type=\"type\"&lt;|sep|&gt;value&lt;|close|&gt;argument&lt;|sep|&gt;),</span>
+<span class="sd">    \"gemma\" (Gemma 4: {key:&lt;|\"|&gt;string value&lt;|\"|&gt;,key2:123}; unquoted keys and &lt;|\"|&gt;-delimited</span>
+<span class="sd">    strings at every nesting level)."""</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
 <span class="w">    </span><span class="sd">"""Whether object properties may appear in any order.</span>
 
@@ -1011,7 +1014,7 @@
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=fd08d4d4"></script>
+</div><script src="../../_static/documentation_options.js?v=41b80504"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>

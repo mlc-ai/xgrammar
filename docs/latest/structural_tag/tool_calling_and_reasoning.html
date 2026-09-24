@@ -8,7 +8,7 @@
         <link rel="prefetch" href="../_static/img/logo_dark.svg" as="image">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Tool Calling and Reasoning - XGrammar 0.2.8.dev17+g97787376f</title>
+        <title>Tool Calling and Reasoning - XGrammar 0.2.9.dev1+g4221346f3</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -165,7 +165,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">XGrammar 0.2.8.dev17+g97787376f</div></a>
+      <a href="../index.html"><div class="brand">XGrammar 0.2.9.dev1+g4221346f3</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -190,7 +190,7 @@
     <img class="sidebar-logo only-dark" src="../_static/img/logo_dark.svg" alt="Dark Logo"/>
   </div>
   
-  <span class="sidebar-brand-text">XGrammar 0.2.8.dev17+g97787376f</span>
+  <span class="sidebar-brand-text">XGrammar 0.2.9.dev1+g4221346f3</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -318,7 +318,7 @@
 <section id="parameters">
 <h3>Parameters<a class="headerlink" href="#parameters" title="Link to this heading">¶</a></h3>
 <ul>
-<li><p><strong>model</strong> (<code class="docutils literal notranslate"><span class="pre">str</span></code>): The structural-tag style. Valid values are <code class="docutils literal notranslate"><span class="pre">&quot;llama&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;qwen_3&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;qwen_3_5&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;qwen_3_coder&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;kimi&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;kimi_k3&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_r1&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v3_1&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;harmony&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v3_2&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;minimax&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;minimax_m3&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;glm_4_7&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v4&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v4_1&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;mimo&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;cohere&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;exaone&quot;</span></code>.</p></li>
+<li><p><strong>model</strong> (<code class="docutils literal notranslate"><span class="pre">str</span></code>): The structural-tag style. Valid values are <code class="docutils literal notranslate"><span class="pre">&quot;llama&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;qwen_3&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;qwen_3_5&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;qwen_3_coder&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;kimi&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;kimi_k3&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_r1&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v3_1&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;harmony&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v3_2&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;minimax&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;minimax_m3&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;glm_4_7&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v4&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v4_1&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;mimo&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;cohere&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;exaone&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;gemma_4&quot;</span></code>.</p></li>
 <li><p><strong>tools</strong> (<code class="docutils literal notranslate"><span class="pre">List[ToolParam</span> <span class="pre">|</span> <span class="pre">dict]</span></code>, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:</p>
 <ul>
 <li><p><strong>Function tools</strong> use the OpenAI Chat Completions shape:</p>
@@ -568,6 +568,9 @@ choice already resolves to a single call, so the flag does not change it.</p>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;exaone&quot;</span></code></p></td>
 <td><p>EXAONE-4.0-32B, EXAONE-4.0-1.2B</p></td>
 </tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&quot;gemma_4&quot;</span></code></p></td>
+<td><p>Gemma 4 (gemma-4-E2B-it, gemma-4-12b-it, gemma-4-26b-a4b-it, gemma-4-31b-it); arguments use the <code class="docutils literal notranslate"><span class="pre">&quot;gemma&quot;</span></code> JSON-schema style</p></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -671,7 +674,7 @@ choice already resolves to a single call, so the flag does not change it.</p>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=fd08d4d4"></script>
+</div><script src="../_static/documentation_options.js?v=41b80504"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>

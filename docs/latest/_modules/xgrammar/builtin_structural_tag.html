@@ -7,7 +7,7 @@
         <link rel="prefetch" href="../../_static/img/logo_dark.svg" as="image">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>xgrammar.builtin_structural_tag - XGrammar 0.2.8.dev17+g97787376f</title>
+        <title>xgrammar.builtin_structural_tag - XGrammar 0.2.9.dev1+g4221346f3</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../_static/copybutton.css?v=76b2166b" />
@@ -164,7 +164,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../../index.html"><div class="brand">XGrammar 0.2.8.dev17+g97787376f</div></a>
+      <a href="../../index.html"><div class="brand">XGrammar 0.2.9.dev1+g4221346f3</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -189,7 +189,7 @@
     <img class="sidebar-logo only-dark" src="../../_static/img/logo_dark.svg" alt="Dark Logo"/>
   </div>
   
-  <span class="sidebar-brand-text">XGrammar 0.2.8.dev17+g97787376f</span>
+  <span class="sidebar-brand-text">XGrammar 0.2.9.dev1+g4221346f3</span>
   
 </a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -2737,10 +2737,10 @@
 
 
 
-<span class="c1"># TODO: We are dropping Gemma support because its parameter format is special and not supported</span>
-<span class="c1"># yet: the string are wrapped by &lt;|"|&gt; instead of ". We will support it later and get it back.</span>
-<span class="c1"># @register_model_structural_tag("gemma_4")</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">_get_gemma_4_structural_tag</span><span class="p">(</span>
+<div class="viewcode-block" id="get_gemma_4_structural_tag">
+<a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_gemma_4_structural_tag">[docs]</a>
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"gemma_4"</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_gemma_4_structural_tag</span><span class="p">(</span>
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
@@ -2771,8 +2771,15 @@
 <span class="sd">      ``function`` object containing ``name`` and ``parameters`` fields.</span>
 <span class="sd">    - ``reasoning``: controls whether the reasoning channel is required,</span>
 <span class="sd">      omitted, or optional.</span>
-<span class="sd">    - ``tool_choice``: ``"auto"`` or ``"required"``. ``"required"`` forces at</span>
-<span class="sd">      least one tool call.</span>
+<span class="sd">    - ``tool_choice``: ``"auto"``, ``"required"``, or ``"forced"``. ``"required"``</span>
+<span class="sd">      forces at least one tool call; ``"forced"`` forces exactly the single</span>
+<span class="sd">      resolved tool.</span>
+
+<span class="sd">    Tool-call arguments use :class:`JSONSchemaFormat` with ``style="gemma"``:</span>
+<span class="sd">    keys are unquoted and strings are delimited by the ``&lt;|"|&gt;`` token. With</span>
+<span class="sd">    ``exclude_special_tokens=True``, argument strings and property names exclude</span>
+<span class="sd">    ``&lt;|tool_call&gt;``, ``&lt;tool_call|&gt;``, ``&lt;|channel&gt;`` and ``&lt;channel|&gt;`` (see</span>
+<span class="sd">    :class:`JSONSchemaFormat` for the exact rules).</span>
 
 <span class="sd">    Supported models:</span>
 
@@ -2792,7 +2799,17 @@
     <span class="n">TOOL_CALL_TRIGGER</span> <span class="o">=</span> <span class="s2">"&lt;|tool_call&gt;"</span>
     <span class="n">THINK_TAG_BEGIN</span> <span class="o">=</span> <span class="s2">"&lt;|channel&gt;thought</span><span class="se">\n</span><span class="s2">"</span>
     <span class="n">THINK_TAG_END</span> <span class="o">=</span> <span class="s2">"&lt;channel|&gt;"</span>
+    <span class="c1"># &lt;|tool_response&gt; is deliberately not excluded: the template emits it as the halt signal</span>
+    <span class="c1"># after a tool call, so engines handle it as a stop sequence rather than the grammar</span>
+    <span class="c1"># blocking it. The triggered free text must not exclude &lt;|tool_call&gt; either: it is the</span>
+    <span class="c1"># trigger, and excluding it would remove the dispatch into the tool-call tags.</span>
     <span class="n">GEMMA4_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;|channel&gt;"</span><span class="p">,</span> <span class="s2">"&lt;channel|&gt;"</span><span class="p">]</span>
+    <span class="c1"># &lt;|tool_call&gt; is excluded from the thought channel, and from free text when no tools are</span>
+    <span class="c1"># available, so a tool call cannot start where its arguments would be unconstrained.</span>
+    <span class="n">GEMMA4_REASONING_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="n">GEMMA4_EXCLUDE_TOKENS</span> <span class="o">+</span> <span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">]</span>
+    <span class="c1"># Argument strings and keys exclude every control marker: a &lt;tool_call|&gt; inside a string</span>
+    <span class="c1"># value would otherwise end the call at the engine's parser.</span>
+    <span class="n">GEMMA4_ARGUMENT_EXCLUDE_TOKENS</span> <span class="o">=</span> <span class="n">GEMMA4_EXCLUDE_TOKENS</span> <span class="o">+</span> <span class="p">[</span><span class="n">TOOL_CALL_TRIGGER</span><span class="p">,</span> <span class="n">TOOL_CALL_END</span><span class="p">]</span>
 
     <span class="n">tools</span> <span class="o">=</span> <span class="n">tools</span> <span class="ow">or</span> <span class="p">[]</span>
     <span class="n">builtin_tools</span> <span class="o">=</span> <span class="n">builtin_tools</span> <span class="ow">or</span> <span class="p">[]</span>
@@ -2807,8 +2824,12 @@
                     <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span><span class="p">,</span>
                     <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
                         <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span>
+                        <span class="n">style</span><span class="o">=</span><span class="s2">"gemma"</span><span class="p">,</span>
                         <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
                         <span class="n">max_whitespace_cnt</span><span class="o">=</span><span class="n">max_whitespace_cnt</span><span class="p">,</span>
+                        <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span>
+                            <span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">GEMMA4_ARGUMENT_EXCLUDE_TOKENS</span>
+                        <span class="p">),</span>
                     <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
@@ -2823,7 +2844,7 @@
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">suffix_tag</span> <span class="o">=</span> <span class="n">AnyTextFormat</span><span class="p">(</span>
-                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">GEMMA4_EXCLUDE_TOKENS</span><span class="p">)</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">GEMMA4_REASONING_EXCLUDE_TOKENS</span><span class="p">)</span>
             <span class="p">)</span>
 
     <span class="k">elif</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"forced"</span><span class="p">:</span>
@@ -2834,8 +2855,10 @@
             <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">function</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
             <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
                 <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">function</span><span class="p">),</span>
+                <span class="n">style</span><span class="o">=</span><span class="s2">"gemma"</span><span class="p">,</span>
                 <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
                 <span class="n">max_whitespace_cnt</span><span class="o">=</span><span class="n">max_whitespace_cnt</span><span class="p">,</span>
+                <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">GEMMA4_ARGUMENT_EXCLUDE_TOKENS</span><span class="p">),</span>
             <span class="p">),</span>
             <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
         <span class="p">)</span>
@@ -2851,8 +2874,12 @@
                     <span class="n">begin</span><span class="o">=</span><span class="n">TOOL_CALL_BEGIN_PREFIX</span> <span class="o">+</span> <span class="n">name</span><span class="p">,</span>
                     <span class="n">content</span><span class="o">=</span><span class="n">JSONSchemaFormat</span><span class="p">(</span>
                         <span class="n">json_schema</span><span class="o">=</span><span class="n">parameters</span><span class="p">,</span>
+                        <span class="n">style</span><span class="o">=</span><span class="s2">"gemma"</span><span class="p">,</span>
                         <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
                         <span class="n">max_whitespace_cnt</span><span class="o">=</span><span class="n">max_whitespace_cnt</span><span class="p">,</span>
+                        <span class="n">excludes</span><span class="o">=</span><span class="n">_text_excludes</span><span class="p">(</span>
+                            <span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">GEMMA4_ARGUMENT_EXCLUDE_TOKENS</span>
+                        <span class="p">),</span>
                     <span class="p">),</span>
                     <span class="n">end</span><span class="o">=</span><span class="n">TOOL_CALL_END</span><span class="p">,</span>
                 <span class="p">)</span>
@@ -2871,10 +2898,11 @@
         <span class="n">think_tag_begin</span><span class="o">=</span><span class="n">THINK_TAG_BEGIN</span><span class="p">,</span>
         <span class="n">think_tag_end</span><span class="o">=</span><span class="n">THINK_TAG_END</span><span class="p">,</span>
         <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
-        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">GEMMA4_EXCLUDE_TOKENS</span><span class="p">,</span>
+        <span class="n">reasoning_exclude_tokens</span><span class="o">=</span><span class="n">GEMMA4_REASONING_EXCLUDE_TOKENS</span><span class="p">,</span>
         <span class="n">prompt_end_with_think</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span>
-    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_assemble_structural_tag</span><span class="p">(</span><span class="n">prefix_tag</span><span class="p">,</span> <span class="n">suffix_tag</span><span class="p">)</span></div>
+
 
 
 <div class="viewcode-block" id="get_deepseek_v4_structural_tag">
@@ -3367,7 +3395,7 @@
       
     </aside>
   </div>
-</div><script src="../../_static/documentation_options.js?v=fd08d4d4"></script>
+</div><script src="../../_static/documentation_options.js?v=41b80504"></script>
     <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>

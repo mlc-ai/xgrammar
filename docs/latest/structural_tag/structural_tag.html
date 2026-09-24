@@ -8,7 +8,7 @@
         <link rel="prefetch" href="../_static/img/logo_dark.svg" as="image">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
-        <title>Structural Tag Usage - XGrammar 0.2.8.dev17+g97787376f</title>
+        <title>Structural Tag Usage - XGrammar 0.2.9.dev1+g4221346f3</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -165,7 +165,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">XGrammar 0.2.8.dev17+g97787376f</div></a>
+      <a href="../index.html"><div class="brand">XGrammar 0.2.9.dev1+g4221346f3</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -190,7 +190,7 @@
     <img class="sidebar-logo only-dark" src="../_static/img/logo_dark.svg" alt="Dark Logo"/>
   </div>
   
-  <span class="sidebar-brand-text">XGrammar 0.2.8.dev17+g97787376f</span>
+  <span class="sidebar-brand-text">XGrammar 0.2.9.dev1+g4221346f3</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -488,7 +488,7 @@ structured region after seeing a trigger.</p>
 <td><p>(required)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">style</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;qwen_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;minimax_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;minimax_m3_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v4_1_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;glm_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;cohere_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;kimi_k3_xml&quot;</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;qwen_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;minimax_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;minimax_m3_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;deepseek_v4_1_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;glm_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;cohere_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;kimi_k3_xml&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;gemma&quot;</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">&quot;json&quot;</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">any_order</span></code></p></td>
@@ -516,6 +516,7 @@ structured region after seeing a trigger.</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">&quot;glm_xml&quot;</span></code>: GLM-style XML parameter format, such as <code class="docutils literal notranslate"><span class="pre">&lt;arg_key&gt;name&lt;/arg_key&gt;&lt;arg_value&gt;value&lt;/arg_value&gt;</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">&quot;cohere_xml&quot;</span></code>: Cohere-style XML values, such as <code class="docutils literal notranslate"><span class="pre">&lt;cofl:value</span> <span class="pre">name=&quot;name&quot;</span> <span class="pre">type=&quot;raw&quot;&gt;value&lt;/cofl:value&gt;</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">&quot;kimi_k3_xml&quot;</span></code>: Kimi-K3 argument format, such as <code class="docutils literal notranslate"><span class="pre">&lt;|open|&gt;argument</span> <span class="pre">key=&quot;name&quot;</span> <span class="pre">type=&quot;string&quot;&lt;|sep|&gt;value&lt;|close|&gt;argument&lt;|sep|&gt;</span></code>. The <code class="docutils literal notranslate"><span class="pre">type</span></code> attribute is fixed to the type each declared property is rendered with (<code class="docutils literal notranslate"><span class="pre">integer</span></code> and <code class="docutils literal notranslate"><span class="pre">number</span></code> schemas both render as <code class="docutils literal notranslate"><span class="pre">number</span></code>); keys with no declared schema accept any type name.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&quot;gemma&quot;</span></code>: Gemma 4 tool-call arguments, such as <code class="docutils literal notranslate"><span class="pre">{location:&lt;|&quot;|&gt;Paris&lt;|&quot;|&gt;,days:3}</span></code>. Object keys are unquoted and strings are delimited by the <code class="docutils literal notranslate"><span class="pre">&lt;|&quot;|&gt;</span></code> token with no escape sequences, at every nesting level. String <code class="docutils literal notranslate"><span class="pre">pattern</span></code> and <code class="docutils literal notranslate"><span class="pre">format</span></code> constraints and <code class="docutils literal notranslate"><span class="pre">patternProperties</span></code> / <code class="docutils literal notranslate"><span class="pre">propertyNames</span></code> key patterns are intersected with “does not contain <code class="docutils literal notranslate"><span class="pre">&lt;|&quot;|&gt;</span></code>” where the regex engine supports the pattern; length constraints are dropped as under <code class="docutils literal notranslate"><span class="pre">excludes</span></code> below. A <code class="docutils literal notranslate"><span class="pre">patternProperties</span></code> key pattern whose language contains <code class="docutils literal notranslate"><span class="pre">:</span></code> cannot round-trip because keys are unquoted.</p></li>
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">any_order</span></code> relaxes object property ordering (see <a class="reference internal" href="#property-ordering-with-any-order"><span class="std std-ref">below</span></a>). It
 works with every <code class="docutils literal notranslate"><span class="pre">style</span></code>.</p>
@@ -527,7 +528,8 @@ still allows the <code class="docutils literal notranslate"><span class="pre">&l
 as follows:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">pattern</span></code> or <code class="docutils literal notranslate"><span class="pre">format</span></code>: the string is matched by that constraint alone; the exclusions do not
-apply to it. Keys constrained by <code class="docutils literal notranslate"><span class="pre">patternProperties</span></code> or <code class="docutils literal notranslate"><span class="pre">propertyNames</span></code> are treated the same.</p></li>
+apply to it. Keys constrained by <code class="docutils literal notranslate"><span class="pre">patternProperties</span></code> or <code class="docutils literal notranslate"><span class="pre">propertyNames</span></code> are treated the same.
+(<code class="docutils literal notranslate"><span class="pre">&quot;gemma&quot;</span></code> intersects the exclusions into these constraints instead, see above.)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">minLength</span></code> / <code class="docutils literal notranslate"><span class="pre">maxLength</span></code>: the bounds are dropped with a warning; the exclusions apply.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">const</span></code> / <code class="docutils literal notranslate"><span class="pre">enum</span></code>: alternatives containing an excluded substring are removed.</p></li>
 </ul>
@@ -1640,7 +1642,7 @@ the model expects a pure separated list of calls</p></li>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=fd08d4d4"></script>
+</div><script src="../_static/documentation_options.js?v=41b80504"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
