@@ -98,7 +98,7 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
 
   /*! \brief Convert SchemaSpec to grammar with XML format for root object. Note that this function
    * is not thread-safe.*/
-  Grammar Convert(const SchemaSpecPtr& spec);
+  Grammar Convert(const SchemaSpecPtr& spec, bool strict_any_order = false);
 
  protected:
   // Override methods for XML format
