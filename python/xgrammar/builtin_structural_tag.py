@@ -2446,7 +2446,10 @@ def get_gemma_4_structural_tag(
       resolved tool.
 
     Tool-call arguments use :class:`JSONSchemaFormat` with ``style="gemma"``:
-    keys are unquoted and strings are delimited by the ``<|"|>`` token.
+    keys are unquoted and strings are delimited by the ``<|"|>`` token. With
+    ``exclude_special_tokens=True``, argument strings and property names exclude
+    ``<|tool_call>``, ``<tool_call|>``, ``<|channel>`` and ``<channel|>`` (see
+    :class:`JSONSchemaFormat` for the exact rules).
 
     Supported models:
 
@@ -2474,6 +2477,9 @@ def get_gemma_4_structural_tag(
     # <|tool_call> is excluded from the thought channel, and from free text when no tools are
     # available, so a tool call cannot start where its arguments would be unconstrained.
     GEMMA4_REASONING_EXCLUDE_TOKENS = GEMMA4_EXCLUDE_TOKENS + [TOOL_CALL_TRIGGER]
+    # Argument strings and keys exclude every control marker: a <tool_call|> inside a string
+    # value would otherwise end the call at the engine's parser.
+    GEMMA4_ARGUMENT_EXCLUDE_TOKENS = GEMMA4_EXCLUDE_TOKENS + [TOOL_CALL_TRIGGER, TOOL_CALL_END]
 
     tools = tools or []
     builtin_tools = builtin_tools or []
@@ -2491,6 +2497,9 @@ def get_gemma_4_structural_tag(
                         style="gemma",
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
+                        excludes=_text_excludes(
+                            exclude_special_tokens, GEMMA4_ARGUMENT_EXCLUDE_TOKENS
+                        ),
                     ),
                     end=TOOL_CALL_END,
                 )
@@ -2519,6 +2528,7 @@ def get_gemma_4_structural_tag(
                 style="gemma",
                 any_order=any_order,
                 max_whitespace_cnt=max_whitespace_cnt,
+                excludes=_text_excludes(exclude_special_tokens, GEMMA4_ARGUMENT_EXCLUDE_TOKENS),
             ),
             end=TOOL_CALL_END,
         )
@@ -2537,6 +2547,9 @@ def get_gemma_4_structural_tag(
                         style="gemma",
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
+                        excludes=_text_excludes(
+                            exclude_special_tokens, GEMMA4_ARGUMENT_EXCLUDE_TOKENS
+                        ),
                     ),
                     end=TOOL_CALL_END,
                 )

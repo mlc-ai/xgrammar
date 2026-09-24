@@ -2607,6 +2607,8 @@ def test_any_order_reordered_arguments_accepted_only_when_enabled():
 
 # ---------- Test: gemma_4 ----------
 
+GEMMA4_ARGUMENT_EXCLUDES = ["<|channel>", "<channel|>", "<|tool_call>", "<tool_call|>"]
+
 
 def _bitmask_allows(bitmask: Any, token_id: int) -> bool:
     """Return whether the token is allowed by a bitmask from fill_next_token_bitmask."""
@@ -2682,6 +2684,10 @@ def test_gemma_4_single_token_delimiter_walk():
         matcher.fill_next_token_bitmask(bitmask)
         token_id = vocab.index(piece)
         assert _bitmask_allows(bitmask, token_id), f"bitmask disallows {piece!r}"
+        if piece == "Seoul":
+            # Inside a <|"|> string the control markers are excluded by default.
+            for marker in GEMMA4_ARGUMENT_EXCLUDES:
+                assert not _bitmask_allows(bitmask, vocab.index(marker)), marker
         assert matcher.accept_token(token_id), f"matcher rejected {piece!r}"
     # After a complete call the grammar reaches an accept state: EOS must be allowed.
     matcher.fill_next_token_bitmask(bitmask)
@@ -2719,6 +2725,58 @@ def test_gemma_4_auto_tool_call_trigger_dispatches():
     check_stag_with_instance(
         structural_tag, "<|channel>thought\nok\n<channel|>text <|tool_call> not a call", False
     )
+
+
+@pytest.mark.parametrize(
+    "tool_choice", ["auto", "required", {"type": "function", "function": {"name": "get_weather"}}]
+)
+def test_gemma_4_exclude_special_tokens(tool_choice):
+    """Argument strings exclude the Gemma control markers unless opted out."""
+    tools = make_tools(["get_weather"])
+    on = get_model_structural_tag("gemma_4", tools=tools, tool_choice=tool_choice)
+    nodes = _collect_json_schema_nodes(on)
+    assert nodes
+    assert all(node.excludes == GEMMA4_ARGUMENT_EXCLUDES for node in nodes)
+
+    off = get_model_structural_tag(
+        "gemma_4", tools=tools, tool_choice=tool_choice, exclude_special_tokens=False
+    )
+    assert all(excludes == [] for excludes in _collect_excludes(off))
+    xgr.Grammar.from_structural_tag(off)
+
+
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("exclude_special_tokens", [False, True])
+def test_gemma_4_tool_argument_exclusions(nested, exclude_special_tokens):
+    """A control marker inside a <|"|> string is rejected unless exclusions are opted out."""
+    value_schema = {"type": "string"}
+    if nested:
+        value_schema = {
+            "type": "object",
+            "properties": {"text": value_schema},
+            "required": ["text"],
+            "additionalProperties": False,
+        }
+    schema = {"type": "object", "properties": {"q": value_schema}, "required": ["q"]}
+    tag = get_model_structural_tag(
+        "gemma_4",
+        tools=make_tools(["get_weather"], schema),
+        reasoning="disabled",
+        exclude_special_tokens=exclude_special_tokens,
+    )
+    grammar = xgr.Grammar.from_structural_tag(tag)
+
+    def instance(text):
+        value = f'<|"|>{text}<|"|>'
+        if nested:
+            value = "{text:" + value + "}"
+        return f"<|tool_call>call:get_weather{{q:{value}}}<tool_call|>"
+
+    assert _is_grammar_accept_string(grammar, instance("Seoul <tool_call]"))
+    for control in GEMMA4_ARGUMENT_EXCLUDES:
+        assert _is_grammar_accept_string(grammar, instance(f"before{control}after")) == (
+            not exclude_special_tokens
+        )
 
 
 # ---------- Test: max_whitespace_cnt propagation ----------

@@ -88,16 +88,16 @@ int32_t GemmaToolCallingConverter::GemmaString(int32_t body) {
 }
 
 int32_t GemmaToolCallingConverter::GemmaRegexBody(
-    const std::string& regex, const std::string& rule_name, bool force_cfg_expansion
+    const std::string& regex, const std::string& rule_name
 ) {
   // Intersect the regex with "does not contain the delimiter" whenever the FSM engine can
-  // build it, so a permissive pattern such as ".*" cannot close the string early. The built-in
-  // format regexes use constructs the FSM engine does not support yet; they keep the CFG
-  // expansion and are emitted verbatim, as the JSON converter does.
+  // build it, so a permissive pattern such as ".*" cannot close the string early. A regex the
+  // FSM engine does not support yet keeps the CFG expansion and is emitted verbatim, as the
+  // JSON converter does.
   if (GrammarFSMBuilder::Regex(regex, false).IsOk()) {
     return ExcludingString(regex, rule_name, false);
   }
-  return RegexExpression(regex, false, force_cfg_expansion);
+  return RegexExpression(regex, false, true);
 }
 
 int32_t GemmaToolCallingConverter::GenerateString(
@@ -106,11 +106,11 @@ int32_t GemmaToolCallingConverter::GenerateString(
   if (spec.format.has_value()) {
     auto regex = JSONFormatToRegexPattern(*spec.format);
     if (regex.has_value()) {
-      return GemmaString(GemmaRegexBody(*regex, rule_name + "_format", true));
+      return GemmaString(GemmaRegexBody(*regex, rule_name + "_format"));
     }
   }
   if (spec.pattern.has_value()) {
-    return GemmaString(GemmaRegexBody(*spec.pattern, rule_name + "_pattern", false));
+    return GemmaString(GemmaRegexBody(*spec.pattern, rule_name + "_pattern"));
   }
   if (spec.min_length != 0 || spec.max_length != -1) {
     // The delimiter is an exclusion, so the bounds are dropped as in the other styles: unrolling
@@ -238,7 +238,7 @@ int32_t GemmaToolCallingConverter::CreatePatternKeyRule(
 ) {
   // patternProperties keys are bare identifiers, not delimited strings. A pattern whose
   // language contains ':' is ambiguous against the key/value separator and cannot round-trip.
-  return builder_.AddRuleWithHint(rule_name_hint, GemmaRegexBody(pattern, rule_name_hint, true));
+  return builder_.AddRuleWithHint(rule_name_hint, GemmaRegexBody(pattern, rule_name_hint));
 }
 
 int32_t GemmaToolCallingConverter::CreatePropertyNamesKeyRule(

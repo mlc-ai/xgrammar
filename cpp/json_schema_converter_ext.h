@@ -349,9 +349,7 @@ class GemmaToolCallingConverter : public JSONSchemaConverter {
   /*! \brief Wrap a string body expression in the delimiters. */
   int32_t GemmaString(int32_t body);
   /*! \brief A regex string body that cannot contain the delimiter, when the FSM engine allows. */
-  int32_t GemmaRegexBody(
-      const std::string& regex, const std::string& rule_name, bool force_cfg_expansion
-  );
+  int32_t GemmaRegexBody(const std::string& regex, const std::string& rule_name);
   /*! \brief A choice of the bare keys spelled by the JSON string literals, or Unsatisfiable. */
   int32_t GemmaKeyLiterals(const std::vector<std::string>& json_values);
   /*! \brief Whether no raw string or key inside the value contains an exclusion. */
