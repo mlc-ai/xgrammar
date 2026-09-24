@@ -1,13 +1,9 @@
 """Validate builtin structural tags against official model renderers.
 
-Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4/V4.1,
-the vendored Gemma-4 templates, and Cohere Melody for CMD5) to render model outputs,
-then checks that xgrammar structural tag grammars accept them. Requires
-encoding_dsv32.py, encoding_dsv4.py and encoding_gemma4.py in the same directory.
-V4.1 uses a revision-pinned official encoder.
-
-GEMMA: model ids render the vendored templates with jinja2 and need neither
-transformers nor a HF token, so those cases are not marked hf_token_required.
+Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4/V4.1)
+and Cohere Melody for CMD5 to render model outputs, then checks that xgrammar
+structural tag grammars accept them. Requires encoding_dsv32.py and
+encoding_dsv4.py in the same directory. V4.1 uses a revision-pinned official encoder.
 """
 
 import importlib.util
@@ -127,11 +123,10 @@ MODEL_CONFIGS = [
         False,
         {"skip_think": True, "enable_thinking": False},
     ),
-    # Gemma-4 tokenizers need transformers >= 5.5; the vendored templates render offline.
-    ("gemma_4", "GEMMA:gemma4_e2b", True, {"enable_thinking": True}),
-    ("gemma_4", "GEMMA:gemma4_e2b", False, {"enable_thinking": False}),
-    ("gemma_4", "GEMMA:gemma4_31b", True, {"enable_thinking": True}),
-    ("gemma_4", "GEMMA:gemma4_31b", False, {"enable_thinking": False}),
+    ("gemma_4", "google/gemma-4-E2B-it", True, {"enable_thinking": True}),
+    ("gemma_4", "google/gemma-4-E2B-it", False, {"enable_thinking": False}),
+    ("gemma_4", "google/gemma-4-31B-it", True, {"enable_thinking": True}),
+    ("gemma_4", "google/gemma-4-31B-it", False, {"enable_thinking": False}),
 ]
 
 # Models whose renderer cannot produce a turn with an empty reasoning block: the DeepSeek
@@ -140,13 +135,13 @@ SKIP_EMPTY_REASONING = {
     "ENCODER:dsv32",
     "MiniMaxAI/MiniMax-M2.5",
     "moonshotai/Kimi-K3",
-    "GEMMA:gemma4_e2b",
-    "GEMMA:gemma4_31b",
+    "google/gemma-4-E2B-it",
+    "google/gemma-4-31B-it",
 }
 
 # Templates that pre-render an empty thought block in the generation prompt when thinking
 # is disabled; history rendering omits it, so it is stripped before diffing.
-PRERENDERED_EMPTY_THOUGHT_MODELS = {"GEMMA:gemma4_31b"}
+PRERENDERED_EMPTY_THOUGHT_MODELS = {"google/gemma-4-31B-it"}
 PRERENDERED_EMPTY_THOUGHT = "<|channel>thought\n<channel|>"
 
 # Models where tool call format in template doesn't match structural tag.
@@ -255,17 +250,8 @@ def strip_eos(output, stag_key, tokenizer=None):
     return output
 
 
-def load_renderer(model_id):
-    """A tokenizer, or a vendored-template renderer that mimics apply_chat_template."""
-    if model_id.startswith("GEMMA:"):
-        from encoding_gemma4 import GemmaTemplateRenderer
-
-        return GemmaTemplateRenderer(model_id.split(":")[1])
-    return load_tokenizer(model_id, trust_remote_code=True)
-
-
 def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_kwargs):
-    tokenizer = load_renderer(model_id)
+    tokenizer = load_tokenizer(model_id, trust_remote_code=True)
     kwargs = dict(tokenize=False, **template_kwargs)
     if tools:
         kwargs["tools"] = tools
@@ -421,8 +407,6 @@ def extract_model_output(stag_key, model_id, assistant_msg, tools, template_kwar
         return extract_output_encoder(encoder_name, stag_key, assistant_msg, tools, template_kwargs)
     if model_id == "MELODY:cmd5":
         return extract_output_melody_cmd5(assistant_msg, tools, template_kwargs)
-    # GEMMA: renderers mimic apply_chat_template, so they share the tokenizer path
-    # (prompt diff, prerendered-thought stripping, EOS stripping).
     return extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_kwargs)
 
 
@@ -498,7 +482,7 @@ def case_id(case):
         _,
         num_tool_calls,
     ) = case
-    model_short = model_id.split("/")[-1] if "/" in model_id else model_id.split(":")[-1]
+    model_short = model_id.split("/")[-1] if "/" in model_id else model_id.replace("ENCODER:", "")
     if reasoning in (False, "disabled"):
         r_tag = "off"
     elif reasoning_content:
@@ -519,7 +503,7 @@ def make_test_param(case):
     if model_id.startswith("MELODY:"):
         if sys.version_info < (3, 10):
             marks.append(pytest.mark.skip(reason="cohere_melody requires Python >= 3.10"))
-    elif not model_id.startswith("GEMMA:"):
+    else:
         marks.append(pytest.mark.hf_token_required)
     return pytest.param(case, id=case_id(case), marks=marks)
 
@@ -536,6 +520,8 @@ def test_reasoning_stag(case):
         template_kwargs,
         num_tool_calls,
     ) = case
+    if stag_key == "gemma_4":
+        pytest.importorskip("transformers", minversion="5.5")
     tools = make_tools(num_tools)
     tool_choice = make_tool_choice(tool_choice_str, tools or [])
     assistant_msg = make_assistant_msg(stag_key, reasoning_content, num_tool_calls)
@@ -813,53 +799,6 @@ def test_mimo_official_tokenizer_masks(model_id, revision, reasoning, policy, sc
         assert (int(bitmask[0, token_id // 32]) >> (token_id % 32)) & 1, (index, token_id)
         assert matcher.accept_token(token_id), (index, token_id)
     assert matcher.is_terminated()
-
-
-# Official model ids for the vendored gemma-4 templates (drift guard below).
-GEMMA4_OFFICIAL_MODELS = {
-    "gemma4_e2b": "google/gemma-4-E2B-it",
-    "gemma4_31b": "google/gemma-4-31B-it",
-}
-
-
-@pytest.mark.hf_token_required
-@pytest.mark.parametrize("variant", sorted(GEMMA4_OFFICIAL_MODELS))
-def test_gemma_4_vendored_template_matches_official(variant):
-    """The vendored gemma-4 templates must render exactly like the official ones.
-
-    Guards against upstream chat-template updates drifting from the vendored copies used
-    by the GEMMA: cases. Loading the official tokenizer requires transformers >= 5.5
-    (gemma-4 support), so this only runs where that is available.
-    """
-    import transformers
-
-    major, minor = (int(p) for p in transformers.__version__.split(".")[:2])
-    if (major, minor) < (5, 5):
-        pytest.skip("gemma-4 tokenizer requires transformers >= 5.5")
-
-    from encoding_gemma4 import GemmaTemplateRenderer
-
-    tokenizer = load_tokenizer(GEMMA4_OFFICIAL_MODELS[variant])
-    renderer = GemmaTemplateRenderer(variant)
-
-    assistant_tool_calls = make_assistant_msg("gemma_4", REASONING_CONTENT, 2)
-    assistant_text = make_assistant_msg("gemma_4", None, 0)
-    for enable_thinking in (True, False):
-        for messages in ([USER_MSG], [USER_MSG, assistant_tool_calls], [USER_MSG, assistant_text]):
-            for tools in (None, [TOOL_A], [TOOL_A, TOOL_B]):
-                for add_generation_prompt in (True, False):
-                    kwargs = {
-                        "tools": tools,
-                        "add_generation_prompt": add_generation_prompt,
-                        "enable_thinking": enable_thinking,
-                    }
-                    official = tokenizer.apply_chat_template(messages, tokenize=False, **kwargs)
-                    vendored = renderer.apply_chat_template(messages, tokenize=False, **kwargs)
-                    assert official == vendored, (
-                        f"Vendored template drifted (enable_thinking={enable_thinking}, "
-                        f"messages={len(messages)}, tools={len(tools or [])}, "
-                        f"add_generation_prompt={add_generation_prompt})"
-                    )
 
 
 if __name__ == "__main__":
