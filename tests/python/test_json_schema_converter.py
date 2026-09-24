@@ -601,6 +601,71 @@ def test_reference_schema():
     )
 
 
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize(
+    ("branch", "field", "marker"), [(0, "title", "first"), (1, "kind", "selected")]
+)
+def test_reference_through_array_index(any_order, branch, field, marker):
+    schema = {
+        "type": "object",
+        "properties": {
+            "operations": {
+                "type": "array",
+                "items": {
+                    "anyOf": [
+                        {
+                            "type": "object",
+                            "properties": {"title": {"type": "string", "enum": ["first"]}},
+                        },
+                        {
+                            "type": "object",
+                            "properties": {"kind": {"type": "string", "enum": ["selected"]}},
+                        },
+                    ]
+                },
+            },
+            "marker": {"$ref": f"#/properties/operations/items/anyOf/{branch}/properties/{field}"},
+        },
+        "required": ["operations", "marker"],
+    }
+
+    grammar = xgr.Grammar.from_json_schema(
+        json.dumps(schema), any_order=any_order, any_whitespace=False
+    )
+    assert _is_grammar_accept_string(
+        grammar, json.dumps({"operations": [{"title": "first"}], "marker": marker})
+    )
+    assert not _is_grammar_accept_string(
+        grammar, json.dumps({"operations": [{"title": "first"}], "marker": "other"})
+    )
+
+
+@pytest.mark.parametrize("index", ["2", "-1", "+1", "01", "1x", "999999999999999999999"])
+def test_reference_through_array_rejects_invalid_index(index):
+    schema = {
+        "type": "object",
+        "properties": {
+            "choice": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+            "marker": {"$ref": f"#/properties/choice/anyOf/{index}"},
+        },
+    }
+
+    with pytest.raises(RuntimeError, match="Cannot find array index"):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
+def test_reference_numeric_object_key_is_not_array_index():
+    schema = {
+        "type": "object",
+        "properties": {"value": {"$ref": "#/$defs/01"}},
+        "required": ["value"],
+        "$defs": {"01": {"type": "string", "enum": ["selected"]}},
+    }
+
+    check_schema_with_instance(schema, {"value": "selected"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"value": "other"}, is_accepted=False, any_whitespace=False)
+
+
 def test_union():
     class Cat(BaseModel):
         name: str
