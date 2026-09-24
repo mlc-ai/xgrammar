@@ -1,5 +1,6 @@
 """Test the basic functionality of GrammarMatcher."""
 
+import json
 import math
 import random
 import sys
@@ -985,3 +986,158 @@ def test_batch_fill_next_token_bitmask_terminated_matcher_raises():
 
 if __name__ == "__main__":
     pytest.main(sys.argv)
+
+
+def test_strict_any_order_nested_rollback():
+    grammar = xgr.Grammar.from_ebnf(
+        r"""
+        root ::= "[" obj "," obj "]"
+        obj ::= "{" Unordered(sep, 2, 3, (a, true), (b, true), (c, false)) "}"
+        sep ::= ","
+        a ::= "a:" value
+        b ::= "b:" value
+        c ::= "c:" value
+        value ::= "1" | "[" obj "]"
+        """
+    )
+    vocab = ["[{c:1,", "b:1,", "a:1},", "{b:[{b:1,a:1}],a:1}]", "b:1", "[EOS]"]
+    info = xgr.TokenizerInfo(vocab, stop_token_ids=5)
+    compiled = xgr.GrammarCompiler(info).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_token(0)
+    for _ in range(20):
+        assert matcher.accept_token(1)
+        assert not matcher.accept_token(4)
+        matcher.rollback(1)
+    for token in [1, 2, 3, 5]:
+        assert matcher.accept_token(token)
+    assert matcher.is_terminated()
+    matcher.reset()
+    assert matcher.accept_token(0)
+
+
+@pytest.mark.parametrize("token_text", ["a", "long-token"])
+@pytest.mark.parametrize("budget", ["", ", max_chars=1", ", max_tokens=1, max_chars=1"])
+def test_unordered_atomic_token_merge_and_fork(token_text, budget):
+    grammar = xgr.Grammar.from_ebnf(
+        "root ::= Unordered(sep, 2, 2, (a, true), (b, true))\n"
+        'sep ::= ""\n'
+        'a ::= "a:" value\n'
+        f'value[capture="value"{budget}] ::= Token(0) | {json.dumps(token_text)}\n'
+        'b ::= "b"'
+    )
+    info = xgr.TokenizerInfo([token_text, "b", "[EOS]", "a:"], stop_token_ids=2)
+    compiled = xgr.GrammarCompiler(info).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled)
+    mask = xgr.allocate_token_bitmask(1, 4)
+    assert matcher.accept_token(3)
+    for _ in range(10):
+        assert matcher.accept_token(0)
+        matcher.fill_next_token_bitmask(mask)
+        assert int(mask[0, 0]) & 15 == 2
+        fork = matcher.fork()
+        assert fork.accept_token(1)
+        assert fork.accept_token(2)
+        matcher.rollback(1)
+    matcher.rollback(1)
+    assert matcher.accept_token(1)
+    assert matcher.accept_token(3)
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(2)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Unordered(sep, 0, 1, (a, true))",
+        "Unordered(sep, 1, 3, (a, true))",
+        "Unordered(sep, 1, 2, (a, true), (a, false))",
+        "Unordered(sep, 1, 1, (a, true), (b, true))",
+    ],
+)
+def test_unordered_invalid_definition(body):
+    with pytest.raises(RuntimeError):
+        xgr.Grammar.from_ebnf(f'root ::= {body}\nsep ::= ","\na ::= "a"\nb ::= "b"')
+
+
+def test_unordered_nullable_entry_rejected():
+    grammar = xgr.Grammar.from_ebnf(
+        'root ::= Unordered(sep, 1, 1, (a, true))\nsep ::= ","\na ::= ""'
+    )
+    with pytest.raises(RuntimeError, match="must not match the empty string"):
+        xgr.GrammarCompiler(xgr.TokenizerInfo(["a"])).compile_grammar(grammar)
+
+
+@pytest.mark.parametrize("entries", [["x"] * 9, ["a", "ab"], ["[a-z]+", "a"]])
+def test_unordered_ambiguous_entries_rejected(entries):
+    rules = [
+        f"e{i} ::= {json.dumps(text) if '[' not in text else text}"
+        for i, text in enumerate(entries)
+    ]
+    rules += [
+        'sep ::= ","',
+        "root ::= Unordered(sep, 1, "
+        + str(len(entries))
+        + ", "
+        + ", ".join(f"(e{i}, false)" for i in range(len(entries)))
+        + ")",
+    ]
+    grammar = xgr.Grammar.from_ebnf("\n".join(rules))
+    with pytest.raises(RuntimeError, match="nonoverlapping literal prefixes"):
+        xgr.GrammarCompiler(xgr.TokenizerInfo(["x", ","])).compile_grammar(grammar)
+
+
+@pytest.mark.parametrize("budget", ["max_tokens=1", "max_chars=2", "max_tokens=1, max_chars=2"])
+def test_unordered_budget_capture_and_rollback(budget):
+    grammar = xgr.Grammar.from_ebnf(
+        f"""
+        root[capture="all"] ::= "[" Unordered(sep, 2, 3, (a, true), (b, true), (c, false)) "]"
+        sep ::= ","
+        a ::= "a:" value
+        value[{budget}, capture="value"] ::= [x]+
+        b ::= "b:1"
+        c ::= "c:1"
+    """
+    )
+    vocab = ["[a:", "xx", ",b:1]", "x", ",a:", "[EOS]"]
+    info = xgr.TokenizerInfo(vocab, stop_token_ids=5)
+    compiled = xgr.GrammarCompiler(info).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled)
+    mask = xgr.allocate_token_bitmask(1, len(vocab))
+    assert matcher.accept_token(0)
+    for _ in range(5):
+        assert matcher.accept_token(1)
+        for _ in range(2):
+            matcher.fill_next_token_bitmask(mask)
+            assert int(mask[0, 0]) & 63 == 4
+        assert not matcher.accept_token(4)
+        assert not matcher.accept_string(",b:1]!")
+        fork = matcher.fork()
+        assert fork.accept_token(2)
+        assert fork.accept_token(5)
+        assert fork.get_captures() == [("value", b"xx"), ("all", b"[a:xx,b:1]")]
+        matcher.rollback(1)
+    assert matcher.accept_token(1)
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(5)
+
+
+def test_unordered_atomic_accept_after_byte_path_rejection():
+    grammar = xgr.Grammar.from_ebnf(
+        """
+        root ::= Unordered(sep, 2, 2, (a, true), (b, true))
+        sep ::= ""
+        a ::= "a:" (Token(0) | "fooz")
+        b ::= "b"
+    """
+    )
+    info = xgr.TokenizerInfo(["foobar", "a:", "b", "[EOS]"], stop_token_ids=3)
+    matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(info).compile_grammar(grammar))
+    assert matcher.accept_token(1)
+    for _ in range(5):
+        assert matcher.accept_token(0)
+        assert not matcher.accept_token(1)
+        matcher.rollback(1)
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(3)

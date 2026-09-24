@@ -12,6 +12,18 @@ except ImportError:
 
 from pydantic import BaseModel, Field
 
+PropertyOrder = Literal["schema", "unordered", "unordered_relaxed"]
+
+
+def _property_order_value(order: Optional[PropertyOrder]) -> Optional[int]:
+    if order is None:
+        return None
+    values = {"schema": 0, "unordered": 1, "unordered_relaxed": 2}
+    if order not in values:
+        raise ValueError(f"Invalid property_order: {order!r}")
+    return values[order]
+
+
 # ---------- Basic Formats ----------
 
 
@@ -52,16 +64,18 @@ class JSONSchemaFormat(BaseModel):
     \"cohere_xml\" (Cohere XML: <cofl:value name=\"key\" type=\"raw|json|dict|list\">value</cofl:value>),
     \"kimi_k3_xml\" (Kimi-K3: <|open|>argument key=\"key\" type=\"type\"<|sep|>value<|close|>argument<|sep|>)."""
     any_order: bool = False
-    """Whether object properties may appear in any order.
+    """Legacy option: True allows arbitrary order without enforcing required keys or uniqueness.
+    False preserves schema order. Prefer property_order for explicit enforcement semantics."""
+    property_order: Optional[PropertyOrder] = None
+    """Object property policy, applied recursively:
 
-    - False (default): properties follow the schema's declared order, fully validated (required
-      keys present, no duplicates).
-    - True: properties may appear in any order; only key validity and each key's value schema are
-      enforced. Key presence and uniqueness are not checked, so required keys may be missing and
-      keys may repeat. The entry count is bounded to ``[max(minProperties, n_required),
-      maxProperties]`` (unbounded when maxProperties is unset).
+    - "schema": declared order, required keys and uniqueness enforced.
+    - "unordered": arbitrary order, required keys and uniqueness enforced. Supports closed
+      objects in json and glm_xml styles; unconstrained values and open objects are rejected.
+    - "unordered_relaxed": arbitrary order without required-key or uniqueness enforcement.
 
-    Applies to every object, nested included."""
+    None preserves any_order's behavior. Cannot be combined with any_order=True.
+    """
     max_whitespace_cnt: Optional[int] = None
     """Max consecutive whitespace characters in this content. None means no limit."""
     excludes: List[str] = []

@@ -146,6 +146,13 @@ class GrammarBuilder {
   /*! \brief Encode a TokenTagDispatch struct into a kTokenTagDispatch expr. */
   int32_t AddTokenTagDispatch(const Grammar::Impl::TokenTagDispatch& token_tag_dispatch);
 
+  int32_t AddUnordered(
+      int32_t separator_rule,
+      int32_t min_count,
+      int32_t max_count,
+      std::vector<std::pair<int32_t, bool>> entries
+  );
+
   int32_t AddRepeat(int32_t ref_rule_id, int32_t min_repeat_count, int32_t max_repeat_count);
 
   /*!

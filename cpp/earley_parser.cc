@@ -104,6 +104,41 @@ int32_t EarleyParser::ResolveActiveTemperatureRule(int32_t rule_id, int32_t inhe
   return grammar_->GetRule(rule_id).temperature.has_value() ? rule_id : inherited_rule_id;
 }
 
+bool EarleyParser::UnorderedCanComplete(const ParserState& state, const GrammarExpr& expr) const {
+  if (state.UnorderedSeenId() < 0) return false;
+  const auto& seen = unordered_states_[state.UnorderedSeenId()];
+  return seen.count >= expr[1] && seen.remaining_required == 0;
+}
+
+bool EarleyParser::UnorderedCanEnter(const ParserState& state, const GrammarExpr& expr, int index)
+    const {
+  int count = 0;
+  int remaining_required = expr[3];
+  if (state.UnorderedSeenId() >= 0) {
+    const auto& seen = unordered_states_[state.UnorderedSeenId()];
+    if (index >= 0 && unordered_states_.Contains(state.UnorderedSeenId(), index)) return false;
+    count = seen.count;
+    remaining_required = seen.remaining_required;
+  }
+  if (count >= expr[2]) return false;
+  // Do not allow an optional field to consume the last slot needed by a required field.
+  return index < 0 || expr[5 + 2 * index] || count + remaining_required < expr[2];
+}
+
+int32_t EarleyParser::UnorderedMarkSeen(
+    const ParserState& state, const GrammarExpr& expr, int index
+) {
+  return unordered_states_.Insert(
+      state.UnorderedSeenId(),
+      state.rule_id,
+      index,
+      (expr.size() - 4) / 2,
+      expr[3],
+      expr[5 + 2 * index],
+      rule_id_to_completable_states_.size() - 1
+  );
+}
+
 void EarleyParser::PopLastStates(int32_t cnt) {
   stop_token_is_accepted_ = false;
   if (cnt >= static_cast<int32_t>(rule_id_to_completable_states_.size())) {
@@ -112,6 +147,7 @@ void EarleyParser::PopLastStates(int32_t cnt) {
   rule_id_to_completable_states_.PopBack(cnt);
   is_completed_.erase(is_completed_.end() - cnt, is_completed_.end());
   scanable_state_history_.PopBack(cnt);
+  unordered_states_.Rewind(scanable_state_history_.size());
   if (capture_tracking_) {
     capture_event_history_.PopBack(cnt);
   }
@@ -211,6 +247,17 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
     // If the rule is referenced by a fsm, we need to advance the fsm.
     XGRAMMAR_DCHECK(grammar_->per_rule_fsms[parent_state.rule_id].has_value());
 
+    const auto parent_expr = grammar_->GetGrammarExpr(parent_state.sequence_id);
+    if (parent_expr.type == GrammarExprType::kUnordered) {
+      auto next = parent_state;
+      if (next.PendingUnorderedEntry() >= 0) {
+        next.SetUnorderedSeenId(UnorderedMarkSeen(next, parent_expr, next.PendingUnorderedEntry()));
+        next.SetPendingUnorderedEntry(-1);
+      }
+      Enqueue(next);
+      continue;
+    }
+
     // Check if the parent_state sits on a kRepeatRef edge
     bool handled_as_repeat = false;
     const auto& parent_fsm = grammar_->per_rule_fsms[parent_state.rule_id].value();
@@ -267,7 +314,12 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
     if (flags & kFsmStateNonTerminal) {
       ExpandNextRuleRefElementOnFSM(state, debug_print);
     }
-    return std::make_pair(flags & kFsmStateScanable, flags & kFsmStateEnd);
+    bool completable = flags & kFsmStateEnd;
+    if (completable) {
+      auto expr = grammar_->GetGrammarExpr(state.sequence_id);
+      if (expr.type == GrammarExprType::kUnordered) completable = UnorderedCanComplete(state, expr);
+    }
+    return std::make_pair(flags & kFsmStateScanable, completable);
   }
   const GrammarExpr& grammar_expr = grammar_->GetGrammarExpr(state.sequence_id);
   XGRAMMAR_DCHECK(
@@ -570,6 +622,7 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
 }
 
 void EarleyParser::Reset() {
+  unordered_states_.Clear();
   rule_id_to_completable_states_.PopBack(rule_id_to_completable_states_.size());
   scanable_state_history_.PopBack(scanable_state_history_.size());
   is_completed_.clear();
@@ -689,6 +742,9 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
   XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
   const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
 
+  const auto body = grammar_->GetGrammarExpr(state.sequence_id);
+  const bool unordered = body.type == GrammarExprType::kUnordered;
+
   // Add the rule reference pairs, and enqueue the epsilon edges.
   for (const auto& edge : fsm.GetFsm().GetFsm().GetEdges(state.element_id)) {
     if (edge.IsEpsilon()) {
@@ -741,6 +797,24 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
     } else {
       continue;
     }
+    int entry_index = -1;
+    if (unordered) {
+      if (ref_rule_id != body[0]) {
+        int lo = 0, hi = (body.size() - 4) / 2;
+        while (lo < hi) {
+          int mid = lo + (hi - lo) / 2;
+          if (body[4 + 2 * mid] < ref_rule_id)
+            lo = mid + 1;
+          else
+            hi = mid;
+        }
+        entry_index = lo;
+        XGRAMMAR_CHECK(
+            entry_index < (body.size() - 4) / 2 && body[4 + 2 * entry_index] == ref_rule_id
+        ) << "Unordered FSM references an unknown entry rule";
+      }
+      if (!UnorderedCanEnter(state, body, entry_index)) continue;
+    }
     bool right_recursion_to_root = false;
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "The rule " << state.rule_id << ": "
@@ -748,7 +822,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                          << ref_rule_id << ": " << grammar_->GetRule(ref_rule_id).name << ".";
     }
     const uint8_t target_flags = GetFsmStateFlags(state.rule_id, target);
-    if (!is_repeat && !(target_flags & kFsmStateHasEdges) && (target_flags & kFsmStateEnd) &&
+    if (!unordered && !is_repeat && !(target_flags & kFsmStateHasEdges) &&
+        (target_flags & kFsmStateEnd) &&
         state.rule_start_pos != static_cast<int32_t>(rule_id_to_completable_states_.size() - 1) &&
         !RuleNeedsCaptureEvent(state.rule_id) && !RuleNeedsCaptureEvent(ref_rule_id)) {
       // It's a right recursion. We can optimize it. The optimization elides the completion of
@@ -809,8 +884,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  state.rule_start_pos,
                  state.budget_deadline,
                  0,
-                 0,
-                 0,
+                 unordered ? entry_index + 1 : 0,
+                 unordered ? state.partial_codepoint : 0,
                  state.active_temperature_rule_id,
                  state.char_budget_deadline
              }}
@@ -828,7 +903,7 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           state.budget_deadline,
           0,
           0,
-          0,
+          unordered ? state.partial_codepoint : 0,
           state.active_temperature_rule_id,
           state.char_budget_deadline
       });

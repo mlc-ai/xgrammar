@@ -1367,6 +1367,9 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     }
   };
 
+  auto unordered_checkpoint = unordered_states_.Save();
+  UnorderedStateArena::RetainScope retain_unordered_states(unordered_states_);
+
   // Phase 1: Try atomic token path (from current state, before byte path)
   std::vector<ParserState> atomic_states;
   std::vector<std::pair<int32_t, ParserState>> atomic_completable;
@@ -1421,6 +1424,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     }
     PopLastStates(pos);
     restore_row_before_token();
+    unordered_states_.Restore(unordered_checkpoint);
     record_char_budget_relaxation_ = false;
     char_budget_relaxed_ = false;
     return false;
@@ -1429,6 +1433,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   if (atomic_success && !byte_path_success) {
     PopLastStates(pos);
     restore_row_before_token();
+    unordered_states_.Restore(unordered_checkpoint);
     char_budget_relaxed_ = false;
     bool accepted =
         has_char_budget_rules_
@@ -1571,6 +1576,7 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
 
   // Capture events are only recorded on the definitive accept path.
   CaptureRecordingGuard capture_guard(this);
+  auto unordered_checkpoint = unordered_states_.Save();
 
   std::vector<ParserState> states_before_input;
   std::vector<std::pair<int32_t, ParserState>> completable_before_input;
@@ -1617,6 +1623,7 @@ bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug
         temporary_input_start_row_ = -1;
         temporary_input_bytes_.clear();
       }
+      unordered_states_.Restore(unordered_checkpoint);
       record_char_budget_relaxation_ = false;
       char_budget_relaxed_ = false;
       return false;

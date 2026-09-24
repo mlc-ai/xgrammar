@@ -21,6 +21,9 @@
 
 namespace xgrammar {
 
+/*! \brief Ordering and key enforcement for JSON-schema objects. */
+enum class PropertyOrder { kSchema, kUnordered, kUnorderedRelaxed };
+
 struct StructuralTagItem {
   std::string begin;
   std::string schema;
@@ -115,6 +118,10 @@ class Grammar {
    *
    * This helps LLM to generate accurate output in the grammar-guided generation with JSON
    * schema. Default: true.
+   *
+   * \param property_order Object-key policy. kUnordered enforces required and unique keys in
+   * arbitrary order on closed objects. nullopt preserves any_order's legacy behavior.
+   * Cannot be combined with any_order=true.
    */
   static Grammar FromJSONSchema(
       const std::string& schema,
@@ -124,7 +131,8 @@ class Grammar {
       bool strict_mode = true,
       std::optional<int> max_whitespace_cnt = std::nullopt,
       bool print_converted_ebnf = false,
-      bool any_order = false
+      bool any_order = false,
+      std::optional<PropertyOrder> property_order = std::nullopt
   );
 
   /*!

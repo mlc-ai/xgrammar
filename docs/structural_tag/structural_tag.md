@@ -154,6 +154,7 @@ Matches content that conforms to a JSON Schema.
 | `json_schema` | `object` | (required) |
 | `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"minimax_m3_xml"` \| `"deepseek_xml"` \| `"deepseek_v4_1_xml"` \| `"glm_xml"` \| `"cohere_xml"` \| `"kimi_k3_xml"` | `"json"` |
 | `any_order` | `bool` | `false` |
+| `property_order` | `"schema"`, `"unordered"`, or `"unordered_relaxed"` | `null` |
 | `excludes` | `string[]` | `[]` |
 
 - **Use it when**: the structured part is naturally expressed as schema-constrained data
@@ -237,6 +238,20 @@ By default (`"any_order": false`) properties must appear in their declared order
 The same flag is the `any_order` argument of
 [`Grammar.from_json_schema`](xgrammar.Grammar.from_json_schema) and
 [`GrammarCompiler.compile_json_schema`](xgrammar.GrammarCompiler.compile_json_schema).
+
+For closed objects, set `property_order="unordered"` in `JSONSchemaFormat`,
+`Grammar.from_json_schema`, or `GrammarCompiler.compile_json_schema`.
+This permits reordered properties while enforcing required keys, unique keys, and
+property-count limits. It supports `json` and `glm_xml` styles and applies to nested
+objects as well. Objects with additional or pattern properties, and unconstrained
+values or containers, are rejected.
+
+Each property is compiled once. The matcher tracks emitted keys per object and restores
+that state on rollback; it does not enumerate subsets during compilation. Unsupported
+schemas raise an error without relaxing validation or falling back to ordered properties.
+`property_order="schema"` preserves declared order; `"unordered_relaxed"` preserves the
+legacy `any_order=true` behavior. Omitting `property_order` preserves the boolean option's
+behavior. Specifying both `property_order` and `any_order=true` is an error.
 
 #### `grammar`
 

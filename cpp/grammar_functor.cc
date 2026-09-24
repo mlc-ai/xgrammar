@@ -29,6 +29,7 @@
 #include "support/container.h"
 #include "support/encoding.h"
 #include "support/logging.h"
+#include "support/recursion_guard.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -364,6 +365,8 @@ class StructureNormalizerImpl : public GrammarMutator {
         auto new_rule_id = builder_->AddRuleWithHint(cur_rule_name_, ttd_expr_id);
         return builder_->AddChoices({builder_->AddSequence({builder_->AddRuleRef(new_rule_id)})});
       }
+      case GrammarExprType::kUnordered:
+        return VisitUnordered(grammar_expr);
       case GrammarExprType::kRegex:
       case GrammarExprType::kSubstring:
         // A regex or substring is kept as the direct body of the rule, like a tag dispatch.
@@ -416,9 +419,12 @@ class StructureNormalizerImpl : public GrammarMutator {
           new_choice_ids.push_back(new_sequence_id);
           break;
         }
+        case GrammarExprType::kUnordered:
         case GrammarExprType::kRegex:
         case GrammarExprType::kSubstring: {
-          auto leaf_expr_id = builder_->AddGrammarExpr(choice_expr);
+          auto leaf_expr_id = choice_expr.type == GrammarExprType::kUnordered
+                                  ? VisitUnordered(choice_expr)
+                                  : builder_->AddGrammarExpr(choice_expr);
           auto new_rule_id = builder_->AddRuleWithHint(cur_rule_name_, leaf_expr_id);
           auto new_sequence_id = builder_->AddSequence({builder_->AddRuleRef(new_rule_id)});
           new_choice_ids.push_back(new_sequence_id);
@@ -510,9 +516,12 @@ class StructureNormalizerImpl : public GrammarMutator {
           new_sequence_ids.push_back(builder_->AddRuleRef(new_rule_id));
           break;
         }
+        case GrammarExprType::kUnordered:
         case GrammarExprType::kRegex:
         case GrammarExprType::kSubstring: {
-          auto leaf_expr_id = builder_->AddGrammarExpr(element_expr);
+          auto leaf_expr_id = element_expr.type == GrammarExprType::kUnordered
+                                  ? VisitUnordered(element_expr)
+                                  : builder_->AddGrammarExpr(element_expr);
           auto new_rule_id = builder_->AddRuleWithHint(cur_rule_name_, leaf_expr_id);
           new_sequence_ids.push_back(builder_->AddRuleRef(new_rule_id));
           break;
@@ -990,7 +999,8 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
     if (root_grammar_expr.type == GrammarExprType::kTagDispatch ||
         root_grammar_expr.type == GrammarExprType::kTokenTagDispatch ||
         root_grammar_expr.type == GrammarExprType::kRegex ||
-        root_grammar_expr.type == GrammarExprType::kSubstring) {
+        root_grammar_expr.type == GrammarExprType::kSubstring ||
+        root_grammar_expr.type == GrammarExprType::kUnordered) {
       return grammar;
     }
     BuildRuleLookaheadInfo();
@@ -1054,6 +1064,13 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
         auto token_tag_dispatch = base_grammar_->GetTokenTagDispatch(grammar_expr);
         for (const auto& [token_id, rule_id] : token_tag_dispatch.trigger_rule_pairs) {
           rule_lookahead_infos_[rule_id].is_triggered_by_dispatch = true;
+        }
+        continue;
+      }
+      if (grammar_expr.type == GrammarExprType::kUnordered) {
+        rule_lookahead_infos_[grammar_expr[0]].is_triggered_by_dispatch = true;
+        for (int j = 4; j < grammar_expr.size(); j += 2) {
+          rule_lookahead_infos_[grammar_expr[j]].is_triggered_by_dispatch = true;
         }
         continue;
       }
@@ -1181,6 +1198,9 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
         continue;
       }
 
+      if (grammar_expr.type == GrammarExprType::kUnordered) {
+        continue;
+      }
       if (grammar_expr.type == GrammarExprType::kSubstring) {
         // A substring automaton always accepts the empty string: every state is accepting.
         empty_rule_id_set->insert(i);
@@ -1259,6 +1279,9 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
             grammar_expr.type != GrammarExprType::kTokenTagDispatch
         ) << "TagDispatch rules should already exist in empty_rule_id_set";
 
+        if (grammar_expr.type == GrammarExprType::kUnordered) {
+          continue;
+        }
         bool is_epsilon = std::any_of(grammar_expr.begin(), grammar_expr.end(), [&](int32_t i) {
           auto seq_expr = base_grammar_->GetGrammarExpr(i);
           return SeqExprIsEpsilon(seq_expr, *empty_rule_id_set);
@@ -1383,6 +1406,7 @@ class GrammarFSMBuilderImpl {
   void BuildCharacterClassStar(
       const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
   );
+  void BuildUnordered(const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states);
   void BuildRepeat(const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states);
   void BuildToken(const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states);
   void BuildExcludeToken(
@@ -1619,6 +1643,8 @@ void GrammarFSMBuilderImpl::BuildExpression(
       return BuildCharacterClassStar(expr, start_state, end_states);
     case ExprType::kRuleRef:
       return BuildRuleRef(expr, start_state, end_states);
+    case ExprType::kUnordered:
+      return BuildUnordered(expr, start_state, end_states);
     case ExprType::kRepeat:
       return BuildRepeat(expr, start_state, end_states);
     case ExprType::kToken:
@@ -1675,6 +1701,21 @@ void GrammarFSMBuilderImpl::BuildRuleRef(
   int end_state = target_fsm_.AddState();
   target_fsm_.AddRuleEdge(start_state, end_state, expr[0]);
   end_states->push_back(end_state);
+}
+
+void GrammarFSMBuilderImpl::BuildUnordered(
+    const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+) {
+  // Rule boundaries keep tokens spanning entries out of context-independent mask caches:
+  // their validity depends on the live seen-key set.
+  int after_entry = target_fsm_.AddState();
+  int after_separator = target_fsm_.AddState();
+  target_fsm_.AddRuleEdge(after_entry, after_separator, expr[0]);
+  for (int i = 4; i < expr.size(); i += 2) {
+    target_fsm_.AddRuleEdge(start_state, after_entry, expr[i]);
+    target_fsm_.AddRuleEdge(after_separator, after_entry, expr[i]);
+  }
+  *end_states = {after_entry};
 }
 
 void GrammarFSMBuilderImpl::BuildRepeat(
@@ -2977,6 +3018,83 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
   }
 };
 
+// Unordered entry identities must be distinguishable before their variable-length values.
+// Otherwise a short input can represent exponentially many assignments to entry rules.
+class UnorderedPrefixValidator {
+ public:
+  explicit UnorderedPrefixValidator(const Grammar& grammar) : grammar_(grammar) {}
+
+  void Validate(const Grammar::Impl::GrammarExpr& expr) {
+    std::vector<std::string> prefixes;
+    for (int i = 4; i < expr.size(); i += 2) {
+      auto prefix = RulePrefix(expr[i]).first;
+      XGRAMMAR_CHECK(!prefix.empty())
+          << "Unordered entries require nonempty, nonoverlapping literal prefixes";
+      prefixes.push_back(std::move(prefix));
+    }
+    std::sort(prefixes.begin(), prefixes.end());
+    for (size_t i = 1; i < prefixes.size(); ++i) {
+      XGRAMMAR_CHECK(prefixes[i].compare(0, prefixes[i - 1].size(), prefixes[i - 1]) != 0)
+          << "Unordered entries require nonempty, nonoverlapping literal prefixes";
+    }
+  }
+
+ private:
+  using Prefix = std::pair<std::string, bool>;
+
+  Prefix RulePrefix(int32_t id) {
+    auto it = cache_.find(id);
+    if (it != cache_.end()) return it->second;
+    // A recursive prefix cannot establish a finite literal discriminator.
+    cache_.emplace(id, Prefix{"", false});
+    auto prefix = ExprPrefix(grammar_->GetRule(id).body_expr_id);
+    cache_[id] = prefix;
+    return prefix;
+  }
+
+  Prefix ExprPrefix(int32_t id) {
+    RecursionGuard guard(&recursion_depth_);
+    auto expr = grammar_->GetGrammarExpr(id);
+    using Type = Grammar::Impl::GrammarExprType;
+    switch (expr.type) {
+      case Type::kEmptyStr:
+        return {"", true};
+      case Type::kByteString:
+        return {std::string(expr.begin(), expr.end()), true};
+      case Type::kRuleRef:
+        return RulePrefix(expr[0]);
+      case Type::kSequence: {
+        std::string prefix;
+        for (auto child : expr) {
+          auto [text, complete] = ExprPrefix(child);
+          prefix += text;
+          if (!complete) return {prefix, false};
+        }
+        return {prefix, true};
+      }
+      case Type::kChoices: {
+        if (expr.size() == 0) return {"", false};
+        auto [prefix, complete] = ExprPrefix(expr[0]);
+        for (int i = 1; i < expr.size(); ++i) {
+          auto [text, child_complete] = ExprPrefix(expr[i]);
+          complete = complete && child_complete && prefix == text;
+          prefix.resize(
+              std::mismatch(prefix.begin(), prefix.end(), text.begin(), text.end()).first -
+              prefix.begin()
+          );
+        }
+        return {prefix, complete};
+      }
+      default:
+        return {"", false};
+    }
+  }
+
+  const Grammar& grammar_;
+  std::unordered_map<int32_t, Prefix> cache_;
+  int recursion_depth_ = 0;
+};
+
 class GrammarOptimizerImpl {
  public:
   static Grammar Apply(const Grammar& grammar) {
@@ -2992,6 +3110,17 @@ class GrammarOptimizerImpl {
     result = DeadCodeEliminator::Apply(result);
     result = LookaheadAssertionAnalyzer::Apply(result);
     result->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(result);
+    UnorderedPrefixValidator unordered_prefixes(result);
+    for (int i = 0; i < result->NumRules(); ++i) {
+      auto expr = result->GetGrammarExpr(result->GetRule(i).body_expr_id);
+      if (expr.type != ExprType::kUnordered) continue;
+      for (int j = 4; j < expr.size(); j += 2) {
+        XGRAMMAR_CHECK(!std::binary_search(
+            result->allow_empty_rule_ids.begin(), result->allow_empty_rule_ids.end(), expr[j]
+        )) << "Unordered entry rules must not match the empty string";
+      }
+      unordered_prefixes.Validate(expr);
+    }
     ValidateLazyRules(result);
     RepetitionNormalizer::Apply(&result);
     GrammarFSMBuilder::Apply(&result);
@@ -3336,7 +3465,9 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
 
   // Disable non-fsms.
   for (size_t i = 0; i < grammar->ImplPtr()->per_rule_fsms.size(); i++) {
-    if (!grammar->ImplPtr()->per_rule_fsms[i].has_value()) {
+    if (!grammar->ImplPtr()->per_rule_fsms[i].has_value() ||
+        (*grammar)->GetGrammarExpr((*grammar)->GetRule(i).body_expr_id).type ==
+            ExprType::kUnordered) {
       visited_[i] = true;
     }
   }
@@ -3382,7 +3513,9 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
     if (!grammar->ImplPtr()->per_rule_fsms[i].has_value()) {
       continue;
     }
-    if (has_inward_edges_[grammar->ImplPtr()->per_rule_fsms[i]->GetFsm().GetStart()]) {
+    if ((*grammar)->GetGrammarExpr((*grammar)->GetRule(i).body_expr_id).type ==
+            ExprType::kUnordered ||
+        has_inward_edges_[grammar->ImplPtr()->per_rule_fsms[i]->GetFsm().GetStart()]) {
       continue;
     }
     const auto& [can_be_hashed, hash_value] = IsPartialHashable(i);
@@ -3658,6 +3791,7 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
       case (GrammarExprType::kChoices): {
         return std::nullopt;
       }
+      case (GrammarExprType::kUnordered):
       case (GrammarExprType::kTagDispatch):
       case (GrammarExprType::kTokenTagDispatch): {
         return std::nullopt;

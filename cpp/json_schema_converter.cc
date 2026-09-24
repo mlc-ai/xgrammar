@@ -899,6 +899,16 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     result = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
   }
 
+  if (std::holds_alternative<ObjectSpec>(result->spec)) {
+    result->unconstrained_container =
+        !schema_obj.count("properties") && !schema_obj.count("additionalProperties") &&
+        !schema_obj.count("unevaluatedProperties") && !schema_obj.count("patternProperties") &&
+        std::get<ObjectSpec>(result->spec).max_properties != 0;
+  } else if (std::holds_alternative<ArraySpec>(result->spec)) {
+    result->unconstrained_container =
+        !schema_obj.count("items") && !schema_obj.count("prefixItems") &&
+        !schema_obj.count("unevaluatedItems") && std::get<ArraySpec>(result->spec).max_items != 0;
+  }
   schema_cache_[cache_key] = result;
   return ResultOk(result);
 }
@@ -1785,8 +1795,11 @@ JSONSchemaConverter::JSONSchemaConverter(
   );
 }
 
-Grammar JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
+Grammar JSONSchemaConverter::Convert(const SchemaSpecPtr& spec, bool strict_any_order) {
+  strict_any_order_ = false;
   AddBasicRules();
+  strict_any_order_ = strict_any_order;
+  CheckStrictAnyOrderSpec(spec);
 
   // Register the root rule for circular reference handling
   // This allows $ref: "#" to resolve to "root"
@@ -2190,9 +2203,16 @@ std::optional<int32_t> JSONSchemaConverter::GetCache(const std::string& key) con
   return rule_cache_manager_.GetCache(key, true);
 }
 
+void JSONSchemaConverter::CheckStrictAnyOrderSpec(const SchemaSpecPtr& spec) const {
+  if (!strict_any_order_) return;
+  XGRAMMAR_CHECK(!std::holds_alternative<AnySpec>(spec->spec) && !spec->unconstrained_container)
+      << "property_order='unordered' does not support unconstrained values, objects, or arrays";
+}
+
 int32_t JSONSchemaConverter::CreateRule(
     const SchemaSpecPtr& spec, const std::string& rule_name_hint
 ) {
+  CheckStrictAnyOrderSpec(spec);
   // Only check cache for basic rules (pre-populated in AddBasicRules)
   // Don't cache other rules to match original behavior
   auto cached = GetCache(spec->cache_key);
@@ -2210,6 +2230,7 @@ int32_t JSONSchemaConverter::CreateRule(
 int32_t JSONSchemaConverter::GenerateFromSpec(
     const SchemaSpecPtr& spec, const std::string& rule_name_hint
 ) {
+  CheckStrictAnyOrderSpec(spec);
   return std::visit(
       [this, &rule_name_hint](const auto& s) -> int32_t {
         using T = std::decay_t<decltype(s)>;
@@ -2849,6 +2870,32 @@ int32_t JSONSchemaConverter::GetAnyOrderRuleForProperties(
   int32_t middle_separator = NextSeparatorExpression();
   int32_t last_separator = NextSeparatorExpression(true);
 
+  if (strict_any_order_) {
+    XGRAMMAR_CHECK(additional == nullptr && !additional_property_override.has_value())
+        << "property_order='unordered' requires objects with no additional or pattern properties";
+    std::vector<std::pair<int32_t, bool>> entries;
+    for (size_t index = 0; index < properties.size(); ++index) {
+      const auto& property = properties[index];
+      int32_t value_rule =
+          CreateRule(property.schema, rule_name + "_prop_" + std::to_string(index));
+      int32_t entry_rule = builder_.AddRuleWithHint(
+          rule_name + "_entry_" + std::to_string(index),
+          FormatProperty(property.name, value_rule, rule_name, index, property.schema)
+      );
+      entries.emplace_back(entry_rule, required.count(property.name) != 0);
+    }
+    int upper =
+        max_properties < 0 ? properties.size() : std::min<int>(max_properties, properties.size());
+    int lower = std::max<int>({1, min_properties, static_cast<int>(required.size())});
+    if (lower > upper) return Unsatisfiable();
+    int32_t separator = builder_.AddRuleWithHint(rule_name + "_separator", middle_separator);
+    int32_t contents = builder_.AddRuleWithHint(
+        rule_name + "_properties",
+        builder_.AddUnordered(separator, lower, upper, std::move(entries))
+    );
+    return Sequence({first_separator, RuleRef(contents), last_separator});
+  }
+
   // Build one "item" alternation over every property (any required/optional key) plus any
   // additional/pattern key; any_order does not care which key goes where.
   std::vector<int32_t> items;
@@ -3183,6 +3230,12 @@ int32_t JSONSchemaConverter::GetPartialRuleForProperties(
 int32_t JSONSchemaConverter::GenerateObject(
     const ObjectSpec& spec, const std::string& rule_name, bool need_braces
 ) {
+  if (strict_any_order_) {
+    XGRAMMAR_CHECK(
+        !spec.allow_additional_properties && !spec.allow_unevaluated_properties &&
+        spec.pattern_properties.empty() && !spec.property_names
+    ) << "property_order='unordered' requires objects with no additional or pattern properties";
+  }
   // Determine additional property handling
   std::string additional_suffix;
   SchemaSpecPtr additional_property;
@@ -3686,9 +3739,9 @@ XMLToolCallingConverter::XMLToolCallingConverter(
   }
 }
 
-Grammar XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec) {
+Grammar XMLToolCallingConverter::Convert(const SchemaSpecPtr& spec, bool strict_any_order) {
   nested_object_level_ = 0;
-  return JSONSchemaConverter::Convert(spec);
+  return JSONSchemaConverter::Convert(spec, strict_any_order);
 }
 
 std::optional<std::string> XMLToolCallingConverter::GetRenderedJSONType(const SchemaSpecPtr& spec) {
@@ -4932,8 +4985,15 @@ Grammar JSONSchemaToGrammar(
     std::optional<int> max_whitespace_cnt,
     bool any_order,
     JSONFormat json_format,
-    std::vector<std::string> excludes
+    std::vector<std::string> excludes,
+    std::optional<PropertyOrder> property_order
 ) {
+  auto order = ResolvePropertyOrder(any_order, property_order);
+  any_order = order != PropertyOrder::kSchema;
+  bool strict_any_order = order == PropertyOrder::kUnordered;
+  XGRAMMAR_CHECK(
+      !strict_any_order || json_format == JSONFormat::kJSON || json_format == JSONFormat::kGlmXML
+  ) << "property_order='unordered' currently supports json and glm_xml styles";
   picojson::value schema_value;
   std::string error = ParseJSON(schema_value, schema);
   XGRAMMAR_CHECK(error.empty()) << "Failed to parse JSON: " << error
@@ -4963,7 +5023,7 @@ Grammar JSONSchemaToGrammar(
           any_order,
           std::move(excludes)
       );
-      return converter.Convert(spec);
+      return converter.Convert(spec, strict_any_order);
     }
     case JSONFormat::kQwenXML:
     case JSONFormat::kMiniMaxXML:
@@ -4981,7 +5041,7 @@ Grammar JSONSchemaToGrammar(
           any_order,
           std::move(excludes)
       );
-      return converter.Convert(spec);
+      return converter.Convert(spec, strict_any_order);
     }
     case JSONFormat::kMiniMaxM3XML: {
       XGRAMMAR_CHECK(excludes.empty())

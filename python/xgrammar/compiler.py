@@ -12,7 +12,7 @@ from .grammar import (
     _convert_schema_to_str,
     _get_structural_tag_str_from_args,
 )
-from .structural_tag import StructuralTag
+from .structural_tag import PropertyOrder, StructuralTag, _property_order_value
 from .tokenizer_info import TokenizerInfo
 
 
@@ -151,6 +151,7 @@ class GrammarCompiler(XGRObject):
         strict_mode: bool = True,
         max_whitespace_cnt: Optional[int] = None,
         any_order: bool = False,
+        property_order: Optional[PropertyOrder] = None,
     ) -> CompiledGrammar:
         """Get CompiledGrammar from the specified JSON schema and format. The indent
         and separators parameters follow the same convention as in json.dumps().
@@ -195,6 +196,13 @@ class GrammarCompiler(XGRObject):
 
             Applies to every object, nested included.
 
+        property_order : Optional[PropertyOrder], default: None
+            "schema" enforces declared key order. "unordered" allows arbitrary order while
+            enforcing required keys and uniqueness on closed objects. "unordered_relaxed"
+            preserves any_order=True's relaxed enforcement. Applies recursively; "unordered"
+            rejects open objects and unconstrained values. Cannot be combined with any_order=True.
+            None preserves the legacy any_order behavior.
+
         Returns
         -------
         compiled_grammar : CompiledGrammar
@@ -210,6 +218,7 @@ class GrammarCompiler(XGRObject):
                 strict_mode,
                 max_whitespace_cnt,
                 any_order,
+                _property_order_value(property_order),
             )
         )
 

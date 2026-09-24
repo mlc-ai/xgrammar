@@ -21,6 +21,19 @@
 
 namespace xgrammar {
 
+// Legacy any_order=true retains its relaxed key-enforcement semantics.
+inline PropertyOrder ResolvePropertyOrder(bool any_order, std::optional<PropertyOrder> order) {
+  XGRAMMAR_CHECK(!any_order || !order.has_value())
+      << "Specify property_order or any_order=true, not both";
+  auto result =
+      order.value_or(any_order ? PropertyOrder::kUnorderedRelaxed : PropertyOrder::kSchema);
+  XGRAMMAR_CHECK(
+      result == PropertyOrder::kSchema || result == PropertyOrder::kUnordered ||
+      result == PropertyOrder::kUnorderedRelaxed
+  ) << "Invalid property_order";
+  return result;
+}
+
 /*!
  * \brief This class stores the abstract syntax tree (AST) of the Backus-Naur Form (BNF) grammar.
  * The BNF definition here is standard BNF, and the characters are represented using regex-style
@@ -203,6 +216,10 @@ class Grammar::Impl {
     // and is carried through the grammar passes as-is; when GrammarFSMBuilder runs, it is
     // compiled into an automaton via a chunk-level suffix automaton (see SuffixAutomata).
     kSubstring,
+    // data format: [separator_rule, min_count, max_count, required_count,
+    //               (entry_rule, required) x N]. Entry rules are sorted by id and non-nullable.
+    // Matches distinct entries in any order. The matcher tracks the seen set per occurrence.
+    kUnordered,
   };
 
   /*! \brief The object representing a grammar expr. */

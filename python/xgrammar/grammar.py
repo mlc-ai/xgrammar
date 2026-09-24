@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing_extensions import deprecated
 
 from .base import XGRObject, _core
-from .structural_tag import StructuralTag, StructuralTagItem
+from .structural_tag import PropertyOrder, StructuralTag, StructuralTagItem, _property_order_value
 
 if TYPE_CHECKING:
     from .tokenizer_info import TokenizerInfo
@@ -208,6 +208,7 @@ class Grammar(XGRObject):
         max_whitespace_cnt: Optional[int] = None,
         print_converted_ebnf: bool = False,
         any_order: bool = False,
+        property_order: Optional[PropertyOrder] = None,
     ) -> "Grammar":
         """Construct a grammar from JSON schema. Pydantic model or JSON schema string can be
         used to specify the schema.
@@ -272,6 +273,13 @@ class Grammar(XGRObject):
 
             Applies to every object, nested included.
 
+        property_order : Optional[PropertyOrder], default: None
+            "schema" enforces declared key order. "unordered" allows arbitrary order while
+            enforcing required keys and uniqueness on closed objects. "unordered_relaxed"
+            preserves any_order=True's relaxed enforcement. Applies recursively; "unordered"
+            rejects open objects and unconstrained values. Cannot be combined with any_order=True.
+            None preserves the legacy any_order behavior.
+
         Returns
         -------
         grammar : Grammar
@@ -293,6 +301,7 @@ class Grammar(XGRObject):
                 max_whitespace_cnt,
                 print_converted_ebnf,
                 any_order,
+                _property_order_value(property_order),
             )
         )
 

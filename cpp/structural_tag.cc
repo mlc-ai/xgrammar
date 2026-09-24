@@ -102,6 +102,21 @@ picojson::value JSONSchemaFormat::ToJSON() const {
   }
   obj["style"] = picojson::value(style);
   obj["any_order"] = picojson::value(any_order);
+  if (property_order.has_value()) {
+    switch (*property_order) {
+      case PropertyOrder::kSchema:
+        obj["property_order"] = picojson::value(std::string("schema"));
+        break;
+      case PropertyOrder::kUnordered:
+        obj["property_order"] = picojson::value(std::string("unordered"));
+        break;
+      case PropertyOrder::kUnorderedRelaxed:
+        obj["property_order"] = picojson::value(std::string("unordered_relaxed"));
+        break;
+      default:
+        XGRAMMAR_LOG(FATAL) << "Invalid property_order";
+    }
+  }
   if (!excludes.empty()) {
     obj["excludes"] = StringVectorToJSONArray(excludes);
   }
@@ -576,12 +591,24 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     }
   }
   bool any_order = false;
-  auto any_order_it = obj.find("any_order");
-  if (any_order_it != obj.end()) {
-    if (!any_order_it->second.is<bool>()) {
-      return ResultErr<ISTError>("any_order must be a boolean");
-    }
-    any_order = any_order_it->second.get<bool>();
+  if (auto it = obj.find("any_order"); it != obj.end()) {
+    if (!it->second.is<bool>()) return ResultErr<ISTError>("any_order must be a boolean");
+    any_order = it->second.get<bool>();
+  }
+  std::optional<PropertyOrder> property_order;
+  if (auto it = obj.find("property_order"); it != obj.end() && !it->second.is<picojson::null>()) {
+    if (!it->second.is<std::string>())
+      return ResultErr<ISTError>("property_order must be a string");
+    auto order = it->second.get<std::string>();
+    if (order == "schema")
+      property_order = PropertyOrder::kSchema;
+    else if (order == "unordered")
+      property_order = PropertyOrder::kUnordered;
+    else if (order == "unordered_relaxed")
+      property_order = PropertyOrder::kUnorderedRelaxed;
+    else
+      return ResultErr<ISTError>("property_order must be schema, unordered, or unordered_relaxed");
+    if (any_order) return ResultErr<ISTError>("Specify property_order or any_order=true, not both");
   }
   std::optional<int> max_whitespace_cnt = std::nullopt;
   auto max_whitespace_cnt_it = obj.find("max_whitespace_cnt");
@@ -615,7 +642,8 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
       style,
       any_order,
       max_whitespace_cnt,
-      std::move(excludes)
+      std::move(excludes),
+      property_order
   );
 }
 
@@ -1968,7 +1996,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
       /*max_whitespace_cnt=*/format.max_whitespace_cnt,
       /*any_order=*/format.any_order,
       /*json_format=*/*json_format,
-      /*excludes=*/format.excludes
+      /*excludes=*/format.excludes,
+      /*property_order=*/format.property_order
   ));
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);

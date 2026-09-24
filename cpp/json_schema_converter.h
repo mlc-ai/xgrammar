@@ -175,6 +175,8 @@ using SchemaSpecVariant = std::variant<
 
 struct SchemaSpec {
   SchemaSpecVariant spec;
+  // No member/item constraint was supplied, before strict-mode defaults were applied.
+  bool unconstrained_container = false;
   std::string cache_key;       // for deduplication
   std::string rule_name_hint;  // suggested rule name
 
@@ -297,7 +299,7 @@ class JSONSchemaConverter {
    * \param spec The SchemaSpec to convert.
    * \return The grammar AST.
    */
-  Grammar Convert(const SchemaSpecPtr& spec);
+  Grammar Convert(const SchemaSpecPtr& spec, bool strict_any_order = false);
 
   /*! \brief Whether \p format is compiled to a regex, which shadows minLength/maxLength. */
   static bool IsBuiltinFormat(const std::string& format) {
@@ -491,6 +493,8 @@ class JSONSchemaConverter {
   // Applies to all objects (including nested ones). Default false preserves the fixed-order
   // behavior.
   bool any_order_ = false;
+  bool strict_any_order_ = false;
+  void CheckStrictAnyOrderSpec(const SchemaSpecPtr& spec) const;
   std::vector<std::string> excludes_;
 
  public:
@@ -568,7 +572,8 @@ Grammar JSONSchemaToGrammar(
     std::optional<int> max_whitespace_cnt = std::nullopt,
     bool any_order = false,
     JSONFormat json_format = JSONFormat::kJSON,
-    std::vector<std::string> excludes = {}
+    std::vector<std::string> excludes = {},
+    std::optional<PropertyOrder> property_order = std::nullopt
 );
 
 // ==================== Public API functions (backward compatible) ====================

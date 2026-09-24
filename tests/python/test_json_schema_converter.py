@@ -1,10 +1,13 @@
 import json
+import random
 import re
 import sys
 from enum import Enum
+from itertools import permutations, product
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
 import pytest
+import torch
 from pydantic import BaseModel, Field, TypeAdapter, create_model
 
 import xgrammar as xgr
@@ -3048,6 +3051,357 @@ def test_any_order_ebnf():
     assert "root_item ::=" in ebnf
     assert "root ::= " in ebnf
     assert "{1, -1}" in ebnf
+
+
+def _strict_order_grammar(schema, style="json"):
+    return xgr.Grammar.from_structural_tag(
+        xgr.StructuralTag(
+            format=xgr.structural_tag.JSONSchemaFormat(
+                json_schema=schema, style=style, property_order="unordered"
+            )
+        )
+    )
+
+
+@pytest.mark.parametrize("style", ["json", "glm_xml"])
+def test_property_order_cached_policies(style):
+    schema = {
+        "type": "object",
+        "properties": {key: {"type": "integer"} for key in "ab"},
+        "additionalProperties": False,
+    }
+    vocab = sorted(set('{}":, ab12<>/_rgkeyvalu')) + ["[EOS]"]
+    info = xgr.TokenizerInfo(vocab, stop_token_ids=len(vocab) - 1)
+    compiler = xgr.GrammarCompiler(info)
+    for required in [["a", "b"], ["a"], ["b"], ["a", "b"]]:
+        schema["required"] = required
+        for order in ["unordered", "schema", "unordered_relaxed", "unordered"]:
+            options = {"property_order": order}
+            if style == "json":
+                compiled = compiler.compile_json_schema(schema, **options)
+                grammar = xgr.Grammar.from_json_schema(schema, **options)
+            else:
+                tag = {
+                    "type": "structural_tag",
+                    "format": dict(type="json_schema", style=style, json_schema=schema, **options),
+                }
+                compiled = compiler.compile_structural_tag(tag)
+                grammar = xgr.Grammar.from_structural_tag(tag)
+            for keys in ["ab", "ba", "aa", "a", "b", ""]:
+                value = (
+                    "{" + ", ".join(f'"{key}": 1' for key in keys) + "}"
+                    if style == "json"
+                    else "".join(
+                        f"<arg_key>{key}</arg_key><arg_value>1</arg_value>" for key in keys
+                    )
+                )
+                expected = (
+                    len(keys) >= len(required)
+                    if order == "unordered_relaxed"
+                    else len(keys) == len(set(keys))
+                    and set(required).issubset(keys)
+                    and (order == "unordered" or keys == "".join(sorted(keys)))
+                )
+                matcher = xgr.GrammarMatcher(compiled)
+                accepted = matcher.accept_string(value)
+                assert (accepted and matcher.is_completed()) == expected
+                if accepted:
+                    mask = xgr.allocate_token_bitmask(1, len(vocab))
+                    matcher.fill_next_token_bitmask(mask)
+                    assert bool(int(mask[0, 0]) & (1 << (len(vocab) - 1))) == expected
+                assert _is_grammar_accept_string(grammar, value) == expected
+
+
+@pytest.mark.parametrize("order", ["schema", "unordered", "unordered_relaxed"])
+def test_property_order_conflicting_options(order):
+    schema = {"type": "object", "properties": {"a": {"type": "integer"}}}
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo(["a"]))
+    for build in [xgr.Grammar.from_json_schema, compiler.compile_json_schema]:
+        with pytest.raises(RuntimeError, match="not both"):
+            build(schema, any_order=True, property_order=order)
+    with pytest.raises(xgr.InvalidStructuralTagError, match="not both"):
+        xgr.Grammar.from_structural_tag(
+            {
+                "type": "structural_tag",
+                "format": {
+                    "type": "json_schema",
+                    "json_schema": schema,
+                    "any_order": True,
+                    "property_order": order,
+                },
+            }
+        )
+
+
+def test_property_order_invalid_policy():
+    with pytest.raises(ValueError, match="Invalid property_order"):
+        xgr.Grammar.from_json_schema({"type": "integer"}, property_order="typo")
+
+
+def test_unordered_explicit_empty_containers():
+    for schema, value in [
+        ({"type": "object", "additionalProperties": False}, "{}"),
+        ({"type": "array", "items": False}, "[]"),
+    ]:
+        assert _is_grammar_accept_string(_strict_order_grammar(schema), value)
+
+
+@pytest.mark.parametrize("style", ["json", "glm_xml"])
+@pytest.mark.parametrize("required", [[], ["a"], ["a", "b"]])
+@pytest.mark.parametrize("bounds", [{}, {"minProperties": 2, "maxProperties": 2}])
+def test_strict_any_order_subsets(style, required, bounds):
+    schema = {
+        "type": "object",
+        "properties": {key: {"type": "integer"} for key in "abc"},
+        "required": required,
+        "additionalProperties": False,
+        **bounds,
+    }
+    grammar = _strict_order_grammar(schema, style)
+    # Include duplicates: a count-only grammar can substitute them for required keys.
+    for count in range(4):
+        for keys in product("abc", repeat=count):
+            if style == "json":
+                value = "{" + ", ".join(f'"{key}": 1' for key in keys) + "}"
+            else:
+                value = "".join(f"<arg_key>{key}</arg_key><arg_value>1</arg_value>" for key in keys)
+            expected = (
+                len(set(keys)) == count
+                and set(required).issubset(keys)
+                and bounds.get("minProperties", 0) <= count <= bounds.get("maxProperties", 3)
+            )
+            assert _is_grammar_accept_string(grammar, value) == expected, value
+
+
+@pytest.mark.parametrize("style", ["json", "glm_xml"])
+def test_strict_any_order_values_and_nested_refs(style):
+    schema = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "enum": ["ok"]},
+            "nested": {"$ref": "#/$defs/inner"},
+        },
+        "required": ["name", "nested"],
+        "additionalProperties": False,
+        "$defs": {
+            "inner": {
+                "type": "object",
+                "properties": {"x": {"type": "integer"}, "y": {"type": "boolean"}},
+                "required": ["x", "y"],
+                "additionalProperties": False,
+            }
+        },
+    }
+    grammar = _strict_order_grammar(schema, style)
+    for pairs in permutations([("name", "ok"), ("nested", {"y": True, "x": 1})]):
+        if style == "json":
+            text = json.dumps(dict(pairs))
+        else:
+            text = "".join(
+                f"<arg_key>{key}</arg_key><arg_value>"
+                + (value if isinstance(value, str) else json.dumps(value))
+                + "</arg_value>"
+                for key, value in pairs
+            )
+        assert _is_grammar_accept_string(grammar, text)
+        assert not _is_grammar_accept_string(grammar, text.replace("ok", "wrong"))
+        assert not _is_grammar_accept_string(grammar, text.replace('"x": 1', '"x": "bad"'))
+        assert not _is_grammar_accept_string(grammar, text.replace('"x": 1', '"z": 1'))
+
+
+@pytest.mark.parametrize(
+    "extra, count, error",
+    [
+        ({"additionalProperties": True}, 2, "no additional or pattern"),
+        ({"patternProperties": {"^z": {"type": "integer"}}}, 2, "no additional or pattern"),
+    ],
+)
+def test_strict_any_order_limits(extra, count, error):
+    schema = {
+        "type": "object",
+        "properties": {f"key_{i}": {"type": "integer"} for i in range(count)},
+        "additionalProperties": False,
+        **extra,
+    }
+    with pytest.raises(RuntimeError, match=error):
+        _strict_order_grammar(schema)
+
+
+def test_strict_any_order_token_masks_and_rollback():
+    schema = {
+        "type": "object",
+        "properties": {key: {"type": "integer"} for key in "abc"},
+        "required": ["a", "b"],
+        "additionalProperties": False,
+    }
+    vocab = [f"<arg_key>{key}</arg_key><arg_value>1</arg_value>" for key in "abc"] + ["[EOS]"]
+    info = xgr.TokenizerInfo(vocab, stop_token_ids=3)
+    compiled = xgr.GrammarCompiler(info).compile_grammar(_strict_order_grammar(schema, "glm_xml"))
+    matcher = xgr.GrammarMatcher(compiled)
+    mask = xgr.allocate_token_bitmask(1, len(vocab))
+
+    def allowed():
+        matcher.fill_next_token_bitmask(mask)
+        return {i for i in range(len(vocab)) if (int(mask[0, 0]) >> i) & 1}
+
+    assert allowed() == {0, 1, 2}
+    assert matcher.accept_token(2)
+    draft_mask = xgr.allocate_token_bitmask(4, len(vocab))
+    assert matcher.traverse_draft_tree(
+        torch.tensor([1, 2, -1, -1], dtype=torch.int64),
+        torch.tensor([-1, 3, -1, -1], dtype=torch.int64),
+        torch.tensor([2, 1, 0, 2], dtype=torch.int64),
+        draft_mask,
+    )
+    # c -> b -> a is valid; the sibling c repeats a key. Traversal must restore the root.
+    assert [int(row[0]) & 15 for row in draft_mask] == [3, 1, 8, 0]
+    assert allowed() == {0, 1}
+    assert matcher.accept_token(1)
+    assert allowed() == {0}
+    matcher.rollback(1)
+    assert allowed() == {0, 1}
+    assert matcher.accept_token(0)
+    assert allowed() == {1}
+    assert matcher.accept_token(1)
+    assert allowed() == {3}
+    assert matcher.accept_token(3)
+    assert matcher.is_terminated()
+
+
+@pytest.mark.parametrize("count", [16, 65, 256])
+def test_strict_any_order_large_objects(count):
+    inner = {
+        "type": "object",
+        "properties": {f"p{i}": {"type": "integer"} for i in range(count)},
+        "required": ["p0", f"p{count - 1}"],
+        "additionalProperties": False,
+    }
+    grammar = _strict_order_grammar({"type": "array", "items": inner})
+    text = json.dumps([{f"p{i}": i for i in reversed(range(count))}] * 2)
+    assert _is_grammar_accept_string(grammar, text)
+    assert not _is_grammar_accept_string(grammar, '[{"p0": 1, "p0": 2}]')
+    # The grammar stores each property once, rather than enumerating key subsets.
+    assert len(str(grammar)) < count * 1000
+    for restored in [
+        xgr.Grammar.from_ebnf(str(grammar)),
+        xgr.Grammar.deserialize_json(grammar.serialize_json()),
+    ]:
+        assert _is_grammar_accept_string(restored, text)
+        assert not _is_grammar_accept_string(restored, '[{"p0": 1}]')
+
+
+@pytest.mark.parametrize("max_properties", [2, 3])
+def test_strict_any_order_masks_across_boundaries(max_properties):
+    schema = {
+        "type": "object",
+        "properties": {key: {"type": "string", "const": "v"} for key in "abc"},
+        "required": ["a", "b"],
+        "additionalProperties": False,
+        "maxProperties": max_properties,
+    }
+    frames = {key: f"<arg_key>{key}</arg_key><arg_value>v</arg_value>" for key in "abc"}
+    valid = [
+        "".join(frames[key] for key in keys)
+        for count in range(2, max_properties + 1)
+        for keys in permutations("abc", count)
+        if {"a", "b"}.issubset(keys)
+    ]
+    # Include pieces spanning a value end and the next key, as well as duplicate keys.
+    vocab = sorted(
+        {
+            text[start:end]
+            for text in [frames["a"] + frames[key] for key in "abc"] + valid
+            for start in [0, 10, 31, 43]
+            for end in [start + 1, start + 10, len(text)]
+            if end <= len(text)
+        }
+    )
+    vocab.append("[EOS]")
+    eos = len(vocab) - 1
+    info = xgr.TokenizerInfo(vocab, stop_token_ids=eos)
+    compiler = xgr.GrammarCompiler(info)
+    compiled = compiler.compile_grammar(_strict_order_grammar(schema, "glm_xml"))
+    compiled = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), info)
+    mask = xgr.allocate_token_bitmask(1, len(vocab))
+    for prefix in sorted({text[:length] for text in valid for length in range(len(text) + 1)}):
+        matcher = xgr.GrammarMatcher(compiled)
+        assert matcher.accept_string(prefix)
+        matcher.fill_next_token_bitmask(mask)
+        for token, piece in enumerate(vocab):
+            expected = (
+                prefix in valid
+                if token == eos
+                else any(text.startswith(prefix + piece) for text in valid)
+            )
+            actual = bool((int(mask[0, token // 32]) >> (token % 32)) & 1)
+            assert actual == expected, (prefix, piece, expected)
+        # Mask exploration must leave the seen set intact.
+        again = mask.clone()
+        matcher.fill_next_token_bitmask(again)
+        assert (mask == again).all()
+
+
+def test_strict_any_order_overlapping_value_schemas():
+    schema = {
+        "type": "object",
+        "properties": {
+            f"p{i}": {
+                "anyOf": [{"type": "integer", "minimum": 0}, {"type": "integer", "maximum": 10}]
+            }
+            for i in range(64)
+        },
+        "additionalProperties": False,
+    }
+    grammar = _strict_order_grammar(schema)
+    text = json.dumps({f"p{i}": 1 for i in reversed(range(64))})
+    assert _is_grammar_accept_string(grammar, text)
+    assert not _is_grammar_accept_string(grammar, text[:-1] + ', "p0": 1}')
+
+
+@pytest.mark.parametrize("schema", [True, {}, {"type": "object"}, {"type": "array"}])
+@pytest.mark.parametrize("style", ["json", "glm_xml"])
+def test_strict_any_order_rejects_unconstrained_values(schema, style):
+    for candidate in [
+        schema,
+        {"type": "object", "properties": {"value": schema}},
+        {"$defs": {"value": schema}, "$ref": "#/$defs/value"},
+    ]:
+        with pytest.raises(RuntimeError, match="unconstrained"):
+            _strict_order_grammar(candidate, style)
+
+
+def test_unordered_randomized_nested_objects():
+    rng = random.Random(0)
+    for _ in range(30):
+        keys = rng.sample(["a", "aa", "b", "long", "é", 'a"b', "line\nbreak"], 5)
+        required = keys[:2]
+        properties = {key: {"type": "integer", "minimum": 0, "maximum": 9} for key in keys}
+        schema = {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": properties,
+                "required": required,
+                "additionalProperties": False,
+            },
+            "minItems": 1,
+        }
+        values = []
+        for _ in range(3):
+            selected = required + rng.sample(keys[2:], rng.randrange(4))
+            rng.shuffle(selected)
+            values.append({key: rng.randrange(10) for key in selected})
+        grammar = xgr.Grammar.from_json_schema(schema, property_order="unordered")
+        assert _is_grammar_accept_string(grammar, json.dumps(values, ensure_ascii=False))
+        for mutation in ["missing", "extra", "type"]:
+            invalid = [dict(value) for value in values]
+            if mutation == "missing":
+                del invalid[1][required[0]]
+            elif mutation == "extra":
+                invalid[1]["undeclared"] = 1
+            else:
+                invalid[1][required[0]] = "wrong type"
+            assert not _is_grammar_accept_string(grammar, json.dumps(invalid, ensure_ascii=False))
 
 
 @pytest.mark.parametrize(
