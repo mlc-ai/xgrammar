@@ -377,9 +377,24 @@ inline std::string EscapeString(uint8_t raw_char) {
 
 inline std::string EscapeString(std::string raw_str) {
   std::string res;
-  auto codepoints = ParseUTF8(raw_str.c_str(), true);
-  for (auto c : codepoints) {
-    res += EscapeString(c);
+  size_t offset = 0;
+  while (offset < raw_str.size()) {
+    // Embedded NUL bytes are valid in arbitrary byte sequences (e.g. "\0" in a byte string),
+    // so handle them explicitly rather than relying on c_str()-style null-termination.
+    if (raw_str[offset] == '\0') {
+      res += "\\0";
+      ++offset;
+      continue;
+    }
+    auto [codepoint, length] = ParseNextUTF8(raw_str.c_str() + offset);
+    if (codepoint == CharHandlingError::kInvalidUTF8) {
+      // Invalid UTF-8 byte: escape the raw byte.
+      res += EscapeString(static_cast<uint8_t>(raw_str[offset]));
+      ++offset;
+      continue;
+    }
+    res += EscapeString(codepoint);
+    offset += static_cast<size_t>(length);
   }
   return res;
 }
