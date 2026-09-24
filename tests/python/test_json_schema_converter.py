@@ -165,6 +165,21 @@ def test_enum_const():
     check_schema_with_instance(schema, instance, any_whitespace=False)
 
 
+@pytest.mark.parametrize(
+    "schema, instance",
+    [
+        ({"const": 19.99}, "19.99"),
+        ({"enum": [19.99, 0.1]}, "0.1"),
+        ({"const": {"price": 19.99}}, '{"price":19.99}'),
+        ({"const": {"first": 19.99, "second": 0.1}}, '{"first":19.99,"second":0.1}'),
+        ({"enum": [[0.1]]}, "[0.1]"),
+    ],
+)
+def test_numeric_const_enum_literals(schema: Dict[str, Any], instance: str):
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, instance)
+
+
 def test_empty_enum_rejected():
     """Empty enum [] should raise error, not produce invalid grammar."""
     schema_obj = '{"type":"object","properties":{"x":{"type":"string","enum":[]}},"required":["x"]}'

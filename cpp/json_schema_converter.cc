@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <climits>
 #include <cmath>
 #include <cstdint>
@@ -1450,9 +1451,37 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
   return ResultOk(std::move(spec));
 }
 
+std::string SerializeSchemaValue(const picojson::value& value) {
+  if (value.is<int64_t>()) return value.serialize(false);
+  if (value.is<double>()) {
+    char buffer[64];
+    auto [end, error] = std::to_chars(buffer, buffer + sizeof(buffer), value.get<double>());
+    XGRAMMAR_CHECK(error == std::errc{});
+    return std::string(buffer, end);
+  }
+  if (value.is<picojson::array>()) {
+    std::string result = "[";
+    for (const auto& item : value.get<picojson::array>()) {
+      if (result.size() != 1) result += ',';
+      result += SerializeSchemaValue(item);
+    }
+    return result + ']';
+  }
+  if (value.is<picojson::object>()) {
+    std::string result = "{";
+    const auto& object = value.get<picojson::object>();
+    for (const auto& key : object.ordered_keys()) {
+      if (result.size() != 1) result += ',';
+      result += picojson::value(key).serialize(false) + ':' + SerializeSchemaValue(object.at(key));
+    }
+    return result + '}';
+  }
+  return value.serialize(false);
+}
+
 Result<ConstSpec, SchemaError> SchemaParser::ParseConst(const picojson::object& schema) {
   ConstSpec spec;
-  spec.json_value = schema.at("const").serialize();
+  spec.json_value = SerializeSchemaValue(schema.at("const"));
   return ResultOk(std::move(spec));
 }
 
@@ -1466,7 +1495,7 @@ Result<EnumSpec, SchemaError> SchemaParser::ParseEnum(const picojson::object& sc
     return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "enum array must not be empty");
   }
   for (const auto& value : enum_array) {
-    spec.json_values.push_back(value.serialize());
+    spec.json_values.push_back(SerializeSchemaValue(value));
   }
   return ResultOk(std::move(spec));
 }
