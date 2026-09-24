@@ -41,6 +41,7 @@ class JSONSchemaFormat(BaseModel):
         "cohere_xml",
         "kimi_k3_xml",
         "deepseek_v4_1_xml",
+        "gemma",
     ] = "json"
     """How to parse the content. Valid values: \"json\" (standard JSON), \"qwen_xml\" (Qwen XML:
     <parameter=key>value</parameter>), \"minimax_xml\" (MiniMax XML:
@@ -50,7 +51,9 @@ class JSONSchemaFormat(BaseModel):
     \"deepseek_v4_1_xml\" (DeepSeek-V4.1: <{dsml_token} parameter name=\"key\" string=\"true|false\">value</{dsml_token} parameter>),
     \"glm_xml\" (GLM XML: <arg_key>key</arg_key><arg_value>value</arg_value>),
     \"cohere_xml\" (Cohere XML: <cofl:value name=\"key\" type=\"raw|json|dict|list\">value</cofl:value>),
-    \"kimi_k3_xml\" (Kimi-K3: <|open|>argument key=\"key\" type=\"type\"<|sep|>value<|close|>argument<|sep|>)."""
+    \"kimi_k3_xml\" (Kimi-K3: <|open|>argument key=\"key\" type=\"type\"<|sep|>value<|close|>argument<|sep|>),
+    \"gemma\" (Gemma 4: {key:<|\"|>string value<|\"|>,key2:123}; unquoted keys and <|\"|>-delimited
+    strings at every nesting level)."""
     any_order: bool = False
     """Whether object properties may appear in any order.
 
