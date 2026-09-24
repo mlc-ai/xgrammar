@@ -2340,6 +2340,25 @@ int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
   XGRAMMAR_CHECK(lower >= 0 && (upper == -1 || upper >= lower))
       << "Invalid repetition range {" << lower << ", " << upper << "}";
 
+  // A `maxLength`-only JSON string body - a repetition of a negative character class with
+  // `lower == 0` - is kept as one counted repeat edge. The generic path below
+  // turns it into an unrolled head plus a repeat tail with a threshold-long lookahead, which
+  // keeps one leaf parser state alive per unrolled copy while the matcher matches inside the
+  // repetition.
+  const auto& repeat_body_expr = builder_->GetGrammarExpr(grammar_expr_id);
+  const bool negative_class = repeat_body_expr.type ==
+                                  GrammarBuilder::GrammarExprType::kCharacterClass &&
+                              repeat_body_expr[0] != 0;
+  if (lower == 0 && upper != -1 && negative_class) {
+    const auto repeat_body_rule_id = builder_->AddRuleWithHint(
+        cur_rule_name + "_repeat",
+        builder_->AddChoices({builder_->AddSequence({grammar_expr_id})})
+    );
+    return builder_->AddRepeat(
+        repeat_body_rule_id, static_cast<int32_t>(lower), static_cast<int32_t>(upper)
+    );
+  }
+
   // Case 1.1 small upper (<=threshold), unzip the repetition.
   // Case 1.2 unbounded upper, and lower is also small (<=threshold), unzip the lower part.
   if ((upper != -1 && upper <= kUnzipThreshold) || (upper == -1 && lower <= kUnzipThreshold)) {
