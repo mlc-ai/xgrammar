@@ -234,7 +234,10 @@ class SingleElementExprEliminator : public GrammarMutator {
   }
 
   int32_t VisitCharacterClass(const GrammarExpr& grammar_expr) final {
-    if (grammar_expr.data_len == 3 && grammar_expr[0] == 0 && grammar_expr[1] == grammar_expr[2]) {
+    // A class with a single codepoint becomes its UTF-8 bytes, except for a surrogate: it has no
+    // UTF-8 encoding, so it stays a class, which accepts nothing.
+    if (grammar_expr.data_len == 3 && grammar_expr[0] == 0 && grammar_expr[1] == grammar_expr[2] &&
+        !(grammar_expr[1] >= 0xD800 && grammar_expr[1] <= 0xDFFF)) {
       std::string str = CharToUTF8(grammar_expr[1]);
       std::vector<int32_t> bytes;
       bytes.reserve(str.size());
@@ -1419,7 +1422,6 @@ class GrammarFSMBuilderImpl {
   void AddCharacterClassTransitions(const GrammarExpr& expr, int start_state, int end_state);
   void BuildNegativeCharacterClass(const GrammarExpr& expr, int start_state, int end_state);
   void AppendFSM(FSMWithStartEnd fsm, int start_state, std::vector<int32_t>* end_states);
-  void AddCharacterRange(int from, int to, uint32_t min, uint32_t max);
   void AddCodepointRange(int from, int to, uint32_t low, uint32_t high);
 
   FSM& target_fsm_;
@@ -1428,22 +1430,8 @@ class GrammarFSMBuilderImpl {
   GrammarBuilder* grammar_builder_ = nullptr;
 };
 
-// This function will add a range [min, max] of unicode characters to the FSM.
-void GrammarFSMBuilderImpl::AddCharacterRange(int from, int to, uint32_t min, uint32_t max) {
-  AddPackedUTF8RangeEdges(target_fsm_, from, to, min, max);
-}
-
 void GrammarFSMBuilderImpl::AddCodepointRange(int from, int to, uint32_t low, uint32_t high) {
-  // Do not bridge UTF-8 widths with the packed-byte range helper: its historical minimum
-  // byte sequences include overlong encodings (e.g. C0 80), which are not codepoints.
-  constexpr uint32_t width_ends[] = {0x7F, 0x7FF, 0xFFFF, 0x10FFFF};
-  for (uint32_t width_end : width_ends) {
-    if (low <= high && low <= width_end) {
-      auto end = std::min(high, width_end);
-      AddCharacterRange(from, to, CodepointToPackedUTF8(low), CodepointToPackedUTF8(end));
-      low = end + 1;
-    }
-  }
+  AddCodepointRangeEdges(target_fsm_, from, to, low, high);
 }
 
 void GrammarFSMBuilderImpl::BuildNegativeCharacterClass(
