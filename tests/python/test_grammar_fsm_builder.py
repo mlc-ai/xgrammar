@@ -472,19 +472,24 @@ fsm_structure_cases = [
         'root ::= "a" item{2,5} "b"\nitem ::= [0-9]',
         _fsm_snapshot(
             r"""
-            Rule 0: root, FSM: CompactFSM(num_states=10, start=2, end=[7], edges=[
-            0: [[0-9]->3]
-            1: ['b'->7]
+            Rule 0: root, FSM: CompactFSM(num_states=11, start=2, end=[3], edges=[
+            0: [Rule(3)->1]
+            1: ['b'->3]
             2: ['a'->0]
-            3: [[0-9]->4]
-            4: [Eps->1, [0-9]->5]
-            5: [Eps->1, [0-9]->6]
-            6: [Eps->1, [0-9]->1]
+            3: []
+            ])
+            Rule 1: root_repeat_1, FSM: CompactFSM(num_states=11, start=4, end=[5], edges=[
+            4: [[0-9]->5]
+            5: []
+            ])
+            Rule 2: root_repeat_1_inner, FSM: CompactFSM(num_states=11, start=6, end=[7], edges=[
+            6: [Repeat(rule=1, min=1, max=4)->7]
             7: []
             ])
-            Rule 1: root_characters, FSM: CompactFSM(num_states=10, start=8, end=[9], edges=[
-            8: [[0-9]->9]
-            9: []
+            Rule 3: root_1, FSM: CompactFSM(num_states=11, start=9, end=[10], edges=[
+            8: [[0-9]->10]
+            9: [Rule(2)->8]
+            10: []
             ])
             """
         ),

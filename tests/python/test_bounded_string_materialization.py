@@ -6,6 +6,49 @@ import pytest
 import torch
 
 import xgrammar as xgr
+from xgrammar.testing import _print_grammar_fsms
+
+
+@pytest.mark.parametrize("upper", [4096, 100000])
+@pytest.mark.parametrize("token_length", [1, 8, 32, 1025, 4096])
+def test_tokenizer_materialization_window(upper, token_length):
+    schema = {"type": "string", "maxLength": upper}
+    reference = xgr.GrammarCompiler(xgr.TokenizerInfo([b"a" * 1024])).compile_json_schema(schema)
+    vocabulary = [b"a", b"a" * token_length, b"a" * token_length + b'"', b'"', b"<eos>"]
+    info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[4])
+    compiled = xgr.GrammarCompiler(info).compile_json_schema(schema)
+    # A longer vocabulary entry must not grow the materialized FSM beyond the
+    # window used for a 1024-character token, even with a large maxLength.
+    actual_fsm = _print_grammar_fsms(compiled.grammar)
+    reference_fsm = _print_grammar_fsms(reference.grammar)
+    if token_length > 1024:
+        assert actual_fsm == reference_fsm
+    else:
+        # Short-token vocabularies should not pay for a fixed minimum window.
+        assert len(actual_fsm) < len(reference_fsm) // 2
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_string('"')
+    mask = xgr.allocate_token_bitmask(1, len(vocabulary))
+    previous = 0
+    for position in sorted({0, upper - token_length, upper - token_length + 1, upper}):
+        assert matcher.accept_string("a" * (position - previous))
+        previous = position
+        matcher.fill_next_token_bitmask(mask)
+        expected = [
+            position < upper,
+            position + token_length <= upper,
+            position + token_length <= upper,
+            True,
+            False,
+        ]
+        for token_id, allowed in enumerate(expected):
+            assert bool((int(mask[0, 0]) >> token_id) & 1) == allowed
+        if position + token_length <= upper:
+            before = mask.clone()
+            assert matcher.accept_token(1)
+            matcher.rollback(1)
+            matcher.fill_next_token_bitmask(mask)
+            assert torch.equal(mask, before)
 
 
 @pytest.mark.parametrize(
