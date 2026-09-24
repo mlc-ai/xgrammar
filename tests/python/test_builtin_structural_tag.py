@@ -11,6 +11,7 @@ from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.builtin_structural_tag import (
+    bind_marker_tokens,
     get_cohere_structural_tag,
     get_deepseek_r1_structural_tag,
     get_deepseek_v3_1_structural_tag,
@@ -39,6 +40,9 @@ from xgrammar.structural_tag import (
     SequenceFormat,
     StructuralTag,
     TagFormat,
+    TokenFormat,
+    TokenTriggeredTagsFormat,
+    TriggeredTagsFormat,
 )
 from xgrammar.testing import _is_grammar_accept_string
 
@@ -3313,3 +3317,224 @@ def test_parallel_tool_calls_rejects_non_bool():
         get_model_structural_tag(
             "qwen_3", tools=_PARALLEL_TOOLS, parallel_tool_calls="no"  # type: ignore[arg-type]
         )
+
+
+# ---------- token_markers: match control markers by token instead of by string ----------
+
+_TOKEN_MARKER_SCHEMA = {
+    "type": "object",
+    "properties": {"city": {"type": "string"}},
+    "required": ["city"],
+}
+_TOKEN_MARKER_TOOLS = make_tools(["get_weather", "get_time"], _TOKEN_MARKER_SCHEMA)
+
+
+def _token_marker_tag_format(model: str, tool_choice: Any, reasoning: bool = False):
+    return get_model_structural_tag(
+        model,
+        tools=_TOKEN_MARKER_TOOLS,
+        tool_choice=tool_choice,
+        reasoning=reasoning,
+        token_markers=True,
+    ).format
+
+
+def test_token_markers_default_off_keeps_string_markers():
+    default = get_model_structural_tag(
+        "glm_4_7", tools=_TOKEN_MARKER_TOOLS, tool_choice="required", reasoning=False
+    )
+    explicit = get_model_structural_tag(
+        "glm_4_7",
+        tools=_TOKEN_MARKER_TOOLS,
+        tool_choice="required",
+        reasoning=False,
+        token_markers=False,
+    )
+    assert explicit == default
+    assert isinstance(default.format, TriggeredTagsFormat)
+
+
+@pytest.mark.parametrize("model", ["glm_4_7", "qwen_3_5", "qwen_3_coder", "qwen_3"])
+def test_token_markers_required_dispatches_on_tool_call_token(model: str):
+    fmt = _token_marker_tag_format(model, "required")
+
+    assert isinstance(fmt, TokenTriggeredTagsFormat)
+    assert fmt.trigger_tokens == ["<tool_call>"]
+    assert fmt.at_least_one is True
+    assert "</think>" in fmt.exclude_tokens
+    assert len(fmt.tags) == 2
+    for tag in fmt.tags:
+        assert tag.begin == TokenFormat(token="<tool_call>")
+        assert tag.end == TokenFormat(token="</tool_call>")
+        # The tool name and any template text stay literal inside the tag.
+        assert isinstance(tag.content, SequenceFormat)
+        assert isinstance(tag.content.elements[0], ConstStringFormat)
+        assert any(isinstance(element, JSONSchemaFormat) for element in tag.content.elements)
+
+
+def test_token_markers_glm_forced_and_reasoning_prefix():
+    fmt = _token_marker_tag_format(
+        "glm_4_7", {"type": "function", "function": {"name": "get_weather"}}, reasoning=True
+    )
+
+    assert isinstance(fmt, SequenceFormat)
+    prefix, call = fmt.elements
+    # The reasoning block is closed by the dedicated </think> token.
+    assert isinstance(prefix, TagFormat)
+    assert prefix.begin == ""
+    assert prefix.end == TokenFormat(token="</think>")
+    assert isinstance(call, TagFormat)
+    assert call.begin == TokenFormat(token="<tool_call>")
+    assert call.content == SequenceFormat(
+        elements=[
+            ConstStringFormat(value="get_weather"),
+            JSONSchemaFormat(json_schema=_TOKEN_MARKER_SCHEMA, style="glm_xml"),
+        ]
+    )
+    assert call.end == TokenFormat(token="</tool_call>")
+
+
+def test_token_markers_qwen_3_coder_keeps_function_wrapper_literal():
+    fmt = _token_marker_tag_format("qwen_3_coder", "auto")
+
+    assert isinstance(fmt, TokenTriggeredTagsFormat)
+    assert fmt.at_least_one is False
+    tag = fmt.tags[0]
+    assert tag.content == SequenceFormat(
+        elements=[
+            ConstStringFormat(value="\n<function=get_weather>\n"),
+            JSONSchemaFormat(json_schema=_TOKEN_MARKER_SCHEMA, style="qwen_xml"),
+            ConstStringFormat(value="\n</function>\n"),
+        ]
+    )
+
+
+def test_token_markers_rejects_models_without_declared_markers():
+    with pytest.raises(ValueError, match="token_markers is not supported"):
+        get_model_structural_tag("llama", tools=_TOKEN_MARKER_TOOLS, token_markers=True)
+
+
+def test_bind_marker_tokens_is_noop_without_occurrences():
+    structural_tag = get_model_structural_tag("llama", tools=_TOKEN_MARKER_TOOLS)
+    assert bind_marker_tokens(structural_tag, ["<tool_call>"]) is structural_tag
+    assert bind_marker_tokens(structural_tag, []) is structural_tag
+
+
+def _marker_encodings(tokenizer, body: str) -> Tuple[List[int], List[int]]:
+    """One tool call with the dedicated marker tokens, and with the markers spelled out."""
+
+    def enc(text: str) -> List[int]:
+        return tokenizer.encode(text, add_special_tokens=False)
+
+    start = tokenizer.convert_tokens_to_ids("<tool_call>")
+    end = tokenizer.convert_tokens_to_ids("</tool_call>")
+    atomic = [start, *enc(body), end]
+    split = [*enc("<"), *enc("tool_call"), *enc(">"), *enc(body)]
+    split += [*enc("</"), *enc("tool_call"), *enc(">")]
+    assert tokenizer.decode(atomic) == tokenizer.decode(split)
+    assert start not in split and end not in split
+    return atomic, split
+
+
+def _accepts_tokens(compiler, structural_tag: StructuralTag, token_ids: List[int]) -> bool:
+    matcher = xgr.GrammarMatcher(compiler.compile_structural_tag(structural_tag))
+    return all(matcher.accept_token(token_id) for token_id in token_ids)
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize(
+    ("model", "tokenizer_id", "body"),
+    [
+        (
+            "glm_4_7",
+            "zai-org/GLM-4.7-Flash",
+            "get_weather<arg_key>city</arg_key><arg_value>Leon</arg_value>",
+        ),
+        (
+            "qwen_3_coder",
+            "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+            "\n<function=get_weather>\n<parameter=city>\nLeon\n</parameter>\n</function>\n",
+        ),
+    ],
+)
+@pytest.mark.parametrize("tool_choice", ["required", "forced"])
+def test_token_markers_required_only_admits_dedicated_marker_tokens(
+    model: str, tokenizer_id: str, body: str, tool_choice: str
+):
+    """Regression for the grammar/parser mismatch behind vllm-project/vllm#58315.
+
+    With string markers the grammar accepts ``<tool_call>`` assembled from
+    ordinary sub-tokens; a parser keyed on the dedicated token ID then finds no
+    tool call although ``required`` was satisfied. With ``token_markers=True``
+    only the dedicated tokens are admitted.
+    """
+    tokenizer = load_tokenizer(tokenizer_id, use_fast=True, trust_remote_code=True)
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo.from_huggingface(tokenizer))
+    atomic, split = _marker_encodings(tokenizer, body)
+    if tool_choice == "forced":
+        tool_choice = {"type": "function", "function": {"name": "get_weather"}}
+    kwargs: Dict[str, Any] = {
+        "tools": _TOKEN_MARKER_TOOLS,
+        "tool_choice": tool_choice,
+        "reasoning": False,
+    }
+
+    string_markers = get_model_structural_tag(model, **kwargs)
+    assert _accepts_tokens(compiler, string_markers, atomic)
+    assert _accepts_tokens(compiler, string_markers, split)
+
+    token_markers = get_model_structural_tag(model, token_markers=True, **kwargs)
+    assert _accepts_tokens(compiler, token_markers, atomic)
+    assert not _accepts_tokens(compiler, token_markers, split)
+
+
+@pytest.mark.hf_token_required
+def test_token_markers_auto_keeps_free_text_and_parallel_calls():
+    tokenizer = load_tokenizer("zai-org/GLM-4.7-Flash", use_fast=True, trust_remote_code=True)
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo.from_huggingface(tokenizer))
+    atomic, _ = _marker_encodings(
+        tokenizer, "get_weather<arg_key>city</arg_key><arg_value>Leon</arg_value>"
+    )
+    prose = tokenizer.encode("Let me check.", add_special_tokens=False)
+    structural_tag = get_model_structural_tag(
+        "glm_4_7",
+        tools=_TOKEN_MARKER_TOOLS,
+        tool_choice="auto",
+        reasoning=False,
+        token_markers=True,
+    )
+
+    assert _accepts_tokens(compiler, structural_tag, prose)
+    assert _accepts_tokens(compiler, structural_tag, [*prose, *atomic, *prose, *atomic])
+    # A stray control token in free text is still excluded.
+    stray = tokenizer.convert_tokens_to_ids("</tool_call>")
+    assert not _accepts_tokens(compiler, structural_tag, [*prose, stray])
+
+
+@pytest.mark.hf_token_required
+def test_token_markers_reasoning_block_closes_on_dedicated_think_token():
+    tokenizer = load_tokenizer(
+        "Qwen/Qwen3-Coder-30B-A3B-Instruct", use_fast=True, trust_remote_code=True
+    )
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo.from_huggingface(tokenizer))
+    atomic, _ = _marker_encodings(
+        tokenizer, "\n<function=get_weather>\n<parameter=city>\nLeon\n</parameter>\n</function>\n"
+    )
+
+    def enc(text: str) -> List[int]:
+        return tokenizer.encode(text, add_special_tokens=False)
+
+    think_end = tokenizer.convert_tokens_to_ids("</think>")
+    structural_tag = get_model_structural_tag(
+        "qwen_3_coder",
+        tools=_TOKEN_MARKER_TOOLS,
+        tool_choice="required",
+        reasoning=True,
+        token_markers=True,
+    )
+
+    dedicated = [*enc("plan"), think_end, *enc("\n\n"), *atomic]
+    spelled = [*enc("plan"), *enc("</"), *enc("think"), *enc(">"), *enc("\n\n"), *atomic]
+    assert tokenizer.decode(dedicated) == tokenizer.decode(spelled)
+    assert _accepts_tokens(compiler, structural_tag, dedicated)
+    assert not _accepts_tokens(compiler, structural_tag, spelled)
