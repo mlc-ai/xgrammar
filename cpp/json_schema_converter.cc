@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <climits>
 #include <cmath>
 #include <cstdint>
@@ -1514,12 +1515,29 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
 
   auto current = std::cref(root_schema_);
   for (const auto& p : parts) {
-    if (!current.get().is<picojson::object>() || !current.get().contains(p)) {
+    if (current.get().is<picojson::object>()) {
+      if (!current.get().contains(p)) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "Cannot find field " + p + " in " + uri
+        );
+      }
+      current = current.get().get(p);
+    } else if (current.get().is<picojson::array>()) {
+      const auto& array = current.get().get<picojson::array>();
+      size_t index = 0;
+      const auto [end, error] = std::from_chars(p.data(), p.data() + p.size(), index);
+      if (p.empty() || (p.size() > 1 && p[0] == '0') || error != std::errc{} ||
+          end != p.data() + p.size() || index >= array.size()) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "Cannot find array index " + p + " in " + uri
+        );
+      }
+      current = std::cref(array[index]);
+    } else {
       return ResultErr<SchemaError>(
           SchemaErrorType::kInvalidSchema, "Cannot find field " + p + " in " + uri
       );
     }
-    current = current.get().get(p);
   }
 
   auto result = Parse(current, new_rule_name_prefix);
