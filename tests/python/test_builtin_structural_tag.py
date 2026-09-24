@@ -2786,6 +2786,25 @@ def test_deepseek_v4_1_empty_arguments(parameters):
     )
     output = '\n\n<｜DSML｜ calls>\n<｜DSML｜ invoke name="ping">\n\n</｜DSML｜ invoke>\n</｜DSML｜ calls>'
     assert _is_grammar_accept_string(grammar, output)
+    without_blank_line = output.replace("\n\n</｜DSML｜ invoke>", "\n</｜DSML｜ invoke>")
+    assert _is_grammar_accept_string(grammar, without_blank_line)
+    assert not _is_grammar_accept_string(
+        grammar, output.replace("\n\n</｜DSML｜ invoke>", "\n\t\t\t</｜DSML｜ invoke>")
+    )
+
+
+def test_deepseek_v4_empty_arguments_are_bounded():
+    tool = {"type": "function", "function": {"name": "ping", "parameters": {}}}
+    grammar = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag(
+            "deepseek_v4", tools=[tool], reasoning=False, tool_choice="required"
+        )
+    )
+    output = '\n\n<｜DSML｜tool_calls>\n<｜DSML｜invoke name="ping">\n\n</｜DSML｜invoke>\n</｜DSML｜tool_calls>'
+    assert _is_grammar_accept_string(grammar, output)
+    assert not _is_grammar_accept_string(
+        grammar, output.replace("\n\n</｜DSML｜invoke>", "\n\t\t\t</｜DSML｜invoke>")
+    )
 
 
 @pytest.mark.parametrize(
