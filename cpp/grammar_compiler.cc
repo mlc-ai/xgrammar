@@ -1093,7 +1093,11 @@ static void CheckTokenIdsInVocab(const Grammar& grammar, int vocab_size) {
 
 CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_unoptimized) {
   auto compiled_grammar_impl = std::make_shared<CompiledGrammar::Impl>();
-  compiled_grammar_impl->grammar = GrammarOptimizer::Apply(grammar_unoptimized);
+  // Cover typical tokens without letting an unusually long vocabulary entry
+  // cause unbounded FSM expansion. Longer tokens use the counter fallback.
+  compiled_grammar_impl->grammar = GrammarOptimizer::Apply(
+      grammar_unoptimized, std::clamp(tokenizer_info_.ImplPtr()->GetMaxTokenChars(), 1, 1024)
+  );
   compiled_grammar_impl->tokenizer_info = tokenizer_info_;
   CheckTokenIdsInVocab(compiled_grammar_impl->grammar, tokenizer_info_.GetVocabSize());
   if (tokenizer_info_.GetVocabSize() == 0) {
