@@ -550,6 +550,8 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   const std::vector<int>& GetStopTokenIds() const { return stop_token_ids_; }
 
+  int GetVocabSize() const { return tokenizer_info_.GetVocabSize(); }
+
   std::string _DebugPrintInternalState() const { return PrintStates(); }
 
  private:
@@ -2788,6 +2790,10 @@ std::optional<float> GrammarMatcher::GetTemperature() const { return pimpl_->Get
 
 const std::vector<int>& GrammarMatcher::GetStopTokenIds() const {
   return pimpl_->GetStopTokenIds();
+}
+
+int GrammarMatcher::GetVocabSize() const {
+  return pimpl_->GetVocabSize();
 }
 
 std::string GrammarMatcher::_DebugPrintInternalState() const {

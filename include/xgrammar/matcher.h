@@ -206,6 +206,9 @@ class GrammarMatcher {
 
   const std::vector<int>& GetStopTokenIds() const;
 
+  /*! \brief Get the vocabulary size this matcher was built with. */
+  int GetVocabSize() const;
+
   /*! \brief Print the internal state of the matcher. This is only used for debugging. The
    * representation of the internal state is subject to change.
    */
