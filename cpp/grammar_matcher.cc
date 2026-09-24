@@ -1924,6 +1924,12 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   const auto& token_char_counts = tokenizer_info_.ImplPtr()->GetTokenCharCounts();
   for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+    if (adaptive_token_mask.uncertain_indices.empty()) {
+      if (adaptive_token_mask.store_type == StoreType::kRejected) {
+        IntsetIntersection(&tmp_rejected_indices_, adaptive_token_mask.rejected_indices);
+      }
+      continue;
+    }
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
     // rejected list.
