@@ -51,6 +51,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 - **reasoning** (`"enabled" | "disabled" | "auto" | bool`, optional): Controls the model-specific reasoning section. The string modes are recommended. The boolean aliases `True` and `False` are deprecated but remain supported as `"enabled"` and `"disabled"`, respectively. For models with a leading reasoning block, `"auto"` means that the prompt does not prefill its opener, and the model may emit one complete block or answer/call a tool directly. Default `"enabled"` in `get_model_structural_tag`; the model-specific `get_minimax_m3_structural_tag` defaults to `"auto"`. For MiniMax M3, these modes must be paired with the chat template's `enabled`, `disabled`, and `adaptive` thinking modes; adaptive output may start with `</mm:think>` when skipping reasoning. Boolean aliases are supported only by `get_model_structural_tag`; model-specific builders take the three explicit string modes.
 - **any_order** (`bool`, optional): When `True`, applies `any_order=True` to every `JSONSchemaFormat` in the generated structural tag, so each tool's arguments may be emitted in any property order (see [`JSONSchemaFormat`](structural_tag) for the exact semantics). Default `False`, which keeps the declared property order with full validation.
 - **parallel_tool_calls** (`bool`, optional): Whether the model may emit more than one tool call in a single response, following the OpenAI Chat Completions parameter of the same name. Default `True`, which keeps the multi-call grammar. When `False`, the structural tag allows at most one tool call: exactly zero or one under `tool_choice="auto"`, exactly one under `"required"` or a forced tool. Free text is still allowed before the call, but generation must end once the call is closed, since a second call is no longer reachable.
+- **token_markers** (`bool`, optional): Whether to match the model's control markers (`<tool_call>`, `</tool_call>`, `</think>`, ...) as single tokens instead of as strings. Default `False`. See [Token-level markers](#token-level-markers). Supported for `glm_4_7`, `qwen_3`, `qwen_3_5` and `qwen_3_coder`; other models raise `ValueError`.
 - **max_whitespace_cnt** (`Optional[int]`, optional): Caps the number of consecutive whitespace characters. Setting it (e.g. `2`) bounds runs of whitespace, which avoids the unbounded-whitespace outputs some models emit in bad cases that would otherwise blow up grammar compilation/matching.
 
 Passing an unsupported `model`, invalid `tool_choice`, or invalid `reasoning` mode will raise `ValueError`.
@@ -209,6 +210,29 @@ structural_tag = get_model_structural_tag(
 With `tool_choice="auto"` the model may still answer with plain text instead, so the response holds
 exactly zero or one call; with `"required"` or a forced tool it holds exactly one. A forced tool
 choice already resolves to a single call, so the flag does not change it.
+
+### Token-level markers
+
+By default the control markers in a builtin structural tag are strings, so the grammar accepts
+`<tool_call>` whether the model emits its dedicated token or spells it from ordinary sub-tokens
+(`<`, `tool_call`, `>`). Both decode to the same text, but a serving engine whose output parser
+recognises the markers by token ID cannot parse the spelled-out form, so a `tool_choice="required"`
+response can satisfy the grammar and still contain no tool call. Pass `token_markers=True` to
+match every marker as its single dedicated token:
+
+```python
+structural_tag = get_model_structural_tag(
+    "glm_4_7",
+    tools=tools,
+    tool_choice="required",
+    token_markers=True,
+)
+```
+
+The accepted text is unchanged; only the admitted tokenizations shrink. The tokenizer must define
+every marker of the model as a single token, otherwise grammar compilation fails. Markers that
+appear inside schema-driven argument content (for example GLM's `<arg_key>` wrappers, which the
+`glm_xml` schema style emits) are still matched as strings.
 
 ---
 
