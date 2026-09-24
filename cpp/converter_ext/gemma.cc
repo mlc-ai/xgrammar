@@ -29,10 +29,6 @@ namespace {
 // tool-calling styles.
 constexpr const char kGemmaIdentifierRegex[] = "[a-zA-Z_][a-zA-Z0-9_]*";
 
-// A string body character for length-constrained strings. `.` excludes newlines in the FSM
-// regex dialect, so newlines are added back explicitly.
-constexpr const char kGemmaAnyCharRegex[] = "(.|\\n)";
-
 std::vector<std::string> WithStringDelimiter(std::vector<std::string> excludes) {
   // The delimiter closes every string, so no string body may contain it. Registering it as an
   // exclusion lets the shared exclusion machinery (ExcludingString, IsAllowedString) keep it
@@ -117,11 +113,9 @@ int32_t GemmaToolCallingConverter::GenerateString(
     return GemmaString(GemmaRegexBody(*spec.pattern, rule_name + "_pattern", false));
   }
   if (spec.min_length != 0 || spec.max_length != -1) {
-    // Gemma strings have no escapes, so every codepoint counts once towards the bounds.
-    std::string repetition = "{" + std::to_string(spec.min_length) + "," +
-                             (spec.max_length == -1 ? "" : std::to_string(spec.max_length)) + "}";
-    return GemmaString(GemmaRegexBody(kGemmaAnyCharRegex + repetition, rule_name + "_bounded", true)
-    );
+    // The delimiter is an exclusion, so the bounds are dropped as in the other styles: unrolling
+    // the exclusion automaton per character costs the compiler ~35 ms per character of the bound.
+    WarnDroppedLengthConstraints(spec, rule_name);
   }
   return GemmaString(RuleRef(kGemmaStringContent));
 }
@@ -183,16 +177,8 @@ int32_t GemmaToolCallingConverter::GemmaLiteral(const std::string& json_value) {
   if (!IsAllowedGemmaValue(value)) {
     return Unsatisfiable();
   }
-  if (!value.is<std::string>() && !value.is<picojson::object>() && !value.is<picojson::array>()) {
-    // Scalars are spelled the same in Gemma and JSON. Keep the schema's own text: a round trip
-    // through picojson's double storage would lose precision for large integers and change
-    // the formatting (e.g. 1.0 -> 1).
-    auto begin = json_value.find_first_not_of(" \n\t\r");
-    auto end = json_value.find_last_not_of(" \n\t\r");
-    return ByteString(json_value.substr(begin, end - begin + 1));
-  }
-  // Strings, objects and arrays are re-serialized into Gemma form. Numbers nested inside them
-  // still pass through picojson.
+  // json_value is picojson's own serialization of the schema literal (SchemaParser::ParseConst),
+  // so re-serializing it is lossless: integers stay int64 and doubles keep their %.17g spelling.
   return ByteString(SerializeGemma(value));
 }
 
@@ -258,14 +244,39 @@ int32_t GemmaToolCallingConverter::CreatePatternKeyRule(
 int32_t GemmaToolCallingConverter::CreatePropertyNamesKeyRule(
     const SchemaSpecPtr& property_names, const std::string& rule_name_hint
 ) {
-  // Constrain the bare key by the propertyNames pattern when one is given; otherwise keep the
-  // identifier rule. Other propertyNames constraints do not apply to unquoted keys.
+  // Constrain the bare key by a propertyNames pattern or by its enum/const literals; otherwise
+  // keep the identifier rule. Other propertyNames constraints do not apply to unquoted keys.
   if (auto* string_spec = std::get_if<StringSpec>(&property_names->spec)) {
     if (string_spec->pattern.has_value()) {
       return CreatePatternKeyRule(*string_spec->pattern, rule_name_hint);
     }
   }
+  if (auto* enum_spec = std::get_if<EnumSpec>(&property_names->spec)) {
+    return builder_.AddRuleWithHint(rule_name_hint, GemmaKeyLiterals(enum_spec->json_values));
+  }
+  if (auto* const_spec = std::get_if<ConstSpec>(&property_names->spec)) {
+    return builder_.AddRuleWithHint(rule_name_hint, GemmaKeyLiterals({const_spec->json_value}));
+  }
   return builder_.AddRuleWithHint(rule_name_hint, KeyPatternExpression());
+}
+
+int32_t GemmaToolCallingConverter::GemmaKeyLiterals(const std::vector<std::string>& json_values) {
+  std::vector<int32_t> keys;
+  for (const auto& json_value : json_values) {
+    picojson::value value;
+    std::string error = ParseJSON(value, json_value);
+    XGRAMMAR_CHECK(error.empty()) << "Failed to parse JSON value: " << error
+                                  << ". The JSON string is: " << json_value;
+    // Only a non-empty string names a property, and a bare key cannot contain an exclusion.
+    if (!value.is<std::string>()) continue;
+    const auto& key = value.get<std::string>();
+    if (key.empty() || !IsAllowedString(key)) continue;
+    keys.push_back(ByteString(key));
+  }
+  if (keys.empty()) {
+    return Unsatisfiable();
+  }
+  return Choice(keys);
 }
 
 }  // namespace xgrammar

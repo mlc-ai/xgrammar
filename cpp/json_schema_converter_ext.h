@@ -352,6 +352,8 @@ class GemmaToolCallingConverter : public JSONSchemaConverter {
   int32_t GemmaRegexBody(
       const std::string& regex, const std::string& rule_name, bool force_cfg_expansion
   );
+  /*! \brief A choice of the bare keys spelled by the JSON string literals, or Unsatisfiable. */
+  int32_t GemmaKeyLiterals(const std::vector<std::string>& json_values);
   /*! \brief Whether no raw string or key inside the value contains an exclusion. */
   bool IsAllowedGemmaValue(const picojson::value& value) const;
   /*! \brief Serialize a JSON value into Gemma's argument spelling. */

@@ -4090,19 +4090,16 @@ def test_gemma_property_names_schema(input_str: str, accepted: bool):
 
 gemma_length_bound_input_str_accepted = (
     ('{s:<|"|>ab<|"|>}', True),
-    ('{s:<|"|>a<b<|"|>}', True),  # lone '<' is allowed in bounded strings
-    ('{s:<|"|>ab<<|"|>}', True),  # '<' as the last content character
+    ('{s:<|"|>a<|"|>}', True),  # the bounds are dropped, as with any exclusion
+    ('{s:<|"|>abcdef<|"|>}', True),
     ('{s:<|"|>a<|b<|"|>}', True),  # a delimiter prefix that diverges
-    ('{s:<|"|>a\nb<|"|>}', True),  # newlines count as characters
-    ('{s:<|"|>한글날<|"|>}', True),  # repetition counts codepoints, not bytes
-    ('{s:<|"|>a<|"|>}', False),  # below minLength
-    ('{s:<|"|>abcdef<|"|>}', False),  # above maxLength
-    ('{s:<|"|>ab<|"|>cd<|"|>}', False),  # embedded delimiter
+    ('{s:<|"|>ab<|"|>cd<|"|>}', False),  # the delimiter stays excluded
 )
 
 
 @pytest.mark.parametrize("input_str, accepted", gemma_length_bound_input_str_accepted)
 def test_gemma_length_bound_string_schema(input_str: str, accepted: bool):
+    """Length bounds are dropped with a warning; the delimiter exclusion still applies."""
     schema = {
         "type": "object",
         "properties": {"s": {"type": "string", "minLength": 2, "maxLength": 5}},
@@ -4164,6 +4161,36 @@ def test_gemma_const_containing_delimiter_is_unsatisfiable():
     schema = {"type": "object", "properties": {"v": {"enum": ['a<|"|>b', "ok"]}}, "required": ["v"]}
     _check_gemma_grammar(schema, '{v:<|"|>ok<|"|>}', True)
     _check_gemma_grammar(schema, '{v:<|"|>a<|"|>b<|"|>}', False)
+
+
+gemma_property_names_enum_input_str_accepted = (
+    ("{a:1}", True),
+    ("{b:2,a:1}", True),
+    ("{}", True),
+    ("{zzz:1}", False),
+    ('{<|"|>a<|"|>:1}', False),
+)
+
+
+@pytest.mark.parametrize("input_str, accepted", gemma_property_names_enum_input_str_accepted)
+def test_gemma_property_names_enum_schema(input_str: str, accepted: bool):
+    """propertyNames enum lists the bare keys; non-string alternatives cannot name a property."""
+    schema = {
+        "type": "object",
+        "propertyNames": {"enum": ["a", "b", 3, ""]},
+        "additionalProperties": {"type": "integer"},
+    }
+    _check_gemma_grammar(schema, input_str, accepted)
+
+
+def test_gemma_property_names_const_schema():
+    schema = {
+        "type": "object",
+        "propertyNames": {"const": "only"},
+        "additionalProperties": {"type": "integer"},
+    }
+    _check_gemma_grammar(schema, "{only:1}", True)
+    _check_gemma_grammar(schema, "{other:1}", False)
 
 
 def test_gemma_structural_tag_excludes():

@@ -169,7 +169,7 @@ Matches content that conforms to a JSON Schema.
 - `"glm_xml"`: GLM-style XML parameter format, such as `<arg_key>name</arg_key><arg_value>value</arg_value>`
 - `"cohere_xml"`: Cohere-style XML values, such as `<cofl:value name="name" type="raw">value</cofl:value>`
 - `"kimi_k3_xml"`: Kimi-K3 argument format, such as `<|open|>argument key="name" type="string"<|sep|>value<|close|>argument<|sep|>`. The `type` attribute is fixed to the type each declared property is rendered with (`integer` and `number` schemas both render as `number`); keys with no declared schema accept any type name.
-- `"gemma"`: Gemma 4 tool-call arguments, such as `{location:<|"|>Paris<|"|>,days:3}`. Object keys are unquoted and strings are delimited by the `<|"|>` token with no escape sequences, at every nesting level. String `pattern`, `format` and length constraints are intersected with "does not contain `<|"|>`" where the regex engine supports the pattern; a `patternProperties` key pattern whose language contains `:` cannot round-trip because keys are unquoted.
+- `"gemma"`: Gemma 4 tool-call arguments, such as `{location:<|"|>Paris<|"|>,days:3}`. Object keys are unquoted and strings are delimited by the `<|"|>` token with no escape sequences, at every nesting level. String `pattern` and `format` constraints and `patternProperties` / `propertyNames` key patterns are intersected with "does not contain `<|"|>`" where the regex engine supports the pattern; length constraints are dropped as under `excludes` below. A `patternProperties` key pattern whose language contains `:` cannot round-trip because keys are unquoted.
 
 `any_order` relaxes object property ordering (see [below](#property-ordering-with-any-order)). It
 works with every `style`.
@@ -183,6 +183,7 @@ as follows:
 
 - `pattern` or `format`: the string is matched by that constraint alone; the exclusions do not
   apply to it. Keys constrained by `patternProperties` or `propertyNames` are treated the same.
+  (`"gemma"` intersects the exclusions into these constraints instead, see above.)
 - `minLength` / `maxLength`: the bounds are dropped with a warning; the exclusions apply.
 - `const` / `enum`: alternatives containing an excluded substring are removed.
 
