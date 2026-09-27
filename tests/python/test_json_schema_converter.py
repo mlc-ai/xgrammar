@@ -8,6 +8,7 @@ import pytest
 from pydantic import BaseModel, Field, TypeAdapter, create_model
 
 import xgrammar as xgr
+from xgrammar.structural_tag import JSONSchemaFormat, StructuralTag
 from xgrammar.testing import (
     GrammarFunctor,
     _generate_float_regex,
@@ -166,18 +167,26 @@ def test_enum_const():
 
 
 @pytest.mark.parametrize(
-    "schema, instance",
+    "schema, accepted, rejected",
     [
-        ({"const": 19.99}, "19.99"),
-        ({"enum": [19.99, 0.1]}, "0.1"),
-        ({"const": {"price": 19.99}}, '{"price":19.99}'),
-        ({"const": {"first": 19.99, "second": 0.1}}, '{"first":19.99,"second":0.1}'),
-        ({"enum": [[0.1]]}, "[0.1]"),
+        ({"const": 19.99}, "19.99", "19.989999999999998"),
+        ({"enum": [19.99, 0.1]}, "0.1", "0.10000000000000001"),
+        ({"const": {"price": 19.99}}, '{"price":19.99}', '{"price":19.989999999999998}'),
+        ({"const": 100000.0}, "100000", "1e+05"),
+        ({"const": 0.0001}, "0.0001", "1e-04"),
     ],
 )
-def test_numeric_const_enum_literals(schema: Dict[str, Any], instance: str):
-    grammar = xgr.Grammar.from_json_schema(schema)
-    assert _is_grammar_accept_string(grammar, instance)
+def test_numeric_const_enum_literals(schema: Dict[str, Any], accepted: str, rejected: str):
+    check_schema_with_instance(schema, accepted, any_whitespace=False)
+    check_schema_with_instance(schema, rejected, is_accepted=False, any_whitespace=False)
+
+
+@pytest.mark.parametrize("style", ["qwen_xml", "minimax_m3_xml"])
+def test_numeric_const_literals_in_xml_styles(style: str):
+    schema = {"type": "object", "const": {"price": 19.99}}
+    tag = StructuralTag(format=JSONSchemaFormat(json_schema=schema, style=style))
+    grammar = str(xgr.Grammar.from_structural_tag(tag))
+    assert "19.99" in grammar and "19.989999999999998" not in grammar
 
 
 def test_empty_enum_rejected():
