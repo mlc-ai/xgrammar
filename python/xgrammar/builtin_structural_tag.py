@@ -21,9 +21,11 @@ from .structural_tag import (
     OrFormat,
     RegexFormat,
     SequenceFormat,
+    StarFormat,
     StructuralTag,
     TagFormat,
     TagsWithSeparatorFormat,
+    TokenFormat,
     TriggeredTagsFormat,
 )
 
@@ -209,6 +211,8 @@ def get_model_structural_tag(
         For Kimi-K3, this also applies to tool-argument string values without
         ``pattern``/``format`` and to property names, nested JSON strings included;
         ``minLength``/``maxLength`` on such strings are dropped with a warning.
+        GLM tool-call delimiters remain reserved when tools are available,
+        because they define call boundaries even when this is ``False``.
     max_whitespace_cnt : Optional[int]
         Applied to every tool-argument :class:`JSONSchemaFormat`. Caps the number
         of consecutive whitespace characters. Setting it (e.g. ``2``) bounds runs
@@ -2308,7 +2312,6 @@ def get_glm_4_7_structural_tag(
     """
     TOOL_CALL_BEGIN_PREFIX = "<tool_call>"
     TOOL_CALL_END = "</tool_call>"
-    TOOL_CALL_TRIGGER = "<tool_call>"
     THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
@@ -2321,39 +2324,62 @@ def get_glm_4_7_structural_tag(
     ARG_TOKENS = ["<arg_key>", "</arg_key>", "<arg_value>", "</arg_value>"]
     # Reasoning contains no tool calls at all -> exclude every control token.
     REASONING_EXCLUDES = THINK_EXCLUDE_TOKENS + [TOOL_CALL_BEGIN_PREFIX, TOOL_CALL_END] + ARG_TOKENS
-    # Free text after </think> may *start* a tool call via the <tool_call>
-    # trigger, so that trigger stays allowed; every other control token is not.
-    TEXT_EXCLUDES = THINK_EXCLUDE_TOKENS + [TOOL_CALL_END] + ARG_TOKENS
+    # Both call delimiters must be absent from free text, regardless of whether
+    # general special-token exclusions are enabled.
+    CALL_MARKERS = [TOOL_CALL_BEGIN_PREFIX, TOOL_CALL_END]
+    TEXT_EXCLUDES = THINK_EXCLUDE_TOKENS + ARG_TOKENS
 
     tools = tools or []
     builtin_tools = builtin_tools or []
-    if tool_choice == "auto":
+    if tool_choice in ("auto", "required"):
         tags = []
         for tool in tools:
             function = tool.function
             parameters = _get_function_parameters(function)
             name = function.name
+            # Select the dedicated marker token first, then match the tool name as text.
             tags.append(
                 TagFormat(
-                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}",
-                    content=JSONSchemaFormat(
-                        json_schema=parameters,
-                        style=XML_STYLE,
-                        any_order=any_order,
-                        max_whitespace_cnt=max_whitespace_cnt,
+                    begin=TokenFormat(token=TOOL_CALL_BEGIN_PREFIX),
+                    content=SequenceFormat(
+                        elements=[
+                            ConstStringFormat(value=name),
+                            JSONSchemaFormat(
+                                json_schema=parameters,
+                                style=XML_STYLE,
+                                any_order=any_order,
+                                max_whitespace_cnt=max_whitespace_cnt,
+                            ),
+                        ]
                     ),
-                    end=TOOL_CALL_END,
+                    end=TokenFormat(token=TOOL_CALL_END),
                 )
             )
 
         if len(tags) > 0:
-            suffix_tag = TriggeredTagsFormat(
-                triggers=[TOOL_CALL_TRIGGER],
-                tags=tags,
-                excludes=_text_excludes(exclude_special_tokens, TEXT_EXCLUDES),
-                stop_after_first=not parallel_tool_calls,
+            # Free text must not spell the call marker with ordinary tokens: a
+            # downstream text parser would otherwise mistake it for a tool call.
+            free_text = AnyTextFormat(
+                excludes=CALL_MARKERS + _text_excludes(exclude_special_tokens, TEXT_EXCLUDES)
             )
+            tool_call = OrFormat(elements=tags)
+            call_and_text = SequenceFormat(elements=[tool_call, free_text])
+            if tool_choice == "auto":
+                additional_calls = (
+                    StarFormat(content=call_and_text)
+                    if parallel_tool_calls
+                    else OptionalFormat(content=tool_call)
+                )
+                suffix_tag = SequenceFormat(elements=[free_text, additional_calls])
+            elif parallel_tool_calls:
+                suffix_tag = SequenceFormat(
+                    elements=[call_and_text, StarFormat(content=call_and_text)]
+                )
+            else:
+                suffix_tag = tool_call
         else:
+            if tool_choice == "required":
+                raise ValueError("Required tool choice needs at least one function tool.")
             suffix_tag = AnyTextFormat(
                 excludes=_text_excludes(exclude_special_tokens, REASONING_EXCLUDES)
             )
@@ -2363,40 +2389,19 @@ def get_glm_4_7_structural_tag(
             raise ValueError("Forced tool choice must resolve to exactly one tool.")
         function = tools[0].function
         suffix_tag = TagFormat(
-            begin=f"{TOOL_CALL_BEGIN_PREFIX}{function.name}",
-            content=JSONSchemaFormat(
-                json_schema=_get_function_parameters(function),
-                style=XML_STYLE,
-                any_order=any_order,
-                max_whitespace_cnt=max_whitespace_cnt,
-            ),
-            end=TOOL_CALL_END,
-        )
-    elif tool_choice == "required":
-        tags = []
-        for tool in tools:
-            function = tool.function
-            parameters = _get_function_parameters(function)
-            name = function.name
-            tags.append(
-                TagFormat(
-                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}",
-                    content=JSONSchemaFormat(
-                        json_schema=parameters,
+            begin=TokenFormat(token=TOOL_CALL_BEGIN_PREFIX),
+            content=SequenceFormat(
+                elements=[
+                    ConstStringFormat(value=function.name),
+                    JSONSchemaFormat(
+                        json_schema=_get_function_parameters(function),
                         style=XML_STYLE,
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
                     ),
-                    end=TOOL_CALL_END,
-                )
-            )
-        assert len(tags) > 0
-        suffix_tag = TriggeredTagsFormat(
-            triggers=[TOOL_CALL_TRIGGER],
-            tags=tags,
-            excludes=_text_excludes(exclude_special_tokens, TEXT_EXCLUDES),
-            at_least_one=True,
-            stop_after_first=not parallel_tool_calls,
+                ]
+            ),
+            end=TokenFormat(token=TOOL_CALL_END),
         )
 
     prefix_tag = _build_reasoning_prefix(
