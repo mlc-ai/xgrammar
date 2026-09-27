@@ -3535,25 +3535,14 @@ int32_t JSONSchemaConverter::GenerateTypeArray(
 std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(
     const std::string& format, bool raw_string
 ) {
-  static const auto build_regex_map = [](bool raw_string
-                                      ) -> std::unordered_map<std::string, std::string> {
+  static const auto raw_regex_map = []() -> std::unordered_map<std::string, std::string> {
     std::unordered_map<std::string, std::string> m;
 
     std::string atext = "[\\w!#$%&'*+/=?^`{|}~-]";
     std::string dot_string = "(" + atext + "+(\\." + atext + "+)*)";
-    std::string quote = raw_string ? "\"" : "\\\\\"";
     std::string quoted_text = R"([\x20\x21\x23-\x5B\x5D-\x7E])";
-    if (!raw_string) {
-      // JSON's slash and Unicode escapes must decode to the same printable ASCII ranges.
-      quoted_text = "(" + quoted_text +
-                    R"(|\\/|\\u00(2[013-9A-Fa-f]|)"
-                    R"([346][0-9A-Fa-f]|5[0-9ABD-Fabd-f]|7[0-9A-Ea-e])))";
-    }
-    // Email-level quoted pairs need an additional layer of escaping only in JSON strings.
-    std::string quoted_pair =
-        raw_string ? R"(\\[\x20-\x7E])"
-                   : R"((\\\\|\\u005[cC])()" + quoted_text + R"(|\\\"|\\u0022|\\\\|\\u005[cC]))";
-    std::string quoted_string = quote + "(" + quoted_pair + "|" + quoted_text + ")*" + quote;
+    std::string quoted_pair = R"(\\[\x20-\x7E])";
+    std::string quoted_string = "\"(" + quoted_pair + "|" + quoted_text + ")*\"";
     std::string domain =
         "([A-Za-z0-9]([\\-A-Za-z0-9]*[A-Za-z0-9])?)((\\.[A-Za-z0-9][\\-A-Za-z0-9]*[A-Za-z0-9])*"
         ")";
@@ -3635,19 +3624,28 @@ std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(
     std::string expression = "\\{(" + op + ")?" + variable_list + "\\}";
     m["uri-template"] = "^(" + literals + "|" + expression + ")*$";
 
-    std::string pointer_char =
-        raw_string
-            ? R"(([\x00-\x2E]|[\x30-\x7D]|[\x7F-\U0010FFFF]|~[01]))"
-            : R"(([\x20-\x21\x23-\x2E]|[\x30-\x5B\x5D-\x7D]|[\x7F-\U0010FFFF]|\\[\"\\/bfnrt]|\\u[0-9A-Fa-f]{4}|~[01]))";
+    std::string pointer_char = R"(([\x00-\x2E]|[\x30-\x7D]|[\x7F-\u{10FFFF}]|~[01]))";
     std::string pointer = "(/" + pointer_char + "*)*";
     m["json-pointer"] = "^" + pointer + "$";
     m["relative-json-pointer"] = "^(0|[1-9][0-9]*)(#|" + pointer + ")$";
 
     return m;
-  };
+  }();
 
-  static const auto json_regex_map = build_regex_map(false);
-  static const auto raw_regex_map = build_regex_map(true);
+  // The format definitions describe decoded values. Derive all JSON spellings from that
+  // single source so escapes cannot bypass a format constraint or change its meaning.
+  static const auto json_regex_map = []() {
+    std::unordered_map<std::string, std::string> result;
+    for (const auto& [name, regex] : raw_regex_map) {
+      auto encoded = RegexToJSONRegex(regex);
+      if (encoded.IsErr()) {
+        XGRAMMAR_LOG(FATAL) << "Cannot encode built-in format " << name << ": "
+                            << std::move(encoded).UnwrapErr().what();
+      }
+      result.emplace(name, std::move(encoded).Unwrap());
+    }
+    return result;
+  }();
   const auto& regex_map = raw_string ? raw_regex_map : json_regex_map;
   auto it = regex_map.find(format);
   if (it == regex_map.end()) {

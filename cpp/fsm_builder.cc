@@ -11,9 +11,11 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <optional>
 #include <set>
+#include <type_traits>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -1541,7 +1543,233 @@ Result<RegexIR> ParseRegexToIR(
   return ResultOk(std::move(ir));
 }
 
+std::string RegexAlternatives(const std::vector<std::string>& alternatives) {
+  if (alternatives.empty()) {
+    return R"([^\x00-\u{10FFFF}])";
+  }
+  if (alternatives.size() == 1) {
+    return alternatives.front();
+  }
+  std::string result = "(";
+  for (const auto& alternative : alternatives) {
+    if (result.size() > 1) result += "|";
+    result += alternative;
+  }
+  return result + ")";
+}
+
+std::string HexDigitRegex(uint32_t low, uint32_t high) {
+  if (low == high && low < 10) {
+    return std::string(1, '0' + low);
+  }
+  std::string result = "[";
+  for (uint32_t digit = low; digit <= high; ++digit) {
+    if (digit < 10) {
+      result += '0' + digit;
+    } else {
+      result += 'a' + digit - 10;
+      result += 'A' + digit - 10;
+    }
+  }
+  return result + "]";
+}
+
+// Match a fixed-width hexadecimal interval without enumerating its codepoints.
+std::string HexRangeRegex(uint32_t low, uint32_t high, int digits) {
+  if (digits == 0) return "";
+  uint32_t place = 1u << (4 * (digits - 1));
+  uint32_t first = low / place;
+  uint32_t last = high / place;
+  if (first == last) {
+    return HexDigitRegex(first, first) + HexRangeRegex(low % place, high % place, digits - 1);
+  }
+  std::vector<std::string> alternatives;
+  if (low % place != 0) {
+    alternatives.push_back(
+        HexDigitRegex(first, first) + HexRangeRegex(low % place, place - 1, digits - 1)
+    );
+    ++first;
+  }
+  if (high % place != place - 1) {
+    alternatives.push_back(HexDigitRegex(last, last) + HexRangeRegex(0, high % place, digits - 1));
+    --last;
+  }
+  if (first <= last) {
+    std::string tail = digits == 1 ? "" : "[0-9A-Fa-f]{" + std::to_string(digits - 1) + "}";
+    alternatives.push_back(HexDigitRegex(first, last) + tail);
+  }
+  return RegexAlternatives(alternatives);
+}
+
+std::string JSONUnicodeEscapeRegex(uint32_t low, uint32_t high) {
+  return R"(\\u)" + HexRangeRegex(low, high, 4);
+}
+
+// A JSON character transition accepts exactly the encodings of its original scalar values.
+std::string JSONCharacterRegex(const std::vector<CodepointRange>& ranges) {
+  std::vector<CodepointRange> scalar_ranges;
+  for (const auto& [low, high] : ranges) {
+    for (const auto& [scalar_low, scalar_high] :
+         {CodepointRange{0, 0xD7FF}, CodepointRange{0xE000, kMaxCodepoint}}) {
+      uint32_t first = std::max(low, scalar_low);
+      uint32_t last = std::min(high, scalar_high);
+      if (first <= last) scalar_ranges.emplace_back(first, last);
+    }
+  }
+
+  std::vector<std::string> alternatives;
+  std::string literal_class;
+  auto literal = [](uint32_t codepoint) {
+    char result[12];
+    std::snprintf(result, sizeof(result), "\\u{%x}", codepoint);
+    return std::string(result);
+  };
+  for (const auto& [low, high] : scalar_ranges) {
+    // Quotes, backslashes and C0 controls must never appear literally in JSON strings.
+    for (const auto& [literal_low, literal_high] :
+         {CodepointRange{0x20, 0x21},
+          CodepointRange{0x23, 0x5B},
+          CodepointRange{0x5D, kMaxCodepoint}}) {
+      uint32_t first = std::max(low, literal_low);
+      uint32_t last = std::min(high, literal_high);
+      if (first <= last) {
+        literal_class += literal(first);
+        if (first != last) literal_class += "-" + literal(last);
+      }
+    }
+    if (low <= 0xFFFF) {
+      alternatives.push_back(JSONUnicodeEscapeRegex(low, std::min(high, 0xFFFFu)));
+    }
+    if (high >= 0x10000) {
+      uint32_t first = std::max(low, 0x10000u) - 0x10000;
+      uint32_t last = high - 0x10000;
+      uint32_t first_high = 0xD800 + (first >> 10);
+      uint32_t last_high = 0xD800 + (last >> 10);
+      auto pair = [&](uint32_t high_low, uint32_t high_high, uint32_t low_low, uint32_t low_high) {
+        alternatives.push_back(
+            JSONUnicodeEscapeRegex(high_low, high_high) +
+            JSONUnicodeEscapeRegex(0xDC00 + low_low, 0xDC00 + low_high)
+        );
+      };
+      if (first_high == last_high) {
+        pair(first_high, last_high, first & 0x3FF, last & 0x3FF);
+      } else {
+        pair(first_high, first_high, first & 0x3FF, 0x3FF);
+        if (first_high + 1 < last_high) {
+          pair(first_high + 1, last_high - 1, 0, 0x3FF);
+        }
+        pair(last_high, last_high, 0, last & 0x3FF);
+      }
+    }
+  }
+  if (!literal_class.empty()) alternatives.push_back("[" + literal_class + "]");
+
+  static const std::pair<uint32_t, const char*> short_escapes[] = {
+      {'"', R"(\\")"},
+      {'\\', R"(\\\\)"},
+      {'/', R"(\\/)"},
+      {'\b', R"(\\b)"},
+      {'\f', R"(\\f)"},
+      {'\n', R"(\\n)"},
+      {'\r', R"(\\r)"},
+      {'\t', R"(\\t)"}
+  };
+  for (const auto& [codepoint, escape] : short_escapes) {
+    if (std::any_of(scalar_ranges.begin(), scalar_ranges.end(), [&](const auto& range) {
+          return range.first <= codepoint && codepoint <= range.second;
+        })) {
+      alternatives.emplace_back(escape);
+    }
+  }
+  return RegexAlternatives(alternatives);
+}
+
+class JSONRegexRenderer {
+ public:
+  explicit JSONRegexRenderer(bool case_insensitive) : case_insensitive_(case_insensitive) {}
+
+  Result<std::string> Render(
+      const std::vector<RegexIR::State>& states, const char* separator = ""
+  ) {
+    std::string result;
+    bool first = true;
+    for (const auto& state : states) {
+      auto rendered = std::visit([&](const auto& node) { return RenderNode(node); }, state);
+      if (rendered.IsErr()) return ResultErr(std::move(rendered).UnwrapErr());
+      if (!first) result += separator;
+      first = false;
+      result += std::move(rendered).Unwrap();
+    }
+    return ResultOk(std::move(result));
+  }
+
+ private:
+  Result<std::string> RenderNode(const RegexIR::Leaf& leaf) {
+    const auto& regex = leaf.regex;
+    if (regex.empty()) return ResultOk(std::string());
+    if (regex.front() == '[') {
+      return ParseCharacterClassLeaf(regex, case_insensitive_).Map(JSONCharacterRegex);
+    }
+    if (regex == ".") return ResultOk(JSONCharacterRegex({{0, kMaxCodepoint}}));
+
+    std::vector<CodepointRange> ranges;
+    bool negated = false;
+    if (regex.front() == '\\') {
+      size_t pos = 0;
+      auto parsed = ParseRegexEscape(regex, &pos, false);
+      if (parsed.IsErr()) return ResultErr(std::move(parsed).UnwrapErr());
+      auto item = std::move(parsed).Unwrap();
+      ranges = item.is_single ? std::vector<CodepointRange>{{item.codepoint, item.codepoint}}
+                              : std::move(item.ranges);
+      negated = item.negated;
+    } else {
+      auto [codepoint, length] = ParseNextUTF8(regex.c_str());
+      if (codepoint < 0 || length != static_cast<int>(regex.size())) {
+        return ResultErr("Invalid UTF-8 character in JSON format regex");
+      }
+      ranges.emplace_back(codepoint, codepoint);
+    }
+    if (case_insensitive_) FoldAsciiCaseRanges(&ranges);
+    NormalizeRanges(&ranges);
+    if (negated) ranges = ComplementRanges(ranges);
+    return ResultOk(JSONCharacterRegex(ranges));
+  }
+
+  template <typename Node>
+  Result<std::string> RenderNode(const Node& node) {
+    if constexpr (std::is_same_v<Node, RegexIR::Bracket>) {
+      return Render(node.states);
+    } else if constexpr (std::is_same_v<Node, RegexIR::Union>) {
+      return Render(node.states, "|").Map([](std::string body) { return "(" + body + ")"; });
+    } else if constexpr (std::is_same_v<Node, RegexIR::Symbol>) {
+      char suffix = node.symbol == RegexIR::RegexSymbol::star   ? '*'
+                    : node.symbol == RegexIR::RegexSymbol::plus ? '+'
+                                                                : '?';
+      return Render(node.state).Map([&](std::string body) { return "(" + body + ")" + suffix; });
+    } else if constexpr (std::is_same_v<Node, RegexIR::Repeat>) {
+      return Render(node.states).Map([&](std::string body) {
+        return "(" + body + "){" + std::to_string(node.lower_bound) + "," +
+               (node.upper_bound == RegexIR::kRepeatNoUpperBound
+                    ? ""
+                    : std::to_string(node.upper_bound)) +
+               "}";
+      });
+    } else {
+      return ResultErr("Rule references are not supported in JSON format regexes");
+    }
+  }
+
+  bool case_insensitive_;
+};
+
 }  // namespace
+
+Result<std::string> RegexToJSONRegex(const std::string& regex) {
+  auto parsed = ParseRegexToIR(regex, nullptr, "");
+  if (parsed.IsErr()) return ResultErr(std::move(parsed).UnwrapErr());
+  auto ir = std::move(parsed).Unwrap();
+  return JSONRegexRenderer(ir.case_insensitive).Render(ir.states);
+}
 
 Result<FSMWithStartEnd> RegexFSMBuilder::Build(
     const std::string& regex, GrammarBuilder* builder, const std::string& rule_hint

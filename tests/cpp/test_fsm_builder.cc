@@ -6,12 +6,14 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <cstdio>
 #include <vector>
 
 #include "fsm.h"
 #include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_functor.h"
+#include "support/encoding.h"
 #include "xgrammar/grammar.h"
 
 using namespace xgrammar;
@@ -706,6 +708,107 @@ TEST(XGrammarFSMBuilderTest, TestRegexErrorMessages) {
       error_message("(?i)+a"),
       "Regex parsing error at position 5: There is nothing to repeat before '+'"
   );
+}
+
+TEST(XGrammarFSMBuilderTest, TestJSONRegexOperators) {
+  auto encoded = RegexToJSONRegex(R"(^(~[01]|a[bc]{1,2}|)$)");
+  ASSERT_TRUE(encoded.IsOk());
+  auto fsm = RegexFSMBuilder::Build(std::move(encoded).Unwrap()).Unwrap();
+  for (const auto& text :
+       {"", "~0", R"(\u007e\u0030)", R"(~\u0031)", "ab", R"(a\u0062c)", R"(\u0061bc)"}) {
+    EXPECT_TRUE(fsm.AcceptString(text)) << text;
+  }
+  for (const auto& text :
+       {"~", "~2", R"(\u007E)", R"(\u007e2)", R"(~\u0032)", "a", "abcb", R"(a\x62)"}) {
+    EXPECT_FALSE(fsm.AcceptString(text)) << text;
+  }
+  EXPECT_TRUE(RegexToJSONRegex("[a-").IsErr());
+  EXPECT_TRUE(RegexToJSONRegex(R"(\p{L})").IsErr());
+}
+
+TEST(XGrammarFSMBuilderTest, TestJSONRegexEscapes) {
+  auto fsm = RegexFSMBuilder::Build(RegexToJSONRegex(R"(^["\\/ \x00-\x1F]$)").Unwrap()).Unwrap();
+  for (const auto& text :
+       {R"(\")",
+        R"(\\)",
+        "/",
+        R"(\/)",
+        R"(\b)",
+        R"(\f)",
+        R"(\n)",
+        R"(\r)",
+        R"(\t)",
+        R"(\u0000)",
+        R"(\u001f)",
+        R"(\u0022)",
+        R"(\u005C)",
+        " "}) {
+    EXPECT_TRUE(fsm.AcceptString(text)) << text;
+  }
+  for (const auto& text :
+       {"\"", "\\", "\n", R"(\a)", R"(\u00)", R"(\u00GG)", R"(\uD800)", R"(\u0061)"}) {
+    EXPECT_FALSE(fsm.AcceptString(text)) << text;
+  }
+}
+
+TEST(XGrammarFSMBuilderTest, TestJSONRegexUnicodeRanges) {
+  auto escaped = [](uint32_t codepoint, bool uppercase) {
+    char result[16];
+    if (codepoint <= 0xFFFF) {
+      std::snprintf(result, sizeof(result), uppercase ? "\\u%04X" : "\\u%04x", codepoint);
+    } else {
+      uint32_t high = 0xD800 + ((codepoint - 0x10000) >> 10);
+      uint32_t low = 0xDC00 + ((codepoint - 0x10000) & 0x3FF);
+      std::snprintf(
+          result, sizeof(result), uppercase ? "\\u%04X\\u%04X" : "\\u%04x\\u%04x", high, low
+      );
+    }
+    return std::string(result);
+  };
+  const std::pair<uint32_t, uint32_t> intervals[] = {
+      {0x1F, 0x7F}, {0xD7FA, 0xE003}, {0xFFFF, 0x10402}, {0x10001, 0x10FFFE}
+  };
+  for (const auto& [low, high] : intervals) {
+    char pattern[40];
+    std::snprintf(pattern, sizeof(pattern), "[\\u{%x}-\\u{%x}]", low, high);
+    auto encoded = RegexToJSONRegex(pattern);
+    ASSERT_TRUE(encoded.IsOk());
+    auto fsm = RegexFSMBuilder::Build(std::move(encoded).Unwrap()).Unwrap();
+    for (uint32_t codepoint :
+         {low - 1,
+          low,
+          low + 1,
+          high - 1,
+          high,
+          high + 1,
+          0xD7FFu,
+          0xD800u,
+          0xDBFFu,
+          0xDC00u,
+          0xDFFFu,
+          0xE000u,
+          0xFFFFu,
+          0x10000u,
+          0x103FFu,
+          0x10400u,
+          0x10FFFFu}) {
+      bool expected =
+          low <= codepoint && codepoint <= high && !(0xD800 <= codepoint && codepoint <= 0xDFFF);
+      EXPECT_EQ(fsm.AcceptString(escaped(codepoint, false)), expected) << codepoint;
+      EXPECT_EQ(fsm.AcceptString(escaped(codepoint, true)), expected) << codepoint;
+      bool literal = codepoint >= 0x20 && codepoint != '"' && codepoint != '\\';
+      EXPECT_EQ(fsm.AcceptString(CharToUTF8(codepoint)), expected && literal) << codepoint;
+    }
+  }
+}
+
+TEST(XGrammarFSMBuilderTest, TestJSONRegexNegatedClassAndCaseFolding) {
+  auto fsm = RegexFSMBuilder::Build(RegexToJSONRegex("(?i)[^a-c]{2}").Unwrap()).Unwrap();
+  EXPECT_TRUE(fsm.AcceptString(R"(\u0044\u00E9)"));
+  EXPECT_TRUE(fsm.AcceptString(R"(d\u0065)"));
+  EXPECT_FALSE(fsm.AcceptString(R"(\u0042\u0065)"));
+  EXPECT_FALSE(fsm.AcceptString(R"(\U0044\u00E9)"));
+  EXPECT_FALSE(fsm.AcceptString(R"(\uD800x)"));
 }
 
 TEST(XGrammarFSMBuilderTest, TestRegexMatchesEmpty) {

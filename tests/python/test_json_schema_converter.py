@@ -1766,6 +1766,11 @@ def test_email_format(instance: str, accepted: bool):
 @pytest.mark.parametrize(
     "instance, value",
     [
+        (r'"\u0022a\u0022@example.com"', '"a"@example.com'),
+        (r'"a\/b@example.com"', "a/b@example.com"),
+        (r'"\u0061@example.com"', "a@example.com"),
+        (r'"a@exam\u0070le.com"', "a@example.com"),
+        (r'"a\u0040example\u002ecom"', "a@example.com"),
         (r'"\"a/b\"@example.com"', '"a/b"@example.com'),
         (r'"\"a\/b\"@example.com"', '"a/b"@example.com'),
         (r'"\"\u0061\"@example.com"', '"a"@example.com'),
@@ -2230,6 +2235,113 @@ def test_pointer_formats_accept_json_escapes(format_name: str, value: str):
 def test_pointer_formats_accept_other_json_escapes(format_name: str, instance: str):
     json.loads(instance)
     check_schema_with_instance({"type": "string", "format": format_name}, instance)
+
+
+@pytest.mark.parametrize(
+    "format_name, prefix", [("json-pointer", ""), ("relative-json-pointer", "0")]
+)
+@pytest.mark.parametrize(
+    "body, value, accepted",
+    [
+        (r"/\u007E", "/~", False),
+        (r"/\u007e2", "/~2", False),
+        (r"/~\u0030", "/~0", True),
+        (r"/~\u0031", "/~1", True),
+        (r"/~\u0032", "/~2", False),
+        (r"/\u007e\u0030", "/~0", True),
+        (r"/\u007E\u0031", "/~1", True),
+        (r"\u002F~\u0030", "/~0", True),
+        (r"\/~0\u002F~1", "/~0/~1", True),
+        (r"/\u005cu007E", r"/\u007E", True),
+    ],
+)
+def test_pointer_formats_validate_decoded_values(format_name, prefix, body, value, accepted):
+    instance = f'"{prefix}{body}"'
+    assert json.loads(instance) == prefix + value
+    schema = {"type": "string", "format": format_name}
+    check_schema_with_instance(schema, json.dumps(prefix + value), is_accepted=accepted)
+    check_schema_with_instance(schema, instance, is_accepted=accepted)
+
+
+@pytest.mark.parametrize(
+    "format_name, prefix", [("json-pointer", ""), ("relative-json-pointer", "0")]
+)
+@pytest.mark.parametrize(
+    "body, accepted",
+    [
+        (r"/\uD800", False),
+        (r"/\uDFFF", False),
+        (r"/\uD800\u0061", False),
+        (r"/\uDC00\uD800", False),
+        (r"/\uD800\uD800", False),
+        (r"/\uD800a\uDC00", False),
+        (r"/\uD800\uDC00", True),
+        (r"/\ud83D\uDe00", True),
+        (r"/\uDBFF\uDFFF", True),
+        (r"/\uD7FF\uE000", True),
+    ],
+)
+def test_pointer_formats_require_unicode_scalars(format_name, prefix, body, accepted):
+    instance = f'"{prefix}{body}"'
+    decoded = json.loads(instance)
+    if accepted:
+        decoded.encode("utf-8")
+        check_schema_with_instance(
+            {"type": "string", "format": format_name}, json.dumps(decoded, ensure_ascii=False)
+        )
+    else:
+        with pytest.raises(UnicodeEncodeError):
+            decoded.encode("utf-8")
+    check_schema_with_instance(
+        {"type": "string", "format": format_name}, instance, is_accepted=accepted
+    )
+
+
+@pytest.mark.parametrize(
+    "format_name, value, accepted",
+    [
+        ("email", '"a\\b"@example.com', True),
+        ("email", "a/b@example.com", True),
+        ("email", "a b@example.com", False),
+        ("date", "2026-09-27", True),
+        ("date", "2026-13-27", False),
+        ("time", "12:34:56Z", True),
+        ("time", "24:34:56Z", False),
+        ("date-time", "2026-09-27T12:34:56+01:00", True),
+        ("date-time", "2026-09-27T24:34:56Z", False),
+        ("duration", "P1Y2M3DT4H5M6S", True),
+        ("duration", "P", False),
+        ("ipv4", "192.168.0.1", True),
+        ("ipv4", "256.0.0.1", False),
+        ("ipv6", "2001:db8::1", True),
+        ("ipv6", "2001:gb8::1", False),
+        ("hostname", "a-b.example.com", True),
+        ("hostname", "-a.example.com", False),
+        ("uuid", "123e4567-e89b-12d3-a456-426614174000", True),
+        ("uuid", "123e4567-e89b-12d3-a456-42661417400g", False),
+        ("uri", "https://example.com/a?x=1#b", True),
+        ("uri", "https://example.com/a b", False),
+        ("uri-reference", "../a?x=1#b", True),
+        ("uri-reference", "/a b", False),
+        ("uri-template", "https://example.com/{id}", True),
+        ("uri-template", "https://example.com/{", False),
+        ("json-pointer", '/~0/~1/"\\\x00é😀', True),
+        ("json-pointer", "/~2", False),
+        ("relative-json-pointer", "12/~0", True),
+        ("relative-json-pointer", "12#", True),
+        ("relative-json-pointer", "01/a", False),
+    ],
+)
+def test_formats_preserve_json_encoding_equivalence(format_name, value, accepted):
+    schema = {"type": "string", "format": format_name}
+    check_schema_with_instance(schema, json.dumps(value), is_accepted=accepted)
+    utf16_hex = value.encode("utf-16-be").hex()
+    for hex_digits in (utf16_hex, utf16_hex.upper()):
+        encoded = (
+            '"' + "".join(r"\u" + hex_digits[i : i + 4] for i in range(0, len(hex_digits), 4)) + '"'
+        )
+        assert json.loads(encoded) == value
+        check_schema_with_instance(schema, encoded, is_accepted=accepted)
 
 
 def test_min_max_length():
