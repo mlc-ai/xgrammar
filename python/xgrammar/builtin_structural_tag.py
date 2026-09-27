@@ -2713,7 +2713,8 @@ def _get_deepseek_v4_structural_tag(
                     )
                 ],
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
-                stop_after_first=not parallel_tool_calls,
+                # Both V4 and V4.1 end the assistant turn after one calls block.
+                stop_after_first=True,
             )
         else:
             excludes = _text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
