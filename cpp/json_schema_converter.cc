@@ -3630,7 +3630,7 @@ std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(
     std::string pointer_char =
         raw_string
             ? R"(([\x00-\x2E]|[\x30-\x7D]|[\x7F-\U0010FFFF]|~[01]))"
-            : R"(([\x20-\x21\x23-\x2E]|[\x30-\x5B\x5D-\x7D]|[\x7F-\U0010FFFF]|\\[\"\\/bfnrt]|\\u[0-9A-Fa-f]{4}|~[01]))";
+            : R"(([\x20-\x21\x23-\x2E]|[\x30-\x5B\x5D-\x7D]|[\x7F-\U0010FFFF]|\\[\"\\/bfnrt]|\\u00[01][0-9A-Fa-f]|~[01]))";
     m["json-pointer"] = "^(/" + pointer_char + "*)*$";
     m["relative-json-pointer"] = "^(0|[1-9][0-9]*)(#|(/" + pointer_char + "*)*)$";
 

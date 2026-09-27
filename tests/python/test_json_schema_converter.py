@@ -2128,6 +2128,8 @@ instance__accepted__test_json_pointer_format = [
     (r"abc", False),
     (r"/~", False),
     (r"/~2", False),
+    (r"/\u007E", False),
+    (r"/\uD800", False),
 ]
 
 
@@ -2198,10 +2200,10 @@ def test_pointer_formats_accept_json_escapes(format_name: str, value: str):
 @pytest.mark.parametrize(
     "format_name, instance",
     [
-        ("json-pointer", r'"/\u0061"'),
+        ("json-pointer", r'"/\u0001"'),
         ("json-pointer", r'"/\/"'),
         ("json-pointer", r'"/\n"'),
-        ("relative-json-pointer", r'"0/\u0061"'),
+        ("relative-json-pointer", r'"0/\u0001"'),
     ],
 )
 def test_pointer_formats_accept_other_json_escapes(format_name: str, instance: str):
