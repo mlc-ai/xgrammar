@@ -2712,8 +2712,15 @@ def _get_deepseek_v4_structural_tag(
                         end=FUNCTION_CALLS_END,
                     )
                 ],
-                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
-                stop_after_first=not parallel_tool_calls,
+                excludes=[
+                    *_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
+                    # Bare legacy XML tags are not V4.1's native DSML protocol.
+                    # Reserve them in auto-mode prose before the calls trigger.
+                    *(["<invoke", "</invoke>", "<parameter", "</parameter>"] if v4_1 else []),
+                ],
+                # Parallel invokes belong inside one V4.1 calls block. Once it
+                # closes, the assistant turn must end. Preserve V4 behavior.
+                stop_after_first=v4_1 or not parallel_tool_calls,
             )
         else:
             excludes = _text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)

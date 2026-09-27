@@ -1548,9 +1548,14 @@ def test_exclude_special_tokens_false_keeps_format_constraints(model, tools):
     structural_tag = get_model_structural_tag(
         model, tools=tools, reasoning=True, exclude_special_tokens=False
     )
-    allowed_excludes = (
-        [[], ["<｜DSML｜ calls>"]] if model == "deepseek_v4_1" and not tools else [[]]
-    )
+    if model == "deepseek_v4_1":
+        allowed_excludes = (
+            [[], ["<invoke", "</invoke>", "<parameter", "</parameter>"]]
+            if tools
+            else [[], ["<｜DSML｜ calls>"]]
+        )
+    else:
+        allowed_excludes = [[]]
     assert all(excludes in allowed_excludes for excludes in _collect_excludes(structural_tag))
     # The less-restrictive grammar must still build.
     xgr.Grammar.from_structural_tag(structural_tag)
@@ -2862,6 +2867,32 @@ def test_deepseek_v4_1_tool_choice(reasoning, policy):
     )
     other = _DEEPSEEK_V41_CALLS.replace('name="search"', 'name="other"')
     assert _is_grammar_accept_string(grammar, prefix + other) == (policy in ["auto", "required"])
+
+
+@pytest.mark.parametrize("bare_tag", ["<invoke", "</invoke>", "<parameter", "</parameter>"])
+def test_deepseek_v4_1_auto_rejects_bare_xml_before_calls(bare_tag):
+    grammar = _make_deepseek_v4_1_grammar(choice="auto")
+    assert not _is_grammar_accept_string(grammar, "Before " + bare_tag + _DEEPSEEK_V41_CALLS)
+    assert _is_grammar_accept_string(grammar, "Before the call." + _DEEPSEEK_V41_CALLS)
+    # Quoting an unescaped legacy tag in assistant prose is also disallowed.
+    assert not _is_grammar_accept_string(grammar, "Quote: " + bare_tag)
+
+
+def test_deepseek_v4_1_auto_keeps_literal_xml_inside_tool_argument():
+    grammar = _make_deepseek_v4_1_grammar(choice="auto")
+    call_with_literal = _DEEPSEEK_V41_CALLS.replace("北京", '<invoke name="search">')
+    assert _is_grammar_accept_string(grammar, call_with_literal)
+
+
+def test_deepseek_v4_1_auto_stops_after_outer_calls_block():
+    grammar = _make_deepseek_v4_1_grammar(choice="auto")
+    assert _is_grammar_accept_string(grammar, _DEEPSEEK_V41_CALLS)
+    parallel = _DEEPSEEK_V41_CALLS.replace(
+        "</｜DSML｜ calls>", _DEEPSEEK_V41_CALL + "</｜DSML｜ calls>"
+    )
+    assert _is_grammar_accept_string(grammar, parallel)
+    assert not _is_grammar_accept_string(grammar, _DEEPSEEK_V41_CALLS + " trailing text")
+    assert not _is_grammar_accept_string(grammar, _DEEPSEEK_V41_CALLS + _DEEPSEEK_V41_CALLS)
 
 
 @pytest.mark.parametrize("policy", ["auto", "required"])
