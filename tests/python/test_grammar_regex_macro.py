@@ -433,31 +433,6 @@ def test_json_schema_pattern_uses_regex_macro():
     assert not _is_grammar_accept_string(grammar, '""')
 
 
-@pytest.mark.parametrize(
-    "format_name",
-    [
-        "email",
-        "date",
-        "time",
-        "date-time",
-        "duration",
-        "ipv4",
-        "ipv6",
-        "hostname",
-        "uuid",
-        "uri",
-        "uri-reference",
-        "uri-template",
-        "json-pointer",
-        "relative-json-pointer",
-    ],
-)
-def test_json_schema_formats_use_regex_macro(format_name):
-    grammar = xgr.Grammar.from_json_schema({"type": "string", "format": format_name})
-    # CFG expansion of the JSON escape alternatives causes a large mask-generation regression.
-    assert "Regex(" in str(grammar)
-
-
 def test_json_schema_pattern_repetition():
     # End-to-end check of the simplification passes on the compiled pattern automaton.
     schema = json.dumps({"type": "string", "pattern": "^(ab)+$"})

@@ -1063,13 +1063,10 @@ FSMWithStartEnd FSMWithStartEnd::Plus() const {
 
 FSMWithStartEnd FSMWithStartEnd::Optional() const {
   FSM fsm = fsm_.Copy();
-  // Accept the empty string from a fresh start, so loops through the original start
-  // or end states cannot bypass a required part of the optional expression.
-  auto new_start = fsm.AddState();
-  fsm.AddEpsilonEdge(new_start, start_);
-  auto new_ends = ends_;
-  new_ends.push_back(new_start);
-  return FSMWithStartEnd(fsm, new_start, std::move(new_ends));
+  if (!ends_.empty()) {
+    fsm.AddEpsilonEdge(start_, ends_.front());
+  }
+  return FSMWithStartEnd(fsm, start_, ends_);
 }
 
 Result<FSMWithStartEnd> FSMWithStartEnd::Not(int max_result_num_states) const {

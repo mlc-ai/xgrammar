@@ -45,14 +45,6 @@ void AddPackedUTF8RangeEdges(FSM& fsm, int from, int to, uint32_t min, uint32_t 
 std::string RewriteRegexDots(const std::string& pattern, bool dot_matches_newline);
 
 /*!
- * \brief Convert a regex over Unicode scalar values to a regex over JSON string contents.
- * Every character may use its literal, short-escape or Unicode-escape spelling, as allowed by
- * JSON. Non-BMP characters may use UTF-16 surrogate pairs; lone surrogates are excluded.
- * The surrounding JSON quotes are not included. Uses the same regex syntax as RegexFSMBuilder.
- */
-Result<std::string> RegexToJSONRegex(const std::string& regex);
-
-/*!
  * \brief A builder that converts a regex string to a FSM.
  */
 class RegexFSMBuilder {

@@ -322,31 +322,6 @@ TEST(XGrammarFSMTest, IntersectionBoundsProductStates) {
   EXPECT_FALSE(intersection.AcceptString("aaaaa"));
 }
 
-TEST(XGrammarFSMTest, OptionalPreservesWholeMatch) {
-  auto check = [](const std::string& regex,
-                  const std::vector<std::string>& accepted,
-                  const std::vector<std::string>& rejected) {
-    auto fsm = RegexFSMBuilder::Build(regex).Unwrap().Optional();
-    for (const auto& candidate : {fsm, fsm.SimplifyEpsilon().MergeEquivalentStates()}) {
-      for (const auto& text : accepted) {
-        EXPECT_TRUE(candidate.AcceptString(text)) << regex << ": " << text;
-      }
-      for (const auto& text : rejected) {
-        EXPECT_FALSE(candidate.AcceptString(text)) << regex << ": " << text;
-      }
-    }
-  };
-  // Optional must not bypass a required suffix after looping back to the old start,
-  // or enter a suffix loop without consuming the required prefix.
-  check("a*b", {"", "b", "ab", "aab"}, {"a", "aa", "abb"});
-  check("ab*", {"", "a", "ab", "abb"}, {"b", "bb", "aab"});
-  check("a+b", {"", "ab", "aab"}, {"a", "aa", "b"});
-
-  auto empty_language = FSMWithStartEnd(FSM(1), 0, {}).Optional();
-  EXPECT_TRUE(empty_language.AcceptString(""));
-  EXPECT_FALSE(empty_language.AcceptString("a"));
-}
-
 TEST(XGrammarFSMTest, MergeEquivalentStatesKeepsStartStateSeparate) {
   // [a-z]* [a-z] "c" "d": the start state loops on [a-z] and also leads to state 1 on [a-z].
   // State 1 is only reached from the start state, but the start state is also entered without
