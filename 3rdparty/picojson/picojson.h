@@ -613,8 +613,7 @@ inline std::string value::to_str() const {
       if (fabs(u_.number_) < (1ULL << 53) && modf(u_.number_, &tmp) == 0) {
         SNPRINTF(buf, sizeof(buf), "%.f", u_.number_);
       } else {
-        // Print the fewest digits that parse back to the same double, e.g. 19.99 instead of
-        // 19.989999999999998.
+        // Print the fewest digits that parse back to the same double.
         for (int precision = 15; precision <= 17; ++precision) {
           SNPRINTF(buf, sizeof(buf), "%.*g", precision, u_.number_);
           if (strtod(buf, NULL) == u_.number_) break;
