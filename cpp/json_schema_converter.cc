@@ -3532,15 +3532,20 @@ int32_t JSONSchemaConverter::GenerateTypeArray(
 
 // ==================== Static Helper Methods ====================
 
-std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(const std::string& format
+std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(
+    const std::string& format, bool raw_string
 ) {
-  static const auto regex_map = []() -> std::unordered_map<std::string, std::string> {
+  static const auto build_regex_map = [](bool raw_string
+                                      ) -> std::unordered_map<std::string, std::string> {
     std::unordered_map<std::string, std::string> m;
 
     std::string atext = "[\\w!#$%&'*+/=?^`{|}~-]";
     std::string dot_string = "(" + atext + "+(\\." + atext + "+)*)";
+    std::string quote = raw_string ? "\"" : "\\\\\"";
+    std::string quoted_pair =
+        raw_string ? R"(\\[\x20-\x7E])" : R"(\\\\([\x20-\x21\x23-\x5B\x5D-\x7E]|\\\"|\\\\))";
     std::string quoted_string =
-        "\\\\\"(\\\\[\\x20-\\x7E]|[\\x20\\x21\\x23-\\x5B\\x5D-\\x7E])*\\\\\"";
+        quote + "(" + quoted_pair + "|[\\x20\\x21\\x23-\\x5B\\x5D-\\x7E])*" + quote;
     std::string domain =
         "([A-Za-z0-9]([\\-A-Za-z0-9]*[A-Za-z0-9])?)((\\.[A-Za-z0-9][\\-A-Za-z0-9]*[A-Za-z0-9])*"
         ")";
@@ -3622,13 +3627,19 @@ std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(const s
     std::string expression = "\\{(" + op + ")?" + variable_list + "\\}";
     m["uri-template"] = "^(" + literals + "|" + expression + ")*$";
 
-    m["json-pointer"] = "^(/([\\x00-\\x2E]|[\\x30-\\x7D]|[\\x7F-\\U0010FFFF]|~[01])*)*$";
-    m["relative-json-pointer"] =
-        "^(0|[1-9][0-9]*)(#|(/([\\x00-\\x2E]|[\\x30-\\x7D]|[\\x7F-\\U0010FFFF]|~[01])*)*)$";
+    std::string pointer_char =
+        raw_string
+            ? R"(([\x00-\x2E]|[\x30-\x7D]|[\x7F-\U0010FFFF]|~[01]))"
+            : R"(([\x20-\x21\x23-\x2E]|[\x30-\x5B\x5D-\x7D]|[\x7F-\U0010FFFF]|\\[\"\\/bfnrt]|\\u00[01][0-9A-Fa-f]|~[01]))";
+    m["json-pointer"] = "^(/" + pointer_char + "*)*$";
+    m["relative-json-pointer"] = "^(0|[1-9][0-9]*)(#|(/" + pointer_char + "*)*)$";
 
     return m;
-  }();
+  };
 
+  static const auto json_regex_map = build_regex_map(false);
+  static const auto raw_regex_map = build_regex_map(true);
+  const auto& regex_map = raw_string ? raw_regex_map : json_regex_map;
   auto it = regex_map.find(format);
   if (it == regex_map.end()) {
     return std::nullopt;
@@ -3865,7 +3876,7 @@ int32_t XMLToolCallingConverter::GenerateString(
 ) {
   if (nested_object_level_ <= 1) {
     if (spec.format.has_value()) {
-      auto regex = JSONFormatToRegexPattern(*spec.format);
+      auto regex = JSONFormatToRegexPattern(*spec.format, /*raw_string=*/true);
       if (regex.has_value()) {
         return RegexExpression(*regex, false, true);
       }

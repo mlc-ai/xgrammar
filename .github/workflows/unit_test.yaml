@@ -91,7 +91,8 @@ jobs:
           echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
           echo "set(XGRAMMAR_ENABLE_INTERNAL_CHECK ON)" >> cmake/config.cmake
           python -m pip install --upgrade pip
-          pip install -v ".[test]"
+          # CMake >= 4.2 fixes FindPython ABI checks for free-threaded Python.
+          pip install -v ".[test]" ${{ matrix.python == '3.14t' && '-C "cmake.version=>=4.2"' || '' }}
 
       # Test with MLX (which is optional) under macOS arm64
       - name: Install MLX
