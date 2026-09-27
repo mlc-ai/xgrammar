@@ -560,7 +560,10 @@ class JSONSchemaConverter {
   );
 
  protected:
-  static std::optional<std::string> JSONFormatToRegexPattern(const std::string& format);
+  // raw_string preserves literal pointer characters in XML parameter values.
+  static std::optional<std::string> JSONFormatToRegexPattern(
+      const std::string& format, bool raw_string = false
+  );
 
   // Expose for testing
   friend std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);

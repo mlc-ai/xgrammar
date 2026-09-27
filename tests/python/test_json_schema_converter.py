@@ -1763,6 +1763,27 @@ def test_email_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
+@pytest.mark.parametrize(
+    "instance, value",
+    [
+        (r'"\"a/b\"@example.com"', '"a/b"@example.com'),
+        (r'"\"a\/b\"@example.com"', '"a/b"@example.com'),
+        (r'"\"\u0061\"@example.com"', '"a"@example.com'),
+        (r'"\"\u0020\u0021\u0023\u005B\u005D\u007e\"@example.com"', '" !#[]~"@example.com'),
+        (r'"\"a\\a\"@example.com"', '"a\\a"@example.com'),
+        (r'"\"a\\\u0061\"@example.com"', '"a\\a"@example.com'),
+        (r'"\"a\u005ca\"@example.com"', '"a\\a"@example.com'),
+        (r'"\"a\\\u0022b\"@example.com"', '"a\\"b"@example.com'),
+        (r'"\"a\\\u005Cb\"@example.com"', '"a\\\\b"@example.com'),
+    ],
+)
+def test_email_format_accepts_json_escapes(instance: str, value: str):
+    assert json.loads(instance) == value
+    schema = {"type": "string", "format": "email"}
+    check_schema_with_instance(schema, json.dumps(value))
+    check_schema_with_instance(schema, instance)
+
+
 instance__accepted__test_date_format = [
     (r"0000-01-01", True),
     (r"9999-12-31", True),
@@ -2168,6 +2189,8 @@ def test_relative_json_pointer_format(instance: str, accepted: bool):
     [
         ("email", r'"\"\a\"@b"'),
         ("email", r'"\"\u\"@b"'),
+        ("email", r'"\"a\u006\"@b"'),
+        ("email", r'"\"a\u00G1\"@b"'),
         ("json-pointer", '"/\x01"'),
         ("json-pointer", '"/"a"'),
         ("json-pointer", r'"/\"'),
@@ -2177,8 +2200,9 @@ def test_relative_json_pointer_format(instance: str, accepted: bool):
 def test_formats_reject_invalid_json_strings(format_name: str, instance: str):
     with pytest.raises(json.JSONDecodeError):
         json.loads(instance)
-    grammar = xgr.Grammar.from_json_schema({"type": "string", "format": format_name})
-    assert not _is_grammar_accept_string(grammar, instance)
+    check_schema_with_instance(
+        {"type": "string", "format": format_name}, instance, is_accepted=False
+    )
 
 
 @pytest.mark.parametrize(
@@ -2191,8 +2215,7 @@ def test_formats_reject_invalid_json_strings(format_name: str, instance: str):
     ],
 )
 def test_pointer_formats_accept_json_escapes(format_name: str, value: str):
-    grammar = xgr.Grammar.from_json_schema({"type": "string", "format": format_name})
-    assert _is_grammar_accept_string(grammar, json.dumps(value))
+    check_schema_with_instance({"type": "string", "format": format_name}, json.dumps(value))
 
 
 @pytest.mark.parametrize(
@@ -2206,8 +2229,7 @@ def test_pointer_formats_accept_json_escapes(format_name: str, value: str):
 )
 def test_pointer_formats_accept_other_json_escapes(format_name: str, instance: str):
     json.loads(instance)
-    grammar = xgr.Grammar.from_json_schema({"type": "string", "format": format_name})
-    assert _is_grammar_accept_string(grammar, instance)
+    check_schema_with_instance({"type": "string", "format": format_name}, instance)
 
 
 def test_min_max_length():

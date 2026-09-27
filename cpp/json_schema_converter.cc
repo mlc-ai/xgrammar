@@ -3532,16 +3532,27 @@ int32_t JSONSchemaConverter::GenerateTypeArray(
 
 // ==================== Static Helper Methods ====================
 
-std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(const std::string& format
+std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(
+    const std::string& format, bool raw_string
 ) {
+  if (raw_string && (format == "json-pointer" || format == "relative-json-pointer")) {
+    // XML parameter values are raw text: JSON escaping would change the pointer value.
+    const std::string pointer = R"((/([\x00-\x2E]|[\x30-\x7D]|[\x7F-\U0010FFFF]|~[01])*)*)";
+    return format == "json-pointer" ? "^" + pointer + "$" : "^(0|[1-9][0-9]*)(#|" + pointer + ")$";
+  }
+
   static const auto regex_map = []() -> std::unordered_map<std::string, std::string> {
     std::unordered_map<std::string, std::string> m;
 
     std::string atext = "[\\w!#$%&'*+/=?^`{|}~-]";
     std::string dot_string = "(" + atext + "+(\\." + atext + "+)*)";
-    std::string quoted_pair = R"(\\\\([\x20-\x21\x23-\x5B\x5D-\x7E]|\\\"|\\\\))";
-    std::string quoted_string =
-        "\\\\\"(" + quoted_pair + "|[\\x20\\x21\\x23-\\x5B\\x5D-\\x7E])*\\\\\"";
+    // Ordinary quoted-local-part characters can also use JSON's slash or Unicode escapes.
+    // Keep the Unicode alternatives within the same printable ASCII ranges as the raw form.
+    std::string quoted_text = R"(([\x20\x21\x23-\x5B\x5D-\x7E]|\\/|\\u00(2[013-9A-Fa-f]|)"
+                              R"([346][0-9A-Fa-f]|5[0-9ABD-Fabd-f]|7[0-9A-Ea-e])))";
+    std::string quoted_pair =
+        R"((\\\\|\\u005[cC])()" + quoted_text + R"(|\\\"|\\u0022|\\\\|\\u005[cC]))";
+    std::string quoted_string = "\\\\\"(" + quoted_pair + "|" + quoted_text + ")*\\\\\"";
     std::string domain =
         "([A-Za-z0-9]([\\-A-Za-z0-9]*[A-Za-z0-9])?)((\\.[A-Za-z0-9][\\-A-Za-z0-9]*[A-Za-z0-9])*"
         ")";
@@ -3867,7 +3878,7 @@ int32_t XMLToolCallingConverter::GenerateString(
 ) {
   if (nested_object_level_ <= 1) {
     if (spec.format.has_value()) {
-      auto regex = JSONFormatToRegexPattern(*spec.format);
+      auto regex = JSONFormatToRegexPattern(*spec.format, /*raw_string=*/true);
       if (regex.has_value()) {
         return RegexExpression(*regex, false, true);
       }

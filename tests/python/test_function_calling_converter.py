@@ -2969,6 +2969,77 @@ _XML_DYNAMIC_PROPERTY_CASES = (
 
 
 @pytest.mark.parametrize(
+    "style, parameter_template", [(case[0], case[1]) for case in _XML_DYNAMIC_PROPERTY_CASES]
+)
+@pytest.mark.parametrize(
+    "format_name, prefix", [("json-pointer", ""), ("relative-json-pointer", "0")]
+)
+@pytest.mark.parametrize(
+    "value, accepted",
+    [
+        ('/a"b', True),
+        (r"/a\q", True),
+        ("/a\\", True),
+        (r"/a\b", True),
+        ("/~0", True),
+        ("/~", False),
+    ],
+)
+def test_xml_pointer_formats_keep_raw_values(
+    style, parameter_template, format_name, prefix, value, accepted
+):
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string", "format": format_name}},
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+    output = parameter_template.replace(">n<", f">{prefix}{value}<")
+    for grammar in (
+        Grammar.from_structural_tag(
+            StructuralTag(format=JSONSchemaFormat(json_schema=schema, style=style))
+        ),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format=style)),
+    ):
+        check_grammar_with_instance(grammar, output, accepted)
+
+
+@pytest.mark.parametrize(
+    "format_name, value",
+    [
+        ("json-pointer", '/a"b'),
+        ("json-pointer", r"/a\q"),
+        ("relative-json-pointer", '0/a"b'),
+        ("relative-json-pointer", r"0/a\q"),
+    ],
+)
+def test_qwen_nested_pointer_formats_require_json_escapes(format_name, value):
+    schema = {
+        "type": "object",
+        "properties": {
+            "nested": {
+                "type": "object",
+                "properties": {"p": {"type": "string", "format": format_name}},
+                "required": ["p"],
+                "additionalProperties": False,
+            }
+        },
+        "required": ["nested"],
+        "additionalProperties": False,
+    }
+    valid = f'<parameter=nested>{json.dumps({"p": value})}</parameter>'
+    invalid = '<parameter=nested>{"p":"' + value + '"}</parameter>'
+    for grammar in (
+        Grammar.from_structural_tag(
+            StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="qwen_xml"))
+        ),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format="qwen_xml")),
+    ):
+        check_grammar_with_instance(grammar, valid, True)
+        check_grammar_with_instance(grammar, invalid, False)
+
+
+@pytest.mark.parametrize(
     "json_format, declared_property, pattern_property, _property_name", _XML_DYNAMIC_PROPERTY_CASES
 )
 def test_xml_pattern_properties_use_property_format_hook(
