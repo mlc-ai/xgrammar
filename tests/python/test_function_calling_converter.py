@@ -3005,15 +3005,55 @@ def test_xml_pointer_formats_keep_raw_values(
 
 
 @pytest.mark.parametrize(
+    "style, parameter_template", [(case[0], case[1]) for case in _XML_DYNAMIC_PROPERTY_CASES]
+)
+@pytest.mark.parametrize(
+    "value, accepted",
+    [
+        ("a@example.com", True),
+        ('"a"@example.com', True),
+        ('"john doe"@example.com', True),
+        (r'"a\"b"@example.com', True),
+        (r'"a\\b"@example.com', True),
+        (r'"a\/b"@example.com', True),
+        (r'"\u0061"@example.com', True),
+        (r"\"a\"@example.com", False),
+        (r"\"\u0061\"@example.com", False),
+        (r"\"a\/b\"@example.com", False),
+        ('"a"b"@example.com', False),
+        ('"a\nb"@example.com', False),
+    ],
+)
+def test_xml_email_format_keeps_raw_values(style, parameter_template, value, accepted):
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "string", "format": "email"}},
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+    output = parameter_template.replace(">n<", f">{value}<")
+    for grammar in (
+        Grammar.from_structural_tag(
+            StructuralTag(format=JSONSchemaFormat(json_schema=schema, style=style))
+        ),
+        Grammar.from_ebnf(_json_schema_to_ebnf(schema, json_format=style)),
+    ):
+        check_grammar_with_instance(grammar, output, accepted)
+
+
+@pytest.mark.parametrize(
     "format_name, value",
     [
         ("json-pointer", '/a"b'),
         ("json-pointer", r"/a\q"),
         ("relative-json-pointer", '0/a"b'),
         ("relative-json-pointer", r"0/a\q"),
+        ("email", '"a"@example.com'),
+        ("email", r'"a\"b"@example.com'),
+        ("email", r'"a\\b"@example.com'),
     ],
 )
-def test_qwen_nested_pointer_formats_require_json_escapes(format_name, value):
+def test_qwen_nested_string_formats_require_json_escapes(format_name, value):
     schema = {
         "type": "object",
         "properties": {

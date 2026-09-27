@@ -560,7 +560,7 @@ class JSONSchemaConverter {
   );
 
  protected:
-  // raw_string preserves literal pointer characters in XML parameter values.
+  // raw_string selects raw XML parameter text instead of JSON string contents.
   static std::optional<std::string> JSONFormatToRegexPattern(
       const std::string& format, bool raw_string = false
   );
