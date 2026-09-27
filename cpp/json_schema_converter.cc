@@ -2656,9 +2656,8 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   if (spec.format.has_value()) {
     auto regex = JSONFormatToRegexPattern(*spec.format);
     if (regex.has_value()) {
-      // The built-in format regexes use constructs that the FSM regex engine does not fully
-      // support yet (e.g. quoted email local parts), so they keep the CFG expansion.
-      return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
+      // Keep the JSON escape alternatives in a single automaton for efficient token masking.
+      return Sequence({ByteString("\""), RegexExpression(*regex), ByteString("\"")});
     }
   }
   // Check for pattern

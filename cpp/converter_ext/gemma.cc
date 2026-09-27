@@ -104,7 +104,7 @@ int32_t GemmaToolCallingConverter::GenerateString(
     const StringSpec& spec, const std::string& rule_name
 ) {
   if (spec.format.has_value()) {
-    auto regex = JSONFormatToRegexPattern(*spec.format);
+    auto regex = JSONFormatToRegexPattern(*spec.format, /*raw_string=*/true);
     if (regex.has_value()) {
       return GemmaString(GemmaRegexBody(*regex, rule_name + "_format"));
     }

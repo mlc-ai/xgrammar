@@ -4249,6 +4249,49 @@ def test_gemma_format_string():
     _check_gemma_grammar(schema, '{when:"2026-07-09"}', False)
 
 
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize(
+    "format_name, value, accepted",
+    [
+        ("date", "2026-07-09", True),
+        ("date", r"\u0032026-07-09", False),
+        ("json-pointer", '/"', True),
+        ("json-pointer", r"/\q", True),
+        ("json-pointer", r"/\u007E", True),
+        ("json-pointer", "/~", False),
+        ("json-pointer", '/a<|"|>b', False),
+        ("relative-json-pointer", '0/"', True),
+        ("relative-json-pointer", r"0/\q", True),
+        ("relative-json-pointer", "0/~", False),
+        ("email", '"a"@example.com', True),
+        ("email", r'"a\"b"@example.com', True),
+        ("email", r"\"a\"@example.com", False),
+        ("email", r"\u0061@example.com", False),
+    ],
+)
+def test_gemma_formats_keep_raw_values(format_name, value, accepted, nested):
+    schema = {
+        "type": "object",
+        "properties": {"v": {"type": "string", "format": format_name}},
+        "required": ["v"],
+        "additionalProperties": False,
+    }
+    output = '{v:<|"|>' + value + '<|"|>}'
+    if nested:
+        schema = {
+            "type": "object",
+            "properties": {"nested": schema},
+            "required": ["nested"],
+            "additionalProperties": False,
+        }
+        output = "{nested:" + output + "}"
+    _check_gemma_grammar(schema, output, accepted)
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="gemma"))
+    )
+    check_grammar_with_instance(grammar, output, accepted)
+
+
 def test_gemma_const_scalar_preserves_literal():
     # Large integers must not be rounded through double re-serialization.
     big = 10000000000000001
