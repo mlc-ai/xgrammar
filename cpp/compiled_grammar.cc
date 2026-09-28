@@ -542,6 +542,12 @@ std::optional<SerializationError> DeserializeJSONValue(
     });
   };
   for (const auto& [state, mask] : impl->adaptive_token_mask_cache) {
+    // PopulateRepeatInteriorBitsets below looks the state's rule up in the grammar.
+    if (state.rule_id >= impl->grammar->NumRules()) {
+      return ConstructDeserializeError(
+          "adaptive_token_mask_cache contains a state whose rule does not exist", type_name
+      );
+    }
     using StoreType = AdaptiveTokenMask::StoreType;
     const bool store_type_ok = mask.store_type == StoreType::kAccepted ||
                                mask.store_type == StoreType::kRejected ||

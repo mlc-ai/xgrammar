@@ -1952,8 +1952,14 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     // the repetitions they consume (see PopulateRepeatInteriorBitsets). The compiled mask is shared
     // by every repeat count, so the budget is read from the parse history here and the matching
     // bitset is accepted in one operation instead of replaying every such token.
-    if (!has_char_budget_rules_ && !adaptive_token_mask.repeat_interior_bitsets.empty() &&
-        state.rule_start_pos != ParserState::kNoPrevInputPos) {
+    if (!adaptive_token_mask.repeat_interior_bitsets.empty()) {
+      // PopulateRepeatInteriorBitsets only fills the bitsets of body rules that are entered
+      // through repeat edges alone, and none when character budgets are enforced. The mask lists
+      // none of these tokens as accepted, so without a repetition parent this state would
+      // silently reject all of them.
+      XGRAMMAR_CHECK(
+          !has_char_budget_rules_ && state.rule_start_pos != ParserState::kNoPrevInputPos
+      ) << "The counted-repetition fast path does not apply to this state";
       int32_t remaining = -1;
       bool on_repeat = false;
       for (const auto& [ref_rule_id, parent_state] :
@@ -1966,16 +1972,19 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
           continue;
         }
         on_repeat = true;
+        // Once budgets are enforced, an expired parent scans no further byte, so the repetitions
+        // it has left cannot be used.
+        if (skip_expired && IsExpiredState(parent_state)) {
+          continue;
+        }
         if (*upper < 0) {
           remaining = INT32_MAX;
           break;
         }
         remaining = std::max(remaining, *upper - parent_state.repeat_count);
       }
-      // PopulateRepeatInteriorBitsets only fills the bitsets of body rules that are entered
-      // through repeat edges alone. The mask lists none of these tokens as accepted, so the ones
-      // that do not fit are rejected by this state without further work.
-      XGRAMMAR_DCHECK(on_repeat) << "A counted-repetition body state has no repetition parent";
+      // The tokens that do not fit are rejected by this state without further work.
+      XGRAMMAR_CHECK(on_repeat) << "A counted-repetition body state has no repetition parent";
       const auto& char_counts = adaptive_token_mask.repeat_interior_char_counts;
       const auto it = std::upper_bound(char_counts.begin(), char_counts.end(), remaining);
       if (it != char_counts.begin()) {

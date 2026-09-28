@@ -11,6 +11,8 @@ at the bound.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 import xgrammar as xgr
@@ -244,3 +246,83 @@ def test_counted_repetitions_in_ebnf_match_the_replay(grammar: str, prefixes: li
     compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
     for text in prefixes:
         _assert_mask_matches_replay(compiled, tokenizer_info, text)
+
+
+@pytest.mark.parametrize(
+    ("compile_args", "accepted", "rejected"),
+    [
+        (
+            {"schema": {"anyOf": [{"const": "aaa"}, {"type": "string", "maxLength": 2}]}},
+            ['"aaa"', '"ab"', '"b"'],
+            ['"baaa"', '"baa"'],
+        ),
+        ({"grammar": 'root ::= "<" ("ab" | [^"x]{0,2} "\\"")'}, ["<ab", '<aa"'], ["<aab", "<Zab"]),
+    ],
+)
+def test_counted_repetition_does_not_continue_into_a_sibling_alternative(
+    compile_args: dict[str, object], accepted: list[str], rejected: list[str]
+) -> None:
+    """After a repetition the parser returns to the repeat edge, which is not a branch point."""
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "Z", '"', "<"])
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    if "schema" in compile_args:
+        compiled = compiler.compile_json_schema(compile_args["schema"])
+    else:
+        compiled = compiler.compile_grammar(compile_args["grammar"])
+    for text in accepted + rejected:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert (matcher.accept_string(text) and matcher.is_terminated()) is (text in accepted), text
+    for text in ('"', '"b', '"ba') if "schema" in compile_args else ("<", "<a", "<aa"):
+        _assert_mask_matches_replay(compiled, tokenizer_info, text)
+
+
+def test_expired_parent_does_not_lend_its_repetitions() -> None:
+    """Once the budget is enforced, only the repetitions of a live parent count."""
+    vocab = ["a", "aa", "b", "ba", '"', 'a"', "p", "pp", "x", "ax"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    grammar = (
+        'root ::= a | b\na[max_tokens=1] ::= "p" [^x]{0,3} "x"\nb[max_tokens=2] ::= [^x]{0,3} "x"'
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    for token_id in range(len(vocab)):
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert matcher.accept_token(vocab.index("pp"))
+        # The budget is enforced by the accept that follows a fill.
+        allowed = token_id in _allowed_token_ids(matcher, tokenizer_info)
+        assert allowed is bool(matcher.accept_token(token_id)), vocab[token_id]
+
+
+def test_deserialized_bounded_string_masks_match() -> None:
+    tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(
+        {"type": "string", "maxLength": 3}
+    )
+    restored = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), tokenizer_info)
+    for consumed in range(4):
+        text = '"' + "a" * consumed
+        assert _allowed_token_ids(_matcher_after(restored, text), tokenizer_info) == (
+            _allowed_token_ids(_matcher_after(compiled, text), tokenizer_info)
+        ), text
+        _assert_mask_matches_replay(restored, tokenizer_info, text)
+
+
+def test_deserialize_rejects_a_mask_for_an_unknown_rule() -> None:
+    tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(
+        {"type": "string", "maxLength": 3}
+    )
+    serialized = json.loads(compiled.serialize_json())
+    serialized["adaptive_token_mask_cache"][0][0][0] = 2**31 - 1
+    with pytest.raises(xgr.exception.DeserializeFormatError):
+        xgr.CompiledGrammar.deserialize_json(json.dumps(serialized), tokenizer_info)
+
+
+def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:
+    """With a character budget anywhere the matcher never uses the counted fast path, so the
+    repetition is expanded as before instead of becoming a counted edge on the slow path."""
+    tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
+    grammar = 'root ::= "\\"" [^"\\\\]{0,3} "\\"" | t\nt[max_chars=2] ::= [a-z]*'
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    assert "{0, 3}" not in str(compiled.grammar)
+    for consumed in range(4):
+        _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)

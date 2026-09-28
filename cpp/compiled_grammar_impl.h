@@ -76,7 +76,9 @@ struct AdaptiveTokenMask {
    *
    * This is derived data: it is deliberately not part of the serialized form (see
    * XGRAMMAR_MEMBER_TABLE below) and is recomputed by PopulateRepeatInteriorBitsets whenever a
-   * compiled grammar is built or deserialized.
+   * compiled grammar is built or deserialized. The serialized mask still lacks the tokens moved
+   * here, so a runtime that does not recompute them must not load it: the serialization version
+   * was bumped for this.
    */
   std::vector<int32_t> repeat_interior_char_counts;
   std::vector<DynamicBitset> repeat_interior_bitsets;
