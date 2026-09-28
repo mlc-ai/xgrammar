@@ -1278,11 +1278,15 @@ class GrammarFSMBuilderImpl {
   explicit GrammarFSMBuilderImpl(
       FSM& target_fsm,
       const std::string* rule_name = nullptr,
-      GrammarBuilder* grammar_builder = nullptr
+      GrammarBuilder* grammar_builder = nullptr,
+      int32_t character_repeat_window = 128
   )
-      : target_fsm_(target_fsm), rule_name_(rule_name), grammar_builder_(grammar_builder) {}
+      : target_fsm_(target_fsm),
+        rule_name_(rule_name),
+        grammar_builder_(grammar_builder),
+        character_repeat_window_(character_repeat_window) {}
 
-  static void Apply(Grammar* grammar) {
+  static void Apply(Grammar* grammar, int32_t character_repeat_window) {
     FSM complete_fsm;
     std::vector<std::optional<FSMWithStartEndWithSize>> per_rule_fsms;
     std::vector<int> state_mapping;
@@ -1293,7 +1297,7 @@ class GrammarFSMBuilderImpl {
     int32_t num_original_rules = (*grammar)->NumRules();
     GrammarBuilder grammar_builder = GrammarBuilder::FromMutableGrammar(grammar);
     for (int i = 0; i < (*grammar)->NumRules(); ++i) {
-      auto rule_fsm = BuildRuleFSM(*grammar, i, &grammar_builder);
+      auto rule_fsm = BuildRuleFSM(*grammar, i, &grammar_builder, character_repeat_window);
       per_rule_fsms.push_back(rule_fsm.AddToCompleteFSM(&complete_fsm, &state_mapping));
     }
 
@@ -1360,13 +1364,17 @@ class GrammarFSMBuilderImpl {
 
  private:
   static FSMWithStartEnd BuildRuleFSM(
-      const Grammar& grammar, int rule_id, GrammarBuilder* grammar_builder = nullptr
+      const Grammar& grammar,
+      int rule_id,
+      GrammarBuilder* grammar_builder = nullptr,
+      int32_t character_repeat_window = 128
   );
   static FSMWithStartEnd BuildExpressionFSM(
       const GrammarExpr& expr,
       const Grammar& grammar,
       const std::string* rule_name = nullptr,
-      GrammarBuilder* grammar_builder = nullptr
+      GrammarBuilder* grammar_builder = nullptr,
+      int32_t character_repeat_window = 128
   );
   void BuildExpression(
       const GrammarExpr& expr,
@@ -1383,7 +1391,12 @@ class GrammarFSMBuilderImpl {
   void BuildCharacterClassStar(
       const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
   );
-  void BuildRepeat(const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states);
+  void BuildRepeat(
+      const GrammarExpr& expr,
+      const Grammar& grammar,
+      int start_state,
+      std::vector<int32_t>* end_states
+  );
   void BuildToken(const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states);
   void BuildExcludeToken(
       const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
@@ -1426,6 +1439,7 @@ class GrammarFSMBuilderImpl {
   const std::string* rule_name_;
   // If not null, kRegex expressions may add new rules through this builder; see Apply().
   GrammarBuilder* grammar_builder_ = nullptr;
+  int32_t character_repeat_window_;
 };
 
 // This function will add a range [min, max] of unicode characters to the FSM.
@@ -1514,11 +1528,18 @@ void GrammarFSMBuilderImpl::BuildCharacterClassStar(
 }
 
 FSMWithStartEnd GrammarFSMBuilderImpl::BuildRuleFSM(
-    const Grammar& grammar, int rule_id, GrammarBuilder* grammar_builder
+    const Grammar& grammar,
+    int rule_id,
+    GrammarBuilder* grammar_builder,
+    int32_t character_repeat_window
 ) {
   const auto& rule = grammar->GetRule(rule_id);
   return BuildExpressionFSM(
-      grammar->GetGrammarExpr(rule.body_expr_id), grammar, &rule.name, grammar_builder
+      grammar->GetGrammarExpr(rule.body_expr_id),
+      grammar,
+      &rule.name,
+      grammar_builder,
+      character_repeat_window
   );
 }
 
@@ -1526,12 +1547,13 @@ FSMWithStartEnd GrammarFSMBuilderImpl::BuildExpressionFSM(
     const GrammarExpr& expr,
     const Grammar& grammar,
     const std::string* rule_name,
-    GrammarBuilder* grammar_builder
+    GrammarBuilder* grammar_builder,
+    int32_t character_repeat_window
 ) {
   FSM result_fsm;
   int start_state = result_fsm.AddState();
   std::vector<int32_t> end_states;
-  GrammarFSMBuilderImpl builder(result_fsm, rule_name, grammar_builder);
+  GrammarFSMBuilderImpl builder(result_fsm, rule_name, grammar_builder, character_repeat_window);
   builder.BuildExpression(expr, grammar, start_state, &end_states);
   FSMWithStartEnd result(result_fsm, start_state, std::move(end_states));
   if (expr.type != ExprType::kTagDispatch && expr.type != ExprType::kTokenTagDispatch) {
@@ -1620,7 +1642,7 @@ void GrammarFSMBuilderImpl::BuildExpression(
     case ExprType::kRuleRef:
       return BuildRuleRef(expr, start_state, end_states);
     case ExprType::kRepeat:
-      return BuildRepeat(expr, start_state, end_states);
+      return BuildRepeat(expr, grammar, start_state, end_states);
     case ExprType::kToken:
       return BuildToken(expr, start_state, end_states);
     case ExprType::kExcludeToken:
@@ -1678,10 +1700,40 @@ void GrammarFSMBuilderImpl::BuildRuleRef(
 }
 
 void GrammarFSMBuilderImpl::BuildRepeat(
-    const GrammarExpr& expr, int start_state, std::vector<int32_t>* end_states
+    const GrammarExpr& expr,
+    const Grammar& grammar,
+    int start_state,
+    std::vector<int32_t>* end_states
 ) {
   XGRAMMAR_DCHECK(expr.type == ExprType::kRepeat);
   end_states->clear();
+  const auto& rule = grammar->GetRule(expr[0]);
+  const auto& body = grammar->GetGrammarExpr(rule.body_expr_id);
+  if (expr[2] >= 0 && expr[2] <= character_repeat_window_ && rule.max_tokens < 0 &&
+      rule.max_chars < 0 && !rule.is_lazy && rule.capture_name.empty() &&
+      !rule.temperature.has_value() && grammar->GetSuffixStopInfo(expr[0]) == nullptr &&
+      body.type == ExprType::kChoices && body.size() == 1) {
+    const auto& choice = grammar->GetGrammarExpr(body[0]);
+    if (choice.type == ExprType::kSequence && choice.size() == 1) {
+      const auto& character = grammar->GetGrammarExpr(choice[0]);
+      if (character.type == ExprType::kCharacterClass) {
+        // Materialize the counter as FSM states. The compiler can then precompute
+        // token masks for every remaining capacity, including split UTF-8 states.
+        int current = start_state;
+        for (int count = 0; count <= expr[2]; ++count) {
+          if (count >= expr[1]) {
+            end_states->push_back(current);
+          }
+          if (count < expr[2]) {
+            int next = target_fsm_.AddState();
+            AddCharacterClassTransitions(character, current, next);
+            current = next;
+          }
+        }
+        return;
+      }
+    }
+  }
   int end_state = target_fsm_.AddState();
   target_fsm_.AddRepeatEdge(start_state, end_state, expr[0], expr[1], expr[2]);
   end_states->push_back(end_state);
@@ -2160,7 +2212,8 @@ class RegularGrammarFSMBuilder {
 class RepetitionRangeExpanderImpl : public GrammarMutator {
  public:
   using GrammarMutator::Apply;
-  using GrammarMutator::GrammarMutator;
+  explicit RepetitionRangeExpanderImpl(int32_t character_repeat_window)
+      : character_repeat_window_(character_repeat_window) {}
 
  private:
   int32_t VisitRepeat(const GrammarExpr& grammar_expr) final {
@@ -2220,6 +2273,9 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
    * linear in the schema size.
    */
   std::map<std::vector<int64_t>, int32_t> repetition_cache_;
+  int32_t character_repeat_window_;
+  // Bound the extra character positions introduced by context specialization.
+  int32_t remaining_context_window_states_ = 4096;
 };
 
 /****************** Repetition range helpers ******************/
@@ -2227,6 +2283,15 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
 int32_t RepetitionRangeExpanderImpl::LegacyHandleRepetitionRange(
     const std::string& cur_rule_name, int32_t grammar_expr_id, int64_t lower, int64_t upper
 ) {
+  if (upper >= 0 && upper <= character_repeat_window_ &&
+      builder_->GetGrammarExpr(grammar_expr_id).type == GrammarExprType::kCharacterClass) {
+    // Keep bounded character repetitions intact until FSM construction, including
+    // the short alternative of a large repetition. Optional rule chains make
+    // otherwise local mask decisions uncertain.
+    auto body = builder_->AddChoices({builder_->AddSequence({grammar_expr_id})});
+    auto rule = builder_->AddRuleWithHint(cur_rule_name + "_characters", body);
+    return builder_->AddRepeat(rule, lower, upper);
+  }
   // Construct expr expr ... expr (l times)
 
   std::vector<int32_t> elements;
@@ -2325,6 +2390,15 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   cache_key.push_back(upper);
   auto it = repetition_cache_.find(cache_key);
   if (it != repetition_cache_.end()) {
+    const auto& cached = builder_->GetGrammarExpr(it->second);
+    if (repeated_expr.type == GrammarExprType::kCharacterClass &&
+        upper > character_repeat_window_ && cached.type == GrammarExprType::kRuleRef &&
+        character_repeat_window_ <= remaining_context_window_states_) {
+      remaining_context_window_states_ -= character_repeat_window_;
+      // Keep the outer continuation local while sharing the counted body.
+      int32_t body = builder_->GetRule(cached[0]).body_expr_id;
+      return builder_->AddRuleRef(builder_->AddRuleWithHint(cur_rule_name, body));
+    }
     return it->second;
   }
 
@@ -2336,7 +2410,10 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
 int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
     const std::string& cur_rule_name, int32_t grammar_expr_id, int64_t lower, int64_t upper
 ) {
-  static const int64_t kUnzipThreshold = 128;
+  const int64_t kUnzipThreshold =
+      builder_->GetGrammarExpr(grammar_expr_id).type == GrammarExprType::kCharacterClass
+          ? character_repeat_window_
+          : 128;
   XGRAMMAR_CHECK(lower >= 0 && (upper == -1 || upper >= lower))
       << "Invalid repetition range {" << lower << ", " << upper << "}";
 
@@ -2979,7 +3056,8 @@ class LazyBodyFlattenerImpl : public GrammarMutator {
 
 class GrammarOptimizerImpl {
  public:
-  static Grammar Apply(const Grammar& grammar) {
+  static Grammar Apply(const Grammar& grammar, int32_t character_repeat_window) {
+    XGRAMMAR_CHECK(character_repeat_window > 0);
     // ByteStringFuser and RuleInliner rewrite the grammar in place, so work on a private copy: the
     // input grammar may be shared (e.g. a cached grammar) and must not be mutated. Copy the impl
     // directly (contiguous vector copies) instead of going through GrammarBuilder, which would
@@ -2987,14 +3065,14 @@ class GrammarOptimizerImpl {
     Grammar result(std::make_shared<Grammar::Impl>(*grammar.operator->()));
     ByteStringFuser::Apply(&result);
     RuleInliner::Apply(&result);
-    result = RepetitionRangeExpander::Apply(result);
+    result = RepetitionRangeExpander::Apply(result, character_repeat_window);
     result = LazyBodyFlattenerImpl().Apply(result);
     result = DeadCodeEliminator::Apply(result);
     result = LookaheadAssertionAnalyzer::Apply(result);
     result->allow_empty_rule_ids = AllowEmptyRuleAnalyzer::Apply(result);
     ValidateLazyRules(result);
     RepetitionNormalizer::Apply(&result);
-    GrammarFSMBuilder::Apply(&result);
+    GrammarFSMBuilder::Apply(&result, character_repeat_window);
     result->optimized = true;
     return result;
   }
@@ -3906,7 +3984,9 @@ Grammar StructureNormalizer::Apply(const Grammar& grammar) {
 
 /*************************** Forward grammar optimizers to their impl ***************************/
 
-void GrammarFSMBuilder::Apply(Grammar* grammar) { GrammarFSMBuilderImpl::Apply(grammar); }
+void GrammarFSMBuilder::Apply(Grammar* grammar, int32_t character_repeat_window) {
+  GrammarFSMBuilderImpl::Apply(grammar, character_repeat_window);
+}
 
 void RepetitionNormalizer::Apply(Grammar* grammar) { RepetitionNormalizerImpl().Apply(grammar); }
 
@@ -3999,12 +4079,12 @@ Grammar LookaheadAssertionAnalyzer::Apply(const Grammar& grammar) {
   return LookaheadAssertionAnalyzerImpl().Apply(grammar);
 }
 
-Grammar RepetitionRangeExpander::Apply(const Grammar& grammar) {
-  return RepetitionRangeExpanderImpl().Apply(grammar);
+Grammar RepetitionRangeExpander::Apply(const Grammar& grammar, int32_t character_repeat_window) {
+  return RepetitionRangeExpanderImpl(character_repeat_window).Apply(grammar);
 }
 
-Grammar GrammarOptimizer::Apply(const Grammar& grammar) {
-  return GrammarOptimizerImpl::Apply(grammar);
+Grammar GrammarOptimizer::Apply(const Grammar& grammar, int32_t character_repeat_window) {
+  return GrammarOptimizerImpl::Apply(grammar, character_repeat_window);
 }
 
 void ByteStringFuser::Apply(Grammar* grammar) { ByteStringFuserImpl().Apply(grammar); }
