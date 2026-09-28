@@ -2289,6 +2289,9 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
    * linear in the schema size.
    */
   std::map<std::vector<int64_t>, int32_t> repetition_cache_;
+
+  /*! \brief The body rule of the counted repetitions of each character class, by its content. */
+  std::map<std::vector<int32_t>, int32_t> counted_body_rule_ids_;
 };
 
 /****************** Repetition range helpers ******************/
@@ -2378,21 +2381,24 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
     if (ref_choice.size() == 1) {
       // Visit the element instead of copying it verbatim: a nested repetition such as
-      // b ::= a{2,} must be expanded too, or an unbounded kRepeat reaches the parser.
+      // b ::= a{2,} must be expanded too, or an unbounded kRepeat reaches the parser. The byte
+      // after this repetition does not follow a nested one.
+      const auto follow_byte = follow_byte_;
+      follow_byte_ = std::nullopt;
       grammar_expr_id = VisitExpr(ref_choice[0]);
+      follow_byte_ = follow_byte;
     }
   }
 
-  // A `maxLength`-only JSON string body - a repetition of a negative character class with
-  // `lower == 0` - is kept as one counted repeat edge when the byte after it is one the class
-  // excludes: the matcher then decides most tokens in the body from the repetition budget alone
+  // A length-bounded JSON string body - a repetition of a negative character class - is kept as
+  // one counted repeat edge when the byte after it is one the class excludes: the matcher then
+  // decides most tokens in the body from the repetition bounds alone
   // (PopulateRepeatInteriorBitsets). Anywhere else the counted edge would be slower than the
   // expansion below, which keeps a separate mask per position; that includes grammars with
   // character budgets, where the matcher never takes the fast path.
   const auto repeated_expr = builder_->GetGrammarExpr(grammar_expr_id);
   bool counted = false;
-  if (lower == 0 && upper != -1 &&
-      repeated_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass &&
+  if (repeated_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass &&
       repeated_expr[0] != 0 && follow_byte_.has_value() && *follow_byte_ < 0x80 &&
       !HasCharBudgetRules()) {
     bool excluded = false;
@@ -2436,13 +2442,25 @@ int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
 
   // The generic path below turns a counted repetition into an unrolled head plus a repeat tail
   // with a threshold-long lookahead, which keeps one leaf parser state alive per unrolled copy
-  // while the matcher matches inside the repetition.
+  // while the matcher matches inside the repetition. The parser needs a finite upper bound, so
+  // INT32_MAX stands for an unbounded one. Counted repetitions of one character class share their
+  // body rule whatever their bounds, which the matcher reads from each repeat edge, so the token
+  // data of PopulateRepeatInteriorBitsets is built once per class.
   if (counted) {
-    const auto repeat_body_rule_id = builder_->AddRuleWithHint(
-        cur_rule_name + "_repeat", builder_->AddChoices({builder_->AddSequence({grammar_expr_id})})
+    const auto repeated_expr = builder_->GetGrammarExpr(grammar_expr_id);
+    auto [it, inserted] = counted_body_rule_ids_.try_emplace(
+        std::vector<int32_t>(repeated_expr.begin(), repeated_expr.end()), -1
     );
+    if (inserted) {
+      it->second = builder_->AddRuleWithHint(
+          cur_rule_name + "_repeat",
+          builder_->AddChoices({builder_->AddSequence({grammar_expr_id})})
+      );
+    }
     return builder_->AddRepeat(
-        repeat_body_rule_id, static_cast<int32_t>(lower), static_cast<int32_t>(upper)
+        it->second,
+        static_cast<int32_t>(lower),
+        upper == -1 ? INT32_MAX : static_cast<int32_t>(upper)
     );
   }
 

@@ -116,11 +116,11 @@ struct RepetitionFollowBytes {
  * \brief The rules whose start state gets the counted-repetition fast path.
  *
  * A rule qualifies when it matches one codepoint of a character class (IsPlainCharacterClassRule)
- * and every reference to it is a repeat edge with `lower == 0` that is followed, in the referring
- * rule, only by character edges whose bytes no codepoint of the class starts with. Then a token
- * that starts inside the class stays in the repetition up to its first byte outside the class and
- * cannot leave it earlier, so its legality depends only on the repetition budget left in the
- * parent: see PopulateRepeatInteriorBitsets.
+ * and every reference to it is a repeat edge that is followed, in the referring rule, only by
+ * character edges whose bytes no codepoint of the class starts with. Then a token that starts
+ * inside the class stays in the repetition up to its first byte outside the class and cannot leave
+ * it earlier, so its legality depends only on the repetition bounds and the repetitions done in
+ * the parent: see PopulateRepeatInteriorBitsets.
  *
  * \return For each rule, the bytes that can follow its repetitions, or nullopt when the rule does
  * not qualify.
@@ -172,7 +172,7 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
           continue;
         }
         referenced[body_rule_id] = true;
-        if (info.Lower() != 0 || rule_fsm->GetFsm().IsEndState(edge.target)) {
+        if (rule_fsm->GetFsm().IsEndState(edge.target)) {
           disqualified[body_rule_id] = true;
           continue;
         }
@@ -212,6 +212,9 @@ struct RepetitionTokenClass {
   enum Kind {
     // Legal exactly when the budget left covers `num_repetitions`.
     kBudget,
+    // Leaves the repetition on its last byte: legal exactly when the budget left covers
+    // `num_repetitions` and they complete the lower bound.
+    kExit,
     // Never legal from this state.
     kRejected,
     // Depends on what follows the repetition: left to the matcher's replay.
@@ -226,10 +229,10 @@ struct RepetitionTokenClass {
  *
  * A token stays inside the class until its first byte outside it. It cannot leave earlier because
  * no follow byte starts a codepoint of the class (FindCountedRepetitionBodies), and it cannot
- * leave inside a codepoint. So it is decided by the budget alone when it ends inside the class, or
- * when it leaves on its last byte and every reference accepts that byte. It is rejected when the
- * byte it stops at can neither continue the codepoint nor follow the repetition, or when it needs
- * more repetitions than any reference allows.
+ * leave inside a codepoint. So it is decided by the repetition bounds alone when it ends inside the
+ * class, or when it leaves on its last byte and every reference accepts that byte. It is rejected
+ * when the byte it stops at can neither continue the codepoint nor follow the repetition, or when
+ * it needs more repetitions than any reference allows.
  */
 RepetitionTokenClass ClassifyRepetitionToken(
     const CompactFSMWithStartEnd& fsm,
@@ -247,7 +250,7 @@ RepetitionTokenClass ClassifyRepetitionToken(
       }
       if (i + 1 == token.size() && follow_bytes.under_all[byte]) {
         // The parent consumes this last byte right after `num_repetitions` codepoints.
-        return {RepetitionTokenClass::kBudget, num_repetitions};
+        return {RepetitionTokenClass::kExit, num_repetitions};
       }
       return {RepetitionTokenClass::kUndecided};
     }
@@ -283,6 +286,7 @@ void PopulateRepeatInteriorBitsets(
   for (auto& [state, mask] : *cache) {
     mask.repeat_interior_char_counts.clear();
     mask.repeat_interior_bitsets.clear();
+    mask.repeat_exit_tokens.clear();
     if (state.rule_id < 0 || !counted_repetition_bodies[state.rule_id].has_value()) {
       continue;
     }
@@ -300,11 +304,16 @@ void PopulateRepeatInteriorBitsets(
       );
       if (token_class.kind == RepetitionTokenClass::kBudget) {
         tokens_by_repetitions[token_class.num_repetitions].push_back(index);
+      } else if (token_class.kind == RepetitionTokenClass::kExit) {
+        mask.repeat_exit_tokens.emplace_back(
+            token_class.num_repetitions, sorted_vocab[index].first
+        );
+        decided_indices.push_back(index);
       } else if (token_class.kind == RepetitionTokenClass::kRejected) {
         decided_indices.push_back(index);
       }
     }
-    if (tokens_by_repetitions.empty()) {
+    if (tokens_by_repetitions.empty() && mask.repeat_exit_tokens.empty()) {
       continue;
     }
 
@@ -321,8 +330,8 @@ void PopulateRepeatInteriorBitsets(
     }
     std::sort(decided_indices.begin(), decided_indices.end());
 
-    // Take the decided tokens out of every static class: the matcher accepts the budget tokens
-    // that fit the remaining repetition budget, and nothing else of them. A kRejected mask would
+    // Take the decided tokens out of every static class: the matcher accepts the budget and exit
+    // tokens that fit the repetition bounds, and nothing else of them. A kRejected mask would
     // accept them implicitly, so it is turned into an accepted bitset first; the mask then never
     // accepts a token it does not list, whatever the other states of the row decide.
     if (mask.store_type == StoreType::kRejected) {

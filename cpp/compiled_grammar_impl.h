@@ -64,11 +64,14 @@ struct AdaptiveTokenMask {
    *
    * `repeat_interior_bitsets[i]` holds every token whose legality in this state is decided by the
    * repetition budget alone, and that consumes at most `repeat_interior_char_counts[i]`
-   * repetitions; the counts are strictly increasing. Such a token either stays inside the class,
-   * possibly ending inside a codepoint, or leaves the repetition on its last byte. It is legal
-   * exactly when the repetition budget left in the parent state covers it. That budget is not
-   * part of the compiled state, so the matcher reads it from the parse history and picks the
-   * matching bitset; the mask itself stays count-independent.
+   * repetitions; the counts are strictly increasing. Such a token stays inside the class, possibly
+   * ending inside a codepoint. It is legal exactly when the repetition budget left in the parent
+   * state covers it. That budget is not part of the compiled state, so the matcher reads it from
+   * the parse history and picks the matching bitset; the mask itself stays count-independent.
+   *
+   * `repeat_exit_tokens` lists (repetitions consumed, token id) for every token that leaves the
+   * repetition on its last byte. Such a token is legal exactly when the repetitions it consumes
+   * fit the budget and, with those before it, reach the lower bound of the repetition.
    *
    * These tokens are removed from the mask's own accepted and uncertain classes, and the mask
    * lists its accepted tokens explicitly, so a token that does not fit is rejected by this state.
@@ -82,6 +85,7 @@ struct AdaptiveTokenMask {
    */
   std::vector<int32_t> repeat_interior_char_counts;
   std::vector<DynamicBitset> repeat_interior_bitsets;
+  std::vector<std::pair<int32_t, int32_t>> repeat_exit_tokens;
 
   /*! \brief Default constructor. Only for deserialization. */
   AdaptiveTokenMask() = default;
@@ -106,7 +110,8 @@ struct AdaptiveTokenMask {
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask) {
     return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
            MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset) +
-           MemorySize(mask.repeat_interior_char_counts) + MemorySize(mask.repeat_interior_bitsets);
+           MemorySize(mask.repeat_interior_char_counts) + MemorySize(mask.repeat_interior_bitsets) +
+           MemorySize(mask.repeat_exit_tokens);
   }
 };
 
@@ -162,10 +167,10 @@ class CompiledGrammar::Impl {
  * \brief Compute the counted-repetition fast path data for every mask in `cache`.
  *
  * Applies to the start state of a rule that matches one codepoint of a character class, when
- * every reference to the rule is a repeat edge with `lower == 0` followed only by bytes that no
- * codepoint of the class starts with. For those states, record the tokens decided by the
- * repetition budget alone, grouped by the repetitions they consume, and take them out of the
- * mask's own classes so that the matcher can decide them with a budget check.
+ * every reference to the rule is a repeat edge followed only by bytes that no codepoint of the
+ * class starts with. For those states, record the tokens decided by the repetition bounds alone,
+ * with the repetitions they consume, and take them out of the mask's own classes so that the
+ * matcher can decide them with a bound check.
  */
 void PopulateRepeatInteriorBitsets(
     const Grammar& grammar,

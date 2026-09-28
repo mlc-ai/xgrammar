@@ -213,6 +213,9 @@ def _assert_mask_matches_replay(
         {"type": "array", "items": {"type": "string", "maxLength": 3}},
         {"anyOf": [{"type": "string", "maxLength": 1}, {"type": "string", "maxLength": 3}]},
         {"anyOf": [{"type": "string", "maxLength": 1}, {"type": "string"}]},
+        {"type": "string", "minLength": 2, "maxLength": 3},
+        {"type": "string", "minLength": 2},
+        {"anyOf": [{"type": "string", "minLength": 3}, {"type": "string", "minLength": 1}]},
     ],
 )
 def test_tokens_that_leave_the_string_respect_the_bound(schema: dict[str, object]) -> None:
@@ -237,6 +240,11 @@ def test_tokens_that_leave_the_string_respect_the_bound(schema: dict[str, object
         # The repetition ends its rule, so what follows it is decided by the parent.
         ('root ::= a "!"\na ::= "<" [^!]{0,3}', ["<", "<a", "<aaa"]),
         ('root ::= "<" [^>]{0,3} ">" [a-z]*', ["<", "<aa", "<aaa"]),
+        # Two parents of one repetition body that have done different numbers of repetitions.
+        ('root ::= r | "a" r\nr ::= [^()]{2,4} ")"', ["a", "aa", "aaa"]),
+        ('root ::= r | "aa" r\nr ::= [^()]{3,} ")"', ["a", "aa", "aab", "aaaa"]),
+        # A repetition nested in a repetition.
+        ('root ::= "<" s{1,2} ">"\ns ::= [^<>]{2,3}', ["<", "<a", "<aa", "<aaaa"]),
     ],
 )
 def test_counted_repetitions_in_ebnf_match_the_replay(grammar: str, prefixes: list[str]) -> None:
@@ -292,10 +300,11 @@ def test_expired_parent_does_not_lend_its_repetitions() -> None:
         assert allowed is bool(matcher.accept_token(token_id)), vocab[token_id]
 
 
-def test_deserialized_bounded_string_masks_match() -> None:
+@pytest.mark.parametrize("min_length", [0, 2])
+def test_deserialized_bounded_string_masks_match(min_length: int) -> None:
     tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
     compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(
-        {"type": "string", "maxLength": 3}
+        {"type": "string", "minLength": min_length, "maxLength": 3}
     )
     restored = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), tokenizer_info)
     for consumed in range(4):
@@ -315,6 +324,15 @@ def test_deserialize_rejects_a_mask_for_an_unknown_rule() -> None:
     serialized["adaptive_token_mask_cache"][0][0][0] = 2**31 - 1
     with pytest.raises(xgr.exception.DeserializeFormatError):
         xgr.CompiledGrammar.deserialize_json(json.dumps(serialized), tokenizer_info)
+
+
+def test_nested_repetition_keeps_the_expanded_repetition() -> None:
+    """The byte after the outer repetition does not follow the inner one, so the inner one is not
+    turned into a counted edge that the matcher cannot take the fast path for."""
+    tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
+    grammar = 'root ::= "<" s{0,2} "\\""\ns ::= [^"]{2,3}'
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    assert "{2, 3}" not in str(compiled.grammar)
 
 
 def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:
