@@ -387,7 +387,7 @@ class GrammarFSMBuilder {
   using GrammarExpr = Grammar::Impl::GrammarExpr;
 
  public:
-  static void Apply(Grammar* grammar);
+  static void Apply(Grammar* grammar, int32_t character_repeat_window = 128);
   static FSMWithStartEnd RuleRef(const GrammarExpr& expr);
   static FSMWithStartEnd CharacterClass(const GrammarExpr& expr);
   static FSMWithStartEnd ByteString(const GrammarExpr& expr);
@@ -437,7 +437,7 @@ class RepetitionNormalizer {
  */
 class RepetitionRangeExpander {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  static Grammar Apply(const Grammar& grammar, int32_t character_repeat_window = 128);
 };
 
 /*!
@@ -454,7 +454,8 @@ class RepetitionRangeExpander {
  */
 class GrammarOptimizer {
  public:
-  static Grammar Apply(const Grammar& grammar);
+  /*! \brief Use a tokenizer-sized character window for finite-repeat lookahead and masks. */
+  static Grammar Apply(const Grammar& grammar, int32_t character_repeat_window = 128);
 };
 
 /*!
