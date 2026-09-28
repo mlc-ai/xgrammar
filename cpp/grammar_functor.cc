@@ -13,6 +13,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <set>
 #include <stack>
@@ -2170,6 +2171,25 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
     return HandleRepetitionRange(cur_rule_name_, ref_rule_id, lower, upper);
   }
 
+  /*! \brief Record the byte that follows each element, for ExpandRepetitionRange. */
+  int32_t VisitSequence(const GrammarExpr& grammar_expr) final {
+    const auto saved_follow_byte = follow_byte_;
+    std::vector<int32_t> sequence_ids;
+    for (int i = 0; i < grammar_expr.size(); ++i) {
+      follow_byte_ = std::nullopt;
+      if (i + 1 < grammar_expr.size()) {
+        const auto& next_expr = base_grammar_->GetGrammarExpr(grammar_expr[i + 1]);
+        if (next_expr.type == GrammarBuilder::GrammarExprType::kByteString &&
+            next_expr.size() > 0) {
+          follow_byte_ = static_cast<uint8_t>(next_expr[0]);
+        }
+      }
+      sequence_ids.push_back(VisitExpr(grammar_expr[i]));
+    }
+    follow_byte_ = saved_follow_byte;
+    return builder_->AddSequence(sequence_ids);
+  }
+
   /*!
    * \brief Handle repetition range by unzipping into explicit sequence/choice (for small bounds).
    * \param cur_rule_name Name hint for generated rules.
@@ -2201,11 +2221,19 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
    * \param grammar_expr_id The expression to repeat.
    * \param lower Minimum count (inclusive).
    * \param upper Maximum count (inclusive), or -1 for unbounded.
+   * \param counted Keep the repetition as one counted repeat edge.
    * \return grammar_expr_id of the repetition result.
    */
   int32_t ExpandRepetitionRange(
-      const std::string& cur_rule_name, int32_t grammar_expr_id, int64_t lower, int64_t upper
+      const std::string& cur_rule_name,
+      int32_t grammar_expr_id,
+      int64_t lower,
+      int64_t upper,
+      bool counted
   );
+
+  /*! \brief The first byte of the sequence element after the one being visited, if known. */
+  std::optional<uint8_t> follow_byte_;
 
   /*!
    * \brief Memoization of expanded repetitions, mapping (content of the repeated expr, lower,
@@ -2314,45 +2342,60 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
     }
   }
 
-  // Memoize on (content of the repeated expr, lower, upper) so that identical repetitions share
-  // one expansion instead of each producing its own chain of rules.
+  // A `maxLength`-only JSON string body - a repetition of a negative character class with
+  // `lower == 0` - is kept as one counted repeat edge when the byte after it is one the class
+  // excludes: the matcher then decides most tokens in the body from the repetition budget alone
+  // (PopulateRepeatInteriorBitsets). Anywhere else the counted edge would be slower than the
+  // expansion below, which keeps a separate mask per position.
   const auto repeated_expr = builder_->GetGrammarExpr(grammar_expr_id);
+  bool counted = false;
+  if (lower == 0 && upper != -1 &&
+      repeated_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass &&
+      repeated_expr[0] != 0 && follow_byte_.has_value() && *follow_byte_ < 0x80) {
+    bool excluded = false;
+    for (int i = 1; i + 1 < repeated_expr.size(); i += 2) {
+      excluded =
+          excluded || (repeated_expr[i] <= *follow_byte_ && *follow_byte_ <= repeated_expr[i + 1]);
+    }
+    counted = excluded;
+  }
+
+  // Memoize on (content of the repeated expr, lower, upper, form) so that identical repetitions
+  // share one expansion instead of each producing its own chain of rules.
   std::vector<int64_t> cache_key;
-  cache_key.reserve(repeated_expr.size() + 3);
+  cache_key.reserve(repeated_expr.size() + 4);
   cache_key.push_back(static_cast<int64_t>(repeated_expr.type));
   cache_key.insert(cache_key.end(), repeated_expr.begin(), repeated_expr.end());
   cache_key.push_back(lower);
   cache_key.push_back(upper);
+  cache_key.push_back(counted);
   auto it = repetition_cache_.find(cache_key);
   if (it != repetition_cache_.end()) {
     return it->second;
   }
 
-  int32_t result = ExpandRepetitionRange(cur_rule_name, grammar_expr_id, lower, upper);
+  int32_t result = ExpandRepetitionRange(cur_rule_name, grammar_expr_id, lower, upper, counted);
   repetition_cache_.emplace(std::move(cache_key), result);
   return result;
 }
 
 int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
-    const std::string& cur_rule_name, int32_t grammar_expr_id, int64_t lower, int64_t upper
+    const std::string& cur_rule_name,
+    int32_t grammar_expr_id,
+    int64_t lower,
+    int64_t upper,
+    bool counted
 ) {
   static const int64_t kUnzipThreshold = 128;
   XGRAMMAR_CHECK(lower >= 0 && (upper == -1 || upper >= lower))
       << "Invalid repetition range {" << lower << ", " << upper << "}";
 
-  // A `maxLength`-only JSON string body - a repetition of a negative character class with
-  // `lower == 0` - is kept as one counted repeat edge. The generic path below
-  // turns it into an unrolled head plus a repeat tail with a threshold-long lookahead, which
-  // keeps one leaf parser state alive per unrolled copy while the matcher matches inside the
-  // repetition.
-  const auto& repeat_body_expr = builder_->GetGrammarExpr(grammar_expr_id);
-  const bool negative_class = repeat_body_expr.type ==
-                                  GrammarBuilder::GrammarExprType::kCharacterClass &&
-                              repeat_body_expr[0] != 0;
-  if (lower == 0 && upper != -1 && negative_class) {
+  // The generic path below turns a counted repetition into an unrolled head plus a repeat tail
+  // with a threshold-long lookahead, which keeps one leaf parser state alive per unrolled copy
+  // while the matcher matches inside the repetition.
+  if (counted) {
     const auto repeat_body_rule_id = builder_->AddRuleWithHint(
-        cur_rule_name + "_repeat",
-        builder_->AddChoices({builder_->AddSequence({grammar_expr_id})})
+        cur_rule_name + "_repeat", builder_->AddChoices({builder_->AddSequence({grammar_expr_id})})
     );
     return builder_->AddRepeat(
         repeat_body_rule_id, static_cast<int32_t>(lower), static_cast<int32_t>(upper)

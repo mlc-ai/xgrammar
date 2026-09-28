@@ -62,16 +62,17 @@ struct AdaptiveTokenMask {
   /*!
    * \brief Fast path for the body state of a counted repetition of a single character class.
    *
-   * `repeat_interior_bitsets[i]` holds every token whose bytes decode to a non-empty sequence of
-   * codepoints accepted by that class and whose codepoint count is at most
-   * `repeat_interior_char_counts[i]`; the counts are strictly increasing. Consuming such a token
-   * keeps the parser inside the repetition and costs one repetition per codepoint, so the token is
-   * legal exactly when the repetition budget left in the parent state covers its codepoint count.
-   * That budget is not part of the compiled state, so the matcher reads it from the parse history
-   * and picks the matching bitset; the mask itself stays count-independent.
+   * `repeat_interior_bitsets[i]` holds every token whose legality in this state is decided by the
+   * repetition budget alone, and that consumes at most `repeat_interior_char_counts[i]`
+   * repetitions; the counts are strictly increasing. Such a token either stays inside the class,
+   * possibly ending inside a codepoint, or leaves the repetition on its last byte. It is legal
+   * exactly when the repetition budget left in the parent state covers it. That budget is not
+   * part of the compiled state, so the matcher reads it from the parse history and picks the
+   * matching bitset; the mask itself stays count-independent.
    *
-   * These tokens are removed from the mask's own accepted/rejected/uncertain classes, which keeps
-   * over-budget tokens classified exactly as the Earley replay would have classified them.
+   * These tokens are removed from the mask's own accepted and uncertain classes, and the mask
+   * lists its accepted tokens explicitly, so a token that does not fit is rejected by this state.
+   * Only body rules found by the eligibility analysis in PopulateRepeatInteriorBitsets get them.
    *
    * This is derived data: it is deliberately not part of the serialized form (see
    * XGRAMMAR_MEMBER_TABLE below) and is recomputed by PopulateRepeatInteriorBitsets whenever a
@@ -103,8 +104,7 @@ struct AdaptiveTokenMask {
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask) {
     return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
            MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset) +
-           MemorySize(mask.repeat_interior_char_counts) +
-           MemorySize(mask.repeat_interior_bitsets);
+           MemorySize(mask.repeat_interior_char_counts) + MemorySize(mask.repeat_interior_bitsets);
   }
 };
 
@@ -157,11 +157,13 @@ class CompiledGrammar::Impl {
 };
 
 /*!
- * \brief Compute the repeat-interior fast path data for every mask in `cache`.
+ * \brief Compute the counted-repetition fast path data for every mask in `cache`.
  *
- * For the body state of a rule whose body is a single character class, record the tokens that
- * stay inside that class, grouped by codepoint count, and take them out of the mask's own
- * accepted/rejected/uncertain classes so that the matcher can decide them with a budget check.
+ * Applies to the start state of a rule that matches one codepoint of a character class, when
+ * every reference to the rule is a repeat edge with `lower == 0` followed only by bytes that no
+ * codepoint of the class starts with. For those states, record the tokens decided by the
+ * repetition budget alone, grouped by the repetitions they consume, and take them out of the
+ * mask's own classes so that the matcher can decide them with a budget check.
  */
 void PopulateRepeatInteriorBitsets(
     const Grammar& grammar,

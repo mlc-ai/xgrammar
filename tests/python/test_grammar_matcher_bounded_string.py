@@ -58,17 +58,13 @@ def _compile(max_length: int | None, min_length: int | None = None) -> xgr.Compi
     return xgr.GrammarCompiler(tokenizer_info).compile_json_schema(schema)
 
 
-def _matcher_after(
-    compiled: xgr.CompiledGrammar, text: str
-) -> xgr.GrammarMatcher:
+def _matcher_after(compiled: xgr.CompiledGrammar, text: str) -> xgr.GrammarMatcher:
     matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
     assert matcher.accept_string(text), f"grammar rejected the prefix {text!r}"
     return matcher
 
 
-def _allowed_token_ids(
-    matcher: xgr.GrammarMatcher, tokenizer_info: xgr.TokenizerInfo
-) -> set[int]:
+def _allowed_token_ids(matcher: xgr.GrammarMatcher, tokenizer_info: xgr.TokenizerInfo) -> set[int]:
     bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
     matcher.fill_next_token_bitmask(bitmask)
     return {
@@ -88,9 +84,9 @@ def test_bounded_string_rejects_tokens_past_the_bound(max_length: int) -> None:
     allowed = _allowed_token_ids(matcher, tokenizer_info)
     assert TOKEN_ID['"'] in allowed, "the string must still be closable at the bound"
     for token in ("a", "aa", "aaa", "aaaa", "b", "bb"):
-        assert TOKEN_ID[token] not in allowed, (
-            f"maxLength={max_length} allowed {token!r} after the bound"
-        )
+        assert (
+            TOKEN_ID[token] not in allowed
+        ), f"maxLength={max_length} allowed {token!r} after the bound"
 
 
 @pytest.mark.parametrize(
@@ -140,8 +136,7 @@ def test_mask_agrees_with_a_fresh_replay_at_the_bound(max_length: int) -> None:
     tokenizer_info = _tokenizer_info()
     compiled = _compile(max_length)
     prefixes = [
-        STRING_START + "a" * min(consumed, max_length)
-        for consumed in (0, 1, 2, max_length)
+        STRING_START + "a" * min(consumed, max_length) for consumed in (0, 1, 2, max_length)
     ] + [STRING_START + "a" * max_length + '"']
     for text in prefixes:
         allowed = _allowed_token_ids(_matcher_after(compiled, text), tokenizer_info)
@@ -189,3 +184,63 @@ def test_bound_is_enforced_in_codepoints_for_multibyte_tokens() -> None:
     assert TOKEN_ID['"'] in allowed
     assert TOKEN_ID["中"] not in allowed
     assert TOKEN_ID["中文"] not in allowed
+
+
+# Tokens that end the repetition on their last byte, tokens that end inside a codepoint, and
+# tokens that run past the repetition into what follows it.
+EXIT_VOCAB = [b"a", b"aa", b"aaa", b"aaaa", b'"', b'a"', b'aa"', b'aaa"', b'aa",', b",", b"[", b"]"]
+EXIT_VOCAB += [b" ", b"\n", b"a\n", b"\xe4", b"a\xe4", b"aa\xe4", b"\xe4\xb8\xad", b"\xb8\xad"]
+
+
+def _assert_mask_matches_replay(
+    compiled: xgr.CompiledGrammar, tokenizer_info: xgr.TokenizerInfo, text: str
+) -> None:
+    allowed = _allowed_token_ids(_matcher_after(compiled, text), tokenizer_info)
+    for token_id in range(tokenizer_info.vocab_size):
+        accepted = _matcher_after(compiled, text).accept_token(token_id)
+        assert (token_id in allowed) is accepted, (
+            f"prefix={text!r} token={tokenizer_info.decoded_vocab[token_id]!r}: "
+            f"mask={token_id in allowed} accept={accepted}"
+        )
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "string", "maxLength": 3},
+        {"type": "array", "items": {"type": "string", "maxLength": 3}},
+        {"anyOf": [{"type": "string", "maxLength": 1}, {"type": "string", "maxLength": 3}]},
+        {"anyOf": [{"type": "string", "maxLength": 1}, {"type": "string"}]},
+    ],
+)
+def test_tokens_that_leave_the_string_respect_the_bound(schema: dict[str, object]) -> None:
+    """A token that closes the string, or ends inside a codepoint, consumes budget too."""
+    tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(schema)
+    start = '["' if schema.get("type") == "array" else '"'
+    for consumed in range(4):
+        _assert_mask_matches_replay(compiled, tokenizer_info, start + "a" * consumed)
+    if start == '["':
+        _assert_mask_matches_replay(compiled, tokenizer_info, '["aaa", "a')
+
+
+@pytest.mark.parametrize(
+    ("grammar", "prefixes"),
+    [
+        # What follows the repetition starts with characters of the class.
+        ('root ::= [^x]{0,3} "ab"', ["", "a", "aa", "aaa"]),
+        ('root ::= "(" [^()]{0,3} ")" | "[" [^()]{0,3} "]"', ["(", "(a", "[aa"]),
+        # A rule that is one character class but is not only used as a repetition body.
+        ('root ::= d d "x" | d "y"\nd ::= [0-9]', ["", "1"]),
+        # The repetition ends its rule, so what follows it is decided by the parent.
+        ('root ::= a "!"\na ::= "<" [^!]{0,3}', ["<", "<a", "<aaa"]),
+        ('root ::= "<" [^>]{0,3} ">" [a-z]*', ["<", "<aa", "<aaa"]),
+    ],
+)
+def test_counted_repetitions_in_ebnf_match_the_replay(grammar: str, prefixes: list[str]) -> None:
+    vocab = ["a", "aa", "aaa", "aaaa", "ab", "aab", "abab", "b", "x", "(", ")", "[", "]", "a)"]
+    vocab += ["a]", "aa]", "<", ">", "a>", "a>b", "!", "a!", "1", "12", "1x", "y", "1y", "d"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    for text in prefixes:
+        _assert_mask_matches_replay(compiled, tokenizer_info, text)
