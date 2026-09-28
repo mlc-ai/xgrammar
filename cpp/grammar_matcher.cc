@@ -1866,6 +1866,34 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
   temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
 }
 
+/*!
+ * \brief The upper bound of the counted repetition of `body_rule_id` that `state` sits on.
+ * \return Nullopt when `state` is not on such a repetition edge; a negative value means the
+ * repetition is unbounded.
+ */
+static std::optional<int32_t> GetRepeatUpperBound(
+    const Grammar& grammar, const ParserState& state, int32_t body_rule_id
+) {
+  if (state.rule_id < 0) {
+    return std::nullopt;
+  }
+  const auto& rule_fsm = grammar->per_rule_fsms[state.rule_id];
+  if (!rule_fsm.has_value()) {
+    return std::nullopt;
+  }
+  for (const auto& edge : rule_fsm->GetFsm().GetFsm().GetEdges(state.element_id)) {
+    if (!edge.IsRepeatRef()) {
+      continue;
+    }
+    // Match the edge the way EarleyParser::Complete does: by the repeated rule.
+    const auto info = grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+    if (info.RuleId() == body_rule_id) {
+      return info.Upper();
+    }
+  }
+  return std::nullopt;
+}
+
 void GrammarMatcher::Impl::FillBitmaskForStates(
     int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
 ) {
@@ -1917,6 +1945,51 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
       for (auto idx : adaptive_token_mask.accepted_indices) {
         tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
+      }
+    }
+    // In the body state of a counted repetition of a character class, most tokens are legal
+    // exactly when the budget left in the repetition state that predicted this body state covers
+    // the repetitions they consume (see PopulateRepeatInteriorBitsets). The compiled mask is shared
+    // by every repeat count, so the budget is read from the parse history here and the matching
+    // bitset is accepted in one operation instead of replaying every such token.
+    if (!adaptive_token_mask.repeat_interior_bitsets.empty()) {
+      // PopulateRepeatInteriorBitsets only fills the bitsets of body rules that are entered
+      // through repeat edges alone, and none when character budgets are enforced. The mask lists
+      // none of these tokens as accepted, so without a repetition parent this state would
+      // silently reject all of them.
+      XGRAMMAR_CHECK(
+          !has_char_budget_rules_ && state.rule_start_pos != ParserState::kNoPrevInputPos
+      ) << "The counted-repetition fast path does not apply to this state";
+      int32_t remaining = -1;
+      bool on_repeat = false;
+      for (const auto& [ref_rule_id, parent_state] :
+           rule_id_to_completable_states_[state.rule_start_pos]) {
+        if (ref_rule_id != state.rule_id) {
+          continue;
+        }
+        const auto upper = GetRepeatUpperBound(grammar_, parent_state, state.rule_id);
+        if (!upper.has_value()) {
+          continue;
+        }
+        on_repeat = true;
+        // Once budgets are enforced, an expired parent scans no further byte, so the repetitions
+        // it has left cannot be used.
+        if (skip_expired && IsExpiredState(parent_state)) {
+          continue;
+        }
+        if (*upper < 0) {
+          remaining = INT32_MAX;
+          break;
+        }
+        remaining = std::max(remaining, *upper - parent_state.repeat_count);
+      }
+      // The tokens that do not fit are rejected by this state without further work.
+      XGRAMMAR_CHECK(on_repeat) << "A counted-repetition body state has no repetition parent";
+      const auto& char_counts = adaptive_token_mask.repeat_interior_char_counts;
+      const auto it = std::upper_bound(char_counts.begin(), char_counts.end(), remaining);
+      if (it != char_counts.begin()) {
+        const size_t index = static_cast<size_t>(it - char_counts.begin()) - 1;
+        tmp_accepted_bitset_ |= adaptive_token_mask.repeat_interior_bitsets[index];
       }
     }
   }
