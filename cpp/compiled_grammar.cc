@@ -102,10 +102,14 @@ bool IsPlainCharacterClassRule(const Grammar& grammar, int32_t rule_id, ByteSet*
   return true;
 }
 
-/*! \brief The bytes that can follow a counted repetition, under all and under any reference. */
+/*!
+ * \brief The bytes that can follow a counted repetition, under all and under any reference, and
+ * the largest upper bound of those references.
+ */
 struct RepetitionFollowBytes {
   ByteSet under_all;
   ByteSet under_any;
+  int32_t max_upper = 0;
 };
 
 /*!
@@ -187,6 +191,9 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
         }
         follow_bytes[body_rule_id].under_all &= bytes;
         follow_bytes[body_rule_id].under_any |= bytes;
+        follow_bytes[body_rule_id].max_upper = std::max(
+            follow_bytes[body_rule_id].max_upper, info.Upper() < 0 ? INT32_MAX : info.Upper()
+        );
       }
     }
   }
@@ -221,7 +228,8 @@ struct RepetitionTokenClass {
  * no follow byte starts a codepoint of the class (FindCountedRepetitionBodies), and it cannot
  * leave inside a codepoint. So it is decided by the budget alone when it ends inside the class, or
  * when it leaves on its last byte and every reference accepts that byte. It is rejected when the
- * byte it stops at can neither continue the codepoint nor follow the repetition.
+ * byte it stops at can neither continue the codepoint nor follow the repetition, or when it needs
+ * more repetitions than any reference allows.
  */
 RepetitionTokenClass ClassifyRepetitionToken(
     const CompactFSMWithStartEnd& fsm,
@@ -247,12 +255,19 @@ RepetitionTokenClass ClassifyRepetitionToken(
     if (fsm.IsEndState(state)) {
       ++num_repetitions;
       state = fsm.GetStart();
+      if (num_repetitions > follow_bytes.max_upper) {
+        return {RepetitionTokenClass::kRejected};
+      }
     }
   }
   // A token ending inside a codepoint uses one more repetition to complete it.
-  return {
-      RepetitionTokenClass::kBudget, state == fsm.GetStart() ? num_repetitions : num_repetitions + 1
-  };
+  if (state != fsm.GetStart()) {
+    ++num_repetitions;
+  }
+  if (num_repetitions > follow_bytes.max_upper) {
+    return {RepetitionTokenClass::kRejected};
+  }
+  return {RepetitionTokenClass::kBudget, num_repetitions};
 }
 
 }  // namespace
