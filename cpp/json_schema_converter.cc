@@ -2291,6 +2291,99 @@ int32_t JSONSchemaConverter::RegexExpression(
   return AddSubGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
 }
 
+int32_t JSONSchemaConverter::JSONSchemaPatternExpression(
+    const std::string& regex, const std::string& rule_name
+) {
+  const std::string inline_flags = regex.compare(0, 4, "(?i)") == 0 ? "(?i)" : "";
+  std::vector<std::pair<size_t, size_t>> branches;
+  size_t branch_start = 0;
+  int group_depth = 0;
+  bool in_character_class = false;
+  bool escaped = false;
+  for (size_t i = 0; i < regex.size(); ++i) {
+    char character = regex[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character == '\\') {
+      escaped = true;
+      continue;
+    }
+    if (in_character_class) {
+      if (character == ']') in_character_class = false;
+      continue;
+    }
+    if (character == '[') {
+      in_character_class = true;
+    } else if (character == '(') {
+      ++group_depth;
+    } else if (character == ')') {
+      if (group_depth > 0) --group_depth;
+    } else if (character == '|' && group_depth == 0) {
+      branches.emplace_back(branch_start, i);
+      branch_start = i + 1;
+    }
+  }
+  branches.emplace_back(branch_start, regex.size());
+
+  std::vector<int32_t> pattern_branches;
+  int32_t excluded_character =
+      builder_.AddCharacterClass({{0, 0x1f}, {'"', '"'}, {'\\', '\\'}}, true);
+  int32_t escaped_character = Sequence({ByteString("\\"), RuleRef(kBasicEscape)});
+  int32_t valid_json_string_unit = Choice({excluded_character, escaped_character});
+  int32_t search_padding = Repeat(
+      rule_name + "_search_padding", valid_json_string_unit, /*min_count=*/0, /*max_count=*/-1
+  );
+
+  for (const auto& [start, end] : branches) {
+    bool anchored_start = false;
+    bool anchored_end = false;
+    in_character_class = false;
+    escaped = false;
+    for (size_t i = start; i < end; ++i) {
+      char character = regex[i];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (character == '\\') {
+        escaped = true;
+        continue;
+      }
+      if (in_character_class) {
+        if (character == ']') in_character_class = false;
+        continue;
+      }
+      if (character == '[') {
+        in_character_class = true;
+      } else if (character == '^') {
+        size_t branch_content_start = start + (start == 0 ? inline_flags.size() : 0);
+        if (i == branch_content_start) {
+          anchored_start = true;
+        } else {
+          XGRAMMAR_CHECK(false) << "Unsupported anchor in JSON Schema pattern: " << regex;
+        }
+      } else if (character == '$') {
+        if (i + 1 == end) {
+          anchored_end = true;
+        } else {
+          XGRAMMAR_CHECK(false) << "Unsupported anchor in JSON Schema pattern: " << regex;
+        }
+      }
+    }
+
+    std::string branch = regex.substr(start, end - start);
+    if (start != 0 && !inline_flags.empty()) branch.insert(0, inline_flags);
+    std::vector<int32_t> elements;
+    if (!anchored_start) elements.push_back(search_padding);
+    elements.push_back(RegexExpression(branch, /*json_string=*/true));
+    if (!anchored_end) elements.push_back(search_padding);
+    pattern_branches.push_back(Sequence(elements));
+  }
+  return Choice(pattern_branches);
+}
+
 // ==================== Generate Methods ====================
 
 void JSONSchemaConverter::WarnDroppedLengthConstraints(
@@ -2664,7 +2757,7 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   // Check for pattern
   if (spec.pattern.has_value()) {
     return Sequence(
-        {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
+        {ByteString("\""), JSONSchemaPatternExpression(*spec.pattern, rule_name), ByteString("\"")}
     );
   }
   // Check for length constraints. They are dropped when there are exclusions: intersecting the

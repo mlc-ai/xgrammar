@@ -440,6 +440,7 @@ class JSONSchemaConverter {
   int32_t RegexExpression(
       const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
   );
+  int32_t JSONSchemaPatternExpression(const std::string& regex, const std::string& rule_name);
   /*!
    * \brief Rules matching the regex (one of the converter's own ASCII string bodies) minus
    * every string containing one of excludes_, and minus excluded_keys as whole strings. With
