@@ -4,7 +4,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import pytest
 import torch
@@ -447,7 +447,9 @@ def _compiled_accepts(compiled_grammar: xgr.CompiledGrammar, input_str: str) -> 
     return matcher.accept_string(input_str) and matcher.is_terminated()
 
 
-def _mask_trace(compiled_grammar: xgr.CompiledGrammar, input_str: str):
+def _mask_trace(
+    compiled_grammar: xgr.CompiledGrammar, input_str: Union[str, List[Union[str, int]]]
+):
     matcher = xgr.GrammarMatcher(compiled_grammar, terminate_without_stop_token=True)
     bitmask = xgr.allocate_token_bitmask(1, compiled_grammar.tokenizer_info.vocab_size)
     trace = []
@@ -455,7 +457,10 @@ def _mask_trace(compiled_grammar: xgr.CompiledGrammar, input_str: str):
         xgr.reset_token_bitmask(bitmask)
         need_apply = matcher.fill_next_token_bitmask(bitmask)
         trace.append((need_apply, bitmask.clone()))
-        assert matcher.accept_string(char)
+        if isinstance(char, int):
+            assert matcher.accept_token(char)
+        else:
+            assert matcher.accept_string(char)
     assert matcher.is_terminated()
     return trace
 
@@ -515,20 +520,30 @@ CROSSING_CACHE_DIFFERENT_FSM_CASES = [
         'root ::= "(" r [0-9a-z] ")" | "(" r "y" ")"\nr ::= ("x" | "yy") (=[1-t])',
         "(xa)",
     ),
+    (
+        'root ::= "(" r ")"\nr ::= s | "x" s | "x0y"\ns ::= "a" | "yy" | "a" s',
+        'root ::= "(" r ")"\nr ::= s | "x0" s | "x0y"\ns ::= "a" | "yy" | "a" s',
+        "(x0a)",
+    ),
+    (
+        'root ::= "(" r ")"\nr ::= "a" Token(4) | "0"',
+        'root ::= "(" r ")"\nr ::= "a" Token(5) | "0"',
+        ["(", "a", 5, ")"],
+    ),
 ]
 
 
 @pytest.mark.parametrize(
     "grammar_a,grammar_b,input_str",
     CROSSING_CACHE_DIFFERENT_FSM_CASES,
-    ids=["character-range", "repeat-bounds", "lookahead"],
+    ids=["character-range", "repeat-bounds", "lookahead", "rule-edge-source", "token-edge"],
 )
 def test_grammar_compiler_crossing_cache_different_fsm(
-    grammar_a: str, grammar_b: str, input_str: str
+    grammar_a: str, grammar_b: str, input_str: Union[str, List[Union[str, int]]]
 ):
     """A grammar must not reuse the token masks of another grammar whose rule differs only in
-    small integers, such as character ranges or repetition bounds: their FSM hashes used to
-    collide."""
+    small integers (character ranges, repetition bounds), in the state a rule reference leaves,
+    or in the tokens of a token edge: their FSM hashes used to collide."""
     tokenizer_info = xgr.TokenizerInfo(["(", ")", "a", "0", "x", "y", '"', '""', "xa", "x0"])
     compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=True)
     compiler.compile_grammar(grammar_a)
