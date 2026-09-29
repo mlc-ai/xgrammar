@@ -499,6 +499,53 @@ def test_grammar_fsm_hasher_worklist_graphs(
             torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
 
 
+CROSSING_CACHE_DIFFERENT_FSM_CASES = [
+    (
+        'root ::= "(" r ")"\nr ::= [0-3] "x" | "y"',
+        'root ::= "(" r ")"\nr ::= [1-t] "x" | "y"',
+        "(ax)",
+    ),
+    (
+        'root ::= "(" s ")"\ns ::= "\\"" [^"\\\\\\r\\n]{0,64} "\\""',
+        'root ::= "(" s ")"\ns ::= "\\"" [^"\\\\\\r\\n]{1,129} "\\""',
+        '("a")',
+    ),
+    (
+        'root ::= "(" r [0-9a-z] ")" | "(" r "y" ")"\nr ::= ("x" | "yy") (=[0-3])',
+        'root ::= "(" r [0-9a-z] ")" | "(" r "y" ")"\nr ::= ("x" | "yy") (=[1-t])',
+        "(xa)",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "grammar_a,grammar_b,input_str",
+    CROSSING_CACHE_DIFFERENT_FSM_CASES,
+    ids=["character-range", "repeat-bounds", "lookahead"],
+)
+def test_grammar_compiler_crossing_cache_different_fsm(
+    grammar_a: str, grammar_b: str, input_str: str
+):
+    """A grammar must not reuse the token masks of another grammar whose rule differs only in
+    small integers, such as character ranges or repetition bounds: their FSM hashes used to
+    collide."""
+    tokenizer_info = xgr.TokenizerInfo(["(", ")", "a", "0", "x", "y", '"', '""', "xa", "x0"])
+    compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=True)
+    compiler.compile_grammar(grammar_a)
+    cached = compiler.compile_grammar(grammar_b)
+    fresh = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=False).compile_grammar(
+        grammar_b
+    )
+
+    expected_trace = _mask_trace(fresh, input_str)
+    actual_trace = _mask_trace(cached, input_str)
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(
+        expected_trace, actual_trace
+    ):
+        assert actual_apply == expected_apply
+        torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
 def test_sharded_rule_cache_concurrent_compilation():
     """Propagate worker failures while exercising concurrent cache lookup and insertion."""
     tokenizer_info = xgr.TokenizerInfo(["a", "b", "c", "d", "x", "y", "z", "ab", "bc"])

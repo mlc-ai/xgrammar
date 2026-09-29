@@ -3286,6 +3286,22 @@ class RootRuleRenamerImpl {
   }
 };
 
+/*!
+ * \brief HashCombine for the FSM hashes, which key the rule level cache across grammars.
+ * HashCombine lets consecutive small integers cancel out: the character ranges [0-3] and [1-t],
+ * or the repetition bounds {0,64} and {1,129}, gave the same hash, so a grammar reused the token
+ * masks of another. Each value is mixed first (the splitmix64 finalizer).
+ */
+template <typename... Args>
+uint64_t HashCombineMixed(Args... args) {
+  auto mix = [](uint64_t value) {
+    value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ull;
+    value = (value ^ (value >> 27)) * 0x94d049bb133111ebull;
+    return value ^ (value >> 31);
+  };
+  return HashCombine(mix(static_cast<uint64_t>(args))...);
+}
+
 class GrammarFSMHasherImpl {
  public:
   void Apply(Grammar* grammar);
@@ -3415,7 +3431,7 @@ void GrammarFSMHasherImpl::HashSimpleCycle(const std::vector<int32_t>& simple_cy
     uint64_t current_hash = 0;
     for (int j = 0; j < static_cast<int>(local_cycle_hash.size()); j++) {
       current_hash =
-          HashCombine(current_hash, local_cycle_hash_copy[(i + j) % local_cycle_hash.size()]);
+          HashCombineMixed(current_hash, local_cycle_hash_copy[(i + j) % local_cycle_hash.size()]);
     }
     local_cycle_hash[i] = current_hash;
   }
@@ -3559,11 +3575,11 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
 
     // Check if the current state is an end state.
     if (fsm.IsEndState(current_old_state_id)) {
-      hash_result = HashCombine(
+      hash_result = HashCombineMixed(
           hash_result, current_new_state_id, kEndStateFlag, kEndStateFlag, current_new_state_id
       );
     } else {
-      hash_result = HashCombine(
+      hash_result = HashCombineMixed(
           hash_result,
           current_new_state_id,
           kNotEndStateFlag,
@@ -3577,9 +3593,15 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
     // First, check the edges which are rule references (including repeat refs).
     // To keep consistent, we need to sort them with hashes.
     int32_t unhashed_rules_count = 0;
-    auto hash_rule_like_edge = [&](int32_t ref_rule_id, int32_t target) {
+    // A repeat edge also hashes its bounds, as in HashFsm.
+    auto hash_rule_like_edge = [&](int32_t ref_rule_id,
+                                   int32_t target,
+                                   std::optional<std::pair<int32_t, int32_t>> bounds) {
+      auto with_bounds = [&](uint64_t hash) {
+        return bounds.has_value() ? HashCombineMixed(hash, bounds->first, bounds->second) : hash;
+      };
       if (ref_rule_id == fsm_index) {
-        hash_and_target.insert({kSelfRecursionFlag, target});
+        hash_and_target.insert({with_bounds(kSelfRecursionFlag), target});
         return true;
       }
       if (!grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value()) {
@@ -3590,23 +3612,26 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
           if (unhashed_rules_count > 1) {
             return false;
           }
-          hash_and_target.insert({kUnKnownFlag, target});
+          hash_and_target.insert({with_bounds(kUnKnownFlag), target});
         }
         return true;
       }
-      hash_and_target.insert({grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value(), target}
+      hash_and_target.insert(
+          {with_bounds(grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value()), target}
       );
       return true;
     };
 
     for (const auto& edge : sorted_edges_[current_old_state_id]) {
       if (edge.IsRuleRef()) {
-        if (!hash_rule_like_edge(edge.GetRefRuleId(), edge.target)) {
+        if (!hash_rule_like_edge(edge.GetRefRuleId(), edge.target, std::nullopt)) {
           return {false, 0};
         }
       } else if (edge.IsRepeatRef()) {
         auto info = grammar_->ImplPtr()->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
-        if (!hash_rule_like_edge(info.RuleId(), edge.target)) {
+        if (!hash_rule_like_edge(
+                info.RuleId(), edge.target, std::make_pair(info.Lower(), info.Upper())
+            )) {
           return {false, 0};
         }
       }
@@ -3620,7 +3645,7 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
         bfs_queue.push(target);
       }
       int32_t target_new_id = original_state_id_to_new_id[target];
-      hash_result = HashCombine(hash_result, current_new_state_id, hash, target_new_id);
+      hash_result = HashCombineMixed(hash_result, current_new_state_id, hash, target_new_id);
     }
 
     // Then, check the edges which are not rule/repeat references.
@@ -3634,7 +3659,7 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
       if (edge.IsRuleRef() || edge.IsRepeatRef()) {
         continue;
       }
-      hash_result = HashCombine(
+      hash_result = HashCombineMixed(
           hash_result,
           current_new_state_id,
           static_cast<int32_t>(edge.min),
@@ -3661,7 +3686,7 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
   std::map<int32_t, int32_t> original_state_id_to_new_id;
   original_state_id_to_new_id[fsm.GetStart()] = 0;
   std::queue<int32_t> bfs_queue;
-  std::set<std::pair<int32_t, int32_t>> hash_and_target;
+  std::set<std::pair<uint64_t, int32_t>> hash_and_target;
   bfs_queue.push(fsm.GetStart());
 
   // Perform a bfs to hash all the edges.
@@ -3672,11 +3697,11 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
 
     // Check if the current state is an end state.
     if (fsm.IsEndState(current_old_state_id)) {
-      hash_result = HashCombine(
+      hash_result = HashCombineMixed(
           hash_result, current_new_state_id, kEndStateFlag, kEndStateFlag, current_new_state_id
       );
     } else {
-      hash_result = HashCombine(
+      hash_result = HashCombineMixed(
           hash_result,
           current_new_state_id,
           kNotEndStateFlag,
@@ -3705,13 +3730,13 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
         int32_t ref_rule_id = info.RuleId();
         if (ref_rule_id == fsm_index) {
           uint64_t base_hash = kSelfRecursionFlag;
-          uint64_t repeat_hash = HashCombine(base_hash, info.Lower(), info.Upper());
+          uint64_t repeat_hash = HashCombineMixed(base_hash, info.Lower(), info.Upper());
           hash_and_target.insert({repeat_hash, edge.target});
         } else {
           XGRAMMAR_CHECK(grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].has_value());
           uint64_t base_hash = grammar_->ImplPtr()->per_rule_fsm_hashes[ref_rule_id].value();
-          uint64_t repeat_hash = HashCombine(base_hash, info.Lower(), info.Upper());
-          hash_and_target.insert({static_cast<int32_t>(repeat_hash), edge.target});
+          uint64_t repeat_hash = HashCombineMixed(base_hash, info.Lower(), info.Upper());
+          hash_and_target.insert({repeat_hash, edge.target});
         }
       }
     }
@@ -3724,7 +3749,7 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
         bfs_queue.push(target);
       }
       int32_t target_new_id = original_state_id_to_new_id[target];
-      hash_result = HashCombine(hash_result, current_new_state_id, hash, target_new_id);
+      hash_result = HashCombineMixed(hash_result, current_new_state_id, hash, target_new_id);
     }
 
     // Then, check the edges which are not rule/repeat references.
@@ -3738,7 +3763,7 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
       if (edge.IsRuleRef() || edge.IsRepeatRef()) {
         continue;
       }
-      hash_result = HashCombine(
+      hash_result = HashCombineMixed(
           hash_result,
           current_new_state_id,
           static_cast<int32_t>(edge.min),
@@ -3769,20 +3794,21 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
       << "GrammarExpr is not a sequence";
   for (const auto& expr_id : sequence_expr) {
     const auto& expr = grammar->GetGrammarExpr(expr_id);
-    hash_result = HashCombine(hash_result, static_cast<int32_t>(expr.type));
+    hash_result = HashCombineMixed(hash_result, static_cast<int32_t>(expr.type));
     switch (expr.type) {
       case (GrammarExprType::kByteString):
       case (GrammarExprType::kCharacterClass):
       case (GrammarExprType::kCharacterClassStar):
       case (GrammarExprType::kEmptyStr): {
         for (const auto& element : expr) {
-          hash_result = HashCombine(hash_result, element);
+          hash_result = HashCombineMixed(hash_result, element);
         }
         break;
       }
       case (GrammarExprType::kRuleRef): {
         if (grammar->per_rule_fsm_hashes[expr[0]].has_value()) {
-          hash_result = HashCombine(hash_result, grammar->per_rule_fsm_hashes[expr[0]].value());
+          hash_result =
+              HashCombineMixed(hash_result, grammar->per_rule_fsm_hashes[expr[0]].value());
         } else {
           return std::nullopt;
         }
@@ -3790,12 +3816,13 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
       }
       case (GrammarExprType::kRepeat): {
         if (grammar->per_rule_fsm_hashes[expr[0]].has_value()) {
-          hash_result = HashCombine(hash_result, grammar->per_rule_fsm_hashes[expr[0]].value());
+          hash_result =
+              HashCombineMixed(hash_result, grammar->per_rule_fsm_hashes[expr[0]].value());
         } else {
           return std::nullopt;
         }
-        hash_result = HashCombine(hash_result, expr[1]);
-        hash_result = HashCombine(hash_result, expr[2]);
+        hash_result = HashCombineMixed(hash_result, expr[1]);
+        hash_result = HashCombineMixed(hash_result, expr[2]);
         break;
       }
       case (GrammarExprType::kSequence):
@@ -3810,14 +3837,14 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
       case (GrammarExprType::kSubstring): {
         // Hash the content, like a byte string.
         for (const auto& element : expr) {
-          hash_result = HashCombine(hash_result, element);
+          hash_result = HashCombineMixed(hash_result, element);
         }
         break;
       }
       case (GrammarExprType::kToken):
       case (GrammarExprType::kExcludeToken): {
         for (const auto& element : expr) {
-          hash_result = HashCombine(hash_result, element);
+          hash_result = HashCombineMixed(hash_result, element);
         }
         break;
       }
