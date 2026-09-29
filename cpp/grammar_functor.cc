@@ -2278,18 +2278,6 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
     return *has_lazy_rules_;
   }
 
-  /*! \brief Whether any rule of the grammar has a token budget. */
-  bool HasTokenBudgetRules() {
-    if (!has_token_budget_rules_.has_value()) {
-      has_token_budget_rules_ = false;
-      for (int32_t i = 0; i < base_grammar_->NumRules(); ++i) {
-        has_token_budget_rules_ =
-            *has_token_budget_rules_ || base_grammar_->GetRule(i).max_tokens >= 0;
-      }
-    }
-    return *has_token_budget_rules_;
-  }
-
   /*! \brief The first byte of the sequence element after the repetition being visited, if known. */
   std::optional<uint8_t> follow_byte_;
 
@@ -2301,9 +2289,6 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
 
   /*! \brief Cache of HasLazyRules. */
   std::optional<bool> has_lazy_rules_;
-
-  /*! \brief Cache of HasTokenBudgetRules. */
-  std::optional<bool> has_token_budget_rules_;
 
   /*!
    * \brief Memoization of expanded repetitions, mapping (content of the repeated expr, lower,
@@ -2321,7 +2306,7 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
 
   /*!
    * \brief The body rule of the counted repetitions of each character class, by its content and
-   * the byte after the repetition, and by the bounds when the grammar has token budgets.
+   * the byte after the repetition.
    */
   std::map<std::vector<int32_t>, int32_t> counted_body_rule_ids_;
 };
@@ -2480,17 +2465,11 @@ int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
   // while the matcher matches inside the repetition. The parser needs a finite upper bound, so
   // INT32_MAX stands for an unbounded one. Counted repetitions of one character class followed by
   // the same byte share their body rule whatever their bounds, which the matcher reads from each
-  // repeat edge, so the token data of PopulateRepeatInteriorBitsets is built once. With token
-  // budgets each bound keeps its own body: a replayed token completes a shared body into every
-  // parent, an expired one included.
+  // repeat edge, so the token data of PopulateRepeatInteriorBitsets is built once.
   if (counted) {
     const auto repeated_expr = builder_->GetGrammarExpr(grammar_expr_id);
     std::vector<int32_t> body_key(repeated_expr.begin(), repeated_expr.end());
     body_key.push_back(*follow_byte_);
-    if (HasTokenBudgetRules()) {
-      body_key.push_back(static_cast<int32_t>(lower));
-      body_key.push_back(static_cast<int32_t>(upper));
-    }
     auto [it, inserted] = counted_body_rule_ids_.try_emplace(std::move(body_key), -1);
     if (inserted) {
       it->second = builder_->AddRuleWithHint(

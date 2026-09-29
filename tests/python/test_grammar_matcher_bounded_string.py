@@ -293,8 +293,7 @@ def test_counted_repetition_does_not_continue_into_a_sibling_alternative(
             'root ::= a | b\na[max_tokens=1] ::= "p" [^x]{0,3} "x"\nb[max_tokens=2] ::= [^x]{0,3} "x"',
             "pp",
         ),
-        # Repetitions with different bounds or different following bytes do not share a body
-        # between budgeted parents.
+        # Budgeted parents with different bounds or different following bytes.
         (
             'root ::= a | b\na[max_tokens=1] ::= [^xy]{0,2} "x"\nb[max_tokens=2] ::= [^xy]{0,3} "y"',
             "a",
