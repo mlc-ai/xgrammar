@@ -231,21 +231,10 @@ def get_model_structural_tag(
         longer reachable, generation must end once the single call is closed:
         free text is still allowed *before* the call but not after it.
     token_markers : bool
-        Whether to match the model's control markers (such as ``<tool_call>``,
-        ``</tool_call>`` and ``</think>``) as single tokens instead of as
-        strings. By default the markers are strings, so the grammar also admits
-        the same text assembled from ordinary sub-tokens, e.g. ``<`` ``tool_call``
-        ``>``. A serving engine whose output parser recognises the markers by
-        their dedicated token ID cannot parse that spelling, so a
-        ``tool_choice="required"`` response can satisfy the grammar and still
-        contain no tool call. With ``True``, the tag structure only admits the
-        dedicated tokens, matching what such a parser recognises. Exclusions of
-        the markers in free text become token-level as well, so only enable this
-        for a parser that recognises the markers by token ID; see
-        :func:`bind_marker_tokens`. The tokenizer must define every marker as a
-        single token.
-        Supported for ``"glm_4_7"``, ``"qwen_3"``, ``"qwen_3_5"`` and
-        ``"qwen_3_coder"``. Default: ``False``.
+        Whether to match the control markers (``<tool_call>``, ``</think>``, ...) as their
+        dedicated tokens instead of as strings, for output parsers that recognise the markers by
+        token ID. See :func:`bind_marker_tokens`. Supported for ``"glm_4_7"``, ``"qwen_3"``,
+        ``"qwen_3_5"`` and ``"qwen_3_coder"``. Default: ``False``.
 
     Notes
     -----
@@ -567,32 +556,19 @@ def _assemble_structural_tag(prefix: Optional[Format], suffix: Format) -> Struct
 
 
 def bind_marker_tokens(structural_tag: StructuralTag, markers: List[str]) -> StructuralTag:
-    """Match the given marker strings as single tokens instead of as text.
+    """Match the given marker strings as their dedicated tokens instead of as text.
 
-    Builtin structural tags spell control markers such as ``<tool_call>`` as
-    strings, so the grammar admits any tokenization of that text. This rewrites
-    the markers in the tag structure to be matched by their dedicated tokens: a
-    :class:`TriggeredTagsFormat` whose triggers start with a marker becomes a
-    :class:`TokenTriggeredTagsFormat`, a :class:`TagFormat` whose ``begin``
-    starts (or ``end`` ends) with a marker uses a :class:`TokenFormat` there,
-    and a :class:`ConstStringFormat` containing a marker is split around it.
-    Markers inside schema-driven content (e.g. :class:`JSONSchemaFormat`) stay
-    strings. The literal text around the markers is preserved.
-
-    The string ``excludes`` of a triggered-tags span that are markers become
-    token-level ``exclude_tokens``; the other excludes are dropped. Exclusion is
-    then token-level too: free text may contain a marker spelled from ordinary
-    sub-tokens, which is no longer rejected. Only use this with an output parser
-    that also recognises the markers by token ID; a parser that matches the
-    marker text would treat such free text as an unconstrained tool call.
+    Markers in triggers, tag ``begin``/``end`` and constant strings become token formats; the
+    surrounding text is kept, and markers inside schema-driven content stay strings. Marker
+    ``excludes`` become token-level (other excludes are dropped), so free text may contain a
+    marker spelled from sub-tokens: use this only with parsers that recognise markers by token ID.
 
     Parameters
     ----------
     structural_tag : StructuralTag
         The structural tag to rewrite, typically from :func:`get_model_structural_tag`.
     markers : List[str]
-        Marker strings that are single tokens in the target tokenizer. Grammar
-        compilation fails if the tokenizer does not define one of them.
+        Marker strings that are single tokens in the target tokenizer.
 
     Returns
     -------
@@ -787,12 +763,8 @@ def register_model_structural_tag(name: str, *, marker_tokens: Optional[List[str
     name : str
         The model format key, e.g. ``"llama"``, ``"harmony"``.
     marker_tokens : Optional[List[str]]
-        The model's control markers that are single tokens in its tokenizer,
-        e.g. ``["<think>", "</think>", "<tool_call>", "</tool_call>"]``.
-        Declaring them enables ``token_markers=True`` in
-        :func:`get_model_structural_tag`, which rewrites the generated tag with
-        :func:`bind_marker_tokens`. Defaults to ``None``: the model does not
-        support token-level markers.
+        The model's control markers that are single tokens in its tokenizer. Declaring them
+        enables ``token_markers=True`` in :func:`get_model_structural_tag`. Default: ``None``.
 
     Examples
     --------
