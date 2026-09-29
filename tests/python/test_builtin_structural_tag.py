@@ -3,6 +3,7 @@
 import copy
 import json
 import re
+import string
 import time
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
@@ -39,8 +40,10 @@ from xgrammar.structural_tag import (
     SequenceFormat,
     StructuralTag,
     TagFormat,
+    TokenFormat,
+    TokenTriggeredTagsFormat,
 )
-from xgrammar.testing import _is_grammar_accept_string
+from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
 
 
 def _input_dict_to_get_stag_kwargs(format_type: str, input_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -129,10 +132,13 @@ def check_stag_with_instance(
     is_accepted: bool = True,
     debug_print: bool = False,
 ):
-    stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
-    accepted = _is_grammar_accept_string(stag_grammar, instance, debug_print=debug_print)
+    if _has_token_boundaries(structural_tag):
+        accepted = _accept_glm_instance_tokens(structural_tag, instance)
+    else:
+        stag_grammar = xgr.Grammar.from_structural_tag(structural_tag)
+        accepted = _is_grammar_accept_string(stag_grammar, instance, debug_print=debug_print)
     assert accepted == is_accepted
-    if PROFILER_ON:
+    if PROFILER_ON and not _has_token_boundaries(structural_tag):
         profiler.profile_stag(structural_tag, instance)
 
 
@@ -147,6 +153,62 @@ def _walk_structural_format(format_obj):
     for attr_name in ("elements", "tags"):
         for child in getattr(format_obj, attr_name, []) or []:
             yield from _walk_structural_format(child)
+
+
+def _has_token_boundaries(structural_tag: StructuralTag) -> bool:
+    return any(
+        isinstance(fmt, TokenTriggeredTagsFormat)
+        or (isinstance(fmt, TagFormat) and isinstance(fmt.begin, TokenFormat))
+        for fmt in _walk_structural_format(structural_tag.format)
+    )
+
+
+_GLM_CONTROL_TOKENS = (
+    "<tool_call>",
+    "</tool_call>",
+    "<think>",
+    "</think>",
+    "<arg_key>",
+    "</arg_key>",
+    "<arg_value>",
+    "</arg_value>",
+)
+
+
+def _glm_token_matcher(structural_tag: StructuralTag, instance: str = ""):
+    # Include both dedicated markers and ordinary tokens that can spell them.
+    vocab = [
+        "<pad>",
+        "<eos>",
+        *_GLM_CONTROL_TOKENS,
+        "tool",
+        "_call",
+        *dict.fromkeys(string.printable + instance),
+    ]
+    info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
+    compiled = xgr.GrammarCompiler(info).compile_structural_tag(structural_tag)
+    return xgr.GrammarMatcher(compiled), {token: idx for idx, token in enumerate(vocab)}
+
+
+def _accept_glm_instance_tokens(structural_tag: StructuralTag, instance: str) -> bool:
+    pieces = re.findall(r"</?tool_call>|.", instance, flags=re.DOTALL)
+    return _accept_glm_token_pieces(structural_tag, pieces)
+
+
+def _accept_glm_token_pieces(structural_tag: StructuralTag, pieces: List[str]) -> bool:
+    instance = "".join(pieces)
+    matcher, token_ids = _glm_token_matcher(structural_tag, instance)
+    return (
+        all(matcher.accept_token(token_ids[piece]) for piece in pieces + ["<eos>"])
+        and matcher.is_terminated()
+    )
+
+
+def _assert_structural_tag_compiles(structural_tag: StructuralTag) -> None:
+    if _has_token_boundaries(structural_tag):
+        _glm_token_matcher(structural_tag)
+    else:
+        xgr.Grammar.from_structural_tag(structural_tag)
 
 
 def _collect_tag_begins(structural_tag: StructuralTag) -> List[str]:
@@ -170,12 +232,13 @@ def _collect_json_schema_values(structural_tag: StructuralTag) -> List[Any]:
 
 
 def _collect_excludes(structural_tag: StructuralTag) -> List[List[str]]:
-    """Collect every ``excludes`` list from nested formats."""
+    """Collect text and token exclusions from nested formats."""
 
     return [
-        list(format_obj.excludes)
+        list(getattr(format_obj, "excludes", None) or getattr(format_obj, "exclude_tokens", []))
         for format_obj in _walk_structural_format(structural_tag.format)
         if getattr(format_obj, "excludes", None) is not None
+        or getattr(format_obj, "exclude_tokens", None) is not None
     ]
 
 
@@ -1499,7 +1562,7 @@ def test_specific_functions_cases(structural_tag_fn, case: Dict[str, Any]):
         reasoning="enabled",
     )
     assert isinstance(structural_tag, StructuralTag)
-    xgr.Grammar.from_structural_tag(structural_tag)
+    _assert_structural_tag_compiles(structural_tag)
     assert None not in _collect_json_schema_values(structural_tag)
 
 
@@ -1537,13 +1600,13 @@ def test_exclude_special_tokens_default_excludes_think_tokens(model, tools):
     expected_tokens = _EXPECTED_EXCLUDE_TOKENS.get(model, ["<think>", "</think>"])
     for token in expected_tokens:
         assert token in flat
-    xgr.Grammar.from_structural_tag(structural_tag)
+    _assert_structural_tag_compiles(structural_tag)
 
 
 @pytest.mark.parametrize("model", _EXCLUDE_TOKEN_MODELS)
 @pytest.mark.parametrize("tools", [make_tools(["search"]), []])
 def test_exclude_special_tokens_false_keeps_format_constraints(model, tools):
-    """Opting out allows special tokens while retaining tool availability constraints."""
+    """Opting out relaxes exclusions while retaining tool syntax constraints."""
 
     structural_tag = get_model_structural_tag(
         model, tools=tools, reasoning=True, exclude_special_tokens=False
@@ -1551,9 +1614,11 @@ def test_exclude_special_tokens_false_keeps_format_constraints(model, tools):
     allowed_excludes = (
         [[], ["<｜DSML｜ calls>"]] if model == "deepseek_v4_1" and not tools else [[]]
     )
+    if model == "glm_4_7" and tools:
+        allowed_excludes.append(["<tool_call>", "</tool_call>"])
     assert all(excludes in allowed_excludes for excludes in _collect_excludes(structural_tag))
     # The less-restrictive grammar must still build.
-    xgr.Grammar.from_structural_tag(structural_tag)
+    _assert_structural_tag_compiles(structural_tag)
 
 
 @pytest.mark.parametrize("flag", [False, True])
@@ -2289,10 +2354,9 @@ def test_deepseek_dsml_parallel_invokes_double_newline_rejected(
 # (separator="", at_least_one=True), which forbids any text between or after
 # tool calls. Under greedy decoding the model could not emit its end-of-turn
 # token after </tool_call>, so it re-opened <tool_call> repeatedly until
-# max_tokens (a runaway tool-call loop, finish_reason="length"). Using the same
-# TriggeredTagsFormat as "auto" with at_least_one=True keeps the >=1-call floor
-# and parallel/chained calls, while letting the model terminate with trailing
-# free text (and thus its natural EOS).
+# max_tokens (a runaway tool-call loop, finish_reason="length").
+# A required first call followed by free-text spans and optional further calls
+# keeps the >=1-call floor while allowing trailing text and natural termination.
 
 _GLM_REQUIRED_TOOLS = [
     {
@@ -2324,35 +2388,148 @@ def _glm_tool_call(name: str, arg: str, value: str) -> str:
 
 
 @pytest.mark.parametrize("reasoning", [False, True])
-def test_glm_required_allows_termination_with_trailing_text(reasoning: bool):
-    """Regression: required tool calls must accept trailing free text.
+@pytest.mark.parametrize("parallel_tool_calls", [False, True])
+def test_glm_required_allows_termination_with_trailing_text(
+    reasoning: bool, parallel_tool_calls: bool
+):
+    """Required calls allow trailing text only when parallel calls are enabled.
 
     Before the fix the grammar rejected "tool_call + text", so a greedy LM could
     not stop and emitted identical tool calls until max_tokens. With the
-    triggered-tags suffix the natural-termination output is accepted.
+    parallel-call suffix the natural-termination output is accepted.
     """
     structural_tag = get_model_structural_tag(
-        "glm_4_7", tools=_GLM_REQUIRED_TOOLS, tool_choice="required", reasoning=reasoning
+        "glm_4_7",
+        tools=_GLM_REQUIRED_TOOLS,
+        tool_choice="required",
+        reasoning=reasoning,
+        parallel_tool_calls=parallel_tool_calls,
     )
-    grammar = xgr.Grammar.from_structural_tag(structural_tag)
 
     weather = _glm_tool_call("get_weather", "city", "Leon")
     get_time = _glm_tool_call("get_time", "tz", "EET")
     prefix = "planning the call</think>" if reasoning else ""
 
     # required floor: zero tool calls is never accepted.
-    assert not _is_grammar_accept_string(
-        grammar, prefix + ""
-    ), "glm_4_7 required must reject zero tool calls"
-    # single and parallel tool calls are accepted (floor + multi-call preserved).
-    assert _is_grammar_accept_string(grammar, prefix + weather)
-    assert _is_grammar_accept_string(grammar, prefix + weather + get_time)
-    # THE FIX: a tool call followed by trailing free text must be accepted so the
-    # model can terminate naturally instead of looping until max_tokens.
-    assert _is_grammar_accept_string(grammar, prefix + weather + " done"), (
-        "glm_4_7 required rejected a tool call + trailing text; greedy decoding "
-        "cannot terminate and loops until max_tokens"
+    check_stag_with_instance(structural_tag, prefix, False)
+    # A single call is always allowed; a second call follows the parallel setting.
+    check_stag_with_instance(structural_tag, prefix + weather)
+    check_stag_with_instance(structural_tag, prefix + weather + get_time, parallel_tool_calls)
+    # Parallel calls may be followed by text; single-call mode stops at the call.
+    check_stag_with_instance(structural_tag, prefix + weather + " done", parallel_tool_calls)
+
+
+@pytest.mark.parametrize("allowed_tools", [False, True])
+def test_glm_required_rejects_builtin_only_tools(allowed_tools: bool):
+    tools = [{"type": "web_search_preview"}]
+    tool_choice: Any = "required"
+    if allowed_tools:
+        tools += make_tools(["search"])
+        tool_choice = {
+            "type": "allowed_tools",
+            "allowed_tools": {"mode": "required", "tools": [{"type": "web_search_preview"}]},
+        }
+    with pytest.raises(ValueError, match="at least one function tool"):
+        get_model_structural_tag("glm_4_7", tools=tools, tool_choice=tool_choice)
+
+
+@pytest.mark.parametrize("builtin_tools", [[], [BuiltinToolParam(type="web_search_preview")]])
+def test_glm_required_builder_rejects_missing_function_tools(builtin_tools):
+    with pytest.raises(ValueError, match="at least one function tool"):
+        get_glm_4_7_structural_tag(builtin_tools=builtin_tools, tool_choice="required")
+
+
+@pytest.mark.parametrize("tool_choice", ["auto", "required", "forced"])
+@pytest.mark.parametrize("reasoning", ["enabled", "disabled", "auto"])
+def test_glm_single_call_only_allows_stop_token_after_closing_marker(tool_choice, reasoning):
+    choice = (
+        {"type": "function", "function": {"name": "search"}}
+        if tool_choice == "forced"
+        else tool_choice
     )
+    tag = get_model_structural_tag(
+        "glm_4_7",
+        tools=make_tools(["search"]),
+        tool_choice=choice,
+        reasoning=reasoning,
+        parallel_tool_calls=False,
+    )
+    prefix = {"enabled": "plan</think>", "disabled": "", "auto": "<think>plan</think>"}[reasoning]
+    if tool_choice == "auto":
+        prefix += "before "
+    check_stag_with_instance(tag, prefix, tool_choice == "auto")
+    instance = prefix + _glm_tool_call("search", "q", "v")
+    matcher, token_ids = _glm_token_matcher(tag, instance)
+    for piece in re.findall(r"</?tool_call>|.", instance, flags=re.DOTALL):
+        assert matcher.accept_token(token_ids[piece])
+
+    bitmask = xgr.allocate_token_bitmask(1, len(token_ids))
+    matcher.fill_next_token_bitmask(bitmask)
+    rejected = set(_get_masked_tokens_from_bitmask(bitmask, len(token_ids)))
+    assert set(token_ids.values()) - rejected == {token_ids["<eos>"]}
+    assert not matcher.accept_token(token_ids[" "])
+    assert not matcher.accept_token(token_ids["<tool_call>"])
+    assert matcher.accept_token(token_ids["<eos>"])
+    assert matcher.is_terminated()
+
+
+_GLM_SPLIT_OPEN = ["<", "tool", "_call", ">"]
+_GLM_SPLIT_CLOSE = ["<", "/", "tool", "_call", ">"]
+
+
+@pytest.mark.parametrize("tool_choice", ["required", "forced"])
+def test_glm_tool_call_markers_require_dedicated_token_ids(tool_choice: str):
+    """Ordinary tokens spelling the markers must not form a structured call."""
+    choice = (
+        {"type": "function", "function": {"name": "search"}}
+        if tool_choice == "forced"
+        else tool_choice
+    )
+    tag = get_model_structural_tag(
+        "glm_4_7", tools=make_tools(["search"]), tool_choice=choice, reasoning=False
+    )
+    body = list("search<arg_key>q</arg_key><arg_value>v</arg_value>")
+    matcher, token_ids = _glm_token_matcher(tag)
+    assert not matcher.accept_token(token_ids["<"])
+    assert _accept_glm_token_pieces(tag, ["<tool_call>", *body, "</tool_call>"])
+    assert not _accept_glm_token_pieces(tag, [*_GLM_SPLIT_OPEN, *body, "</tool_call>"])
+    assert not _accept_glm_token_pieces(tag, ["<tool_call>", *body, *_GLM_SPLIT_CLOSE])
+    assert not _accept_glm_token_pieces(tag, [*_GLM_SPLIT_OPEN, *body, *_GLM_SPLIT_CLOSE])
+    if tool_choice == "required":
+        assert not _accept_glm_token_pieces(
+            tag, ["<tool_call>", *body, "</tool_call>", *_GLM_SPLIT_OPEN]
+        )
+
+
+@pytest.mark.parametrize("exclude_special_tokens", [False, True])
+@pytest.mark.parametrize("parallel_tool_calls", [False, True])
+def test_glm_auto_rejects_split_marker_spelling_in_free_text(
+    exclude_special_tokens: bool, parallel_tool_calls: bool
+):
+    tag = get_model_structural_tag(
+        "glm_4_7",
+        tools=make_tools(["search"]),
+        tool_choice="auto",
+        reasoning=False,
+        exclude_special_tokens=exclude_special_tokens,
+        parallel_tool_calls=parallel_tool_calls,
+    )
+    body = list("search<arg_key>q</arg_key><arg_value>v</arg_value>")
+    assert _accept_glm_token_pieces(tag, list("hello"))
+    assert _accept_glm_token_pieces(tag, ["<tool_call>", *body, "</tool_call>"])
+    assert _accept_glm_token_pieces(tag, [*list("before "), "<tool_call>", *body, "</tool_call>"])
+    assert (
+        _accept_glm_token_pieces(
+            tag, [*list("before "), "<tool_call>", *body, "</tool_call>", *list(" after")]
+        )
+        == parallel_tool_calls
+    )
+    assert not _accept_glm_token_pieces(tag, [*_GLM_SPLIT_OPEN, *body, *_GLM_SPLIT_CLOSE])
+    assert not _accept_glm_token_pieces(
+        tag, ["<tool_call>", *body, "</tool_call>", *_GLM_SPLIT_OPEN]
+    )
+    assert not _accept_glm_token_pieces(tag, [*list("hello"), *_GLM_SPLIT_CLOSE])
+    assert not _accept_glm_token_pieces(tag, ["<tool_call>", *list("other"), *body])
 
 
 # ---------- Regression: required suffixes must allow termination (same bug as GLM-4.7 above) ----------
