@@ -12,9 +12,12 @@ os.environ["XGRAMMAR_BUILD_DOCS"] = "1"
 sys.path.insert(0, os.path.abspath("../python"))
 sys.path.insert(0, os.path.abspath("../"))
 
-# Use Git tags, or the metadata in an extracted source distribution.
+# Use Git tags, or the metadata in an extracted source distribution. Untagged
+# commits show the latest release instead of a guessed dev version.
 root = Path(__file__).resolve().parents[1]
-__version__ = setuptools_scm.get_version(root=root, fallback_root=root)
+__version__ = setuptools_scm.get_version(
+    root=root, fallback_root=root, version_scheme="only-version", local_scheme="no-local-version"
+)
 
 project = "XGrammar"
 author = "XGrammar Contributors"
