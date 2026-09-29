@@ -513,6 +513,9 @@ uint8_t EarleyParser::InitializeFsmStateFlags(int32_t rule_id, int32_t state_id)
   for (const auto& edge : edges) {
     if (edge.IsCharRange() || edge.IsToken() || edge.IsExcludeToken()) {
       flags |= kFsmStateScanable;
+      if (edge.IsExcludeToken()) {
+        flags |= kFsmStateHasExcludeToken;
+      }
     } else if (edge.IsRuleRef() || edge.IsEpsilon() || edge.IsRepeatRef()) {
       flags |= kFsmStateNonTerminal;
     }
@@ -1234,6 +1237,31 @@ bool EarleyParser::AdvanceAtomicToken(
     char_budget_entry_history_.push_back(tmp_char_budget_entered_);
   }
   return true;
+}
+
+int32_t EarleyParser::FindMidTokenExcludeEdgeRow(
+    int32_t num_rows, int32_t token_id, int32_t from_row
+) {
+  const int32_t size = static_cast<int32_t>(scanable_state_history_.size());
+  for (int32_t row = from_row < 0 ? num_rows : from_row; row >= 1; --row) {
+    for (const auto& state : scanable_state_history_[size - 1 - (num_rows - row)]) {
+      if (state.rule_id == -1 ||
+          !(GetFsmStateFlags(state.rule_id, state.element_id) & kFsmStateHasExcludeToken)) {
+        continue;
+      }
+      if (token_id < 0) {
+        return row;
+      }
+      const auto& fsm = grammar_->per_rule_fsms[state.rule_id]->GetFsm().GetFsm();
+      for (const auto& edge : fsm.GetEdges(state.element_id)) {
+        if (edge.IsExcludeToken() &&
+            fsm.GetExcludeTokenEdgeInfo(edge.GetAuxIndex()).Accepts(token_id)) {
+          return row;
+        }
+      }
+    }
+  }
+  return 0;
 }
 
 bool RepeatDetector::IsVisited(const ParserState& state) const {

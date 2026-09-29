@@ -151,6 +151,8 @@ struct TokenFormat {
 
  private:
   int32_t resolved_token_id_ = -1;
+  /*! \brief The decoded text of the token; empty when no tokenizer is available. */
+  std::string resolved_token_text_;
   friend class StructuralTagTokenResolver;
   friend class StructuralTagAnalyzer;
   friend class StructuralTagGrammarConverter;

@@ -1304,7 +1304,13 @@ std::optional<ISTError> StructuralTagTokenResolver::Resolve(
 }
 
 std::optional<ISTError> StructuralTagTokenResolver::ResolveTokenFormat(TokenFormat* tf) {
-  if (tf->resolved_token_id_ >= 0) return std::nullopt;
+  if (tf->resolved_token_id_ >= 0) {
+    if (tokenizer_info_ &&
+        tf->resolved_token_id_ < static_cast<int32_t>(tokenizer_info_->GetDecodedVocab().size())) {
+      tf->resolved_token_text_ = tokenizer_info_->GetDecodedVocab()[tf->resolved_token_id_];
+    }
+    return std::nullopt;
+  }
   if (!std::holds_alternative<std::string>(tf->token)) return std::nullopt;
   if (!tokenizer_info_) {
     return ISTError("Token string resolution requires tokenizer_info");
@@ -1314,6 +1320,7 @@ std::optional<ISTError> StructuralTagTokenResolver::ResolveTokenFormat(TokenForm
   for (int32_t i = 0; i < static_cast<int32_t>(vocab.size()); ++i) {
     if (vocab[i] == token_str) {
       tf->resolved_token_id_ = i;
+      tf->resolved_token_text_ = token_str;
       return std::nullopt;
     }
   }
@@ -1571,7 +1578,9 @@ std::vector<std::string> StructuralTagAnalyzer::DetectEndStrings() {
       if (std::holds_alternative<std::vector<std::string>>(tag->end)) {
         return std::get<std::vector<std::string>>(tag->end);
       }
-      return {};  // TokenFormat end — propagated via DetectEndTokenIds
+      // A TokenFormat end is also excluded from text by its decoded text: otherwise the token
+      // could be consumed as text and never end the tag.
+      return {std::get<TokenFormat>(tag->end).resolved_token_text_};
     }
   }
   return {};

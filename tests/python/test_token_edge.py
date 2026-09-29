@@ -632,7 +632,8 @@ def test_e2e_mixed_tag_and_token_dispatch():
     Inner (TagDispatch): trigger "<end>", excludes string "<bad>"
 
     Key: token 6 ("<bad>") rejected by string-based excludes (outer+inner),
-    but temporarily accepted inside mid (token-based, doesn't exclude 6).
+    but accepted inside mid (token-based, doesn't exclude 6). Inner may end anywhere, so once
+    mid_body has its token, mid can take 6 again.
     """
     vocab = [
         "<s>",  # 0
@@ -670,8 +671,8 @@ def test_e2e_mixed_tag_and_token_dispatch():
     # fmt: off
     paths = [
         [   # Path A: full traversal through all 3 layers
-            (None, OUTER), (7, OUTER), (2, ALL), (3, OUTER), (9, OUTER),
-            (8, OUTER), (5, OUTER), (11, OUTER), (1, None),
+            (None, OUTER), (7, OUTER), (2, ALL), (3, OUTER), (9, ALL),
+            (8, ALL), (5, ALL), (11, ALL), (1, None),
         ],
         [   # Path B: outer loop only, <bad>(6) rejected
             (None, OUTER), (7, OUTER), (8, OUTER), (6, False), (1, None),
@@ -682,14 +683,14 @@ def test_e2e_mixed_tag_and_token_dispatch():
         [   # Path C2: <bad>(6) accepted inside mid
             (2, ALL), (6, ALL),
         ],
-        [   # Path C3: <bad>(6) rejected by inner excludes
-            (2, ALL), (3, OUTER), (9, OUTER), (6, False),
+        [   # Path C3: <bad>(6) accepted by mid after inner ends
+            (2, ALL), (3, OUTER), (9, ALL), (6, ALL),
         ],
         [   # Path D1: <skip>(4) accepted at outer
             (4, OUTER),
         ],
         [   # Path D2: <skip>(4) accepted at inner
-            (2, ALL), (3, OUTER), (9, OUTER), (4, OUTER),
+            (2, ALL), (3, OUTER), (9, ALL), (4, ALL),
         ],
     ]
     # fmt: on
@@ -1630,6 +1631,193 @@ def test_stag_any_tokens_exclude_redispatch():
     _accept_tokens(m, [2, 13])  # <tool> x
     assert m.accept_token(STAG_STOP)
     assert m.is_terminated()
+
+
+@pytest.mark.parametrize(
+    "content", [{"type": "any_text"}, {"type": "sequence", "elements": [{"type": "any_text"}]}]
+)
+def test_stag_token_end_excluded_from_nested_any_text(content):
+    """A token end is excluded from the text inside the tag, also when that text is nested."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": {"type": "token", "token": "<think>"},
+            "content": content,
+            "end": {"type": "token", "token": "<think_end>"},
+        },
+    }
+    m, b, ti = _stag_matcher(stag)
+    _accept_tokens(m, [5, 7, 6])  # <think> hello <think_end>
+    assert not m.accept_token(8)  # world: the tag has ended
+    assert m.accept_token(STAG_STOP)
+
+
+_NN = {"type": "const_string", "value": "\n\n"}
+_ANY = {"type": "any_tokens", "exclude_tokens": ["<end>"]}
+_MID_TOKEN_VOCAB = [
+    "<s>",  # 0
+    "</s>",  # 1
+    "<tool>",  # 2
+    "<end>",  # 3
+    "\n\n",  # 4
+    "\n\n\n",  # 5
+    "hi",  # 6
+    "<",  # 7
+    "<hi",  # 8
+    "\n\n\n\n",  # 9
+]
+
+
+@pytest.mark.parametrize(
+    "elements, token, accepted",
+    [
+        # The region is in the same rule, which cannot end before it: decided by the mask cache.
+        ([_NN, _ANY, {"type": "token", "token": "<end>"}], 5, True),
+        # The region follows the rule holding the literal: decided at runtime.
+        (
+            [{"type": "or", "elements": [_NN, {"type": "const_string", "value": "x"}]}, _ANY],
+            5,
+            True,
+        ),
+        # The region still excludes its tokens.
+        ([{"type": "const_string", "value": "<"}, _ANY], 3, False),
+        ([{"type": "const_string", "value": "<"}, _ANY], 8, True),
+        # A token under an excluded one is not rejected with it: at runtime, and in the mask cache.
+        (
+            [
+                {"type": "or", "elements": [_NN, {"type": "const_string", "value": "x"}]},
+                {"type": "any_tokens", "exclude_tokens": ["\n\n\n"]},
+            ],
+            9,
+            True,
+        ),
+        (
+            [
+                _NN,
+                {"type": "any_tokens", "exclude_tokens": ["\n\n\n"]},
+                {"type": "token", "token": "<end>"},
+            ],
+            9,
+            True,
+        ),
+        # The region is in the lookahead of the rule holding the literal.
+        (
+            [
+                {"type": "or", "elements": [{"type": "const_string", "value": "<"}, _NN]},
+                _ANY,
+                {"type": "token", "token": "<end>"},
+            ],
+            8,
+            True,
+        ),
+    ],
+)
+def test_stag_token_level_region_entered_mid_token(elements, token, accepted):
+    """A token whose first bytes finish a literal is taken whole by the token-level region after
+    it."""
+    ti = xgr.TokenizerInfo(_MID_TOKEN_VOCAB)
+    stag = {"type": "structural_tag", "format": {"type": "sequence", "elements": elements}}
+    m = xgr.GrammarMatcher(xgr.GrammarCompiler(ti).compile_structural_tag(stag))
+    b = xgr.allocate_token_bitmask(1, ti.vocab_size)
+    assert (token in _get_accepted(m, b, ti.vocab_size)) == accepted
+    assert m.accept_token(token) == accepted
+
+
+@pytest.mark.parametrize(
+    "fmt, token, next_tokens",
+    [
+        # "\n\n\n" is both "\n\n" then the region, and the start of the literal "\n<".
+        (
+            {
+                "type": "sequence",
+                "elements": [
+                    _NN,
+                    {"type": "or", "elements": [_ANY, {"type": "const_string", "value": "\n<"}]},
+                ],
+            },
+            5,
+            [6, 7],
+        ),
+        # "<hi" enters a region after its first byte and after its first two bytes.
+        (
+            {
+                "type": "or",
+                "elements": [
+                    {
+                        "type": "sequence",
+                        "elements": [
+                            {"type": "const_string", "value": "<"},
+                            {"type": "any_tokens", "exclude_tokens": ["hi", "\n\n"]},
+                            {"type": "const_string", "value": "hi"},
+                        ],
+                    },
+                    {
+                        "type": "sequence",
+                        "elements": [
+                            {"type": "const_string", "value": "<h"},
+                            {"type": "any_tokens", "exclude_tokens": ["hi", "\n\n"]},
+                            {"type": "const_string", "value": "\n\n"},
+                        ],
+                    },
+                ],
+            },
+            8,
+            [6, 4],
+        ),
+    ],
+)
+def test_stag_token_taken_several_ways(fmt, token, next_tokens):
+    """A token taken several ways keeps every way: the tokens that follow any of them are allowed."""
+    ti = xgr.TokenizerInfo(_MID_TOKEN_VOCAB)
+    m = xgr.GrammarMatcher(
+        xgr.GrammarCompiler(ti).compile_structural_tag({"type": "structural_tag", "format": fmt})
+    )
+    b = xgr.allocate_token_bitmask(1, ti.vocab_size)
+    assert m.accept_token(token)
+    accepted = _get_accepted(m, b, ti.vocab_size)
+    for token in next_tokens:
+        assert token in accepted
+        assert m.accept_token(token)
+        m.rollback(1)
+
+
+def test_token_and_bytes_lead_to_different_rules():
+    """A token taken both as bytes and by a Token edge keeps what follows each way."""
+    vocab = ["<s>", "</s>", "aa", "1", "2", "d", "e"]
+    grammar = (
+        'root ::= (Token(2) x "1") | ("aa" y "2")\n'
+        'x ::= "d" x "e" | "e"\n'
+        'y ::= "d" y "e" | "e"\n'
+    )
+    matcher = _make_matcher(vocab, grammar)
+    _accept_tokens(matcher, [2, 5, 6, 6])  # aa d e e
+    b = xgr.allocate_token_bitmask(1, len(vocab))
+    assert {3, 4} <= set(_get_accepted(matcher, b, len(vocab)))
+    assert matcher.accept_token(3)
+
+
+def test_stag_rule_cache_tells_token_sets_apart():
+    """Grammars that differ only in their token ids must not share cached masks."""
+    ti = xgr.TokenizerInfo(STAG_VOCAB)
+    compiler = xgr.GrammarCompiler(ti)
+    b = xgr.allocate_token_bitmask(1, ti.vocab_size)
+    for excluded, allowed in [("<bad>", 2), ("<tool>", 16)]:
+        stag = {
+            "type": "structural_tag",
+            "format": {
+                "type": "sequence",
+                "elements": [
+                    {"type": "const_string", "value": "x"},
+                    {"type": "any_tokens", "exclude_tokens": [excluded]},
+                ],
+            },
+        }
+        m = xgr.GrammarMatcher(compiler.compile_structural_tag(stag))
+        _accept_tokens(m, [13])  # x
+        accepted = _get_accepted(m, b, ti.vocab_size)
+        assert allowed in accepted and STAG_VOCAB.index(excluded) not in accepted
+        assert m.accept_token(allowed)
 
 
 def test_token_edge_id_out_of_vocab_raises():

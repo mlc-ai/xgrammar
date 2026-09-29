@@ -3347,6 +3347,21 @@ class GrammarFSMHasherImpl {
   void RemoveHashedFsmFromRefGraph(int32_t fsm_index);
 
   std::pair<bool, uint64_t> IsPartialHashable(int fsm_index);
+
+  /*!
+   * \brief Token and exclude-token edges keep their token ids out of line, so the edge itself
+   * does not tell two token sets apart. Hash the ids too.
+   */
+  uint64_t HashTokenEdgeIds(uint64_t hash_result, const FSMEdge& edge) const {
+    if (edge.IsToken() || edge.IsExcludeToken()) {
+      // Both kinds share the [count, token_id_0, ...] aux layout.
+      const auto info = grammar_->ImplPtr()->complete_fsm.GetTokenEdgeInfo(edge.GetAuxIndex());
+      for (int32_t i = 0; i < info.Count(); ++i) {
+        hash_result = HashCombine(hash_result, info.TokenIds()[i]);
+      }
+    }
+    return hash_result;
+  }
 };
 
 bool GrammarFSMHasherImpl::FindSimpleCycle() {
@@ -3641,6 +3656,7 @@ std::pair<bool, uint64_t> GrammarFSMHasherImpl::IsPartialHashable(int fsm_index)
           static_cast<int32_t>(edge.max),
           target_new_id
       );
+      hash_result = HashTokenEdgeIds(hash_result, edge);
     }
   }
   std::vector<std::pair<int32_t, int32_t>> new_id_mapping;
@@ -3745,6 +3761,7 @@ uint64_t GrammarFSMHasherImpl::HashFsm(int fsm_index) {
           static_cast<int32_t>(edge.max),
           target_new_id
       );
+      hash_result = HashTokenEdgeIds(hash_result, edge);
     }
   }
   std::vector<std::pair<int32_t, int32_t>> new_id_mapping;
