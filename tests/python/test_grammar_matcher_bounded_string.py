@@ -213,6 +213,9 @@ def _assert_mask_matches_replay(
         {"type": "array", "items": {"type": "string", "maxLength": 3}},
         {"anyOf": [{"type": "string", "maxLength": 1}, {"type": "string", "maxLength": 3}]},
         {"anyOf": [{"type": "string", "maxLength": 1}, {"type": "string"}]},
+        {"type": "string", "minLength": 2, "maxLength": 3},
+        {"type": "string", "minLength": 2},
+        {"anyOf": [{"type": "string", "minLength": 3}, {"type": "string", "minLength": 1}]},
     ],
 )
 def test_tokens_that_leave_the_string_respect_the_bound(schema: dict[str, object]) -> None:
@@ -237,6 +240,13 @@ def test_tokens_that_leave_the_string_respect_the_bound(schema: dict[str, object
         # The repetition ends its rule, so what follows it is decided by the parent.
         ('root ::= a "!"\na ::= "<" [^!]{0,3}', ["<", "<a", "<aaa"]),
         ('root ::= "<" [^>]{0,3} ">" [a-z]*', ["<", "<aa", "<aaa"]),
+        # Two parents of one repetition body that have done different numbers of repetitions.
+        ('root ::= r | "a" r\nr ::= [^()]{2,4} ")"', ["a", "aa", "aaa"]),
+        ('root ::= r | "aa" r\nr ::= [^()]{3,} ")"', ["a", "aa", "aab", "aaaa"]),
+        # A repetition nested in a repetition.
+        ('root ::= "<" s{1,2} ">"\ns ::= [^<>]{2,3}', ["<", "<a", "<aa", "<aaaa"]),
+        # Repetitions of one class followed by different bytes.
+        ('root ::= "(" [^()]{2,} ")" | "<" [^()]{0,3} "("', ["(", "(aa", "<", "<a"]),
     ],
 )
 def test_counted_repetitions_in_ebnf_match_the_replay(grammar: str, prefixes: list[str]) -> None:
@@ -276,26 +286,57 @@ def test_counted_repetition_does_not_continue_into_a_sibling_alternative(
         _assert_mask_matches_replay(compiled, tokenizer_info, text)
 
 
-def test_expired_parent_does_not_lend_its_repetitions() -> None:
+@pytest.mark.parametrize(
+    ("grammar", "first_token"),
+    [
+        (
+            'root ::= a | b\na[max_tokens=1] ::= "p" [^x]{0,3} "x"\nb[max_tokens=2] ::= [^x]{0,3} "x"',
+            "pp",
+        ),
+        # Budgeted parents with different bounds or different following bytes.
+        (
+            'root ::= a | b\na[max_tokens=1] ::= [^xy]{0,2} "x"\nb[max_tokens=2] ::= [^xy]{0,3} "y"',
+            "a",
+        ),
+        (
+            'root ::= a | b\na[max_tokens=1] ::= [^xy]{1,2} "x"\nb[max_tokens=2] ::= [^xy]{1,3} "y"',
+            "a",
+        ),
+        (
+            'root ::= a | b\na[max_tokens=1] ::= [^xy]{0,2} "x" "!"\n'
+            'b[max_tokens=2] ::= [^xy]{0,3} "x" "?"',
+            "a",
+        ),
+        # One body with the same bounds and following byte, entered from an expired and a live
+        # parent: replaying from the live one must not complete into the expired one.
+        ('root ::= a | b\na[max_tokens=1] ::= [^x]{2,} "x!"\nb ::= "a" [^x]{2,} "x?"', "a"),
+        ('root ::= a | b\na[max_tokens=1] ::= [^x]{0,5} "x!"\nb ::= "a" [^x]{0,5} "x?"', "a"),
+        # The same with a plain rule shared by two budgeted parents.
+        (
+            'root ::= a | b\na[max_tokens=1] ::= c "x"\nb[max_tokens=2] ::= c "y"\n'
+            "c ::= [^xy] [^xy]?",
+            "a",
+        ),
+    ],
+)
+def test_expired_parent_does_not_lend_its_repetitions(grammar: str, first_token: str) -> None:
     """Once the budget is enforced, only the repetitions of a live parent count."""
-    vocab = ["a", "aa", "b", "ba", '"', 'a"', "p", "pp", "x", "ax"]
+    vocab = ["a", "aa", "b", "ba", '"', 'a"', "p", "pp", "x", "ax", "y", "ay", "ax!", "ax?"]
     tokenizer_info = xgr.TokenizerInfo(vocab)
-    grammar = (
-        'root ::= a | b\na[max_tokens=1] ::= "p" [^x]{0,3} "x"\nb[max_tokens=2] ::= [^x]{0,3} "x"'
-    )
     compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
     for token_id in range(len(vocab)):
         matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
-        assert matcher.accept_token(vocab.index("pp"))
+        assert matcher.accept_token(vocab.index(first_token))
         # The budget is enforced by the accept that follows a fill.
         allowed = token_id in _allowed_token_ids(matcher, tokenizer_info)
         assert allowed is bool(matcher.accept_token(token_id)), vocab[token_id]
 
 
-def test_deserialized_bounded_string_masks_match() -> None:
+@pytest.mark.parametrize("min_length", [0, 2])
+def test_deserialized_bounded_string_masks_match(min_length: int) -> None:
     tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
     compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(
-        {"type": "string", "maxLength": 3}
+        {"type": "string", "minLength": min_length, "maxLength": 3}
     )
     restored = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), tokenizer_info)
     for consumed in range(4):
@@ -315,6 +356,42 @@ def test_deserialize_rejects_a_mask_for_an_unknown_rule() -> None:
     serialized["adaptive_token_mask_cache"][0][0][0] = 2**31 - 1
     with pytest.raises(xgr.exception.DeserializeFormatError):
         xgr.CompiledGrammar.deserialize_json(json.dumps(serialized), tokenizer_info)
+
+
+def test_nested_repetition_keeps_the_expanded_repetition() -> None:
+    """The byte after the outer repetition does not follow the inner one, so the inner one is not
+    turned into a counted edge that the matcher cannot take the fast path for."""
+    tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
+    grammar = 'root ::= "<" s{0,2} "\\""\ns ::= [^"]{2,3}'
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    assert "{2, 3}" not in str(compiled.grammar)
+
+
+@pytest.mark.parametrize(
+    "grammar",
+    [
+        'root ::= s ","\ns[lazy] ::= "\\"" [^"]{2} "\\""',
+        'root ::= s ","\ns[lazy] ::= "\\"" [^"]{3,} "\\""',
+        'root ::= s ","\ns[lazy] ::= "\\"" [^"]{0,} "\\""',
+        'root ::= s ","\ns[lazy] ::= "\\"" t\nt ::= [^"]{3,} "\\""',
+    ],
+)
+def test_lazy_rule_keeps_the_expanded_repetition(grammar: str) -> None:
+    """A lazy body is flattened, which a counted edge would prevent, so it keeps the expansion."""
+    tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    for consumed in range(3):
+        _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
+
+
+def test_lazy_rule_elsewhere_keeps_the_counted_repetition() -> None:
+    """A repetition with `lower == 0` and an upper bound stays counted next to a lazy rule."""
+    tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
+    grammar = 'root ::= "\\"" [^"]{0,3} "\\"" t\nt[lazy] ::= ","'
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    assert "{0, 3}" in str(compiled.grammar)
+    for consumed in range(4):
+        _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
 
 
 def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:

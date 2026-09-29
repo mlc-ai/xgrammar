@@ -1867,11 +1867,10 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
 }
 
 /*!
- * \brief The upper bound of the counted repetition of `body_rule_id` that `state` sits on.
- * \return Nullopt when `state` is not on such a repetition edge; a negative value means the
- * repetition is unbounded.
+ * \brief The counted repetition edge of `body_rule_id` that `state` sits on.
+ * \return Nullopt when `state` is not on such a repetition edge.
  */
-static std::optional<int32_t> GetRepeatUpperBound(
+static std::optional<RepeatEdgeRef> GetRepeatEdgeInfo(
     const Grammar& grammar, const ParserState& state, int32_t body_rule_id
 ) {
   if (state.rule_id < 0) {
@@ -1888,7 +1887,7 @@ static std::optional<int32_t> GetRepeatUpperBound(
     // Match the edge the way EarleyParser::Complete does: by the repeated rule.
     const auto info = grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
     if (info.RuleId() == body_rule_id) {
-      return info.Upper();
+      return info;
     }
   }
   return std::nullopt;
@@ -1897,6 +1896,9 @@ static std::optional<int32_t> GetRepeatUpperBound(
 void GrammarMatcher::Impl::FillBitmaskForStates(
     int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
 ) {
+  // Replay uncertain tokens the way the accept that enforces the budget scans them, so an expired
+  // derivation is not revived through a rule it shares with a live one.
+  SkipExpiredGuard skip_expired_guard(this, skip_expired);
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
   const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
@@ -1949,10 +1951,12 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     }
     // In the body state of a counted repetition of a character class, most tokens are legal
     // exactly when the budget left in the repetition state that predicted this body state covers
-    // the repetitions they consume (see PopulateRepeatInteriorBitsets). The compiled mask is shared
-    // by every repeat count, so the budget is read from the parse history here and the matching
-    // bitset is accepted in one operation instead of replaying every such token.
-    if (!adaptive_token_mask.repeat_interior_bitsets.empty()) {
+    // the repetitions they consume, and a token that leaves the repetition also needs them to
+    // complete its lower bound (see PopulateRepeatInteriorBitsets). The compiled mask is shared by
+    // every repeat count, so the count is read from the parse history here and the matching bitset
+    // is accepted in one operation instead of replaying every such token.
+    if (!adaptive_token_mask.repeat_interior_bitsets.empty() ||
+        !adaptive_token_mask.repeat_exit_tokens.empty()) {
       // PopulateRepeatInteriorBitsets only fills the bitsets of body rules that are entered
       // through repeat edges alone, and none when character budgets are enforced. The mask lists
       // none of these tokens as accepted, so without a repetition parent this state would
@@ -1967,8 +1971,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         if (ref_rule_id != state.rule_id) {
           continue;
         }
-        const auto upper = GetRepeatUpperBound(grammar_, parent_state, state.rule_id);
-        if (!upper.has_value()) {
+        const auto info = GetRepeatEdgeInfo(grammar_, parent_state, state.rule_id);
+        if (!info.has_value()) {
           continue;
         }
         on_repeat = true;
@@ -1977,11 +1981,14 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         if (skip_expired && IsExpiredState(parent_state)) {
           continue;
         }
-        if (*upper < 0) {
-          remaining = INT32_MAX;
-          break;
+        const int32_t budget = info->Upper() - parent_state.repeat_count;
+        remaining = std::max(remaining, budget);
+        for (const auto& [num_repetitions, token_id] : adaptive_token_mask.repeat_exit_tokens) {
+          if (num_repetitions <= budget &&
+              parent_state.repeat_count + num_repetitions >= info->Lower()) {
+            tmp_accepted_bitset_.Set(token_id, true);
+          }
         }
-        remaining = std::max(remaining, *upper - parent_state.repeat_count);
       }
       // The tokens that do not fit are rejected by this state without further work.
       XGRAMMAR_CHECK(on_repeat) << "A counted-repetition body state has no repetition parent";
