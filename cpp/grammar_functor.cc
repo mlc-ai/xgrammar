@@ -3312,6 +3312,7 @@ class GrammarFSMHasherImpl {
   static constexpr int16_t kSelfRecursionFlag = -0x300;
   static constexpr int16_t kSimpleCycleFlag = -0x400;
   static constexpr int16_t kUnKnownFlag = -0x500;
+  static constexpr int16_t kLazyFlag = -0x600;
 
  private:
   Grammar* grammar_;
@@ -3693,6 +3694,10 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashFsm(int fsm_index, bool allow_
     new_id_mapping.emplace_back(original_state_id, new_state_id);
   }
   grammar_->ImplPtr()->per_rule_fsm_new_state_ids[fsm_index] = new_id_mapping;
+  // A lazy rule has other token masks than the same fsm without it.
+  if ((*grammar_)->GetRule(fsm_index).is_lazy) {
+    hash_result = HashCombineMixed(hash_result, kLazyFlag);
+  }
   return hash_result;
 }
 
