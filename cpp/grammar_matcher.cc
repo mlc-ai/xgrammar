@@ -1413,8 +1413,22 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     temporary_input_bytes_.clear();
   }
 
+  // A token whose first bytes lead into a token-level region (e.g. "\n\n" then free text, fed
+  // "\n\n\n") is taken whole by that region's ExcludeToken edge from there.
+  int32_t mid_token_row = 0;
+  if (!byte_path_success && !atomic_success && !has_char_budget_rules_) {
+    mid_token_row = FindMidTokenExcludeEdgeRow(pos, token_id);
+    if (mid_token_row > 0) {
+      PopLastStates(pos - mid_token_row);
+      pos = mid_token_row;
+      if (!AdvanceAtomicToken(token_id, debug_print)) {
+        mid_token_row = 0;
+      }
+    }
+  }
+
   // Phase 3: Combine results (no priority — merge with deduplication)
-  if (!byte_path_success && !atomic_success) {
+  if (!byte_path_success && !atomic_success && mid_token_row == 0) {
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << EscapeString(token)
                          << "> rejected at position " << pos;
@@ -1426,7 +1440,13 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     return false;
   }
 
-  if (atomic_success && !byte_path_success) {
+  if (mid_token_row > 0) {
+    token_length_history.push_back(mid_token_row + 1);
+    if (ShouldTrackAcceptedBytes()) {
+      AppendPerByteRows(token.substr(0, mid_token_row));
+      AppendAtomicRow(token.substr(mid_token_row));
+    }
+  } else if (atomic_success && !byte_path_success) {
     PopLastStates(pos);
     restore_row_before_token();
     char_budget_relaxed_ = false;
@@ -2099,6 +2119,16 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
           }
           prev_matched_size = j + 1;
         }
+      }
+
+      // The first bytes may lead into a token-level region that takes the rest of the token. Its
+      // subtree may be taken the same way, so it is not skipped.
+      if (!accepted && !has_char_budget_rules_ &&
+          FindMidTokenExcludeEdgeRow(
+              prev_matched_size, sorted_decoded_vocab[cur_token_idx].first
+          )) {
+        accepted = true;
+        last_rejected_uncertain_range = cur_token_idx + 1;
       }
 
       bool retried_atomically = false;

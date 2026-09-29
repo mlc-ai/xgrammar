@@ -644,6 +644,11 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 
       bool can_reach_end = tmp_can_reach_end_prefix_or_stack_.back();
 
+      // The first bytes may lead into a token-level region that takes the rest of the token.
+      if (!accepted && !has_char_budget_rules_) {
+        accepted = FindMidTokenExcludeEdgeRow(prev_matched_size, sorted_decoded_vocab[i].first);
+      }
+
       if (accepted) {
         if (HasEnteredCharBudget()) {
           tmp_uncertain_indices_.push_back(i);

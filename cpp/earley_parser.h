@@ -365,6 +365,7 @@ class EarleyParser {
     kFsmStateNonTerminal = 1 << 2,
     kFsmStateEnd = 1 << 3,
     kFsmStateHasEdges = 1 << 4,
+    kFsmStateHasExcludeToken = 1 << 5,
   };
 
   /*! \brief Lazily-computed FSM state properties, indexed by rule id and state id. */
@@ -640,6 +641,14 @@ class EarleyParser {
    * \return True if any state advanced, false otherwise.
    */
   bool AdvanceAtomicToken(int32_t token_id, bool debug_print = false, int32_t token_char_count = 0);
+
+  /*!
+   * \brief Find the latest of the last num_rows rows (row i holds the states after the first i
+   * bytes of the current token) with a kExcludeToken edge accepting token_id: a token-level region
+   * reached in the middle of a token takes the rest of it.
+   * \return That i, or 0 if there is none.
+   */
+  int32_t FindMidTokenExcludeEdgeRow(int32_t num_rows, int32_t token_id);
 
   /*!
    * \brief Enqueue the state into the queue.

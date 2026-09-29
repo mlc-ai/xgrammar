@@ -1632,6 +1632,80 @@ def test_stag_any_tokens_exclude_redispatch():
     assert m.is_terminated()
 
 
+@pytest.mark.parametrize(
+    "content", [{"type": "any_text"}, {"type": "sequence", "elements": [{"type": "any_text"}]}]
+)
+def test_stag_token_end_excluded_from_nested_any_text(content):
+    """A token end is excluded from the text inside the tag, also when that text is nested."""
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "tag",
+            "begin": {"type": "token", "token": "<think>"},
+            "content": content,
+            "end": {"type": "token", "token": "<think_end>"},
+        },
+    }
+    m, b, ti = _stag_matcher(stag)
+    _accept_tokens(m, [5, 7, 6])  # <think> hello <think_end>
+    assert not m.accept_token(8)  # world: the tag has ended
+    assert m.accept_token(STAG_STOP)
+
+
+_NN = {"type": "const_string", "value": "\n\n"}
+_ANY = {"type": "any_tokens", "exclude_tokens": ["<end>"]}
+
+
+@pytest.mark.parametrize(
+    "elements, token, accepted",
+    [
+        # The region is in the same rule, which cannot end before it: decided by the mask cache.
+        ([_NN, _ANY, {"type": "token", "token": "<end>"}], 5, True),
+        # The region follows the rule holding the literal: decided at runtime.
+        (
+            [{"type": "or", "elements": [_NN, {"type": "const_string", "value": "x"}]}, _ANY],
+            5,
+            True,
+        ),
+        # The region still excludes its tokens.
+        ([{"type": "const_string", "value": "<"}, _ANY], 3, False),
+        ([{"type": "const_string", "value": "<"}, _ANY], 8, True),
+    ],
+)
+def test_stag_token_level_region_entered_mid_token(elements, token, accepted):
+    """A token whose first bytes finish a literal is taken whole by the token-level region after
+    it."""
+    ti = xgr.TokenizerInfo(["<s>", "</s>", "<tool>", "<end>", "\n\n", "\n\n\n", "hi", "<", "<hi"])
+    stag = {"type": "structural_tag", "format": {"type": "sequence", "elements": elements}}
+    m = xgr.GrammarMatcher(xgr.GrammarCompiler(ti).compile_structural_tag(stag))
+    b = xgr.allocate_token_bitmask(1, ti.vocab_size)
+    assert (token in _get_accepted(m, b, ti.vocab_size)) == accepted
+    assert m.accept_token(token) == accepted
+
+
+def test_stag_rule_cache_tells_token_sets_apart():
+    """Grammars that differ only in their token ids must not share cached masks."""
+    ti = xgr.TokenizerInfo(STAG_VOCAB)
+    compiler = xgr.GrammarCompiler(ti)
+    b = xgr.allocate_token_bitmask(1, ti.vocab_size)
+    for excluded, allowed in [("<bad>", 2), ("<tool>", 16)]:
+        stag = {
+            "type": "structural_tag",
+            "format": {
+                "type": "sequence",
+                "elements": [
+                    {"type": "const_string", "value": "x"},
+                    {"type": "any_tokens", "exclude_tokens": [excluded]},
+                ],
+            },
+        }
+        m = xgr.GrammarMatcher(compiler.compile_structural_tag(stag))
+        _accept_tokens(m, [13])  # x
+        accepted = _get_accepted(m, b, ti.vocab_size)
+        assert allowed in accepted and STAG_VOCAB.index(excluded) not in accepted
+        assert m.accept_token(allowed)
+
+
 def test_token_edge_id_out_of_vocab_raises():
     # Token ids index per-token arrays during compilation, so an id outside the vocabulary must be
     # rejected with an error instead of being read out of bounds.
