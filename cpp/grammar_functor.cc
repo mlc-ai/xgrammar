@@ -3459,6 +3459,7 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
   grammar_ = grammar;
   grammar->ImplPtr()->per_rule_fsm_hashes =
       std::vector<std::optional<uint64_t>>((*grammar)->NumRules());
+  grammar->ImplPtr()->per_rule_fsm_hash_is_partial = std::vector<bool>((*grammar)->NumRules());
   grammar->ImplPtr()->per_rule_fsm_new_state_ids.resize((*grammar)->NumRules());
   ref_graph_from_referee_to_referrer_.clear();
   ref_graph_from_referrer_to_referee_.clear();
@@ -3552,6 +3553,7 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
   }
   for (const auto& [rule_id, hash_value] : partial_hashed_list) {
     grammar->ImplPtr()->per_rule_fsm_hashes[rule_id] = hash_value;
+    grammar->ImplPtr()->per_rule_fsm_hash_is_partial[rule_id] = true;
   }
 }
 
@@ -3707,7 +3709,8 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
       << "GrammarExpr is not a sequence";
   for (const auto& expr_id : sequence_expr) {
     const auto& expr = grammar->GetGrammarExpr(expr_id);
-    hash_result = HashCombineMixed(hash_result, static_cast<int32_t>(expr.type));
+    // The size keeps the elements of one expr apart from the next expr.
+    hash_result = HashCombineMixed(hash_result, static_cast<int32_t>(expr.type), expr.size());
     switch (expr.type) {
       case (GrammarExprType::kByteString):
       case (GrammarExprType::kCharacterClass):
@@ -3718,8 +3721,10 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
         }
         break;
       }
+      // A partial hash does not identify the language of the referenced rule.
       case (GrammarExprType::kRuleRef): {
-        if (grammar->per_rule_fsm_hashes[expr[0]].has_value()) {
+        if (grammar->per_rule_fsm_hashes[expr[0]].has_value() &&
+            !grammar->per_rule_fsm_hash_is_partial[expr[0]]) {
           hash_result =
               HashCombineMixed(hash_result, grammar->per_rule_fsm_hashes[expr[0]].value());
         } else {
@@ -3728,7 +3733,8 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashSequence(
         break;
       }
       case (GrammarExprType::kRepeat): {
-        if (grammar->per_rule_fsm_hashes[expr[0]].has_value()) {
+        if (grammar->per_rule_fsm_hashes[expr[0]].has_value() &&
+            !grammar->per_rule_fsm_hash_is_partial[expr[0]]) {
           hash_result =
               HashCombineMixed(hash_result, grammar->per_rule_fsm_hashes[expr[0]].value());
         } else {

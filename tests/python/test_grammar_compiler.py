@@ -530,21 +530,45 @@ CROSSING_CACHE_DIFFERENT_FSM_CASES = [
         'root ::= "(" r ")"\nr ::= "a" Token(5) | "0"',
         ["(", "a", 5, ")"],
     ),
+    (
+        'root ::= "(" r "x" [c-d] ")"\nr ::= "q" (="x" [c-d])',
+        'root ::= "(" r "x\\x01\\x00\\x63\\x64" ")"\nr ::= "q" (="x\\x01\\x00\\x63\\x64")',
+        ["(", 11, "\x00", "c", "d", ")"],
+    ),
+    (
+        'root ::= "(" r z ")"\nr ::= "q" (=z)\n'
+        'v ::= "[" w "]" | "a"\nw ::= v | "{" z "}"\nz ::= w | "b"',
+        'root ::= "(" r z ")"\nr ::= "q" (=z)\n'
+        'v ::= "[" w "]" | "0"\nw ::= v | "{" z "}"\nz ::= w | "b"',
+        "(q0)",
+    ),
 ]
 
 
 @pytest.mark.parametrize(
     "grammar_a,grammar_b,input_str",
     CROSSING_CACHE_DIFFERENT_FSM_CASES,
-    ids=["character-range", "repeat-bounds", "lookahead", "rule-edge-source", "token-edge"],
+    ids=[
+        "character-range",
+        "repeat-bounds",
+        "lookahead",
+        "rule-edge-source",
+        "token-edge",
+        "lookahead-expr-boundary",
+        "lookahead-rule-ref",
+    ],
 )
 def test_grammar_compiler_crossing_cache_different_fsm(
     grammar_a: str, grammar_b: str, input_str: Union[str, List[Union[str, int]]]
 ):
     """A grammar must not reuse the token masks of another grammar whose rule differs only in
     small integers (character ranges, repetition bounds), in the state a rule reference leaves,
-    or in the tokens of a token edge: their FSM hashes used to collide."""
-    tokenizer_info = xgr.TokenizerInfo(["(", ")", "a", "0", "x", "y", '"', '""', "xa", "x0"])
+    in the tokens of a token edge, or in where one lookahead element ends: their FSM hashes used to
+    collide. Nor may it reuse them for a lookahead that references a rule with a partial hash, which
+    leaves out a rule referenced at its start state."""
+    tokenizer_info = xgr.TokenizerInfo(
+        ["(", ")", "a", "0", "x", "y", '"', '""', "xa", "x0", "q", "qx\x01", "qa", "q0"]
+    )
     compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=True)
     compiler.compile_grammar(grammar_a)
     cached = compiler.compile_grammar(grammar_b)
