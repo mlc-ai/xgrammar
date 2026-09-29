@@ -238,9 +238,12 @@ def get_model_structural_tag(
         ``>``. A serving engine whose output parser recognises the markers by
         their dedicated token ID cannot parse that spelling, so a
         ``tool_choice="required"`` response can satisfy the grammar and still
-        contain no tool call. With ``True``, the grammar only admits the
-        dedicated tokens, so it accepts exactly the encodings such a parser
-        recognises. The tokenizer must define every marker as a single token.
+        contain no tool call. With ``True``, the tag structure only admits the
+        dedicated tokens, matching what such a parser recognises. Exclusions of
+        the markers in free text become token-level as well, so only enable this
+        for a parser that recognises the markers by token ID; see
+        :func:`bind_marker_tokens`. The tokenizer must define every marker as a
+        single token.
         Supported for ``"glm_4_7"``, ``"qwen_3"``, ``"qwen_3_5"`` and
         ``"qwen_3_coder"``. Default: ``False``.
 
@@ -568,14 +571,20 @@ def bind_marker_tokens(structural_tag: StructuralTag, markers: List[str]) -> Str
 
     Builtin structural tags spell control markers such as ``<tool_call>`` as
     strings, so the grammar admits any tokenization of that text. This rewrites
-    the tag so that every occurrence of a marker is matched by its dedicated
-    token: a :class:`TriggeredTagsFormat` whose triggers start with a marker
-    becomes a :class:`TokenTriggeredTagsFormat`, a :class:`TagFormat` whose
-    ``begin`` starts (or ``end`` ends) with a marker uses a :class:`TokenFormat`
-    there, and a :class:`ConstStringFormat` containing a marker is split around
-    it. The literal text around the markers is preserved, so the accepted text
-    is unchanged; only the admitted tokenizations shrink. String ``excludes`` of
-    a triggered-tags span become token-level ``exclude_tokens``.
+    the markers in the tag structure to be matched by their dedicated tokens: a
+    :class:`TriggeredTagsFormat` whose triggers start with a marker becomes a
+    :class:`TokenTriggeredTagsFormat`, a :class:`TagFormat` whose ``begin``
+    starts (or ``end`` ends) with a marker uses a :class:`TokenFormat` there,
+    and a :class:`ConstStringFormat` containing a marker is split around it.
+    Markers inside schema-driven content (e.g. :class:`JSONSchemaFormat`) stay
+    strings. The literal text around the markers is preserved.
+
+    The string ``excludes`` of a triggered-tags span that are markers become
+    token-level ``exclude_tokens``; the other excludes are dropped. Exclusion is
+    then token-level too: free text may contain a marker spelled from ordinary
+    sub-tokens, which is no longer rejected. Only use this with an output parser
+    that also recognises the markers by token ID; a parser that matches the
+    marker text would treat such free text as an unconstrained tool call.
 
     Parameters
     ----------
@@ -670,12 +679,21 @@ class _MarkerBinder:
             if marker is not None and begin.startswith(marker):
                 lead = self._split_literal(begin[len(marker) :])
                 begin = TokenFormat(token=marker)
+        end_marker: Optional[str] = None
         if isinstance(end, str):
-            marker = self._trailing_marker(end)
-            if marker is not None:
-                tail = self._split_literal(end[: -len(marker)])
-                end = TokenFormat(token=marker)
+            end_marker = self._trailing_marker(end)
+            if end_marker is not None:
+                tail = self._split_literal(end[: -len(end_marker)])
+                end = TokenFormat(token=end_marker)
         content = self.bind(tag.content)
+        if (
+            end_marker is not None
+            and isinstance(content, AnyTextFormat)
+            and end_marker not in content.excludes
+        ):
+            # A string end is excluded from AnyText content automatically, a token
+            # end is not; keep the wildcard from swallowing the closing marker.
+            content = content.model_copy(update={"excludes": [*content.excludes, end_marker]})
         if lead or tail:
             content = SequenceFormat(elements=[*lead, content, *tail])
         if begin is tag.begin and end is tag.end and content is tag.content:
@@ -702,7 +720,9 @@ class _MarkerBinder:
         return TokenTriggeredTagsFormat(
             trigger_tokens=[marker],
             tags=[self._bind_tag(tag, begin_marker=marker) for tag in fmt.tags],
-            exclude_tokens=list(fmt.excludes),
+            # Only markers are known to be single tokens; other string excludes
+            # cannot be expressed at the token level and are dropped.
+            exclude_tokens=[text for text in fmt.excludes if text in self._markers],
             at_least_one=fmt.at_least_one,
             stop_after_first=fmt.stop_after_first,
         )

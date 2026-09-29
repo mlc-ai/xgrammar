@@ -34,6 +34,7 @@ from xgrammar.builtin_structural_tag import (
 )
 from xgrammar.openai_tool_call_schema import BuiltinToolParam, FunctionToolParam
 from xgrammar.structural_tag import (
+    AnyTextFormat,
     ConstStringFormat,
     JSONSchemaFormat,
     OptionalFormat,
@@ -3420,6 +3421,37 @@ def test_bind_marker_tokens_is_noop_without_occurrences():
     assert bind_marker_tokens(structural_tag, []) is structural_tag
 
 
+@pytest.mark.parametrize("end", ["</think>", "\n</think>"])
+def test_bind_marker_tokens_excludes_token_end_from_any_text(end: str):
+    """Unlike a string end, a token end is not excluded from AnyText content automatically."""
+    structural_tag = StructuralTag(format=TagFormat(begin="", content=AnyTextFormat(), end=end))
+    tag = bind_marker_tokens(structural_tag, ["</think>"]).format
+
+    assert isinstance(tag, TagFormat)
+    assert tag.end == TokenFormat(token="</think>")
+    content = tag.content.elements[0] if isinstance(tag.content, SequenceFormat) else tag.content
+    assert isinstance(content, AnyTextFormat)
+    assert content.excludes == ["</think>"]
+
+
+def test_bind_marker_tokens_keeps_only_marker_excludes():
+    structural_tag = StructuralTag(
+        format=TriggeredTagsFormat(
+            triggers=["<tool_call>"],
+            tags=[
+                TagFormat(
+                    begin="<tool_call>", content=ConstStringFormat(value="x"), end="</tool_call>"
+                )
+            ],
+            excludes=["<think>", "</tool_call>"],
+        )
+    )
+    fmt = bind_marker_tokens(structural_tag, ["<tool_call>", "</tool_call>"]).format
+
+    assert isinstance(fmt, TokenTriggeredTagsFormat)
+    assert fmt.exclude_tokens == ["</tool_call>"]
+
+
 def _marker_encodings(tokenizer, body: str) -> Tuple[List[int], List[int]]:
     """One tool call with the dedicated marker tokens, and with the markers spelled out."""
 
@@ -3538,3 +3570,29 @@ def test_token_markers_reasoning_block_closes_on_dedicated_think_token():
     assert tokenizer.decode(dedicated) == tokenizer.decode(spelled)
     assert _accepts_tokens(compiler, structural_tag, dedicated)
     assert not _accepts_tokens(compiler, structural_tag, spelled)
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("tool_choice", ["required", "auto"])
+def test_token_markers_without_special_token_excludes_terminates(tool_choice: str):
+    """With exclude_special_tokens=False the reasoning content has no excludes of its own;
+    it must still stop at the dedicated </think> token so a valid response can complete."""
+    tokenizer = load_tokenizer("zai-org/GLM-4.7-Flash", use_fast=True, trust_remote_code=True)
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo.from_huggingface(tokenizer))
+    atomic, _ = _marker_encodings(
+        tokenizer, "get_weather<arg_key>city</arg_key><arg_value>Leon</arg_value>"
+    )
+    think_end = tokenizer.convert_tokens_to_ids("</think>")
+    structural_tag = get_model_structural_tag(
+        "glm_4_7",
+        tools=_TOKEN_MARKER_TOOLS,
+        tool_choice=tool_choice,
+        reasoning=True,
+        exclude_special_tokens=False,
+        token_markers=True,
+    )
+
+    matcher = xgr.GrammarMatcher(compiler.compile_structural_tag(structural_tag))
+    tokens = [*tokenizer.encode("plan", add_special_tokens=False), think_end, *atomic]
+    assert all(matcher.accept_token(token_id) for token_id in tokens)
+    assert matcher.is_completed()
