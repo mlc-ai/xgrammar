@@ -308,6 +308,16 @@ def test_counted_repetition_does_not_continue_into_a_sibling_alternative(
             'b[max_tokens=2] ::= [^xy]{0,3} "x" "?"',
             "a",
         ),
+        # One body with the same bounds and following byte, entered from an expired and a live
+        # parent: replaying from the live one must not complete into the expired one.
+        ('root ::= a | b\na[max_tokens=1] ::= [^x]{2,} "x!"\nb ::= "a" [^x]{2,} "x?"', "a"),
+        ('root ::= a | b\na[max_tokens=1] ::= [^x]{0,5} "x!"\nb ::= "a" [^x]{0,5} "x?"', "a"),
+        # The same with a plain rule shared by two budgeted parents.
+        (
+            'root ::= a | b\na[max_tokens=1] ::= c "x"\nb[max_tokens=2] ::= c "y"\n'
+            "c ::= [^xy] [^xy]?",
+            "a",
+        ),
     ],
 )
 def test_expired_parent_does_not_lend_its_repetitions(grammar: str, first_token: str) -> None:
@@ -372,6 +382,16 @@ def test_lazy_rule_keeps_the_expanded_repetition(grammar: str) -> None:
     tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
     compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
     for consumed in range(3):
+        _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
+
+
+def test_lazy_rule_elsewhere_keeps_the_counted_repetition() -> None:
+    """A repetition with `lower == 0` and an upper bound stays counted next to a lazy rule."""
+    tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
+    grammar = 'root ::= "\\"" [^"]{0,3} "\\"" t\nt[lazy] ::= ","'
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    assert "{0, 3}" in str(compiled.grammar)
+    for consumed in range(4):
         _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
 
 

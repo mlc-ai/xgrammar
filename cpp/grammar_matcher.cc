@@ -1896,6 +1896,9 @@ static std::optional<RepeatEdgeRef> GetRepeatEdgeInfo(
 void GrammarMatcher::Impl::FillBitmaskForStates(
     int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
 ) {
+  // Replay uncertain tokens the way the accept that enforces the budget scans them, so an expired
+  // derivation is not revived through a rule it shares with a live one.
+  SkipExpiredGuard skip_expired_guard(this, skip_expired);
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
   const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;

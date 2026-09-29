@@ -2427,13 +2427,14 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   // decides most tokens in the body from the repetition bounds alone
   // (PopulateRepeatInteriorBitsets). Anywhere else the counted edge would be slower than the
   // expansion below, which keeps a separate mask per position; that includes grammars with
-  // character budgets, where the matcher never takes the fast path. Grammars with lazy rules keep
-  // the expansion too: the lazy body flattener cannot flatten a counted edge.
+  // character budgets, where the matcher never takes the fast path. In grammars with lazy rules
+  // a repetition with a lower bound or without an upper bound keeps the expansion too: the lazy
+  // body flattener flattens that expansion but not a counted edge.
   const auto repeated_expr = builder_->GetGrammarExpr(grammar_expr_id);
   bool counted = false;
   if (repeated_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass &&
       repeated_expr[0] != 0 && follow_byte_.has_value() && *follow_byte_ < 0x80 &&
-      !HasCharBudgetRules() && !HasLazyRules()) {
+      !HasCharBudgetRules() && ((lower == 0 && upper != -1) || !HasLazyRules())) {
     bool excluded = false;
     for (int i = 1; i + 1 < repeated_expr.size(); i += 2) {
       excluded =
