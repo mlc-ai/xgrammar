@@ -229,10 +229,15 @@ structural_tag = get_model_structural_tag(
 )
 ```
 
-The accepted text is unchanged; only the admitted tokenizations shrink. The tokenizer must define
-every marker of the model as a single token, otherwise grammar compilation fails. Markers that
-appear inside schema-driven argument content (for example GLM's `<arg_key>` wrappers, which the
-`glm_xml` schema style emits) are still matched as strings.
+The literal text around the markers is unchanged; what changes is how the markers may be
+tokenized. The tokenizer must define every marker of the model as a single token, otherwise
+grammar compilation fails. Markers that appear inside schema-driven argument content (for example
+GLM's `<arg_key>` wrappers, which the `glm_xml` schema style emits) are still matched as strings.
+
+The exclusions of markers in free text become token-level too: free text may then contain a
+marker spelled from ordinary sub-tokens. Only enable `token_markers` when the output parser also
+recognises the markers by token ID. A parser that matches the marker text would treat such free
+text as a tool call that the grammar never constrained.
 
 ---
 
