@@ -1239,13 +1239,18 @@ bool EarleyParser::AdvanceAtomicToken(
   return true;
 }
 
-int32_t EarleyParser::FindMidTokenExcludeEdgeRow(int32_t num_rows, int32_t token_id) {
+int32_t EarleyParser::FindMidTokenExcludeEdgeRow(
+    int32_t num_rows, int32_t token_id, int32_t from_row
+) {
   const int32_t size = static_cast<int32_t>(scanable_state_history_.size());
-  for (int32_t row = num_rows; row >= 1; --row) {
+  for (int32_t row = from_row < 0 ? num_rows : from_row; row >= 1; --row) {
     for (const auto& state : scanable_state_history_[size - 1 - (num_rows - row)]) {
       if (state.rule_id == -1 ||
           !(GetFsmStateFlags(state.rule_id, state.element_id) & kFsmStateHasExcludeToken)) {
         continue;
+      }
+      if (token_id < 0) {
+        return row;
       }
       const auto& fsm = grammar_->per_rule_fsms[state.rule_id]->GetFsm().GetFsm();
       for (const auto& edge : fsm.GetEdges(state.element_id)) {

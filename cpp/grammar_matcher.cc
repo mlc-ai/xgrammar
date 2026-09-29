@@ -710,6 +710,32 @@ class GrammarMatcher::Impl : public EarleyParser {
     row_byte_end_.push_back(static_cast<int64_t>(accepted_bytes_.size()));
   }
 
+  /*! \brief The parser row after taking the current token one way, kept to be merged into the row
+   * where the token ends when taken another way. */
+  struct TokenEndRow {
+    std::vector<ParserState> states;
+    std::vector<std::pair<int32_t, ParserState>> completable;
+    std::vector<CaptureEvent> capture_row;
+    bool completed = false;
+    /*! \brief The input position of the row. */
+    int32_t pos = 0;
+  };
+
+  TokenEndRow CopyLatestRow() {
+    auto row = rule_id_to_completable_states_.Back();
+    return {
+        GetLatestScanableStates(),
+        {row.data, row.data + row.data_len},
+        CopyLastCaptureRow(),
+        is_completed_.back(),
+        static_cast<int32_t>(rule_id_to_completable_states_.size()) - 1
+    };
+  }
+
+  /*! \brief Merge rows where the current token ends into the latest row. What starts at a row's
+   * position starts at the latest position instead. */
+  void MergeIntoLatestRow(const std::vector<TokenEndRow>& rows);
+
   CompiledGrammar compiled_grammar_;
   TokenizerInfo tokenizer_info_;
   std::vector<int> stop_token_ids_;
@@ -1368,20 +1394,13 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   };
 
   // Phase 1: Try atomic token path (from current state, before byte path)
-  std::vector<ParserState> atomic_states;
-  std::vector<std::pair<int32_t, ParserState>> atomic_completable;
-  std::vector<CaptureEvent> atomic_capture_row;
-  bool atomic_completed = false;
+  TokenEndRow atomic_row;
   bool atomic_success =
       has_char_budget_rules_
           ? AdvanceAtomicTokenWithCharacterBudget(token_id, token_char_count, debug_print)
           : AdvanceAtomicToken(token_id, debug_print);
   if (atomic_success) {
-    atomic_states = GetLatestScanableStates();
-    auto row = rule_id_to_completable_states_.Back();
-    atomic_completable.assign(row.data, row.data + row.data_len);
-    atomic_capture_row = CopyLastCaptureRow();
-    atomic_completed = is_completed_.back();
+    atomic_row = CopyLatestRow();
     PopLastStates(1);
   }
   restore_row_before_token();
@@ -1414,21 +1433,47 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   }
 
   // A token whose first bytes lead into a token-level region (e.g. "\n\n" then free text, fed
-  // "\n\n\n") is taken whole by that region's ExcludeToken edge from there.
-  int32_t mid_token_row = 0;
-  if (!byte_path_success && !atomic_success && !has_char_budget_rules_) {
-    mid_token_row = FindMidTokenExcludeEdgeRow(pos, token_id);
-    if (mid_token_row > 0) {
-      PopLastStates(pos - mid_token_row);
-      pos = mid_token_row;
-      if (!AdvanceAtomicToken(token_id, debug_print)) {
-        mid_token_row = 0;
+  // "\n\n\n") may also be taken whole by that region's ExcludeToken edge from there. Take it from
+  // every such row, latest first, dropping the rows above each; the rows the token ends on are
+  // rebuilt below. end_rows keeps where the other ways of taking the token end, to be merged into
+  // the row it ends on.
+  std::vector<TokenEndRow> end_rows;
+  int32_t last_mid_token_row =
+      has_char_budget_rules_ ? 0 : std::min(pos, static_cast<int32_t>(token.size()) - 1);
+  if (last_mid_token_row > 0) {
+    std::vector<int32_t> rows;
+    for (int32_t row = FindMidTokenExcludeEdgeRow(pos, token_id, last_mid_token_row); row > 0;
+         row = FindMidTokenExcludeEdgeRow(pos, token_id, row - 1)) {
+      rows.push_back(row);
+    }
+    int32_t rows_left = pos;
+    for (int32_t row : rows) {
+      PopLastStates(rows_left - row);
+      rows_left = row;
+      if (AdvanceAtomicToken(token_id, debug_print)) {
+        end_rows.push_back(CopyLatestRow());
+        PopLastStates(1);
       }
+    }
+    // The token ends on its last byte if the byte path took it, else on the row taken from the
+    // latest region.
+    last_mid_token_row =
+        byte_path_success || end_rows.empty() ? 0 : end_rows.front().pos - size_before_token;
+    int32_t end_pos = byte_path_success ? pos : std::max(last_mid_token_row, rows_left);
+    for (; rows_left < end_pos; ++rows_left) {
+      bool accepted = Advance(static_cast<uint8_t>(token[rows_left]), debug_print);
+      XGRAMMAR_DCHECK(accepted);
+    }
+    pos = end_pos;
+    if (last_mid_token_row > 0) {
+      bool accepted = AdvanceAtomicToken(token_id, debug_print);
+      XGRAMMAR_DCHECK(accepted);
+      end_rows.erase(end_rows.begin());
     }
   }
 
   // Phase 3: Combine results (no priority — merge with deduplication)
-  if (!byte_path_success && !atomic_success && mid_token_row == 0) {
+  if (!byte_path_success && !atomic_success && last_mid_token_row == 0) {
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "Token #" << token_id << "<" << EscapeString(token)
                          << "> rejected at position " << pos;
@@ -1440,13 +1485,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     return false;
   }
 
-  if (mid_token_row > 0) {
-    token_length_history.push_back(mid_token_row + 1);
-    if (ShouldTrackAcceptedBytes()) {
-      AppendPerByteRows(token.substr(0, mid_token_row));
-      AppendAtomicRow(token.substr(mid_token_row));
-    }
-  } else if (atomic_success && !byte_path_success) {
+  if (atomic_success && !byte_path_success && last_mid_token_row == 0) {
     PopLastStates(pos);
     restore_row_before_token();
     char_budget_relaxed_ = false;
@@ -1459,104 +1498,32 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     if (ShouldTrackAcceptedBytes()) {
       AppendAtomicRow(token);
     }
-  } else if (byte_path_success && !atomic_success) {
-    token_length_history.push_back(token.size());
+  } else if (atomic_success && token.empty()) {
+    // Zero-length token: byte path created 0 timepoints, just push atomic states
+    scanable_state_history_.PushBack(atomic_row.states);
+    rule_id_to_completable_states_.PushBack(atomic_row.completable);
+    is_completed_.push_back(atomic_row.completed);
+    PushCaptureRow(atomic_row.capture_row);
+    PushCharCountRow(GetCurrentCharIndex(), HasEnteredCharBudget());
+    token_length_history.push_back(1);
     if (ShouldTrackAcceptedBytes()) {
-      AppendPerByteRows(token);
+      AppendAtomicRow(token);
     }
   } else {
-    // Both paths succeeded — merge atomic token states into byte path
-    if (token.empty()) {
-      // Zero-length token: byte path created 0 timepoints, just push atomic states
-      scanable_state_history_.PushBack(atomic_states);
-      rule_id_to_completable_states_.PushBack(atomic_completable);
-      is_completed_.push_back(atomic_completed);
-      PushCaptureRow(atomic_capture_row);
-      PushCharCountRow(GetCurrentCharIndex(), HasEnteredCharBudget());
-      token_length_history.push_back(1);
-      if (ShouldTrackAcceptedBytes()) {
-        AppendAtomicRow(token);
-      }
-    } else {
-      auto byte_states = GetLatestScanableStates();
-      std::vector<ParserState> merged = byte_states;
-      StateEqualForParsing state_eq;
-      for (const auto& s : atomic_states) {
-        if (std::find_if(merged.begin(), merged.end(), [&](const auto& m) {
-              return state_eq(m, s);
-            }) == merged.end()) {
-          merged.push_back(s);
-        }
-      }
-
-      auto byte_row = rule_id_to_completable_states_.Back();
-      std::vector<std::pair<int32_t, ParserState>> merged_completable(
-          byte_row.data, byte_row.data + byte_row.data_len
-      );
-      std::vector<CaptureEvent> merged_capture_row = CopyLastCaptureRow();
-      bool byte_completed = is_completed_.back();
-      int32_t final_char_index = GetCurrentCharIndex();
-      bool final_char_budget_entered = HasEnteredCharBudget();
-      PopLastStates(1);
-
-      for (const auto& cs : atomic_completable) {
-        if (std::find_if(merged_completable.begin(), merged_completable.end(), [&](const auto& m) {
-              return m.first == cs.first && state_eq(m.second, cs.second);
-            }) == merged_completable.end()) {
-          merged_completable.push_back(cs);
-        }
-      }
-
-      for (auto event : atomic_capture_row) {
-        // In the atomic path, the after-token position was size_before_token; in the byte path
-        // it is the row being re-pushed. Remap events that started at the after-token position
-        // (empty spans) so that they stay empty in the byte-path numbering.
-        if (event.start_pos == size_before_token) {
-          event.start_pos = rule_id_to_completable_states_.size();
-        }
-        if (event.occurrence_start_pos == size_before_token) {
-          event.occurrence_start_pos = rule_id_to_completable_states_.size();
-        }
-        for (auto& target : event.stop_capture_targets) {
-          if (target.start_pos == size_before_token) {
-            target.start_pos = rule_id_to_completable_states_.size();
-          }
-        }
-        auto existing = std::find_if(
-            merged_capture_row.begin(),
-            merged_capture_row.end(),
-            [&](const CaptureEvent& e) {
-              return e.rule_id == event.rule_id && e.start_pos == event.start_pos &&
-                     e.occurrence_start_pos == event.occurrence_start_pos;
-            }
-        );
-        if (existing == merged_capture_row.end()) {
-          merged_capture_row.push_back(event);
-        } else {
-          existing->hidden_suffix_bytes =
-              std::max(existing->hidden_suffix_bytes, event.hidden_suffix_bytes);
-          existing->hidden_stop_bytes =
-              std::max(existing->hidden_stop_bytes, event.hidden_stop_bytes);
-          for (const auto& target : event.stop_capture_targets) {
-            if (std::find(
-                    existing->stop_capture_targets.begin(),
-                    existing->stop_capture_targets.end(),
-                    target
-                ) == existing->stop_capture_targets.end()) {
-              existing->stop_capture_targets.push_back(target);
-            }
-          }
-        }
-      }
-
-      scanable_state_history_.PushBack(merged);
-      rule_id_to_completable_states_.PushBack(merged_completable);
-      is_completed_.push_back(byte_completed || atomic_completed);
-      PushCaptureRow(merged_capture_row);
-      PushCharCountRow(final_char_index, final_char_budget_entered);
-      token_length_history.push_back(token.size());
-      if (ShouldTrackAcceptedBytes()) {
-        AppendPerByteRows(token);
+    // The token ends on its last byte, or on the row taken from the latest region. Merge the other
+    // ways of taking it into that row.
+    if (atomic_success) {
+      end_rows.push_back(std::move(atomic_row));
+    }
+    if (!end_rows.empty()) {
+      MergeIntoLatestRow(end_rows);
+    }
+    const int32_t num_byte_rows = last_mid_token_row > 0 ? last_mid_token_row : token.size();
+    token_length_history.push_back(num_byte_rows + (last_mid_token_row > 0));
+    if (ShouldTrackAcceptedBytes()) {
+      AppendPerByteRows(token.substr(0, num_byte_rows));
+      if (last_mid_token_row > 0) {
+        AppendAtomicRow(token.substr(num_byte_rows));
       }
     }
   }
@@ -1570,6 +1537,81 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
   }
   record_char_budget_relaxation_ = false;
   return FinishAccept(consumed_past_deadline);
+}
+
+void GrammarMatcher::Impl::MergeIntoLatestRow(const std::vector<TokenEndRow>& rows) {
+  TokenEndRow merged = CopyLatestRow();
+  int32_t final_char_index = GetCurrentCharIndex();
+  bool final_char_budget_entered = HasEnteredCharBudget();
+  PopLastStates(1);
+
+  StateEqualForParsing state_eq;
+  for (const auto& row : rows) {
+    // A rule predicted where the token ends along this row's path starts at the merged row.
+    auto move_pos = [&](int32_t& pos) {
+      if (pos == row.pos) {
+        pos = merged.pos;
+      }
+    };
+    for (auto s : row.states) {
+      move_pos(s.rule_start_pos);
+      if (std::find_if(merged.states.begin(), merged.states.end(), [&](const auto& m) {
+            return state_eq(m, s);
+          }) == merged.states.end()) {
+        merged.states.push_back(s);
+      }
+    }
+
+    for (auto cs : row.completable) {
+      move_pos(cs.second.rule_start_pos);
+      if (std::find_if(merged.completable.begin(), merged.completable.end(), [&](const auto& m) {
+            return m.first == cs.first && state_eq(m.second, cs.second);
+          }) == merged.completable.end()) {
+        merged.completable.push_back(cs);
+      }
+    }
+
+    for (auto event : row.capture_row) {
+      // Events that started at the row's position (empty spans) stay empty at the merged row.
+      move_pos(event.start_pos);
+      move_pos(event.occurrence_start_pos);
+      for (auto& target : event.stop_capture_targets) {
+        move_pos(target.start_pos);
+      }
+      auto existing = std::find_if(
+          merged.capture_row.begin(),
+          merged.capture_row.end(),
+          [&](const CaptureEvent& e) {
+            return e.rule_id == event.rule_id && e.start_pos == event.start_pos &&
+                   e.occurrence_start_pos == event.occurrence_start_pos;
+          }
+      );
+      if (existing == merged.capture_row.end()) {
+        merged.capture_row.push_back(event);
+      } else {
+        existing->hidden_suffix_bytes =
+            std::max(existing->hidden_suffix_bytes, event.hidden_suffix_bytes);
+        existing->hidden_stop_bytes =
+            std::max(existing->hidden_stop_bytes, event.hidden_stop_bytes);
+        for (const auto& target : event.stop_capture_targets) {
+          if (std::find(
+                  existing->stop_capture_targets.begin(),
+                  existing->stop_capture_targets.end(),
+                  target
+              ) == existing->stop_capture_targets.end()) {
+            existing->stop_capture_targets.push_back(target);
+          }
+        }
+      }
+    }
+    merged.completed = merged.completed || row.completed;
+  }
+
+  scanable_state_history_.PushBack(merged.states);
+  rule_id_to_completable_states_.PushBack(merged.completable);
+  is_completed_.push_back(merged.completed);
+  PushCaptureRow(merged.capture_row);
+  PushCharCountRow(final_char_index, final_char_budget_entered);
 }
 
 bool GrammarMatcher::Impl::AcceptString(const std::string& input_str, bool debug_print) {
@@ -2121,13 +2163,14 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         }
       }
 
-      // The first bytes may lead into a token-level region that takes the rest of the token. Its
-      // subtree may be taken the same way, so it is not skipped.
+      // The first bytes may lead into a token-level region that takes the whole token. The tokens
+      // under this one reach the same rows, and the region may take them even when it excludes
+      // this one, so they are checked one by one instead of being skipped with it.
       if (!accepted && !has_char_budget_rules_ &&
-          FindMidTokenExcludeEdgeRow(
-              prev_matched_size, sorted_decoded_vocab[cur_token_idx].first
-          )) {
-        accepted = true;
+          FindMidTokenExcludeEdgeRow(prev_matched_size, -1)) {
+        accepted = FindMidTokenExcludeEdgeRow(
+            prev_matched_size, sorted_decoded_vocab[cur_token_idx].first
+        );
         last_rejected_uncertain_range = cur_token_idx + 1;
       }
 

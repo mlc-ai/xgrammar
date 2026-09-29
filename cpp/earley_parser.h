@@ -645,10 +645,12 @@ class EarleyParser {
   /*!
    * \brief Find the latest of the last num_rows rows (row i holds the states after the first i
    * bytes of the current token) with a kExcludeToken edge accepting token_id: a token-level region
-   * reached in the middle of a token takes the rest of it.
+   * reached in the middle of a token takes the whole token.
+   * \param token_id The token, or -1 to find any kExcludeToken edge.
+   * \param from_row The latest row to look at; -1 means num_rows.
    * \return That i, or 0 if there is none.
    */
-  int32_t FindMidTokenExcludeEdgeRow(int32_t num_rows, int32_t token_id);
+  int32_t FindMidTokenExcludeEdgeRow(int32_t num_rows, int32_t token_id, int32_t from_row = -1);
 
   /*!
    * \brief Enqueue the state into the queue.
