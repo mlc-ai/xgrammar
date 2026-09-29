@@ -191,9 +191,8 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
         }
         follow_bytes[body_rule_id].under_all &= bytes;
         follow_bytes[body_rule_id].under_any |= bytes;
-        follow_bytes[body_rule_id].max_upper = std::max(
-            follow_bytes[body_rule_id].max_upper, info.Upper() < 0 ? INT32_MAX : info.Upper()
-        );
+        follow_bytes[body_rule_id].max_upper =
+            std::max(follow_bytes[body_rule_id].max_upper, info.Upper());
       }
     }
   }

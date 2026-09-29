@@ -245,6 +245,8 @@ def test_tokens_that_leave_the_string_respect_the_bound(schema: dict[str, object
         ('root ::= r | "aa" r\nr ::= [^()]{3,} ")"', ["a", "aa", "aab", "aaaa"]),
         # A repetition nested in a repetition.
         ('root ::= "<" s{1,2} ">"\ns ::= [^<>]{2,3}', ["<", "<a", "<aa", "<aaaa"]),
+        # Repetitions of one class followed by different bytes.
+        ('root ::= "(" [^()]{2,} ")" | "<" [^()]{0,3} "("', ["(", "(aa", "<", "<a"]),
     ],
 )
 def test_counted_repetitions_in_ebnf_match_the_replay(grammar: str, prefixes: list[str]) -> None:
@@ -284,17 +286,38 @@ def test_counted_repetition_does_not_continue_into_a_sibling_alternative(
         _assert_mask_matches_replay(compiled, tokenizer_info, text)
 
 
-def test_expired_parent_does_not_lend_its_repetitions() -> None:
+@pytest.mark.parametrize(
+    ("grammar", "first_token"),
+    [
+        (
+            'root ::= a | b\na[max_tokens=1] ::= "p" [^x]{0,3} "x"\nb[max_tokens=2] ::= [^x]{0,3} "x"',
+            "pp",
+        ),
+        # Repetitions with different bounds or different following bytes do not share a body
+        # between budgeted parents.
+        (
+            'root ::= a | b\na[max_tokens=1] ::= [^xy]{0,2} "x"\nb[max_tokens=2] ::= [^xy]{0,3} "y"',
+            "a",
+        ),
+        (
+            'root ::= a | b\na[max_tokens=1] ::= [^xy]{1,2} "x"\nb[max_tokens=2] ::= [^xy]{1,3} "y"',
+            "a",
+        ),
+        (
+            'root ::= a | b\na[max_tokens=1] ::= [^xy]{0,2} "x" "!"\n'
+            'b[max_tokens=2] ::= [^xy]{0,3} "x" "?"',
+            "a",
+        ),
+    ],
+)
+def test_expired_parent_does_not_lend_its_repetitions(grammar: str, first_token: str) -> None:
     """Once the budget is enforced, only the repetitions of a live parent count."""
-    vocab = ["a", "aa", "b", "ba", '"', 'a"', "p", "pp", "x", "ax"]
+    vocab = ["a", "aa", "b", "ba", '"', 'a"', "p", "pp", "x", "ax", "y", "ay", "ax!", "ax?"]
     tokenizer_info = xgr.TokenizerInfo(vocab)
-    grammar = (
-        'root ::= a | b\na[max_tokens=1] ::= "p" [^x]{0,3} "x"\nb[max_tokens=2] ::= [^x]{0,3} "x"'
-    )
     compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
     for token_id in range(len(vocab)):
         matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
-        assert matcher.accept_token(vocab.index("pp"))
+        assert matcher.accept_token(vocab.index(first_token))
         # The budget is enforced by the accept that follows a fill.
         allowed = token_id in _allowed_token_ids(matcher, tokenizer_info)
         assert allowed is bool(matcher.accept_token(token_id)), vocab[token_id]
@@ -333,6 +356,23 @@ def test_nested_repetition_keeps_the_expanded_repetition() -> None:
     grammar = 'root ::= "<" s{0,2} "\\""\ns ::= [^"]{2,3}'
     compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
     assert "{2, 3}" not in str(compiled.grammar)
+
+
+@pytest.mark.parametrize(
+    "grammar",
+    [
+        'root ::= s ","\ns[lazy] ::= "\\"" [^"]{2} "\\""',
+        'root ::= s ","\ns[lazy] ::= "\\"" [^"]{3,} "\\""',
+        'root ::= s ","\ns[lazy] ::= "\\"" [^"]{0,} "\\""',
+        'root ::= s ","\ns[lazy] ::= "\\"" t\nt ::= [^"]{3,} "\\""',
+    ],
+)
+def test_lazy_rule_keeps_the_expanded_repetition(grammar: str) -> None:
+    """A lazy body is flattened, which a counted edge would prevent, so it keeps the expansion."""
+    tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    for consumed in range(3):
+        _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
 
 
 def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:

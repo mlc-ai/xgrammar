@@ -2267,6 +2267,29 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
     return *has_char_budget_rules_;
   }
 
+  /*! \brief Whether any rule of the grammar is lazy. */
+  bool HasLazyRules() {
+    if (!has_lazy_rules_.has_value()) {
+      has_lazy_rules_ = false;
+      for (int32_t i = 0; i < base_grammar_->NumRules(); ++i) {
+        has_lazy_rules_ = *has_lazy_rules_ || base_grammar_->GetRule(i).is_lazy;
+      }
+    }
+    return *has_lazy_rules_;
+  }
+
+  /*! \brief Whether any rule of the grammar has a token budget. */
+  bool HasTokenBudgetRules() {
+    if (!has_token_budget_rules_.has_value()) {
+      has_token_budget_rules_ = false;
+      for (int32_t i = 0; i < base_grammar_->NumRules(); ++i) {
+        has_token_budget_rules_ =
+            *has_token_budget_rules_ || base_grammar_->GetRule(i).max_tokens >= 0;
+      }
+    }
+    return *has_token_budget_rules_;
+  }
+
   /*! \brief The first byte of the sequence element after the repetition being visited, if known. */
   std::optional<uint8_t> follow_byte_;
 
@@ -2275,6 +2298,12 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
 
   /*! \brief Cache of HasCharBudgetRules. */
   std::optional<bool> has_char_budget_rules_;
+
+  /*! \brief Cache of HasLazyRules. */
+  std::optional<bool> has_lazy_rules_;
+
+  /*! \brief Cache of HasTokenBudgetRules. */
+  std::optional<bool> has_token_budget_rules_;
 
   /*!
    * \brief Memoization of expanded repetitions, mapping (content of the repeated expr, lower,
@@ -2290,7 +2319,10 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
    */
   std::map<std::vector<int64_t>, int32_t> repetition_cache_;
 
-  /*! \brief The body rule of the counted repetitions of each character class, by its content. */
+  /*!
+   * \brief The body rule of the counted repetitions of each character class, by its content and
+   * the byte after the repetition, and by the bounds when the grammar has token budgets.
+   */
   std::map<std::vector<int32_t>, int32_t> counted_body_rule_ids_;
 };
 
@@ -2395,12 +2427,13 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   // decides most tokens in the body from the repetition bounds alone
   // (PopulateRepeatInteriorBitsets). Anywhere else the counted edge would be slower than the
   // expansion below, which keeps a separate mask per position; that includes grammars with
-  // character budgets, where the matcher never takes the fast path.
+  // character budgets, where the matcher never takes the fast path. Grammars with lazy rules keep
+  // the expansion too: the lazy body flattener cannot flatten a counted edge.
   const auto repeated_expr = builder_->GetGrammarExpr(grammar_expr_id);
   bool counted = false;
   if (repeated_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass &&
       repeated_expr[0] != 0 && follow_byte_.has_value() && *follow_byte_ < 0x80 &&
-      !HasCharBudgetRules()) {
+      !HasCharBudgetRules() && !HasLazyRules()) {
     bool excluded = false;
     for (int i = 1; i + 1 < repeated_expr.size(); i += 2) {
       excluded =
@@ -2410,15 +2443,16 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   }
   counted_repetition_ = counted;
 
-  // Memoize on (content of the repeated expr, lower, upper, form) so that identical repetitions
-  // share one expansion instead of each producing its own chain of rules.
+  // Memoize on (content of the repeated expr, lower, upper, and the byte after a counted one) so
+  // that identical repetitions share one expansion instead of each producing its own chain of
+  // rules.
   std::vector<int64_t> cache_key;
   cache_key.reserve(repeated_expr.size() + 4);
   cache_key.push_back(static_cast<int64_t>(repeated_expr.type));
   cache_key.insert(cache_key.end(), repeated_expr.begin(), repeated_expr.end());
   cache_key.push_back(lower);
   cache_key.push_back(upper);
-  cache_key.push_back(counted);
+  cache_key.push_back(counted ? *follow_byte_ : -1);
   auto it = repetition_cache_.find(cache_key);
   if (it != repetition_cache_.end()) {
     return it->second;
@@ -2443,14 +2477,20 @@ int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
   // The generic path below turns a counted repetition into an unrolled head plus a repeat tail
   // with a threshold-long lookahead, which keeps one leaf parser state alive per unrolled copy
   // while the matcher matches inside the repetition. The parser needs a finite upper bound, so
-  // INT32_MAX stands for an unbounded one. Counted repetitions of one character class share their
-  // body rule whatever their bounds, which the matcher reads from each repeat edge, so the token
-  // data of PopulateRepeatInteriorBitsets is built once per class.
+  // INT32_MAX stands for an unbounded one. Counted repetitions of one character class followed by
+  // the same byte share their body rule whatever their bounds, which the matcher reads from each
+  // repeat edge, so the token data of PopulateRepeatInteriorBitsets is built once. With token
+  // budgets each bound keeps its own body: a replayed token completes a shared body into every
+  // parent, an expired one included.
   if (counted) {
     const auto repeated_expr = builder_->GetGrammarExpr(grammar_expr_id);
-    auto [it, inserted] = counted_body_rule_ids_.try_emplace(
-        std::vector<int32_t>(repeated_expr.begin(), repeated_expr.end()), -1
-    );
+    std::vector<int32_t> body_key(repeated_expr.begin(), repeated_expr.end());
+    body_key.push_back(*follow_byte_);
+    if (HasTokenBudgetRules()) {
+      body_key.push_back(static_cast<int32_t>(lower));
+      body_key.push_back(static_cast<int32_t>(upper));
+    }
+    auto [it, inserted] = counted_body_rule_ids_.try_emplace(std::move(body_key), -1);
     if (inserted) {
       it->second = builder_->AddRuleWithHint(
           cur_rule_name + "_repeat",
