@@ -8,6 +8,7 @@ import pytest
 from pydantic import BaseModel, Field, TypeAdapter, create_model
 
 import xgrammar as xgr
+from xgrammar.structural_tag import JSONSchemaFormat, StructuralTag
 from xgrammar.testing import (
     GrammarFunctor,
     _generate_float_regex,
@@ -163,6 +164,29 @@ def test_enum_const():
     instance = MainModel(foo="a", values=1, bars="a", str_values='a\n\r"', field=Field.FOO)
     check_schema_grammar_builds(schema, any_whitespace=False)
     check_schema_with_instance(schema, instance, any_whitespace=False)
+
+
+@pytest.mark.parametrize(
+    "schema, accepted, rejected",
+    [
+        ({"const": 19.99}, "19.99", "19.989999999999998"),
+        ({"enum": [19.99, 0.1]}, "0.1", "0.10000000000000001"),
+        ({"const": {"price": 19.99}}, '{"price":19.99}', '{"price":19.989999999999998}'),
+        ({"const": 100000.0}, "100000", "1e+05"),
+        ({"const": 0.0001}, "0.0001", "1e-04"),
+    ],
+)
+def test_numeric_const_enum_literals(schema: Dict[str, Any], accepted: str, rejected: str):
+    check_schema_with_instance(schema, accepted, any_whitespace=False)
+    check_schema_with_instance(schema, rejected, is_accepted=False, any_whitespace=False)
+
+
+@pytest.mark.parametrize("style", ["qwen_xml", "minimax_m3_xml"])
+def test_numeric_const_literals_in_xml_styles(style: str):
+    schema = {"type": "object", "const": {"price": 19.99}}
+    tag = StructuralTag(format=JSONSchemaFormat(json_schema=schema, style=style))
+    grammar = str(xgr.Grammar.from_structural_tag(tag))
+    assert "19.99" in grammar and "19.989999999999998" not in grammar
 
 
 def test_empty_enum_rejected():
@@ -2128,6 +2152,8 @@ instance__accepted__test_json_pointer_format = [
     (r"abc", False),
     (r"/~", False),
     (r"/~2", False),
+    (r"/\u007E", False),
+    (r"/\uD800", False),
 ]
 
 
@@ -2161,6 +2187,53 @@ def test_relative_json_pointer_format(instance: str, accepted: bool):
     check_schema_grammar_builds(schema)
 
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
+
+
+@pytest.mark.parametrize(
+    "format_name, instance",
+    [
+        ("email", r'"\"\a\"@b"'),
+        ("email", r'"\"\u\"@b"'),
+        ("json-pointer", '"/\x01"'),
+        ("json-pointer", '"/"a"'),
+        ("json-pointer", r'"/\"'),
+        ("relative-json-pointer", '"0/\x01"'),
+    ],
+)
+def test_formats_reject_invalid_json_strings(format_name: str, instance: str):
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(instance)
+    grammar = xgr.Grammar.from_json_schema({"type": "string", "format": format_name})
+    assert not _is_grammar_accept_string(grammar, instance)
+
+
+@pytest.mark.parametrize(
+    "format_name, value",
+    [
+        ("json-pointer", '/"'),
+        ("json-pointer", "/\\"),
+        ("relative-json-pointer", '0/"'),
+        ("relative-json-pointer", "0/\\"),
+    ],
+)
+def test_pointer_formats_accept_json_escapes(format_name: str, value: str):
+    grammar = xgr.Grammar.from_json_schema({"type": "string", "format": format_name})
+    assert _is_grammar_accept_string(grammar, json.dumps(value))
+
+
+@pytest.mark.parametrize(
+    "format_name, instance",
+    [
+        ("json-pointer", r'"/\u0001"'),
+        ("json-pointer", r'"/\/"'),
+        ("json-pointer", r'"/\n"'),
+        ("relative-json-pointer", r'"0/\u0001"'),
+    ],
+)
+def test_pointer_formats_accept_other_json_escapes(format_name: str, instance: str):
+    json.loads(instance)
+    grammar = xgr.Grammar.from_json_schema({"type": "string", "format": format_name})
+    assert _is_grammar_accept_string(grammar, instance)
 
 
 def test_min_max_length():

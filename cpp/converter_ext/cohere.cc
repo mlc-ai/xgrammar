@@ -376,7 +376,7 @@ int32_t CohereXMLToolCallingConverter::GenerateString(
   }
   if (spec.format.has_value()) {
     const std::string& format = *spec.format;
-    auto regex_pattern = JSONFormatToRegexPattern(format);
+    auto regex_pattern = JSONFormatToRegexPattern(format, /*raw_string=*/true);
     if (regex_pattern.has_value()) {
       return RegexExpression(regex_pattern.value(), false, true);
     }

@@ -75,7 +75,6 @@ PARALLEL_TOOL_SCENARIOS = [(2, "auto", 2), (2, "required", 2)]
 # (stag_key, model_id, reasoning, template_kwargs)
 # Excluded:
 #   - Llama-4: pythonic tool call format, needs separate structural tag
-#   - gemma_4: tool calls use <|"|> quoting, not JSON
 #   - deepseek_r1 thinking=True: template drops <think> in history rendering,
 #     prompt diff extraction doesn't work
 #   - Kimi-K2-Thinking thinking=False: model always outputs <think></think>,
@@ -124,11 +123,26 @@ MODEL_CONFIGS = [
         False,
         {"skip_think": True, "enable_thinking": False},
     ),
+    ("gemma_4", "google/gemma-4-E2B-it", True, {"enable_thinking": True}),
+    ("gemma_4", "google/gemma-4-E2B-it", False, {"enable_thinking": False}),
+    ("gemma_4", "google/gemma-4-31B-it", True, {"enable_thinking": True}),
+    ("gemma_4", "google/gemma-4-31B-it", False, {"enable_thinking": False}),
 ]
 
 # Models whose renderer cannot produce a turn with an empty reasoning block: the DeepSeek
-# V3.2 encoder rejects it, the other templates drop the block entirely.
-SKIP_EMPTY_REASONING = {"ENCODER:dsv32", "MiniMaxAI/MiniMax-M2.5", "moonshotai/Kimi-K3"}
+# V3.2 encoder rejects it, the other templates (including Gemma-4's) drop the block entirely.
+SKIP_EMPTY_REASONING = {
+    "ENCODER:dsv32",
+    "MiniMaxAI/MiniMax-M2.5",
+    "moonshotai/Kimi-K3",
+    "google/gemma-4-E2B-it",
+    "google/gemma-4-31B-it",
+}
+
+# Templates that pre-render an empty thought block in the generation prompt when thinking
+# is disabled; history rendering omits it, so it is stripped before diffing.
+PRERENDERED_EMPTY_THOUGHT_MODELS = {"google/gemma-4-31B-it"}
+PRERENDERED_EMPTY_THOUGHT = "<|channel>thought\n<channel|>"
 
 # Models where tool call format in template doesn't match structural tag.
 SKIP_TOOLS = set()
@@ -168,6 +182,8 @@ EOS_SUFFIXES = {
     "deepseek_v4_1": ["<｜end▁of▁sentence｜>"],
     "cohere": ["<|END_OF_TURN_TOKEN|>"],
     "exaone": ["[|endofturn|]"],
+    # <|tool_response> is the halt signal the template appends after a tool call.
+    "gemma_4": ["<turn|>", "<|tool_response>"],
 }
 
 
@@ -243,6 +259,9 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
     full = tokenizer.apply_chat_template(
         [USER_MSG, assistant_msg], add_generation_prompt=False, **kwargs
     )
+
+    if model_id in PRERENDERED_EMPTY_THOUGHT_MODELS and not full.startswith(prompt):
+        prompt = prompt.removesuffix(PRERENDERED_EMPTY_THOUGHT)
 
     if model_id in STRIP_THINK_MODELS and assistant_msg.get("reasoning_content") is not None:
         if not full.startswith(prompt):
@@ -501,6 +520,8 @@ def test_reasoning_stag(case):
         template_kwargs,
         num_tool_calls,
     ) = case
+    if stag_key == "gemma_4":
+        pytest.importorskip("transformers", minversion="5.5")
     tools = make_tools(num_tools)
     tool_choice = make_tool_choice(tool_choice_str, tools or [])
     assistant_msg = make_assistant_msg(stag_key, reasoning_content, num_tool_calls)
@@ -684,6 +705,99 @@ def test_deepseek_v4_1_official_tokenizer_masks(reasoning, policy, schema_kind):
             assert not (int(bitmask[0, 0]) >> tokenizer.eos_token_id) & 1
         assert (int(bitmask[0, token_id // 32]) >> (token_id % 32)) & 1, token_id
         assert matcher.accept_token(token_id), token_id
+    assert matcher.is_terminated()
+
+
+_MIMO_CHECKPOINTS = [
+    ("XiaomiMiMo/MiMo-V2.6-Pro-RL", "54b10491b1811c76aa9681a9d0ff872396a4064c"),
+    ("XiaomiMiMo/MiMo-V2.6-Flash-RL", "3b38d063180c3e4aed9691fdc735f3d10b266ee4"),
+]
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("model_id,revision", _MIMO_CHECKPOINTS)
+@pytest.mark.parametrize("reasoning", [False, True])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced"])
+@pytest.mark.parametrize("schema_kind", ["typed", "union", "ref", "unconstrained"])
+def test_mimo_official_tokenizer_masks(model_id, revision, reasoning, policy, schema_kind):
+    """Replay actual template completions, including tokens crossing XML boundaries."""
+    tokenizer = load_tokenizer(model_id, revision=revision)
+    info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=152576)
+    assert info.vocab_type == xgr.VocabType.BYTE_LEVEL
+    assert info.stop_token_ids == [151645]
+    assert len(tokenizer) == 151675
+    for text, token_id in [
+        ("<tool_call>", 151657),
+        ("</tool_call>", 151658),
+        ("<think>", 151667),
+        ("</think>", 151668),
+    ]:
+        assert tokenizer.encode(text, add_special_tokens=False) == [token_id]
+
+    arguments = {
+        "query": '\n北京 &amp; "quoted"\n',
+        "limit": 2,
+        "data": {"items": [True, None, "é"]},
+    }
+    schema = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "limit": {"type": "integer", "minimum": 1},
+            "data": {
+                "type": "object",
+                "properties": {"items": {"type": "array"}},
+                "required": ["items"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["query", "limit", "data"],
+        "additionalProperties": False,
+    }
+    if schema_kind == "union":
+        schema["properties"]["limit"] = {"anyOf": [{"type": "integer"}, {"type": "null"}]}
+        arguments["limit"] = None
+    elif schema_kind == "ref":
+        schema["$defs"] = {"Limit": schema["properties"]["limit"]}
+        schema["properties"]["limit"] = {"$ref": "#/$defs/Limit"}
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": name,
+                "parameters": schema,
+                "strict": schema_kind != "unconstrained",
+            },
+        }
+        for name in ("search", "other")
+    ]
+    choice = {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    tag = get_model_structural_tag("mimo", tools=tools, reasoning=reasoning, tool_choice=choice)
+    matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(info).compile_structural_tag(tag))
+    message = {
+        "role": "assistant",
+        "content": "",
+        "reasoning_content": "Plan." if reasoning else "",
+        "tool_calls": [
+            {"type": "function", "function": {"name": name, "arguments": arguments}}
+            for name in (["search"] if policy == "forced" else ["search", "other"])
+        ],
+    }
+    kwargs = {"tools": tools, "tokenize": False, "enable_thinking": reasoning}
+    prompt = tokenizer.apply_chat_template([USER_MSG], add_generation_prompt=True, **kwargs)
+    full = tokenizer.apply_chat_template([USER_MSG, message], **kwargs)
+    assert prompt.endswith("assistant\n" if reasoning else "assistant\n<think></think>")
+    assert full.startswith(prompt)
+    output = full[len(prompt) :]
+    token_ids = tokenizer.encode(output, add_special_tokens=False)
+    assert tokenizer.decode(token_ids) == output
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    for index, token_id in enumerate(token_ids):
+        matcher.fill_next_token_bitmask(bitmask)
+        if policy != "auto" and (index == 0 or token_ids[index - 1] != 151658):
+            assert not (int(bitmask[0, 151645 // 32]) >> (151645 % 32)) & 1
+        assert (int(bitmask[0, token_id // 32]) >> (token_id % 32)) & 1, (index, token_id)
+        assert matcher.accept_token(token_id), (index, token_id)
     assert matcher.is_terminated()
 
 
