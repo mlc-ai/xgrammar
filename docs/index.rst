@@ -29,6 +29,7 @@ The mission of this project is to bring flexible zero-overhead structure generat
    using_xgrammar/serialization
    using_xgrammar/runtime_safeguards
    using_xgrammar/javascript_api
+   using_xgrammar/rust_api
 
 .. toctree::
    :maxdepth: 1
