@@ -21,7 +21,6 @@ from .structural_tag import (
     OrFormat,
     PlusFormat,
     RegexFormat,
-    RepeatFormat,
     SequenceFormat,
     StarFormat,
     StructuralTag,
@@ -559,9 +558,12 @@ def bind_marker_tokens(structural_tag: StructuralTag, markers: List[str]) -> Str
     """Match the given marker strings as their dedicated tokens instead of as text.
 
     Markers in triggers, tag ``begin``/``end`` and constant strings become token formats; the
-    surrounding text is kept, and markers inside schema-driven content stay strings. Marker
-    ``excludes`` become token-level (other excludes are dropped), so free text may contain a
-    marker spelled from sub-tokens: use this only with parsers that recognise markers by token ID.
+    surrounding text is kept, and markers inside schema-driven content stay strings. In
+    token-triggered free text, marker ``excludes`` become token-level (other excludes are dropped),
+    so it may contain a marker spelled from sub-tokens: use this only with parsers that recognise
+    markers by token ID. Compile the result with a tokenizer-configured :class:`GrammarCompiler`.
+    Markers under a :class:`RepeatFormat` stay strings; a list-valued ``end`` raises
+    :class:`ValueError` if an alternative ends with a marker.
 
     Parameters
     ----------
@@ -601,8 +603,10 @@ class _MarkerBinder:
             return _replace(fmt, "tags", [self._bind_tag(tag) for tag in fmt.tags])
         if isinstance(fmt, (SequenceFormat, OrFormat)):
             return _replace(fmt, "elements", [self.bind(element) for element in fmt.elements])
-        if isinstance(fmt, (OptionalFormat, PlusFormat, StarFormat, RepeatFormat)):
+        if isinstance(fmt, (OptionalFormat, PlusFormat, StarFormat)):
             return _replace(fmt, "content", self.bind(fmt.content))
+        # RepeatFormat is left untouched: token formats beneath it are not
+        # resolved against the tokenizer, so its markers stay strings.
         return fmt
 
     def _leading_marker(self, text: str) -> Optional[str]:
@@ -656,6 +660,14 @@ class _MarkerBinder:
                 lead = self._split_literal(begin[len(marker) :])
                 begin = TokenFormat(token=marker)
         end_marker: Optional[str] = None
+        if isinstance(end, list):
+            bound = [alt for alt in end if self._trailing_marker(alt) is not None]
+            if bound:
+                raise ValueError(
+                    "bind_marker_tokens cannot bind a tag whose `end` is a list of alternatives "
+                    f"when one of them ends with a marker (got {bound!r}); use a single end "
+                    "string or leave that tag unbound"
+                )
         if isinstance(end, str):
             end_marker = self._trailing_marker(end)
             if end_marker is not None:

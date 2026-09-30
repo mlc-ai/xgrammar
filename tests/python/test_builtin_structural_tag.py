@@ -38,6 +38,7 @@ from xgrammar.structural_tag import (
     ConstStringFormat,
     JSONSchemaFormat,
     OptionalFormat,
+    RepeatFormat,
     SequenceFormat,
     StructuralTag,
     TagFormat,
@@ -3452,6 +3453,34 @@ def test_bind_marker_tokens_keeps_only_marker_excludes():
     assert fmt.exclude_tokens == ["</tool_call>"]
 
 
+def test_bind_marker_tokens_leaves_repeat_content_as_strings():
+    """The token resolver does not recurse through RepeatFormat, so nothing is bound beneath it."""
+    structural_tag = StructuralTag(
+        format=RepeatFormat(min=1, max=2, content=ConstStringFormat(value="<tool_call>x"))
+    )
+    assert bind_marker_tokens(structural_tag, ["<tool_call>"]) is structural_tag
+
+
+def test_bind_marker_tokens_rejects_marker_in_alternative_ends():
+    structural_tag = StructuralTag(
+        format=TagFormat(
+            begin="<tool_call>",
+            content=ConstStringFormat(value="x"),
+            end=["</tool_call>", "</tool_call>\n"],
+        )
+    )
+    with pytest.raises(ValueError, match="list of alternatives"):
+        bind_marker_tokens(structural_tag, ["<tool_call>", "</tool_call>"])
+
+    plain = StructuralTag(
+        format=TagFormat(begin="<tool_call>", content=ConstStringFormat(value="x"), end=["a", "b"])
+    )
+    bound = bind_marker_tokens(plain, ["<tool_call>"]).format
+    assert isinstance(bound, TagFormat)
+    assert bound.begin == TokenFormat(token="<tool_call>")
+    assert bound.end == ["a", "b"]
+
+
 def _marker_encodings(tokenizer, body: str) -> Tuple[List[int], List[int]]:
     """One tool call with the dedicated marker tokens, and with the markers spelled out."""
 
@@ -3481,6 +3510,12 @@ def _accepts_tokens(compiler, structural_tag: StructuralTag, token_ids: List[int
             "glm_4_7",
             "zai-org/GLM-4.7-Flash",
             "get_weather<arg_key>city</arg_key><arg_value>Leon</arg_value>",
+        ),
+        ("qwen_3", "Qwen/Qwen3-0.6B", '\n{"name": "get_weather", "arguments": {"city": "Leon"}}\n'),
+        (
+            "qwen_3_5",
+            "Qwen/Qwen3.5-35B-A3B",
+            "\n<function=get_weather>\n<parameter=city>\nLeon\n</parameter>\n</function>\n",
         ),
         (
             "qwen_3_coder",
