@@ -420,6 +420,12 @@ class Grammar::Impl {
   std::vector<std::optional<uint64_t>> per_rule_fsm_hashes;
 
   /*!
+   * \brief Whether each rule's FSM hash is partial: it hashes a rule referenced at the start state
+   * as unknown, so it does not identify the language of the rule.
+   */
+  std::vector<bool> per_rule_fsm_hash_is_partial;
+
+  /*!
    * \brief The new state ids of each FSM's states.
    */
   std::vector<std::vector<std::pair<int32_t, int32_t>>> per_rule_fsm_new_state_ids;
