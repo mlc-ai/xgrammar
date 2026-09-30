@@ -3605,6 +3605,11 @@ std::optional<uint64_t> GrammarFSMHasherImpl::HashFsm(int fsm_index, bool allow_
         return bounds.has_value() ? HashCombineMixed(hash, bounds->first, bounds->second) : hash;
       };
       if (ref_rule_id == fsm_index) {
+        // With allow_unknown_at_start the fsm references an unhashed rule at its start state, which
+        // the token masks of the other states reach through a self-reference.
+        if (allow_unknown_at_start) {
+          return false;
+        }
         hash_and_target.insert({with_bounds(kSelfRecursionFlag), target});
         return true;
       }
