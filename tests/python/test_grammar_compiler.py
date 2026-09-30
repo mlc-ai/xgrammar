@@ -543,6 +543,13 @@ CROSSING_CACHE_DIFFERENT_FSM_CASES = [
         "(q0)",
     ),
     ('root ::= "(" r ")"\nr ::= [a-x]* "x"', 'root ::= "(" r ")"\nr[lazy] ::= [a-x]* "x"', "(ax)"),
+    (
+        'root ::= "(" r ")"\nr ::= z | "qx"\n'
+        'v ::= "q" w "]" | "a"\nw ::= v | "{" z "}"\nz ::= w | "b"',
+        'root ::= "(" r ")"\nr ::= z | "qx"\n'
+        'v ::= "q" w "]" | "0"\nw ::= v | "{" z "}"\nz ::= w | "b"',
+        "(q0])",
+    ),
 ]
 
 
@@ -558,6 +565,7 @@ CROSSING_CACHE_DIFFERENT_FSM_CASES = [
         "lookahead-expr-boundary",
         "lookahead-rule-ref",
         "lazy",
+        "partial-hash-start-state",
     ],
 )
 def test_grammar_compiler_crossing_cache_different_fsm(
@@ -568,7 +576,8 @@ def test_grammar_compiler_crossing_cache_different_fsm(
     in the tokens of a token edge, or in where one lookahead element ends: their FSM hashes used to
     collide. Nor may it reuse them for a lookahead that references a rule with a partial hash, which
     leaves out a rule referenced at its start state, or for a rule that differs only in being lazy.
-    """
+    The start state of a rule with a partial hash must not reuse them either: its mask includes the
+    tokens of that left-out rule."""
     tokenizer_info = xgr.TokenizerInfo(
         ["(", ")", "a", "0", "x", "y", '"', '""', "xa", "x0", "q", "qx\x01", "qa", "q0"]
     )
