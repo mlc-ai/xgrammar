@@ -216,9 +216,10 @@ choice already resolves to a single call, so the flag does not change it.
 By default control markers such as `<tool_call>` are strings, so the grammar also accepts them
 spelled from ordinary sub-tokens (`<`, `tool_call`, `>`), which a parser that recognises markers by
 token ID cannot parse. `token_markers=True` requires the dedicated tokens instead; the tokenizer
-must define each marker as a single token. Markers in free text are then also only excluded as
-tokens, so use it only with such parsers. Markers inside schema-driven content (e.g. GLM's
-`<arg_key>`) stay strings.
+must define each marker as a single token, and the tag must be compiled with a tokenizer-configured
+`GrammarCompiler`, not `Grammar.from_structural_tag`. Markers in token-triggered free text are then
+also only excluded as tokens, so use it only with such parsers. Markers inside schema-driven content
+(e.g. GLM's `<arg_key>`) stay strings.
 
 ---
 
