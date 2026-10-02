@@ -114,6 +114,112 @@ def test_indent():
     )
 
 
+@pytest.mark.parametrize(
+    "schema, instance, separators",
+    [
+        ({"type": "object"}, {"a": 1, "b": 2}, (",", ":")),
+        ({"type": "array"}, [1, 2], (",", ":")),
+        ({}, {"a": [1, 2], "b": {"c": 3, "d": 4}}, (",", ":")),
+        (
+            {
+                "type": "object",
+                "properties": {"value": {"type": "object"}},
+                "required": ["value"],
+                "additionalProperties": False,
+            },
+            {"value": {"a": [1, 2], "b": 3}},
+            (",", ":"),
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"value": {"type": "array"}},
+                "required": ["value"],
+                "additionalProperties": False,
+            },
+            {"value": [{"a": 1, "b": 2}, 3]},
+            (",", ":"),
+        ),
+        ({"type": "object"}, {"a": 1, "b": 2}, None),
+        ({"type": "array"}, [1, 2], None),
+        ({"type": "object"}, {"a": 1, "b": 2}, (",  ", ": ")),
+        ({"type": "object"}, {"a": 1, "b": 2}, (", ", ":  ")),
+    ],
+)
+def test_basic_rules_separators(schema, instance, separators):
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False, separators=separators)
+    text = json.dumps(instance, separators=separators)
+    assert _is_grammar_accept_string(grammar, text)
+
+    comma, colon = separators or (", ", ": ")
+    other_comma = ", " if comma != ", " else ","
+    for index, char in enumerate(text):
+        if char == ",":
+            mutated = text[:index] + other_comma + text[index + len(comma) :]
+            assert not _is_grammar_accept_string(grammar, mutated)
+    if ":" in text:
+        other_colon = ": " if colon != ": " else ":"
+        assert not _is_grammar_accept_string(
+            grammar, json.dumps(instance, separators=(comma, other_colon))
+        )
+
+
+@pytest.mark.parametrize("separators", [None, (",", ":"), (", ", ": ")])
+def test_basic_rules_separators_with_indent(separators):
+    schema = {
+        "type": "object",
+        "properties": {"value": {}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    grammar = xgr.Grammar.from_json_schema(
+        schema, any_whitespace=False, indent=2, separators=separators
+    )
+    comma, colon = separators or (",", ": ")
+    instance = {"a": [1, 2], "b": 3}
+    prefix = '{\n  "value"' + colon
+    suffix = "\n}"
+    value_text = json.dumps(instance, separators=(comma, colon))
+    text = prefix + value_text + suffix
+    assert _is_grammar_accept_string(grammar, text)
+    other_comma = ", " if comma != ", " else ","
+    for index, char in enumerate(value_text):
+        if char == ",":
+            mutated = value_text[:index] + other_comma + value_text[index + len(comma) :]
+            assert not _is_grammar_accept_string(grammar, prefix + mutated + suffix)
+    assert not _is_grammar_accept_string(
+        grammar, prefix + json.dumps(instance, indent=2, separators=(comma, colon)) + suffix
+    )
+
+
+@pytest.mark.parametrize("text", ['{"a":1,"b":[2,3]}', '{\n"a" : 1 ,\t"b" : [2,\r\n3]\n}'])
+def test_basic_rules_separators_with_any_whitespace(text):
+    grammar = xgr.Grammar.from_json_schema({}, any_whitespace=True, separators=(",", ":"))
+    assert _is_grammar_accept_string(grammar, text)
+
+
+@pytest.mark.parametrize(
+    "value_schema, instance",
+    [({"type": "object"}, {"a": 1, "b": 2}), ({"type": "object"}, {"a": [1, 2]})],
+)
+def test_basic_rules_separators_in_qwen_xml(value_schema, instance):
+    schema = {
+        "type": "object",
+        "properties": {"value": value_schema},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+    grammar = xgr.Grammar.from_ebnf(
+        _json_schema_to_ebnf(
+            schema, any_whitespace=False, separators=(",", ":"), json_format="qwen_xml"
+        )
+    )
+    text = "<parameter=value>" + json.dumps(instance, separators=(",", ":")) + "</parameter>"
+    assert _is_grammar_accept_string(grammar, text)
+    spaced = "<parameter=value>" + json.dumps(instance, separators=(", ", ":")) + "</parameter>"
+    assert not _is_grammar_accept_string(grammar, spaced)
+
+
 schema__accepted_instances__rejected_instances__test_non_strict = [
     (
         {"type": "array", "prefixItems": [{"type": "integer"}, {"type": "integer"}]},
