@@ -21,6 +21,7 @@ from .structural_tag import (
     OrFormat,
     PlusFormat,
     RegexFormat,
+    RepeatFormat,
     SequenceFormat,
     StarFormat,
     StructuralTag,
@@ -674,14 +675,10 @@ class _MarkerBinder:
                 tail = self._split_literal(end[: -len(end_marker)])
                 end = TokenFormat(token=end_marker)
         content = self.bind(tag.content)
-        if (
-            end_marker is not None
-            and isinstance(content, AnyTextFormat)
-            and end_marker not in content.excludes
-        ):
-            # A string end is excluded from AnyText content automatically, a token
-            # end is not; keep the wildcard from swallowing the closing marker.
-            content = content.model_copy(update={"excludes": [*content.excludes, end_marker]})
+        if end_marker is not None:
+            # A string end stops the free text beneath the tag automatically, a token
+            # end does not; keep the wildcards from swallowing the closing marker.
+            content = _exclude_from_free_text(content, end_marker)
         if lead or tail:
             content = SequenceFormat(elements=[*lead, content, *tail])
         if begin is tag.begin and end is tag.end and content is tag.content:
@@ -714,6 +711,19 @@ class _MarkerBinder:
             at_least_one=fmt.at_least_one,
             stop_after_first=fmt.stop_after_first,
         )
+
+
+def _exclude_from_free_text(fmt: Format, text: str) -> Format:
+    """Exclude ``text`` from the free-text spans of ``fmt`` that are not inside a nested tag."""
+    if isinstance(fmt, (AnyTextFormat, TriggeredTagsFormat)):
+        if text in fmt.excludes:
+            return fmt
+        return fmt.model_copy(update={"excludes": [*fmt.excludes, text]})
+    if isinstance(fmt, (SequenceFormat, OrFormat)):
+        return _replace(fmt, "elements", [_exclude_from_free_text(e, text) for e in fmt.elements])
+    if isinstance(fmt, (OptionalFormat, PlusFormat, StarFormat, RepeatFormat)):
+        return _replace(fmt, "content", _exclude_from_free_text(fmt.content, text))
+    return fmt
 
 
 def _replace(fmt: Format, field: str, value: Any) -> Format:
@@ -792,7 +802,9 @@ def register_model_structural_tag(name: str, *, marker_tokens: Optional[List[str
 
     def decorator(func):
         _structural_tag_registry[name] = func
-        if marker_tokens is not None:
+        if marker_tokens is None:
+            _structural_tag_marker_tokens.pop(name, None)
+        else:
             _structural_tag_marker_tokens[name] = list(marker_tokens)
         return func
 
