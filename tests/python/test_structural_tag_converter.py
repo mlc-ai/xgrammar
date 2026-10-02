@@ -1,3 +1,4 @@
+import json
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -91,6 +92,91 @@ def check_stag_with_instance(
     assert accepted == is_accepted
     if PROFILER_ON:
         profiler.profile_stag(structural_tag_format, instance)
+
+
+@pytest.mark.parametrize("dynamic", [False, True])
+@pytest.mark.parametrize(
+    "patterns,excludes",
+    [
+        (["abce", "bcd"], ["<guard>"]),
+        (["abcx", "bc"], ["你好"]),
+        (["<A>", "<B>"], ["stop", "stopping"]),
+        ([], ["<guard>"]),
+    ],
+)
+def test_tag_dispatch_slicing_mask_matches_byte_matching(dynamic, patterns, excludes):
+    vocabulary = [chr(value) for value in range(32, 127)] + [
+        "abc",
+        "xabc",
+        "xabcd",
+        "xabcx",
+        "abcxX",
+        "x<guard>",
+        "<guard>",
+        "x你好",
+        "你好",
+        "x<A>X",
+        "<A>X",
+        "x<B>Y",
+        "xstop",
+        "stopping",
+        "xstopping",
+    ]
+    info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[])
+    compiler = xgr.GrammarCompiler(info, cache_enabled=False, enable_dynamic_compilation=dynamic)
+    if patterns:
+        compiled = compiler.compile_structural_tag(
+            {
+                "type": "structural_tag",
+                "format": {
+                    "type": "dispatch",
+                    "rules": [
+                        [pattern, {"type": "const_string", "value": "X"}] for pattern in patterns
+                    ],
+                    "loop": True,
+                    "excludes": excludes,
+                },
+            }
+        )
+    else:
+        # EBNF permits an empty dispatch; the structural-tag JSON API requires a trigger.
+        excluded = ", ".join(json.dumps(pattern) for pattern in excludes)
+        compiled = compiler.compile_grammar(
+            f"root ::= TagDispatch(excludes=({excluded}), loop_after_dispatch=true)"
+        )
+    # Check partial triggers and excludes across token boundaries, as well as patterns wholly
+    # inside one token. Byte matching is independent of the vocabulary-preprocessing shortcut.
+    prefixes = [
+        "",
+        "free",
+        "a",
+        "ab",
+        "abc",
+        "b",
+        "bc",
+        "<",
+        "<A",
+        "<A>",
+        "s",
+        "st",
+        "sto",
+        "你",
+        "abcx",
+        "abce",
+        "bcd",
+        "<gua",
+    ]
+    for prefix in prefixes:
+        matcher = xgr.GrammarMatcher(compiled)
+        if not matcher.accept_string(prefix):
+            continue
+        mask = xgr.allocate_token_bitmask(1, info.vocab_size)
+        matcher.fill_next_token_bitmask(mask)
+        for token_id, token in enumerate(vocabulary):
+            oracle = matcher.fork()
+            expected = oracle.accept_string(token)
+            allowed = bool((int(mask[0, token_id // 32]) >> (token_id % 32)) & 1)
+            assert allowed == expected, (prefix, token, dynamic, patterns, excludes)
 
 
 def test_tag_dispatch_slicing_cache_isolated_and_concurrent():

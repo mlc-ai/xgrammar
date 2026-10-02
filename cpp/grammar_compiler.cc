@@ -36,6 +36,7 @@
 #include "support/thread_pool.h"
 #include "support/thread_safe_cache.h"
 #include "support/utils.h"
+#include "tag_dispatch_slicing.h"
 #include "tokenizer_info_impl.h"
 #include "xgrammar/grammar.h"
 #include "xgrammar/tokenizer_info.h"
@@ -4257,20 +4258,9 @@ std::shared_ptr<const DynamicBitset> GrammarCompilerSub::GetTagDispatchSecondSli
   }
 
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
-  auto computed = std::make_shared<DynamicBitset>(sorted_decoded_vocab.size());
-  for (int32_t index = 0; index < static_cast<int32_t>(sorted_decoded_vocab.size()); ++index) {
-    const auto& token = sorted_decoded_vocab[index].second;
-    bool definitely_accepted = token.empty();
-    if (!definitely_accepted) {
-      definitely_accepted =
-          std::none_of(patterns.begin(), patterns.end(), [&](const std::string& pattern) {
-            return token.find(pattern, 1) != std::string::npos;
-          });
-    }
-    if (definitely_accepted) {
-      computed->Set(index);
-    }
-  }
+  auto computed = std::make_shared<DynamicBitset>(
+      BuildTagDispatchSecondSlicingBitset(sorted_decoded_vocab, patterns)
+  );
 
   constexpr size_t kMaxTagDispatchSlicingCacheEntries = 64;
   std::lock_guard<std::mutex> lock(tag_dispatch_slicing_cache_mutex_);
