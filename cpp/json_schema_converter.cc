@@ -1893,7 +1893,7 @@ void JSONSchemaConverter::AddBasicRules(const std::vector<std::string>& addition
   auto saved_indent_manager = indent_manager_;
   indent_manager_ = IndentManager(
       std::nullopt,
-      any_whitespace_ ? "," : ", ",
+      any_whitespace_ ? "," : saved_indent_manager.separator_,
       any_whitespace_,
       any_whitespace_ ? max_whitespace_cnt_ : std::nullopt
   );
