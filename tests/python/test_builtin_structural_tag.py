@@ -11,6 +11,8 @@ from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.builtin_structural_tag import (
+    _structural_tag_marker_tokens,
+    _structural_tag_registry,
     bind_marker_tokens,
     get_cohere_structural_tag,
     get_deepseek_r1_structural_tag,
@@ -3433,6 +3435,37 @@ def test_bind_marker_tokens_excludes_token_end_from_any_text(end: str):
     content = tag.content.elements[0] if isinstance(tag.content, SequenceFormat) else tag.content
     assert isinstance(content, AnyTextFormat)
     assert content.excludes == ["</think>"]
+
+
+def test_bind_marker_tokens_excludes_token_end_from_nested_free_text():
+    """The token end is excluded from free text anywhere in the content, except in nested tags."""
+    inner = TagFormat(begin="<a>", content=AnyTextFormat(), end="</a>")
+    content = SequenceFormat(
+        elements=[OptionalFormat(content=AnyTextFormat()), inner, AnyTextFormat()]
+    )
+    structural_tag = StructuralTag(format=TagFormat(begin="", content=content, end="</think>"))
+    tag = bind_marker_tokens(structural_tag, ["</think>"]).format
+
+    first, nested, last = tag.content.elements
+    assert first.content.excludes == ["</think>"]
+    assert nested is inner
+    assert last.excludes == ["</think>"]
+
+
+def test_reregistering_without_marker_tokens_disables_token_markers():
+    name = "_test_reregistered_model"
+    try:
+        xgr.register_model_structural_tag(name, marker_tokens=["<tool_call>", "</tool_call>"])(
+            get_qwen_3_structural_tag
+        )
+        get_model_structural_tag(name, tools=_TOKEN_MARKER_TOOLS, token_markers=True)
+
+        xgr.register_model_structural_tag(name)(get_qwen_3_structural_tag)
+        with pytest.raises(ValueError, match="token_markers is not supported"):
+            get_model_structural_tag(name, tools=_TOKEN_MARKER_TOOLS, token_markers=True)
+    finally:
+        _structural_tag_registry.pop(name, None)
+        _structural_tag_marker_tokens.pop(name, None)
 
 
 def test_bind_marker_tokens_keeps_only_marker_excludes():
