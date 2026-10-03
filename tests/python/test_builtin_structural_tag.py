@@ -3418,6 +3418,13 @@ def test_token_markers_rejects_models_without_declared_markers():
         get_model_structural_tag("llama", tools=_TOKEN_MARKER_TOOLS, token_markers=True)
 
 
+def test_token_markers_rejects_non_bool():
+    with pytest.raises(ValueError, match="token_markers"):
+        get_model_structural_tag(
+            "qwen_3", tools=_TOKEN_MARKER_TOOLS, token_markers="yes"  # type: ignore[arg-type]
+        )
+
+
 def test_bind_marker_tokens_is_noop_without_occurrences():
     structural_tag = get_model_structural_tag("llama", tools=_TOKEN_MARKER_TOOLS)
     assert bind_marker_tokens(structural_tag, ["<tool_call>"]) is structural_tag
