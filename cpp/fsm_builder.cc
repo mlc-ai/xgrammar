@@ -1568,7 +1568,9 @@ Result<FSMWithStartEnd> RegexFSMBuilder::BuildWithForbiddenChars(
     GrammarBuilder* builder,
     const std::string& rule_hint
 ) {
-  auto build_result = Build(regex, builder, rule_hint);
+  // The byte filter cannot constrain referenced subrules. Keep this automaton self-contained
+  // when exclusions are present, using the existing bounded unrolling and state limit.
+  auto build_result = Build(regex, forbidden_chars.none() ? builder : nullptr, rule_hint);
   if (build_result.IsErr() || forbidden_chars.none()) {
     return build_result;
   }
