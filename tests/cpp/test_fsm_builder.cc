@@ -463,8 +463,8 @@ TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenChars) {
   EXPECT_TRUE(fsm_wse.AcceptString("你好"));
 }
 
-TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenCharsPreservesRepeatAuxData) {
-  const auto& forbidden = GrammarFSMBuilder::JSONStringForbiddenChars();
+TEST(XGrammarFSMBuilderTest, TestRegexBuildWithEmptyForbiddenCharsPreservesRepeatAuxData) {
+  const std::bitset<256> forbidden;
   GrammarBuilder builder;
 
   auto fsm_wse =
@@ -489,6 +489,22 @@ TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenCharsPreservesRepeatAuxD
     }
   }
   EXPECT_TRUE(found_repeat_edge);
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenCharsPreservesCountedLanguage) {
+  const auto& forbidden = GrammarFSMBuilder::JSONStringForbiddenChars();
+  GrammarBuilder builder;
+  auto fsm_wse =
+      RegexFSMBuilder::BuildWithForbiddenChars("[^\\n\\r]{1,129}", forbidden, &builder).Unwrap();
+
+  EXPECT_TRUE(fsm_wse.AcceptString("a"));
+  EXPECT_TRUE(fsm_wse.AcceptString(std::string(129, 'a')));
+  EXPECT_FALSE(fsm_wse.AcceptString(""));
+  EXPECT_FALSE(fsm_wse.AcceptString(std::string(130, 'a')));
+  for (const auto* input : {"a\n", "a\r", "a\"", "a\\", "a\t", "a\x01"}) {
+    EXPECT_FALSE(fsm_wse.AcceptString(input));
+  }
+  EXPECT_EQ(builder.NumRules(), 0);
 }
 
 TEST(XGrammarFSMBuilderTest, TestGrammarFSMBuilderRegex) {
