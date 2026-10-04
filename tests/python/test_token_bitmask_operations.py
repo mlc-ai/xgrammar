@@ -367,13 +367,16 @@ def test_apply_token_bitmask_inplace_indices(
 
 
 @pytest.mark.parametrize("bad_index", [5, -1])
-def test_apply_token_bitmask_inplace_indices_out_of_bounds(bad_index: int):
-    # An index that is out of range for the logits/bitmask batch would cause an out-of-bounds
-    # write; it must be rejected instead of crashing.
+@pytest.mark.parametrize("backend", ["auto", "cpu", "cuda", "triton", "torch_compile", "torch_native"])
+def test_apply_token_bitmask_inplace_indices_out_of_bounds(bad_index: int, backend: str):
+    # An index outside the logits/bitmask batch would make a kernel read/write out of bounds. The
+    # validation runs before the backend is dispatched, so every backend (including the CUDA and
+    # Triton kernels that index device memory directly) rejects it with a clear error on CPU
+    # tensors, no GPU required.
     logits = torch.ones(2, 128, dtype=torch.float32)
     bitmask = torch.zeros(2, 4, dtype=torch.int32)
-    with pytest.raises(Exception):
-        xgr.apply_token_bitmask_inplace(logits, bitmask, indices=[bad_index])
+    with pytest.raises(ValueError, match="indices"):
+        xgr.apply_token_bitmask_inplace(logits, bitmask, indices=[bad_index], backend=backend)
 
 
 def test_bitmask_to_boolmask():

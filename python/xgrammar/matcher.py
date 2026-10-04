@@ -160,6 +160,18 @@ def apply_token_bitmask_inplace(
                 stacklevel=2,
             )
 
+    if indices is not None and len(indices) > 0:
+        # Validate the indices here, for every backend, before the kernel turns them into row
+        # pointers. The CUDA and Triton kernels (and the torch paths) index logits/bitmask with
+        # these values directly, so an out-of-range index would be an out-of-bounds device memory
+        # access rather than a clean error.
+        num_rows = min(logits.shape[0], bitmask.shape[0])
+        if min(indices) < 0 or max(indices) >= num_rows:
+            raise ValueError(
+                "Every value in `indices` must be a valid row of both logits and bitmask, i.e. in "
+                f"[0, {num_rows}). Got indices in [{min(indices)}, {max(indices)}]."
+            )
+
     if backend == "auto":
         if logits.device.type == "cpu":
             backend = "cpu"
