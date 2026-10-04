@@ -537,6 +537,9 @@ class JSONSchemaConverter {
 
   std::unordered_map<std::string, int32_t> uri_to_rule_id_;  // For circular reference handling
   RefResolver ref_resolver_;  // Resolves $ref URI to SchemaSpecPtr at generate time
+  // Recursion depth of GenerateFromSpec, guarded so a long $ref chain is rejected instead of
+  // overflowing the stack.
+  int recursion_depth_ = 0;
 
   // Trie over property names, for key patterns that exclude specific properties
   struct TrieNode {

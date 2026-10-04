@@ -3653,5 +3653,45 @@ def test_deeply_nested_json_rejected():
             xgr.Grammar.from_json_schema(schema(60))
 
 
+def test_deeply_nested_schema_rejected():
+    # A schema nested far deeper than any real one is rejected quickly instead of taking
+    # super-linear time (the old cost grew with the nesting depth) or overflowing the stack.
+    def nested_object_schema(depth: int) -> str:
+        schema: Dict[str, Any] = {"type": "object"}
+        cur = schema
+        for _ in range(depth):
+            cur["properties"] = {"a": {"type": "object"}}
+            cur["required"] = ["a"]
+            cur = cur["properties"]["a"]
+        cur["properties"] = {"v": {"type": "string"}}
+        return json.dumps(schema)
+
+    # A moderately deep schema still converts.
+    xgr.Grammar.from_json_schema(nested_object_schema(50))
+    with pytest.raises(RuntimeError, match="nested too deeply"):
+        xgr.Grammar.from_json_schema(nested_object_schema(2000))
+
+
+def test_long_ref_chain_rejected():
+    # A long $ref chain is resolved at generation time (the JSON itself is shallow), so it is
+    # bounded by the conversion depth guard and raises instead of overflowing the stack.
+    def ref_chain_schema(n: int) -> str:
+        defs: Dict[str, Any] = {}
+        for i in range(n):
+            if i < n - 1:
+                defs[f"d{i}"] = {
+                    "type": "object",
+                    "properties": {"next": {"$ref": f"#/$defs/d{i + 1}"}},
+                }
+            else:
+                defs[f"d{i}"] = {"type": "string"}
+        return json.dumps({"$defs": defs, "$ref": "#/$defs/d0"})
+
+    # A short chain resolves normally.
+    xgr.Grammar.from_json_schema(ref_chain_schema(20))
+    with pytest.raises(RuntimeError, match="too deeply"):
+        xgr.Grammar.from_json_schema(ref_chain_schema(20000))
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

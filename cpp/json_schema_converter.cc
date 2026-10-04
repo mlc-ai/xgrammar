@@ -35,8 +35,52 @@
 #include "regex_converter.h"
 #include "support/json_parse.h"
 #include "support/logging.h"
+#include "support/recursion_guard.h"
 
 namespace xgrammar {
+
+/*!
+ * \brief Maximum nesting / $ref-chain depth of a JSON schema that the converter will process.
+ * A schema deeper than this is rejected instead of parsed. It sits well below the native stack
+ * depth that would overflow (observed ~3500 recursion frames) and far above any realistic schema
+ * (nesting rarely exceeds a few dozen). Bounding the depth also bounds the converter's per-level
+ * super-linear work (a sub-schema's cache key is a string whose length grows with its depth), so
+ * a deeply nested schema cannot stall the caller.
+ */
+static constexpr int kMaxSchemaConversionDepth = 500;
+
+/*!
+ * \brief Max nesting depth of a JSON value, computed iteratively so measuring a deeply nested
+ * schema cannot itself overflow the stack. The root value has depth 1.
+ */
+static int JSONValueMaxDepth(const picojson::value& root) {
+  int max_depth = 0;
+  // Each frame is a container being visited at a given depth.
+  std::vector<std::pair<const picojson::value*, int>> stack;
+  stack.emplace_back(&root, 1);
+  while (!stack.empty()) {
+    auto [value, depth] = stack.back();
+    stack.pop_back();
+    if (depth > max_depth) {
+      max_depth = depth;
+    }
+    // Stop descending once the limit is already exceeded; the exact depth beyond it is irrelevant
+    // and this keeps the scan bounded for pathological inputs.
+    if (depth > kMaxSchemaConversionDepth) {
+      continue;
+    }
+    if (value->is<picojson::object>()) {
+      for (const auto& kv : value->get<picojson::object>()) {
+        stack.emplace_back(&kv.second, depth + 1);
+      }
+    } else if (value->is<picojson::array>()) {
+      for (const auto& item : value->get<picojson::array>()) {
+        stack.emplace_back(&item, depth + 1);
+      }
+    }
+  }
+  return max_depth;
+}
 
 // ==================== Spec ToString implementations ====================
 
@@ -709,6 +753,8 @@ class SchemaParser {
   picojson::value root_schema_;
   std::unordered_map<std::string, SchemaSpecPtr> ref_cache_;
   std::unordered_map<std::string, SchemaSpecPtr> schema_cache_;
+  // Whether the one-time depth check has run (on the first, root-level Parse call).
+  bool depth_checked_ = false;
 };
 
 std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
@@ -777,6 +823,18 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     const std::string& rule_name_hint,
     std::optional<std::string> default_type
 ) {
+  // Reject a schema nested too deeply before doing any per-node work. Parsing is super-linear in
+  // the nesting depth (the cache key of a sub-schema is a string whose length grows with its
+  // depth) and would otherwise overflow the stack, so a deeply nested schema could stall or crash
+  // the caller. The check is iterative and runs once, on the first (root) call.
+  if (!depth_checked_) {
+    depth_checked_ = true;
+    if (JSONValueMaxDepth(root_schema_) > kMaxSchemaConversionDepth) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "JSON schema is nested too deeply"
+      );
+    }
+  }
   std::string cache_key = ComputeCacheKey(schema);
   if (schema_cache_.count(cache_key)) {
     return ResultOk(schema_cache_[cache_key]);
@@ -2270,6 +2328,12 @@ int32_t JSONSchemaConverter::CreateRule(
 int32_t JSONSchemaConverter::GenerateFromSpec(
     const SchemaSpecPtr& spec, const std::string& rule_name_hint
 ) {
+  // $refs are resolved here (not while parsing), so a long $ref chain only shows up as deep
+  // recursion at this point, not as a deeply nested JSON value. Bound it to avoid a stack
+  // overflow on an untrusted schema.
+  RecursionGuard recursion_guard(&recursion_depth_);
+  XGRAMMAR_CHECK(recursion_depth_ <= kMaxSchemaConversionDepth)
+      << "JSON schema is $ref-chained too deeply";
   return std::visit(
       [this, &rule_name_hint](const auto& s) -> int32_t {
         using T = std::decay_t<decltype(s)>;
