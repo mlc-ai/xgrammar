@@ -87,10 +87,17 @@ void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_pres
   int32_t event_start_pos = state.rule_start_pos;
   if (marker_consumed && suffix_stop_info->body_rule_id == state.rule_id) {
     // A self-referencing body helper marks the zero-width event inserted immediately after a
-    // dynamic string trigger. Its capture span is the fixed-length marker that precedes it.
-    XGRAMMAR_DCHECK(event_start_pos != ParserState::kNoPrevInputPos);
+    // dynamic string trigger. Its capture span is the fixed-length marker that precedes it, so
+    // the event must start after enough bytes have been consumed to hold that marker. A grammar
+    // whose suffix/stop metadata claims a longer marker than the consumed prefix (reachable with
+    // crafted, e.g. deserialized, metadata that a self-reference passes id-range validation)
+    // would push the start before the input begins; later GetCaptures uses it as a row index, so
+    // reject it here with an always-on check instead of reading out of bounds.
+    XGRAMMAR_CHECK(event_start_pos != ParserState::kNoPrevInputPos)
+        << "Invalid capture metadata: self-referencing body helper on a rule with no input prefix";
     event_start_pos -= std::max(hidden_suffix_bytes, hidden_stop_bytes);
-    XGRAMMAR_DCHECK(event_start_pos >= 0);
+    XGRAMMAR_CHECK(event_start_pos >= 0)
+        << "Invalid capture metadata: hidden marker is longer than the consumed prefix";
   }
 
   std::vector<CaptureOccurrence> stop_capture_targets =

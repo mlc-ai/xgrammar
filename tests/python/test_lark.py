@@ -3170,6 +3170,34 @@ def test_lark_suffix_stop_body_must_be_terminal_but_supports_bounded_regex(attri
     )
 
 
+def test_capture_self_referencing_body_helper_rejected():
+    # A serialized grammar can point a suffix/stop body helper at its own rule and claim a hidden
+    # marker longer than any consumed prefix. Id-range validation accepts the self-reference, but
+    # recording the capture would push the event start before the input begins, and GetCaptures
+    # then indexes a row table with that negative position (an out-of-bounds read). The parser must
+    # reject the malformed metadata at match time rather than read out of bounds.
+    tokenizer_info = xgr.TokenizerInfo(["x", "<", ">", "a!", "b!", "a", "b", "!"])
+    grammar = xgr.Grammar.from_lark(
+        'start[capture="all"]: value ">"\n'
+        'value[max_tokens=2, capture="body", suffix="!", stop_capture="marker"]: /[ab]*/\n',
+        tokenizer_info=tokenizer_info,
+    )
+    serialized = json.loads(grammar.serialize_json())
+    # suffix_stop_infos entry fields:
+    # [rule_id, hidden_suffix_bytes, hidden_stop_bytes, body_rule_id, marker_rule_id, name]
+    info = serialized["suffix_stop_infos"][0]
+    rule_id = info[0]
+    info[1] = 100  # hidden_suffix_bytes far larger than any consumed prefix
+    info[3] = rule_id  # body_rule_id points at its own rule (self-reference)
+    malformed = xgr.Grammar.deserialize_json(json.dumps(serialized))
+
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(malformed)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    with pytest.raises(RuntimeError, match="capture metadata"):
+        matcher.accept_token(3)  # "a!" completes the self-referencing captured rule
+        matcher.get_captures()
+
+
 def test_deeply_nested_groups_rejected():
     # Group parsing recurses once per level; the depth must be bounded instead of overflowing the
     # stack.
