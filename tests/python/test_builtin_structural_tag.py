@@ -3459,6 +3459,7 @@ def test_bind_marker_tokens_excludes_token_end_from_nested_free_text():
     assert last.excludes == ["</think>"]
 
 
+@pytest.mark.thread_unsafe
 def test_reregistering_without_marker_tokens_disables_token_markers():
     name = "_test_reregistered_model"
     try:
