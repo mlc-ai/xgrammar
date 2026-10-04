@@ -360,6 +360,14 @@ class EarleyParser {
   /*! \brief The class is used to check if a state has been added into the queue. */
   RepeatDetector tmp_states_visited_in_queue_;
 
+  /*!
+   * \brief Number of parent states scanned while completing rules during the current advance.
+   * Reset before each process loop and used to bound the per-advance parsing work, so a
+   * pathologically ambiguous grammar (e.g. a large counted repetition of a variable-length
+   * subrule) cannot make a single decoding step run unboundedly long.
+   */
+  int64_t tmp_complete_scan_count_ = 0;
+
   /*! \brief Check if the stop token is accepted. */
   bool stop_token_is_accepted_ = false;
 

@@ -206,5 +206,25 @@ def test_regression_lookahead_already_completed():
     process_tokens(tokens)
 
 
+def test_large_counted_repetition_does_not_stall_decoding():
+    """A large counted repetition of a variable-length subrule (e.g. "(a+){7777,}") makes each
+    decoding step scan parser rows that grow with the input, so matching degrades super-linearly
+    while compilation stays cheap. The parser must bound this per-step work and raise instead of
+    stalling the caller on a tiny untrusted regex."""
+    vocab = ["a", "b", "</s>"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, vocab_size=len(vocab))
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    compiled = compiler.compile_grammar(xgr.Grammar.from_regex(r"(a+){7777,}"))
+    matcher = xgr.GrammarMatcher(compiled)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    with pytest.raises(RuntimeError):
+        # The budget trips well within this bound; without it this loop never terminates in
+        # practical time. The cap keeps the test fast regardless.
+        for _ in range(2000):
+            matcher.fill_next_token_bitmask(token_bitmask)
+            if not matcher.accept_token(0):  # token id of "a"
+                break
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)

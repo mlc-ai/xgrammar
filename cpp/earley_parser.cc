@@ -23,6 +23,13 @@ using GrammarExprType = Grammar::Impl::GrammarExprType;
 
 using GrammarExpr = Grammar::Impl::GrammarExpr;
 
+/*!
+ * \brief Upper bound on the number of parent states scanned while completing rules in a single
+ * advance. Ordinary grammars stay orders of magnitude below this; it only trips on pathologically
+ * ambiguous inputs whose per-step parsing work grows with the generated length.
+ */
+static constexpr int64_t kMaxCompleteScanPerAdvance = 1LL << 20;  // ~1.05M
+
 bool EarleyParser::IsCompleted() const { return is_completed_.back(); }
 
 bool EarleyParser::CompletionConsumedMarker(const ParserState& state) const {
@@ -149,6 +156,16 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
 
   // Check all the possible parent states.
   const auto& parent_states_map = rule_id_to_completable_states_[state.rule_start_pos];
+  tmp_complete_scan_count_ += static_cast<int64_t>(parent_states_map.size());
+  // Bound the work a single advance may do. Ordinary grammars complete rules against tiny parent
+  // rows, but a large counted repetition of a variable-length subrule (e.g. the regex
+  // "(a+){7777,}") makes each decoding step scan rows that grow with the input, so matching
+  // degrades super-linearly even though compilation is cheap. Reject such inputs instead of
+  // stalling the caller; the threshold is far above anything a normal grammar reaches.
+  XGRAMMAR_CHECK(tmp_complete_scan_count_ <= kMaxCompleteScanPerAdvance)
+      << "The grammar is too ambiguous to parse: a single step exceeded the completion work "
+         "budget. This usually comes from a large counted repetition of a variable-length "
+         "subrule in the regex or grammar.";
   for (const auto& [ref_id, parent_state] : parent_states_map) {
     if (ref_id != state.rule_id) {
       continue;
@@ -419,6 +436,7 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   if (capture_tracking_) {
     capture_event_history_.PushBack(std::vector<CaptureEvent>());
   }
+  tmp_complete_scan_count_ = 0;
   while (!tmp_process_state_queue_.empty()) {
     const auto state = std::move(tmp_process_state_queue_.front());
     tmp_process_state_queue_.pop();
@@ -554,6 +572,7 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   if (capture_tracking_) {
     capture_event_history_.PushBack(std::vector<CaptureEvent>());
   }
+  tmp_complete_scan_count_ = 0;
   while (!tmp_process_state_queue_.empty()) {
     const auto state = tmp_process_state_queue_.front();
     tmp_process_state_queue_.pop();
@@ -1221,6 +1240,7 @@ bool EarleyParser::AdvanceAtomicToken(
   if (capture_tracking_) {
     capture_event_history_.PushBack(std::vector<CaptureEvent>());
   }
+  tmp_complete_scan_count_ = 0;
   while (!tmp_process_state_queue_.empty()) {
     const auto state = std::move(tmp_process_state_queue_.front());
     tmp_process_state_queue_.pop();
