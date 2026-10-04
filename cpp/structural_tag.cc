@@ -1434,7 +1434,7 @@ std::optional<ISTError> StructuralTagTokenResolver::ResolveFormat(Format* format
           }
           return std::nullopt;
         } else if constexpr (std::is_same_v<T, OptionalFormat> || std::is_same_v<T, PlusFormat> ||
-                             std::is_same_v<T, StarFormat>) {
+                             std::is_same_v<T, StarFormat> || std::is_same_v<T, RepeatFormat>) {
           return ResolveFormat(arg.content.get());
         } else {
           return std::nullopt;
@@ -2493,7 +2493,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const DispatchForm
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TokenDispatchFormat& format) {
-  XGRAMMAR_DCHECK(format.resolved_trigger_token_ids_.size() == format.rules.size())
+  XGRAMMAR_CHECK(format.resolved_trigger_token_ids_.size() == format.rules.size())
       << "TokenDispatchFormat must be resolved before conversion";
   std::vector<std::pair<int32_t, int32_t>> trigger_rule_pairs;
   trigger_rule_pairs.reserve(format.rules.size());

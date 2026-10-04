@@ -2690,6 +2690,33 @@ def test_repeat_format(
     check_stag_with_instance(stag_format, instance, accepted_results[stag_id])
 
 
+def test_repeat_over_token_dispatch_resolves_content():
+    """Regression: a repeat wrapping a token_dispatch used to leave the inner
+    token-dispatch's trigger token ids unresolved (ResolveFormat had no RepeatFormat
+    branch), so conversion read index [0] of an empty vector and segfaulted."""
+    stag_format = {
+        "type": "repeat",
+        "min": 1,
+        "max": -1,
+        "content": {
+            "type": "token_dispatch",
+            "rules": [[10, {"type": "const_string", "value": "A"}]],
+            "loop": False,
+        },
+    }
+    expected_grammar = r"""const_string ::= (("A"))
+token_tag_dispatch ::= ((token_tag_dispatch_1))
+repeat ::= ((token_tag_dispatch{1, -1}))
+root ::= ((repeat))
+token_tag_dispatch_1 ::= TokenTagDispatch(
+  (10, const_string),
+  loop_after_dispatch=false,
+  excludes=()
+)
+"""
+    check_stag_with_grammar(stag_format, expected_grammar)
+
+
 compound_stag_instance_is_accepted = [
     # Llama JSON-based tool calling
     (
