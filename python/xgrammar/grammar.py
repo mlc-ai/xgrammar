@@ -227,6 +227,15 @@ class Grammar(XGRObject):
             Whether to use any whitespace. If True, the generated grammar will ignore the
             indent parameter, and allow any whitespace.
 
+            Note that setting this to False accepts only the exact separators, so the LLM
+            cannot emit whitespace between the elements of the JSON. On a schema that permits
+            additional properties, an additional property name accepts any string, so an LLM
+            that does not continue with a declared property may write its answer into a
+            property name instead, including the empty name "". This causes the valid JSON
+            to not carry all the expected fields. Set additionalProperties to false to
+            reject such names. See
+            <https://github.com/mlc-ai/xgrammar/issues/851> for more details.
+
         indent : Optional[int], default: None
             The number of spaces for indentation. If None, the output will be in one line.
 
