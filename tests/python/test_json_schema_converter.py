@@ -3657,19 +3657,17 @@ def test_deeply_nested_schema_rejected():
     # A schema nested far deeper than any real one is rejected quickly instead of taking
     # super-linear time (the old cost grew with the nesting depth) or overflowing the stack.
     def nested_object_schema(depth: int) -> str:
-        schema: Dict[str, Any] = {"type": "object"}
-        cur = schema
+        # Build the JSON text directly rather than json.dumps-ing a deeply nested dict, so the
+        # test exercises xgrammar's depth guard and not CPython's own encoder recursion limit.
+        schema = '{"type":"object","properties":{"v":{"type":"string"}}}'
         for _ in range(depth):
-            cur["properties"] = {"a": {"type": "object"}}
-            cur["required"] = ["a"]
-            cur = cur["properties"]["a"]
-        cur["properties"] = {"v": {"type": "string"}}
-        return json.dumps(schema)
+            schema = '{"type":"object","properties":{"a":' + schema + '},"required":["a"]}'
+        return schema
 
     # A moderately deep schema still converts.
     xgr.Grammar.from_json_schema(nested_object_schema(50))
     with pytest.raises(RuntimeError, match="nested too deeply"):
-        xgr.Grammar.from_json_schema(nested_object_schema(2000))
+        xgr.Grammar.from_json_schema(nested_object_schema(600))
 
 
 def test_long_ref_chain_rejected():
