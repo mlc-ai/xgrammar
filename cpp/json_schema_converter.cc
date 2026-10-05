@@ -1481,6 +1481,32 @@ Result<RefSpec, SchemaError> SchemaParser::ParseRef(const picojson::object& sche
   return ResultOk(std::move(spec));
 }
 
+/*! \brief Decode URI percent-encoding ("%2F" -> "/"); malformed sequences are kept verbatim. */
+static std::string PercentDecode(const std::string& str) {
+  std::string result;
+  for (size_t i = 0; i < str.size(); ++i) {
+    if (str[i] == '%' && i + 2 < str.size() &&
+        std::isxdigit(static_cast<unsigned char>(str[i + 1])) &&
+        std::isxdigit(static_cast<unsigned char>(str[i + 2]))) {
+      result += static_cast<char>(std::stoi(str.substr(i + 1, 2), nullptr, 16));
+      i += 2;
+    } else {
+      result += str[i];
+    }
+  }
+  return result;
+}
+
+/*! \brief Decode the RFC 6901 escapes of one JSON Pointer token: "~1" -> "/", then "~0" -> "~". */
+static std::string UnescapeJSONPointerToken(std::string token) {
+  for (const auto& [from, to] : {std::pair{"~1", "/"}, std::pair{"~0", "~"}}) {
+    for (size_t pos = 0; (pos = token.find(from, pos)) != std::string::npos; ++pos) {
+      token.replace(pos, 2, to);
+    }
+  }
+  return token;
+}
+
 Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
     const std::string& uri, const std::string& rule_name_hint
 ) {
@@ -1501,15 +1527,19 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
     return ResultOk(SchemaSpec::Make(AnySpec{}, "", "any"));
   }
 
+  // The fragment is a JSON Pointer (RFC 6901 section 6): undo the URI percent-encoding first,
+  // then split on '/', then decode the per-token escapes "~1" -> "/" and "~0" -> "~".
   std::vector<std::string> parts;
-  std::stringstream ss(uri.substr(2));
+  std::stringstream ss(PercentDecode(uri.substr(2)));
   std::string part;
   std::string new_rule_name_prefix;
   while (std::getline(ss, part, '/')) {
-    if (!part.empty()) parts.push_back(part);
+    if (!part.empty()) parts.push_back(UnescapeJSONPointerToken(part));
     if (!new_rule_name_prefix.empty()) new_rule_name_prefix += "_";
     for (const auto& c : part) {
-      if (std::isalpha(c) || c == '_' || c == '-' || c == '.') new_rule_name_prefix += c;
+      if (std::isalpha(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.') {
+        new_rule_name_prefix += c;
+      }
     }
   }
 
@@ -1811,6 +1841,9 @@ Grammar JSONSchemaConverter::Convert(const SchemaSpecPtr& spec) {
   int32_t root_rule_id = builder_.AddEmptyRuleWithHint("root");
   std::string root_rule_name = builder_.GetRule(root_rule_id).name;
   uri_to_rule_id_[RefCacheKey("#")] = root_rule_id;
+  if (const auto* root_ref = std::get_if<RefSpec>(&spec->spec)) {
+    ResolveRefRejectingCycles(*root_ref, root_rule_name);
+  }
 
   // Check if the spec can be directly mapped to an existing rule
   auto cached_rule = GetCache(spec->cache_key);
@@ -3465,16 +3498,39 @@ SchemaSpecPtr JSONSchemaConverter::ResolveRefSchema(
 
 std::string JSONSchemaConverter::RefCacheKey(const std::string& uri) const { return uri; }
 
+SchemaSpecPtr JSONSchemaConverter::ResolveRefRejectingCycles(
+    const RefSpec& spec, const std::string& rule_name
+) {
+  // Resolve `spec`, then follow any further pure $ref hops. A chain that returns to a $ref
+  // already on it without passing through any schema content would only yield self-referencing
+  // rules (R ::= R), i.e. a grammar that accepts nothing, so reject it as a schema error instead.
+  SchemaSpecPtr resolved = ResolveRefSchema(spec, rule_name);
+  std::vector<std::string> chain{spec.uri};
+  SchemaSpecPtr target = resolved;
+  while (const auto* next_ref = std::get_if<RefSpec>(&target->spec)) {
+    bool seen = std::find(chain.begin(), chain.end(), next_ref->uri) != chain.end();
+    chain.push_back(next_ref->uri);
+    if (seen) {
+      std::string chain_str;
+      for (const auto& uri : chain) chain_str += (chain_str.empty() ? "" : " -> ") + uri;
+      XGRAMMAR_LOG(FATAL) << "Circular $ref chain with no schema content: " << chain_str;
+    }
+    target = ResolveRefSchema(*next_ref, rule_name);
+  }
+  return resolved;
+}
+
 int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string& rule_name) {
   const std::string cache_key = RefCacheKey(spec.uri);
   // First check if we have a direct URI mapping (for circular references)
   if (uri_to_rule_id_.count(cache_key)) {
     return RuleRef(uri_to_rule_id_[cache_key]);
   }
+  SchemaSpecPtr resolved = ResolveRefRejectingCycles(spec, rule_name);
 
   // Derive rule name from URI path (like original URIToRule) so that the same
-  // $ref always gets the same rule name, and allocate before resolving to prevent
-  // dead recursion when the ref target contains a ref back.
+  // $ref always gets the same rule name, and allocate before generating the body
+  // so that a ref back to this one inside the target resolves to the allocated rule.
   std::string rule_name_hint = "ref";
   if (spec.uri.size() >= 2 && spec.uri[0] == '#' && spec.uri[1] == '/') {
     std::string new_rule_name_prefix;
@@ -3500,7 +3556,6 @@ int32_t JSONSchemaConverter::GenerateRef(const RefSpec& spec, const std::string&
   int32_t allocated_rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
   std::string allocated_rule_name = builder_.GetRule(allocated_rule_id).name;
   uri_to_rule_id_[cache_key] = allocated_rule_id;
-  SchemaSpecPtr resolved = ResolveRefSchema(spec, allocated_rule_name);
   builder_.UpdateRuleBody(allocated_rule_id, GenerateFromSpec(resolved, allocated_rule_name));
   if (!resolved->cache_key.empty()) {
     AddCache(resolved->cache_key, allocated_rule_id);

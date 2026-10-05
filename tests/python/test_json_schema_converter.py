@@ -690,6 +690,43 @@ def test_reference_numeric_object_key_is_not_array_index():
     check_schema_with_instance(schema, {"value": "other"}, is_accepted=False, any_whitespace=False)
 
 
+@pytest.mark.parametrize(
+    ("key", "ref"),
+    [
+        ("a/b", "#/$defs/a~1b"),
+        ("a~b", "#/$defs/a~0b"),
+        ("~1", "#/$defs/~01"),
+        ("a b", "#/$defs/a%20b"),
+        ("a/b", "#/$defs/a%7E1b"),
+    ],
+)
+def test_reference_decodes_json_pointer_escapes(key, ref):
+    schema = {
+        "type": "object",
+        "properties": {"value": {"$ref": ref}},
+        "required": ["value"],
+        "$defs": {key: {"type": "string", "enum": ["selected"]}},
+    }
+
+    check_schema_with_instance(schema, {"value": "selected"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"value": "other"}, is_accepted=False, any_whitespace=False)
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"$ref": "#"},
+        {"$defs": {"a": {"$ref": "#/$defs/a"}}, "$ref": "#/$defs/a"},
+        {"$defs": {"a": {"$ref": "#/$defs/b"}, "b": {"$ref": "#/$defs/a"}}, "$ref": "#/$defs/a"},
+        {"anyOf": [{"$ref": "#/anyOf/0"}]},
+        {"type": "object", "properties": {"v": {"$ref": "#/properties/v"}}},
+    ],
+)
+def test_reference_circular_chain_raises(schema):
+    with pytest.raises(RuntimeError, match=r"Circular \$ref chain"):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
 def test_union():
     class Cat(BaseModel):
         name: str
