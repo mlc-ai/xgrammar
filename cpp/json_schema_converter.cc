@@ -1528,19 +1528,25 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
   }
 
   // The fragment is a JSON Pointer (RFC 6901 section 6): undo the URI percent-encoding first,
-  // then split on '/', then decode the per-token escapes "~1" -> "/" and "~0" -> "~".
+  // then split on '/', then decode the per-token escapes "~1" -> "/" and "~0" -> "~". An empty
+  // token is a valid token (the object key ""), so every token is kept, including a trailing
+  // one (std::getline would drop it); the array branch below rejects it as an index.
   std::vector<std::string> parts;
-  std::stringstream ss(PercentDecode(uri.substr(2)));
-  std::string part;
+  std::string pointer = PercentDecode(uri.substr(2));
   std::string new_rule_name_prefix;
-  while (std::getline(ss, part, '/')) {
-    if (!part.empty()) parts.push_back(UnescapeJSONPointerToken(part));
+  for (size_t start = 0;;) {
+    size_t end = pointer.find('/', start);
+    std::string part =
+        pointer.substr(start, end == std::string::npos ? std::string::npos : end - start);
+    parts.push_back(UnescapeJSONPointerToken(part));
     if (!new_rule_name_prefix.empty()) new_rule_name_prefix += "_";
     for (const auto& c : part) {
       if (std::isalpha(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.') {
         new_rule_name_prefix += c;
       }
     }
+    if (end == std::string::npos) break;
+    start = end + 1;
   }
 
   auto current = std::cref(root_schema_);
@@ -1548,7 +1554,7 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
     if (current.get().is<picojson::object>()) {
       if (!current.get().contains(p)) {
         return ResultErr<SchemaError>(
-            SchemaErrorType::kInvalidSchema, "Cannot find field " + p + " in " + uri
+            SchemaErrorType::kInvalidSchema, "Cannot find field '" + p + "' in " + uri
         );
       }
       current = current.get().get(p);
@@ -1559,13 +1565,13 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
       if (p.empty() || (p.size() > 1 && p[0] == '0') || error != std::errc{} ||
           end != p.data() + p.size() || index >= array.size()) {
         return ResultErr<SchemaError>(
-            SchemaErrorType::kInvalidSchema, "Cannot find array index " + p + " in " + uri
+            SchemaErrorType::kInvalidSchema, "Cannot find array index '" + p + "' in " + uri
         );
       }
       current = std::cref(array[index]);
     } else {
       return ResultErr<SchemaError>(
-          SchemaErrorType::kInvalidSchema, "Cannot find field " + p + " in " + uri
+          SchemaErrorType::kInvalidSchema, "Cannot find field '" + p + "' in " + uri
       );
     }
   }

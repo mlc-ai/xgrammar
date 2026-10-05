@@ -664,7 +664,7 @@ def test_reference_through_array_index(any_order, branch, field, marker):
     )
 
 
-@pytest.mark.parametrize("index", ["2", "-1", "+1", "01", "1x", "999999999999999999999"])
+@pytest.mark.parametrize("index", ["2", "-1", "+1", "01", "1x", "999999999999999999999", ""])
 def test_reference_through_array_rejects_invalid_index(index):
     schema = {
         "type": "object",
@@ -675,6 +675,33 @@ def test_reference_through_array_rejects_invalid_index(index):
     }
 
     with pytest.raises(RuntimeError, match="Cannot find array index"):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
+def test_reference_empty_pointer_token_is_object_key():
+    # RFC 6901: "#/$defs/" has an empty final token and refers to the key "" under $defs.
+    schema = {
+        "type": "object",
+        "properties": {"value": {"$ref": "#/$defs/"}},
+        "required": ["value"],
+        "$defs": {"": {"type": "string", "enum": ["selected"]}},
+    }
+
+    check_schema_with_instance(schema, {"value": "selected"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"value": "other"}, is_accepted=False, any_whitespace=False)
+
+
+@pytest.mark.parametrize("ref", ["#/$defs/", "#/$defs//a", "#/$defs/a/"])
+def test_reference_empty_pointer_token_is_not_skipped(ref):
+    # An empty token must be looked up as the key "", not dropped so that the pointer
+    # silently resolves to the parent node.
+    schema = {
+        "type": "object",
+        "properties": {"value": {"$ref": ref}},
+        "$defs": {"a": {"type": "string", "enum": ["selected"]}},
+    }
+
+    with pytest.raises(RuntimeError, match="Cannot find field"):
         xgr.Grammar.from_json_schema(json.dumps(schema))
 
 
