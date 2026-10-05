@@ -367,18 +367,41 @@ def test_apply_token_bitmask_inplace_indices(
 
 
 @pytest.mark.parametrize("bad_index", [5, -1])
+@pytest.mark.parametrize("indices_type", ["list", "cpu_tensor"])
 @pytest.mark.parametrize(
     "backend", ["auto", "cpu", "cuda", "triton", "torch_compile", "torch_native"]
 )
-def test_apply_token_bitmask_inplace_indices_out_of_bounds(bad_index: int, backend: str):
-    # An index outside the logits/bitmask batch would make a kernel read/write out of bounds. The
-    # validation runs before the backend is dispatched, so every backend (including the CUDA and
-    # Triton kernels that index device memory directly) rejects it with a clear error on CPU
-    # tensors, no GPU required.
+def test_apply_token_bitmask_inplace_indices_out_of_bounds(
+    bad_index: int, indices_type: str, backend: str
+):
+    # Out-of-range indices are rejected before the backend is dispatched, so no GPU is needed.
     logits = torch.ones(2, 128, dtype=torch.float32)
     bitmask = torch.zeros(2, 4, dtype=torch.int32)
+    indices = (
+        [bad_index] if indices_type == "list" else torch.tensor([bad_index], dtype=torch.int32)
+    )
     with pytest.raises(ValueError, match="indices"):
-        xgr.apply_token_bitmask_inplace(logits, bitmask, indices=[bad_index], backend=backend)
+        xgr.apply_token_bitmask_inplace(logits, bitmask, indices=indices, backend=backend)
+
+
+@pytest.mark.parametrize("backend", ["cuda", "triton"])
+def test_apply_token_bitmask_inplace_indices_device_tensor(backend: str):
+    # A device tensor of indices goes straight to the kernel, without host-side iteration.
+    if not _is_cuda_available:
+        pytest.skip(reason="CUDA is not installed")
+    vocab_size = 128
+    logits = torch.ones(3, vocab_size, dtype=torch.float32, device="cuda")
+    bool_mask = torch.zeros(3, vocab_size, dtype=torch.bool)
+    bool_mask[:, ::2] = True
+    bitmask = bool_mask_to_bitmask(bool_mask).to("cuda")
+    rows = [0, 2]
+    logits_expected = logits.clone()
+    logits_expected[rows] = torch.masked_fill(
+        logits_expected[rows], ~bool_mask[rows].to("cuda"), float("-inf")
+    )
+    indices = torch.tensor(rows, dtype=torch.int32, device="cuda")
+    xgr.apply_token_bitmask_inplace(logits, bitmask, indices=indices, backend=backend)
+    torch.testing.assert_close(logits, logits_expected)
 
 
 def test_bitmask_to_boolmask():

@@ -60,7 +60,7 @@ def apply_token_bitmask_inplace(
     bitmask: torch.Tensor,
     *,
     vocab_size: Optional[int] = None,
-    indices: Optional[List[int]] = None,
+    indices: Optional[Union[List[int], torch.Tensor]] = None,
     backend: Literal["auto", "cpu", "cuda", "triton", "torch_compile", "torch_native"] = "auto",
 ) -> None:
     """Apply the bitmask to the logits in-place. The bitmask is a 01 bitwise compressed tensor,
@@ -130,9 +130,10 @@ def apply_token_bitmask_inplace(
         The size of the vocabulary. If not provided, the vocab size will be detected as
         min(logits.shape[-1], bitmask.shape[-1] * 32).
 
-    indices : Optional[List[int]], default: None
+    indices : Optional[Union[List[int], torch.Tensor]], default: None
         A list of indices to specify which logits in the batch to apply the bitmask to. Should be
-        unique. If None, apply the bitmask to all logits in the batch.
+        unique. If None, apply the bitmask to all logits in the batch. A 1-D integer tensor is
+        also accepted; only lists and CPU tensors are bounds-checked.
 
     backend : Literal["auto", "cpu", "cuda", "triton", "torch_compile", "torch_native"], default: "auto"
         The backend where the token bitmask should be applied inplace. If the value is "auto", then it will
@@ -161,15 +162,20 @@ def apply_token_bitmask_inplace(
             )
 
     if indices is not None and len(indices) > 0:
-        # Validate the indices here, for every backend, before the kernel turns them into row
-        # pointers. The CUDA and Triton kernels (and the torch paths) index logits/bitmask with
-        # these values directly, so an out-of-range index would be an out-of-bounds device memory
-        # access rather than a clean error.
+        # Validate the indices before any kernel indexes device memory with them. A device tensor
+        # is left unchecked: checking it would cost a device-to-host sync per call.
         num_rows = min(logits.shape[0], bitmask.shape[0])
-        if min(indices) < 0 or max(indices) >= num_rows:
+        if isinstance(indices, torch.Tensor):
+            bounds = None
+            if indices.device.type == "cpu":
+                lo, hi = torch.aminmax(indices)
+                bounds = (int(lo), int(hi))
+        else:
+            bounds = (min(indices), max(indices))
+        if bounds is not None and (bounds[0] < 0 or bounds[1] >= num_rows):
             raise ValueError(
                 "Every value in `indices` must be a valid row of both logits and bitmask, i.e. in "
-                f"[0, {num_rows}). Got indices in [{min(indices)}, {max(indices)}]."
+                f"[0, {num_rows}). Got indices in [{bounds[0]}, {bounds[1]}]."
             )
 
     if backend == "auto":
