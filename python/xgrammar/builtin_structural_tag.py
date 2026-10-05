@@ -206,6 +206,9 @@ def get_model_structural_tag(
         free-text spans constrained to exclude those tokens. Set to ``False``
         to allow them to appear as plain text. For models that have no special
         tokens to exclude (such as ``"harmony"``), this has no effect.
+        For Kimi-K3, this also applies to tool-argument string values without
+        ``pattern``/``format`` and to property names, nested JSON strings included;
+        ``minLength``/``maxLength`` on such strings are dropped with a warning.
     max_whitespace_cnt : Optional[int]
         Applied to every tool-argument :class:`JSONSchemaFormat`. Caps the number
         of consecutive whitespace characters. Setting it (e.g. ``2``) bounds runs
@@ -923,7 +926,10 @@ def get_kimi_k3_structural_tag(
 
     The tool-call arguments are emitted one tag per argument and are constrained
     by :class:`JSONSchemaFormat` with ``style="kimi_k3_xml"``: string values are
-    raw text, and other value types remain JSON-style.
+    raw text, and other value types remain JSON-style. With ``exclude_special_tokens=True``,
+    string values without ``pattern``/``format`` and property names exclude ``<|open|>``,
+    ``<|close|>``, and ``<|sep|>`` (see :class:`JSONSchemaFormat` for the exact rules);
+    argument and call wrappers remain outside this exclusion scope.
 
     Parameters are normalized by :func:`get_model_structural_tag` before this
     function is called:
@@ -973,6 +979,7 @@ def get_kimi_k3_structural_tag(
                         style=XML_STYLE,
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
+                        excludes=_text_excludes(exclude_special_tokens, [OPEN, CLOSE, SEP]),
                     ),
                 ]
             ),
@@ -1430,6 +1437,109 @@ def get_qwen_3_5_structural_tag(
 
 get_qwen_3_coder_structural_tag = get_qwen_3_5_structural_tag
 """Deprecated alias for :func:`get_qwen_3_5_structural_tag`."""
+
+
+@register_model_structural_tag("mimo")
+def get_mimo_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
+    any_order: bool = False,
+    exclude_special_tokens: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get MiMo-V2.6 style structural tag format.
+
+    Corresponding model key: ``"mimo"``.
+
+    Reference: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Pro-RL/blob/main/chat_template.jinja
+
+    MiMo uses the Qwen XML parameter format, but without the newlines that
+    Qwen3-Coder puts between the wrapper tags::
+
+        <tool_call><function=NAME><parameter=KEY>VALUE</parameter></function></tool_call>
+
+    String arguments are raw text; other values are JSON. Arguments are
+    constrained by :class:`JSONSchemaFormat` with ``style="qwen_xml"``.
+
+    With ``enable_thinking=True`` the chat template ends the generation prompt
+    at ``<|im_start|>assistant\\n``, so ``reasoning="enabled"`` generates the
+    complete ``<think>...</think>`` block. With ``enable_thinking=False`` the
+    template renders ``<think></think>`` into the prompt; use
+    ``reasoning="disabled"``, also when the serving engine manages reasoning
+    itself.
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: selects ``"enabled"``, ``"disabled"``, or adaptive
+      ``"auto"`` reasoning.
+
+    Supported models:
+
+    - MiMo-V2.6-Pro-RL
+    - MiMo-V2.6-Flash-RL
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for MiMo function calling format.
+    """
+    if builtin_tools:
+        raise ValueError("MiMo does not support builtin tools.")
+
+    tool_start = "<tool_call>"
+    text_excludes = ["<think>", "</think>", "</tool_call>", "<function="]
+    reasoning_excludes = [tool_start, *text_excludes]
+    tags = [
+        TagFormat(
+            begin=f"{tool_start}<function={tool.function.name}>",
+            content=JSONSchemaFormat(
+                json_schema=_get_function_parameters(tool.function),
+                style="qwen_xml",
+                any_order=any_order,
+                max_whitespace_cnt=max_whitespace_cnt,
+            ),
+            end="</function></tool_call>",
+        )
+        for tool in tools or []
+    ]
+    if tool_choice == "forced":
+        if not tags:
+            raise ValueError("Forced tool choice must resolve to exactly one tool.")
+        suffix_tag = tags[0]
+    elif tool_choice in ("auto", "required"):
+        if tool_choice == "required" and not tags:
+            raise ValueError("Required tool choice needs at least one function tool.")
+        if tags:
+            suffix_tag = TriggeredTagsFormat(
+                triggers=[tool_start],
+                tags=tags,
+                excludes=_text_excludes(exclude_special_tokens, text_excludes),
+                at_least_one=tool_choice == "required",
+                stop_after_first=not parallel_tool_calls,
+            )
+        else:
+            suffix_tag = AnyTextFormat(
+                excludes=_text_excludes(exclude_special_tokens, reasoning_excludes)
+            )
+    else:
+        raise ValueError(f"Unsupported tool choice: {tool_choice}")
+
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin="<think>",
+        think_tag_end="</think>",
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=reasoning_excludes,
+        prompt_end_with_think=False,
+    )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 @register_model_structural_tag("qwen_3")
@@ -2299,10 +2409,8 @@ def get_glm_4_7_structural_tag(
     return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
-# TODO: We are dropping Gemma support because its parameter format is special and not supported
-# yet: the string are wrapped by <|"|> instead of ". We will support it later and get it back.
-# @register_model_structural_tag("gemma_4")
-def _get_gemma_4_structural_tag(
+@register_model_structural_tag("gemma_4")
+def get_gemma_4_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
     tool_choice: Literal["auto", "required", "forced"] = "auto",
@@ -2333,8 +2441,15 @@ def _get_gemma_4_structural_tag(
       ``function`` object containing ``name`` and ``parameters`` fields.
     - ``reasoning``: controls whether the reasoning channel is required,
       omitted, or optional.
-    - ``tool_choice``: ``"auto"`` or ``"required"``. ``"required"`` forces at
-      least one tool call.
+    - ``tool_choice``: ``"auto"``, ``"required"``, or ``"forced"``. ``"required"``
+      forces at least one tool call; ``"forced"`` forces exactly the single
+      resolved tool.
+
+    Tool-call arguments use :class:`JSONSchemaFormat` with ``style="gemma"``:
+    keys are unquoted and strings are delimited by the ``<|"|>`` token. With
+    ``exclude_special_tokens=True``, argument strings and property names exclude
+    ``<|tool_call>``, ``<tool_call|>``, ``<|channel>`` and ``<channel|>`` (see
+    :class:`JSONSchemaFormat` for the exact rules).
 
     Supported models:
 
@@ -2354,7 +2469,17 @@ def _get_gemma_4_structural_tag(
     TOOL_CALL_TRIGGER = "<|tool_call>"
     THINK_TAG_BEGIN = "<|channel>thought\n"
     THINK_TAG_END = "<channel|>"
+    # <|tool_response> is deliberately not excluded: the template emits it as the halt signal
+    # after a tool call, so engines handle it as a stop sequence rather than the grammar
+    # blocking it. The triggered free text must not exclude <|tool_call> either: it is the
+    # trigger, and excluding it would remove the dispatch into the tool-call tags.
     GEMMA4_EXCLUDE_TOKENS = ["<|channel>", "<channel|>"]
+    # <|tool_call> is excluded from the thought channel, and from free text when no tools are
+    # available, so a tool call cannot start where its arguments would be unconstrained.
+    GEMMA4_REASONING_EXCLUDE_TOKENS = GEMMA4_EXCLUDE_TOKENS + [TOOL_CALL_TRIGGER]
+    # Argument strings and keys exclude every control marker: a <tool_call|> inside a string
+    # value would otherwise end the call at the engine's parser.
+    GEMMA4_ARGUMENT_EXCLUDE_TOKENS = GEMMA4_EXCLUDE_TOKENS + [TOOL_CALL_TRIGGER, TOOL_CALL_END]
 
     tools = tools or []
     builtin_tools = builtin_tools or []
@@ -2369,8 +2494,12 @@ def _get_gemma_4_structural_tag(
                     begin=TOOL_CALL_BEGIN_PREFIX + name,
                     content=JSONSchemaFormat(
                         json_schema=parameters,
+                        style="gemma",
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
+                        excludes=_text_excludes(
+                            exclude_special_tokens, GEMMA4_ARGUMENT_EXCLUDE_TOKENS
+                        ),
                     ),
                     end=TOOL_CALL_END,
                 )
@@ -2385,7 +2514,7 @@ def _get_gemma_4_structural_tag(
             )
         else:
             suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens, GEMMA4_EXCLUDE_TOKENS)
+                excludes=_text_excludes(exclude_special_tokens, GEMMA4_REASONING_EXCLUDE_TOKENS)
             )
 
     elif tool_choice == "forced":
@@ -2396,8 +2525,10 @@ def _get_gemma_4_structural_tag(
             begin=TOOL_CALL_BEGIN_PREFIX + function.name,
             content=JSONSchemaFormat(
                 json_schema=_get_function_parameters(function),
+                style="gemma",
                 any_order=any_order,
                 max_whitespace_cnt=max_whitespace_cnt,
+                excludes=_text_excludes(exclude_special_tokens, GEMMA4_ARGUMENT_EXCLUDE_TOKENS),
             ),
             end=TOOL_CALL_END,
         )
@@ -2413,8 +2544,12 @@ def _get_gemma_4_structural_tag(
                     begin=TOOL_CALL_BEGIN_PREFIX + name,
                     content=JSONSchemaFormat(
                         json_schema=parameters,
+                        style="gemma",
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
+                        excludes=_text_excludes(
+                            exclude_special_tokens, GEMMA4_ARGUMENT_EXCLUDE_TOKENS
+                        ),
                     ),
                     end=TOOL_CALL_END,
                 )
@@ -2433,7 +2568,7 @@ def _get_gemma_4_structural_tag(
         think_tag_begin=THINK_TAG_BEGIN,
         think_tag_end=THINK_TAG_END,
         exclude_special_tokens=exclude_special_tokens,
-        reasoning_exclude_tokens=GEMMA4_EXCLUDE_TOKENS,
+        reasoning_exclude_tokens=GEMMA4_REASONING_EXCLUDE_TOKENS,
         prompt_end_with_think=False,
     )
     return _assemble_structural_tag(prefix_tag, suffix_tag)
@@ -2578,7 +2713,8 @@ def _get_deepseek_v4_structural_tag(
                     )
                 ],
                 excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
-                stop_after_first=not parallel_tool_calls,
+                # Both V4 and V4.1 end the assistant turn after one calls block.
+                stop_after_first=True,
             )
         else:
             excludes = _text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)

@@ -504,6 +504,9 @@ class GrammarMatcher::Impl : public EarleyParser {
         }
       }
     }
+    if (has_char_budget_rules_) {
+      has_token_edges_ = HasTokenEdges();
+    }
     XGRAMMAR_CHECK(
         !default_temperature_.has_value() ||
         (std::isfinite(default_temperature_.value()) && default_temperature_.value() >= 0)
@@ -730,6 +733,21 @@ class GrammarMatcher::Impl : public EarleyParser {
   bool record_char_budget_relaxation_ = false;
   /*! \brief Whether byte history is needed to recognize a budgeted suffix/stop body boundary. */
   bool has_budget_marker_rules_ = false;
+  /*! \brief Whether the grammar has Token/ExcludeToken edges, the only edges that can accept a
+   * token the byte-level walk rejected. */
+  bool has_token_edges_ = false;
+  /*! \brief Whether the complete FSM has any Token/ExcludeToken edge. */
+  bool HasTokenEdges() const {
+    const auto& fsm = grammar_->complete_fsm;
+    for (int state = 0; state < fsm.NumStates(); ++state) {
+      for (const auto& edge : fsm.GetEdges(state)) {
+        if (edge.IsToken() || edge.IsExcludeToken()) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
 
   struct BudgetBodyMatchProgress {
     int64_t begin_byte;
@@ -1848,9 +1866,39 @@ void GrammarMatcher::Impl::FillBitmaskForCharBudgetBoundary(
   temporary_input_bytes_ = std::move(saved_temporary_input_bytes);
 }
 
+/*!
+ * \brief The counted repetition edge of `body_rule_id` that `state` sits on.
+ * \return Nullopt when `state` is not on such a repetition edge.
+ */
+static std::optional<RepeatEdgeRef> GetRepeatEdgeInfo(
+    const Grammar& grammar, const ParserState& state, int32_t body_rule_id
+) {
+  if (state.rule_id < 0) {
+    return std::nullopt;
+  }
+  const auto& rule_fsm = grammar->per_rule_fsms[state.rule_id];
+  if (!rule_fsm.has_value()) {
+    return std::nullopt;
+  }
+  for (const auto& edge : rule_fsm->GetFsm().GetFsm().GetEdges(state.element_id)) {
+    if (!edge.IsRepeatRef()) {
+      continue;
+    }
+    // Match the edge the way EarleyParser::Complete does: by the repeated rule.
+    const auto info = grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
+    if (info.RuleId() == body_rule_id) {
+      return info;
+    }
+  }
+  return std::nullopt;
+}
+
 void GrammarMatcher::Impl::FillBitmaskForStates(
     int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
 ) {
+  // Replay uncertain tokens the way the accept that enforces the budget scans them, so an expired
+  // derivation is not revived through a rule it shares with a live one.
+  SkipExpiredGuard skip_expired_guard(this, skip_expired);
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
   const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
@@ -1901,8 +1949,59 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
       }
     }
+    // In the body state of a counted repetition of a character class, most tokens are legal
+    // exactly when the budget left in the repetition state that predicted this body state covers
+    // the repetitions they consume, and a token that leaves the repetition also needs them to
+    // complete its lower bound (see PopulateRepeatInteriorBitsets). The compiled mask is shared by
+    // every repeat count, so the count is read from the parse history here and the matching bitset
+    // is accepted in one operation instead of replaying every such token.
+    if (!adaptive_token_mask.repeat_interior_bitsets.empty() ||
+        !adaptive_token_mask.repeat_exit_tokens.empty()) {
+      // PopulateRepeatInteriorBitsets only fills the bitsets of body rules that are entered
+      // through repeat edges alone, and none when character budgets are enforced. The mask lists
+      // none of these tokens as accepted, so without a repetition parent this state would
+      // silently reject all of them.
+      XGRAMMAR_CHECK(
+          !has_char_budget_rules_ && state.rule_start_pos != ParserState::kNoPrevInputPos
+      ) << "The counted-repetition fast path does not apply to this state";
+      int32_t remaining = -1;
+      bool on_repeat = false;
+      for (const auto& [ref_rule_id, parent_state] :
+           rule_id_to_completable_states_[state.rule_start_pos]) {
+        if (ref_rule_id != state.rule_id) {
+          continue;
+        }
+        const auto info = GetRepeatEdgeInfo(grammar_, parent_state, state.rule_id);
+        if (!info.has_value()) {
+          continue;
+        }
+        on_repeat = true;
+        // Once budgets are enforced, an expired parent scans no further byte, so the repetitions
+        // it has left cannot be used.
+        if (skip_expired && IsExpiredState(parent_state)) {
+          continue;
+        }
+        const int32_t budget = info->Upper() - parent_state.repeat_count;
+        remaining = std::max(remaining, budget);
+        for (const auto& [num_repetitions, token_id] : adaptive_token_mask.repeat_exit_tokens) {
+          if (num_repetitions <= budget &&
+              parent_state.repeat_count + num_repetitions >= info->Lower()) {
+            tmp_accepted_bitset_.Set(token_id, true);
+          }
+        }
+      }
+      // The tokens that do not fit are rejected by this state without further work.
+      XGRAMMAR_CHECK(on_repeat) << "A counted-repetition body state has no repetition parent";
+      const auto& char_counts = adaptive_token_mask.repeat_interior_char_counts;
+      const auto it = std::upper_bound(char_counts.begin(), char_counts.end(), remaining);
+      if (it != char_counts.begin()) {
+        const size_t index = static_cast<size_t>(it - char_counts.begin()) - 1;
+        tmp_accepted_bitset_ |= adaptive_token_mask.repeat_interior_bitsets[index];
+      }
+    }
   }
 
+  const auto& token_char_counts = tokenizer_info_.ImplPtr()->GetTokenCharCounts();
   for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
     const auto& adaptive_token_mask = adaptive_token_mask_it->second;
 
@@ -1918,11 +2017,6 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     tmp_rejected_indices_delta_.clear();
 
     // Examine only the current one ParserState
-    std::optional<Impl> atomic_trial_base;
-    if (has_char_budget_rules_ && !adaptive_token_mask.uncertain_indices.empty()) {
-      atomic_trial_base.emplace(*this);
-      atomic_trial_base->capture_recording_ = false;
-    }
     PushOneStateToCheck(state);
     bool track_temporary_input = has_char_budget_rules_ && has_budget_marker_rules_;
     int32_t saved_temporary_input_start_row = -1;
@@ -2007,17 +2101,29 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         }
       }
 
-      if (!accepted && has_char_budget_rules_) {
-        int32_t token_char_count = 0;
-        for (uint8_t byte : cur_token) {
-          token_char_count += StartsUTF8Codepoint(byte);
+      bool retried_atomically = false;
+      if (!accepted && has_char_budget_rules_ && has_token_edges_) {
+        // Retry through Token/ExcludeToken edges in place: rebuild the single-state row, run the
+        // atomic path, then rebuild it again so trial-time enforcement does not leak. A full
+        // matcher copy here made every mask O(generated length).
+        retried_atomically = true;
+        PopLastStates(prev_matched_size + 1);
+        if (track_temporary_input) {
+          temporary_input_bytes_.clear();
         }
-        XGRAMMAR_DCHECK(atomic_trial_base.has_value());
-        Impl atomic_trial(atomic_trial_base.value());
-        atomic_trial.PushOneStateToCheck(state);
-        accepted = atomic_trial.AdvanceAtomicTokenWithCharacterBudget(
-            sorted_decoded_vocab[cur_token_idx].first, token_char_count
+        PushOneStateToCheck(state);
+        const bool saved_capture_recording = capture_recording_;
+        const bool saved_record_relaxation = record_char_budget_relaxation_;
+        capture_recording_ = false;
+        record_char_budget_relaxation_ = false;
+        accepted = AdvanceAtomicTokenWithCharacterBudget(
+            sorted_decoded_vocab[cur_token_idx].first, token_char_counts[cur_token_idx]
         );
+        capture_recording_ = saved_capture_recording;
+        record_char_budget_relaxation_ = saved_record_relaxation;
+        PopLastStates(accepted ? 2 : 1);
+        PushOneStateToCheck(state);
+        prev_matched_size = 0;
         if (accepted) {
           last_rejected_uncertain_range = cur_token_idx + 1;
         }
@@ -2035,7 +2141,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         }
       }
 
-      prev_token = &cur_token;
+      // The retry dropped this token's rows, so its prefix cannot be reused.
+      prev_token = retried_atomically ? nullptr : &cur_token;
     }
 
     PopLastStates(prev_matched_size + 1);

@@ -8,6 +8,7 @@ import pytest
 from pydantic import BaseModel, Field, TypeAdapter, create_model
 
 import xgrammar as xgr
+from xgrammar.structural_tag import JSONSchemaFormat, StructuralTag
 from xgrammar.testing import (
     GrammarFunctor,
     _generate_float_regex,
@@ -163,6 +164,29 @@ def test_enum_const():
     instance = MainModel(foo="a", values=1, bars="a", str_values='a\n\r"', field=Field.FOO)
     check_schema_grammar_builds(schema, any_whitespace=False)
     check_schema_with_instance(schema, instance, any_whitespace=False)
+
+
+@pytest.mark.parametrize(
+    "schema, accepted, rejected",
+    [
+        ({"const": 19.99}, "19.99", "19.989999999999998"),
+        ({"enum": [19.99, 0.1]}, "0.1", "0.10000000000000001"),
+        ({"const": {"price": 19.99}}, '{"price":19.99}', '{"price":19.989999999999998}'),
+        ({"const": 100000.0}, "100000", "1e+05"),
+        ({"const": 0.0001}, "0.0001", "1e-04"),
+    ],
+)
+def test_numeric_const_enum_literals(schema: Dict[str, Any], accepted: str, rejected: str):
+    check_schema_with_instance(schema, accepted, any_whitespace=False)
+    check_schema_with_instance(schema, rejected, is_accepted=False, any_whitespace=False)
+
+
+@pytest.mark.parametrize("style", ["qwen_xml", "minimax_m3_xml"])
+def test_numeric_const_literals_in_xml_styles(style: str):
+    schema = {"type": "object", "const": {"price": 19.99}}
+    tag = StructuralTag(format=JSONSchemaFormat(json_schema=schema, style=style))
+    grammar = str(xgr.Grammar.from_structural_tag(tag))
+    assert "19.99" in grammar and "19.989999999999998" not in grammar
 
 
 def test_empty_enum_rejected():
@@ -2128,6 +2152,8 @@ instance__accepted__test_json_pointer_format = [
     (r"abc", False),
     (r"/~", False),
     (r"/~2", False),
+    (r"/\u007E", False),
+    (r"/\uD800", False),
 ]
 
 
@@ -2163,6 +2189,53 @@ def test_relative_json_pointer_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
+@pytest.mark.parametrize(
+    "format_name, instance",
+    [
+        ("email", r'"\"\a\"@b"'),
+        ("email", r'"\"\u\"@b"'),
+        ("json-pointer", '"/\x01"'),
+        ("json-pointer", '"/"a"'),
+        ("json-pointer", r'"/\"'),
+        ("relative-json-pointer", '"0/\x01"'),
+    ],
+)
+def test_formats_reject_invalid_json_strings(format_name: str, instance: str):
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(instance)
+    grammar = xgr.Grammar.from_json_schema({"type": "string", "format": format_name})
+    assert not _is_grammar_accept_string(grammar, instance)
+
+
+@pytest.mark.parametrize(
+    "format_name, value",
+    [
+        ("json-pointer", '/"'),
+        ("json-pointer", "/\\"),
+        ("relative-json-pointer", '0/"'),
+        ("relative-json-pointer", "0/\\"),
+    ],
+)
+def test_pointer_formats_accept_json_escapes(format_name: str, value: str):
+    grammar = xgr.Grammar.from_json_schema({"type": "string", "format": format_name})
+    assert _is_grammar_accept_string(grammar, json.dumps(value))
+
+
+@pytest.mark.parametrize(
+    "format_name, instance",
+    [
+        ("json-pointer", r'"/\u0001"'),
+        ("json-pointer", r'"/\/"'),
+        ("json-pointer", r'"/\n"'),
+        ("relative-json-pointer", r'"0/\u0001"'),
+    ],
+)
+def test_pointer_formats_accept_other_json_escapes(format_name: str, instance: str):
+    json.loads(instance)
+    grammar = xgr.Grammar.from_json_schema({"type": "string", "format": format_name})
+    assert _is_grammar_accept_string(grammar, instance)
+
+
 def test_min_max_length():
     schema = {"type": "string", "minLength": 1, "maxLength": 10}
 
@@ -2173,6 +2246,80 @@ def test_min_max_length():
 
     check_schema_with_instance(schema, instance_accepted, any_whitespace=True)
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
+
+
+# --- pattern/format combined with minLength/maxLength (issue #749) ----------------------------
+#
+# GenerateString takes exactly one branch, so a pattern or a built-in format shadows the
+# minLength/maxLength branch and the bounds are dropped. Composing them is not supported yet; the
+# converter warns so the dropped bounds are at least observable. These tests pin down both halves:
+# the warning fires for every shape that drops a bound, and for nothing else.
+
+
+def _compile_and_capture(capfd, schema, json_format="json"):
+    if json_format == "json":
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+    else:
+        _json_schema_to_ebnf(schema, json_format=json_format)
+    captured = capfd.readouterr()
+    return captured.err + captured.out
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "string", "pattern": "^a+$", "maxLength": 2},
+        {"type": "string", "pattern": "^a+$", "minLength": 1},
+        {"type": "string", "pattern": "^a+$", "minLength": 1, "maxLength": 5},
+        # A built-in format is compiled to a regex, so it shadows the bounds exactly like a pattern.
+        {"type": "string", "format": "email", "maxLength": 10},
+        {"type": "string", "format": "date", "minLength": 1},
+    ],
+)
+def test_string_generative_with_length_warns(capfd, schema):
+    output = _compile_and_capture(capfd, schema)
+    assert "minLength/maxLength" in output, output
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "string", "pattern": "^a+$"},
+        {"type": "string", "format": "email"},
+        {"type": "string", "minLength": 1, "maxLength": 10},
+        # An unrecognized format is a plain annotation: it does not shadow the length branch, so
+        # the bounds are still enforced and there is nothing to warn about.
+        {"type": "string", "format": "not-a-builtin-format", "maxLength": 5},
+        # minLength 0 is the default bound; nothing is dropped.
+        {"type": "string", "pattern": "^a+$", "minLength": 0},
+    ],
+)
+def test_string_without_the_combination_does_not_warn(capfd, schema):
+    output = _compile_and_capture(capfd, schema)
+    assert "minLength/maxLength" not in output, output
+
+
+def test_string_generative_with_length_warns_for_xml_tool_calls(capfd):
+    # XMLToolCallingConverter::GenerateString returns from its own pattern branch without calling
+    # the base version, so a warning placed there would never reach XML tool calls.
+    schema = {
+        "type": "object",
+        "properties": {"k": {"type": "string", "pattern": "^[a-z]+$", "maxLength": 3}},
+        "required": ["k"],
+    }
+    output = _compile_and_capture(capfd, schema, json_format="qwen_xml")
+    assert "minLength/maxLength" in output, output
+
+
+def test_string_pattern_with_length_still_ignores_the_bound(capfd):
+    # The warning does not change the grammar: this documents the behavior it warns about, so the
+    # day the bounds are actually composed this test fails and has to be updated deliberately.
+    bounded = {"type": "string", "pattern": "^[a-z]+$", "maxLength": 3}
+    unbounded = {"type": "string", "pattern": "^[a-z]+$"}
+    grammar = xgr.Grammar.from_json_schema(json.dumps(bounded))
+    capfd.readouterr()
+    assert str(grammar) == str(xgr.Grammar.from_json_schema(json.dumps(unbounded)))
+    assert _is_grammar_accept_string(grammar, '"abcd"')
 
 
 def test_type_array():

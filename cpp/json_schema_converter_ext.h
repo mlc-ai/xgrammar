@@ -92,7 +92,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       std::optional<int> max_whitespace_cnt,
       RefResolver ref_resolver = nullptr,
       JSONFormat json_format = JSONFormat::kQwenXML,
-      bool any_order = false
+      bool any_order = false,
+      std::vector<std::string> excludes = {}
   );
 
   /*! \brief Convert SchemaSpec to grammar with XML format for root object. Note that this function
@@ -171,15 +172,18 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   int32_t XMLKeySuffix(const std::optional<std::string>& pinned_type = std::nullopt);
 
   /*!
-   * \brief Build a deepseek_v4_1_xml parameter's string attribute, value and closing tag.
+   * \brief Build a DeepSeek XML parameter's string attribute, value and closing tag.
    * string="true" wraps raw strings, string="false" wraps JSON values. Unions and mixed enums
    * produce one alternative per option; GetRenderedJSONType supplies the type classification.
+   * A negative value_rule_id defers value-rule creation until a typed leaf is reached.
    */
-  int32_t FormatDeepSeekV41ParamSuffix(const SchemaSpecPtr& schema, int32_t value_rule_id);
+  int32_t FormatDeepSeekParamSuffix(
+      const SchemaSpecPtr& schema, int32_t value_rule_id, const std::string& rule_name_hint = ""
+  );
 
   // Parameter suffix rules are independent of the key, so references can be shared across
   // named and dynamic parameters. Allocate them before resolving refs to handle cycles.
-  std::unordered_map<std::string, int32_t> deepseek_v41_param_ref_rules_;
+  std::unordered_map<std::string, int32_t> deepseek_param_ref_rules_;
 
   JSONFormat json_format_;
   // Root parameter lists, raw parameter values, and nested JSON have distinct grammars.
@@ -294,6 +298,71 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   int cohere_array_level_ = 0;
 };
 
+/*!
+ * \brief Converter for the Gemma tool-calling argument format.
+ *
+ * Every nesting level uses Gemma's spelling instead of JSON:
+ * - Object keys are unquoted: {key:value,key2:value2}
+ * - Strings are delimited by the <|"|> token instead of double quotes and have no escape
+ *   sequences: <|"|>any text<|"|>
+ * - Numbers, booleans, null, arrays and objects otherwise follow JSON syntax.
+ */
+class GemmaToolCallingConverter : public JSONSchemaConverter {
+ public:
+  GemmaToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false,
+      std::vector<std::string> excludes = {}
+  );
+
+  // The Gemma string delimiter that replaces the JSON double quote.
+  static const std::string kGemmaStringDelim;
+
+ protected:
+  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
+
+  int32_t FormatPropertyKey(const std::string& key, const SchemaSpecPtr& schema) override;
+  std::string GetKeyPattern() const override;
+  int32_t GetKeyPatternExcluding(
+      const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+  ) override;
+  int32_t CreatePatternKeyRule(const std::string& pattern, const std::string& rule_name_hint)
+      override;
+  int32_t CreatePropertyNamesKeyRule(
+      const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+  ) override;
+
+  void AddBasicRules() override;
+
+ private:
+  // Rule matching any text that does not contain the string delimiter.
+  static const std::string kGemmaStringContent;
+  // Rule matching an unquoted property key.
+  static const std::string kGemmaVariableName;
+
+  /*! \brief Wrap a string body expression in the delimiters. */
+  int32_t GemmaString(int32_t body);
+  /*! \brief A regex string body that cannot contain the delimiter, when the FSM engine allows. */
+  int32_t GemmaRegexBody(const std::string& regex, const std::string& rule_name);
+  /*! \brief A choice of the bare keys spelled by the JSON string literals, or Unsatisfiable. */
+  int32_t GemmaKeyLiterals(const std::vector<std::string>& json_values);
+  /*! \brief Whether no raw string or key inside the value contains an exclusion. */
+  bool IsAllowedGemmaValue(const picojson::value& value) const;
+  /*! \brief Serialize a JSON value into Gemma's argument spelling. */
+  static std::string SerializeGemma(const picojson::value& value);
+  /*! \brief The Gemma spelling of a JSON literal as a byte string, or Unsatisfiable. */
+  int32_t GemmaLiteral(const std::string& json_value);
+
+  // Whether the caller supplied JSONSchemaFormat.excludes beyond the delimiter.
+  bool has_user_excludes_;
+};
+
 namespace converter_ext {
 
 XMLWrapper GetQwenXMLWrapper();
@@ -310,7 +379,6 @@ struct XMLKeySuffix {
   const char* suffix;
 };
 
-const XMLKeySuffix& GetDeepSeekXMLKeySuffix();
 const XMLKeySuffix& GetKimiK3XMLKeySuffix();
 
 }  // namespace converter_ext

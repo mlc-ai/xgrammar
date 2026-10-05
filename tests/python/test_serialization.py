@@ -51,7 +51,7 @@ def _set_path(obj, path, value):
 
 def test_get_serialization_version():
     """Test the version of the serialized JSON string."""
-    assert xgr.get_serialization_version() == "v16"
+    assert xgr.get_serialization_version() == "v17"
 
 
 def test_serialize_grammar():
@@ -75,7 +75,7 @@ def test_serialize_grammar():
         "per_rule_fsms": [],
         "allow_empty_rule_ids": [],
         "optimized": False,
-        "__VERSION__": "v16",
+        "__VERSION__": "v17",
     }
     # The fsms are the same one, but the start state and end states are different.
     assert json.loads(serialized) == expected_json
@@ -99,14 +99,14 @@ def test_serialize_grammar_exception():
         "allow_empty_rule_ids": [],
         "complete_fsm": None,
         "per_rule_fsms": [],
-        "__VERSION__": "v16",
+        "__VERSION__": "v17",
     }
 
     expected_json["__VERSION__"] = "v1"  # Change version to trigger error
     with pytest.raises(xgr.DeserializeVersionError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
 
-    expected_json["__VERSION__"] = "v16"
+    expected_json["__VERSION__"] = "v17"
     expected_json.pop("rules")  # Remove required field to trigger error
     with pytest.raises(xgr.DeserializeFormatError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
@@ -158,7 +158,7 @@ def test_serialize_tokenizer_info():
         '"decoded_vocab":["1","212","a","A","b","\\u00e4\\u00b8\\u0080","-","aBc","abc"],'
         '"sorted_decoded_vocab":[[6,"-"],[3,"A"],[2,"a"],[7,"aBc"],[8,"abc"],[4,"b"],[5,"\\u00e4\\u00b8\\u0080"]],'
         '"trie_subtree_nodes_range":[1,2,5,4,5,6,7],'
-        '"__VERSION__":"v16"}'
+        '"__VERSION__":"v17"}'
     )
     assert json.loads(serialized) == json.loads(expected_json)
 
@@ -253,12 +253,13 @@ def test_serialize_compiled_grammar():
             "complete_fsm": {
                 "edges": {
                     "data_": [[128, 191, 1], [128, 191, 3], [0, 47, 3], [58, 127, 3],
-                        [192, 223, 1],[224, 239, 0],[240, 247, 4],[-2, 0, 5],
-                        [128, 191, 0],[97, 97, 8],[-2, 0, 6]],
-                    "indptr_":[0, 1, 2, 7, 8, 9, 9, 10, 11, 11]
+                        [194, 223, 1],[224, 224, 4],[225, 239, 0],[240, 240, 5],
+                        [241, 243, 7],[244, 244, 6],[-2, 0, 8],[160, 191, 1],
+                        [144, 191, 0],[128, 143, 0],[128, 191, 0],[97, 97, 11],[-2, 0, 9]],
+                    "indptr_":[0, 1, 2, 10, 11, 12, 13, 14, 15, 15, 16, 17, 17]
                 },
                 "edge_aux_data": [],
-                "edge_num": 11,
+                "edge_num": 17,
             },
             "per_rule_fsms": [
                 [
@@ -266,29 +267,31 @@ def test_serialize_compiled_grammar():
                     {
                             "edges": {
                                 "data_": [[128, 191, 1], [128, 191, 3], [0, 47, 3], [58, 127, 3],
-                                    [192, 223, 1],[224, 239, 0],[240, 247, 4],[-2, 0, 5],
-                                    [128, 191, 0],[97, 97, 8],[-2, 0, 6]],
-                                "indptr_":[0, 1, 2, 7, 8, 9, 9, 10, 11, 11]
+                                    [194, 223, 1],[224, 224, 4],[225, 239, 0],[240, 240, 5],
+                                    [241, 243, 7],[244, 244, 6],[-2, 0, 8],[160, 191, 1],
+                                    [144, 191, 0],[128, 143, 0],[128, 191, 0],[97, 97, 11],[-2, 0, 9]],
+                                "indptr_":[0, 1, 2, 10, 11, 12, 13, 14, 15, 15, 16, 17, 17]
                             },
                             "edge_aux_data": [],
-                            "edge_num": 11,
+                            "edge_num": 17,
                         },
-                        2, [2, 5], False, 11
-                    ], 9, 6
+                        2, [2, 8], False, 17
+                    ], 15, 9
                 ],
                 [
                     [
                         {
                             "edges": {
                                 "data_": [[128, 191, 1], [128, 191, 3], [0, 47, 3], [58, 127, 3],
-                                    [192, 223, 1],[224, 239, 0],[240, 247, 4],[-2, 0, 5],
-                                    [128, 191, 0],[97, 97, 8],[-2, 0, 6]],
-                                "indptr_":[0, 1, 2, 7, 8, 9, 9, 10, 11, 11]
+                                    [194, 223, 1],[224, 224, 4],[225, 239, 0],[240, 240, 5],
+                                    [241, 243, 7],[244, 244, 6],[-2, 0, 8],[160, 191, 1],
+                                    [144, 191, 0],[128, 143, 0],[128, 191, 0],[97, 97, 11],[-2, 0, 9]],
+                                "indptr_":[0, 1, 2, 10, 11, 12, 13, 14, 15, 15, 16, 17, 17]
                             },
                             "edge_aux_data": [],
-                            "edge_num": 11,
+                            "edge_num": 17,
                         },
-                        7, [8], False, 11,
+                        10, [11], False, 17,
                     ], 2, 3
                 ]
             ],
@@ -301,7 +304,7 @@ def test_serialize_compiled_grammar():
             "add_prefix_space": True,
             "stop_token_ids": [0, 1],
         },
-        "__VERSION__": "v16",
+        "__VERSION__": "v17",
     }
 
     class AdaptiveTokenMask(BaseModel):

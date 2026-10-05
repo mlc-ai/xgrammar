@@ -806,9 +806,13 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   tmp_can_reach_end_stack_.push_back(false);
   tmp_can_reach_end_prefix_or_stack_.push_back(false);
 
-  // Try to get the crossing cache.
-  bool rule_level_cache_is_available = !has_char_budget_rules_ && rule_level_cache_.has_value() &&
-                                       grammar_->per_rule_fsm_hashes[init_rule_id_].has_value();
+  // Try to get the crossing cache. A partial hash leaves out the rule referenced at the start
+  // state, whose tokens the mask of the start state includes.
+  bool rule_level_cache_is_available =
+      !has_char_budget_rules_ && rule_level_cache_.has_value() &&
+      grammar_->per_rule_fsm_hashes[init_rule_id_].has_value() &&
+      !(grammar_->per_rule_fsm_hash_is_partial[init_rule_id_] &&
+        initial_state_.element_id == grammar_->per_rule_fsms[init_rule_id_]->GetFsm().GetStart());
   std::optional<uint64_t> fsm_hash = std::nullopt;
   int32_t new_state_id = -1;
   std::optional<AdaptiveTokenMask> crossing_cache = std::nullopt;
@@ -1173,6 +1177,12 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   if (max_threads_ > 1) {
     thread_pool->Join();
   }
+
+  PopulateRepeatInteriorBitsets(
+      compiled_grammar_impl->grammar,
+      tokenizer_info_,
+      &compiled_grammar_impl->adaptive_token_mask_cache
+  );
 
   return CompiledGrammar(compiled_grammar_impl);
 }

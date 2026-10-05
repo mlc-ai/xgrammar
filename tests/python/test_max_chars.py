@@ -331,3 +331,79 @@ def test_max_chars_compiler_cache_and_serialization() -> None:
         assert _allowed_token_ids(matcher, tokenizer_info) == [0]
         assert matcher.accept_token(0)
         assert matcher.is_terminated()
+
+
+def _allowed_token_ids_after(
+    compiled: xgr.CompiledGrammar, tokenizer_info: xgr.TokenizerInfo, prefix: str
+) -> list[int]:
+    matcher = xgr.GrammarMatcher(compiled)
+    assert matcher.accept_string(prefix)
+    return _allowed_token_ids(matcher, tokenizer_info)
+
+
+def test_token_edges_are_retried_in_place_under_char_budget() -> None:
+    # "<|x|>" is only reachable through the Token edge, so the mask filler must retry it through
+    # the atomic token path after the byte-level walk rejects it.
+    vocab = ["<s>", "</s>", "a", "b", "ab", "abcd", "<", ">", "<|x|>", "|", '"', ","]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    with_tokens = compiler.compile_grammar(
+        xgr.Grammar.from_ebnf('root ::= "<" body ">"\nbody[max_chars=8] ::= (Token(8) | [a-z])*')
+    )
+    without_tokens = compiler.compile_grammar(
+        xgr.Grammar.from_ebnf('root ::= "<" body ">"\nbody[max_chars=8] ::= [a-z]*')
+    )
+    assert _allowed_token_ids_after(with_tokens, tokenizer_info, "<") == [2, 3, 4, 5, 7, 8]
+    assert _allowed_token_ids_after(without_tokens, tokenizer_info, "<") == [2, 3, 4, 5, 7]
+    # Six of eight characters used: "abcd" would cross the budget through the byte path.
+    assert _allowed_token_ids_after(with_tokens, tokenizer_info, "<abcdab") == [2, 3, 4, 7, 8]
+    assert _allowed_token_ids_after(without_tokens, tokenizer_info, "<abcdab") == [2, 3, 4, 7]
+    # Budget exhausted: only the closing bracket remains, on both paths.
+    assert _allowed_token_ids_after(with_tokens, tokenizer_info, "<abcdabcd") == [7]
+    assert _allowed_token_ids_after(without_tokens, tokenizer_info, "<abcdabcd") == [7]
+
+
+def test_unbudgeted_rule_masks_match_budget_free_grammar() -> None:
+    # `t` is never under a budget, so its masks match the budget-free grammar even after a long
+    # prefix; `b` still enforces its budget.
+    vocab = ["<s>", "</s>", "a", "b", "ab", "abcd", "<", ">", "<|x|>", "|", '"', ","]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    budgeted = compiler.compile_grammar(
+        xgr.Grammar.from_ebnf(
+            'root ::= "\\"" t "\\"" "," b "|"\nb[max_chars=3] ::= s\nt ::= [a-z]*\ns ::= [a-z]*'
+        )
+    )
+    plain = compiler.compile_grammar(
+        xgr.Grammar.from_ebnf(
+            'root ::= "\\"" t "\\"" "," b "|"\nb ::= s\nt ::= [a-z]*\ns ::= [a-z]*'
+        )
+    )
+    for prefix in ['"', '"ab', '"' + "a" * 3000]:
+        assert _allowed_token_ids_after(
+            budgeted, tokenizer_info, prefix
+        ) == _allowed_token_ids_after(plain, tokenizer_info, prefix)
+    long_prefix = '"' + "a" * 3000 + '",'
+    # Two of three characters used: only single-character tokens still fit.
+    assert _allowed_token_ids_after(budgeted, tokenizer_info, long_prefix + "ab") == [2, 3, 9]
+    assert _allowed_token_ids_after(plain, tokenizer_info, long_prefix + "ab") == [2, 3, 4, 5, 9]
+    assert _allowed_token_ids_after(budgeted, tokenizer_info, long_prefix + "abc") == [9]
+    assert _allowed_token_ids_after(plain, tokenizer_info, long_prefix + "abc") == [2, 3, 4, 5, 9]
+
+
+def test_token_crossing_into_budgeted_sibling_rule_is_masked() -> None:
+    # The mask is computed from a state inside `t`, which has no budget. A token that finishes `t`
+    # and continues through the parent into `b` must still respect `b`'s budget, exactly like
+    # accept_token does.
+    vocab = ["<s>", "</s>", "a", "b", ",", "|", "a,bbb|", "a,bb|", ",bbb", "<"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(
+        xgr.Grammar.from_ebnf('root ::= "<" t "," b "|"\nt ::= [a-z]*\nb[max_chars=2] ::= [a-z]*')
+    )
+    for prefix in ["<", "<a"]:
+        allowed = _allowed_token_ids_after(compiled, tokenizer_info, prefix)
+        assert allowed == [vocab.index(t) for t in ["a", "b", ",", "a,bb|"]]
+        for token in ["a,bbb|", "a,bb|", ",bbb"]:
+            matcher = xgr.GrammarMatcher(compiled)
+            assert matcher.accept_string(prefix)
+            assert matcher.accept_token(vocab.index(token)) == (vocab.index(token) in allowed)
