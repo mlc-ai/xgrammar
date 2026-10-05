@@ -367,7 +367,9 @@ def test_apply_token_bitmask_inplace_indices(
 
 
 @pytest.mark.parametrize("bad_index", [5, -1])
-@pytest.mark.parametrize("backend", ["auto", "cpu", "cuda", "triton", "torch_compile", "torch_native"])
+@pytest.mark.parametrize(
+    "backend", ["auto", "cpu", "cuda", "triton", "torch_compile", "torch_native"]
+)
 def test_apply_token_bitmask_inplace_indices_out_of_bounds(bad_index: int, backend: str):
     # An index outside the logits/bitmask batch would make a kernel read/write out of bounds. The
     # validation runs before the backend is dispatched, so every backend (including the CUDA and
