@@ -320,6 +320,7 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
   }
   auto lookahead_state =
       ParserState(/*rule_id*/ -1, lookahead_assertion_id, 0, ParserState::kNoPrevInputPos, 0);
+  lookahead_reached_exclude_token_ = false;
   PushStateAndExpand(lookahead_state);
   int token_len = token.size();
   if (IsCompleted()) {
@@ -354,7 +355,14 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
       can_reach_end = false;
       return {accepted, can_reach_end};
     }
-    // Case 3. The token is not accepted. Check the next position.
+    // Case 3. The token is not accepted, unless a free-text region in the lookahead may still
+    // take it whole from the middle; then the parent decides.
+    if (lookahead_reached_exclude_token_ ||
+        (!has_char_budget_rules_ && FindMidTokenExcludeEdgeRow(last_accept_pos - i + 2, -1))) {
+      PopLastStates(last_accept_pos - i + 2);
+      return {accepted, can_reach_end};
+    }
+    // Check the next position.
     PopLastStates(last_accept_pos - i + 1);
   }
 
@@ -644,6 +652,16 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
 
       bool can_reach_end = tmp_can_reach_end_prefix_or_stack_.back();
 
+      // The first bytes may finish a literal before a token-level free-text region, which takes
+      // the whole token from there. The longer tokens under this one may be taken even when this
+      // one is excluded, so they are not skipped with it.
+      int32_t rejected_range_end = subtree_nodes_range[i];
+      if (!accepted && !has_char_budget_rules_ &&
+          FindMidTokenExcludeEdgeRow(prev_matched_size, -1)) {
+        accepted = FindMidTokenExcludeEdgeRow(prev_matched_size, sorted_decoded_vocab[i].first) > 0;
+        rejected_range_end = i + 1;
+      }
+
       if (accepted) {
         if (HasEnteredCharBudget()) {
           tmp_uncertain_indices_.push_back(i);
@@ -663,15 +681,15 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
             tmp_accepted_by_lookahead_indices_.push_back(i);
           }
         } else {
-          for (int j = i; j < subtree_nodes_range[i]; j++) {
+          for (int j = i; j < rejected_range_end; j++) {
             tmp_rejected_indices_.push_back(j);
             tmp_rejected_by_lookahead_indices_.push_back(j);
           }
-          i = subtree_nodes_range[i] - 1;  // Skip the subtree nodes.
+          i = rejected_range_end - 1;  // Skip the subtree nodes.
         }
       } else {
         tmp_rejected_indices_.push_back(i);
-        last_rejected_range = subtree_nodes_range[i];
+        last_rejected_range = rejected_range_end;
         fill_reject_indices =
             tmp_rejected_indices_.size() >= AdaptiveTokenMask::USE_BITSET_THRESHOLD
                 ? false
