@@ -3964,6 +3964,20 @@ int32_t XMLToolCallingConverter::GenerateString(
       return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
     }
     const bool bounded = spec.min_length != 0 || spec.max_length != -1;
+    if (json_format_ == JSONFormat::kGlmXML && bounded && !spec.format.has_value()) {
+      // Keep the raw value delimiter-aware. A finite repetition of all Unicode
+      // characters also consumes argument and tool delimiters, retaining old parses.
+      auto original_excludes = excludes_;
+      excludes_.push_back(xml_wrapper_.parameter_suffix);
+      const auto regex = "[\\s\\S]{" + std::to_string(spec.min_length) + ",}";
+      auto body = ExcludingString(regex, rule_name, false, {});
+      excludes_ = std::move(original_excludes);
+      const auto bounded_rule = builder_.AddRuleWithHint(rule_name + "_bounded_xml", body);
+      if (spec.max_length != -1) {
+        builder_.UpdateMaxChars(bounded_rule, spec.max_length);
+      }
+      return RuleRef(bounded_rule);
+    }
     // Without exclusions, a length bound or an unrecognized format keeps the plain repetition.
     if (excludes_.empty() && (bounded || spec.format.has_value())) {
       return Repeat(
@@ -4073,6 +4087,63 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
   return JSONSchemaConverter::FormatPropertyKey(key, schema);
 }
 
+int32_t XMLToolCallingConverter::FormatGLMValue(
+    const SchemaSpecPtr& schema, int32_t value_rule_id, const std::string& rule_name
+) {
+  // Formatting whitespace belongs inside each non-string alternative. Wrapping a
+  // bounded raw string (including one behind a ref/union) would bypass its bound
+  // and retain one parser state for each whitespace/body split.
+  const bool composite = schema && (std::holds_alternative<RefSpec>(schema->spec) ||
+                                    std::holds_alternative<AnyOfSpec>(schema->spec) ||
+                                    std::holds_alternative<OneOfSpec>(schema->spec) ||
+                                    std::holds_alternative<TypeArraySpec>(schema->spec) ||
+                                    std::holds_alternative<AllOfSpec>(schema->spec));
+  int32_t formatted_rule = -1;
+  if (composite) {
+    auto it = glm_formatted_value_rules_.find(value_rule_id);
+    if (it != glm_formatted_value_rules_.end()) return RuleRef(it->second);
+    formatted_rule = builder_.AddEmptyRuleWithHint(rule_name + "_formatted_value");
+    // Publish the placeholder before descending through recursive schema alternatives.
+    glm_formatted_value_rules_[value_rule_id] = formatted_rule;
+  }
+  auto finish = [&](int32_t body) {
+    if (formatted_rule == -1) return body;
+    builder_.UpdateRuleBody(formatted_rule, body);
+    return RuleRef(formatted_rule);
+  };
+  if (schema) {
+    if (const auto* ref = std::get_if<RefSpec>(&schema->spec)) {
+      auto resolved = ResolveRefRejectingCycles(*ref, rule_name);
+      return finish(FormatGLMValue(resolved, CreateRule(resolved, rule_name + "_value"), rule_name)
+      );
+    }
+    const std::vector<SchemaSpecPtr>* options = nullptr;
+    if (const auto* any = std::get_if<AnyOfSpec>(&schema->spec)) options = &any->options;
+    if (const auto* one = std::get_if<OneOfSpec>(&schema->spec)) options = &one->options;
+    if (const auto* types = std::get_if<TypeArraySpec>(&schema->spec))
+      options = &types->type_schemas;
+    if (const auto* all = std::get_if<AllOfSpec>(&schema->spec); all && all->schemas.size() == 1) {
+      options = &all->schemas;
+    }
+    if (options) {
+      std::vector<int32_t> choices;
+      for (size_t i = 0; i < options->size(); ++i) {
+        const auto& option = (*options)[i];
+        auto name = rule_name + "_value_" + std::to_string(i);
+        choices.push_back(FormatGLMValue(option, CreateRule(option, name), name));
+      }
+      return finish(Choice(choices));
+    }
+    if (const auto* str = std::get_if<StringSpec>(&schema->spec);
+        str && !str->pattern.has_value() && !str->format.has_value() &&
+        (str->min_length != 0 || str->max_length != -1)) {
+      return finish(RuleRef(value_rule_id));
+    }
+  }
+  if (value_rule_id == builder_.GetRuleId(kXMLString)) return finish(RuleRef(value_rule_id));
+  return finish(Sequence({WhitespaceExpression(), RuleRef(value_rule_id), WhitespaceExpression()}));
+}
+
 int32_t XMLToolCallingConverter::FormatProperty(
     const std::string& key,
     int32_t value_rule_id,
@@ -4097,7 +4168,9 @@ int32_t XMLToolCallingConverter::FormatProperty(
     }
     // xml_string already accepts whitespace. Adding whitespace repetitions around it preserves the
     // language but creates one Earley state for every possible split with the string body.
-    if (value_rule_id == builder_.GetRuleId(kXMLString)) {
+    if (json_format_ == JSONFormat::kGlmXML) {
+      elements.push_back(FormatGLMValue(schema, value_rule_id, rule_name));
+    } else if (value_rule_id == builder_.GetRuleId(kXMLString)) {
       elements.push_back(RuleRef(value_rule_id));
     } else {
       elements.push_back(WhitespaceExpression());
@@ -4136,7 +4209,9 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
       elements.push_back(WhitespaceExpression());
       elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
     }
-    if (value_rule_id == builder_.GetRuleId(kXMLString)) {
+    if (json_format_ == JSONFormat::kGlmXML) {
+      elements.push_back(FormatGLMValue(schema, value_rule_id, rule_name));
+    } else if (value_rule_id == builder_.GetRuleId(kXMLString)) {
       elements.push_back(RuleRef(value_rule_id));
     } else {
       elements.push_back(WhitespaceExpression());
