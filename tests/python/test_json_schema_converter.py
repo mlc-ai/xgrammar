@@ -625,6 +625,135 @@ def test_reference_schema():
     )
 
 
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize(
+    ("branch", "field", "marker"), [(0, "title", "first"), (1, "kind", "selected")]
+)
+def test_reference_through_array_index(any_order, branch, field, marker):
+    schema = {
+        "type": "object",
+        "properties": {
+            "operations": {
+                "type": "array",
+                "items": {
+                    "anyOf": [
+                        {
+                            "type": "object",
+                            "properties": {"title": {"type": "string", "enum": ["first"]}},
+                        },
+                        {
+                            "type": "object",
+                            "properties": {"kind": {"type": "string", "enum": ["selected"]}},
+                        },
+                    ]
+                },
+            },
+            "marker": {"$ref": f"#/properties/operations/items/anyOf/{branch}/properties/{field}"},
+        },
+        "required": ["operations", "marker"],
+    }
+
+    grammar = xgr.Grammar.from_json_schema(
+        json.dumps(schema), any_order=any_order, any_whitespace=False
+    )
+    assert _is_grammar_accept_string(
+        grammar, json.dumps({"operations": [{"title": "first"}], "marker": marker})
+    )
+    assert not _is_grammar_accept_string(
+        grammar, json.dumps({"operations": [{"title": "first"}], "marker": "other"})
+    )
+
+
+@pytest.mark.parametrize("index", ["2", "-1", "+1", "01", "1x", "999999999999999999999", ""])
+def test_reference_through_array_rejects_invalid_index(index):
+    schema = {
+        "type": "object",
+        "properties": {
+            "choice": {"anyOf": [{"type": "string"}, {"type": "integer"}]},
+            "marker": {"$ref": f"#/properties/choice/anyOf/{index}"},
+        },
+    }
+
+    with pytest.raises(RuntimeError, match="Cannot find array index"):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
+def test_reference_empty_pointer_token_is_object_key():
+    # RFC 6901: "#/$defs/" has an empty final token and refers to the key "" under $defs.
+    schema = {
+        "type": "object",
+        "properties": {"value": {"$ref": "#/$defs/"}},
+        "required": ["value"],
+        "$defs": {"": {"type": "string", "enum": ["selected"]}},
+    }
+
+    check_schema_with_instance(schema, {"value": "selected"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"value": "other"}, is_accepted=False, any_whitespace=False)
+
+
+@pytest.mark.parametrize("ref", ["#/$defs/", "#/$defs//a", "#/$defs/a/"])
+def test_reference_empty_pointer_token_is_not_skipped(ref):
+    # An empty token must be looked up as the key "", not dropped so that the pointer
+    # silently resolves to the parent node.
+    schema = {
+        "type": "object",
+        "properties": {"value": {"$ref": ref}},
+        "$defs": {"a": {"type": "string", "enum": ["selected"]}},
+    }
+
+    with pytest.raises(RuntimeError, match="Cannot find field"):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
+def test_reference_numeric_object_key_is_not_array_index():
+    schema = {
+        "type": "object",
+        "properties": {"value": {"$ref": "#/$defs/01"}},
+        "required": ["value"],
+        "$defs": {"01": {"type": "string", "enum": ["selected"]}},
+    }
+
+    check_schema_with_instance(schema, {"value": "selected"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"value": "other"}, is_accepted=False, any_whitespace=False)
+
+
+@pytest.mark.parametrize(
+    ("key", "ref"),
+    [
+        ("a/b", "#/$defs/a~1b"),
+        ("a~b", "#/$defs/a~0b"),
+        ("~1", "#/$defs/~01"),
+        ("a b", "#/$defs/a%20b"),
+        ("a/b", "#/$defs/a%7E1b"),
+    ],
+)
+def test_reference_decodes_json_pointer_escapes(key, ref):
+    schema = {
+        "type": "object",
+        "properties": {"value": {"$ref": ref}},
+        "required": ["value"],
+        "$defs": {key: {"type": "string", "enum": ["selected"]}},
+    }
+
+    check_schema_with_instance(schema, {"value": "selected"}, any_whitespace=False)
+    check_schema_with_instance(schema, {"value": "other"}, is_accepted=False, any_whitespace=False)
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"$ref": "#"},
+        {"$defs": {"a": {"$ref": "#/$defs/a"}}, "$ref": "#/$defs/a"},
+        {"$defs": {"a": {"$ref": "#/$defs/b"}, "b": {"$ref": "#/$defs/a"}}, "$ref": "#/$defs/a"},
+        {"anyOf": [{"$ref": "#/anyOf/0"}]},
+        {"type": "object", "properties": {"v": {"$ref": "#/properties/v"}}},
+    ],
+)
+def test_reference_circular_chain_raises(schema):
+    with pytest.raises(RuntimeError, match=r"Circular \$ref chain"):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
 def test_union():
     class Cat(BaseModel):
         name: str

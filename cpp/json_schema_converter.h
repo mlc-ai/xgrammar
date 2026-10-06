@@ -324,6 +324,8 @@ class JSONSchemaConverter {
   virtual int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name);
   virtual int32_t GenerateRef(const RefSpec& spec, const std::string& rule_name);
+  /*! \brief Resolve `spec`, rejecting a chain of pure $ref hops that loops back onto itself. */
+  SchemaSpecPtr ResolveRefRejectingCycles(const RefSpec& spec, const std::string& rule_name);
   /*! \brief Key reference rules by their output encoding context. */
   virtual std::string RefCacheKey(const std::string& uri) const;
   virtual int32_t GenerateAnyOf(const AnyOfSpec& spec, const std::string& rule_name);
