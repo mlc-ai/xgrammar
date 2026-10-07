@@ -110,6 +110,8 @@ std::string GrammarPrinter::PrintGrammarExpr(const GrammarExpr& grammar_expr) {
       return PrintRegex(grammar_expr);
     case GrammarExprType::kSubstring:
       return PrintSubstring(grammar_expr);
+    case GrammarExprType::kDynamicTag:
+      return PrintDynamicTag(grammar_expr);
     default:
       XGRAMMAR_LOG(FATAL) << "Unexpected GrammarExpr type: " << static_cast<int>(grammar_expr.type);
       XGRAMMAR_UNREACHABLE();
@@ -301,6 +303,26 @@ std::string GrammarPrinter::PrintTokenTagDispatch(const GrammarExpr& grammar_exp
   }
   result += ")\n)";
   return result;
+}
+
+std::string GrammarPrinter::PrintDynamicTag(const GrammarExpr& grammar_expr) {
+  auto tag = grammar_->GetDynamicTag(grammar_expr);
+  std::string result = "DynamicTag(" + PrintString(tag.open_prefix) + ", " +
+                       grammar_->GetRule(tag.name_rule_id).name + ", " +
+                       PrintString(tag.open_suffix) + ", " +
+                       grammar_->GetRule(tag.content_rule_id).name + ", " +
+                       PrintString(tag.close_prefix) + ", " + PrintString(tag.close_suffix);
+  if (tag.unique_key_scope_rule_id >= 0) {
+    result += ", unique_key_scope=" + grammar_->GetRule(tag.unique_key_scope_rule_id).name +
+              ", reserved_names=(";
+    for (int32_t i = 0; i < static_cast<int32_t>(tag.reserved_names.size()); ++i) {
+      if (i > 0) result += ", ";
+      result += PrintString(tag.reserved_names[i]);
+    }
+    if (tag.reserved_names.size() == 1) result += ",";
+    result += ")";
+  }
+  return result + ")";
 }
 
 std::string GrammarPrinter::ToString() {

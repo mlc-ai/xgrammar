@@ -100,8 +100,10 @@ struct ObjectSpec {
   std::unordered_set<std::string> required;
 
   bool allow_additional_properties = false;
+  bool has_explicit_additional_properties = false;
   SchemaSpecPtr additional_properties_schema;
   bool allow_unevaluated_properties = true;
+  bool has_explicit_unevaluated_properties = false;
   SchemaSpecPtr unevaluated_properties_schema;
   SchemaSpecPtr property_names;
 

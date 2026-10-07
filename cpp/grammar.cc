@@ -205,7 +205,7 @@ std::optional<std::string> Grammar::Impl::Validate() const {
     if (len < 0 || start + 2 + len > data_size) {
       return "The length of grammar expr " + std::to_string(expr_id) + " is out of range";
     }
-    if (type < 0 || type > static_cast<int64_t>(GrammarExprType::kSubstring)) {
+    if (type < 0 || type > static_cast<int64_t>(GrammarExprType::kDynamicTag)) {
       return "Unknown type of grammar expr " + std::to_string(expr_id);
     }
   }
@@ -272,6 +272,25 @@ std::optional<std::string> Grammar::Impl::Validate() const {
           i += chunk_len;
         }
         break;
+      case GrammarExprType::kDynamicTag: {
+        // [open_prefix, name_rule, open_suffix, content_rule, close_prefix, close_suffix]
+        // plus optionally [unique_key_scope_rule, reserved_names_choices]
+        auto byte_string_ok = [&](int64_t id) {
+          return expr_ok(id) && GetGrammarExpr(id).type == GrammarExprType::kByteString;
+        };
+        ok = (size == 6 || size == 8) && byte_string_ok(expr[0]) && rule_ok(expr[1]) &&
+             byte_string_ok(expr[2]) && rule_ok(expr[3]) && byte_string_ok(expr[4]) &&
+             byte_string_ok(expr[5]);
+        if (ok && size == 8) {
+          ok = rule_ok(expr[6]) && expr_ok(expr[7]) &&
+               GetGrammarExpr(expr[7]).type == GrammarExprType::kChoices;
+          if (ok) {
+            const auto reserved_names = GetGrammarExpr(expr[7]);
+            ok = std::all_of(reserved_names.begin(), reserved_names.end(), byte_string_ok);
+          }
+        }
+        break;
+      }
     }
     if (!ok) {
       return "Grammar expr " + std::to_string(expr_id) + " is malformed";

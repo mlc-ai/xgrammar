@@ -96,9 +96,12 @@ std::string ObjectSpec::ToString() const {
   }
   s +=
       std::string("], allow_additional_properties=") +
-      (allow_additional_properties ? "true" : "false") +
+      (allow_additional_properties ? "true" : "false") + ", has_explicit_additional_properties=" +
+      (has_explicit_additional_properties ? "true" : "false") +
       ", additional_properties_schema=" + (additional_properties_schema ? "SchemaSpec" : "null") +
       ", allow_unevaluated_properties=" + (allow_unevaluated_properties ? "true" : "false") +
+      ", has_explicit_unevaluated_properties=" +
+      (has_explicit_unevaluated_properties ? "true" : "false") +
       ", unevaluated_properties_schema=" + (unevaluated_properties_schema ? "SchemaSpec" : "null") +
       ", property_names=" + (property_names ? "SchemaSpec" : "null") +
       ", min_properties=" + std::to_string(min_properties) +
@@ -1369,6 +1372,7 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
 
   spec.allow_additional_properties = !config_.strict_mode;
   if (schema.count("additionalProperties")) {
+    spec.has_explicit_additional_properties = true;
     auto add_props = schema.at("additionalProperties");
     if (add_props.is<bool>()) {
       spec.allow_additional_properties = add_props.get<bool>();
@@ -1384,6 +1388,7 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
   if (schema.count("additionalProperties")) {
     spec.allow_unevaluated_properties = spec.allow_additional_properties;
   } else if (schema.count("unevaluatedProperties")) {
+    spec.has_explicit_unevaluated_properties = true;
     auto uneval_props = schema.at("unevaluatedProperties");
     if (uneval_props.is<bool>()) {
       spec.allow_unevaluated_properties = uneval_props.get<bool>();
@@ -1438,7 +1443,10 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
             std::to_string(spec.max_properties) + " < " + std::to_string(spec.required.size())
     );
   }
-  if (spec.pattern_properties.empty() && !spec.property_names &&
+  const bool property_names_allow_implicit_properties = spec.property_names &&
+                                                        !spec.has_explicit_additional_properties &&
+                                                        !spec.has_explicit_unevaluated_properties;
+  if (spec.pattern_properties.empty() && !property_names_allow_implicit_properties &&
       !spec.allow_additional_properties && !spec.allow_unevaluated_properties &&
       spec.min_properties > static_cast<int>(spec.properties.size())) {
     return ResultErr<SchemaError>(
@@ -3306,7 +3314,11 @@ int32_t JSONSchemaConverter::GenerateObject(
         int32_t value_rule_id =
             CreateRule(effective_additional, rule_name + "_" + effective_suffix);
         patterns.push_back(FormatOtherProperty(
-            KeyPatternExpression(), value_rule_id, rule_name, effective_suffix, effective_additional
+            GetKeyPatternExcluding(spec.properties, rule_name),
+            value_rule_id,
+            rule_name,
+            effective_suffix,
+            effective_additional
         ));
       }
       additional_override = Choice(patterns);
@@ -3368,40 +3380,46 @@ int32_t JSONSchemaConverter::GenerateObject(
           ));
         }
       } else {
-        int32_t key_rule_id = CreatePropertyNamesKeyRule(spec.property_names, rule_name + "_name");
-        // propertyNames constrains only the key, so a typed additionalProperties
-        // schema still applies to the value (issue #826).
-        int32_t value_rule_id;
-        if (additional_property) {
-          value_rule_id = CreateRule(additional_property, rule_name + "_" + additional_suffix);
-        } else {
-          value_rule_id = builder_.GetRuleId(GetBasicAnyRuleName());
-          XGRAMMAR_DCHECK(value_rule_id != -1);
+        SchemaSpecPtr property_names_value = additional_property;
+        if (!property_names_value && !spec.has_explicit_additional_properties &&
+            !spec.has_explicit_unevaluated_properties) {
+          // Preserve the established behavior in which propertyNames by itself opts into dynamic
+          // properties, while an explicit false additional/unevaluated policy forbids them.
+          property_names_value = SchemaSpec::Make(AnySpec{}, "", "any");
         }
-        property_choices.push_back(Sequence(
-            {beginning_separator,
-             FormatOtherProperty(
-                 RuleRef(key_rule_id),
-                 value_rule_id,
-                 rule_name,
-                 /*rule_name_suffix=*/"pn",
-                 additional_property
-             )}
-        ));
+        if (property_names_value) {
+          int32_t key_rule_id =
+              CreatePropertyNamesKeyRule(spec.property_names, rule_name + "_name");
+          const std::string value_suffix =
+              additional_suffix.empty() ? "pn_value" : additional_suffix;
+          int32_t value_rule_id = CreateRule(property_names_value, rule_name + "_" + value_suffix);
+          property_choices.push_back(Sequence(
+              {beginning_separator,
+               FormatOtherProperty(
+                   RuleRef(key_rule_id),
+                   value_rule_id,
+                   rule_name,
+                   /*rule_name_suffix=*/"pn",
+                   additional_property
+               )}
+          ));
+        }
       }
 
-      int32_t property_rule_id =
-          builder_.AddRuleWithHint(rule_name + "_prop", Choice(property_choices));
-      int32_t subsequent_property =
-          Sequence({NextSeparatorExpression(), RuleRef(property_rule_id)});
-      content = Sequence(
-          {RuleRef(property_rule_id),
-           GetPropertyWithNumberConstraints(
-               subsequent_property, spec.min_properties, spec.max_properties, 1, rule_name
-           ),
-           NextSeparatorExpression(true)}
-      );
-      has_content = true;
+      if (!property_choices.empty()) {
+        int32_t property_rule_id =
+            builder_.AddRuleWithHint(rule_name + "_prop", Choice(property_choices));
+        int32_t subsequent_property =
+            Sequence({NextSeparatorExpression(), RuleRef(property_rule_id)});
+        content = Sequence(
+            {RuleRef(property_rule_id),
+             GetPropertyWithNumberConstraints(
+                 subsequent_property, spec.min_properties, spec.max_properties, 1, rule_name
+             ),
+             NextSeparatorExpression(true)}
+        );
+        has_content = true;
+      }
       could_be_empty = spec.min_properties == 0;
     } else {
       could_be_empty = true;
