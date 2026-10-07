@@ -51,7 +51,7 @@ def _set_path(obj, path, value):
 
 def test_get_serialization_version():
     """Test the version of the serialized JSON string."""
-    assert xgr.get_serialization_version() == "v19"
+    assert xgr.get_serialization_version() == "v18"
 
 
 def test_serialize_grammar():
@@ -76,7 +76,7 @@ def test_serialize_grammar():
         "has_token_edges": False,
         "allow_empty_rule_ids": [],
         "optimized": False,
-        "__VERSION__": "v19",
+        "__VERSION__": "v18",
     }
     # The fsms are the same one, but the start state and end states are different.
     assert json.loads(serialized) == expected_json
@@ -101,14 +101,14 @@ def test_serialize_grammar_exception():
         "complete_fsm": None,
         "per_rule_fsms": [],
         "has_token_edges": False,
-        "__VERSION__": "v19",
+        "__VERSION__": "v18",
     }
 
     expected_json["__VERSION__"] = "v1"  # Change version to trigger error
     with pytest.raises(xgr.DeserializeVersionError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
 
-    expected_json["__VERSION__"] = "v19"
+    expected_json["__VERSION__"] = "v18"
     expected_json.pop("rules")  # Remove required field to trigger error
     with pytest.raises(xgr.DeserializeFormatError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
@@ -160,7 +160,7 @@ def test_serialize_tokenizer_info():
         '"decoded_vocab":["1","212","a","A","b","\\u00e4\\u00b8\\u0080","-","aBc","abc"],'
         '"sorted_decoded_vocab":[[6,"-"],[3,"A"],[2,"a"],[7,"aBc"],[8,"abc"],[4,"b"],[5,"\\u00e4\\u00b8\\u0080"]],'
         '"trie_subtree_nodes_range":[1,2,5,4,5,6,7],'
-        '"__VERSION__":"v19"}'
+        '"__VERSION__":"v18"}'
     )
     assert json.loads(serialized) == json.loads(expected_json)
 
@@ -307,7 +307,7 @@ def test_serialize_compiled_grammar():
             "add_prefix_space": True,
             "stop_token_ids": [0, 1],
         },
-        "__VERSION__": "v19",
+        "__VERSION__": "v18",
     }
 
     class AdaptiveTokenMask(BaseModel):
