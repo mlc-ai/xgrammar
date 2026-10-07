@@ -508,6 +508,8 @@ class JSONSchemaConverter {
   int32_t colon_expr_id_;
   bool any_whitespace_;
   std::optional<int> max_whitespace_cnt_;
+  // Comma used by the compact basic_object/basic_array rules.
+  std::string compact_separator_;
   // When true, object properties may appear in any order (see GetAnyOrderRuleForProperties).
   // Applies to all objects (including nested ones). Default false preserves the fixed-order
   // behavior.

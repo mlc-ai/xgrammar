@@ -175,7 +175,7 @@ def test_basic_rules_separators_with_indent(separators):
     grammar = xgr.Grammar.from_json_schema(
         schema, any_whitespace=False, indent=2, separators=separators
     )
-    comma, colon = separators or (",", ": ")
+    comma, colon = separators or (", ", ": ")
     instance = {"a": [1, 2], "b": 3}
     prefix = '{\n  "value"' + colon
     suffix = "\n}"
@@ -192,10 +192,20 @@ def test_basic_rules_separators_with_indent(separators):
     )
 
 
-@pytest.mark.parametrize("text", ['{"a":1,"b":[2,3]}', '{\n"a" : 1 ,\t"b" : [2,\r\n3]\n}'])
-def test_basic_rules_separators_with_any_whitespace(text):
-    grammar = xgr.Grammar.from_json_schema({}, any_whitespace=True, separators=(",", ":"))
-    assert _is_grammar_accept_string(grammar, text)
+@pytest.mark.parametrize(
+    "separators, accepted, rejected",
+    [
+        ((",", ":"), '{"a":1,"b":[2,3]}', None),
+        ((",", ":"), '{\n"a" : 1 ,\t"b" : [2,\r\n3]\n}', None),
+        ((", ", ":"), '{"a":1, "b":[2, 3]}', '{"a":1,"b":[2,3]}'),
+        ((", ", ":"), '{"a" : 1 , "b":[2, \n3]}', '{"a":1 ,"b":[2, 3]}'),
+    ],
+)
+def test_basic_rules_separators_with_any_whitespace(separators, accepted, rejected):
+    grammar = xgr.Grammar.from_json_schema({}, any_whitespace=True, separators=separators)
+    assert _is_grammar_accept_string(grammar, accepted)
+    if rejected is not None:
+        assert not _is_grammar_accept_string(grammar, rejected)
 
 
 @pytest.mark.parametrize(
