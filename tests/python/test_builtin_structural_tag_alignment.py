@@ -410,10 +410,23 @@ def extract_model_output(stag_key, model_id, assistant_msg, tools, template_kwar
     return extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_kwargs)
 
 
-def validate_output(stag_key, tools, tool_choice, reasoning, model_output):
+def validate_output(stag_key, tools, tool_choice, reasoning, model_output, model_id=None):
     structural_tag = get_model_structural_tag(
         stag_key, tools=tools or [], tool_choice=tool_choice, reasoning=reasoning
     )
+    if stag_key == "glm_4_7" and tools:
+        assert model_id is not None
+        tokenizer = load_tokenizer(model_id, trust_remote_code=True)
+        info = xgr.TokenizerInfo.from_huggingface(tokenizer)
+        compiled = xgr.GrammarCompiler(info).compile_structural_tag(structural_tag)
+        matcher = xgr.GrammarMatcher(compiled)
+        token_ids = tokenizer.encode(model_output, add_special_tokens=False)
+        assert tokenizer.decode(token_ids) == model_output
+        accepted = all(matcher.accept_token(token_id) for token_id in token_ids)
+        accepted = accepted and matcher.accept_token(tokenizer.eos_token_id)
+        accepted = accepted and matcher.is_terminated()
+        assert accepted, f"Grammar rejected output:\n{repr(model_output[:500])}"
+        return
     grammar = Grammar.from_structural_tag(structural_tag)
     accepted = _is_grammar_accept_string(grammar, model_output)
     assert accepted, f"Grammar rejected output:\n{repr(model_output[:500])}"
@@ -526,7 +539,7 @@ def test_reasoning_stag(case):
     tool_choice = make_tool_choice(tool_choice_str, tools or [])
     assistant_msg = make_assistant_msg(stag_key, reasoning_content, num_tool_calls)
     model_output = extract_model_output(stag_key, model_id, assistant_msg, tools, template_kwargs)
-    validate_output(stag_key, tools, tool_choice, reasoning, model_output)
+    validate_output(stag_key, tools, tool_choice, reasoning, model_output, model_id=model_id)
 
 
 @pytest.mark.hf_token_required
