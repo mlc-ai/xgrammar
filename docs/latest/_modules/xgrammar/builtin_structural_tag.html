@@ -294,16 +294,23 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.structural_tag</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">AnyTextFormat</span><span class="p">,</span>
+    <span class="n">AnyTokensFormat</span><span class="p">,</span>
     <span class="n">ConstStringFormat</span><span class="p">,</span>
+    <span class="n">DispatchFormat</span><span class="p">,</span>
     <span class="n">Format</span><span class="p">,</span>
     <span class="n">JSONSchemaFormat</span><span class="p">,</span>
     <span class="n">OptionalFormat</span><span class="p">,</span>
     <span class="n">OrFormat</span><span class="p">,</span>
+    <span class="n">PlusFormat</span><span class="p">,</span>
     <span class="n">RegexFormat</span><span class="p">,</span>
+    <span class="n">RepeatFormat</span><span class="p">,</span>
     <span class="n">SequenceFormat</span><span class="p">,</span>
+    <span class="n">StarFormat</span><span class="p">,</span>
     <span class="n">StructuralTag</span><span class="p">,</span>
     <span class="n">TagFormat</span><span class="p">,</span>
     <span class="n">TagsWithSeparatorFormat</span><span class="p">,</span>
+    <span class="n">TokenFormat</span><span class="p">,</span>
+    <span class="n">TokenTriggeredTagsFormat</span><span class="p">,</span>
     <span class="n">TriggeredTagsFormat</span><span class="p">,</span>
 <span class="p">)</span>
 
@@ -322,6 +329,7 @@
     <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
     <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">token_markers</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
 <span class="w">    </span><span class="sa">r</span><span class="sd">"""Get a structural tag for a model's reasoning and tool-call output format.</span>
 
@@ -506,6 +514,11 @@
 <span class="sd">        under ``"required"`` or a forced tool. Because a second call is no</span>
 <span class="sd">        longer reachable, generation must end once the single call is closed:</span>
 <span class="sd">        free text is still allowed *before* the call but not after it.</span>
+<span class="sd">    token_markers : bool</span>
+<span class="sd">        Whether to match the control markers (``&lt;tool_call&gt;``, ``&lt;/think&gt;``, ...) as their</span>
+<span class="sd">        dedicated tokens instead of as strings, for output parsers that recognise the markers by</span>
+<span class="sd">        token ID. Supported for ``"glm_4_7"``, ``"qwen_3"``,</span>
+<span class="sd">        ``"qwen_3_5"`` and ``"qwen_3_coder"``. Default: ``False``.</span>
 
 <span class="sd">    Notes</span>
 <span class="sd">    -----</span>
@@ -522,13 +535,23 @@
 <span class="sd">    Raises</span>
 <span class="sd">    ------</span>
 <span class="sd">    ValueError</span>
-<span class="sd">        If tool lists, tool choices, reasoning modes, or required tool availability are invalid.</span>
+<span class="sd">        If tool lists, tool choices, reasoning modes, or required tool availability are invalid,</span>
+<span class="sd">        or if ``token_markers`` is requested for a model that does not declare its markers.</span>
 <span class="sd">    """</span>
 
     <span class="n">func</span> <span class="o">=</span> <span class="n">_structural_tag_registry</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">func</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">supported</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">_structural_tag_registry</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown format type: </span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2">, supported types: </span><span class="si">{</span><span class="n">supported</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">token_markers</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The 'token_markers' argument must be a bool."</span><span class="p">)</span>
+    <span class="n">markers</span> <span class="o">=</span> <span class="n">_structural_tag_marker_tokens</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">token_markers</span> <span class="ow">and</span> <span class="n">markers</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">supported</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">_structural_tag_marker_tokens</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"token_markers is not supported for model </span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2">, supported models: </span><span class="si">{</span><span class="n">supported</span><span class="si">}</span><span class="s2">"</span>
+        <span class="p">)</span>
 
     <span class="n">function_tools</span><span class="p">,</span> <span class="n">builtin_tools</span><span class="p">,</span> <span class="n">simplified_tool_choice</span> <span class="o">=</span> <span class="n">normalize_tool_choice</span><span class="p">(</span>
         <span class="n">tools</span><span class="p">,</span> <span class="n">tool_choice</span>
@@ -546,7 +569,7 @@
     <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parallel_tool_calls</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The 'parallel_tool_calls' argument must be a bool."</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">func</span><span class="p">(</span>
+    <span class="n">structural_tag</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span>
         <span class="n">function_tools</span><span class="p">,</span>
         <span class="n">builtin_tools</span><span class="p">,</span>
         <span class="n">simplified_tool_choice</span><span class="p">,</span>
@@ -555,7 +578,11 @@
         <span class="n">exclude_special_tokens</span><span class="o">=</span><span class="n">exclude_special_tokens</span><span class="p">,</span>
         <span class="n">max_whitespace_cnt</span><span class="o">=</span><span class="n">max_whitespace_cnt</span><span class="p">,</span>
         <span class="n">parallel_tool_calls</span><span class="o">=</span><span class="n">parallel_tool_calls</span><span class="p">,</span>
-    <span class="p">)</span></div>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">token_markers</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">markers</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="n">structural_tag</span> <span class="o">=</span> <span class="n">_bind_marker_tokens</span><span class="p">(</span><span class="n">structural_tag</span><span class="p">,</span> <span class="n">markers</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">structural_tag</span></div>
 
 
 
@@ -568,6 +595,7 @@
 <span class="n">_TOOL_CHOICE_ADAPTER</span> <span class="o">=</span> <span class="n">TypeAdapter</span><span class="p">(</span><span class="n">ToolChoiceOptionParam</span><span class="p">)</span>
 
 <span class="n">_structural_tag_registry</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">BuiltinStructuralTagFn</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="n">_structural_tag_marker_tokens</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
 
 
 <div class="viewcode-block" id="normalize_tool_choice">
@@ -815,6 +843,203 @@
     <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">prefix</span><span class="p">,</span> <span class="n">suffix</span><span class="p">]))</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_bind_marker_tokens</span><span class="p">(</span><span class="n">structural_tag</span><span class="p">:</span> <span class="n">StructuralTag</span><span class="p">,</span> <span class="n">markers</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Match the given marker strings as their dedicated tokens instead of as text.</span>
+
+<span class="sd">    Markers in triggers, tag ``begin``/``end`` and constant strings become token formats; the</span>
+<span class="sd">    surrounding text is kept, and markers inside schema-driven content stay strings. Free text</span>
+<span class="sd">    under a token end becomes :class:`AnyTokensFormat` (its ``excludes`` must be markers) and in</span>
+<span class="sd">    token-triggered free text marker ``excludes`` become token-level (other excludes are dropped),</span>
+<span class="sd">    so free text may contain a marker spelled from sub-tokens: use this only with parsers that</span>
+<span class="sd">    recognise markers by token ID. Compile the result with a tokenizer-configured</span>
+<span class="sd">    :class:`GrammarCompiler`. Markers under a :class:`RepeatFormat` stay strings; a token end over</span>
+<span class="sd">    a Repeat or Dispatch format, or a list-valued ``end`` with an alternative ending in a marker,</span>
+<span class="sd">    raises :class:`ValueError`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    structural_tag : StructuralTag</span>
+<span class="sd">        The structural tag to rewrite, typically from :func:`get_model_structural_tag`.</span>
+<span class="sd">    markers : List[str]</span>
+<span class="sd">        Marker strings that are single tokens in the target tokenizer.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    StructuralTag</span>
+<span class="sd">        The rewritten structural tag, or ``structural_tag`` itself if no marker occurs in it.</span>
+<span class="sd">    """</span>
+
+    <span class="n">unique_markers</span> <span class="o">=</span> <span class="p">{</span><span class="n">marker</span> <span class="k">for</span> <span class="n">marker</span> <span class="ow">in</span> <span class="n">markers</span> <span class="k">if</span> <span class="n">marker</span><span class="p">}</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">unique_markers</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">structural_tag</span>
+    <span class="n">bound</span> <span class="o">=</span> <span class="n">_MarkerBinder</span><span class="p">(</span><span class="n">unique_markers</span><span class="p">)</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="n">structural_tag</span><span class="o">.</span><span class="n">format</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">bound</span> <span class="ow">is</span> <span class="n">structural_tag</span><span class="o">.</span><span class="n">format</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">structural_tag</span>
+    <span class="k">return</span> <span class="n">structural_tag</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">"format"</span><span class="p">:</span> <span class="n">bound</span><span class="p">})</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_MarkerBinder</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">markers</span><span class="p">:</span> <span class="s2">"set[str]"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Longest first, so a marker that extends another marker wins.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_markers</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">markers</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="nb">len</span><span class="p">,</span> <span class="n">reverse</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">bind</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="n">Format</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Format</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="n">ConstStringFormat</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bind_const_string</span><span class="p">(</span><span class="n">fmt</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="n">TagFormat</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bind_tag</span><span class="p">(</span><span class="n">fmt</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="n">TriggeredTagsFormat</span><span class="p">):</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_bind_triggered_tags</span><span class="p">(</span><span class="n">fmt</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="n">TagsWithSeparatorFormat</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">_replace</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="s2">"tags"</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_bind_tag</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">fmt</span><span class="o">.</span><span class="n">tags</span><span class="p">])</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="p">(</span><span class="n">SequenceFormat</span><span class="p">,</span> <span class="n">OrFormat</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="n">_replace</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="s2">"elements"</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="n">element</span><span class="p">)</span> <span class="k">for</span> <span class="n">element</span> <span class="ow">in</span> <span class="n">fmt</span><span class="o">.</span><span class="n">elements</span><span class="p">])</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="p">(</span><span class="n">OptionalFormat</span><span class="p">,</span> <span class="n">PlusFormat</span><span class="p">,</span> <span class="n">StarFormat</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="n">_replace</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">content</span><span class="p">))</span>
+        <span class="c1"># RepeatFormat is left untouched: token formats beneath it are not</span>
+        <span class="c1"># resolved against the tokenizer, so its markers stay strings.</span>
+        <span class="k">return</span> <span class="n">fmt</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_leading_marker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="nb">next</span><span class="p">((</span><span class="n">marker</span> <span class="k">for</span> <span class="n">marker</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_markers</span> <span class="k">if</span> <span class="n">text</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">marker</span><span class="p">)),</span> <span class="kc">None</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_trailing_marker</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+        <span class="k">return</span> <span class="nb">next</span><span class="p">((</span><span class="n">marker</span> <span class="k">for</span> <span class="n">marker</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_markers</span> <span class="k">if</span> <span class="n">text</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">marker</span><span class="p">)),</span> <span class="kc">None</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_split_literal</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Format</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Split a literal into const strings and marker tokens."""</span>
+        <span class="n">parts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Format</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">while</span> <span class="n">text</span><span class="p">:</span>
+            <span class="n">best</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">marker</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_markers</span><span class="p">:</span>
+                <span class="n">index</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">marker</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">index</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span> <span class="ow">and</span> <span class="p">(</span><span class="n">best</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="n">best</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+                    <span class="n">best</span> <span class="o">=</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">marker</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">best</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">text</span><span class="p">))</span>
+                <span class="k">break</span>
+            <span class="n">index</span><span class="p">,</span> <span class="n">marker</span> <span class="o">=</span> <span class="n">best</span>
+            <span class="k">if</span> <span class="n">index</span><span class="p">:</span>
+                <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">text</span><span class="p">[:</span><span class="n">index</span><span class="p">]))</span>
+            <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">TokenFormat</span><span class="p">(</span><span class="n">token</span><span class="o">=</span><span class="n">marker</span><span class="p">))</span>
+            <span class="n">text</span> <span class="o">=</span> <span class="n">text</span><span class="p">[</span><span class="n">index</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">marker</span><span class="p">)</span> <span class="p">:]</span>
+        <span class="k">return</span> <span class="n">parts</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_bind_const_string</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="n">ConstStringFormat</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Format</span><span class="p">:</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_split_literal</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">parts</span> <span class="ow">or</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ConstStringFormat</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="n">fmt</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="n">parts</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_bind_tag</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">tag</span><span class="p">:</span> <span class="n">TagFormat</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">begin_marker</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">keep_begin</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TagFormat</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Move a leading begin marker and a trailing end marker onto tokens.</span>
+
+<span class="sd">        The rest of ``begin`` and ``end`` is folded into the tag content so the</span>
+<span class="sd">        accepted text stays the same.</span>
+<span class="sd">        """</span>
+        <span class="n">begin</span> <span class="o">=</span> <span class="n">tag</span><span class="o">.</span><span class="n">begin</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">tag</span><span class="o">.</span><span class="n">end</span>
+        <span class="n">lead</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Format</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">tail</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Format</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">begin</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">keep_begin</span><span class="p">:</span>
+            <span class="n">marker</span> <span class="o">=</span> <span class="n">begin_marker</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_leading_marker</span><span class="p">(</span><span class="n">begin</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">marker</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">begin</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">marker</span><span class="p">):</span>
+                <span class="n">lead</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_split_literal</span><span class="p">(</span><span class="n">begin</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">marker</span><span class="p">)</span> <span class="p">:])</span>
+                <span class="n">begin</span> <span class="o">=</span> <span class="n">TokenFormat</span><span class="p">(</span><span class="n">token</span><span class="o">=</span><span class="n">marker</span><span class="p">)</span>
+        <span class="n">end_marker</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">end</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="n">bound</span> <span class="o">=</span> <span class="p">[</span><span class="n">alt</span> <span class="k">for</span> <span class="n">alt</span> <span class="ow">in</span> <span class="n">end</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_trailing_marker</span><span class="p">(</span><span class="n">alt</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">bound</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">"Token markers cannot bind a tag whose `end` is a list of alternatives "</span>
+                    <span class="sa">f</span><span class="s2">"when one of them ends with a marker (got </span><span class="si">{</span><span class="n">bound</span><span class="si">!r}</span><span class="s2">); use a single end "</span>
+                    <span class="s2">"string or leave that tag unbound"</span>
+                <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">end</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="n">end_marker</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_trailing_marker</span><span class="p">(</span><span class="n">end</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">end_marker</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">tail</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_split_literal</span><span class="p">(</span><span class="n">end</span><span class="p">[:</span> <span class="o">-</span><span class="nb">len</span><span class="p">(</span><span class="n">end_marker</span><span class="p">)])</span>
+                <span class="n">end</span> <span class="o">=</span> <span class="n">TokenFormat</span><span class="p">(</span><span class="n">token</span><span class="o">=</span><span class="n">end_marker</span><span class="p">)</span>
+        <span class="n">content</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">bind</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">content</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">end_marker</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># String-level free text does not see a token end; make it token-level so the end</span>
+            <span class="c1"># token stops it.</span>
+            <span class="n">content</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_token_level</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">lead</span> <span class="ow">or</span> <span class="n">tail</span><span class="p">:</span>
+            <span class="n">content</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="o">*</span><span class="n">lead</span><span class="p">,</span> <span class="n">content</span><span class="p">,</span> <span class="o">*</span><span class="n">tail</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">begin</span> <span class="ow">is</span> <span class="n">tag</span><span class="o">.</span><span class="n">begin</span> <span class="ow">and</span> <span class="n">end</span> <span class="ow">is</span> <span class="n">tag</span><span class="o">.</span><span class="n">end</span> <span class="ow">and</span> <span class="n">content</span> <span class="ow">is</span> <span class="n">tag</span><span class="o">.</span><span class="n">content</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">tag</span>
+        <span class="k">return</span> <span class="n">tag</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">"begin"</span><span class="p">:</span> <span class="n">begin</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">:</span> <span class="n">content</span><span class="p">,</span> <span class="s2">"end"</span><span class="p">:</span> <span class="n">end</span><span class="p">})</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_bind_triggered_tags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="n">TriggeredTagsFormat</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Format</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Dispatch on the marker token when every trigger starts with it."""</span>
+        <span class="n">marker</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span>
+            <span class="p">(</span>
+                <span class="n">marker</span>
+                <span class="k">for</span> <span class="n">marker</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_markers</span>
+                <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="n">trigger</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">marker</span><span class="p">)</span> <span class="k">for</span> <span class="n">trigger</span> <span class="ow">in</span> <span class="n">fmt</span><span class="o">.</span><span class="n">triggers</span><span class="p">)</span>
+                <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span>
+                    <span class="nb">isinstance</span><span class="p">(</span><span class="n">tag</span><span class="o">.</span><span class="n">begin</span><span class="p">,</span> <span class="nb">str</span><span class="p">)</span> <span class="ow">and</span> <span class="n">tag</span><span class="o">.</span><span class="n">begin</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">marker</span><span class="p">)</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">fmt</span><span class="o">.</span><span class="n">tags</span>
+                <span class="p">)</span>
+            <span class="p">),</span>
+            <span class="kc">None</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">marker</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># The trigger is ordinary text; keep string dispatch but still bind</span>
+            <span class="c1"># the markers inside the tags.</span>
+            <span class="k">return</span> <span class="n">_replace</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="s2">"tags"</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_bind_tag</span><span class="p">(</span><span class="n">tag</span><span class="p">,</span> <span class="n">keep_begin</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">fmt</span><span class="o">.</span><span class="n">tags</span><span class="p">])</span>
+        <span class="k">return</span> <span class="n">TokenTriggeredTagsFormat</span><span class="p">(</span>
+            <span class="n">trigger_tokens</span><span class="o">=</span><span class="p">[</span><span class="n">marker</span><span class="p">],</span>
+            <span class="n">tags</span><span class="o">=</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_bind_tag</span><span class="p">(</span><span class="n">tag</span><span class="p">,</span> <span class="n">begin_marker</span><span class="o">=</span><span class="n">marker</span><span class="p">)</span> <span class="k">for</span> <span class="n">tag</span> <span class="ow">in</span> <span class="n">fmt</span><span class="o">.</span><span class="n">tags</span><span class="p">],</span>
+            <span class="c1"># Only markers are known to be single tokens; other string excludes</span>
+            <span class="c1"># cannot be expressed at the token level and are dropped.</span>
+            <span class="n">exclude_tokens</span><span class="o">=</span><span class="p">[</span><span class="n">text</span> <span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">fmt</span><span class="o">.</span><span class="n">excludes</span> <span class="k">if</span> <span class="n">text</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_markers</span><span class="p">],</span>
+            <span class="n">at_least_one</span><span class="o">=</span><span class="n">fmt</span><span class="o">.</span><span class="n">at_least_one</span><span class="p">,</span>
+            <span class="n">stop_after_first</span><span class="o">=</span><span class="n">fmt</span><span class="o">.</span><span class="n">stop_after_first</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_token_level</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fmt</span><span class="p">:</span> <span class="n">Format</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Format</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Turn the free text under a token end into token-level formats."""</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="n">AnyTextFormat</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">fmt</span><span class="o">.</span><span class="n">max_chars</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">any</span><span class="p">(</span><span class="n">text</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_markers</span> <span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="n">fmt</span><span class="o">.</span><span class="n">excludes</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">"Token markers need the free text under a token end to be token-level: "</span>
+                    <span class="sa">f</span><span class="s2">"its excludes must be markers and max_chars unset (got </span><span class="si">{</span><span class="n">fmt</span><span class="si">!r}</span><span class="s2">)"</span>
+                <span class="p">)</span>
+            <span class="k">return</span> <span class="n">AnyTokensFormat</span><span class="p">(</span><span class="n">exclude_tokens</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">excludes</span><span class="p">),</span> <span class="n">max_tokens</span><span class="o">=</span><span class="n">fmt</span><span class="o">.</span><span class="n">max_tokens</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="n">TriggeredTagsFormat</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">"Token markers cannot keep string-triggered tags under a token end; "</span>
+                <span class="s2">"their triggers must start with a marker"</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="p">(</span><span class="n">SequenceFormat</span><span class="p">,</span> <span class="n">OrFormat</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="n">_replace</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="s2">"elements"</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_token_level</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">fmt</span><span class="o">.</span><span class="n">elements</span><span class="p">])</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="p">(</span><span class="n">OptionalFormat</span><span class="p">,</span> <span class="n">PlusFormat</span><span class="p">,</span> <span class="n">StarFormat</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="n">_replace</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="s2">"content"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_token_level</span><span class="p">(</span><span class="n">fmt</span><span class="o">.</span><span class="n">content</span><span class="p">))</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="p">(</span><span class="n">RepeatFormat</span><span class="p">,</span> <span class="n">DispatchFormat</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">"Token markers cannot put a token end over a Repeat or Dispatch format; "</span>
+                <span class="s2">"the free text inside it would stay string-level"</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="n">fmt</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_replace</span><span class="p">(</span><span class="n">fmt</span><span class="p">:</span> <span class="n">Format</span><span class="p">,</span> <span class="n">field</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Format</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Copy ``fmt`` with ``field`` replaced, unless nothing actually changed."""</span>
+    <span class="n">current</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">fmt</span><span class="p">,</span> <span class="n">field</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="n">unchanged</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">current</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span>
+            <span class="n">new</span> <span class="ow">is</span> <span class="n">old</span> <span class="k">for</span> <span class="n">new</span><span class="p">,</span> <span class="n">old</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">current</span><span class="p">)</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">unchanged</span> <span class="o">=</span> <span class="n">value</span> <span class="ow">is</span> <span class="n">current</span>
+    <span class="k">return</span> <span class="n">fmt</span> <span class="k">if</span> <span class="n">unchanged</span> <span class="k">else</span> <span class="n">fmt</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="n">field</span><span class="p">:</span> <span class="n">value</span><span class="p">})</span>
+
+
 <span class="k">def</span><span class="w"> </span><span class="nf">_filter_allowed_tools</span><span class="p">(</span>
     <span class="n">tools</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">],</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">],</span>
@@ -852,7 +1077,7 @@
 
 <div class="viewcode-block" id="register_model_structural_tag">
 <a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.register_model_structural_tag">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">register_model_structural_tag</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">register_model_structural_tag</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">marker_tokens</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Register a model-specific structural tag function under *name*.</span>
 
 <span class="sd">    The decorated function is stored in the internal registry so that</span>
@@ -863,6 +1088,9 @@
 <span class="sd">    ----------</span>
 <span class="sd">    name : str</span>
 <span class="sd">        The model format key, e.g. ``"llama"``, ``"harmony"``.</span>
+<span class="sd">    marker_tokens : Optional[List[str]]</span>
+<span class="sd">        The model's control markers that are single tokens in its tokenizer. Declaring them</span>
+<span class="sd">        enables ``token_markers=True`` in :func:`get_model_structural_tag`. Default: ``None``.</span>
 
 <span class="sd">    Examples</span>
 <span class="sd">    --------</span>
@@ -878,6 +1106,10 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">decorator</span><span class="p">(</span><span class="n">func</span><span class="p">):</span>
         <span class="n">_structural_tag_registry</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">func</span>
+        <span class="k">if</span> <span class="n">marker_tokens</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">_structural_tag_marker_tokens</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">_structural_tag_marker_tokens</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">marker_tokens</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">func</span>
 
     <span class="k">return</span> <span class="n">decorator</span></div>
@@ -1605,10 +1837,13 @@
 
 
 
+<span class="n">_QWEN_MARKER_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/think&gt;"</span><span class="p">,</span> <span class="s2">"&lt;tool_call&gt;"</span><span class="p">,</span> <span class="s2">"&lt;/tool_call&gt;"</span><span class="p">]</span>
+
+
 <div class="viewcode-block" id="get_qwen_3_5_structural_tag">
 <a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_qwen_3_5_structural_tag">[docs]</a>
-<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"qwen_3_5"</span><span class="p">)</span>
-<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"qwen_3_coder"</span><span class="p">)</span>
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"qwen_3_5"</span><span class="p">,</span> <span class="n">marker_tokens</span><span class="o">=</span><span class="n">_QWEN_MARKER_TOKENS</span><span class="p">)</span>
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"qwen_3_coder"</span><span class="p">,</span> <span class="n">marker_tokens</span><span class="o">=</span><span class="n">_QWEN_MARKER_TOKENS</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_qwen_3_5_structural_tag</span><span class="p">(</span>
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1854,7 +2089,7 @@
 
 <div class="viewcode-block" id="get_qwen_3_structural_tag">
 <a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_qwen_3_structural_tag">[docs]</a>
-<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"qwen_3"</span><span class="p">)</span>
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"qwen_3"</span><span class="p">,</span> <span class="n">marker_tokens</span><span class="o">=</span><span class="n">_QWEN_MARKER_TOKENS</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_qwen_3_structural_tag</span><span class="p">(</span>
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2593,9 +2828,21 @@
 
 
 
+<span class="n">_GLM_4_7_MARKER_TOKENS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">"&lt;think&gt;"</span><span class="p">,</span>
+    <span class="s2">"&lt;/think&gt;"</span><span class="p">,</span>
+    <span class="s2">"&lt;tool_call&gt;"</span><span class="p">,</span>
+    <span class="s2">"&lt;/tool_call&gt;"</span><span class="p">,</span>
+    <span class="s2">"&lt;arg_key&gt;"</span><span class="p">,</span>
+    <span class="s2">"&lt;/arg_key&gt;"</span><span class="p">,</span>
+    <span class="s2">"&lt;arg_value&gt;"</span><span class="p">,</span>
+    <span class="s2">"&lt;/arg_value&gt;"</span><span class="p">,</span>
+<span class="p">]</span>
+
+
 <div class="viewcode-block" id="get_glm_4_7_structural_tag">
 <a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_glm_4_7_structural_tag">[docs]</a>
-<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"glm_4_7"</span><span class="p">)</span>
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"glm_4_7"</span><span class="p">,</span> <span class="n">marker_tokens</span><span class="o">=</span><span class="n">_GLM_4_7_MARKER_TOKENS</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_glm_4_7_structural_tag</span><span class="p">(</span>
     <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
