@@ -1336,6 +1336,15 @@ class GrammarFSMBuilderImpl {
       }
     }
 
+    (*grammar)->has_token_edges = false;
+    for (int state = 0; state < complete_fsm.NumStates() && !(*grammar)->has_token_edges; ++state) {
+      for (const auto& edge : complete_fsm.GetEdges(state)) {
+        if (edge.IsToken() || edge.IsExcludeToken()) {
+          (*grammar)->has_token_edges = true;
+          break;
+        }
+      }
+    }
     (*grammar)->complete_fsm = std::move(compact_complete_fsm);
     (*grammar)->per_rule_fsms = std::move(compact_per_rule_fsms);
   }
