@@ -37,6 +37,7 @@ from xgrammar.builtin_structural_tag import (
 from xgrammar.openai_tool_call_schema import BuiltinToolParam, FunctionToolParam
 from xgrammar.structural_tag import (
     AnyTextFormat,
+    AnyTokensFormat,
     ConstStringFormat,
     JSONSchemaFormat,
     OptionalFormat,
@@ -3432,20 +3433,19 @@ def test_bind_marker_tokens_is_noop_without_occurrences():
 
 
 @pytest.mark.parametrize("end", ["</think>", "\n</think>"])
-def test_bind_marker_tokens_excludes_token_end_from_any_text(end: str):
-    """Unlike a string end, a token end is not excluded from AnyText content automatically."""
-    structural_tag = StructuralTag(format=TagFormat(begin="", content=AnyTextFormat(), end=end))
-    tag = bind_marker_tokens(structural_tag, ["</think>"]).format
+def test_bind_marker_tokens_makes_free_text_under_token_end_token_level(end: str):
+    structural_tag = StructuralTag(
+        format=TagFormat(begin="", content=AnyTextFormat(excludes=["<think>"]), end=end)
+    )
+    tag = bind_marker_tokens(structural_tag, ["<think>", "</think>"]).format
 
     assert isinstance(tag, TagFormat)
     assert tag.end == TokenFormat(token="</think>")
     content = tag.content.elements[0] if isinstance(tag.content, SequenceFormat) else tag.content
-    assert isinstance(content, AnyTextFormat)
-    assert content.excludes == ["</think>"]
+    assert content == AnyTokensFormat(exclude_tokens=["<think>"])
 
 
-def test_bind_marker_tokens_excludes_token_end_from_nested_free_text():
-    """The token end is excluded from free text anywhere in the content, except in nested tags."""
+def test_bind_marker_tokens_converts_nested_free_text_but_not_nested_tags():
     inner = TagFormat(begin="<a>", content=AnyTextFormat(), end="</a>")
     content = SequenceFormat(
         elements=[OptionalFormat(content=AnyTextFormat()), inner, AnyTextFormat()]
@@ -3454,9 +3454,17 @@ def test_bind_marker_tokens_excludes_token_end_from_nested_free_text():
     tag = bind_marker_tokens(structural_tag, ["</think>"]).format
 
     first, nested, last = tag.content.elements
-    assert first.content.excludes == ["</think>"]
+    assert first.content == AnyTokensFormat()
     assert nested is inner
-    assert last.excludes == ["</think>"]
+    assert last == AnyTokensFormat()
+
+
+def test_bind_marker_tokens_rejects_string_excludes_under_token_end():
+    structural_tag = StructuralTag(
+        format=TagFormat(begin="", content=AnyTextFormat(excludes=["<|im_end|>"]), end="</think>")
+    )
+    with pytest.raises(ValueError, match="must be markers"):
+        bind_marker_tokens(structural_tag, ["</think>"])
 
 
 @pytest.mark.thread_unsafe
@@ -3541,6 +3549,11 @@ def _marker_encodings(tokenizer, body: str) -> Tuple[List[int], List[int]]:
 def _accepts_tokens(compiler, structural_tag: StructuralTag, token_ids: List[int]) -> bool:
     matcher = xgr.GrammarMatcher(compiler.compile_structural_tag(structural_tag))
     return all(matcher.accept_token(token_id) for token_id in token_ids)
+
+
+def _completes(compiler, structural_tag: StructuralTag, token_ids: List[int]) -> bool:
+    matcher = xgr.GrammarMatcher(compiler.compile_structural_tag(structural_tag))
+    return all(matcher.accept_token(token_id) for token_id in token_ids) and matcher.is_completed()
 
 
 @pytest.mark.hf_token_required
@@ -3644,8 +3657,10 @@ def test_token_markers_reasoning_block_closes_on_dedicated_think_token():
     dedicated = [*enc("plan"), think_end, *enc("\n\n"), *atomic]
     spelled = [*enc("plan"), *enc("</"), *enc("think"), *enc(">"), *enc("\n\n"), *atomic]
     assert tokenizer.decode(dedicated) == tokenizer.decode(spelled)
-    assert _accepts_tokens(compiler, structural_tag, dedicated)
-    assert not _accepts_tokens(compiler, structural_tag, spelled)
+    assert _completes(compiler, structural_tag, dedicated)
+    # The spelled form is reasoning text: accepted, but the block never closes.
+    assert _accepts_tokens(compiler, structural_tag, spelled)
+    assert not _completes(compiler, structural_tag, spelled)
 
 
 @pytest.mark.hf_token_required

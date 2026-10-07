@@ -14,6 +14,7 @@ from .openai_tool_call_schema import (
 )
 from .structural_tag import (
     AnyTextFormat,
+    AnyTokensFormat,
     ConstStringFormat,
     Format,
     JSONSchemaFormat,
@@ -559,12 +560,13 @@ def bind_marker_tokens(structural_tag: StructuralTag, markers: List[str]) -> Str
     """Match the given marker strings as their dedicated tokens instead of as text.
 
     Markers in triggers, tag ``begin``/``end`` and constant strings become token formats; the
-    surrounding text is kept, and markers inside schema-driven content stay strings. In
-    token-triggered free text, marker ``excludes`` become token-level (other excludes are dropped),
-    so it may contain a marker spelled from sub-tokens: use this only with parsers that recognise
-    markers by token ID. Compile the result with a tokenizer-configured :class:`GrammarCompiler`.
-    Markers under a :class:`RepeatFormat` stay strings; a list-valued ``end`` raises
-    :class:`ValueError` if an alternative ends with a marker.
+    surrounding text is kept, and markers inside schema-driven content stay strings. Free text
+    under a token end becomes :class:`AnyTokensFormat` (its ``excludes`` must be markers) and in
+    token-triggered free text marker ``excludes`` become token-level (other excludes are dropped),
+    so free text may contain a marker spelled from sub-tokens: use this only with parsers that
+    recognise markers by token ID. Compile the result with a tokenizer-configured
+    :class:`GrammarCompiler`. Markers under a :class:`RepeatFormat` stay strings; a list-valued
+    ``end`` raises :class:`ValueError` if an alternative ends with a marker.
 
     Parameters
     ----------
@@ -676,9 +678,9 @@ class _MarkerBinder:
                 end = TokenFormat(token=end_marker)
         content = self.bind(tag.content)
         if end_marker is not None:
-            # A string end stops the free text beneath the tag automatically, a token
-            # end does not; keep the wildcards from swallowing the closing marker.
-            content = _exclude_from_free_text(content, end_marker)
+            # String-level free text does not see a token end; make it token-level so the end
+            # token stops it.
+            content = self._token_level(content)
         if lead or tail:
             content = SequenceFormat(elements=[*lead, content, *tail])
         if begin is tag.begin and end is tag.end and content is tag.content:
@@ -712,18 +714,25 @@ class _MarkerBinder:
             stop_after_first=fmt.stop_after_first,
         )
 
-
-def _exclude_from_free_text(fmt: Format, text: str) -> Format:
-    """Exclude ``text`` from the free-text spans of ``fmt`` that are not inside a nested tag."""
-    if isinstance(fmt, (AnyTextFormat, TriggeredTagsFormat)):
-        if text in fmt.excludes:
-            return fmt
-        return fmt.model_copy(update={"excludes": [*fmt.excludes, text]})
-    if isinstance(fmt, (SequenceFormat, OrFormat)):
-        return _replace(fmt, "elements", [_exclude_from_free_text(e, text) for e in fmt.elements])
-    if isinstance(fmt, (OptionalFormat, PlusFormat, StarFormat, RepeatFormat)):
-        return _replace(fmt, "content", _exclude_from_free_text(fmt.content, text))
-    return fmt
+    def _token_level(self, fmt: Format) -> Format:
+        """Turn the free text under a token end into token-level formats."""
+        if isinstance(fmt, AnyTextFormat):
+            if fmt.max_chars is not None or any(text not in self._markers for text in fmt.excludes):
+                raise ValueError(
+                    "bind_marker_tokens needs the free text under a token end to be token-level: "
+                    f"its excludes must be markers and max_chars unset (got {fmt!r})"
+                )
+            return AnyTokensFormat(exclude_tokens=list(fmt.excludes), max_tokens=fmt.max_tokens)
+        if isinstance(fmt, TriggeredTagsFormat):
+            raise ValueError(
+                "bind_marker_tokens cannot keep string-triggered tags under a token end; "
+                "their triggers must start with a marker"
+            )
+        if isinstance(fmt, (SequenceFormat, OrFormat)):
+            return _replace(fmt, "elements", [self._token_level(e) for e in fmt.elements])
+        if isinstance(fmt, (OptionalFormat, PlusFormat, StarFormat)):
+            return _replace(fmt, "content", self._token_level(fmt.content))
+        return fmt
 
 
 def _replace(fmt: Format, field: str, value: Any) -> Format:
