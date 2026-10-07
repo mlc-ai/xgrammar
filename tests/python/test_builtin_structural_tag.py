@@ -11,9 +11,9 @@ from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.builtin_structural_tag import (
+    _bind_marker_tokens,
     _structural_tag_marker_tokens,
     _structural_tag_registry,
-    bind_marker_tokens,
     get_cohere_structural_tag,
     get_deepseek_r1_structural_tag,
     get_deepseek_v3_1_structural_tag,
@@ -39,6 +39,7 @@ from xgrammar.structural_tag import (
     AnyTextFormat,
     AnyTokensFormat,
     ConstStringFormat,
+    DispatchFormat,
     JSONSchemaFormat,
     OptionalFormat,
     RepeatFormat,
@@ -3428,8 +3429,8 @@ def test_token_markers_rejects_non_bool():
 
 def test_bind_marker_tokens_is_noop_without_occurrences():
     structural_tag = get_model_structural_tag("llama", tools=_TOKEN_MARKER_TOOLS)
-    assert bind_marker_tokens(structural_tag, ["<tool_call>"]) is structural_tag
-    assert bind_marker_tokens(structural_tag, []) is structural_tag
+    assert _bind_marker_tokens(structural_tag, ["<tool_call>"]) is structural_tag
+    assert _bind_marker_tokens(structural_tag, []) is structural_tag
 
 
 @pytest.mark.parametrize("end", ["</think>", "\n</think>"])
@@ -3437,7 +3438,7 @@ def test_bind_marker_tokens_makes_free_text_under_token_end_token_level(end: str
     structural_tag = StructuralTag(
         format=TagFormat(begin="", content=AnyTextFormat(excludes=["<think>"]), end=end)
     )
-    tag = bind_marker_tokens(structural_tag, ["<think>", "</think>"]).format
+    tag = _bind_marker_tokens(structural_tag, ["<think>", "</think>"]).format
 
     assert isinstance(tag, TagFormat)
     assert tag.end == TokenFormat(token="</think>")
@@ -3451,7 +3452,7 @@ def test_bind_marker_tokens_converts_nested_free_text_but_not_nested_tags():
         elements=[OptionalFormat(content=AnyTextFormat()), inner, AnyTextFormat()]
     )
     structural_tag = StructuralTag(format=TagFormat(begin="", content=content, end="</think>"))
-    tag = bind_marker_tokens(structural_tag, ["</think>"]).format
+    tag = _bind_marker_tokens(structural_tag, ["</think>"]).format
 
     first, nested, last = tag.content.elements
     assert first.content == AnyTokensFormat()
@@ -3464,7 +3465,7 @@ def test_bind_marker_tokens_rejects_string_excludes_under_token_end():
         format=TagFormat(begin="", content=AnyTextFormat(excludes=["<|im_end|>"]), end="</think>")
     )
     with pytest.raises(ValueError, match="must be markers"):
-        bind_marker_tokens(structural_tag, ["</think>"])
+        _bind_marker_tokens(structural_tag, ["</think>"])
 
 
 @pytest.mark.thread_unsafe
@@ -3496,7 +3497,7 @@ def test_bind_marker_tokens_keeps_only_marker_excludes():
             excludes=["<think>", "</tool_call>"],
         )
     )
-    fmt = bind_marker_tokens(structural_tag, ["<tool_call>", "</tool_call>"]).format
+    fmt = _bind_marker_tokens(structural_tag, ["<tool_call>", "</tool_call>"]).format
 
     assert isinstance(fmt, TokenTriggeredTagsFormat)
     assert fmt.exclude_tokens == ["</tool_call>"]
@@ -3507,7 +3508,21 @@ def test_bind_marker_tokens_leaves_repeat_content_as_strings():
     structural_tag = StructuralTag(
         format=RepeatFormat(min=1, max=2, content=ConstStringFormat(value="<tool_call>x"))
     )
-    assert bind_marker_tokens(structural_tag, ["<tool_call>"]) is structural_tag
+    assert _bind_marker_tokens(structural_tag, ["<tool_call>"]) is structural_tag
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        RepeatFormat(min=1, max=2, content=AnyTextFormat()),
+        DispatchFormat(rules=[("<a>", ConstStringFormat(value="x"))]),
+    ],
+    ids=["repeat", "dispatch"],
+)
+def test_bind_marker_tokens_rejects_repeat_and_dispatch_under_token_end(content):
+    structural_tag = StructuralTag(format=TagFormat(begin="", content=content, end="</think>"))
+    with pytest.raises(ValueError, match="Repeat or Dispatch"):
+        _bind_marker_tokens(structural_tag, ["</think>"])
 
 
 def test_bind_marker_tokens_rejects_marker_in_alternative_ends():
@@ -3519,12 +3534,12 @@ def test_bind_marker_tokens_rejects_marker_in_alternative_ends():
         )
     )
     with pytest.raises(ValueError, match="list of alternatives"):
-        bind_marker_tokens(structural_tag, ["<tool_call>", "</tool_call>"])
+        _bind_marker_tokens(structural_tag, ["<tool_call>", "</tool_call>"])
 
     plain = StructuralTag(
         format=TagFormat(begin="<tool_call>", content=ConstStringFormat(value="x"), end=["a", "b"])
     )
-    bound = bind_marker_tokens(plain, ["<tool_call>"]).format
+    bound = _bind_marker_tokens(plain, ["<tool_call>"]).format
     assert isinstance(bound, TagFormat)
     assert bound.begin == TokenFormat(token="<tool_call>")
     assert bound.end == ["a", "b"]

@@ -16,6 +16,7 @@ from .structural_tag import (
     AnyTextFormat,
     AnyTokensFormat,
     ConstStringFormat,
+    DispatchFormat,
     Format,
     JSONSchemaFormat,
     OptionalFormat,
@@ -234,7 +235,7 @@ def get_model_structural_tag(
     token_markers : bool
         Whether to match the control markers (``<tool_call>``, ``</think>``, ...) as their
         dedicated tokens instead of as strings, for output parsers that recognise the markers by
-        token ID. See :func:`bind_marker_tokens`. Supported for ``"glm_4_7"``, ``"qwen_3"``,
+        token ID. Supported for ``"glm_4_7"``, ``"qwen_3"``,
         ``"qwen_3_5"`` and ``"qwen_3_coder"``. Default: ``False``.
 
     Notes
@@ -298,7 +299,7 @@ def get_model_structural_tag(
     )
     if token_markers:
         assert markers is not None
-        structural_tag = bind_marker_tokens(structural_tag, markers)
+        structural_tag = _bind_marker_tokens(structural_tag, markers)
     return structural_tag
 
 
@@ -556,7 +557,7 @@ def _assemble_structural_tag(prefix: Optional[Format], suffix: Format) -> Struct
     return StructuralTag(format=SequenceFormat(elements=[prefix, suffix]))
 
 
-def bind_marker_tokens(structural_tag: StructuralTag, markers: List[str]) -> StructuralTag:
+def _bind_marker_tokens(structural_tag: StructuralTag, markers: List[str]) -> StructuralTag:
     """Match the given marker strings as their dedicated tokens instead of as text.
 
     Markers in triggers, tag ``begin``/``end`` and constant strings become token formats; the
@@ -565,8 +566,9 @@ def bind_marker_tokens(structural_tag: StructuralTag, markers: List[str]) -> Str
     token-triggered free text marker ``excludes`` become token-level (other excludes are dropped),
     so free text may contain a marker spelled from sub-tokens: use this only with parsers that
     recognise markers by token ID. Compile the result with a tokenizer-configured
-    :class:`GrammarCompiler`. Markers under a :class:`RepeatFormat` stay strings; a list-valued
-    ``end`` raises :class:`ValueError` if an alternative ends with a marker.
+    :class:`GrammarCompiler`. Markers under a :class:`RepeatFormat` stay strings; a token end over
+    a Repeat or Dispatch format, or a list-valued ``end`` with an alternative ending in a marker,
+    raises :class:`ValueError`.
 
     Parameters
     ----------
@@ -667,7 +669,7 @@ class _MarkerBinder:
             bound = [alt for alt in end if self._trailing_marker(alt) is not None]
             if bound:
                 raise ValueError(
-                    "bind_marker_tokens cannot bind a tag whose `end` is a list of alternatives "
+                    "Token markers cannot bind a tag whose `end` is a list of alternatives "
                     f"when one of them ends with a marker (got {bound!r}); use a single end "
                     "string or leave that tag unbound"
                 )
@@ -719,19 +721,24 @@ class _MarkerBinder:
         if isinstance(fmt, AnyTextFormat):
             if fmt.max_chars is not None or any(text not in self._markers for text in fmt.excludes):
                 raise ValueError(
-                    "bind_marker_tokens needs the free text under a token end to be token-level: "
+                    "Token markers need the free text under a token end to be token-level: "
                     f"its excludes must be markers and max_chars unset (got {fmt!r})"
                 )
             return AnyTokensFormat(exclude_tokens=list(fmt.excludes), max_tokens=fmt.max_tokens)
         if isinstance(fmt, TriggeredTagsFormat):
             raise ValueError(
-                "bind_marker_tokens cannot keep string-triggered tags under a token end; "
+                "Token markers cannot keep string-triggered tags under a token end; "
                 "their triggers must start with a marker"
             )
         if isinstance(fmt, (SequenceFormat, OrFormat)):
             return _replace(fmt, "elements", [self._token_level(e) for e in fmt.elements])
         if isinstance(fmt, (OptionalFormat, PlusFormat, StarFormat)):
             return _replace(fmt, "content", self._token_level(fmt.content))
+        if isinstance(fmt, (RepeatFormat, DispatchFormat)):
+            raise ValueError(
+                "Token markers cannot put a token end over a Repeat or Dispatch format; "
+                "the free text inside it would stay string-level"
+            )
         return fmt
 
 
