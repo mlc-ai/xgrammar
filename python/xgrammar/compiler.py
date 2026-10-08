@@ -160,6 +160,12 @@ class GrammarCompiler(XGRObject):
         schema : Union[str, Type[BaseModel], Dict[str, Any]]
             The schema string or Pydantic model or JSON schema dict.
 
+        any_whitespace : bool, default: True
+            Whether to use any whitespace. If True, the generated grammar will ignore the
+            indent and separators parameters, and allow any whitespace. Setting this to False
+            on a schema that permits additional properties can degrade the generation quality.
+            See :meth:`xgrammar.Grammar.from_json_schema` for more details.
+
         indent : Optional[int], default: None
             The number of spaces for indentation. If None, the output will be in one line.
 
