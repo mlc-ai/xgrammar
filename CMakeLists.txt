@@ -70,8 +70,8 @@ else()
   endif()
 endif()
 
-set(XGRAMMAR_INCLUDE_PATH ${PROJECT_SOURCE_DIR}/3rdparty/picojson
-                          ${PROJECT_SOURCE_DIR}/3rdparty/dlpack/include
+set(XGRAMMAR_INCLUDE_PATH $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/3rdparty/picojson>
+                          $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/3rdparty/dlpack/include>
 )
 
 file(GLOB_RECURSE XGRAMMAR_SOURCES_PATH CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/cpp/*.cc")
@@ -79,7 +79,10 @@ file(GLOB_RECURSE XGRAMMAR_SOURCES_PATH CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}
 list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "/cpp/tvm_ffi/.*\\.cc$")
 
 add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
-target_include_directories(xgrammar PUBLIC include)
+add_library(xgrammar::xgrammar ALIAS xgrammar)
+target_include_directories(
+  xgrammar PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>
+)
 target_include_directories(xgrammar SYSTEM PUBLIC ${XGRAMMAR_INCLUDE_PATH})
 
 # link to cpptrace
@@ -95,7 +98,7 @@ endif()
 # Skip when building Python wheels via scikit-build-core (which defines SKBUILD): everything
 # installed here would be bundled into the wheel, and the static library alone adds tens of MB.
 if(NOT SKBUILD)
-  install(TARGETS xgrammar)
+  install(TARGETS xgrammar EXPORT xgrammarTargets)
   install(
     DIRECTORY ${CMAKE_SOURCE_DIR}/include/xgrammar
     DESTINATION include
@@ -109,6 +112,18 @@ if(NOT SKBUILD)
     FILES_MATCHING
     PATTERN "*.h"
   )
+  # Export the target so downstream CMake projects can `find_package(xgrammar)`.
+  install(
+    EXPORT xgrammarTargets
+    NAMESPACE xgrammar::
+    DESTINATION lib/cmake/xgrammar
+  )
+  include(CMakePackageConfigHelpers)
+  configure_package_config_file(
+    ${PROJECT_SOURCE_DIR}/cmake/xgrammarConfig.cmake.in ${CMAKE_BINARY_DIR}/xgrammarConfig.cmake
+    INSTALL_DESTINATION lib/cmake/xgrammar
+  )
+  install(FILES ${CMAKE_BINARY_DIR}/xgrammarConfig.cmake DESTINATION lib/cmake/xgrammar)
 endif()
 
 if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
