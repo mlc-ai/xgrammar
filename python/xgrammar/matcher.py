@@ -50,6 +50,32 @@ def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
     return torch.full(get_bitmask_shape(batch_size, vocab_size), _FULL_MASK, dtype=bitmask_dtype)
 
 
+def _clear_bitmask_storage_padding(bitmask: torch.Tensor, vocab_size: int) -> None:
+    """Normalize the storage-padding bits of the int32 bitmask words.
+
+    The bitmask is packed into int32 words, so it can express ``32 * words`` bits while only
+    ``vocab_size`` of them are real tokens. The extra bits are storage padding, not
+    vocabulary entries.
+
+    ``fill_next_token_bitmask`` stores the matcher's result into those words with int32
+    bitwise operations, so the padding bits keep whatever value the caller's buffer already
+    had: a freshly allocated, all-ones bitmask leaves them 1, a zeroed buffer leaves them 0.
+    That made the padding region's meaning depend on how the caller allocated the buffer.
+
+    The padding bits are normalized to 1, which reads as "this mask decides nothing about
+    this lane". That is the only self-consistent meaning for ids the grammar has no token
+    for, and it is the safe value for a caller that applies the bitmask to a logits tensor
+    padded past ``vocab_size``: those lanes must not be forced to ``-inf`` by a mask that was
+    never about them. The ``vocab_size`` real bits are left exactly as the matcher wrote them.
+    """
+    buffer_size = bitmask.shape[-1]
+    if buffer_size * 32 == vocab_size:
+        return
+    last_word_bits = vocab_size - (buffer_size - 1) * 32
+    # Bits [vocab_size, 32 * buffer_size) are padding: leave every one of them allowed.
+    bitmask[..., -1] |= ~((1 << last_word_bits) - 1)
+
+
 def reset_token_bitmask(bitmask: torch.Tensor) -> None:
     """Reset the bitmask to the full mask."""
     bitmask.fill_(_FULL_MASK)
@@ -361,7 +387,11 @@ class GrammarMatcher(XGRObject):
         RuntimeError
             If the bitmask is invalid (not on CPU, not int32, shape mismatch).
         """
-        return self._handle.fill_next_token_bitmask(bitmask, index, debug_print)
+        need_apply = self._handle.fill_next_token_bitmask(bitmask, index, debug_print)
+        # The matcher only decides ids up to its own vocabulary size; normalize the
+        # word-alignment tail so its value does not depend on the caller's buffer.
+        _clear_bitmask_storage_padding(bitmask, self._bitmask_vocab_size)
+        return need_apply
 
     def traverse_draft_tree(
         self,
@@ -497,6 +527,15 @@ class GrammarMatcher(XGRObject):
             A new matcher with the same grammar but independent parsing state.
         """
         return GrammarMatcher._create_from_handle(self._handle.fork())
+
+    @property
+    def _bitmask_vocab_size(self) -> int:
+        """The vocabulary size the matcher's bitmask is sized from.
+
+        This is the C++ matcher's own vocabulary, so it stays correct for matchers created
+        through ``fork()`` or ``_create_from_handle``, where ``__init__`` does not run.
+        """
+        return self._handle.vocab_size()
 
     @property
     def max_rollback_tokens(self) -> int:
