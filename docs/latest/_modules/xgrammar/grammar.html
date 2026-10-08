@@ -515,7 +515,7 @@
 
 <span class="sd">        any_whitespace : bool, default: True</span>
 <span class="sd">            Whether to use any whitespace. If True, the generated grammar will ignore the</span>
-<span class="sd">            indent and separators parameters, and allow any whitespace.</span>
+<span class="sd">            indent parameter, and allow any whitespace.</span>
 
 <span class="sd">        indent : Optional[int], default: None</span>
 <span class="sd">            The number of spaces for indentation. If None, the output will be in one line.</span>
@@ -529,8 +529,9 @@
 
 <span class="sd">        separators : Optional[Tuple[str, str]], default: None</span>
 <span class="sd">            Two separators used in the schema: comma and colon. Examples: (",", ":"), (", ", ": ").</span>
-<span class="sd">            If None, the default separators will be used: (",", ": ") when the indent is not None,</span>
-<span class="sd">            and (", ", ": ") otherwise.</span>
+<span class="sd">            If None, the default separators will be used: (",", ":") when any_whitespace is True,</span>
+<span class="sd">            (",", ": ") when the indent is not None, and (", ", ": ") otherwise. With indent, values</span>
+<span class="sd">            with an unconstrained schema (e.g. {}) still stay on one line with (", ", ": ").</span>
 
 <span class="sd">        strict_mode : bool, default: True</span>
 <span class="sd">            Whether to use strict mode. In strict mode, the generated grammar will not allow</span>

@@ -394,7 +394,7 @@ meaning and the default values of the parameters follows the convention in json.
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>schema</strong> (<em>Union</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>Type</em><em>[</em><em>BaseModel</em><em>]</em><em>, </em><em>Dict</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>Any</em><em>]</em><em>]</em>) – The schema string or Pydantic model or JSON schema dict.</p></li>
 <li><p><strong>any_whitespace</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: True</em>) – Whether to use any whitespace. If True, the generated grammar will ignore the
-indent and separators parameters, and allow any whitespace.</p></li>
+indent parameter, and allow any whitespace.</p></li>
 <li><p><strong>indent</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>]</em><em>, </em><em>default: None</em>) – <p>The number of spaces for indentation. If None, the output will be in one line.</p>
 <p>Note that specifying the indentation means forcing the LLM to generate JSON strings
 strictly formatted. However, some models may tend to generate JSON strings that
@@ -404,8 +404,9 @@ formatted JSON strings may degrade the generation quality. See
 details.</p>
 </p></li>
 <li><p><strong>separators</strong> (<em>Optional</em><em>[</em><em>Tuple</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>]</em><em>]</em><em>, </em><em>default: None</em>) – Two separators used in the schema: comma and colon. Examples: (“,”, “:”), (”, “, “: “).
-If None, the default separators will be used: (“,”, “: “) when the indent is not None,
-and (”, “, “: “) otherwise.</p></li>
+If None, the default separators will be used: (“,”, “:”) when any_whitespace is True,
+(“,”, “: “) when the indent is not None, and (”, “, “: “) otherwise. With indent, values
+with an unconstrained schema (e.g. {}) still stay on one line with (”, “, “: “).</p></li>
 <li><p><strong>strict_mode</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: True</em>) – <p>Whether to use strict mode. In strict mode, the generated grammar will not allow
 properties and items that is not specified in the schema. This is equivalent to
 setting unevaluatedProperties and unevaluatedItems to false.</p>
