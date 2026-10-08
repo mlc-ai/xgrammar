@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <variant>
@@ -696,6 +697,21 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           "accept_token",
           [](GrammarMatcherObj* o, int64_t token_id, bool debug_print) {
             return o->value.AcceptToken(static_cast<int32_t>(token_id), debug_print);
+          }
+      )
+      .def(
+          "validate_tokens",
+          [](const GrammarMatcherObj* o, const ffi::Array<int64_t>& token_ids) {
+            std::vector<int32_t> converted;
+            converted.reserve(token_ids.size());
+            for (int64_t token_id : token_ids) {
+              converted.push_back(
+                  token_id >= 0 && token_id <= std::numeric_limits<int32_t>::max()
+                      ? static_cast<int32_t>(token_id)
+                      : -1
+              );
+            }
+            return o->value.ValidateTokens(converted);
           }
       )
       .def(
