@@ -3482,18 +3482,44 @@ void GrammarFSMHasherImpl::Apply(Grammar* grammar) {
     }
   }
 
-  // Get the reference graph.
-  ref_graph_from_referee_to_referrer_ = RuleRefGraphFinder().Apply(*grammar);
+  // Get the reference graph from the fsm edges, which HashFsm walks. The grammar exprs miss the
+  // rules a kRegex body references for its large repetitions.
+  const auto& complete_fsm = grammar->ImplPtr()->complete_fsm;
+  ref_graph_from_referee_to_referrer_ = std::vector<std::vector<int32_t>>((*grammar)->NumRules());
   ref_graph_from_referrer_to_referee_ = std::vector<std::vector<int32_t>>((*grammar)->NumRules());
-  for (int referee = 0; referee < static_cast<int>(ref_graph_from_referee_to_referrer_.size());
-       ++referee) {
-    for (int referer : ref_graph_from_referee_to_referrer_[referee]) {
-      ref_graph_from_referrer_to_referee_[referer].push_back(referee);
+  std::vector<bool> state_visited(complete_fsm.NumStates(), false);
+  std::vector<int32_t> state_stack;
+  for (int i = 0; i < (*grammar)->NumRules(); i++) {
+    if (!grammar->ImplPtr()->per_rule_fsms[i].has_value()) {
+      continue;
+    }
+    auto& referees = ref_graph_from_referrer_to_referee_[i];
+    int32_t start = grammar->ImplPtr()->per_rule_fsms[i]->GetFsm().GetStart();
+    state_visited[start] = true;
+    state_stack.push_back(start);
+    while (!state_stack.empty()) {
+      int32_t state = state_stack.back();
+      state_stack.pop_back();
+      for (const auto& edge : complete_fsm.GetEdges(state)) {
+        if (edge.IsRuleRef()) {
+          referees.push_back(edge.GetRefRuleId());
+        } else if (edge.IsRepeatRef()) {
+          referees.push_back(complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId());
+        }
+        if (!state_visited[edge.target]) {
+          state_visited[edge.target] = true;
+          state_stack.push_back(edge.target);
+        }
+      }
+    }
+    std::sort(referees.begin(), referees.end());
+    referees.erase(std::unique(referees.begin(), referees.end()), referees.end());
+    for (int32_t referee : referees) {
+      ref_graph_from_referee_to_referrer_[referee].push_back(i);
     }
   }
 
   // Sort the edges.
-  const auto& complete_fsm = grammar->ImplPtr()->complete_fsm;
   sorted_edges_.reserve(complete_fsm.NumStates());
   for (int i = 0; i < complete_fsm.NumStates(); i++) {
     const auto& edges = complete_fsm.GetEdges(i);
