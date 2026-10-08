@@ -1828,6 +1828,9 @@ JSONSchemaConverter::JSONSchemaConverter(
       ),
       any_whitespace_(any_whitespace),
       max_whitespace_cnt_(max_whitespace_cnt),
+      compact_separator_(
+          separators.has_value() ? separators->first : (any_whitespace ? "," : ", ")
+      ),
       any_order_(any_order),
       excludes_(std::move(excludes)),
       ref_resolver_(std::move(ref_resolver)) {
@@ -1893,7 +1896,7 @@ void JSONSchemaConverter::AddBasicRules(const std::vector<std::string>& addition
   auto saved_indent_manager = indent_manager_;
   indent_manager_ = IndentManager(
       std::nullopt,
-      any_whitespace_ ? "," : ", ",
+      compact_separator_,
       any_whitespace_,
       any_whitespace_ ? max_whitespace_cnt_ : std::nullopt
   );
