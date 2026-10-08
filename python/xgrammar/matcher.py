@@ -161,18 +161,21 @@ def apply_token_bitmask_inplace(
                 stacklevel=2,
             )
 
-    if indices is not None and len(indices) > 0:
-        # Validate the indices before any kernel indexes device memory with them. A device tensor
-        # is left unchecked: checking it would cost a device-to-host sync per call.
-        num_rows = min(logits.shape[0], bitmask.shape[0])
-        if isinstance(indices, torch.Tensor):
-            bounds = None
-            if indices.device.type == "cpu":
-                lo, hi = torch.aminmax(indices)
-                bounds = (int(lo), int(hi))
-        else:
-            bounds = (min(indices), max(indices))
-        if bounds is not None and (bounds[0] < 0 or bounds[1] >= num_rows):
+    # Validate the indices before any kernel indexes device memory with them. A device tensor
+    # is left unchecked: checking it would cost a device-to-host sync per call.
+    bounds = None
+    if isinstance(indices, torch.Tensor):
+        if indices.is_cpu and indices.numel() > 0:
+            lo, hi = torch.aminmax(indices)
+            bounds = (int(lo), int(hi))
+    elif indices is not None and len(indices) > 0:
+        bounds = (min(indices), max(indices))
+    if bounds is not None:
+        # A 1-D tensor is a single row for every kernel.
+        num_rows = min(
+            logits.shape[0] if logits.ndim == 2 else 1, bitmask.shape[0] if bitmask.ndim == 2 else 1
+        )
+        if bounds[0] < 0 or bounds[1] >= num_rows:
             raise ValueError(
                 "Every value in `indices` must be a valid row of both logits and bitmask, i.e. in "
                 f"[0, {num_rows}). Got indices in [{bounds[0]}, {bounds[1]}]."
