@@ -2567,6 +2567,59 @@ def test_string_pattern_with_length_still_ignores_the_bound(capfd):
     assert _is_grammar_accept_string(grammar, '"abcd"')
 
 
+# --- unrecognized string formats (issue #967) -----------------------------------------------------
+#
+# Only the built-in formats compile to a regex. Any other format is an annotation the converter
+# cannot enforce, so the string is generated as if the keyword were absent; the converter warns so
+# that is observable instead of silent.
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "string", "format": "non_existing_format"},
+        # A format real schema generators emit that is not built in (pydantic's SecretStr).
+        {"type": "string", "format": "password"},
+        # A pattern still constrains the string; only the format is dropped.
+        {"type": "string", "format": "non_existing_format", "pattern": "^[a-z]+$"},
+        {"type": "string", "format": "non_existing_format", "maxLength": 5},
+    ],
+)
+def test_string_unknown_format_warns(capfd, schema):
+    output = _compile_and_capture(capfd, schema)
+    assert f'format "{schema["format"]}" is not supported' in output, output
+
+
+@pytest.mark.parametrize("fmt", ["email", "date", "date-time", "uuid", "uri"])
+def test_string_builtin_format_does_not_warn(capfd, fmt):
+    output = _compile_and_capture(capfd, {"type": "string", "format": fmt})
+    assert "is not supported" not in output, output
+
+
+def test_string_unknown_format_warns_for_xml_tool_calls(capfd):
+    schema = {
+        "type": "object",
+        "properties": {"k": {"type": "string", "format": "non_existing_format"}},
+        "required": ["k"],
+    }
+    output = _compile_and_capture(capfd, schema, json_format="qwen_xml")
+    assert 'format "non_existing_format" is not supported' in output, output
+
+
+def test_string_unknown_format_still_ignores_the_format(capfd):
+    # The warning does not change the grammar: an unknown format accepts what a plain string does,
+    # so the day such a format is enforced this test fails and is updated deliberately.
+    annotated = {"type": "string", "format": "non_existing_format"}
+    grammar = xgr.Grammar.from_json_schema(json.dumps(annotated))
+    plain = xgr.Grammar.from_json_schema(json.dumps({"type": "string"}))
+    capfd.readouterr()
+    for instance in ['"hello"', '""', '"a \\"quoted\\" word"', '"\\u00e9"', "1", "null"]:
+        assert _is_grammar_accept_string(grammar, instance) == _is_grammar_accept_string(
+            plain, instance
+        ), instance
+    assert _is_grammar_accept_string(grammar, '"hello"')
+
+
 def test_type_array():
     schema = {
         "type": ["integer", "string"],
