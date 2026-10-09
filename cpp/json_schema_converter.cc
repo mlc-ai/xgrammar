@@ -1148,6 +1148,12 @@ Result<StringSpec, SchemaError> SchemaParser::ParseString(const picojson::object
             std::to_string(spec.max_length)
     );
   }
+  // Only the built-in formats compile to a regex; any other format is an annotation that
+  // GenerateString skips, so the string is unconstrained by it (issue #967). Warn so the dropped
+  // keyword is observable, as for the bounds below.
+  if (spec.format.has_value() && !JSONSchemaConverter::IsBuiltinFormat(*spec.format)) {
+    XGRAMMAR_LOG(WARNING) << "format \"" << *spec.format << "\" is not supported; ignoring format";
+  }
   // A pattern or built-in format takes the whole GenerateString branch, so minLength/maxLength
   // would be dropped silently (issue #749). Warn here rather than in GenerateString: the XML
   // tool-calling converter overrides that method, but every converter goes through ParseString.
