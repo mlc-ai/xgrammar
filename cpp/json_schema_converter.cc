@@ -1448,6 +1448,25 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
             std::to_string(spec.min_properties) + " > " + std::to_string(spec.properties.size())
     );
   }
+  // propertyNames only constrains names and evaluates no property. Without properties or
+  // patternProperties, an explicit additionalProperties/unevaluatedProperties false therefore
+  // rejects every property, so only the empty object is valid (issue #961).
+  bool explicitly_closed =
+      schema.count("additionalProperties")
+          ? !spec.allow_additional_properties
+          : schema.count("unevaluatedProperties") && !spec.allow_unevaluated_properties;
+  if (spec.property_names && spec.properties.empty() && spec.pattern_properties.empty() &&
+      explicitly_closed) {
+    if (spec.min_properties > 0) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema,
+          "minProperties is greater than the number of properties, but additional properties "
+          "aren't allowed: " +
+              std::to_string(spec.min_properties) + " > 0"
+      );
+    }
+    spec.max_properties = 0;
+  }
   return ResultOk(std::move(spec));
 }
 

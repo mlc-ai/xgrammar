@@ -3609,6 +3609,34 @@ def test_prefix_items_no_additional_items_allows_shorter():
     check_schema_with_instance(schema, '["a", 1, true]', is_accepted=False)
 
 
+@pytest.mark.parametrize("keyword", ["additionalProperties", "unevaluatedProperties"])
+@pytest.mark.parametrize("strict_mode", [True, False])
+@pytest.mark.parametrize(
+    "instance, accepted", [({}, True), ({"score": 1}, False), ({"Score": 1}, False)]
+)
+def test_property_names_with_closed_object(
+    keyword: str, strict_mode: bool, instance: dict, accepted: bool
+):
+    # Regression for issue #961: propertyNames evaluates no property, so with no properties or
+    # patternProperties, false additionalProperties/unevaluatedProperties only allow {}.
+    schema = {"type": "object", "propertyNames": {"pattern": "^[a-z]+$"}, keyword: False}
+    check_schema_with_instance(schema, instance, is_accepted=accepted, strict_mode=strict_mode)
+
+
+@pytest.mark.parametrize("keyword", ["additionalProperties", "unevaluatedProperties"])
+def test_property_names_with_closed_object_min_properties(keyword: str):
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z]+$"},
+        keyword: False,
+        "minProperties": 1,
+    }
+    with pytest.raises(
+        RuntimeError, match="minProperties is greater than the number of properties"
+    ):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
 def test_property_names_preserves_additional_properties_value_schema():
     # Regression for issue #826: propertyNames constrains only the key; a
     # typed additionalProperties schema must still constrain the value.
