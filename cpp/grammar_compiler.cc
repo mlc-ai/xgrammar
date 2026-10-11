@@ -2910,33 +2910,47 @@ GrammarMatcherForTokenMaskCache::GetDeterministicBytePathDirectMask(bool is_root
 
   const auto& rule_fsm = grammar_->per_rule_fsms[init_rule_id_]->GetFsm();
   const auto& fsm = rule_fsm.GetFsm();
+  const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
   struct PendingPath {
     int32_t state;
-    std::string bytes;
+    int32_t begin;
+    int32_t end;
+    size_t depth;
   };
-  std::vector<PendingPath> pending{{initial_state_.element_id, {}}};
-  std::vector<std::string> accepted_prefixes;
-  std::vector<std::string> boundary_prefixes;
+  std::vector<PendingPath> pending{
+      {initial_state_.element_id, 0, static_cast<int32_t>(sorted_vocab.size()), 0}
+  };
+  std::vector<int32_t> accepted_indices;
+  std::vector<int32_t> uncertain_indices;
   constexpr size_t kMaxDirectPaths = 32768;
   constexpr size_t kMaxDirectPathBytes = 256;
   constexpr size_t kMinBoundaryPrefixBytes = 2;
   size_t visited_paths = 0;
+  bool found_boundary = false;
   while (!pending.empty()) {
-    PendingPath path = std::move(pending.back());
+    const PendingPath path = pending.back();
     pending.pop_back();
     if (++visited_paths > kMaxDirectPaths) {
       return std::nullopt;
     }
+    int32_t begin = path.begin;
+    while (begin < path.end && sorted_vocab[begin].second.size() == path.depth) {
+      if (path.depth != 0) {
+        accepted_indices.push_back(begin);
+      }
+      ++begin;
+    }
     if (rule_fsm.IsEndState(path.state)) {
-      // A token ending here is accepted locally. Longer tokens depend on either the outgoing path
-      // or parent completion; keep only a selective boundary range for runtime classification.
-      if (path.bytes.size() < kMinBoundaryPrefixBytes) {
+      if (path.depth < kMinBoundaryPrefixBytes) {
         return std::nullopt;
       }
-      boundary_prefixes.push_back(std::move(path.bytes));
+      found_boundary = true;
+      for (int32_t i = begin; i < path.end; ++i) {
+        uncertain_indices.push_back(i);
+      }
       continue;
     }
-    if (path.bytes.size() >= kMaxDirectPathBytes) {
+    if (path.depth >= kMaxDirectPathBytes) {
       return std::nullopt;
     }
 
@@ -2951,92 +2965,45 @@ GrammarMatcherForTokenMaskCache::GetDeterministicBytePathDirectMask(bool is_root
       seen_bytes[edge.min] = true;
     }
     if (!deterministic_byte_edges) {
-      // The rejected linear experiment admitted a one-byte boundary (commonly an opening quote)
-      // before a broad string state, making a large part of the vocabulary uncertain. A two-byte
-      // boundary remains selective while covering property-name tries followed by rule refs.
-      if (path.bytes.size() < kMinBoundaryPrefixBytes) {
+      if (path.depth < kMinBoundaryPrefixBytes) {
         return std::nullopt;
       }
-      boundary_prefixes.push_back(std::move(path.bytes));
+      found_boundary = true;
+      for (int32_t i = begin; i < path.end; ++i) {
+        uncertain_indices.push_back(i);
+      }
       continue;
     }
     for (const auto& edge : edges) {
-      std::string next_bytes = path.bytes;
-      next_bytes.push_back(static_cast<char>(edge.min));
-      accepted_prefixes.push_back(next_bytes);
-      pending.push_back(PendingPath{edge.target, std::move(next_bytes)});
+      const auto first = std::lower_bound(
+          sorted_vocab.begin() + begin,
+          sorted_vocab.begin() + path.end,
+          edge.min,
+          [&](const auto& token, int32_t byte) {
+            return static_cast<uint8_t>(token.second[path.depth]) < byte;
+          }
+      );
+      const auto last = std::upper_bound(
+          first,
+          sorted_vocab.begin() + path.end,
+          edge.min,
+          [&](int32_t byte, const auto& token) {
+            return byte < static_cast<uint8_t>(token.second[path.depth]);
+          }
+      );
+      pending.push_back(PendingPath{
+          edge.target,
+          static_cast<int32_t>(first - sorted_vocab.begin()),
+          static_cast<int32_t>(last - sorted_vocab.begin()),
+          path.depth + 1
+      });
     }
   }
-  if (boundary_prefixes.empty() ||
-      std::any_of(boundary_prefixes.begin(), boundary_prefixes.end(), [](const auto& prefix) {
-        return prefix.empty();
-      })) {
+  if (!found_boundary) {
     return std::nullopt;
   }
-
-  const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
-  std::vector<int32_t> accepted_indices;
-  std::vector<int32_t> uncertain_indices;
-
-  // A token ending at any visited byte prefix is accepted locally. Equal decoded strings can
-  // have multiple token ids, so collect the full equal range for every distinct prefix.
-  std::sort(accepted_prefixes.begin(), accepted_prefixes.end());
-  accepted_prefixes.erase(
-      std::unique(accepted_prefixes.begin(), accepted_prefixes.end()), accepted_prefixes.end()
-  );
-  for (const auto& prefix : accepted_prefixes) {
-    auto first = std::lower_bound(
-        sorted_vocab.begin(),
-        sorted_vocab.end(),
-        prefix,
-        [](const auto& token, const std::string& value) { return token.second < value; }
-    );
-    for (auto it = first; it != sorted_vocab.end() && it->second == prefix; ++it) {
-      accepted_indices.push_back(static_cast<int32_t>(it - sorted_vocab.begin()));
-    }
-  }
   std::sort(accepted_indices.begin(), accepted_indices.end());
-  accepted_indices.erase(
-      std::unique(accepted_indices.begin(), accepted_indices.end()), accepted_indices.end()
-  );
-
-  // A token crossing a boundary depends on the remainder of this rule and, when the rule
-  // completes, its parent parser states. Preserve that exact distinction by leaving only these
-  // lexicographic prefix ranges for the runtime continuation check. Remove descendant boundaries
-  // because their token ranges are already covered by the shortest ancestor.
-  std::sort(boundary_prefixes.begin(), boundary_prefixes.end());
-  boundary_prefixes.erase(
-      std::unique(boundary_prefixes.begin(), boundary_prefixes.end()), boundary_prefixes.end()
-  );
-  std::vector<std::string> minimal_boundaries;
-  for (auto& prefix : boundary_prefixes) {
-    if (!minimal_boundaries.empty() && prefix.size() >= minimal_boundaries.back().size() &&
-        prefix.compare(0, minimal_boundaries.back().size(), minimal_boundaries.back()) == 0) {
-      continue;
-    }
-    minimal_boundaries.push_back(std::move(prefix));
-  }
-  for (const auto& prefix : minimal_boundaries) {
-    auto first = std::lower_bound(
-        sorted_vocab.begin(),
-        sorted_vocab.end(),
-        prefix,
-        [](const auto& token, const std::string& value) { return token.second < value; }
-    );
-    for (auto it = first; it != sorted_vocab.end(); ++it) {
-      const auto& token = it->second;
-      if (token.size() < prefix.size() || token.compare(0, prefix.size(), prefix) != 0) {
-        break;
-      }
-      if (token.size() > prefix.size()) {
-        uncertain_indices.push_back(static_cast<int32_t>(it - sorted_vocab.begin()));
-      }
-    }
-  }
   std::sort(uncertain_indices.begin(), uncertain_indices.end());
-  uncertain_indices.erase(
-      std::unique(uncertain_indices.begin(), uncertain_indices.end()), uncertain_indices.end()
-  );
 
   return AdaptiveTokenMask(
       tokenizer_info_.GetVocabSize(), sorted_vocab, accepted_indices, uncertain_indices
