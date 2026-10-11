@@ -1144,6 +1144,34 @@ def test_cache_disabled_deterministic_byte_path_masks_match_token_oracle(
             )
 
 
+@pytest.mark.parametrize(
+    "grammar,prefixes,vocabulary",
+    [
+        (
+            'root ::= literal "!"\n'
+            'literal[capture="literal"] ::= "abcdefgh" | "abcdexyz" | "unrepresented"',
+            ["", "a", "abc", "abcdef"],
+            ["a", "ab", "abc", "abc", "abcdefgh", "abcdefgh!", "abcdefgh?", "bcd", "!"],
+        ),
+        (
+            'root ::= literal "!"\n' 'literal[capture="literal"] ::= "éx" | "中y"',
+            ["", b"\xc3", "é", b"\xe4\xb8", "中"],
+            [b"\xc3", b"\xa9", "é", "éx", "éx!", "中", "中y", "中y!", b"\xff"],
+        ),
+        (
+            'root ::= literal "!"\nliteral[capture="literal"] ::= "a"* "bc"',
+            ["", "a", "aa", "aab"],
+            ["a", "aa", "a" * 300, "aabc", "aabc!", "aabc?", "bc", "bc!", "!"],
+        ),
+    ],
+    ids=["sparse-vocabulary-and-duplicates", "unsigned-utf8-prefix-ranges", "cyclic-path-limit"],
+)
+def test_deterministic_byte_path_vocabulary_intersection(grammar, prefixes, vocabulary):
+    test_cache_disabled_deterministic_byte_path_masks_match_token_oracle(
+        grammar, prefixes, vocabulary
+    )
+
+
 def test_additional_property_exclusion_sink_masks_match_token_oracle():
     vocabulary = [
         '"',
