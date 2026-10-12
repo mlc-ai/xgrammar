@@ -548,6 +548,30 @@ TEST(XGrammarFSMBuilderTest, TestRegexRepeatZero) {
   EXPECT_TRUE(RegexFSMBuilder::Build("a{1,0}").IsErr());
 }
 
+TEST(XGrammarFSMBuilderTest, TestRegexMergeAdjacentRepeats) {
+  auto build = [](const std::string& regex) {
+    return RegexFSMBuilder::Build(regex).Unwrap().ToString();
+  };
+  // Adjacent repeats of the same element build one repeat with the summed bounds.
+  EXPECT_EQ(build("xa{1,3}a{0,2}a{2}y"), build("xa{3,7}y"));
+  EXPECT_EQ(build("xa{2}a{0}y"), build("xa{2}y"));
+  EXPECT_EQ(build("x(ab){1,2}(ab){3}y"), build("x(ab){4,5}y"));
+  // Merging stops at 256 copies.
+  EXPECT_EQ(build("a{0,128}a{0,128}a{0,1}"), build("a{0,256}a{0,1}"));
+  EXPECT_NE(build("a{0,128}a{0,128}a{0,1}"), build("a{0,257}"));
+  EXPECT_EQ(build("a{0,128}a{0,128}a{0,1}a{0,1}"), build("a{0,256}a{0,2}"));
+
+  // Each repeat fits kMaxUnrolledRepeatStates but the merged one would not, so they stay apart.
+  const std::string element = "a{100}b{100}c{100}";
+  EXPECT_TRUE(RegexFSMBuilder::Build("(" + element + "){0,200}").IsErr());
+  auto fsm_wse =
+      RegexFSMBuilder::Build("(" + element + "){0,100}(" + element + "){0,100}").Unwrap();
+  const std::string text = std::string(100, 'a') + std::string(100, 'b') + std::string(100, 'c');
+  EXPECT_TRUE(fsm_wse.AcceptString(""));
+  EXPECT_TRUE(fsm_wse.AcceptString(text + text));
+  EXPECT_FALSE(fsm_wse.AcceptString(text + "a"));
+}
+
 TEST(XGrammarFSMBuilderTest, TestRegexCaseInsensitiveFlag) {
   // The (?i) prefix folds ASCII letters in literals, alternations and repeats.
   auto fsm_wse = RegexFSMBuilder::Build("(?i)abc").Unwrap();
