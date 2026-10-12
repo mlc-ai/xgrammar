@@ -152,6 +152,22 @@ class GrammarMatcher {
   std::string FindJumpForwardString();
 
   /*!
+   * \brief Find token ids to append for jump-forward decoding without changing the matcher.
+   *
+   * Greedily tokenize the forced bytes from the current boundary using the longest matching
+   * decoded vocabulary entry (lowest id for duplicate entries). Stop at an unencodable byte
+   * or a token that cannot be accepted. If the last candidate token is a strict prefix of a
+   * longer ordinary vocabulary token, omit that last token; otherwise keep it. Stop and special
+   * tokens are never returned. Completed or terminated matchers return an empty vector.
+   *
+   * This preserves already accepted token boundaries and requires no rollback of the model's
+   * key/value cache. It does not reproduce the model tokenizer's canonical segmentation or
+   * guarantee the same sampling distribution. The caller must accept the returned tokens and
+   * run a model forward pass over them before continuing generation.
+   */
+  std::vector<int32_t> FindJumpForwardTokens() const;
+
+  /*!
    * \brief Rollback the matcher to a previous state.
    * \param num_tokens The number of tokens to rollback. It cannot exceed the current number of
    * steps, nor can it exceed the specified maximum number of rollback tokens.
