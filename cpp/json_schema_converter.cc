@@ -723,6 +723,14 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
       "$comment",
       "$schema",
   };
+  static const std::unordered_set<std::string> kSchemaMapKeys = {
+      "properties",
+      "patternProperties",
+      "$defs",
+      "definitions",
+      "dependentSchemas",
+      "dependencies",
+  };
 
   if (schema.is<picojson::object>()) {
     std::string result = "{";
@@ -741,7 +749,25 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
         result += ",";
       }
       ++idx;
-      result += "\"" + key + "\":" + ComputeCacheKey(value);
+      result += picojson::value(key).serialize(false) + ":";
+      if (kSchemaMapKeys.count(key) && value.is<picojson::object>()) {
+        // Map keys are names, not schema keywords. Keep their order: property
+        // order affects the generated grammar when any_order is false.
+        result += "{";
+        const auto& schemas = value.get<picojson::object>();
+        std::string separator;
+        for (const auto& name : schemas.ordered_keys()) {
+          result += separator + picojson::value(name).serialize(false) + ":" +
+                    ComputeCacheKey(schemas.at(name));
+          separator = ",";
+        }
+        result += "}";
+      } else if (key == "const" || key == "enum") {
+        // Literal data must retain annotation-like names and member order.
+        result += value.serialize(false);
+      } else {
+        result += ComputeCacheKey(value);
+      }
     }
     return result + "}";
   } else if (schema.is<picojson::array>()) {
@@ -778,6 +804,17 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     std::optional<std::string> default_type
 ) {
   std::string cache_key = ComputeCacheKey(schema);
+  if (default_type.has_value() && schema.is<picojson::object>()) {
+    const auto& schema_obj = schema.get<picojson::object>();
+    // These branches determine interpretation without using default_type.
+    const bool has_explicit_interpretation =
+        schema_obj.count("$ref") || schema_obj.count("const") || schema_obj.count("enum") ||
+        schema_obj.count("anyOf") || schema_obj.count("oneOf") || schema_obj.count("allOf") ||
+        schema_obj.count("type");
+    if (!has_explicit_interpretation) {
+      cache_key = default_type.value() + ":" + cache_key;
+    }
+  }
   if (schema_cache_.count(cache_key)) {
     return ResultOk(schema_cache_[cache_key]);
   }
