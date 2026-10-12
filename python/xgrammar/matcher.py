@@ -426,23 +426,17 @@ class GrammarMatcher(XGRObject):
     def find_jump_forward_tokens(self) -> List[int]:
         """Find token ids to append for jump-forward decoding.
 
-        Greedily tokenize the forced bytes from the current boundary using the longest matching
-        decoded vocabulary entry, choosing the lowest id for duplicate entries. Stop at an
-        unencodable byte or a token that cannot be accepted. If the last candidate token is a
-        strict prefix of a longer ordinary vocabulary token, omit that last token; otherwise
-        keep it. Stop and special tokens are never returned.
+        Greedily match the longest decoded vocabulary tokens in the forced continuation, omitting
+        the last token if it is a strict prefix of a longer ordinary token. The matcher and already
+        accepted token boundaries remain unchanged. Stop and special tokens are excluded.
 
-        This method does not change the matcher or retokenize already accepted tokens, so the
-        engine does not need to roll back its key/value cache. It does not reproduce the model
-        tokenizer's canonical segmentation or guarantee the same sampling distribution. The
-        caller must accept each returned token with :meth:`accept_token` and run a model forward
-        pass over the appended tokens before continuing generation. An empty result means that
-        normal masked decoding should continue, unless the matcher has already completed.
+        Accept each returned token with :meth:`accept_token` and prefill them before sampling
+        again. This tokenization may differ from the model tokenizer's encoding.
 
         Returns
         -------
         jump_forward_tokens : List[int]
-            Token ids to append. Empty for completed or terminated matchers.
+            Empty if no jump is available or the matcher has completed or terminated.
         """
         return list(self._handle.find_jump_forward_tokens())
 

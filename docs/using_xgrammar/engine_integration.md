@@ -129,43 +129,18 @@ then roll back the rejected suffix with
 with independent states, duplicate the matcher with
 [`xgr.GrammarMatcher.fork`](xgrammar.GrammarMatcher.fork).
 
-## Jump-Forward Decoding
-
+**Jump-forward decoding.**
 [`xgr.GrammarMatcher.find_jump_forward_tokens`](xgrammar.GrammarMatcher.find_jump_forward_tokens)
-returns token ids for the bytes forced by the current grammar state. It starts at the current
-token boundary, greedily selects the longest matching decoded vocabulary entries, and withholds
-the last candidate token if it is a strict prefix of a longer ordinary vocabulary token. For
-example, with tokens `ab`, `c`, and `cd`, a forced continuation `abc` yields only `ab`: sampling
-can still choose `c` or `cd` next. With tokens `ab` and `c` only, it yields both tokens.
+returns tokens for the grammar's forced continuation without changing the matcher or already
+accepted token boundaries. It greedily matches vocabulary tokens and withholds the last token
+if it is a strict prefix of a longer token. Accept the returned tokens with
+[`accept_token()`](xgrammar.GrammarMatcher.accept_token), append them to the output, and prefill
+them before sampling again. This tokenization may differ from the model tokenizer's encoding.
+An empty result means to resume normal decoding or handle completion as usual.
 
-The query leaves the matcher unchanged. Accept the returned tokens and append them to the
-engine's existing token sequence, then prefill those new tokens together to populate the model's
-key/value cache before sampling again:
-
-```python
-jump_tokens = matcher.find_jump_forward_tokens()
-if jump_tokens:
-    for token_id in jump_tokens:
-        assert matcher.accept_token(token_id)
-    # Engine-specific: append jump_tokens and prefill them before the next sampling step.
-```
-
-Already accepted tokens keep their boundaries, so the engine does not need to retokenize the
-existing output or roll back its cache. This is vocabulary-based greedy tokenization, not the
-model tokenizer's canonical encoding: it can change subsequent model probabilities. The
-last-token check only tests whole-token prefixes; it does not inspect suffixes beginning inside
-earlier tokens or guarantee that every future tokenization keeps the new boundaries. It may
-withhold a token even if all its longer vocabulary extensions are forbidden by the grammar.
-
-An empty result means to resume normal masked decoding. A completed grammar also returns an
-empty result; handle its stop token through the usual engine stopping logic. No stop or special
-token is emitted by this query. If some forced bytes cannot be encoded by the vocabulary, the
-query stops there and applies the same last-token rule to the candidates found so far.
-
-For integrations that need to manage tokenization themselves,
+For engines that handle tokenization themselves,
 [`xgr.GrammarMatcher.find_jump_forward_string`](xgrammar.GrammarMatcher.find_jump_forward_string)
-returns the longest string that certainly follows the current state under the grammar. The
-engine is responsible for converting it to tokens and handling tokenization boundaries.
+returns the forced continuation as text.
 
 ## Real-World Integrations
 
