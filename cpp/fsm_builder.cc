@@ -1213,9 +1213,14 @@ size_t SkipCharacterClass(const std::string& regex, size_t pos) {
  * \param builder If not null, large bounded repetitions are compiled into subrules added through
  * this builder; see RegexFSMBuilder::Build.
  * \param rule_hint Name hint for the created subrules.
+ * \param merge_repeats Whether to merge adjacent repetitions of the same element. It builds the
+ * element's FSM, so callers that only parse the regex disable it.
  */
 Result<RegexIR> ParseRegexToIR(
-    const std::string& regex_with_flags, GrammarBuilder* builder, const std::string& rule_hint
+    const std::string& regex_with_flags,
+    GrammarBuilder* builder,
+    const std::string& rule_hint,
+    bool merge_repeats
 ) {
   RegexIR ir;
   std::string regex = regex_with_flags;
@@ -1440,15 +1445,14 @@ Result<RegexIR> ParseRegexToIR(
       if (i + 1 < size && regex[i + 1] == '?') {
         i++;
       }
-      // X{a,b}X{c,d} matches the same strings as X{a+c,b+d}. Unrolled separately, the boundary
-      // between the two repeats is ambiguous and the token masks get expensive to precompute.
-      // Merge them into one repeat, which stays unrolled like its parts. Skip it when another
-      // quantifier follows, since that one applies to X{c,d} alone, or when the merged repeat
-      // would exceed kMaxMergedRepeatUpperBound or kMaxUnrolledRepeatStates.
+      // X{a,b}X{c,d} == X{a+c,b+d}. Merge them so the unrolled FSM has no ambiguous boundary
+      // between the two repeats; the merged repeat stays unrolled. A following quantifier
+      // applies to X{c,d} alone, so don't merge then.
       bool merged = false;
       bool followed_by_quantifier = i + 1 < size && std::strchr("*+?{", regex[i + 1]) != nullptr;
-      if (upper_bound != RegexIR::kRepeatNoUpperBound && upper_bound <= kLargeRepeatThreshold &&
-          !followed_by_quantifier && !stack.empty() && stack.back().repeat_atom_end != -1) {
+      if (merge_repeats && upper_bound != RegexIR::kRepeatNoUpperBound &&
+          upper_bound <= kLargeRepeatThreshold && !followed_by_quantifier && !stack.empty() &&
+          stack.back().repeat_atom_end != -1) {
         const auto& prev_entry = stack.back();
         const auto& prev = std::get<RegexIR::Repeat>(std::get<RegexIR::State>(prev_entry.item));
         bool same_atom = regex.compare(
@@ -1595,7 +1599,7 @@ Result<RegexIR> ParseRegexToIR(
 Result<FSMWithStartEnd> RegexFSMBuilder::Build(
     const std::string& regex, GrammarBuilder* builder, const std::string& rule_hint
 ) {
-  auto ir_result = ParseRegexToIR(regex, builder, rule_hint);
+  auto ir_result = ParseRegexToIR(regex, builder, rule_hint, /*merge_repeats=*/true);
   if (ir_result.IsErr()) {
     return ResultErr(std::move(ir_result).UnwrapErr());
   }
@@ -1603,7 +1607,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(
 }
 
 Result<bool> RegexFSMBuilder::MatchesEmpty(const std::string& regex) {
-  auto ir_result = ParseRegexToIR(regex, nullptr, "");
+  auto ir_result = ParseRegexToIR(regex, nullptr, "", /*merge_repeats=*/false);
   if (ir_result.IsErr()) {
     return ResultErr(std::move(ir_result).UnwrapErr());
   }

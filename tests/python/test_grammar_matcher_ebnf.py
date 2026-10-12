@@ -847,14 +847,15 @@ def test_repeat_ref_boundary():
 
 
 def test_regex_adjacent_repeats_merged():
-    """Adjacent bounded repeats of the same element build one unrolled repeat with the summed
-    bounds, also when the sum is above the RepeatRef threshold. Issue #972."""
+    """Test that adjacent repeats of the same element merge into one unrolled repeat. Issue #972."""
     compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=False)
 
     def fsms(regex):
         return _print_grammar_fsms(compiler.compile_grammar(f'root ::= Regex("{regex}")').grammar)
 
     assert fsms("x[a-z]{1,3}[a-z]{0,2}[a-z]{2}y") == fsms("x[a-z]{3,7}y")
+    assert fsms("x(a?){2}(a?){2}y") == fsms("x(a?){4}y")
+    assert fsms("xa{1}?a{2}?y") == fsms("xa{3}y")
     # Not merged: an unbounded first repeat, or a quantifier on the second one.
     for regex, accepted, rejected in [
         ("a{2,}a{3}", ["a" * 5, "a" * 9], ["a" * 4]),
