@@ -166,15 +166,29 @@ ebnf_str__input_str__accepted__test_regex_macro_engine_features = [
     # \cA is the control character U+0001.
     (r'root ::= Regex("x\\cAy")', "x\x01y", True),
     (r'root ::= Regex("x\\cAy")', "xy", False),
-    # \s matches exactly the standard whitespace characters [ \t\n\r\f\v].
+    # \s is the ECMAScript whitespace class: ASCII whitespace plus every other WhiteSpace and
+    # LineTerminator code point (U+00A0, U+1680, U+2000-U+200A, U+2028, U+2029, U+202F, U+205F,
+    # U+3000, U+FEFF).
     (r'root ::= Regex("a\\sb")', "a b", True),
     (r'root ::= Regex("a\\sb")', "a\tb", True),
+    (r'root ::= Regex("a\\sb")', "a\u00a0b", True),
+    (r'root ::= Regex("a\\sb")', "a\u1680b", True),
+    (r'root ::= Regex("a\\sb")', "a\u2003b", True),
+    (r'root ::= Regex("a\\sb")', "a\u2028b", True),
+    (r'root ::= Regex("a\\sb")', "a\u202fb", True),
+    (r'root ::= Regex("a\\sb")', "a\u3000b", True),
+    (r'root ::= Regex("a\\sb")', "a\ufeffb", True),
     (r'root ::= Regex("a\\sb")', "a\x00b", False),
     (r'root ::= Regex("a\\sb")', "a\x01b", False),
+    (r'root ::= Regex("a\\sb")', "a\x85b", False),  # NEL is not WhiteSpace
+    (r'root ::= Regex("a\\sb")', "a\u200bb", False),  # ZWSP is not WhiteSpace
     # \S is the codepoint-domain complement.
     (r'root ::= Regex("\\S")', "好", True),
     (r'root ::= Regex("\\S")', "\x00", True),
+    (r'root ::= Regex("\\S")', "\u200b", True),
     (r'root ::= Regex("\\S")', " ", False),
+    (r'root ::= Regex("\\S")', "\u00a0", False),
+    (r'root ::= Regex("\\S")', "\u3000", False),
     # A quantifier after a multi-byte character applies to the whole codepoint.
     ('root ::= Regex("好*")', "", True),
     ('root ::= Regex("好*")', "好好", True),

@@ -68,10 +68,49 @@ def test_escaped_char_class():
     regex = r"\w\w\W\d\D\s\S"
     instance = "A_ 1b 0"
     grammar_str = _regex_to_ebnf(regex)
-    expected_grammar = r"""root ::= [a-zA-Z0-9_] [a-zA-Z0-9_] [^a-zA-Z0-9_] [0-9] [^0-9] [\f\n\r\t\v\u0020\u00a0] [^\f\n\r\t\v\u0020\u00a0]
-"""
+    whitespace = r"\f\n\r\t\v\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+    expected_grammar = f"root ::= [a-zA-Z0-9_] [a-zA-Z0-9_] [^a-zA-Z0-9_] [0-9] [^0-9] [{whitespace}] [^{whitespace}]\n"
     assert grammar_str == expected_grammar
     assert _is_grammar_accept_string(grammar_str, instance)
+
+
+# \s follows the ECMAScript dialect: WhiteSpace (TAB, VT, FF, ZWNBSP and every Space_Separator)
+# plus LineTerminator (LF, CR, LS, PS). It is not ASCII-only, unlike \d and \w.
+ecmascript_whitespace = [
+    "\t",
+    "\n",
+    "\v",
+    "\f",
+    "\r",
+    " ",
+    "\u00a0",
+    "\u1680",
+    "\u2000",
+    "\u200a",
+    "\u2028",
+    "\u2029",
+    "\u202f",
+    "\u205f",
+    "\u3000",
+    "\ufeff",
+]
+not_ecmascript_whitespace = ["\x00", "\x01", "\x85", "\u200b", "\u2060", "a", "好"]
+
+
+@pytest.mark.parametrize("char", ecmascript_whitespace)
+def test_whitespace_class_accepts_ecmascript_whitespace(char: str):
+    assert _is_grammar_accept_string(_regex_to_ebnf(r"a\sb"), f"a{char}b")
+    assert _is_grammar_accept_string(_regex_to_ebnf(r"a[\s]b"), f"a{char}b")
+    assert not _is_grammar_accept_string(_regex_to_ebnf(r"a\Sb"), f"a{char}b")
+    assert not _is_grammar_accept_string(_regex_to_ebnf(r"a[\S]b"), f"a{char}b")
+
+
+@pytest.mark.parametrize("char", not_ecmascript_whitespace)
+def test_whitespace_class_rejects_other_characters(char: str):
+    assert not _is_grammar_accept_string(_regex_to_ebnf(r"a\sb"), f"a{char}b")
+    assert not _is_grammar_accept_string(_regex_to_ebnf(r"a[\s]b"), f"a{char}b")
+    assert _is_grammar_accept_string(_regex_to_ebnf(r"a\Sb"), f"a{char}b")
+    assert _is_grammar_accept_string(_regex_to_ebnf(r"a[\S]b"), f"a{char}b")
 
 
 def test_non_whitespace_accepts_bracket():
