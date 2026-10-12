@@ -2762,19 +2762,25 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
       int32_t below_surrogates = builder_.AddCharacterClass({{'0', '7'}});
       int32_t high_surrogate = builder_.AddCharacterClass({{'8', '9'}, {'A', 'B'}, {'a', 'b'}});
       int32_t low_surrogate = builder_.AddCharacterClass({{'C', 'F'}, {'c', 'f'}});
-      int32_t bmp_escape = Sequence(
-          {ByteString("u"),
-           Choice({Sequence({hex_but_d, hex, hex, hex}), Sequence({d, below_surrogates, hex, hex})})}
-      );
-      int32_t surrogate_pair_escape = Sequence(
-          {ByteString("u"), d, high_surrogate, hex, hex, ByteString("\\u"), d, low_surrogate, hex, hex
-          }
-      );
+      // One flat choice of byte sequences, so that the repetition expander can count the
+      // repetitions of this unit like those of a single character class.
       int32_t character = Choice(
           {normal_character,
            Sequence({ByteString("\\"), short_escape}),
-           Sequence({ByteString("\\"), bmp_escape}),
-           Sequence({ByteString("\\"), surrogate_pair_escape})}
+           Sequence({ByteString("\\u"), hex_but_d, hex, hex, hex}),
+           Sequence({ByteString("\\u"), d, below_surrogates, hex, hex}),
+           Sequence(
+               {ByteString("\\u"),
+                d,
+                high_surrogate,
+                hex,
+                hex,
+                ByteString("\\u"),
+                d,
+                low_surrogate,
+                hex,
+                hex}
+           )}
       );
       int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
       return Sequence({ByteString("\""), body, ByteString("\"")});
