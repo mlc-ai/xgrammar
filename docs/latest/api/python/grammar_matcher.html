@@ -335,22 +335,25 @@ with optimizations specific to LLM token mask generation.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find_jump_forward_string</span></code></a>()</p></td>
 <td><p>Find the jump-forward string for jump-forward decoding.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.rollback" title="xgrammar.GrammarMatcher.rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rollback</span></code></a>([num_tokens])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_tokens" title="xgrammar.GrammarMatcher.find_jump_forward_tokens"><code class="xref py py-obj docutils literal notranslate"><span class="pre">find_jump_forward_tokens</span></code></a>()</p></td>
+<td><p>Find token ids to append for jump-forward decoding.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.rollback" title="xgrammar.GrammarMatcher.rollback"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rollback</span></code></a>([num_tokens])</p></td>
 <td><p>Rollback the matcher to a previous state by several tokens.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.get_captures" title="xgrammar.GrammarMatcher.get_captures"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_captures</span></code></a>(*[, deduplicate])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.get_captures" title="xgrammar.GrammarMatcher.get_captures"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_captures</span></code></a>(*[, deduplicate])</p></td>
 <td><p>Get the capture groups recorded so far, ordered by completion position.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_terminated</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated" title="xgrammar.GrammarMatcher.is_terminated"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_terminated</span></code></a>()</p></td>
 <td><p>Check if the matcher has terminated.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.is_completed" title="xgrammar.GrammarMatcher.is_completed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_completed</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.is_completed" title="xgrammar.GrammarMatcher.is_completed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_completed</span></code></a>()</p></td>
 <td><p>Check if the input accepted so far forms a complete valid string according to the grammar.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.reset" title="xgrammar.GrammarMatcher.reset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.reset" title="xgrammar.GrammarMatcher.reset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code></a>()</p></td>
 <td><p>Reset the matcher to the initial state.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.fork" title="xgrammar.GrammarMatcher.fork"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fork</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#xgrammar.GrammarMatcher.fork" title="xgrammar.GrammarMatcher.fork"><code class="xref py py-obj docutils literal notranslate"><span class="pre">fork</span></code></a>()</p></td>
 <td><p>Fork the matcher.</p></td>
 </tr>
 </tbody>
@@ -520,6 +523,25 @@ can become the output of the LLM without requiring LLM decoding.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)">str</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="xgrammar.GrammarMatcher.find_jump_forward_tokens">
+<span class="sig-name descname"><span class="pre">find_jump_forward_tokens</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3.12/library/typing.html#typing.List" title="(in Python v3.12)"><span class="pre">List</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/xgrammar/matcher.html#GrammarMatcher.find_jump_forward_tokens"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#xgrammar.GrammarMatcher.find_jump_forward_tokens" title="Link to this definition">¶</a></dt>
+<dd><p>Find token ids to append for jump-forward decoding.</p>
+<p>Greedily match the longest decoded vocabulary tokens in the forced continuation, omitting
+the last token if it is a strict prefix of a longer ordinary token. The matcher and already
+accepted token boundaries remain unchanged. Stop and special tokens are excluded.</p>
+<p>Accept each returned token with <a class="reference internal" href="#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><code class="xref py py-meth docutils literal notranslate"><span class="pre">accept_token()</span></code></a> and prefill them before sampling
+again. This tokenization may differ from the model tokenizer’s encoding.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>jump_forward_tokens</strong> – Empty if no jump is available or the matcher has completed or terminated.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>List[<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)">int</a>]</p>
 </dd>
 </dl>
 </dd></dl>
@@ -873,6 +895,7 @@ used for all matchers; if a list is provided, it must have the same length as ma
 <li><a class="reference internal" href="#xgrammar.GrammarMatcher.fill_next_token_bitmask"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.fill_next_token_bitmask()</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.GrammarMatcher.traverse_draft_tree"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.traverse_draft_tree()</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_string"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.find_jump_forward_string()</span></code></a></li>
+<li><a class="reference internal" href="#xgrammar.GrammarMatcher.find_jump_forward_tokens"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.find_jump_forward_tokens()</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.GrammarMatcher.rollback"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.rollback()</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.GrammarMatcher.get_captures"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.get_captures()</span></code></a></li>
 <li><a class="reference internal" href="#xgrammar.GrammarMatcher.is_terminated"><code class="docutils literal notranslate"><span class="pre">GrammarMatcher.is_terminated()</span></code></a></li>

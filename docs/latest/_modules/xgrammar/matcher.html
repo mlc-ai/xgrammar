@@ -735,6 +735,26 @@
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">find_jump_forward_string</span><span class="p">())</span></div>
 
 
+<div class="viewcode-block" id="GrammarMatcher.find_jump_forward_tokens">
+<a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_tokens">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">find_jump_forward_tokens</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Find token ids to append for jump-forward decoding.</span>
+
+<span class="sd">        Greedily match the longest decoded vocabulary tokens in the forced continuation, omitting</span>
+<span class="sd">        the last token if it is a strict prefix of a longer ordinary token. The matcher and already</span>
+<span class="sd">        accepted token boundaries remain unchanged. Stop and special tokens are excluded.</span>
+
+<span class="sd">        Accept each returned token with :meth:`accept_token` and prefill them before sampling</span>
+<span class="sd">        again. This tokenization may differ from the model tokenizer's encoding.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        jump_forward_tokens : List[int]</span>
+<span class="sd">            Empty if no jump is available or the matcher has completed or terminated.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="o">.</span><span class="n">find_jump_forward_tokens</span><span class="p">())</span></div>
+
+
 <div class="viewcode-block" id="GrammarMatcher.rollback">
 <a class="viewcode-back" href="../../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.rollback">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">rollback</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_tokens</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>

@@ -414,10 +414,16 @@ then roll back the rejected suffix with
 with independent states, duplicate the matcher with
 <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.fork" title="xgrammar.GrammarMatcher.fork"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.fork</span></code></span></a>.</p>
 <p><strong>Jump-forward decoding.</strong>
+<a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_tokens" title="xgrammar.GrammarMatcher.find_jump_forward_tokens"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.find_jump_forward_tokens</span></code></span></a>
+returns tokens for the grammar’s forced continuation without changing the matcher or already
+accepted token boundaries. It greedily matches vocabulary tokens and withholds the last token
+if it is a strict prefix of a longer token. Accept the returned tokens with
+<a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.accept_token" title="xgrammar.GrammarMatcher.accept_token"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">accept_token()</span></code></span></a>, append them to the output, and prefill
+them before sampling again. This tokenization may differ from the model tokenizer’s encoding.
+An empty result means to resume normal decoding or handle completion as usual.</p>
+<p>For engines that handle tokenization themselves,
 <a class="reference internal" href="../api/python/grammar_matcher.html#xgrammar.GrammarMatcher.find_jump_forward_string" title="xgrammar.GrammarMatcher.find_jump_forward_string"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">xgr.GrammarMatcher.find_jump_forward_string</span></code></span></a>
-returns the longest string that certainly follows the current state under the grammar. The
-engine can append this string to the output directly without LLM decoding, saving decoding
-steps.</p>
+returns the forced continuation as text.</p>
 </section>
 <section id="real-world-integrations">
 <h2>Real-World Integrations<a class="headerlink" href="#real-world-integrations" title="Link to this heading">¶</a></h2>
