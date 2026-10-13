@@ -1088,6 +1088,31 @@ def test_restricted_string():
     )
 
 
+# \s in a JSON Schema pattern follows the ECMAScript dialect, so it matches every WhiteSpace and
+# LineTerminator code point, not only ASCII whitespace.
+@pytest.mark.parametrize(
+    "char, is_accepted",
+    [
+        (" ", True),
+        ("\u00a0", True),  # no-break space
+        ("\u2003", True),  # em space
+        ("\u2028", True),  # line separator
+        ("\u3000", True),  # ideographic space
+        ("\ufeff", True),  # zero width no-break space
+        ("\u200b", False),  # zero width space is not WhiteSpace
+        ("x", False),
+    ],
+)
+def test_pattern_whitespace_class(char: str, is_accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {"v": {"type": "string", "pattern": r"^a\sb$"}},
+        "required": ["v"],
+    }
+    instance = json.dumps({"v": f"a{char}b"}, ensure_ascii=False)
+    check_schema_with_instance(schema, instance, is_accepted=is_accepted, any_whitespace=False)
+
+
 def test_complex_restrictions():
     class RestrictedModel(BaseModel):
         restricted_string: str = Field(..., pattern=r"[^\"]*")
