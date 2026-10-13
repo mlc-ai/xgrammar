@@ -1,6 +1,7 @@
 """Build a portable, credential-free tokenizer bundle for offline CI tests."""
 
 import argparse
+import hashlib
 import json
 import shutil
 import zipfile
@@ -10,6 +11,18 @@ from huggingface_hub import get_token, snapshot_download
 
 # Include custom tokenizer/config implementations and chat templates, but no weights.
 ASSET_PATTERNS = ["*.json", "*.model", "*.tiktoken", "*.txt", "*.py", "*.jinja", "*.bpe"]
+
+
+def prepare_tiktoken_cache(output):
+    # Phi-3-small calls get_encoding("cl100k_base") even when loaded from local files.
+    # Seed tiktoken's URL-hash cache from the vocabulary in its pinned Hub snapshot.
+    output = Path(output)
+    phi_vocab = output / "microsoft--Phi-3-small-8k-instruct" / "cl100k_base.tiktoken"
+    if phi_vocab.is_file():
+        cache = output / "tiktoken"
+        cache.mkdir(exist_ok=True)
+        url = "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken"
+        shutil.copyfile(phi_vocab, cache / hashlib.sha1(url.encode()).hexdigest())
 
 
 def prepare(manifest_path, output, include_token_required=False):
@@ -38,6 +51,7 @@ def prepare(manifest_path, output, include_token_required=False):
         # Dereference Hub cache symlinks for portable Windows/Linux/macOS artifacts.
         shutil.copytree(snapshot, destination)
         index[model_id] = {"path": relative, "revision": entry["revision"], "commit": snapshot.name}
+    prepare_tiktoken_cache(output)
     (output / "index.json").write_text(json.dumps(index, indent=2) + "\n")
 
 

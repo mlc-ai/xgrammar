@@ -82,6 +82,7 @@ jobs:
     needs: [pre_check, prepare_tokenizers]
     env:
       XGRAMMAR_TOKENIZER_ASSETS: ${{ github.workspace }}/.ci/tokenizer-assets
+      TIKTOKEN_CACHE_DIR: ${{ github.workspace }}/.ci/tokenizer-assets/tiktoken
       HF_HUB_OFFLINE: "1"
       XGRAMMAR_TEST_OFFLINE: "1"
     name: Run unit tests on ${{ matrix.os }}

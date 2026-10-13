@@ -1,6 +1,7 @@
 import json
 import os
 import socket
+from pathlib import Path
 
 import pytest
 from tokenizer_utils import load_config, load_model_file, load_tokenizer, local_model_path
@@ -96,6 +97,19 @@ def test_public_tokenizer_bundle_smoke():
     tokenizer = load_tokenizer("Qwen/Qwen2.5-0.5B", use_fast=True)
     text = "Hello, tokenizer!"
     assert tokenizer.decode(tokenizer.encode(text, add_special_tokens=False)) == text
+
+
+def test_prepared_tiktoken_encoding():
+    """Phi-3-small requires tiktoken's external vocabulary cache as well."""
+    assets = os.environ.get("XGRAMMAR_TOKENIZER_ASSETS")
+    if not assets or not (Path(assets) / "tiktoken").is_dir():
+        pytest.skip("The public-only bundle does not need tiktoken's vocabulary cache")
+    import tiktoken
+
+    assert Path(os.environ["TIKTOKEN_CACHE_DIR"]) == Path(assets) / "tiktoken"
+    encoding = tiktoken.get_encoding("cl100k_base")
+    text = "Hello, tokenizer!"
+    assert encoding.decode(encoding.encode(text)) == text
 
 
 def test_ci_network_guard():
