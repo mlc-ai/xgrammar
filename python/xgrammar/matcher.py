@@ -423,6 +423,23 @@ class GrammarMatcher(XGRObject):
         """
         return str(self._handle.find_jump_forward_string())
 
+    def find_jump_forward_tokens(self) -> List[int]:
+        """Find token ids to append for jump-forward decoding.
+
+        Greedily match the longest decoded vocabulary tokens in the forced continuation, omitting
+        the last token if it is a strict prefix of a longer ordinary token. The matcher and already
+        accepted token boundaries remain unchanged. Stop and special tokens are excluded.
+
+        Accept each returned token with :meth:`accept_token` and prefill them before sampling
+        again. This tokenization may differ from the model tokenizer's encoding.
+
+        Returns
+        -------
+        jump_forward_tokens : List[int]
+            Empty if no jump is available or the matcher has completed or terminated.
+        """
+        return list(self._handle.find_jump_forward_tokens())
+
     def rollback(self, num_tokens: int = 1) -> None:
         """Rollback the matcher to a previous state by several tokens.
 
