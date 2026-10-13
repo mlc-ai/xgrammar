@@ -3,14 +3,67 @@
 import argparse
 import hashlib
 import json
+import re
 import shutil
+import time
 import zipfile
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 from huggingface_hub import get_token, snapshot_download
+from huggingface_hub.utils import HfHubHTTPError
 
 # Include custom tokenizer/config implementations and chat templates, but no weights.
 ASSET_PATTERNS = ["*.json", "*.model", "*.tiktoken", "*.txt", "*.py", "*.jinja", "*.bpe"]
+
+
+def rate_limit_wait(error):
+    """Honor both Hub reset headers and standard Retry-After responses."""
+    headers = error.response.headers
+    delays = []
+    retry_after = headers.get("Retry-After")
+    if retry_after:
+        try:
+            delays.append(float(retry_after))
+        except ValueError:
+            try:
+                reset = parsedate_to_datetime(retry_after)
+                delays.append((reset - datetime.now(timezone.utc)).total_seconds())
+            except (TypeError, ValueError):
+                pass
+    reset = re.search(r"\bt=(\d+)", headers.get("RateLimit", ""))
+    if reset:
+        delays.append(float(reset.group(1)))
+    # Some Hub API errors provide the reset only in their response message.
+    reset = re.search(r"Retry after (\d+) seconds", str(error), re.IGNORECASE)
+    if reset:
+        delays.append(float(reset.group(1)))
+    # Without a reset hint, wait for a complete Hub rate-limit window.
+    return max([0, *delays]) + 1 if delays else 301
+
+
+def download_snapshot(model_id, revision, max_attempts=10, retry_budget=1200):
+    """Retry API-tree 429s too; the SDK's file-download retries do not cover them."""
+    deadline = time.monotonic() + retry_budget
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return snapshot_download(
+                model_id, revision=revision, allow_patterns=ASSET_PATTERNS, max_workers=1
+            )
+        except HfHubHTTPError as error:
+            if error.response is None or error.response.status_code != 429:
+                raise
+            delay = rate_limit_wait(error)
+            if attempt == max_attempts or time.monotonic() + delay > deadline:
+                raise
+            print(
+                f"Hub rate limit for {model_id}; retrying in {delay:g}s "
+                f"(attempt {attempt}/{max_attempts})",
+                flush=True,
+            )
+            time.sleep(delay)
+    raise RuntimeError("No snapshot download attempts configured")
 
 
 def prepare_tiktoken_cache(output):
@@ -39,11 +92,7 @@ def prepare(manifest_path, output, include_token_required=False):
         model_id = entry["repo_id"]
         print("Preparing " + model_id, flush=True)
         # Serial repositories and serial file downloads avoid a download stampede.
-        snapshot = Path(
-            snapshot_download(
-                model_id, revision=entry["revision"], allow_patterns=ASSET_PATTERNS, max_workers=1
-            )
-        )
+        snapshot = Path(download_snapshot(model_id, entry["revision"]))
         relative = model_id.replace("/", "--")
         destination = output / relative
         if destination.exists():

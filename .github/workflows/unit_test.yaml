@@ -32,6 +32,7 @@ jobs:
     needs: [pre_check]
     name: Prepare tokenizer assets once
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
