@@ -520,6 +520,8 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   std::string FindJumpForwardString();
 
+  std::vector<int32_t> FindJumpForwardTokens() const;
+
   void Rollback(int num_tokens);
 
   bool IsTerminated() const;
@@ -2218,6 +2220,11 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
       const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
       const auto& current_edges = fsm.GetFsm().GetFsm().GetEdges(state.element_id);
       for (const auto& edge : current_edges) {
+        // Token-level alternatives are not forced byte continuations.
+        if (edge.IsToken() || edge.IsExcludeToken()) {
+          can_find_next_char = false;
+          break;
+        }
         if (!edge.IsCharRange()) {
           continue;
         }
@@ -2255,6 +2262,71 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
   // Rollback all chars accepted
   PopLastStates(num_accepted_chars);
   return result;
+}
+
+std::vector<int32_t> GrammarMatcher::Impl::FindJumpForwardTokens() const {
+  if (IsTerminated() || IsCompleted()) {
+    return {};
+  }
+
+  // All lookahead and token validation happens on a copy. In particular, querying must not
+  // change token history, captures, or pending budget enforcement on the live matcher.
+  Impl trial(*this);
+  const std::string forced_bytes = trial.FindJumpForwardString();
+  const auto& vocab = tokenizer_info_.GetSortedDecodedVocab();
+  std::vector<int32_t> tokens;
+  bool last_is_prefix = false;
+
+  for (size_t offset = 0; offset < forced_bytes.size();) {
+    auto begin = vocab.begin();
+    auto end = vocab.end();
+    int32_t token_id = -1;
+    size_t token_length = 0;
+    bool is_prefix = false;
+
+    // Narrow the sorted vocabulary by one byte at a time, remembering the longest complete
+    // token. Removing exact matches from the range leaves only strictly longer extensions.
+    for (size_t depth = 0; offset + depth < forced_bytes.size() && begin != end; ++depth) {
+      const uint8_t byte = static_cast<uint8_t>(forced_bytes[offset + depth]);
+      begin = std::lower_bound(begin, end, byte, [depth](const auto& entry, uint8_t value) {
+        return static_cast<uint8_t>(entry.second[depth]) < value;
+      });
+      end = std::upper_bound(begin, end, byte, [depth](uint8_t value, const auto& entry) {
+        return value < static_cast<uint8_t>(entry.second[depth]);
+      });
+      int32_t exact_id = -1;
+      while (begin != end && begin->second.size() == depth + 1) {
+        const int32_t id = begin->first;
+        if (std::find(stop_token_ids_.begin(), stop_token_ids_.end(), id) ==
+                stop_token_ids_.end() &&
+            (exact_id == -1 || id < exact_id)) {
+          exact_id = id;
+        }
+        ++begin;
+      }
+      if (exact_id != -1) {
+        token_id = exact_id;
+        token_length = depth + 1;
+        is_prefix = std::any_of(begin, end, [&](const auto& entry) {
+          return std::find(stop_token_ids_.begin(), stop_token_ids_.end(), entry.first) ==
+                 stop_token_ids_.end();
+        });
+      }
+    }
+
+    if (token_id == -1 || !trial.AcceptToken(token_id)) {
+      break;
+    }
+    tokens.push_back(token_id);
+    last_is_prefix = is_prefix;
+    offset += token_length;
+  }
+
+  // Withhold at most one newly proposed token; never retokenize or roll back accepted tokens.
+  if (!tokens.empty() && last_is_prefix) {
+    tokens.pop_back();
+  }
+  return tokens;
 }
 
 void GrammarMatcher::Impl::Rollback(int num_tokens) {
@@ -2852,6 +2924,10 @@ bool GrammarMatcher::TraverseDraftTree(
 }
 
 std::string GrammarMatcher::FindJumpForwardString() { return pimpl_->FindJumpForwardString(); }
+
+std::vector<int32_t> GrammarMatcher::FindJumpForwardTokens() const {
+  return pimpl_->FindJumpForwardTokens();
+}
 
 void GrammarMatcher::Rollback(int num_tokens) { pimpl_->Rollback(num_tokens); }
 
