@@ -603,17 +603,30 @@ TEST(XGrammarFSMBuilderTest, TestRegexEscapes) {
   EXPECT_TRUE(fsm_wse.AcceptString("好好"));
   EXPECT_FALSE(fsm_wse.AcceptString("\xbd"));
 
-  // \s matches exactly the standard whitespace characters [ \t\n\r\f\v].
+  // \s is the ECMAScript whitespace class: the ASCII whitespace characters plus every other
+  // WhiteSpace and LineTerminator code point (U+00A0, U+1680, U+2000-U+200A, U+2028, U+2029,
+  // U+202F, U+205F, U+3000, U+FEFF).
   fsm_wse = RegexFSMBuilder::Build("\\s+").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString(" \t\n\r\f\v"));
+  EXPECT_TRUE(fsm_wse.AcceptString("\xC2\xA0"));                  // U+00A0
+  EXPECT_TRUE(fsm_wse.AcceptString("\xE1\x9A\x80"));              // U+1680
+  EXPECT_TRUE(fsm_wse.AcceptString("\xE2\x80\x80\xE2\x80\x8A"));  // U+2000 U+200A
+  EXPECT_TRUE(fsm_wse.AcceptString("\xE2\x80\xA8\xE2\x80\xA9"));  // U+2028 U+2029
+  EXPECT_TRUE(fsm_wse.AcceptString("\xE2\x80\xAF\xE2\x81\x9F"));  // U+202F U+205F
+  EXPECT_TRUE(fsm_wse.AcceptString("\xE3\x80\x80\xEF\xBB\xBF"));  // U+3000 U+FEFF
   EXPECT_FALSE(fsm_wse.AcceptString(std::string(1, '\0')));
   EXPECT_FALSE(fsm_wse.AcceptString("\x01"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\xC2\x85"));      // U+0085 NEL is not WhiteSpace
+  EXPECT_FALSE(fsm_wse.AcceptString("\xE2\x80\x8B"));  // U+200B ZWSP is not WhiteSpace
 
   // \S is the codepoint-domain complement, so non-ASCII characters are accepted.
   fsm_wse = RegexFSMBuilder::Build("\\S").Unwrap();
   EXPECT_TRUE(fsm_wse.AcceptString("好"));
   EXPECT_TRUE(fsm_wse.AcceptString(std::string(1, '\0')));
+  EXPECT_TRUE(fsm_wse.AcceptString("\xE2\x80\x8B"));  // U+200B
   EXPECT_FALSE(fsm_wse.AcceptString(" "));
+  EXPECT_FALSE(fsm_wse.AcceptString("\xC2\xA0"));      // U+00A0
+  EXPECT_FALSE(fsm_wse.AcceptString("\xE3\x80\x80"));  // U+3000
 }
 
 TEST(XGrammarFSMBuilderTest, TestRegexUnsupportedFeatures) {

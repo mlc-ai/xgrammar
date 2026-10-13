@@ -381,6 +381,22 @@ void AddCodepointRangesToFSM(
   }
 }
 
+/*! \brief The code points matched by \s. The regex dialect is ECMAScript, where \s is WhiteSpace
+ * (TAB, VT, FF, ZWNBSP and every Space_Separator code point) plus LineTerminator (LF, CR, LS, PS).
+ * Unlike \d and \w, it is not ASCII-only. */
+const std::vector<CodepointRange> kWhitespaceClassRanges = {
+    {0x09, 0x0D},
+    {0x20, 0x20},
+    {0xA0, 0xA0},
+    {0x1680, 0x1680},
+    {0x2000, 0x200A},
+    {0x2028, 0x2029},
+    {0x202F, 0x202F},
+    {0x205F, 0x205F},
+    {0x3000, 0x3000},
+    {0xFEFF, 0xFEFF},
+};
+
 /*! \brief One parsed regex escape (or literal): either a single codepoint, or a (possibly
  * negated) set of codepoint ranges for class escapes like \d, \D, \w, \W, \s, \S. */
 struct RegexEscapeItem {
@@ -463,10 +479,10 @@ Result<RegexEscapeItem> ParseRegexEscape(const std::string& regex, size_t* pos, 
       item.negated = true;
       return ResultOk(std::move(item));
     case 's':
-      item.ranges = {{0x09, 0x0D}, {' ', ' '}};
+      item.ranges = kWhitespaceClassRanges;
       return ResultOk(std::move(item));
     case 'S':
-      item.ranges = {{0x09, 0x0D}, {' ', ' '}};
+      item.ranges = kWhitespaceClassRanges;
       item.negated = true;
       return ResultOk(std::move(item));
     case 'x': {

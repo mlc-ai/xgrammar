@@ -15,6 +15,17 @@
 
 namespace xgrammar {
 
+/*! \brief The class body matched by \s. The regex dialect is ECMAScript, where \s is WhiteSpace
+ * (TAB, VT, FF, ZWNBSP and every Space_Separator code point) plus LineTerminator (LF, CR, LS, PS).
+ * Unlike \d and \w, it is not ASCII-only. */
+constexpr const char* kWhitespaceClassBody =
+    R"(\f\n\r\t\v\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff)";
+
+/*! \brief The complement of kWhitespaceClassBody over the whole codepoint range, for \S. */
+constexpr const char* kNonWhitespaceClassBody =
+    R"(\x00-\x08\x0E-\x1F\x21-\x9F\xA1-\u167f\u1681-\u1fff\u200b-\u2027\u202a-\u202e)"
+    R"(\u2030-\u205e\u2060-\u2fff\u3001-\ufefe\uff00-\U0010FFFF)";
+
 /*!
  * \brief Convert a regex to EBNF.
  * \details The implementation refers to the regex described in
@@ -213,10 +224,10 @@ std::string RegexConverter::HandleEscapeInCharClass() {
     return R"(\x00-\x2F\x3A-\x40\x5B-\x5E\x60\x7B-\U0010FFFF)";
   } else if (current_[1] == 's') {
     current_ += 2;
-    return R"(\f\n\r\t\v\u0020\u00a0)";
+    return kWhitespaceClassBody;
   } else if (current_[1] == 'S') {
     current_ += 2;
-    return R"(\x00-\x08\x0E-\x1F\x21-\x9F\xA1-\U0010FFFF)";
+    return kNonWhitespaceClassBody;
   } else {
     auto res = HandleCharEscape();
     if (res == "]" || res == "-") {
@@ -252,10 +263,10 @@ std::string RegexConverter::HandleEscape() {
     return "[^a-zA-Z0-9_]";
   } else if (current_[1] == 's') {
     current_ += 2;
-    return R"([\f\n\r\t\v\u0020\u00a0])";
+    return std::string("[") + kWhitespaceClassBody + "]";
   } else if (current_[1] == 'S') {
     current_ += 2;
-    return R"([^\f\n\r\t\v\u0020\u00a0])";
+    return std::string("[^") + kWhitespaceClassBody + "]";
   } else if ((current_[1] >= '1' && current_[1] <= '9') || current_[1] == 'k') {
     RaiseError("Backreference is not supported yet.");
   } else if (current_[1] == 'p' || current_[1] == 'P') {
