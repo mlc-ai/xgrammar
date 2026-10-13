@@ -28,8 +28,64 @@ jobs:
       - name: Ruff check
         uses: astral-sh/ruff-action@v3
 
-  run_unit_test:
+  prepare_tokenizers:
     needs: [pre_check]
+    name: Prepare tokenizer assets once
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Select asset set
+        id: mode
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        shell: bash
+        run: |
+          if [ -n "$HF_TOKEN" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Restore portable tokenizer bundle
+        id: assets
+        uses: actions/cache@v4
+        with:
+          path: .ci/tokenizer-assets.zip
+          key: tokenizer-assets-v1-${{ steps.mode.outputs.has_token }}-${{ hashFiles('tests/tokenizer_assets.json',
+            'scripts/prepare_tokenizer_assets.py') }}
+
+      - name: Prepare missing tokenizer bundle
+        if: steps.assets.outputs.cache-hit != 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_HUB_DOWNLOAD_TIMEOUT: 60
+        run: |
+          python -m pip install "huggingface_hub>=1.2,<2"
+          python scripts/prepare_tokenizer_assets.py
+
+      - name: Share tokenizer bundle with test jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: tokenizer-assets
+          path: .ci/tokenizer-assets.zip
+          retention-days: 1
+          if-no-files-found: error
+
+  run_unit_test:
+    needs: [pre_check, prepare_tokenizers]
+    env:
+      XGRAMMAR_TOKENIZER_ASSETS: ${{ github.workspace }}/.ci/tokenizer-assets
+      TIKTOKEN_CACHE_DIR: ${{ github.workspace }}/.ci/tokenizer-assets/tiktoken
+      HF_HUB_OFFLINE: "1"
+      XGRAMMAR_TEST_OFFLINE: "1"
     name: Run unit tests on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -65,12 +121,14 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Cache huggingface
-        uses: actions/cache@v4
+      - name: Download prepared tokenizer bundle
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            ~/.cache/huggingface
-          key: huggingface-${{ matrix.os }}-python-${{ matrix.python }}
+          name: tokenizer-assets
+          path: .ci
+
+      - name: Extract tokenizer bundle
+        run: python -m zipfile -e .ci/tokenizer-assets.zip .ci/tokenizer-assets
 
       - name: Use LLVM clang 17 on macOS
         if: matrix.os == 'macos-15-intel'
