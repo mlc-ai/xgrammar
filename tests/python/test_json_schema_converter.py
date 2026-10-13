@@ -3308,6 +3308,212 @@ def test_property_names_with_properties():
     check_schema_with_instance(schema, {"Name": "John"}, is_accepted=False, any_whitespace=False)
 
 
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize("required", [False, True])
+@pytest.mark.parametrize(
+    "constraint, allowed, forbidden",
+    [
+        ({"pattern": "^[a-z]+$"}, "good", "Bad"),
+        ({"pattern": "^[é你]+$"}, "é你", "other"),
+        ({"enum": ["good", "other"]}, "good", "Bad"),
+        ({"const": "good"}, "good", "Bad"),
+        ({"minLength": 2, "maxLength": 4}, "good", "longer"),
+        ({"anyOf": [{"const": "good"}, {"const": "other"}]}, "good", "Bad"),
+        ({"$ref": "#/$defs/name"}, "good", "Bad"),
+    ],
+)
+def test_property_names_constrain_declared_keys(
+    constraint, allowed, forbidden, required, any_order
+):
+    schema = {
+        "type": "object",
+        "$defs": {"name": {"type": "string", "pattern": "^[a-z]+$"}},
+        "properties": {allowed: {"type": "integer"}, forbidden: {"type": "integer"}},
+        "propertyNames": constraint,
+        "additionalProperties": False,
+        "required": [forbidden] if required else [],
+    }
+    grammar = xgr.Grammar.from_json_schema(schema, any_order=any_order)
+    for instance, accepted in [
+        ({}, not required),
+        ({allowed: 1}, not required),
+        ({forbidden: 1}, False),
+        ({allowed: 1, forbidden: 2}, False),
+        ({allowed: "wrong type"}, False),
+    ]:
+        assert (
+            _is_grammar_accept_string(grammar, json.dumps(instance, ensure_ascii=False)) == accepted
+        )
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize("declared", [False, True])
+@pytest.mark.parametrize(
+    "constraint, allowed, forbidden",
+    [
+        ({"pattern": "^grade_[0-9]$"}, "grade_1", "grade_12"),
+        ({"enum": ["grade_1", "grade_2"]}, "grade_1", "grade_3"),
+        ({"const": "grade_1"}, "grade_1", "grade_2"),
+        ({"minLength": 7, "maxLength": 7}, "grade_1", "grade_12"),
+        ({"pattern": "^grade_[é你]$"}, "grade_你", "grade_你é"),
+        ({}, "grade_1", "other"),
+        ({"anyOf": [{}, {"type": "object"}]}, "grade_1", "other"),
+        ({"type": ["string", "object"]}, "grade_1", "other"),
+    ],
+)
+def test_property_names_intersect_pattern_keys(constraint, allowed, forbidden, declared, any_order):
+    schema = {
+        "type": "object",
+        "patternProperties": {"^grade_.+$": {"type": "integer"}},
+        "propertyNames": constraint,
+        "additionalProperties": False,
+    }
+    if declared:
+        schema["properties"] = {allowed: {"type": "integer"}}
+    grammar = xgr.Grammar.from_json_schema(schema, any_order=any_order)
+    for instance, accepted in [
+        ({}, True),
+        ({allowed: 1}, True),
+        ({forbidden: 1}, False),
+        ({allowed: "wrong type"}, False),
+    ]:
+        assert (
+            _is_grammar_accept_string(grammar, json.dumps(instance, ensure_ascii=False)) == accepted
+        )
+    serialized = xgr.Grammar.from_ebnf(str(grammar))
+    assert _is_grammar_accept_string(serialized, json.dumps({allowed: 1}, ensure_ascii=False))
+    assert not _is_grammar_accept_string(serialized, json.dumps({forbidden: 1}, ensure_ascii=False))
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize("additional", [True, {"type": "integer"}])
+def test_property_names_constrain_named_pattern_and_additional_keys(any_order, additional):
+    schema = {
+        "type": "object",
+        "properties": {"name": {"type": "integer"}},
+        "patternProperties": {"^grade_[0-9]+$": {"type": "integer"}},
+        "propertyNames": {"pattern": "^(name|grade_[0-9]|other)$"},
+        "additionalProperties": additional,
+    }
+    grammar = xgr.Grammar.from_json_schema(schema, any_order=any_order)
+    for instance, accepted in [
+        ({"name": 1, "grade_1": 2, "other": 3}, True),
+        ({"name": 1, "grade_12": 2}, False),
+        ({"Bad": 1}, False),
+    ]:
+        assert _is_grammar_accept_string(grammar, json.dumps(instance)) == accepted
+
+
+def test_property_names_empty_intersection_keeps_other_union_options():
+    schema = {
+        "anyOf": [
+            {
+                "type": "object",
+                "properties": {"Bad": {"type": "integer"}},
+                "required": ["Bad"],
+                "propertyNames": {"pattern": "^[a-z]+$"},
+                "additionalProperties": False,
+            },
+            {"const": "fallback"},
+        ]
+    }
+    check_schema_with_instance(schema, '"fallback"')
+    check_schema_with_instance(schema, {"Bad": 1}, is_accepted=False)
+
+
+def test_property_names_reference_does_not_narrow_values():
+    schema = {
+        "type": "object",
+        "$defs": {"key_or_value": {"enum": ["ok", 1, {"nested": "value"}]}},
+        "properties": {"ok": {"$ref": "#/$defs/key_or_value"}},
+        "propertyNames": {"$ref": "#/$defs/key_or_value"},
+        "patternProperties": {"^[a-z]+$": {"$ref": "#/$defs/key_or_value"}},
+        "additionalProperties": False,
+    }
+    for value in ["ok", 1, {"nested": "value"}]:
+        check_schema_with_instance(schema, {"ok": value}, separators=(",", ":"))
+        check_schema_with_instance(
+            schema, {"other": value}, is_accepted=False, separators=(",", ":")
+        )
+
+
+@pytest.mark.parametrize("name", ["", '"', "\\", "\n", "\x00", "é你"])
+@pytest.mark.parametrize("constraint_kind", ["unconstrained", "const", "length"])
+def test_property_names_validate_decoded_declared_names(name, constraint_kind):
+    constraint = {
+        "unconstrained": {},
+        "const": {"const": name},
+        "length": {"minLength": len(name), "maxLength": len(name)},
+    }[constraint_kind]
+    schema = {
+        "type": "object",
+        "properties": {name: {"type": "integer"}},
+        "required": [name],
+        "propertyNames": constraint,
+        "additionalProperties": False,
+    }
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, json.dumps({name: 1}, ensure_ascii=False))
+
+
+@pytest.mark.parametrize("reference", [False, True])
+@pytest.mark.parametrize("value_first", [False, True])
+@pytest.mark.parametrize("composite", [False, True])
+def test_property_names_string_context_isolated_from_values(reference, value_first, composite):
+    constraint = {"pattern": "^[a-z]+$"}
+    if composite:
+        constraint = {"anyOf": [constraint]}
+    shared = {"$ref": "#/$defs/shared"} if reference else constraint
+    schema = {
+        "type": "object",
+        "$defs": {"shared": constraint},
+        "propertyNames": shared,
+        "additionalProperties": shared,
+    }
+    if value_first:
+        schema["properties"] = {"ok": shared, "Bad": shared}
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '{"ok":1}')
+    assert not _is_grammar_accept_string(grammar, '{"Bad":1}')
+
+
+@pytest.mark.parametrize(
+    "constraint, diagnostic",
+    [
+        (
+            {"allOf": [{"pattern": "^[a-z]+$"}, {"minLength": 2}]},
+            "propertyNames with multiple allOf schemas",
+        ),
+        (
+            {"oneOf": [{"pattern": "^[a-z]+$"}, {"pattern": "^g.*$"}]},
+            "propertyNames oneOf with overlapping or non-provably-disjoint branches",
+        ),
+    ],
+)
+def test_property_names_unsupported_intersections(constraint, diagnostic):
+    schema = {
+        "type": "object",
+        "properties": {"Bad": {"type": "integer"}},
+        "propertyNames": constraint,
+    }
+    with pytest.raises(RuntimeError, match=diagnostic):
+        xgr.Grammar.from_json_schema(schema)
+
+
+def test_property_names_empty_pattern_intersection():
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^[a-z]+$"},
+        "patternProperties": {"^[0-9]+$": {"type": "integer"}},
+        "additionalProperties": False,
+    }
+    check_schema_with_instance(schema, {})
+    check_schema_with_instance(schema, {"123": 1}, is_accepted=False)
+    check_schema_with_instance(schema, {"abc": 1}, is_accepted=False)
+    schema["minProperties"] = 1
+    check_schema_with_instance(schema, {}, is_accepted=False)
+
+
 @pytest.mark.parametrize("keyword", ["additionalProperties", "unevaluatedProperties"])
 @pytest.mark.parametrize(
     "instance, accepted",

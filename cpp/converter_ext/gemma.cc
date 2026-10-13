@@ -241,42 +241,35 @@ int32_t GemmaToolCallingConverter::CreatePatternKeyRule(
   return builder_.AddRuleWithHint(rule_name_hint, GemmaRegexBody(pattern, rule_name_hint));
 }
 
-int32_t GemmaToolCallingConverter::CreatePropertyNamesKeyRule(
-    const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+int32_t GemmaToolCallingConverter::GeneratePropertyNameString(
+    const StringSpec& spec, const std::string& rule_name
 ) {
-  // Constrain the bare key by a propertyNames pattern or by its enum/const literals; otherwise
-  // keep the identifier rule. Other propertyNames constraints do not apply to unquoted keys.
-  if (auto* string_spec = std::get_if<StringSpec>(&property_names->spec)) {
-    if (string_spec->pattern.has_value()) {
-      return CreatePatternKeyRule(*string_spec->pattern, rule_name_hint);
-    }
+  if (spec.pattern.has_value()) return GemmaRegexBody(*spec.pattern, rule_name);
+  if (!spec.format.has_value() && spec.min_length == 0 && spec.max_length == -1) {
+    return KeyPatternExpression();
   }
-  if (auto* enum_spec = std::get_if<EnumSpec>(&property_names->spec)) {
-    return builder_.AddRuleWithHint(rule_name_hint, GemmaKeyLiterals(enum_spec->json_values));
-  }
-  if (auto* const_spec = std::get_if<ConstSpec>(&property_names->spec)) {
-    return builder_.AddRuleWithHint(rule_name_hint, GemmaKeyLiterals({const_spec->json_value}));
-  }
-  return builder_.AddRuleWithHint(rule_name_hint, KeyPatternExpression());
+  auto result = FSMWithStartEnd::Intersect(
+      PropertyNameFSM(builder_.GetRuleId(GetKeyPattern())),
+      PropertyNameFSM(CreatePropertyNamesConstraintRule(SchemaSpec::Make(spec), rule_name))
+  );
+  XGRAMMAR_CHECK(result.IsOk()) << "Cannot constrain Gemma additional property names: "
+                                << std::move(result).UnwrapErr().what();
+  return FSMExpression(std::move(result).Unwrap(), rule_name, Empty());
 }
 
-int32_t GemmaToolCallingConverter::GemmaKeyLiterals(const std::vector<std::string>& json_values) {
-  std::vector<int32_t> keys;
-  for (const auto& json_value : json_values) {
-    picojson::value value;
-    std::string error = ParseJSON(value, json_value);
-    XGRAMMAR_CHECK(error.empty()) << "Failed to parse JSON value: " << error
-                                  << ". The JSON string is: " << json_value;
-    // Only a non-empty string names a property, and a bare key cannot contain an exclusion.
-    if (!value.is<std::string>()) continue;
-    const auto& key = value.get<std::string>();
-    if (key.empty() || !IsAllowedString(key)) continue;
-    keys.push_back(ByteString(key));
-  }
-  if (keys.empty()) {
-    return Unsatisfiable();
-  }
-  return Choice(keys);
+int32_t GemmaToolCallingConverter::GeneratePropertyNameConst(
+    const ConstSpec& spec, const std::string& rule_name
+) {
+  picojson::value value;
+  XGRAMMAR_CHECK(ParseJSON(value, spec.json_value).empty());
+  const auto& key = value.get<std::string>();
+  return key.empty() || !IsAllowedString(key) ? Unsatisfiable() : ByteString(key);
+}
+
+int32_t GemmaToolCallingConverter::CreatePropertyNamesConstraintRule(
+    const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+) {
+  return CreateRawPropertyNamesConstraintRule(property_names, rule_name_hint);
 }
 
 }  // namespace xgrammar

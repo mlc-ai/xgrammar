@@ -676,7 +676,7 @@ class SchemaParser {
   bool IsStrictMode() const { return config_.strict_mode; }
 
   Result<SchemaSpecPtr, SchemaError> ResolveRef(
-      const std::string& uri, const std::string& rule_name_hint
+      const RefSpec& spec, const std::string& rule_name_hint
   );
 
  private:
@@ -691,10 +691,16 @@ class SchemaParser {
   Result<EnumSpec, SchemaError> ParseEnum(const picojson::object& schema);
   Result<RefSpec, SchemaError> ParseRef(const picojson::object& schema);
   Result<AnyOfSpec, SchemaError> ParseAnyOf(
-      const picojson::object& schema, const std::string& keyword
+      const picojson::object& schema,
+      const std::string& keyword,
+      std::optional<std::string> default_type
   );
-  Result<OneOfSpec, SchemaError> ParseOneOf(const picojson::object& schema);
-  Result<AllOfSpec, SchemaError> ParseAllOf(const picojson::object& schema);
+  Result<OneOfSpec, SchemaError> ParseOneOf(
+      const picojson::object& schema, std::optional<std::string> default_type
+  );
+  Result<AllOfSpec, SchemaError> ParseAllOf(
+      const picojson::object& schema, std::optional<std::string> default_type
+  );
   Result<TypeArraySpec, SchemaError> ParseTypeArray(
       const picojson::object& schema, const std::string& rule_name_hint
   );
@@ -707,7 +713,7 @@ class SchemaParser {
 
   Config config_;
   picojson::value root_schema_;
-  std::unordered_map<std::string, SchemaSpecPtr> ref_cache_;
+  std::map<std::pair<std::string, std::optional<std::string>>, SchemaSpecPtr> ref_cache_;
   std::unordered_map<std::string, SchemaSpecPtr> schema_cache_;
 };
 
@@ -778,6 +784,7 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     std::optional<std::string> default_type
 ) {
   std::string cache_key = ComputeCacheKey(schema);
+  if (default_type.has_value()) cache_key += ":" + *default_type;
   if (schema_cache_.count(cache_key)) {
     return ResultOk(schema_cache_[cache_key]);
   }
@@ -811,6 +818,7 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     auto ref_result = ParseRef(schema_obj);
     if (ref_result.IsErr()) return ResultErr(std::move(ref_result).UnwrapErr());
     auto ref_spec = std::move(ref_result).Unwrap();
+    ref_spec.default_type = default_type;
     result = SchemaSpec::Make(std::move(ref_spec), cache_key, rule_name_hint);
   } else if (schema_obj.count("const")) {
     auto const_result = ParseConst(schema_obj);
@@ -821,24 +829,32 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     if (enum_result.IsErr()) return ResultErr(std::move(enum_result).UnwrapErr());
     result = SchemaSpec::Make(std::move(enum_result).Unwrap(), cache_key, rule_name_hint);
   } else if (schema_obj.count("anyOf")) {
-    auto anyof_result = ParseAnyOf(schema_obj, "anyOf");
+    auto anyof_result = ParseAnyOf(schema_obj, "anyOf", default_type);
     if (anyof_result.IsErr()) return ResultErr(std::move(anyof_result).UnwrapErr());
     result = SchemaSpec::Make(std::move(anyof_result).Unwrap(), cache_key, rule_name_hint);
   } else if (schema_obj.count("oneOf")) {
-    auto oneof_result = ParseOneOf(schema_obj);
+    auto oneof_result = ParseOneOf(schema_obj, default_type);
     if (oneof_result.IsErr()) {
+      if (default_type.has_value() &&
+          oneof_result.ErrRef().Type() == SchemaErrorType::kUnsupportedSchema) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsupportedSchema,
+            "propertyNames oneOf with overlapping or non-provably-disjoint branches is not "
+            "supported"
+        );
+      }
       if (oneof_result.ErrRef().Type() != SchemaErrorType::kUnsupportedSchema) {
         return ResultErr(std::move(oneof_result).UnwrapErr());
       }
       XGRAMMAR_LOG(WARNING) << oneof_result.ErrRef().what();
-      auto anyof_result = ParseAnyOf(schema_obj, "oneOf");
+      auto anyof_result = ParseAnyOf(schema_obj, "oneOf", default_type);
       if (anyof_result.IsErr()) return ResultErr(std::move(anyof_result).UnwrapErr());
       result = SchemaSpec::Make(std::move(anyof_result).Unwrap(), cache_key, rule_name_hint);
     } else {
       result = SchemaSpec::Make(std::move(oneof_result).Unwrap(), cache_key, rule_name_hint);
     }
   } else if (schema_obj.count("allOf")) {
-    auto allof_result = ParseAllOf(schema_obj);
+    auto allof_result = ParseAllOf(schema_obj, default_type);
     if (allof_result.IsErr()) return ResultErr(std::move(allof_result).UnwrapErr());
     result = SchemaSpec::Make(std::move(allof_result).Unwrap(), cache_key, rule_name_hint);
   } else if (schema_obj.count("type") || default_type.has_value()) {
@@ -1508,17 +1524,19 @@ static std::string UnescapeJSONPointerToken(std::string token) {
 }
 
 Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
-    const std::string& uri, const std::string& rule_name_hint
+    const RefSpec& spec, const std::string& rule_name_hint
 ) {
-  if (ref_cache_.count(uri)) return ResultOk(ref_cache_[uri]);
+  const auto& uri = spec.uri;
+  const auto cache_key = std::make_pair(uri, spec.default_type);
+  if (ref_cache_.count(cache_key)) return ResultOk(ref_cache_[cache_key]);
 
   if (uri == "#") {
     auto placeholder = SchemaSpec::Make(AnySpec{}, "", "root");
-    ref_cache_[uri] = placeholder;
-    auto result = Parse(root_schema_, "root");
+    ref_cache_[cache_key] = placeholder;
+    auto result = Parse(root_schema_, "root", spec.default_type);
     if (result.IsErr()) return ResultErr(std::move(result).UnwrapErr());
     auto resolved = std::move(result).Unwrap();
-    ref_cache_[uri] = resolved;
+    ref_cache_[cache_key] = resolved;
     return ResultOk(resolved);
   }
 
@@ -1576,15 +1594,17 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
     }
   }
 
-  auto result = Parse(current, new_rule_name_prefix);
+  auto result = Parse(current, new_rule_name_prefix, spec.default_type);
   if (result.IsErr()) return ResultErr(std::move(result).UnwrapErr());
   auto resolved = std::move(result).Unwrap();
-  ref_cache_[uri] = resolved;
+  ref_cache_[cache_key] = resolved;
   return ResultOk(resolved);
 }
 
 Result<AnyOfSpec, SchemaError> SchemaParser::ParseAnyOf(
-    const picojson::object& schema, const std::string& keyword
+    const picojson::object& schema,
+    const std::string& keyword,
+    std::optional<std::string> default_type
 ) {
   AnyOfSpec spec;
   if (!schema.at(keyword).is<picojson::array>()) {
@@ -1592,7 +1612,7 @@ Result<AnyOfSpec, SchemaError> SchemaParser::ParseAnyOf(
   }
   int idx = 0;
   for (const auto& option : schema.at(keyword).get<picojson::array>()) {
-    auto option_result = Parse(option, "case_" + std::to_string(idx));
+    auto option_result = Parse(option, "case_" + std::to_string(idx), default_type);
     if (option_result.IsErr()) return ResultErr(std::move(option_result).UnwrapErr());
     spec.options.push_back(std::move(option_result).Unwrap());
     ++idx;
@@ -1600,7 +1620,9 @@ Result<AnyOfSpec, SchemaError> SchemaParser::ParseAnyOf(
   return ResultOk(std::move(spec));
 }
 
-Result<OneOfSpec, SchemaError> SchemaParser::ParseOneOf(const picojson::object& schema) {
+Result<OneOfSpec, SchemaError> SchemaParser::ParseOneOf(
+    const picojson::object& schema, std::optional<std::string> default_type
+) {
   OneOfSpec spec;
   if (!schema.at("oneOf").is<picojson::array>()) {
     return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "oneOf must be an array");
@@ -1613,7 +1635,7 @@ Result<OneOfSpec, SchemaError> SchemaParser::ParseOneOf(const picojson::object& 
 
   int idx = 0;
   for (const auto& option : options) {
-    auto option_result = Parse(option, "case_" + std::to_string(idx));
+    auto option_result = Parse(option, "case_" + std::to_string(idx), default_type);
     if (option_result.IsErr()) return ResultErr(std::move(option_result).UnwrapErr());
     spec.options.push_back(std::move(option_result).Unwrap());
     ++idx;
@@ -1626,14 +1648,22 @@ Result<OneOfSpec, SchemaError> SchemaParser::ParseOneOf(const picojson::object& 
   return ResultOk(std::move(spec));
 }
 
-Result<AllOfSpec, SchemaError> SchemaParser::ParseAllOf(const picojson::object& schema) {
+Result<AllOfSpec, SchemaError> SchemaParser::ParseAllOf(
+    const picojson::object& schema, std::optional<std::string> default_type
+) {
   AllOfSpec spec;
   if (!schema.at("allOf").is<picojson::array>()) {
     return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "allOf must be an array");
   }
+  if (default_type.has_value() && schema.at("allOf").get<picojson::array>().size() > 1) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "propertyNames with multiple allOf schemas is not supported"
+    );
+  }
   int idx = 0;
   for (const auto& sub_schema : schema.at("allOf").get<picojson::array>()) {
-    auto sub_result = Parse(sub_schema, "all_" + std::to_string(idx));
+    auto sub_result = Parse(sub_schema, "all_" + std::to_string(idx), default_type);
     if (sub_result.IsErr()) return ResultErr(std::move(sub_result).UnwrapErr());
     spec.schemas.push_back(std::move(sub_result).Unwrap());
     ++idx;
@@ -2419,6 +2449,21 @@ int32_t JSONSchemaConverter::ExcludingString(
     XGRAMMAR_CHECK(filtered.IsOk());
     fsm = std::move(filtered).Unwrap();
   }
+  // The closing quote is JSON syntax, not string content subject to excludes.
+  return FSMExpression(
+      fsm,
+      rule_name + "_exclude",
+      close_json_string ? ByteString("\"") : Empty(),
+      !excluded_keys.empty()
+  );
+}
+
+int32_t JSONSchemaConverter::FSMExpression(
+    const FSMWithStartEnd& fsm,
+    const std::string& rule_name,
+    int32_t ending,
+    bool share_nonliteral_transitions
+) {
   // Do not emit paths that can never complete after exclusions. Otherwise a matcher
   // could accept a forbidden alternative's prefix and reach an all-rejected mask later.
   std::vector<std::vector<int>> predecessors(fsm.NumStates());
@@ -2505,7 +2550,7 @@ int32_t JSONSchemaConverter::ExcludingString(
   // Share complete fallback branches across key prefixes to reuse their token masks.
   // The key contains the target state followed by every codepoint interval.
   std::map<std::vector<int32_t>, int32_t> shared_key_continuations;
-  rules[fsm.GetStart()] = builder_.AddEmptyRuleWithHint(rule_name + "_exclude");
+  rules[fsm.GetStart()] = builder_.AddEmptyRuleWithHint(rule_name);
   for (size_t index = 0; index < pending.size(); ++index) {
     int state = pending[index];
     Ranges ranges;
@@ -2542,22 +2587,20 @@ int32_t JSONSchemaConverter::ExcludingString(
       transitions[range.target].push_back({range.min, range.max});
     }
     std::vector<int32_t> choices;
-    // Keep the closing quote on the accepting body states. A nullable body rule
-    // would otherwise finish at every character and force token masks to speculate
-    // across its parent rules. The quote is appended AFTER the exclusion intersection:
-    // it is JSON syntax, not string content subject to excludes.
+    // Keep a caller's closing delimiter on accepting states rather than a nullable body rule,
+    // so token masks do not have to speculate across its parent after every character.
     if (fsm.IsEndState(state)) {
-      choices.push_back(close_json_string ? ByteString("\"") : Empty());
+      choices.push_back(ending);
     }
     for (const auto& [target, codepoints] : transitions) {
       if (rules[target] == -1) {
-        rules[target] = builder_.AddEmptyRuleWithHint(rule_name + "_exclude");
+        rules[target] = builder_.AddEmptyRuleWithHint(rule_name);
         pending.push_back(target);
       }
       bool single_ascii = codepoints.size() == 1 && codepoints[0].lower == codepoints[0].upper &&
                           codepoints[0].upper <= 0x7f;
       // Keep self-loops local for the compiler's speculative string-mask fast path.
-      if (!excluded_keys.empty() && !single_ascii && target != state) {
+      if (share_nonliteral_transitions && !single_ascii && target != state) {
         std::vector<int32_t> key{target};
         key.reserve(1 + codepoints.size() * 2);
         for (const auto& range : codepoints) {
@@ -2567,7 +2610,7 @@ int32_t JSONSchemaConverter::ExcludingString(
         auto [it, inserted] = shared_key_continuations.emplace(std::move(key), -1);
         if (inserted) {
           it->second = builder_.AddRuleWithHint(
-              rule_name + "_exclude_continuation",
+              rule_name + "_continuation",
               Sequence({builder_.AddCharacterClass(codepoints), RuleRef(rules[target])})
           );
         }
@@ -2893,10 +2936,144 @@ int32_t JSONSchemaConverter::CreatePatternKeyRule(
   );
 }
 
+namespace {
+
+// String-only constraints before format-specific quoting or wrapping.
+class PropertyNamesConverter : public JSONSchemaConverter {
+ public:
+  explicit PropertyNamesConverter(RefResolver ref_resolver)
+      : JSONSchemaConverter(
+            std::nullopt, std::nullopt, true, std::nullopt, std::move(ref_resolver)
+        ) {}
+
+  Grammar ConvertNames(const SchemaSpecPtr& spec, const std::string& rule_name) {
+    return builder_.Get(CreatePropertyNamesConstraintRule(spec, rule_name));
+  }
+
+ protected:
+  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override {
+    if (spec.format.has_value()) {
+      auto regex = JSONFormatToRegexPattern(*spec.format, /*raw_string=*/true);
+      if (regex.has_value()) return RegexExpression(*regex, false, true);
+    }
+    if (spec.pattern.has_value()) return RegexExpression(*spec.pattern, false, true);
+    return Repeat(
+        rule_name + "_characters",
+        builder_.AddCharacterClass({{0, 0x10ffff}}),
+        spec.min_length,
+        spec.max_length
+    );
+  }
+
+  int32_t GenerateConst(const ConstSpec& spec, const std::string&) override {
+    picojson::value value;
+    XGRAMMAR_CHECK(ParseJSON(value, spec.json_value).empty());
+    return ByteString(value.get<std::string>());
+  }
+};
+
+}  // namespace
+
+int32_t JSONSchemaConverter::CreateRawPropertyNamesConstraintRule(
+    const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+) {
+  PropertyNamesConverter converter(ref_resolver_);
+  return SubGrammarAdder::Apply(&builder_, converter.ConvertNames(property_names, rule_name_hint));
+}
+
+int32_t JSONSchemaConverter::GeneratePropertyNameString(
+    const StringSpec& spec, const std::string& rule_name
+) {
+  return GenerateString(spec, rule_name);
+}
+
+int32_t JSONSchemaConverter::GeneratePropertyNameConst(
+    const ConstSpec& spec, const std::string& rule_name
+) {
+  return GenerateConst(spec, rule_name);
+}
+
+int32_t JSONSchemaConverter::CreatePropertyNamesConstraintRule(
+    const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+) {
+  return CreatePropertyNamesKeyRule(property_names, rule_name_hint);
+}
+
 int32_t JSONSchemaConverter::CreatePropertyNamesKeyRule(
     const SchemaSpecPtr& property_names, const std::string& rule_name_hint
 ) {
-  return CreateRule(property_names, rule_name_hint);
+  if (const auto* ref = std::get_if<RefSpec>(&property_names->spec)) {
+    const std::string cache_key = "property_names:" + RefCacheKey(ref->uri);
+    auto cached = uri_to_rule_id_.find(cache_key);
+    if (cached != uri_to_rule_id_.end()) return cached->second;
+    auto resolved = ResolveRefRejectingCycles(*ref, rule_name_hint);
+    int32_t rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
+    uri_to_rule_id_[cache_key] = rule_id;
+    builder_.UpdateRuleBody(rule_id, RuleRef(CreatePropertyNamesKeyRule(resolved, rule_name_hint)));
+    return rule_id;
+  }
+  int32_t body = std::visit(
+      [&](const auto& spec) -> int32_t {
+        using T = std::decay_t<decltype(spec)>;
+        if constexpr (std::is_same_v<T, StringSpec>) {
+          return GeneratePropertyNameString(spec, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, AnySpec>) {
+          // Object keys are strings even when propertyNames or a referenced schema is empty.
+          return GeneratePropertyNameString(StringSpec{}, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, ConstSpec>) {
+          picojson::value value;
+          XGRAMMAR_CHECK(ParseJSON(value, spec.json_value).empty());
+          return value.is<std::string>() ? GeneratePropertyNameConst(spec, rule_name_hint)
+                                         : Unsatisfiable();
+        } else if constexpr (std::is_same_v<T, EnumSpec>) {
+          std::vector<int32_t> choices;
+          for (const auto& value : spec.json_values) {
+            choices.push_back(RuleRef(CreatePropertyNamesKeyRule(
+                SchemaSpec::Make(ConstSpec{value}, "", ""), rule_name_hint
+            )));
+          }
+          return Choice(choices);
+        } else if constexpr (std::is_same_v<T, AnyOfSpec> || std::is_same_v<T, OneOfSpec> ||
+                             std::is_same_v<T, TypeArraySpec>) {
+          const auto& options = [&]() -> const std::vector<SchemaSpecPtr>& {
+            if constexpr (std::is_same_v<T, TypeArraySpec>)
+              return spec.type_schemas;
+            else
+              return spec.options;
+          }();
+          std::vector<int32_t> choices;
+          for (const auto& option : options) {
+            choices.push_back(RuleRef(CreatePropertyNamesKeyRule(option, rule_name_hint)));
+          }
+          return Choice(choices);
+        } else if constexpr (std::is_same_v<T, AllOfSpec>) {
+          if (spec.schemas.size() == 1) {
+            return RuleRef(CreatePropertyNamesKeyRule(spec.schemas[0], rule_name_hint));
+          }
+          XGRAMMAR_CHECK(spec.schemas.empty())
+              << "propertyNames with multiple allOf schemas is not supported";
+          return GeneratePropertyNameString(StringSpec{}, rule_name_hint);
+        } else {
+          return Unsatisfiable();
+        }
+      },
+      property_names->spec
+  );
+  return builder_.AddRuleWithHint(rule_name_hint, body);
+}
+
+FSMWithStartEnd JSONSchemaConverter::PropertyNameFSM(int32_t rule_id) {
+  auto grammar = DeadCodeEliminator::Apply(builder_.Get(rule_id));
+  // Key helper lookaheads describe the following colon or XML wrapper. The intersection
+  // concerns the key alone; the surrounding object grammar still owns that punctuation.
+  auto key_builder = GrammarBuilder::FromMutableGrammar(&grammar);
+  for (int index = 0; index < grammar->NumRules(); ++index) {
+    key_builder.UpdateLookaheadAssertion(index, -1);
+  }
+  auto result = GrammarFSMBuilder::FromRegularGrammar(grammar);
+  XGRAMMAR_CHECK(result.IsOk()) << "Cannot build propertyNames key constraint: "
+                                << std::move(result).UnwrapErr().what();
+  return std::move(result).Unwrap();
 }
 
 int32_t JSONSchemaConverter::GetPropertyWithNumberConstraints(
@@ -2916,6 +3093,7 @@ int32_t JSONSchemaConverter::GetPropertyWithNumberConstraints(
 
 int32_t JSONSchemaConverter::GetAnyOrderRuleForProperties(
     const std::vector<ObjectSpec::Property>& properties,
+    const std::vector<int32_t>& property_patterns,
     const std::unordered_set<std::string>& required,
     const SchemaSpecPtr& additional,
     const std::string& rule_name,
@@ -2930,14 +3108,7 @@ int32_t JSONSchemaConverter::GetAnyOrderRuleForProperties(
 
   // Build one "item" alternation over every property (any required/optional key) plus any
   // additional/pattern key; any_order does not care which key goes where.
-  std::vector<int32_t> items;
-  for (size_t index = 0; index < properties.size(); ++index) {
-    const auto& property = properties[index];
-    int32_t value_rule_id =
-        CreateRule(property.schema, rule_name + "_prop_" + std::to_string(index));
-    items.push_back(FormatProperty(property.name, value_rule_id, rule_name, index, property.schema)
-    );
-  }
+  std::vector<int32_t> items = property_patterns;
   if (additional != nullptr) {
     if (additional_property_override.has_value()) {
       items.push_back(*additional_property_override);
@@ -2976,14 +3147,32 @@ int32_t JSONSchemaConverter::GetPartialRuleForProperties(
     const std::string& additional_suffix,
     int min_properties,
     int max_properties,
-    const std::optional<int32_t>& additional_property_override
+    const std::optional<int32_t>& additional_property_override,
+    const FSMWithStartEnd* property_names
 ) {
   if (max_properties == 0) {
     return Empty();
   }
+  std::vector<int32_t> property_patterns;
+  for (size_t index = 0; index < properties.size(); ++index) {
+    const auto& property = properties[index];
+    if (property_names && !property_names->AcceptString(property.name)) {
+      if (required.count(property.name)) {
+        return Unsatisfiable();
+      }
+      property_patterns.push_back(Unsatisfiable());
+      continue;
+    }
+    int32_t value_rule_id =
+        CreateRule(property.schema, rule_name + "_prop_" + std::to_string(index));
+    property_patterns.push_back(
+        FormatProperty(property.name, value_rule_id, rule_name, index, property.schema)
+    );
+  }
   if (any_order_) {
     return GetAnyOrderRuleForProperties(
         properties,
+        property_patterns,
         required,
         additional,
         rule_name,
@@ -2997,15 +3186,6 @@ int32_t JSONSchemaConverter::GetPartialRuleForProperties(
   int32_t first_separator = NextSeparatorExpression();
   int32_t middle_separator = NextSeparatorExpression();
   int32_t last_separator = NextSeparatorExpression(true);
-
-  std::vector<int32_t> property_patterns;
-  for (size_t index = 0; index < properties.size(); ++index) {
-    int32_t value_rule_id =
-        CreateRule(properties[index].schema, rule_name + "_prop_" + std::to_string(index));
-    property_patterns.push_back(FormatProperty(
-        properties[index].name, value_rule_id, rule_name, index, properties[index].schema
-    ));
-  }
 
   bool allow_additional = additional != nullptr;
   std::optional<int32_t> additional_pattern;
@@ -3276,6 +3456,35 @@ int32_t JSONSchemaConverter::GenerateObject(
     additional_property = SchemaSpec::Make(AnySpec{}, "", "any");
   }
 
+  std::optional<int32_t> property_names_rule;
+  std::optional<FSMWithStartEnd> property_names_fsm;
+  std::optional<FSMWithStartEnd> declared_names_fsm;
+  if (spec.property_names) {
+    if (additional_property || (spec.properties.empty() && spec.pattern_properties.empty())) {
+      property_names_rule = CreatePropertyNamesKeyRule(spec.property_names, rule_name + "_name");
+    }
+    if (!spec.pattern_properties.empty()) {
+      property_names_fsm = PropertyNameFSM(
+          CreatePropertyNamesConstraintRule(spec.property_names, rule_name + "_name_constraint")
+      );
+    }
+    if (!spec.properties.empty()) {
+      declared_names_fsm = PropertyNameFSM(
+          CreateRawPropertyNamesConstraintRule(spec.property_names, rule_name + "_declared_name")
+      );
+    }
+  }
+  auto pattern_key = [&](const std::string& pattern, const std::string& key_rule_name) {
+    int32_t key_rule_id = CreatePatternKeyRule(pattern, key_rule_name);
+    if (!property_names_fsm.has_value()) {
+      return RuleRef(key_rule_id);
+    }
+    auto result = FSMWithStartEnd::Intersect(PropertyNameFSM(key_rule_id), *property_names_fsm);
+    XGRAMMAR_CHECK(result.IsOk()) << "Cannot intersect patternProperties and propertyNames: "
+                                  << std::move(result).UnwrapErr().what();
+    return FSMExpression(std::move(result).Unwrap(), key_rule_name + "_intersection", Empty());
+  };
+
   indent_manager_.StartIndent();
   bool has_content = false;
   bool could_be_empty = false;
@@ -3295,13 +3504,12 @@ int32_t JSONSchemaConverter::GenerateObject(
       for (size_t index = 0; index < spec.pattern_properties.size(); ++index) {
         const auto& pattern_property = spec.pattern_properties[index];
         std::string pattern_suffix = "pp_" + std::to_string(index);
-        int32_t key_rule_id = CreatePatternKeyRule(
-            pattern_property.pattern, rule_name + "_" + pattern_suffix + "_key"
-        );
+        int32_t key =
+            pattern_key(pattern_property.pattern, rule_name + "_" + pattern_suffix + "_key");
         int32_t value_rule_id =
             CreateRule(pattern_property.schema, rule_name + "_" + pattern_suffix);
         patterns.push_back(FormatOtherProperty(
-            RuleRef(key_rule_id), value_rule_id, rule_name, pattern_suffix, pattern_property.schema
+            key, value_rule_id, rule_name, pattern_suffix, pattern_property.schema
         ));
       }
       // Merge with existing additionalProperties if present
@@ -3309,7 +3517,12 @@ int32_t JSONSchemaConverter::GenerateObject(
         int32_t value_rule_id =
             CreateRule(effective_additional, rule_name + "_" + effective_suffix);
         patterns.push_back(FormatOtherProperty(
-            KeyPatternExpression(), value_rule_id, rule_name, effective_suffix, effective_additional
+            property_names_rule.has_value() ? RuleRef(*property_names_rule)
+                                            : KeyPatternExpression(),
+            value_rule_id,
+            rule_name,
+            effective_suffix,
+            effective_additional
         ));
       }
       additional_override = Choice(patterns);
@@ -3318,13 +3531,9 @@ int32_t JSONSchemaConverter::GenerateObject(
       }
       effective_suffix = "pp";
     } else if (spec.property_names && effective_additional) {
-      // propertyNames constrains keys of additional properties.
-      // Only apply when additional properties are allowed - when additionalProperties
-      // is false, no extra keys beyond named properties should be permitted.
-      int32_t key_rule_id = CreatePropertyNamesKeyRule(spec.property_names, rule_name + "_name");
       int32_t value_rule_id = CreateRule(effective_additional, rule_name + "_" + effective_suffix);
       additional_override = FormatOtherProperty(
-          RuleRef(key_rule_id),
+          RuleRef(*property_names_rule),
           value_rule_id,
           rule_name,
           /*rule_name_suffix=*/"pn",
@@ -3341,7 +3550,8 @@ int32_t JSONSchemaConverter::GenerateObject(
         effective_suffix,
         spec.min_properties,
         spec.max_properties,
-        additional_override
+        additional_override,
+        declared_names_fsm.has_value() ? &*declared_names_fsm : nullptr
     );
     has_content = spec.max_properties != 0;
     could_be_empty = spec.required.empty() && spec.min_properties == 0;
@@ -3354,24 +3564,18 @@ int32_t JSONSchemaConverter::GenerateObject(
         for (size_t index = 0; index < spec.pattern_properties.size(); ++index) {
           const auto& pattern_property = spec.pattern_properties[index];
           std::string pattern_suffix = "prop_" + std::to_string(index);
-          int32_t key_rule_id = CreatePatternKeyRule(
-              pattern_property.pattern, rule_name + "_" + pattern_suffix + "_key"
-          );
+          int32_t key =
+              pattern_key(pattern_property.pattern, rule_name + "_" + pattern_suffix + "_key");
           int32_t value_rule_id =
               CreateRule(pattern_property.schema, rule_name + "_" + pattern_suffix);
           property_choices.push_back(Sequence(
               {beginning_separator,
                FormatOtherProperty(
-                   RuleRef(key_rule_id),
-                   value_rule_id,
-                   rule_name,
-                   pattern_suffix,
-                   pattern_property.schema
+                   key, value_rule_id, rule_name, pattern_suffix, pattern_property.schema
                )}
           ));
         }
       } else {
-        int32_t key_rule_id = CreatePropertyNamesKeyRule(spec.property_names, rule_name + "_name");
         // propertyNames constrains only the key, so a typed additionalProperties
         // schema still applies to the value (issue #826).
         int32_t value_rule_id;
@@ -3384,7 +3588,7 @@ int32_t JSONSchemaConverter::GenerateObject(
         property_choices.push_back(Sequence(
             {beginning_separator,
              FormatOtherProperty(
-                 RuleRef(key_rule_id),
+                 RuleRef(*property_names_rule),
                  value_rule_id,
                  rule_name,
                  /*rule_name_suffix=*/"pn",
@@ -3502,7 +3706,7 @@ SchemaSpecPtr JSONSchemaConverter::ResolveRefSchema(
   if (!ref_resolver_) {
     XGRAMMAR_LOG(FATAL) << "Ref resolver not set; cannot resolve $ref: " << spec.uri;
   }
-  return ref_resolver_(spec.uri, rule_name_hint);
+  return ref_resolver_(spec, rule_name_hint);
 }
 
 std::string JSONSchemaConverter::RefCacheKey(const std::string& uri) const { return uri; }
@@ -5045,8 +5249,8 @@ Grammar JSONSchemaToGrammar(
     XGRAMMAR_LOG(FATAL) << std::move(spec_result).UnwrapErr().what();
   }
   auto spec = std::move(spec_result).Unwrap();
-  auto ref_resolver = [&parser](const std::string& uri, const std::string& rule_name_hint) {
-    auto result = parser.ResolveRef(uri, rule_name_hint);
+  auto ref_resolver = [&parser](const RefSpec& spec, const std::string& rule_name_hint) {
+    auto result = parser.ResolveRef(spec, rule_name_hint);
     if (result.IsErr()) {
       XGRAMMAR_LOG(FATAL) << std::move(result).UnwrapErr().what();
     }
@@ -5172,8 +5376,8 @@ std::string JSONSchemaToEBNF(
   }
   auto spec = std::move(spec_result).Unwrap();
 
-  auto ref_resolver = [&parser](const std::string& uri, const std::string& rule_name_hint) {
-    auto r = parser.ResolveRef(uri, rule_name_hint);
+  auto ref_resolver = [&parser](const RefSpec& spec, const std::string& rule_name_hint) {
+    auto r = parser.ResolveRef(spec, rule_name_hint);
     if (r.IsErr()) {
       XGRAMMAR_LOG(FATAL) << std::move(r).UnwrapErr().what();
     }

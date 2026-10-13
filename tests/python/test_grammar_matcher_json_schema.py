@@ -78,6 +78,53 @@ def test_json_schema_find_jump_forward_string():
     assert matcher.find_jump_forward_string() == ""
 
 
+@pytest.mark.parametrize("any_order", [False, True])
+def test_property_names_intersection_token_masks_and_rollback(any_order):
+    vocabulary = ['{"', "grade_1", "2", '"', ":1}", "<eos>"]
+    tokenizer = xgr.TokenizerInfo(vocabulary, stop_token_ids=[5])
+    compiler = xgr.GrammarCompiler(tokenizer)
+    compiled = compiler.compile_json_schema(
+        {
+            "type": "object",
+            "properties": {"Bad": {"type": "integer"}},
+            "patternProperties": {"^grade_[0-9]+$": {"type": "integer"}},
+            "propertyNames": {"pattern": "^grade_[0-9]$"},
+            "additionalProperties": False,
+        },
+        any_order=any_order,
+    )
+    for grammar in [
+        compiled,
+        xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), tokenizer),
+    ]:
+        matcher = xgr.GrammarMatcher(grammar)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer.vocab_size)
+        for _ in range(2):
+            assert matcher.accept_token(0)
+            assert matcher.accept_token(1)
+            matcher.fill_next_token_bitmask(bitmask)
+            rejected = _get_masked_tokens_from_bitmask(bitmask, tokenizer.vocab_size)
+            assert 2 in rejected
+            assert 3 not in rejected
+            saved_mask = bitmask.clone()
+            assert not matcher.accept_token(2)
+            matcher.fill_next_token_bitmask(bitmask)
+            assert bitmask.equal(saved_mask)
+            fork = matcher.fork()
+            for token in [3, 4, 5]:
+                assert fork.accept_token(token)
+            assert fork.is_terminated()
+            assert not matcher.is_terminated()
+            assert matcher.accept_token(3)
+            matcher.rollback()
+            matcher.fill_next_token_bitmask(bitmask)
+            assert bitmask.equal(saved_mask)
+            for token in [3, 4, 5]:
+                assert matcher.accept_token(token)
+            assert matcher.is_terminated()
+            matcher.reset()
+
+
 tokenizer_path = ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
 
 

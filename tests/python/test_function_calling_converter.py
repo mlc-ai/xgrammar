@@ -3105,6 +3105,30 @@ def test_xml_property_names_use_property_format_hook(
 
 
 @pytest.mark.parametrize(
+    "json_format, declared_property, pattern_property, _property_name", _XML_DYNAMIC_PROPERTY_CASES
+)
+@pytest.mark.parametrize("any_order", [False, True])
+def test_xml_property_names_constrain_declared_and_pattern_keys(
+    json_format, declared_property, pattern_property, _property_name, any_order
+):
+    schema = {
+        "type": "object",
+        "propertyNames": {"pattern": "^(name|x_[a-z]{1,3})$"},
+        "patternProperties": {"^x_.*$": {"type": "integer"}},
+        "additionalProperties": False,
+    }
+    for declared in [False, True]:
+        if declared:
+            schema["properties"] = {"name": {"type": "string"}, "Bad": {"type": "integer"}}
+        instance = (declared_property if declared else "") + pattern_property
+        grammar = _json_schema_to_ebnf(schema, json_format=json_format, any_order=any_order)
+        assert _is_grammar_accept_string(grammar, instance)
+        assert not _is_grammar_accept_string(grammar, instance.replace("x_key", "x_keys"))
+        assert not _is_grammar_accept_string(grammar, instance.replace("x_key", "Bad"))
+        assert not _is_grammar_accept_string(grammar, instance.replace("3", "oops"))
+
+
+@pytest.mark.parametrize(
     "json_format, _declared_property, integer_property, _property_name", _XML_DYNAMIC_PROPERTY_CASES
 )
 @pytest.mark.parametrize("keyword", ["additionalProperties", "unevaluatedProperties"])
@@ -4266,6 +4290,131 @@ def test_gemma_property_names_const_schema():
     }
     _check_gemma_grammar(schema, "{only:1}", True)
     _check_gemma_grammar(schema, "{other:1}", False)
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+def test_gemma_property_names_constrain_declared_and_pattern_keys(any_order):
+    schema = {
+        "type": "object",
+        "properties": {"ok": {"type": "integer"}, "Bad": {"type": "integer"}},
+        "propertyNames": {"pattern": "^(ok|x_[a-z]{1,3})$"},
+        "patternProperties": {"^x_.*$": {"type": "integer"}},
+        "additionalProperties": False,
+    }
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(
+            format=JSONSchemaFormat(
+                json_schema=schema, style="gemma", any_order=any_order, excludes=["bad"]
+            )
+        )
+    )
+    assert _is_grammar_accept_string(grammar, "{ok:1,x_key:3}")
+    for instance in ["{Bad:1}", "{x_keys:3}", "{x_bad:3}", "{x_key:true}"]:
+        assert not _is_grammar_accept_string(grammar, instance)
+
+
+@pytest.mark.parametrize("name", ["bad-key", "é", ""])
+@pytest.mark.parametrize("declared", [False, True])
+@pytest.mark.parametrize("constraint_kind", ["unconstrained", "type", "const", "pattern"])
+def test_gemma_property_names_preserve_fixed_and_pattern_key_syntax(
+    name, declared, constraint_kind
+):
+    constraint = {
+        "unconstrained": {},
+        "type": {"type": "string"},
+        "const": {"const": name},
+        "pattern": {"pattern": "^.*$"},
+    }[constraint_kind]
+    schema = {"type": "object", "propertyNames": constraint, "additionalProperties": False}
+    if declared:
+        schema["properties"] = {name: {"type": "integer"}}
+        schema["required"] = [name]
+    else:
+        schema["patternProperties"] = {f"^{name}$": {"type": "integer"}}
+    _check_gemma_grammar(schema, "{" + name + ":1}", True)
+
+
+def test_gemma_property_names_keep_default_additional_key_syntax():
+    schema = {"type": "object", "propertyNames": {}, "additionalProperties": {"type": "integer"}}
+    _check_gemma_grammar(schema, "{key:1}", True)
+    for name in ["bad-key", "é", ""]:
+        _check_gemma_grammar(schema, "{" + name + ":1}", False)
+
+
+@pytest.mark.parametrize(
+    "constraint",
+    [{"$ref": "#/$defs/name"}, {"anyOf": [{"const": "good"}]}, {"minLength": 4, "maxLength": 4}],
+)
+@pytest.mark.parametrize("pattern", [False, True])
+@pytest.mark.parametrize("additional", [True, {"type": "integer"}])
+def test_gemma_additional_properties_cannot_bypass_name_constraints(
+    constraint, pattern, additional
+):
+    schema = {
+        "type": "object",
+        "$defs": {"name": {"const": "good"}},
+        "properties": {"good": {"type": "integer"}, "Bad": {"type": "integer"}},
+        "propertyNames": constraint,
+        "additionalProperties": additional,
+    }
+    if pattern:
+        schema["patternProperties"] = {"^.*$": {"type": "integer"}}
+    _check_gemma_grammar(schema, "{good:1}", True)
+    _check_gemma_grammar(schema, "{Bad:1}", False)
+    _check_gemma_grammar(schema, "{other:1}", False)
+
+
+@pytest.mark.parametrize("wrapper", ["inline", "ref", "union", "ref_union"])
+@pytest.mark.parametrize(
+    "constraint, allowed, forbidden",
+    [
+        ({"const": "bad-key"}, "bad-key", "other"),
+        ({"enum": ["bad-key", "é"]}, "é", "other"),
+        ({"pattern": "^bad-key$"}, "bad-key", "other"),
+        ({}, "key", "bad-key"),
+        ({"minLength": 4, "maxLength": 4}, "good", "other"),
+    ],
+)
+def test_gemma_property_names_aliases_keep_additional_key_language(
+    wrapper, constraint, allowed, forbidden
+):
+    reference = {"$ref": "#/$defs/name"}
+    property_names = {
+        "inline": constraint,
+        "ref": reference,
+        "union": {"anyOf": [constraint]},
+        "ref_union": {"anyOf": [reference]},
+    }[wrapper]
+    schema = {
+        "type": "object",
+        "$defs": {"name": constraint},
+        "propertyNames": property_names,
+        "additionalProperties": {"type": "integer"},
+    }
+    _check_gemma_grammar(schema, "{" + allowed + ":1}", True)
+    _check_gemma_grammar(schema, "{" + forbidden + ":1}", False)
+
+
+def test_gemma_property_names_recursive_union():
+    schema = {
+        "type": "object",
+        "$defs": {"name": {"anyOf": [{"$ref": "#/$defs/name"}, {"const": "bad-key"}]}},
+        "propertyNames": {"$ref": "#/$defs/name"},
+        "additionalProperties": {"type": "integer"},
+    }
+    _check_gemma_grammar(schema, "{bad-key:1}", True)
+    _check_gemma_grammar(schema, "{other:1}", False)
+
+
+def test_gemma_property_names_reference_preserves_value_encoding():
+    schema = {
+        "type": "object",
+        "$defs": {"name": {"const": "bad-key"}},
+        "propertyNames": {"$ref": "#/$defs/name"},
+        "additionalProperties": {"$ref": "#/$defs/name"},
+    }
+    _check_gemma_grammar(schema, '{bad-key:<|"|>bad-key<|"|>}', True)
+    _check_gemma_grammar(schema, "{bad-key:bad-key}", False)
 
 
 def test_gemma_structural_tag_excludes():
