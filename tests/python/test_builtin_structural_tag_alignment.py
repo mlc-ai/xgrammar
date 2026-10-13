@@ -13,7 +13,7 @@ import sys
 from functools import lru_cache
 
 import pytest
-from tokenizer_utils import load_tokenizer
+from tokenizer_utils import load_model_file, load_tokenizer
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -293,9 +293,7 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
 @lru_cache(maxsize=1)
 def load_deepseek_v41_encoder():
     """Load the official, revision-pinned renderer (the release has no Jinja template)."""
-    from huggingface_hub import hf_hub_download
-
-    path = hf_hub_download(
+    path = load_model_file(
         "deepseek-ai/DeepSeek-V4.1-Flash",
         "encoding/encoding.py",
         revision="dba1be0a40aa45a94ad051997016db3960a90277",
