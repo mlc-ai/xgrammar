@@ -1900,7 +1900,6 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   SkipExpiredGuard skip_expired_guard(this, skip_expired);
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
-  const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
   // We need to have a copy, because scanable_state_history_ will be modified during the
   // FillNextTokenBitmask process, which can lead to undefined behavior.
   std::vector<ParserState> latest_states;
@@ -1926,13 +1925,14 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                        << ", num of states=" << latest_states.size();
   }
 
-  std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
-      latest_states_with_masks;
+  // Lazy insertion can rehash the cache. Pointers to immutable entries remain valid;
+  // unordered_map iterators do not. Entries are never erased during this grammar's lifetime.
+  std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
-    XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+    const AdaptiveTokenMask* adaptive_token_mask_pointer =
+        &compiled_grammar_->GetAdaptiveTokenMask(state);
+    const auto& adaptive_token_mask = *adaptive_token_mask_pointer;
     if (state.char_budget_deadline >= 0) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
@@ -1940,7 +1940,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         continue;
       }
     }
-    latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
+    latest_states_with_masks.emplace_back(state, adaptive_token_mask_pointer);
     if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
       tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
     } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
@@ -2001,8 +2001,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   }
 
   const auto& token_char_counts = tokenizer_info_.ImplPtr()->GetTokenCharCounts();
-  for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+  for (const auto& [state, adaptive_token_mask_pointer] : latest_states_with_masks) {
+    const auto& adaptive_token_mask = *adaptive_token_mask_pointer;
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
     // rejected list.
