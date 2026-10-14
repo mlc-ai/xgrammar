@@ -60,9 +60,10 @@ int NextStateOnByte(const CompactFSM& fsm, int state, uint8_t byte) {
 }
 
 /*!
- * \brief Whether rule `rule_id` matches exactly one codepoint of a character class through a
- * deterministic byte FSM, with no rule-level semantics attached. Sets `first_bytes` to the bytes
- * such a codepoint can start with.
+ * \brief Whether rule `rule_id` matches exactly one unit through a deterministic byte FSM, with no
+ * rule-level semantics attached. A unit is a codepoint of a character class, or one match of a
+ * byte-unit body (Grammar::Impl::IsByteUnitExpr) such as the body of a length-bounded JSON string:
+ * an unescaped codepoint or an escape. Sets `first_bytes` to the bytes such a unit can start with.
  */
 bool IsPlainCharacterClassRule(const Grammar& grammar, int32_t rule_id, ByteSet* first_bytes) {
   const auto& rule = grammar->GetRule(rule_id);
@@ -73,7 +74,10 @@ bool IsPlainCharacterClassRule(const Grammar& grammar, int32_t rule_id, ByteSet*
   }
   const auto body = UnwrapSingleElement(grammar, grammar->GetGrammarExpr(rule.body_expr_id));
   const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
-  if (body.type != Grammar::Impl::GrammarExprType::kCharacterClass || !rule_fsm.has_value()) {
+  const bool is_unit_body =
+      body.type == Grammar::Impl::GrammarExprType::kCharacterClass ||
+      (grammar->IsByteUnitExpr(body) && grammar->ByteUnitExprHasNegativeClass(body));
+  if (!is_unit_body || !rule_fsm.has_value()) {
     return false;
   }
   const auto& fsm = rule_fsm->GetFsm();
@@ -115,12 +119,12 @@ struct RepetitionFollowBytes {
 /*!
  * \brief The rules whose start state gets the counted-repetition fast path.
  *
- * A rule qualifies when it matches one codepoint of a character class (IsPlainCharacterClassRule)
+ * A rule qualifies when it matches one unit (IsPlainCharacterClassRule)
  * and every reference to it is a repeat edge that is followed, in the referring rule, only by
- * character edges whose bytes no codepoint of the class starts with. Then a token that starts
- * inside the class stays in the repetition up to its first byte outside the class and cannot leave
- * it earlier, so its legality depends only on the repetition bounds and the repetitions done in
- * the parent: see PopulateRepeatInteriorBitsets.
+ * character edges whose bytes no unit starts with. Then a token that starts inside the repetition
+ * stays in it up to its first byte that cannot continue a unit and cannot leave it earlier, so its
+ * legality depends only on the repetition bounds and the repetitions done in the parent: see
+ * PopulateRepeatInteriorBitsets.
  *
  * \return For each rule, the bytes that can follow its repetitions, or nullopt when the rule does
  * not qualify.
@@ -228,12 +232,13 @@ struct RepetitionTokenClass {
 /*!
  * \brief Classify `token` in the start state of a counted-repetition body rule whose FSM is `fsm`.
  *
- * A token stays inside the class until its first byte outside it. It cannot leave earlier because
- * no follow byte starts a codepoint of the class (FindCountedRepetitionBodies), and it cannot
- * leave inside a codepoint. So it is decided by the repetition bounds alone when it ends inside the
- * class, or when it leaves on its last byte and every reference accepts that byte. It is rejected
- * when the byte it stops at can neither continue the codepoint nor follow the repetition, or when
- * it needs more repetitions than any reference allows.
+ * A token stays inside the repetition until its first byte that cannot continue a unit (a codepoint
+ * of the class, or an escape). It cannot leave earlier because no follow byte starts a unit
+ * (FindCountedRepetitionBodies), and it cannot leave inside a unit. So it is decided by the
+ * repetition bounds alone when it ends inside the repetition, or when it leaves on its last byte
+ * and every reference accepts that byte. It is rejected when the byte it stops at can neither
+ * continue the unit nor follow the repetition, or when it needs more repetitions than any
+ * reference allows.
  */
 RepetitionTokenClass ClassifyRepetitionToken(
     const CompactFSMWithStartEnd& fsm,
@@ -250,7 +255,7 @@ RepetitionTokenClass ClassifyRepetitionToken(
         return {RepetitionTokenClass::kRejected};
       }
       if (i + 1 == token.size() && follow_bytes.under_all[byte]) {
-        // The parent consumes this last byte right after `num_repetitions` codepoints.
+        // The parent consumes this last byte right after `num_repetitions` units.
         return {RepetitionTokenClass::kExit, num_repetitions};
       }
       return {RepetitionTokenClass::kUndecided};
@@ -264,7 +269,7 @@ RepetitionTokenClass ClassifyRepetitionToken(
       }
     }
   }
-  // A token ending inside a codepoint uses one more repetition to complete it.
+  // A token ending inside a unit uses one more repetition to complete it.
   if (state != fsm.GetStart()) {
     ++num_repetitions;
   }
