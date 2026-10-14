@@ -74,8 +74,14 @@ TokenizerInfo TokenizerInfo_Init(
       {"BYTE_FALLBACK", VocabType::BYTE_FALLBACK},
       {"BYTE_LEVEL", VocabType::BYTE_LEVEL},
   };
+  // The web binding does not expose special_token_ids; detection applies as before.
   return TokenizerInfo(
-      encoded_vocab, VOCAB_TYPE_MAP.at(vocab_type), vocab_size, stop_token_ids, add_prefix_space
+      encoded_vocab,
+      VOCAB_TYPE_MAP.at(vocab_type),
+      vocab_size,
+      stop_token_ids,
+      std::nullopt,
+      add_prefix_space
   );
 }
 

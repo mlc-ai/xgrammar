@@ -23,6 +23,7 @@ TokenizerInfo TokenizerInfo_Init(
     int vocab_type,
     std::optional<int> vocab_size,
     std::optional<std::vector<int32_t>> stop_token_ids,
+    std::optional<std::vector<int32_t>> special_token_ids,
     bool add_prefix_space
 );
 
