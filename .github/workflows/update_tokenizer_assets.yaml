@@ -18,7 +18,7 @@ jobs:
   update:
     if: github.repository == 'mlc-ai/xgrammar' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,14 +46,26 @@ jobs:
           title: 'ci: update pinned tokenizer asset revisions'
           body-path: .ci/tokenizer-update.md
           add-paths: tests/tokenizer_assets.json
-          draft: true
+          draft: false
 
-      # GITHUB_TOKEN-created commits/PRs do not trigger ordinary push/PR workflows.
-      # Dispatch explicitly on the update branch; results attach to its head commit.
-      - name: Run offline unit tests for changed revisions
-        if: steps.pr.outputs.pull-request-operation == 'created' || steps.pr.outputs.pull-request-operation
-          == 'updated'
+      - name: Mark an existing update draft ready
+        if: steps.pr.outputs.pull-request-number != ''
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh workflow run unit_test.yaml --ref ci/update-tokenizer-assets
+          UPDATE_PR: ${{ steps.pr.outputs.pull-request-number }}
+        run: |
+          if [ "$(gh pr view "$UPDATE_PR" --json isDraft --jq .isDraft)" = "true" ]; then
+            gh pr ready "$UPDATE_PR"
+          fi
+
+      # GITHUB_TOKEN-created commits/PRs do not trigger ordinary push/PR workflows.
+      # Dispatch explicitly on the update branch; results attach to its head commit.
+      - name: Validate revisions and enable auto-merge
+        if: steps.pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          UPDATE_PR: ${{ steps.pr.outputs.pull-request-number }}
+          UPDATE_SHA: ${{ steps.pr.outputs.pull-request-head-sha }}
+        run: python scripts/validate_tokenizer_update.py
