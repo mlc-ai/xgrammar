@@ -2208,21 +2208,16 @@ int32_t JSONSchemaConverter::GenerateFromSpec(
  * json_string=true so the pattern is compiled into a single automaton by GrammarFSMBuilder;
  * json_string=true excludes the characters that must be escaped in a JSON string ('"', '\\'
  * and the control characters) from every character match, so classes like \S cannot emit an
- * unescaped quote. Fall back to the CFG expansion when the FSM regex engine does not support
- * the pattern, or when the exclusion makes the pattern unmatchable (e.g. a pattern requiring
- * a literal '"').
+ * unescaped quote. JSON-string patterns must never fall back to the raw regex CFG: that
+ * path does not escape quotes or control characters. If the safe canonical language is
+ * empty or unsupported, reject the schema rather than generate malformed JSON.
  */
 int32_t JSONSchemaConverter::RegexExpression(
     const std::string& regex, bool json_string, bool force_cfg_expansion
 ) {
-  bool can_use_fsm = !force_cfg_expansion;
-  if (json_string) {
-    can_use_fsm =
-        can_use_fsm && std::all_of(regex.begin(), regex.end(), [](unsigned char character) {
-          return character >= 0x20 && character <= 0x7e;
-        });
-  }
-  if (can_use_fsm) {
+  // The FSM handles UTF-8 patterns too; routing those through the raw CFG loses
+  // JSON-string exclusions (for example, in a Unicode pattern containing \\S).
+  if (!force_cfg_expansion) {
     auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
     if (fsm_result.IsOk()) {
       auto fsm = std::move(fsm_result).Unwrap();
@@ -2238,8 +2233,12 @@ int32_t JSONSchemaConverter::RegexExpression(
     }
   }
 
-  // Keep regex conversion independent. Only the uncommon fallback path converts its existing
-  // EBNF result to a subgrammar; the JSON Schema rule graph itself is still built directly.
+  XGRAMMAR_CHECK(!json_string)
+      << "JSON string pattern has no JSON-safe canonical representation or uses unsupported regex "
+         "syntax; patterns requiring escaped quotes, backslashes or control characters are not "
+         "supported";
+
+  // Raw regex/numeric conversion is independent and may still use its CFG fallback.
   return AddSubGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
 }
 
