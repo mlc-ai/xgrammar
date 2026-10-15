@@ -729,6 +729,14 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
       "$comment",
       "$schema",
   };
+  static const std::unordered_set<std::string> kSchemaMapKeys = {
+      "properties",
+      "patternProperties",
+      "$defs",
+      "definitions",
+      "dependentSchemas",
+      "dependencies",
+  };
 
   if (schema.is<picojson::object>()) {
     std::string result = "{";
@@ -747,7 +755,25 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
         result += ",";
       }
       ++idx;
-      result += "\"" + key + "\":" + ComputeCacheKey(value);
+      result += picojson::value(key).serialize(false) + ":";
+      if (kSchemaMapKeys.count(key) && value.is<picojson::object>()) {
+        // Map keys are names, not schema keywords. Keep their order: property
+        // order affects the generated grammar when any_order is false.
+        result += "{";
+        const auto& schemas = value.get<picojson::object>();
+        std::string separator;
+        for (const auto& name : schemas.ordered_keys()) {
+          result += separator + picojson::value(name).serialize(false) + ":" +
+                    ComputeCacheKey(schemas.at(name));
+          separator = ",";
+        }
+        result += "}";
+      } else if (key == "const" || key == "enum") {
+        // Literal data must retain annotation-like names and member order.
+        result += value.serialize(false);
+      } else {
+        result += ComputeCacheKey(value);
+      }
     }
     return result + "}";
   } else if (schema.is<picojson::array>()) {
@@ -784,7 +810,17 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     std::optional<std::string> default_type
 ) {
   std::string cache_key = ComputeCacheKey(schema);
-  if (default_type.has_value()) cache_key += ":" + *default_type;
+  if (default_type.has_value() && schema.is<picojson::object>()) {
+    const auto& schema_obj = schema.get<picojson::object>();
+    // References and union branches inherit the key's string context.
+    const bool uses_default_type =
+        schema_obj.count("$ref") || (!schema_obj.count("const") && !schema_obj.count("enum") &&
+                                     (schema_obj.count("anyOf") || schema_obj.count("oneOf") ||
+                                      schema_obj.count("allOf") || !schema_obj.count("type")));
+    if (uses_default_type) {
+      cache_key = default_type.value() + ":" + cache_key;
+    }
+  }
   if (schema_cache_.count(cache_key)) {
     return ResultOk(schema_cache_[cache_key]);
   }
@@ -3012,6 +3048,11 @@ int32_t JSONSchemaConverter::CreatePropertyNamesKeyRule(
     builder_.UpdateRuleBody(rule_id, RuleRef(CreatePropertyNamesKeyRule(resolved, rule_name_hint)));
     return rule_id;
   }
+  const std::string cache_key =
+      property_names->cache_key.empty() ? "" : "property_names:" + property_names->cache_key;
+  if (auto cached = GetCache(cache_key)) {
+    return *cached;
+  }
   int32_t body = std::visit(
       [&](const auto& spec) -> int32_t {
         using T = std::decay_t<decltype(spec)>;
@@ -3059,7 +3100,9 @@ int32_t JSONSchemaConverter::CreatePropertyNamesKeyRule(
       },
       property_names->spec
   );
-  return builder_.AddRuleWithHint(rule_name_hint, body);
+  int32_t rule_id = builder_.AddRuleWithHint(rule_name_hint, body);
+  AddCache(cache_key, rule_id);
+  return rule_id;
 }
 
 FSMWithStartEnd JSONSchemaConverter::PropertyNameFSM(int32_t rule_id) {
