@@ -14,16 +14,23 @@ from .openai_tool_call_schema import (
 )
 from .structural_tag import (
     AnyTextFormat,
+    AnyTokensFormat,
     ConstStringFormat,
+    DispatchFormat,
     Format,
     JSONSchemaFormat,
     OptionalFormat,
     OrFormat,
+    PlusFormat,
     RegexFormat,
+    RepeatFormat,
     SequenceFormat,
+    StarFormat,
     StructuralTag,
     TagFormat,
     TagsWithSeparatorFormat,
+    TokenFormat,
+    TokenTriggeredTagsFormat,
     TriggeredTagsFormat,
 )
 
@@ -40,6 +47,7 @@ def get_model_structural_tag(
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
     parallel_tool_calls: bool = True,
+    token_markers: bool = False,
 ) -> StructuralTag:
     r"""Get a structural tag for a model's reasoning and tool-call output format.
 
@@ -224,6 +232,11 @@ def get_model_structural_tag(
         under ``"required"`` or a forced tool. Because a second call is no
         longer reachable, generation must end once the single call is closed:
         free text is still allowed *before* the call but not after it.
+    token_markers : bool
+        Whether to match the control markers (``<tool_call>``, ``</think>``, ...) as their
+        dedicated tokens instead of as strings, for output parsers that recognise the markers by
+        token ID. Supported for ``"glm_4_7"``, ``"qwen_3"``,
+        ``"qwen_3_5"`` and ``"qwen_3_coder"``. Default: ``False``.
 
     Notes
     -----
@@ -240,13 +253,23 @@ def get_model_structural_tag(
     Raises
     ------
     ValueError
-        If tool lists, tool choices, reasoning modes, or required tool availability are invalid.
+        If tool lists, tool choices, reasoning modes, or required tool availability are invalid,
+        or if ``token_markers`` is requested for a model that does not declare its markers.
     """
 
     func = _structural_tag_registry.get(model)
     if func is None:
         supported = list(_structural_tag_registry.keys())
         raise ValueError(f"Unknown format type: {model}, supported types: {supported}")
+
+    if not isinstance(token_markers, bool):
+        raise ValueError("The 'token_markers' argument must be a bool.")
+    markers = _structural_tag_marker_tokens.get(model)
+    if token_markers and markers is None:
+        supported = list(_structural_tag_marker_tokens.keys())
+        raise ValueError(
+            f"token_markers is not supported for model {model}, supported models: {supported}"
+        )
 
     function_tools, builtin_tools, simplified_tool_choice = normalize_tool_choice(
         tools, tool_choice
@@ -264,7 +287,7 @@ def get_model_structural_tag(
     if not isinstance(parallel_tool_calls, bool):
         raise ValueError("The 'parallel_tool_calls' argument must be a bool.")
 
-    return func(
+    structural_tag = func(
         function_tools,
         builtin_tools,
         simplified_tool_choice,
@@ -274,6 +297,10 @@ def get_model_structural_tag(
         max_whitespace_cnt=max_whitespace_cnt,
         parallel_tool_calls=parallel_tool_calls,
     )
+    if token_markers:
+        assert markers is not None
+        structural_tag = _bind_marker_tokens(structural_tag, markers)
+    return structural_tag
 
 
 # ---------- Helper Functions And Constants ----------
@@ -285,6 +312,7 @@ _TOOL_ADAPTER = TypeAdapter(ToolParam)
 _TOOL_CHOICE_ADAPTER = TypeAdapter(ToolChoiceOptionParam)
 
 _structural_tag_registry: Dict[str, BuiltinStructuralTagFn] = {}
+_structural_tag_marker_tokens: Dict[str, List[str]] = {}
 
 
 def normalize_tool_choice(
@@ -529,6 +557,203 @@ def _assemble_structural_tag(prefix: Optional[Format], suffix: Format) -> Struct
     return StructuralTag(format=SequenceFormat(elements=[prefix, suffix]))
 
 
+def _bind_marker_tokens(structural_tag: StructuralTag, markers: List[str]) -> StructuralTag:
+    """Match the given marker strings as their dedicated tokens instead of as text.
+
+    Markers in triggers, tag ``begin``/``end`` and constant strings become token formats; the
+    surrounding text is kept, and markers inside schema-driven content stay strings. Free text
+    under a token end becomes :class:`AnyTokensFormat` (its ``excludes`` must be markers) and in
+    token-triggered free text marker ``excludes`` become token-level (other excludes are dropped),
+    so free text may contain a marker spelled from sub-tokens: use this only with parsers that
+    recognise markers by token ID. Compile the result with a tokenizer-configured
+    :class:`GrammarCompiler`. Markers under a :class:`RepeatFormat` stay strings; a token end over
+    a Repeat or Dispatch format, or a list-valued ``end`` with an alternative ending in a marker,
+    raises :class:`ValueError`.
+
+    Parameters
+    ----------
+    structural_tag : StructuralTag
+        The structural tag to rewrite, typically from :func:`get_model_structural_tag`.
+    markers : List[str]
+        Marker strings that are single tokens in the target tokenizer.
+
+    Returns
+    -------
+    StructuralTag
+        The rewritten structural tag, or ``structural_tag`` itself if no marker occurs in it.
+    """
+
+    unique_markers = {marker for marker in markers if marker}
+    if not unique_markers:
+        return structural_tag
+    bound = _MarkerBinder(unique_markers).bind(structural_tag.format)
+    if bound is structural_tag.format:
+        return structural_tag
+    return structural_tag.model_copy(update={"format": bound})
+
+
+class _MarkerBinder:
+    def __init__(self, markers: "set[str]") -> None:
+        # Longest first, so a marker that extends another marker wins.
+        self._markers = sorted(markers, key=len, reverse=True)
+
+    def bind(self, fmt: Format) -> Format:
+        if isinstance(fmt, ConstStringFormat):
+            return self._bind_const_string(fmt)
+        if isinstance(fmt, TagFormat):
+            return self._bind_tag(fmt)
+        if isinstance(fmt, TriggeredTagsFormat):
+            return self._bind_triggered_tags(fmt)
+        if isinstance(fmt, TagsWithSeparatorFormat):
+            return _replace(fmt, "tags", [self._bind_tag(tag) for tag in fmt.tags])
+        if isinstance(fmt, (SequenceFormat, OrFormat)):
+            return _replace(fmt, "elements", [self.bind(element) for element in fmt.elements])
+        if isinstance(fmt, (OptionalFormat, PlusFormat, StarFormat)):
+            return _replace(fmt, "content", self.bind(fmt.content))
+        # RepeatFormat is left untouched: token formats beneath it are not
+        # resolved against the tokenizer, so its markers stay strings.
+        return fmt
+
+    def _leading_marker(self, text: str) -> Optional[str]:
+        return next((marker for marker in self._markers if text.startswith(marker)), None)
+
+    def _trailing_marker(self, text: str) -> Optional[str]:
+        return next((marker for marker in self._markers if text.endswith(marker)), None)
+
+    def _split_literal(self, text: str) -> List[Format]:
+        """Split a literal into const strings and marker tokens."""
+        parts: List[Format] = []
+        while text:
+            best: Optional[Tuple[int, str]] = None
+            for marker in self._markers:
+                index = text.find(marker)
+                if index != -1 and (best is None or index < best[0]):
+                    best = (index, marker)
+            if best is None:
+                parts.append(ConstStringFormat(value=text))
+                break
+            index, marker = best
+            if index:
+                parts.append(ConstStringFormat(value=text[:index]))
+            parts.append(TokenFormat(token=marker))
+            text = text[index + len(marker) :]
+        return parts
+
+    def _bind_const_string(self, fmt: ConstStringFormat) -> Format:
+        parts = self._split_literal(fmt.value)
+        if not parts or (len(parts) == 1 and isinstance(parts[0], ConstStringFormat)):
+            return fmt
+        if len(parts) == 1:
+            return parts[0]
+        return SequenceFormat(elements=parts)
+
+    def _bind_tag(
+        self, tag: TagFormat, *, begin_marker: Optional[str] = None, keep_begin: bool = False
+    ) -> TagFormat:
+        """Move a leading begin marker and a trailing end marker onto tokens.
+
+        The rest of ``begin`` and ``end`` is folded into the tag content so the
+        accepted text stays the same.
+        """
+        begin = tag.begin
+        end = tag.end
+        lead: List[Format] = []
+        tail: List[Format] = []
+        if isinstance(begin, str) and not keep_begin:
+            marker = begin_marker or self._leading_marker(begin)
+            if marker is not None and begin.startswith(marker):
+                lead = self._split_literal(begin[len(marker) :])
+                begin = TokenFormat(token=marker)
+        end_marker: Optional[str] = None
+        if isinstance(end, list):
+            bound = [alt for alt in end if self._trailing_marker(alt) is not None]
+            if bound:
+                raise ValueError(
+                    "Token markers cannot bind a tag whose `end` is a list of alternatives "
+                    f"when one of them ends with a marker (got {bound!r}); use a single end "
+                    "string or leave that tag unbound"
+                )
+        if isinstance(end, str):
+            end_marker = self._trailing_marker(end)
+            if end_marker is not None:
+                tail = self._split_literal(end[: -len(end_marker)])
+                end = TokenFormat(token=end_marker)
+        content = self.bind(tag.content)
+        if end_marker is not None:
+            # String-level free text does not see a token end; make it token-level so the end
+            # token stops it.
+            content = self._token_level(content)
+        if lead or tail:
+            content = SequenceFormat(elements=[*lead, content, *tail])
+        if begin is tag.begin and end is tag.end and content is tag.content:
+            return tag
+        return tag.model_copy(update={"begin": begin, "content": content, "end": end})
+
+    def _bind_triggered_tags(self, fmt: TriggeredTagsFormat) -> Format:
+        """Dispatch on the marker token when every trigger starts with it."""
+        marker = next(
+            (
+                marker
+                for marker in self._markers
+                if all(trigger.startswith(marker) for trigger in fmt.triggers)
+                and all(
+                    isinstance(tag.begin, str) and tag.begin.startswith(marker) for tag in fmt.tags
+                )
+            ),
+            None,
+        )
+        if marker is None:
+            # The trigger is ordinary text; keep string dispatch but still bind
+            # the markers inside the tags.
+            return _replace(fmt, "tags", [self._bind_tag(tag, keep_begin=True) for tag in fmt.tags])
+        return TokenTriggeredTagsFormat(
+            trigger_tokens=[marker],
+            tags=[self._bind_tag(tag, begin_marker=marker) for tag in fmt.tags],
+            # Only markers are known to be single tokens; other string excludes
+            # cannot be expressed at the token level and are dropped.
+            exclude_tokens=[text for text in fmt.excludes if text in self._markers],
+            at_least_one=fmt.at_least_one,
+            stop_after_first=fmt.stop_after_first,
+        )
+
+    def _token_level(self, fmt: Format) -> Format:
+        """Turn the free text under a token end into token-level formats."""
+        if isinstance(fmt, AnyTextFormat):
+            if fmt.max_chars is not None or any(text not in self._markers for text in fmt.excludes):
+                raise ValueError(
+                    "Token markers need the free text under a token end to be token-level: "
+                    f"its excludes must be markers and max_chars unset (got {fmt!r})"
+                )
+            return AnyTokensFormat(exclude_tokens=list(fmt.excludes), max_tokens=fmt.max_tokens)
+        if isinstance(fmt, TriggeredTagsFormat):
+            raise ValueError(
+                "Token markers cannot keep string-triggered tags under a token end; "
+                "their triggers must start with a marker"
+            )
+        if isinstance(fmt, (SequenceFormat, OrFormat)):
+            return _replace(fmt, "elements", [self._token_level(e) for e in fmt.elements])
+        if isinstance(fmt, (OptionalFormat, PlusFormat, StarFormat)):
+            return _replace(fmt, "content", self._token_level(fmt.content))
+        if isinstance(fmt, (RepeatFormat, DispatchFormat)):
+            raise ValueError(
+                "Token markers cannot put a token end over a Repeat or Dispatch format; "
+                "the free text inside it would stay string-level"
+            )
+        return fmt
+
+
+def _replace(fmt: Format, field: str, value: Any) -> Format:
+    """Copy ``fmt`` with ``field`` replaced, unless nothing actually changed."""
+    current = getattr(fmt, field)
+    if isinstance(value, list):
+        unchanged = len(value) == len(current) and all(
+            new is old for new, old in zip(value, current)
+        )
+    else:
+        unchanged = value is current
+    return fmt if unchanged else fmt.model_copy(update={field: value})
+
+
 def _filter_allowed_tools(
     tools: List[FunctionToolParam],
     builtin_tools: List[BuiltinToolParam],
@@ -564,7 +789,7 @@ def _filter_allowed_tools(
     return filtered_tools, filtered_builtin_tools
 
 
-def register_model_structural_tag(name: str):
+def register_model_structural_tag(name: str, *, marker_tokens: Optional[List[str]] = None):
     """Register a model-specific structural tag function under *name*.
 
     The decorated function is stored in the internal registry so that
@@ -575,6 +800,9 @@ def register_model_structural_tag(name: str):
     ----------
     name : str
         The model format key, e.g. ``"llama"``, ``"harmony"``.
+    marker_tokens : Optional[List[str]]
+        The model's control markers that are single tokens in its tokenizer. Declaring them
+        enables ``token_markers=True`` in :func:`get_model_structural_tag`. Default: ``None``.
 
     Examples
     --------
@@ -590,6 +818,10 @@ def register_model_structural_tag(name: str):
 
     def decorator(func):
         _structural_tag_registry[name] = func
+        if marker_tokens is None:
+            _structural_tag_marker_tokens.pop(name, None)
+        else:
+            _structural_tag_marker_tokens[name] = list(marker_tokens)
         return func
 
     return decorator
@@ -1301,8 +1533,11 @@ def get_deepseek_v3_1_structural_tag(
     return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
-@register_model_structural_tag("qwen_3_5")
-@register_model_structural_tag("qwen_3_coder")
+_QWEN_MARKER_TOKENS = ["<think>", "</think>", "<tool_call>", "</tool_call>"]
+
+
+@register_model_structural_tag("qwen_3_5", marker_tokens=_QWEN_MARKER_TOKENS)
+@register_model_structural_tag("qwen_3_coder", marker_tokens=_QWEN_MARKER_TOKENS)
 def get_qwen_3_5_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -1542,7 +1777,7 @@ def get_mimo_structural_tag(
     return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
-@register_model_structural_tag("qwen_3")
+@register_model_structural_tag("qwen_3", marker_tokens=_QWEN_MARKER_TOKENS)
 def get_qwen_3_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,
@@ -2268,7 +2503,19 @@ def get_minimax_m3_structural_tag(
     return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
-@register_model_structural_tag("glm_4_7")
+_GLM_4_7_MARKER_TOKENS = [
+    "<think>",
+    "</think>",
+    "<tool_call>",
+    "</tool_call>",
+    "<arg_key>",
+    "</arg_key>",
+    "<arg_value>",
+    "</arg_value>",
+]
+
+
+@register_model_structural_tag("glm_4_7", marker_tokens=_GLM_4_7_MARKER_TOKENS)
 def get_glm_4_7_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
     builtin_tools: Optional[List[BuiltinToolParam]] = None,

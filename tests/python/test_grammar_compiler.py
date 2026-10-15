@@ -1,5 +1,6 @@
 """This test uses the optimized JSON grammar provided by the grammar library."""
 
+import json
 import sys
 import threading
 import time
@@ -597,6 +598,32 @@ def test_grammar_compiler_crossing_cache_different_fsm(
 
     expected_trace = _mask_trace(fresh, input_str)
     actual_trace = _mask_trace(cached, input_str)
+    for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(
+        expected_trace, actual_trace
+    ):
+        assert actual_apply == expected_apply
+        torch.testing.assert_close(actual_mask, expected_mask, rtol=0, atol=0)
+
+
+def test_grammar_compiler_cache_regex_large_repeat():
+    """A regex with a large bounded repetition references the rule built for the repeated element
+    only through an fsm edge. The hasher must still hash that rule first and fold its hash into
+    the referrer's, so regexes that differ only in the repeated element get their own masks.
+    Issue #957."""
+    vocab = ['"', "x", "xa", "x1", "a", "1"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, xgr.VocabType.RAW)
+    schema_a = json.dumps({"type": "string", "pattern": r"^x[a-z]{129}$"})
+    schema_b = json.dumps({"type": "string", "pattern": r"^x[0-9]{129}$"})
+    compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1, cache_enabled=True)
+    compiler.compile_json_schema(schema_a)
+    cached = compiler.compile_json_schema(schema_b)
+    fresh = xgr.GrammarCompiler(
+        tokenizer_info, max_threads=1, cache_enabled=False
+    ).compile_json_schema(schema_b)
+
+    input_tokens = [vocab.index(token) for token in ['"', "x1"] + ["1"] * 128 + ['"']]
+    expected_trace = _mask_trace(fresh, input_tokens)
+    actual_trace = _mask_trace(cached, input_tokens)
     for (expected_apply, expected_mask), (actual_apply, actual_mask) in zip(
         expected_trace, actual_trace
     ):

@@ -1632,6 +1632,101 @@ def test_stag_any_tokens_exclude_redispatch():
     assert m.is_terminated()
 
 
+_NN = {"type": "const_string", "value": "\n\n"}
+_ANY = {"type": "any_tokens", "exclude_tokens": ["<end>"]}
+_MID_TOKEN_VOCAB = [
+    "<s>",
+    "</s>",
+    "<tool>",
+    "<end>",
+    "\n\n",
+    "\n\n\n",
+    "hi",
+    "<",
+    "<hi",
+    "\n\n\n\n",
+]
+#                    0      1       2         3        4       5          6     7    8      9
+
+
+@pytest.mark.parametrize(
+    "elements, token, accepted",
+    [
+        # The region is in the same rule, which cannot end before it: decided by the mask cache.
+        ([_NN, _ANY, {"type": "token", "token": "<end>"}], 5, True),
+        # The region follows the rule holding the literal: decided at runtime.
+        (
+            [{"type": "or", "elements": [_NN, {"type": "const_string", "value": "x"}]}, _ANY],
+            5,
+            True,
+        ),
+        # The region still excludes its tokens.
+        ([{"type": "const_string", "value": "<"}, _ANY], 3, False),
+        ([{"type": "const_string", "value": "<"}, _ANY], 8, True),
+        # A token under an excluded one is not rejected with it: at runtime, and in the mask cache.
+        (
+            [
+                {"type": "or", "elements": [_NN, {"type": "const_string", "value": "x"}]},
+                {"type": "any_tokens", "exclude_tokens": ["\n\n\n"]},
+            ],
+            9,
+            True,
+        ),
+        (
+            [
+                _NN,
+                {"type": "any_tokens", "exclude_tokens": ["\n\n\n"]},
+                {"type": "token", "token": "<end>"},
+            ],
+            9,
+            True,
+        ),
+        # The region is in the lookahead of the rule holding the literal.
+        (
+            [
+                {"type": "or", "elements": [{"type": "const_string", "value": "<"}, _NN]},
+                _ANY,
+                {"type": "token", "token": "<end>"},
+            ],
+            8,
+            True,
+        ),
+        # A Token edge is not a free-text region: a token begin or a trigger starts at a token
+        # boundary.
+        ([{"type": "const_string", "value": "<"}, {"type": "token", "token": "<hi"}], 8, False),
+    ],
+)
+def test_stag_free_text_region_entered_mid_token(elements, token, accepted):
+    """A token whose first bytes finish a literal is taken whole by the token-level free-text
+    region after it."""
+    ti = xgr.TokenizerInfo(_MID_TOKEN_VOCAB)
+    stag = {"type": "structural_tag", "format": {"type": "sequence", "elements": elements}}
+    m = xgr.GrammarMatcher(xgr.GrammarCompiler(ti).compile_structural_tag(stag))
+    b = xgr.allocate_token_bitmask(1, ti.vocab_size)
+    assert (token in _get_accepted(m, b, ti.vocab_size)) == accepted
+    assert m.accept_token(token) == accepted
+
+
+@pytest.mark.parametrize(
+    "grammar, token, accepted",
+    [
+        # The content rule's lookahead is the region itself: (=(ExcludeToken(2))) cannot be
+        # scanned by bytes, so the mask cache leaves "<hi" to the parent instead of rejecting it.
+        ('root ::= Token(3) x ExcludeToken(2)\nx ::= "<"\n', 5, True),
+        # A Token edge in the lookahead does not take a token from the middle.
+        ('root ::= Token(3) x Token(2)\nx ::= "<"\n', 2, False),
+    ],
+)
+def test_token_edge_in_lookahead_entered_mid_token(grammar, token, accepted):
+    vocab = ["<s>", "</s>", "<end>", "<tool>", "<", "<hi"]
+    ti = xgr.TokenizerInfo(vocab)
+    m = xgr.GrammarMatcher(xgr.GrammarCompiler(ti).compile_grammar(grammar))
+    b = xgr.allocate_token_bitmask(1, ti.vocab_size)
+    assert m.accept_token(3)
+    assert (token in _get_accepted(m, b, ti.vocab_size)) == accepted
+    assert m.accept_token(token) == accepted
+
+
 def test_token_edge_id_out_of_vocab_raises():
     # Token ids index per-token arrays during compilation, so an id outside the vocabulary must be
     # rejected with an error instead of being read out of bounds.

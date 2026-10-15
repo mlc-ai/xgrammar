@@ -225,7 +225,7 @@ class Grammar(XGRObject):
 
         any_whitespace : bool, default: True
             Whether to use any whitespace. If True, the generated grammar will ignore the
-            indent and separators parameters, and allow any whitespace.
+            indent parameter, and allow any whitespace.
 
         indent : Optional[int], default: None
             The number of spaces for indentation. If None, the output will be in one line.
@@ -239,8 +239,9 @@ class Grammar(XGRObject):
 
         separators : Optional[Tuple[str, str]], default: None
             Two separators used in the schema: comma and colon. Examples: (",", ":"), (", ", ": ").
-            If None, the default separators will be used: (",", ": ") when the indent is not None,
-            and (", ", ": ") otherwise.
+            If None, the default separators will be used: (",", ":") when any_whitespace is True,
+            (",", ": ") when the indent is not None, and (", ", ": ") otherwise. With indent, values
+            with an unconstrained schema (e.g. {}) still stay on one line with (", ", ": ").
 
         strict_mode : bool, default: True
             Whether to use strict mode. In strict mode, the generated grammar will not allow
