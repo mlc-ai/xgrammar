@@ -23,7 +23,15 @@ target_link_libraries(python_methods PUBLIC xgrammar)
 
 # TVM-FFI shared library: C++ bindings entry point
 add_library(xgrammar_bindings SHARED tvm_ffi.cc)
-tvm_ffi_configure_target(xgrammar_bindings STUB_DIR "${PROJECT_SOURCE_DIR}/python" STUB_INIT ON)
+tvm_ffi_configure_target(
+  xgrammar_bindings
+  STUB_DIR
+  "${PROJECT_SOURCE_DIR}/python"
+  STUB_INIT
+  ON
+  STUB_PKG
+  xgrammar
+)
 install(TARGETS xgrammar_bindings DESTINATION .)
 tvm_ffi_install(xgrammar_bindings DESTINATION .)
 target_include_directories(xgrammar_bindings PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
