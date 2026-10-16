@@ -4004,7 +4004,7 @@ int32_t XMLToolCallingConverter::GenerateString(
       return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
     }
     const bool bounded = spec.min_length != 0 || spec.max_length != -1;
-    if (json_format_ == JSONFormat::kGlmXML && bounded && !spec.format.has_value()) {
+    if (bounded && !spec.format.has_value()) {
       // Keep the raw value delimiter-aware. A finite repetition of all Unicode
       // characters also consumes argument and tool delimiters, retaining old parses.
       auto original_excludes = excludes_;
@@ -4127,7 +4127,7 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
   return JSONSchemaConverter::FormatPropertyKey(key, schema);
 }
 
-int32_t XMLToolCallingConverter::FormatGLMValue(
+int32_t XMLToolCallingConverter::FormatRawXMLValue(
     const SchemaSpecPtr& schema, int32_t value_rule_id, const std::string& rule_name
 ) {
   // Formatting whitespace belongs inside each non-string alternative. Wrapping a
@@ -4140,11 +4140,11 @@ int32_t XMLToolCallingConverter::FormatGLMValue(
                                     std::holds_alternative<AllOfSpec>(schema->spec));
   int32_t formatted_rule = -1;
   if (composite) {
-    auto it = glm_formatted_value_rules_.find(value_rule_id);
-    if (it != glm_formatted_value_rules_.end()) return RuleRef(it->second);
+    auto it = raw_xml_formatted_value_rules_.find(value_rule_id);
+    if (it != raw_xml_formatted_value_rules_.end()) return RuleRef(it->second);
     formatted_rule = builder_.AddEmptyRuleWithHint(rule_name + "_formatted_value");
     // Publish the placeholder before descending through recursive schema alternatives.
-    glm_formatted_value_rules_[value_rule_id] = formatted_rule;
+    raw_xml_formatted_value_rules_[value_rule_id] = formatted_rule;
   }
   auto finish = [&](int32_t body) {
     if (formatted_rule == -1) return body;
@@ -4154,7 +4154,8 @@ int32_t XMLToolCallingConverter::FormatGLMValue(
   if (schema) {
     if (const auto* ref = std::get_if<RefSpec>(&schema->spec)) {
       auto resolved = ResolveRefRejectingCycles(*ref, rule_name);
-      return finish(FormatGLMValue(resolved, CreateRule(resolved, rule_name + "_value"), rule_name)
+      return finish(
+          FormatRawXMLValue(resolved, CreateRule(resolved, rule_name + "_value"), rule_name)
       );
     }
     const std::vector<SchemaSpecPtr>* options = nullptr;
@@ -4170,7 +4171,7 @@ int32_t XMLToolCallingConverter::FormatGLMValue(
       for (size_t i = 0; i < options->size(); ++i) {
         const auto& option = (*options)[i];
         auto name = rule_name + "_value_" + std::to_string(i);
-        choices.push_back(FormatGLMValue(option, CreateRule(option, name), name));
+        choices.push_back(FormatRawXMLValue(option, CreateRule(option, name), name));
       }
       return finish(Choice(choices));
     }
@@ -4208,15 +4209,7 @@ int32_t XMLToolCallingConverter::FormatProperty(
     }
     // xml_string already accepts whitespace. Adding whitespace repetitions around it preserves the
     // language but creates one Earley state for every possible split with the string body.
-    if (json_format_ == JSONFormat::kGlmXML) {
-      elements.push_back(FormatGLMValue(schema, value_rule_id, rule_name));
-    } else if (value_rule_id == builder_.GetRuleId(kXMLString)) {
-      elements.push_back(RuleRef(value_rule_id));
-    } else {
-      elements.push_back(WhitespaceExpression());
-      elements.push_back(RuleRef(value_rule_id));
-      elements.push_back(WhitespaceExpression());
-    }
+    elements.push_back(FormatRawXMLValue(schema, value_rule_id, rule_name));
     elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
     return Sequence(elements);
   }
@@ -4249,15 +4242,7 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
       elements.push_back(WhitespaceExpression());
       elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
     }
-    if (json_format_ == JSONFormat::kGlmXML) {
-      elements.push_back(FormatGLMValue(schema, value_rule_id, rule_name));
-    } else if (value_rule_id == builder_.GetRuleId(kXMLString)) {
-      elements.push_back(RuleRef(value_rule_id));
-    } else {
-      elements.push_back(WhitespaceExpression());
-      elements.push_back(RuleRef(value_rule_id));
-      elements.push_back(WhitespaceExpression());
-    }
+    elements.push_back(FormatRawXMLValue(schema, value_rule_id, rule_name));
     elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
     return Sequence(elements);
   }
