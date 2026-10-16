@@ -230,7 +230,7 @@ std::string RegexConverter::HandleEscapeInCharClass() {
     return kNonWhitespaceClassBody;
   } else {
     auto res = HandleCharEscape();
-    if (res == "]" || res == "-") {
+    if (res == "]" || res == "-" || res == "^") {
       return "\\" + res;
     } else {
       return res;
