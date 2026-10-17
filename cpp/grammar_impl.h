@@ -7,8 +7,6 @@
 #ifndef XGRAMMAR_GRAMMAR_IMPL_H_
 #define XGRAMMAR_GRAMMAR_IMPL_H_
 
-#include <xgrammar/xgrammar.h>
-
 #include <cstddef>
 #include <optional>
 #include <string>

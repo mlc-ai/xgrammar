@@ -5,8 +5,6 @@
 #ifndef XGRAMMAR_SUPPORT_COMPACT_2D_ARRAY_H_
 #define XGRAMMAR_SUPPORT_COMPACT_2D_ARRAY_H_
 
-#include <picojson.h>
-
 #include <algorithm>
 #include <climits>
 #include <cstddef>

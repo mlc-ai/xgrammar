@@ -7,8 +7,6 @@
 #ifndef XGRAMMAR_GRAMMAR_BUILDER_H_
 #define XGRAMMAR_GRAMMAR_BUILDER_H_
 
-#include <xgrammar/xgrammar.h>
-
 #include <cstdint>
 #include <optional>
 #include <string>
