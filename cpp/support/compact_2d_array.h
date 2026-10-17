@@ -6,7 +6,6 @@
 #define XGRAMMAR_SUPPORT_COMPACT_2D_ARRAY_H_
 
 #include <algorithm>
-#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
