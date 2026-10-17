@@ -6,7 +6,6 @@
 #include "earley_parser.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cstdint>
 #include <utility>
 #include <vector>

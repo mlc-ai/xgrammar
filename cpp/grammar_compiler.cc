@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <bitset>
-#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <optional>

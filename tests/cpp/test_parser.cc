@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include <xgrammar/xgrammar.h>
 
 #include "grammar_parser.h"
 #include "support/encoding.h"

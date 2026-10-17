@@ -5,12 +5,9 @@
 
 #include "grammar_parser.h"
 
-#include <picojson.h>
-
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <limits>
 #include <string>
 #include <variant>

@@ -5,8 +5,6 @@
 
 #include "grammar_functor.h"
 
-#include <xgrammar/xgrammar.h>
-
 #include <array>
 #include <bitset>
 #include <cstdint>

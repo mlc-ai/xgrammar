@@ -6,7 +6,6 @@
  */
 
 #include <gtest/gtest.h>
-#include <xgrammar/xgrammar.h>
 
 #include "grammar_functor.h"
 

@@ -4,8 +4,6 @@
  */
 #include "fsm_builder.h"
 
-#include <sys/types.h>
-
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -13,7 +11,6 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
-#include <set>
 #include <unordered_set>
 #include <utility>
 #include <variant>

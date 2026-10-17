@@ -24,7 +24,6 @@
 #include "support/logging.h"
 #include "support/recursion_guard.h"
 #include "support/utils.h"
-#include "tokenizer_info_impl.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {

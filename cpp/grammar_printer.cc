@@ -5,8 +5,6 @@
 
 #include "grammar_printer.h"
 
-#include <picojson.h>
-
 #include <iomanip>
 #include <limits>
 #include <sstream>

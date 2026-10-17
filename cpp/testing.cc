@@ -4,8 +4,6 @@
  */
 #include "testing.h"
 
-#include <xgrammar/xgrammar.h>
-
 #include <algorithm>
 #include <cstdint>
 #include <sstream>
