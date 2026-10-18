@@ -80,22 +80,7 @@ cmake -G Ninja ..
 ninja
 ```
 
-### Optional: Unity Build
-
-Set `-DXGRAMMAR_ENABLE_UNITY_BUILD=ON` when configuring CMake to compile the core
-library in batches of four source files. This can reduce repeated header parsing
-in clean builds. It is off by default and applies only to the `xgrammar` target.
-
-```bash
-cmake -S . -B build -G Ninja -DXGRAMMAR_ENABLE_UNITY_BUILD=ON
-cmake --build build --parallel 4
-```
-
-Set the option to `OFF` and reconfigure to return to separate source compilation.
-Unity can use more memory per compiler process, and editing one source file
-recompiles its whole batch. Its benefit also depends on build parallelism.
-See [Unity builds](../developer_guide/unity_builds.md) for the tradeoffs and a
-comparison procedure for your machine.
+Add `set(XGRAMMAR_ENABLE_UNITY_BUILD ON)` to `config.cmake` to group the core library's source files in batches of four. This can speed up full builds, but may use more memory and slow down rebuilds after editing one file. The option is off by default; set it to `OFF` to disable it.
 
 ### Optional: Run C++ Tests
 
