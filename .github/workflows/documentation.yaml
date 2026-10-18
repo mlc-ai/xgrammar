@@ -3,6 +3,11 @@ name: Build Docs
 on:
   workflow_dispatch:
     inputs:
+      build_only:
+        description: Build documentation without publishing it
+        required: false
+        default: false
+        type: boolean
       docs_ref:
         description: Git ref to build versioned docs from. When set, the docs are published to docs/<version>/
           where <version> is resolved from that ref's package metadata. Leave empty to rebuild main as
@@ -105,8 +110,8 @@ jobs:
 
   deploy_docs:
     name: Deploy Docs
-    if: github.repository_owner == 'mlc-ai' && (github.event_name == 'release' || github.event_name ==
-      'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    if: github.repository_owner == 'mlc-ai' && (github.event_name == 'release' || (github.event_name ==
+      'workflow_dispatch' && !inputs.build_only) || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
     needs: build_docs
     runs-on: ubuntu-latest
     permissions:
