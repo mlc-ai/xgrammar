@@ -517,6 +517,12 @@
 <span class="sd">            Whether to use any whitespace. If True, the generated grammar will ignore the</span>
 <span class="sd">            indent parameter, and allow any whitespace.</span>
 
+<span class="sd">            Setting this to False can degrade generation quality with schemas that allow additional</span>
+<span class="sd">            properties, possibly because restricting whitespace steers prose into unconstrained keys.</span>
+<span class="sd">            The output can still satisfy the schema. If extra keys are not needed, set</span>
+<span class="sd">            additionalProperties to false. See</span>
+<span class="sd">            &lt;https://github.com/mlc-ai/xgrammar/issues/851&gt; for more details.</span>
+
 <span class="sd">        indent : Optional[int], default: None</span>
 <span class="sd">            The number of spaces for indentation. If None, the output will be in one line.</span>
 

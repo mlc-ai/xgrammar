@@ -456,6 +456,11 @@
 <span class="sd">        schema : Union[str, Type[BaseModel], Dict[str, Any]]</span>
 <span class="sd">            The schema string or Pydantic model or JSON schema dict.</span>
 
+<span class="sd">        any_whitespace : bool, default: True</span>
+<span class="sd">            Whether to use any whitespace. If True, the generated grammar will ignore the</span>
+<span class="sd">            indent parameter, and allow any whitespace. See</span>
+<span class="sd">            :meth:`xgrammar.Grammar.from_json_schema` for details and generation quality warnings.</span>
+
 <span class="sd">        indent : Optional[int], default: None</span>
 <span class="sd">            The number of spaces for indentation. If None, the output will be in one line.</span>
 

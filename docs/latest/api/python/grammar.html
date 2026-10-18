@@ -393,8 +393,14 @@ meaning and the default values of the parameters follows the convention in json.
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>schema</strong> (<em>Union</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>Type</em><em>[</em><em>BaseModel</em><em>]</em><em>, </em><em>Dict</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>Any</em><em>]</em><em>]</em>) – The schema string or Pydantic model or JSON schema dict.</p></li>
-<li><p><strong>any_whitespace</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: True</em>) – Whether to use any whitespace. If True, the generated grammar will ignore the
-indent parameter, and allow any whitespace.</p></li>
+<li><p><strong>any_whitespace</strong> (<a class="reference external" href="https://docs.python.org/3.12/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>default: True</em>) – <p>Whether to use any whitespace. If True, the generated grammar will ignore the
+indent parameter, and allow any whitespace.</p>
+<p>Setting this to False can degrade generation quality with schemas that allow additional
+properties, possibly because restricting whitespace steers prose into unconstrained keys.
+The output can still satisfy the schema. If extra keys are not needed, set
+additionalProperties to false. See
+&lt;<a class="reference external" href="https://github.com/mlc-ai/xgrammar/issues/851">https://github.com/mlc-ai/xgrammar/issues/851</a>&gt; for more details.</p>
+</p></li>
 <li><p><strong>indent</strong> (<em>Optional</em><em>[</em><a class="reference external" href="https://docs.python.org/3.12/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a><em>]</em><em>, </em><em>default: None</em>) – <p>The number of spaces for indentation. If None, the output will be in one line.</p>
 <p>Note that specifying the indentation means forcing the LLM to generate JSON strings
 strictly formatted. However, some models may tend to generate JSON strings that
