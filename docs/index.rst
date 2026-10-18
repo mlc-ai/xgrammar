@@ -44,6 +44,7 @@ The mission of this project is to bring flexible zero-overhead structure generat
 
    developer_guide/building_docs
    developer_guide/code_coverage
+   developer_guide/unity_builds
 
 .. toctree::
    :maxdepth: 1
