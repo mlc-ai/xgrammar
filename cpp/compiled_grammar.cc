@@ -10,8 +10,6 @@
 #include <cstdint>
 #include <map>
 #include <optional>
-#include <set>
-#include <tuple>
 #include <unordered_set>
 #include <vector>
 
@@ -112,13 +110,8 @@ struct RepetitionFollowBytes {
   ByteSet under_all;
   ByteSet under_any;
   int32_t max_upper = 0;
-  /*! \brief Each repeat edge to the rule: the parent rule, and the edge's source and target. */
-  struct Reference {
-    int32_t rule_id;
-    int32_t source;
-    int32_t target;
-  };
-  std::vector<Reference> references;
+  /*! \brief Each repeat edge to the rule, as (parent rule id, source state of the edge). */
+  std::vector<std::pair<int32_t, int32_t>> references;
 };
 
 /*!
@@ -204,7 +197,7 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
         XGRAMMAR_DCHECK(info.Upper() >= 0);
         follow_bytes[body_rule_id].max_upper =
             std::max(follow_bytes[body_rule_id].max_upper, info.Upper());
-        follow_bytes[body_rule_id].references.push_back({rule_id, state, edge.target});
+        follow_bytes[body_rule_id].references.emplace_back(rule_id, state);
       }
     }
   }
@@ -297,7 +290,7 @@ RepetitionTokenClass ClassifyRepetitionToken(
 void PopulateRepeatParentExitTokens(
     const Grammar& grammar,
     const TokenizerInfo& tokenizer_info,
-    const std::vector<RepetitionFollowBytes::Reference>& references,
+    const std::vector<std::pair<int32_t, int32_t>>& references,
     const std::vector<std::pair<int32_t, RepetitionTokenClass>>& undecided,
     AdaptiveTokenMask* mask,
     std::vector<int32_t>* decided_indices
@@ -306,16 +299,17 @@ void PopulateRepeatParentExitTokens(
   if (undecided.empty() || grammar->has_token_edges) {
     return;
   }
-  // The matcher finds the parent's list by the parent state, i.e. the edge's source.
-  // The byte that leaves the repetition must be scanned after it, from the edge's target: so the
-  // source may have no other edge that could scan it.
-  std::set<std::pair<int32_t, int32_t>> sources;
-  for (const auto& reference : references) {
-    const auto& parent_fsm = grammar->per_rule_fsms[reference.rule_id]->GetFsm().GetFsm();
-    if (!sources.emplace(reference.rule_id, reference.source).second ||
-        parent_fsm.GetEdges(reference.source).size() != 1) {
+  // The matcher finds a parent's tokens by the parent state, i.e. the edge's source. The byte that
+  // leaves the repetition must be scanned after it, from the edge's target: so the source may have
+  // no other edge that could scan it.
+  std::vector<int32_t> targets;
+  for (const auto& [rule_id, source] : references) {
+    const auto& edges = grammar->per_rule_fsms[rule_id]->GetFsm().GetFsm().GetEdges(source);
+    if (edges.size() != 1 ||
+        std::count(references.begin(), references.end(), std::make_pair(rule_id, source)) != 1) {
       return;
     }
+    targets.push_back(edges[0].target);
   }
   const auto& sorted_vocab = tokenizer_info.GetSortedDecodedVocab();
   std::vector<std::string> exit_bytes;
@@ -325,14 +319,10 @@ void PopulateRepeatParentExitTokens(
   }
   std::vector<std::vector<RepeatExitClass>> classes;
   classes.reserve(references.size());
-  for (const auto& reference : references) {
+  for (size_t r = 0; r < references.size(); ++r) {
     classes.push_back(ClassifyBytesAfterRepetition(
-        grammar, tokenizer_info, reference.rule_id, reference.target, exit_bytes
+        grammar, tokenizer_info, references[r].first, targets[r], exit_bytes
     ));
-  }
-  std::vector<AdaptiveTokenMask::RepeatParentExitTokens> parents;
-  for (const auto& reference : references) {
-    parents.push_back({reference.rule_id, reference.source, {}});
   }
   for (size_t i = 0; i < undecided.size(); ++i) {
     const bool uncertain = std::any_of(classes.begin(), classes.end(), [&](const auto& c) {
@@ -345,22 +335,16 @@ void PopulateRepeatParentExitTokens(
     decided_indices->push_back(index);
     for (size_t r = 0; r < references.size(); ++r) {
       if (classes[r][i] == RepeatExitClass::kAccepted) {
-        parents[r].tokens.emplace_back(token_class.num_repetitions, sorted_vocab[index].first);
+        mask->repeat_parent_exit_tokens.emplace_back(
+            references[r].first,
+            references[r].second,
+            token_class.num_repetitions,
+            sorted_vocab[index].first
+        );
       }
     }
   }
-  for (auto& parent : parents) {
-    if (!parent.tokens.empty()) {
-      mask->repeat_parent_exit_tokens.push_back(std::move(parent));
-    }
-  }
-  std::sort(
-      mask->repeat_parent_exit_tokens.begin(),
-      mask->repeat_parent_exit_tokens.end(),
-      [](const auto& a, const auto& b) {
-        return std::tie(a.rule_id, a.element_id) < std::tie(b.rule_id, b.element_id);
-      }
-  );
+  std::sort(mask->repeat_parent_exit_tokens.begin(), mask->repeat_parent_exit_tokens.end());
 }
 
 }  // namespace

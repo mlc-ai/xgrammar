@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -92,16 +93,8 @@ struct AdaptiveTokenMask {
   std::vector<DynamicBitset> repeat_interior_bitsets;
   std::vector<std::pair<int32_t, int32_t>> repeat_exit_tokens;
 
-  /*! \brief The exit tokens a repetition parent accepts after the repetition. */
-  struct RepeatParentExitTokens {
-    /*! \brief The parent state: the source state of the repeat edge in the parent rule. */
-    int32_t rule_id;
-    int32_t element_id;
-    /*! \brief (repetitions consumed, token id), as in repeat_exit_tokens. */
-    std::vector<std::pair<int32_t, int32_t>> tokens;
-  };
-  /*! \brief Sorted by (rule_id, element_id). */
-  std::vector<RepeatParentExitTokens> repeat_parent_exit_tokens;
+  /*! \brief Sorted (parent rule id, parent element id, repetitions consumed, token id). */
+  std::vector<std::tuple<int32_t, int32_t, int32_t, int32_t>> repeat_parent_exit_tokens;
 
   /*! \brief Default constructor. Only for deserialization. */
   AdaptiveTokenMask() = default;
@@ -127,13 +120,7 @@ struct AdaptiveTokenMask {
     return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
            MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset) +
            MemorySize(mask.repeat_interior_char_counts) + MemorySize(mask.repeat_interior_bitsets) +
-           MemorySize(mask.repeat_exit_tokens) + [&] {
-             std::size_t size = 0;
-             for (const auto& parent : mask.repeat_parent_exit_tokens) {
-               size += sizeof(parent) + MemorySize(parent.tokens);
-             }
-             return size;
-           }();
+           MemorySize(mask.repeat_exit_tokens) + MemorySize(mask.repeat_parent_exit_tokens);
   }
 };
 

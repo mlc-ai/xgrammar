@@ -1983,29 +1983,28 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         }
         const int32_t budget = info->Upper() - parent_state.repeat_count;
         remaining = std::max(remaining, budget);
-        const int32_t repeat_count = parent_state.repeat_count;
-        const int32_t lower = info->Lower();
-        auto accept_exit_tokens = [&](const std::vector<std::pair<int32_t, int32_t>>& tokens) {
-          for (const auto& [num_repetitions, token_id] : tokens) {
-            if (num_repetitions <= budget && repeat_count + num_repetitions >= lower) {
-              tmp_accepted_bitset_.Set(token_id, true);
-            }
+        for (const auto& [num_repetitions, token_id] : adaptive_token_mask.repeat_exit_tokens) {
+          if (num_repetitions <= budget &&
+              parent_state.repeat_count + num_repetitions >= info->Lower()) {
+            tmp_accepted_bitset_.Set(token_id, true);
           }
-        };
-        accept_exit_tokens(adaptive_token_mask.repeat_exit_tokens);
-        const auto& parent_exit_tokens = adaptive_token_mask.repeat_parent_exit_tokens;
-        const auto parent_key = std::make_pair(parent_state.rule_id, parent_state.element_id);
-        const auto parent_it = std::lower_bound(
-            parent_exit_tokens.begin(),
-            parent_exit_tokens.end(),
-            parent_key,
-            [](const auto& parent, const std::pair<int32_t, int32_t>& key) {
-              return std::make_pair(parent.rule_id, parent.element_id) < key;
-            }
-        );
-        if (parent_it != parent_exit_tokens.end() &&
-            std::make_pair(parent_it->rule_id, parent_it->element_id) == parent_key) {
-          accept_exit_tokens(parent_it->tokens);
+        }
+        // The tokens that leave the repetition before their last byte and that this parent
+        // accepts after it.
+        const auto& parent_exits = adaptive_token_mask.repeat_parent_exit_tokens;
+        for (auto it = std::lower_bound(
+                 parent_exits.begin(),
+                 parent_exits.end(),
+                 std::make_tuple(parent_state.rule_id, parent_state.element_id, INT32_MIN, 0)
+             );
+             it != parent_exits.end() && std::get<0>(*it) == parent_state.rule_id &&
+             std::get<1>(*it) == parent_state.element_id;
+             ++it) {
+          const int32_t num_repetitions = std::get<2>(*it);
+          if (num_repetitions <= budget &&
+              parent_state.repeat_count + num_repetitions >= info->Lower()) {
+            tmp_accepted_bitset_.Set(std::get<3>(*it), true);
+          }
         }
       }
       // The tokens that do not fit are rejected by this state without further work.

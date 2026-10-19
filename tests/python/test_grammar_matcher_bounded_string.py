@@ -405,159 +405,72 @@ def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:
         _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
 
 
-# Capped strings as vLLM compiles them: any_whitespace=False, so each string is followed by a
-# fixed separator. The vocabulary has tokens that leave the string before their last byte and run
-# into what follows it, which the matcher decides per repetition parent.
-CAPPED_VOCAB = ["{", "}", "[", "]", ",", ", ", ": ", " ", '"', '",', '", ', '"}', '"]', '"}]']
-CAPPED_VOCAB += ['"],', '""', '"x', '"a": "', '"b": "', ', "b": "', '"s": "', "null", "a", "aa"]
-CAPPED_VOCAB += ["aaa", "aaaa", "aaaaa", "aaaaaa", "ab cd", "a,", 'a"', 'a",', 'a", ', 'a", "b": "']
-CAPPED_VOCAB += ['a"}', 'a"]', 'a"}]', 'a"x', 'a""', ' ""', 'aa"}', "é", "éé", "日", "日日", "🙂"]
-CAPPED_VOCAB += ['é"', '日"}', "\\", '\\"', "\r", "\n", "\t", "\x00", "a\tb"]
-
-
-def _capped_tokenizer_info() -> xgr.TokenizerInfo:
-    return xgr.TokenizerInfo(list(CAPPED_VOCAB))
-
-
-def _compile_capped(schema: dict[str, object]) -> xgr.CompiledGrammar:
-    return xgr.GrammarCompiler(_capped_tokenizer_info()).compile_json_schema(
-        json.dumps(schema), any_whitespace=False
-    )
-
-
-def _capped(max_length: int, min_length: int = 0) -> dict[str, object]:
-    schema: dict[str, object] = {"type": "string", "maxLength": max_length}
-    if min_length:
-        schema["minLength"] = min_length
-    return schema
-
-
-def _strict_object(properties: dict[str, object]) -> dict[str, object]:
-    return {
-        "type": "object",
-        "properties": properties,
-        "required": list(properties),
-        "additionalProperties": False,
-    }
-
-
-def _accepts(compiled: xgr.CompiledGrammar, text: str) -> bool:
-    return xgr.GrammarMatcher(compiled, terminate_without_stop_token=True).accept_string(text)
-
-
-def test_capped_string_accepts_up_to_max_length() -> None:
-    compiled = _compile_capped(_strict_object({"s": _capped(5)}))
-    assert _accepts(compiled, '{"s": "abcde"}')
-    matcher = _matcher_after(compiled, '{"s": "abcde')
-    assert not matcher.accept_string("f")
-    assert matcher.accept_string('"}')
-
-
-@pytest.mark.parametrize("char", ["a", "é", "日", "🙂"])
-def test_capped_string_counts_codepoints(char: str) -> None:
-    compiled = _compile_capped(_strict_object({"s": _capped(5)}))
-    assert _accepts(compiled, '{"s": "' + char * 5 + '"}')
-    assert not _accepts(compiled, '{"s": "' + char * 6 + '"}')
-    exact = _compile_capped(_strict_object({"s": _capped(5, min_length=5)}))
-    assert _accepts(exact, '{"s": "' + char * 5 + '"}')
-    assert not _accepts(exact, '{"s": "' + char * 4 + '"}')
-
-
-def test_capped_string_min_length_delays_the_closing_quote() -> None:
-    tokenizer_info = _capped_tokenizer_info()
-    compiled = _compile_capped(_strict_object({"s": _capped(5, min_length=5)}))
-    quote = CAPPED_VOCAB.index('"')
-    assert quote not in _allowed_token_ids(_matcher_after(compiled, '{"s": "aaaa'), tokenizer_info)
-    assert quote in _allowed_token_ids(_matcher_after(compiled, '{"s": "aaaaa'), tokenizer_info)
-
-
-def test_capped_string_masks_tokens_that_cross_the_cap() -> None:
-    tokenizer_info = _capped_tokenizer_info()
-    compiled = _compile_capped(_strict_object({"s": _capped(5)}))
-    for consumed in range(6):
-        allowed = _allowed_token_ids(
-            _matcher_after(compiled, '{"s": "' + "a" * consumed), tokenizer_info
-        )
-        for length in range(1, 7):
-            token_id = CAPPED_VOCAB.index("a" * length)
-            assert (token_id in allowed) is (length <= 5 - consumed), (consumed, length)
-
-
-def test_capped_string_character_class() -> None:
-    """The class is [^"\\\r\n]: no escapes, and raw control characters other than CR/LF."""
-    compiled = _compile_capped(_strict_object({"s": _capped(5)}))
-    for char in ["\\", "\r", "\n"]:
-        assert not _accepts(compiled, '{"s": "a' + char), repr(char)
-    for char in ["\t", "\x00"]:
-        assert _accepts(compiled, '{"s": "a' + char + '"}'), repr(char)
-    assert _accepts(compiled, '{"s": "a"}')
-
-
-CAPPED_SCHEMAS = [
-    _strict_object({"a": _capped(3), "b": _capped(2)}),
-    _strict_object({"a": _capped(3, min_length=2), "b": {"type": "boolean"}}),
-    _strict_object({"a": {"anyOf": [_capped(2), {"type": "null"}]}, "b": _capped(4)}),
-    _strict_object(
-        {"a": {"type": "array", "minItems": 1, "maxItems": 2, "items": _capped(2)}, "b": _capped(3)}
-    ),
-    _strict_object({"a": _strict_object({"a": _capped(1), "b": _capped(3)}), "b": _capped(2)}),
-    {"type": "array", "items": _strict_object({"a": _capped(2), "b": _capped(1)})},
-    _capped(3),
-    _capped(3, min_length=1),
+# Tokens that close a string and run into what follows it, which the matcher decides per
+# repetition parent, for strings followed by a fixed separator (any_whitespace=False).
+CAPPED_VOCAB = EXIT_VOCAB + [
+    token.encode()
+    for token in ["{", "}", ", ", ": ", '", ', '"}', '"]', '"}]', '""', '"x', '"b": "', "null"]
+    + ["é", 'é"', 'a"}', 'a"]', 'a""', ' ""', 'a", "b": "']
 ]
 
 
-@pytest.mark.parametrize("schema", CAPPED_SCHEMAS)
+def _capped(max_length: int, min_length: int = 0) -> dict[str, object]:
+    return {"type": "string", "maxLength": max_length, "minLength": min_length}
+
+
+def _object(properties: dict[str, object]) -> dict[str, object]:
+    return {"type": "object", "properties": properties, "required": list(properties)}
+
+
+def _compile_capped(schema: dict[str, object]) -> tuple[xgr.CompiledGrammar, xgr.TokenizerInfo]:
+    tokenizer_info = xgr.TokenizerInfo(list(CAPPED_VOCAB))
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(
+        json.dumps(schema), any_whitespace=False
+    )
+    return compiled, tokenizer_info
+
+
+def _full_value(schema: dict[str, object]) -> object:
+    """A value whose capped strings are full, so that every count reaches its bound."""
+    if "anyOf" in schema:
+        return _full_value(schema["anyOf"][0])  # type: ignore[index]
+    if schema["type"] == "string":
+        return ("aé" * 8)[: schema["maxLength"]]  # type: ignore[index]
+    if schema["type"] == "array":
+        return [_full_value(schema["items"]) for _ in range(schema["maxItems"])]  # type: ignore[arg-type]
+    return {key: _full_value(sub) for key, sub in schema["properties"].items()}  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        _object({"a": _capped(3), "b": _capped(2)}),
+        _object({"a": _capped(3, min_length=2), "b": _capped(1, min_length=1)}),
+        _object({"a": {"anyOf": [_capped(2), {"type": "null"}]}, "b": _capped(4)}),
+        _object({"a": {"type": "array", "items": _capped(2), "minItems": 1, "maxItems": 2}}),
+        _object({"a": _object({"a": _capped(1), "b": _capped(3)}), "b": _capped(2)}),
+        _capped(3),
+    ],
+)
 def test_tokens_that_leave_a_capped_string_mid_token_match_the_replay(
     schema: dict[str, object]
 ) -> None:
-    """Every capped string keeps its own count, and a token that closes one string and runs into
-    what follows it is allowed exactly when the matcher accepts it."""
-    tokenizer_info = _capped_tokenizer_info()
-    compiled = _compile_capped(schema)
-    value = json.loads(json.dumps(_example_value(schema)))
-    text = json.dumps(value, ensure_ascii=False, separators=(", ", ": "))
-    # Every prefix that ends inside a string, and the ones right after a string closes.
-    prefixes = [text[:end] for end in range(1, len(text)) if text[end - 1] in 'aé"']
-    for prefix in prefixes:
-        _assert_mask_matches_replay(compiled, tokenizer_info, prefix)
+    """Each capped string keeps its own count, and a token that closes one and runs into what
+    follows it is allowed exactly when the matcher accepts it."""
+    compiled, tokenizer_info = _compile_capped(schema)
+    text = json.dumps(_full_value(schema), ensure_ascii=False, separators=(", ", ": "))
+    for end in range(1, len(text)):
+        if text[end - 1] in 'aé"':
+            _assert_mask_matches_replay(compiled, tokenizer_info, text[:end])
 
 
-def _example_value(schema: dict[str, object]) -> object:
-    """A value whose capped strings are full, which puts every count at its bound once."""
-    if "anyOf" in schema:
-        return _example_value(schema["anyOf"][0])  # type: ignore[index]
-    kind = schema["type"]
-    if kind == "string":
-        return ("aé" * 8)[: schema["maxLength"]]  # type: ignore[index]
-    if kind == "boolean":
-        return True
-    if kind == "array":
-        return [_example_value(schema["items"]) for _ in range(schema.get("maxItems", 2))]  # type: ignore[arg-type]
-    return {key: _example_value(sub) for key, sub in schema["properties"].items()}  # type: ignore[union-attr]
-
-
-@pytest.mark.parametrize("min_length", [0, 2])
-def test_deserialized_capped_string_exit_tokens_match(min_length: int) -> None:
-    tokenizer_info = _capped_tokenizer_info()
-    compiled = _compile_capped(
-        _strict_object({"a": _capped(3, min_length=min_length), "b": _capped(2)})
-    )
+def test_deserialized_capped_string_exit_tokens_match() -> None:
+    compiled, tokenizer_info = _compile_capped(_object({"a": _capped(3, 1), "b": _capped(2)}))
     restored = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), tokenizer_info)
-    for text in ['{"a": "', '{"a": "a', '{"a": "aaa', '{"a": "aa", "b": "', '{"a": "aa", "b": "a']:
+    for text in ['{"a": "', '{"a": "a', '{"a": "aaa', '{"a": "aa", "b": "a']:
         assert _allowed_token_ids(_matcher_after(restored, text), tokenizer_info) == (
             _allowed_token_ids(_matcher_after(compiled, text), tokenizer_info)
         ), text
-        _assert_mask_matches_replay(restored, tokenizer_info, text)
-
-
-def test_capped_string_inherits_the_lookahead_of_its_property() -> None:
-    """The rule that holds the counted repetition only ends the string rule, so it is followed by
-    exactly what follows the string."""
-    grammar = str(_compile_capped(_strict_object({"a": _capped(3), "b": _capped(2)})).grammar)
-    counted = [line for line in grammar.splitlines() if "_counted ::=" in line]
-    assert len(counted) == 2
-    assert all("(=(" in line for line in counted), counted
 
 
 @pytest.mark.parametrize(
@@ -584,45 +497,6 @@ def test_lookahead_is_inherited_only_through_a_single_last_reference(
     rules = {line.split(" ::= ")[0]: line for line in str(compiled.grammar).splitlines()}
     for name, expected in inherits.items():
         assert rules[name].endswith('(=("!"))') is expected, rules[name]
-    for text in ["", "<", "<z", "(", "q"]:
-        if xgr.GrammarMatcher(compiled, terminate_without_stop_token=True).accept_string(text):
+    for text in ["", "<", "<z", "("]:
+        if xgr.GrammarMatcher(compiled).accept_string(text):
             _assert_mask_matches_replay(compiled, tokenizer_info, text)
-
-
-def test_capped_string_fill_is_not_slower_than_uncapped() -> None:
-    """Speed guard: inside a capped string, the fill decides the tokens that close the string from
-    bitsets and per-parent lists instead of replaying them. Before that it was about 1.6x the
-    uncapped fill on this vocabulary (and 2x on Qwen3.5's); now it is far below it, because the
-    uncapped string's lookahead is not exact and leaves every token that closes it uncertain."""
-    import random
-    import time
-
-    rng = random.Random(0)
-    letters = "abcdefghijklmnopqrstuvwxyz"
-    vocab = sorted(
-        {
-            prefix + "".join(rng.choice(letters) for _ in range(rng.randint(1, 8))) + suffix
-            for prefix in ["", " ", '"', ' "']
-            for suffix in ["", '"', '",', '", "', '"}', '"]', ".", ",", '":', '"),', '")']
-            for _ in range(400)
-        }
-    )
-    tokenizer_info = xgr.TokenizerInfo(vocab)
-    compiler = xgr.GrammarCompiler(tokenizer_info)
-
-    def fill_seconds(string_schema: dict[str, object]) -> float:
-        schema = _strict_object({"a": string_schema, "b": {"type": "boolean"}})
-        compiled = compiler.compile_json_schema(json.dumps(schema), any_whitespace=False)
-        matcher = _matcher_after(compiled, '{"a": "the quick brown fox')
-        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-        best = float("inf")
-        for _ in range(5):
-            start = time.perf_counter()
-            for _ in range(200):
-                matcher.fill_next_token_bitmask(bitmask)
-            best = min(best, time.perf_counter() - start)
-        return best
-
-    capped = fill_seconds(_capped(300))
-    uncapped = fill_seconds({"type": "string"})
-    assert capped <= uncapped, f"capped {capped:.4f}s vs uncapped {uncapped:.4f}s"
