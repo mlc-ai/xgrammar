@@ -3706,7 +3706,7 @@ std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(
     m["hostname"] = "^([a-z0-9]([a-z0-9-]*[a-z0-9])?)(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$";
     m["uuid"] = "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$";
 
-    std::string schema_pat = "[a-zA-Z][a-zA-Z+\\.-]*";
+    std::string schema_pat = "[a-zA-Z][a-zA-Z0-9+\\.-]*";
     std::string pchar = "([\\w\\.~!$&'()*+,;=:@-]|%[0-9A-Fa-f][0-9A-Fa-f])";
     std::string query_fragment_char = "([\\w\\.~!$&'()*+,;=:@/\\?-]|%[0-9A-Fa-f][0-9A-Fa-f])*";
     std::string query = "(\\?" + query_fragment_char + ")?";
@@ -3733,7 +3733,8 @@ std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(
     authority = "(" + userinfo + "@)?" + host + "(:\\d*)?";
     std::string relative_part =
         "(//" + authority + path_abempty + "|" + path_absolute + "|" + path_noscheme + ")?";
-    m["uri-reference"] = "^" + relative_part + query + fragment + "$";
+    m["uri-reference"] =
+        "^(" + schema_pat + ":" + hier_part + "|" + relative_part + ")" + query + fragment + "$";
 
     std::string literals =
         "([\\x21\\x23-\\x24\\x26\\x28-\\x3B\\x3D\\x3F-\\x5B\\x5D\\x5F\\x61-\\x7A\\x7E]"
