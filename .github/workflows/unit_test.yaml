@@ -98,17 +98,12 @@ jobs:
           - {os: windows-11-vs2026-arm, python: '3.11'}
           - {os: windows-11-vs2026-arm, python: '3.12'}
           - {os: windows-11-vs2026-arm, python: '3.13'}
-        exclude:
-          - os: macos-14
-            python: '3.14t'
-          - os: macos-15-intel
-            python: '3.13'
-          - os: macos-15-intel
-            python: '3.14'
-          - os: macos-15-intel
-            python: '3.14t'
-            # The reason for the exclusion is that pytorch distribution
-            # can't be found by pip on macos-15-intel with python 3.13.
+        # macos-15-intel: no pytorch wheel for 3.13+ (pip can't find it). On pull requests, also run only
+        # 3.8 and 3.12 there (oldest + newest supported): the 5-concurrent-macOS-job cap is the PR wall-time floor.
+        # Push to main keeps every leg; macos-14 (arm64) keeps all versions on PRs.
+        exclude: ${{ fromJSON(github.event_name == 'pull_request' && '[{"os":"macos-14","python":"3.14t"},{"os":"macos-15-intel","python":"3.13"},{"os":"macos-15-intel","python":"3.14"},{"os":"macos-15-intel","python":"3.14t"},{"os":"macos-15-intel","python":"3.9"},{"os":"macos-15-intel","python":"3.10"},{"os":"macos-15-intel","python":"3.11"}]'
+          || '[{"os":"macos-14","python":"3.14t"},{"os":"macos-15-intel","python":"3.13"},{"os":"macos-15-intel","python":"3.14"},{"os":"macos-15-intel","python":"3.14t"}]')
+          }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
