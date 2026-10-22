@@ -1570,6 +1570,10 @@ def get_qwen_3_5_structural_tag(
     - Qwen3-Coder
     - Qwen3-Coder-Next
 
+    Zero-argument calls can close immediately after the function-opening newline.
+    An optional newline before ``</function>`` preserves existing call forms
+    without consuming the parameters' ``max_whitespace_cnt`` allowance.
+
     Returns
     -------
     StructuralTag
@@ -1577,7 +1581,7 @@ def get_qwen_3_5_structural_tag(
     """
     TOOL_CALL_BEGIN_PREFIX = "<tool_call>\n<function="
     TOOL_CALL_BEGIN_SUFFIX = ">\n"
-    TOOL_CALL_END = "\n</function>\n</tool_call>"
+    TOOL_CALL_END = "</function>\n</tool_call>"
     TOOL_CALL_TRIGGER = "<tool_call>\n<function="
     THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
@@ -1585,21 +1589,29 @@ def get_qwen_3_5_structural_tag(
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
     tools = tools or []
     builtin_tools = builtin_tools or []
+
+    def parameter_content(function: FunctionDefinition) -> SequenceFormat:
+        return SequenceFormat(
+            elements=[
+                JSONSchemaFormat(
+                    json_schema=_get_function_parameters(function),
+                    style="qwen_xml",
+                    any_order=any_order,
+                    max_whitespace_cnt=max_whitespace_cnt,
+                ),
+                OptionalFormat(content=ConstStringFormat(value="\n")),
+            ]
+        )
+
     if tool_choice == "auto":
         tags = []
         for tool in tools:
             function = tool.function
-            parameters = _get_function_parameters(function)
             name = function.name
             tags.append(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
-                    content=JSONSchemaFormat(
-                        json_schema=parameters,
-                        style="qwen_xml",
-                        any_order=any_order,
-                        max_whitespace_cnt=max_whitespace_cnt,
-                    ),
+                    content=parameter_content(function),
                     end=TOOL_CALL_END,
                 )
             )
@@ -1622,12 +1634,7 @@ def get_qwen_3_5_structural_tag(
         function = tools[0].function
         suffix_tag = TagFormat(
             begin=f"{TOOL_CALL_BEGIN_PREFIX}{function.name}{TOOL_CALL_BEGIN_SUFFIX}",
-            content=JSONSchemaFormat(
-                json_schema=_get_function_parameters(function),
-                style="qwen_xml",
-                any_order=any_order,
-                max_whitespace_cnt=max_whitespace_cnt,
-            ),
+            content=parameter_content(function),
             end=TOOL_CALL_END,
         )
 
@@ -1635,17 +1642,11 @@ def get_qwen_3_5_structural_tag(
         tags = []
         for tool in tools:
             function = tool.function
-            parameters = _get_function_parameters(function)
             name = function.name
             tags.append(
                 TagFormat(
                     begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
-                    content=JSONSchemaFormat(
-                        json_schema=parameters,
-                        style="qwen_xml",
-                        any_order=any_order,
-                        max_whitespace_cnt=max_whitespace_cnt,
-                    ),
+                    content=parameter_content(function),
                     end=TOOL_CALL_END,
                 )
             )
