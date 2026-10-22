@@ -157,7 +157,7 @@ enum class SchemaErrorType : int {
 using SchemaError = TypedError<SchemaErrorType>;
 
 // Unbounded integer multipleOf emits a modulo DFA: states ~= N, transitions ~= 10N.
-// Fail closed above the cap to keep generated grammars bounded.
+// Cap the divisor to keep generated grammars bounded.
 constexpr int64_t kIntegerMultipleOfMax = 1024;
 constexpr int64_t kIntegerMultipleOfRangeWidthMax = 10000;
 
@@ -1057,23 +1057,13 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
         SchemaErrorType::kUnsatisfiableSchema, "Invalid range: minimum greater than maximum"
     );
   }
-  if (spec.multiple_of.has_value()) {
-    bool has_lower_bound = spec.minimum.has_value() || spec.exclusive_minimum.has_value();
-    bool has_upper_bound = spec.maximum.has_value() || spec.exclusive_maximum.has_value();
-    if (has_lower_bound || has_upper_bound) {
-      if (!has_lower_bound || !has_upper_bound ||
-          IsRangeWidthOverCap(effective_min, effective_max, kIntegerMultipleOfRangeWidthMax)) {
-        XGRAMMAR_LOG(WARNING
-        ) << "range + multipleOf combination not yet supported; ignoring multipleOf";
-        spec.multiple_of.reset();
-        return ResultOk(std::move(spec));
-      }
-      if (!HasMultipleInRange(effective_min, effective_max, *spec.multiple_of)) {
-        return ResultErr<SchemaError>(
-            SchemaErrorType::kUnsatisfiableSchema, "range contains no multipleOf value"
-        );
-      }
-    }
+  if (spec.multiple_of.has_value() && effective_range.start.has_value() &&
+      effective_range.end.has_value() &&
+      !IsRangeWidthOverCap(effective_min, effective_max, kIntegerMultipleOfRangeWidthMax) &&
+      !HasMultipleInRange(effective_min, effective_max, *spec.multiple_of)) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema, "range contains no multipleOf value"
+    );
   }
   return ResultOk(std::move(spec));
 }
@@ -2632,9 +2622,9 @@ int32_t JSONSchemaConverter::GenerateInteger(
   std::optional<int64_t> end = range.end;
 
   if (spec.multiple_of.has_value()) {
-    // ParseInteger keeps multiple_of only when the range is fully bounded (enumerate the
-    // multiples) or fully unbounded (emit a modulo DFA); the half-bounded case is dropped there.
-    if (start.has_value() && end.has_value()) {
+    // Keep enumeration for small finite ranges; larger and one-sided ranges use a DFA.
+    if (start.has_value() && end.has_value() &&
+        !IsRangeWidthOverCap(*start, *end, kIntegerMultipleOfRangeWidthMax)) {
       std::vector<int32_t> multiples;
       for (int64_t value = *start; value <= *end; ++value) {
         if (IsMultipleOf(value, *spec.multiple_of)) {
@@ -2646,7 +2636,7 @@ int32_t JSONSchemaConverter::GenerateInteger(
       }
       return Choice(multiples);
     }
-    return GenerateIntegerMultipleOfDFA(*spec.multiple_of, rule_name);
+    return GenerateIntegerMultipleOfDFA(*spec.multiple_of, rule_name, start, end);
   }
   if (start.has_value() || end.has_value()) {
     return RegexExpression(
@@ -2667,8 +2657,73 @@ int32_t JSONSchemaConverter::GenerateInteger(
 }
 
 int32_t JSONSchemaConverter::GenerateIntegerMultipleOfDFA(
-    int64_t multiple_of, const std::string& rule_name
+    int64_t multiple_of,
+    const std::string& rule_name,
+    std::optional<int64_t> start,
+    std::optional<int64_t> end
 ) {
+  if (start.has_value() || end.has_value()) {
+    auto range = GrammarFSMBuilder::Regex(GenerateRangeRegex(start, end));
+    XGRAMMAR_CHECK(range.IsOk()) << std::move(range).UnwrapErr().what();
+
+    // The range automaton enforces the sign and canonical integer spelling. Track the
+    // magnitude's remainder independently, since the sign cannot change divisibility.
+    int32_t initial = static_cast<int32_t>(multiple_of);
+    int32_t negative = initial + 1;
+    FSM modulo(initial + 2);
+    for (int32_t state = 0; state < initial + 2; ++state) {
+      int64_t remainder = state < initial ? state : 0;
+      for (int32_t digit = 0; digit <= 9; ++digit) {
+        modulo.AddEdge(state, (remainder * 10 + digit) % multiple_of, '0' + digit, '0' + digit);
+      }
+    }
+    modulo.AddEdge(initial, negative, '-', '-');
+    auto intersected = FSMWithStartEnd::Intersect(
+        std::move(range).Unwrap(), FSMWithStartEnd(modulo, initial, {0}, true)
+    );
+    XGRAMMAR_CHECK(intersected.IsOk()) << std::move(intersected).UnwrapErr().what();
+    auto fsm = std::move(intersected).Unwrap();
+
+    // Remove prefixes that cannot finish at a multiple within the range. Keeping them
+    // would let constrained decoding enter a state with no valid next token.
+    std::vector<std::vector<int32_t>> predecessors(fsm.NumStates());
+    for (int32_t state = 0; state < fsm.NumStates(); ++state) {
+      for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+        predecessors[edge.target].push_back(state);
+      }
+    }
+    std::vector<bool> productive(fsm.NumStates(), false);
+    std::vector<int32_t> pending(fsm.GetEnds().begin(), fsm.GetEnds().end());
+    for (int32_t state : pending) productive[state] = true;
+    for (size_t index = 0; index < pending.size(); ++index) {
+      for (int32_t state : predecessors[pending[index]]) {
+        if (!productive[state]) {
+          productive[state] = true;
+          pending.push_back(state);
+        }
+      }
+    }
+    if (!productive[fsm.GetStart()]) return Unsatisfiable();
+
+    std::vector<int32_t> rules(fsm.NumStates(), -1);
+    for (int32_t state : pending) {
+      rules[state] = builder_.AddEmptyRuleWithHint(rule_name + "_multiple_of_range");
+    }
+    for (int32_t state : pending) {
+      std::vector<int32_t> choices;
+      if (fsm.IsEndState(state)) choices.push_back(Empty());
+      for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+        if (!productive[edge.target]) continue;
+        XGRAMMAR_DCHECK(edge.IsCharRange());
+        choices.push_back(Sequence(
+            {builder_.AddCharacterClass({{edge.min, edge.max}}), RuleRef(rules[edge.target])}
+        ));
+      }
+      builder_.UpdateRuleBody(rules[state], Choice(choices));
+    }
+    return RuleRef(rules[fsm.GetStart()]);
+  }
+
   std::vector<int32_t> states(multiple_of);
   for (int64_t state = 0; state < multiple_of; ++state) {
     states[state] = builder_.AddEmptyRuleWithHint(
