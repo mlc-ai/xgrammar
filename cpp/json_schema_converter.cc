@@ -4178,6 +4178,12 @@ int32_t XMLToolCallingConverter::FormatRawXMLValue(
     if (const auto* str = std::get_if<StringSpec>(&schema->spec);
         str && !str->pattern.has_value() && !str->format.has_value() &&
         (str->min_length != 0 || str->max_length != -1)) {
+      if (json_format_ == JSONFormat::kQwenXML) {
+        // The Qwen3-Coder template writes "<parameter=k>\n" + value + "\n</parameter>", and parsers
+        // strip one newline on each side, so those two are markup outside the bounded value.
+        const int32_t newline = Choice({Empty(), ByteString("\n")});
+        return finish(Sequence({newline, RuleRef(value_rule_id), newline}));
+      }
       return finish(RuleRef(value_rule_id));
     }
   }

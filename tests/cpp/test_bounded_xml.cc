@@ -182,8 +182,47 @@ TEST_P(BoundedXMLTest, CharacterBoundariesUnicodeWhitespaceAndCompositions) {
                                << " value=" << testing::PrintToString(text)
         );
         GrammarMatcher matcher(grammar);
-        const bool wanted = chars >= lo && (hi < 0 || chars <= hi);
+        bool wanted = chars >= lo && (hi < 0 || chars <= hi);
+        // In Qwen XML a lone newline may also be the template's framing around an empty value.
+        if (std::string(GetParam().style) == "qwen_xml" && text == "\n") wanted = lo <= 1;
         EXPECT_EQ(matcher.AcceptString(Call(text)), wanted);
+      }
+    }
+  }
+}
+
+TEST_P(BoundedXMLTest, QwenTemplateNewlinesAreNotCounted) {
+  if (std::string(GetParam().style) != "qwen_xml") GTEST_SKIP() << "Qwen XML framing only";
+  // The Qwen3-Coder template writes "<parameter=k>\n" + value + "\n</parameter>".
+  const std::vector<std::pair<std::string, int>> values = {
+      {"", 0},
+      {"a", 1},
+      {"ab", 2},
+      {"abcd", 4},
+      {"abcde", 5},
+      {" a ", 3},
+      {"é", 1},
+      {"日本", 2},
+      {"a\nb", 3}
+  };
+  const std::vector<std::pair<int, int>> bounds = {{0, 0}, {0, 1}, {1, 1}, {1, 4}, {2, 4}, {3, -1}};
+  for (const auto& variant : {"direct", "ref", "allOf", "nullable", "recursive"}) {
+    for (const auto& [lo, hi] : bounds) {
+      const auto grammar = CompileBounded(lo, hi, variant);
+      for (const auto& [text, chars] : values) {
+        SCOPED_TRACE(
+            testing::Message() << "variant=" << variant << " min=" << lo << " max=" << hi
+                               << " value=" << testing::PrintToString(text)
+        );
+        // maxLength is exact on the framed value. Each optional framing newline can instead be read
+        // as part of the value, so minLength has up to two characters of slack.
+        bool wanted = false;
+        for (int extra = 0; extra <= 2; ++extra) {
+          wanted |= chars + extra >= lo && (hi < 0 || chars + extra <= hi);
+        }
+        if (hi >= 0 && chars > hi) wanted = false;
+        GrammarMatcher matcher(grammar);
+        EXPECT_EQ(matcher.AcceptString(Call("\n" + text + "\n")), wanted);
       }
     }
   }
