@@ -52,5 +52,35 @@ TEST(JSONTest, JSONSchemaCarriageReturnWhitespaceModes) {
   EXPECT_FALSE(MatchesEntireString(capped, "{\r\n\r\"value\": 3}"));
 }
 
+TEST(JSONTest, UnicodePatternsRetainJSONStringExclusions) {
+  GrammarCompiler compiler(TokenizerInfo(std::vector<std::string>{}), 1, false);
+  auto grammar = compiler.CompileJSONSchema(
+      R"({"type":"string","pattern":"^[é\\s\\S]{1,64}$"})"
+  );
+  EXPECT_TRUE(MatchesEntireString(grammar, "\"hello é 🙂 world\""));
+  EXPECT_FALSE(MatchesEntireString(grammar, "\"hello\"world\""));
+  for (char control = 0; control < 0x20; ++control) {
+    EXPECT_FALSE(MatchesEntireString(grammar, std::string("\"hello") + control + "world\""));
+  }
+  auto literal = compiler.CompileJSONSchema(R"({"type":"string","pattern":"^é🙂+$"})");
+  EXPECT_TRUE(MatchesEntireString(literal, "\"é🙂🙂\""));
+  EXPECT_FALSE(MatchesEntireString(literal, "\"éé\""));
+}
+
+TEST(JSONTest, EscapedOnlyPatternsFailBeforeGenerationInsteadOfUsingRawCFG) {
+  GrammarCompiler compiler(TokenizerInfo(std::vector<std::string>{}), 1, false);
+  for (const auto* schema : {
+           R"({"type":"string","pattern":"^\\\"$"})",
+           R"({"type":"string","pattern":"^\\n$"})",
+           R"({"type":"string","pattern":"^\\\\$"})",
+           R"({"type":"object","properties":{"text":{"type":"string","pattern":"^\\\"$"}}})",
+       }) {
+    EXPECT_ANY_THROW(compiler.CompileJSONSchema(schema));
+  }
+  // The independent raw-regex API is not JSON and must keep accepting these bytes.
+  auto raw = compiler.CompileRegex("^\"$");
+  EXPECT_TRUE(MatchesEntireString(raw, "\""));
+}
+
 }  // namespace
 }  // namespace xgrammar
