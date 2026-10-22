@@ -416,6 +416,12 @@ class GrammarMatcher(XGRObject):
 
         This method does not change the matcher state.
 
+        The result contains only complete UTF-8 characters. If the forced bytes stop inside a
+        multi-byte character (for example, when the grammar allows both "é" and "è", only their
+        shared first byte is forced) or start inside one (after accepting a token that splits a
+        character), the result stops before that character. Use
+        :meth:`find_jump_forward_tokens` to obtain the forced bytes as token ids.
+
         Returns
         -------
         jump_forward_string : str
