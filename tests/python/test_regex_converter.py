@@ -1,5 +1,6 @@
 import sys
 import time
+from typing import List
 
 import pytest
 from tokenizer_utils import load_tokenizer
@@ -121,6 +122,31 @@ def test_non_whitespace_accepts_bracket():
     assert _is_grammar_accept_string(grammar_str, "[")
     assert _is_grammar_accept_string(grammar_str, "a")
     assert not _is_grammar_accept_string(grammar_str, " ")
+
+
+# An escaped "^" is a literal wherever it appears in a class. Left unescaped at the start of the
+# generated EBNF class, it would negate the class instead.
+escaped_caret_in_char_class = [
+    (r"[\^a]", r"[\^a]", ["^", "a"], ["b"]),
+    (r"[\^]", r"[\^]", ["^"], ["a"]),
+    (r"[a\^]", r"[a\^]", ["a", "^"], ["b"]),
+    (r"[^\^]", r"[^\^]", ["a"], ["^"]),
+    (r"[\u005ea]", r"[\^a]", ["^", "a"], ["b"]),
+]
+
+
+@pytest.mark.parametrize("regex, expected_class, accepted, rejected", escaped_caret_in_char_class)
+def test_escaped_caret_in_char_class(
+    regex: str, expected_class: str, accepted: List[str], rejected: List[str]
+):
+    assert _regex_to_ebnf(regex) == f"root ::= {expected_class}\n"
+    grammar = xgr.Grammar.from_regex(regex)
+    # The printed grammar must parse back to the same language.
+    for g in [grammar, xgr.Grammar.from_ebnf(str(grammar))]:
+        for instance in accepted:
+            assert _is_grammar_accept_string(g, instance), instance
+        for instance in rejected:
+            assert not _is_grammar_accept_string(g, instance), instance
 
 
 def test_char_class():

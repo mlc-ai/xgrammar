@@ -66,6 +66,17 @@ def test_complex_character_class():
     assert after == expected
 
 
+def test_character_class_with_literal_caret():
+    """A literal '^' at the start of a non-negated class must stay escaped when printed."""
+    before = r"""root ::= [\^a] [\^] [^^] [a^]
+"""
+    expected = r"""root ::= (([\^a] [\^] [^^] [a^]))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    after = str(grammar)
+    assert after == expected
+
+
 def test_sequence():
     """Test sequence of expressions."""
     before = """root ::= "a" "b" "c"
