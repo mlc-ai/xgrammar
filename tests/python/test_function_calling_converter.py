@@ -2988,6 +2988,8 @@ _XML_DYNAMIC_PROPERTY_CASES = (
         ("email", r'"a\\b"@example.com', True),
         ("email", r"\"a\"@example.com", False),
         ("email", '"a"b"@example.com', False),
+        ("uri", "s3://bucket/key", True),
+        ("uri-reference", "s3://bucket/key", True),
     ],
 )
 def test_xml_string_formats_keep_raw_values(
