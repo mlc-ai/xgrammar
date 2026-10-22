@@ -270,6 +270,7 @@ TokenizerInfo::Impl::Impl(
     VocabType vocab_type,
     std::optional<int> vocab_size,
     std::optional<std::vector<int32_t>> stop_token_ids,
+    std::optional<std::vector<int32_t>> special_token_ids,
     bool add_prefix_space
 )
     : vocab_type_(vocab_type),
@@ -285,11 +286,17 @@ TokenizerInfo::Impl::Impl(
   for (int i = 0; i < static_cast<int>(encoded_vocab.size()); ++i) {
     const std::string& token = TokenDecoder::DecodeToken(encoded_vocab[i], vocab_type_);
     decoded_vocab_.push_back(token);
+    // Unlike stop_token_ids, a caller-provided special_token_ids extends the detected set instead
+    // of replacing it: GrammarMatcher relies on the padding ids appended after this loop being
+    // special, so detection stays in effect no matter what the caller declares.
     if ((!stop_token_ids && DETECTION_STOP_TOKENS.count(token)) ||
         (stop_token_ids &&
          std::find(stop_token_ids->begin(), stop_token_ids->end(), i) != stop_token_ids->end())) {
       stop_token_ids_.push_back(i);
-    } else if (IsSpecialToken(token)) {
+    } else if (IsSpecialToken(token) ||
+               (special_token_ids &&
+                std::find(special_token_ids->begin(), special_token_ids->end(), i) !=
+                    special_token_ids->end())) {
       special_token_ids_.push_back(i);
     } else {
       sorted_decoded_vocab_.push_back({i, token});
@@ -479,8 +486,9 @@ std::shared_ptr<TokenizerInfo::Impl> TokenizerInfo::Impl::FromVocabAndMetadata(
     XGRAMMAR_CHECK(id.is<int64_t>()) << "Stop token id is not an integer";
     stop_token_ids.push_back(static_cast<int32_t>(id.get<int64_t>()));
   }
+  // special_token_ids is not part of the metadata schema, so it is always detected here.
   return std::make_shared<Impl>(
-      encoded_vocab, vocab_type, vocab_size, stop_token_ids, add_prefix_space
+      encoded_vocab, vocab_type, vocab_size, stop_token_ids, std::nullopt, add_prefix_space
   );
 }
 
@@ -506,10 +514,11 @@ TokenizerInfo::TokenizerInfo(
     VocabType vocab_type,
     std::optional<int> vocab_size,
     std::optional<std::vector<int32_t>> stop_token_ids,
+    std::optional<std::vector<int32_t>> special_token_ids,
     bool add_prefix_space
 )
     : pimpl_(std::make_shared<Impl>(
-          encoded_vocab, vocab_type, vocab_size, stop_token_ids, add_prefix_space
+          encoded_vocab, vocab_type, vocab_size, stop_token_ids, special_token_ids, add_prefix_space
       )) {}
 
 int TokenizerInfo::GetVocabSize() const { return pimpl_->GetVocabSize(); }
