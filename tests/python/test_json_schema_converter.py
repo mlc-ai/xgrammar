@@ -2875,6 +2875,34 @@ def test_string_pattern_with_length_still_ignores_the_bound(capfd):
     assert _is_grammar_accept_string(grammar, '"abcd"')
 
 
+@pytest.mark.parametrize("strict_mode", [True, False])
+def test_unique_items_warns_without_enforcing_uniqueness(capfd, strict_mode):
+    schema = {"type": "array", "items": {"type": "integer"}, "uniqueItems": True}
+    grammar = xgr.Grammar.from_json_schema(schema, strict_mode=strict_mode)
+    captured = capfd.readouterr()
+    output = captured.err + captured.out
+    assert "uniqueItems" in output and "not supported" in output, output
+
+    # This diagnostic must not change the accepted language.
+    del schema["uniqueItems"]
+    assert str(grammar) == str(xgr.Grammar.from_json_schema(schema, strict_mode=strict_mode))
+    assert _is_grammar_accept_string(grammar, "[1, 1]")
+    assert _is_grammar_accept_string(grammar, "[1, 2]")
+    assert _is_grammar_accept_string(grammar, "[]")
+    assert not _is_grammar_accept_string(grammar, '[1, "x"]')
+
+
+@pytest.mark.parametrize("strict_mode", [True, False])
+@pytest.mark.parametrize("unique_items", [False, None])
+def test_unique_items_false_or_omitted_does_not_warn(capfd, strict_mode, unique_items):
+    schema = {"type": "array", "items": {"type": "integer"}}
+    if unique_items is not None:
+        schema["uniqueItems"] = unique_items
+    xgr.Grammar.from_json_schema(schema, strict_mode=strict_mode)
+    captured = capfd.readouterr()
+    assert "uniqueItems" not in captured.err + captured.out
+
+
 def test_type_array():
     schema = {
         "type": ["integer", "string"],
