@@ -27,6 +27,7 @@
 namespace xgrammar {
 
 class FSMWithStartEnd;
+class EarleyParser;
 
 // ==================== SchemaSpec: Intermediate Representation for JSON Schema ====================
 
@@ -504,7 +505,7 @@ class JSONSchemaConverter {
       int min_properties,
       int max_properties,
       const std::optional<int32_t>& additional_property_override = std::nullopt,
-      const FSMWithStartEnd* property_names = nullptr
+      EarleyParser* property_name_parser = nullptr
   );
 
   /*! \brief Generate the object rule in "any order" mode: an "item" alternation over all property

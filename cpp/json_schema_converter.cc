@@ -28,6 +28,7 @@
 #include <variant>
 #include <vector>
 
+#include "earley_parser.h"
 #include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_functor.h"
@@ -3191,7 +3192,7 @@ int32_t JSONSchemaConverter::GetPartialRuleForProperties(
     int min_properties,
     int max_properties,
     const std::optional<int32_t>& additional_property_override,
-    const FSMWithStartEnd* property_names
+    EarleyParser* property_name_parser
 ) {
   if (max_properties == 0) {
     return Empty();
@@ -3199,7 +3200,17 @@ int32_t JSONSchemaConverter::GetPartialRuleForProperties(
   std::vector<int32_t> property_patterns;
   for (size_t index = 0; index < properties.size(); ++index) {
     const auto& property = properties[index];
-    if (property_names && !property_names->AcceptString(property.name)) {
+    bool name_allowed = true;
+    if (property_name_parser) {
+      property_name_parser->Reset();
+      name_allowed = std::all_of(
+                         property.name.begin(),
+                         property.name.end(),
+                         [&](uint8_t byte) { return property_name_parser->Advance(byte); }
+                     ) &&
+                     property_name_parser->IsCompleted();
+    }
+    if (!name_allowed) {
       if (required.count(property.name)) {
         return Unsatisfiable();
       }
@@ -3501,7 +3512,7 @@ int32_t JSONSchemaConverter::GenerateObject(
 
   std::optional<int32_t> property_names_rule;
   std::optional<FSMWithStartEnd> property_names_fsm;
-  std::optional<FSMWithStartEnd> declared_names_fsm;
+  std::optional<EarleyParser> declared_names_parser;
   if (spec.property_names) {
     if (additional_property || (spec.properties.empty() && spec.pattern_properties.empty())) {
       property_names_rule = CreatePropertyNamesKeyRule(spec.property_names, rule_name + "_name");
@@ -3512,9 +3523,12 @@ int32_t JSONSchemaConverter::GenerateObject(
       );
     }
     if (!spec.properties.empty()) {
-      declared_names_fsm = PropertyNameFSM(
-          CreateRawPropertyNamesConstraintRule(spec.property_names, rule_name + "_declared_name")
-      );
+      int32_t key_rule =
+          CreateRawPropertyNamesConstraintRule(spec.property_names, rule_name + "_declared_name");
+      // Declared keys need membership checks, not expansion of a bounded repetition into an FSM.
+      declared_names_parser.emplace(GrammarOptimizer::Apply(
+          GrammarNormalizer::Apply(DeadCodeEliminator::Apply(builder_.Get(key_rule)))
+      ));
     }
   }
   auto pattern_key = [&](const std::string& pattern, const std::string& key_rule_name) {
@@ -3594,7 +3608,7 @@ int32_t JSONSchemaConverter::GenerateObject(
         spec.min_properties,
         spec.max_properties,
         additional_override,
-        declared_names_fsm.has_value() ? &*declared_names_fsm : nullptr
+        declared_names_parser.has_value() ? &*declared_names_parser : nullptr
     );
     has_content = spec.max_properties != 0;
     could_be_empty = spec.required.empty() && spec.min_properties == 0;
