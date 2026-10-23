@@ -83,6 +83,12 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
    */
   void AdaptCacheWithLookahead(AdaptiveTokenMask* cache, bool is_root_rule);
 
+  /*!
+   * \brief Classify a byte string from the initial state the way GetAdaptiveTokenMask classifies
+   * a token with these bytes, without the speculative and rule-level-cache shortcuts.
+   */
+  RepeatExitClass ClassifyBytes(const std::string& bytes, bool is_root_rule);
+
  private:
   /*! \brief Check if a token can pass the lookahead assertion. */
   std::pair</*acceptable*/ bool, /*can reach end*/ bool> IsTokenPassLookaheadAssertion(
@@ -809,6 +815,67 @@ const std::vector<int32_t>& GrammarMatcherForTokenMaskCache::GetTokenEdgeAccepte
   IntsetDifference(&tmp_token_edge_excluded_, tmp_token_edge_accepted_);
   IntsetComplement(&tmp_token_edge_accepted_, sorted_size, tmp_token_edge_excluded_);
   return tmp_token_edge_accepted_;
+}
+
+RepeatExitClass GrammarMatcherForTokenMaskCache::ClassifyBytes(
+    const std::string& bytes, bool is_root_rule
+) {
+  tmp_can_reach_end_stack_.assign(1, false);
+  tmp_can_reach_end_prefix_or_stack_.assign(1, false);
+  int matched_size = 0;
+  bool accepted = true;
+  for (; matched_size < static_cast<int>(bytes.size()); ++matched_size) {
+    if (!Advance(bytes[matched_size])) {
+      accepted = false;
+      break;
+    }
+    tmp_can_reach_end_stack_.push_back(IsCompleted());
+    tmp_can_reach_end_prefix_or_stack_.push_back(
+        tmp_can_reach_end_stack_.back() || tmp_can_reach_end_prefix_or_stack_.back()
+    );
+  }
+  const bool can_reach_end = tmp_can_reach_end_prefix_or_stack_.back();
+  RepeatExitClass result = RepeatExitClass::kRejected;
+  if (accepted) {
+    result = HasEnteredCharBudget() ? RepeatExitClass::kUncertain : RepeatExitClass::kAccepted;
+  } else if (can_reach_end && matched_size > 0) {
+    const bool is_exact_lookahead = grammar_->GetRule(init_rule_id_).is_exact_lookahead;
+    auto [lookahead_accepted, lookahead_completed] =
+        IsTokenPassLookaheadAssertion(bytes, tmp_can_reach_end_stack_);
+    if (!is_root_rule && lookahead_accepted) {
+      result = lookahead_completed || !is_exact_lookahead || HasEnteredCharBudget()
+                   ? RepeatExitClass::kUncertain
+                   : RepeatExitClass::kAccepted;
+    }
+  }
+  PopLastStates(matched_size);
+  return result;
+}
+
+std::vector<RepeatExitClass> ClassifyBytesAfterRepetition(
+    const Grammar& grammar,
+    const TokenizerInfo& tokenizer_info,
+    int32_t rule_id,
+    int32_t element_id,
+    const std::vector<std::string>& byte_strings
+) {
+  static const std::unordered_map<int32_t, DynamicBitset> kNoTagDispatch;
+  std::optional<RuleLevelCache> no_rule_level_cache;
+  const auto& rule = grammar->GetRule(rule_id);
+  GrammarMatcherForTokenMaskCache matcher(
+      grammar,
+      ParserState(rule_id, rule.body_expr_id, element_id, ParserState::kNoPrevInputPos, 0),
+      kNoTagDispatch,
+      tokenizer_info,
+      no_rule_level_cache
+  );
+  const bool is_root_rule = rule_id == grammar->GetRootRuleId();
+  std::vector<RepeatExitClass> result;
+  result.reserve(byte_strings.size());
+  for (const auto& bytes : byte_strings) {
+    result.push_back(matcher.ClassifyBytes(bytes, is_root_rule));
+  }
+  return result;
 }
 
 AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_root_rule) {

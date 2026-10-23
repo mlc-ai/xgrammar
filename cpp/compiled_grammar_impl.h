@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -73,6 +74,11 @@ struct AdaptiveTokenMask {
    * repetition on its last byte. Such a token is legal exactly when the repetitions it consumes
    * fit the budget and, with those before it, reach the lower bound of the repetition.
    *
+   * `repeat_parent_exit_tokens` does the same for the tokens that leave the repetition before
+   * their last byte, per repetition parent: the bytes after the repetition were classified at
+   * compile time from the parent state, with the parent rule's lookahead. A token is listed for
+   * the parents that accept those bytes; the parents that reject them reject the token.
+   *
    * These tokens are removed from the mask's own accepted and uncertain classes, and the mask
    * lists its accepted tokens explicitly, so a token that does not fit is rejected by this state.
    * Only body rules found by the eligibility analysis in PopulateRepeatInteriorBitsets get them.
@@ -86,6 +92,9 @@ struct AdaptiveTokenMask {
   std::vector<int32_t> repeat_interior_char_counts;
   std::vector<DynamicBitset> repeat_interior_bitsets;
   std::vector<std::pair<int32_t, int32_t>> repeat_exit_tokens;
+
+  /*! \brief Sorted (parent rule id, parent element id, repetitions consumed, token id). */
+  std::vector<std::tuple<int32_t, int32_t, int32_t, int32_t>> repeat_parent_exit_tokens;
 
   /*! \brief Default constructor. Only for deserialization. */
   AdaptiveTokenMask() = default;
@@ -111,7 +120,7 @@ struct AdaptiveTokenMask {
     return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
            MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset) +
            MemorySize(mask.repeat_interior_char_counts) + MemorySize(mask.repeat_interior_bitsets) +
-           MemorySize(mask.repeat_exit_tokens);
+           MemorySize(mask.repeat_exit_tokens) + MemorySize(mask.repeat_parent_exit_tokens);
   }
 };
 
@@ -162,6 +171,22 @@ class CompiledGrammar::Impl {
   );
   friend std::size_t MemorySize(const Impl& impl);
 };
+
+/*! \brief How the state after a counted repetition classifies the bytes a token has left. */
+enum class RepeatExitClass { kAccepted, kRejected, kUncertain };
+
+/*!
+ * \brief Classify each of `byte_strings` from the state `element_id` of rule `rule_id` the way
+ * the token mask of that state classifies a token with those bytes: with the rule's lookahead,
+ * and leaving to the matcher what the lookahead cannot decide. Defined in grammar_compiler.cc.
+ */
+std::vector<RepeatExitClass> ClassifyBytesAfterRepetition(
+    const Grammar& grammar,
+    const TokenizerInfo& tokenizer_info,
+    int32_t rule_id,
+    int32_t element_id,
+    const std::vector<std::string>& byte_strings
+);
 
 /*!
  * \brief Compute the counted-repetition fast path data for every mask in `cache`.

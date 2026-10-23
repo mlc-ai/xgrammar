@@ -1955,7 +1955,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     // every repeat count, so the count is read from the parse history here and the matching bitset
     // is accepted in one operation instead of replaying every such token.
     if (!adaptive_token_mask.repeat_interior_bitsets.empty() ||
-        !adaptive_token_mask.repeat_exit_tokens.empty()) {
+        !adaptive_token_mask.repeat_exit_tokens.empty() ||
+        !adaptive_token_mask.repeat_parent_exit_tokens.empty()) {
       // PopulateRepeatInteriorBitsets only fills the bitsets of body rules that are entered
       // through repeat edges alone, and none when character budgets are enforced. The mask lists
       // none of these tokens as accepted, so without a repetition parent this state would
@@ -1986,6 +1987,23 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
           if (num_repetitions <= budget &&
               parent_state.repeat_count + num_repetitions >= info->Lower()) {
             tmp_accepted_bitset_.Set(token_id, true);
+          }
+        }
+        // The tokens that leave the repetition before their last byte and that this parent
+        // accepts after it.
+        const auto& parent_exits = adaptive_token_mask.repeat_parent_exit_tokens;
+        for (auto it = std::lower_bound(
+                 parent_exits.begin(),
+                 parent_exits.end(),
+                 std::make_tuple(parent_state.rule_id, parent_state.element_id, INT32_MIN, 0)
+             );
+             it != parent_exits.end() && std::get<0>(*it) == parent_state.rule_id &&
+             std::get<1>(*it) == parent_state.element_id;
+             ++it) {
+          const int32_t num_repetitions = std::get<2>(*it);
+          if (num_repetitions <= budget &&
+              parent_state.repeat_count + num_repetitions >= info->Lower()) {
+            tmp_accepted_bitset_.Set(std::get<3>(*it), true);
           }
         }
       }

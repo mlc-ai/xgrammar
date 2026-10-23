@@ -1005,6 +1005,9 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
         continue;
       }
       auto look_head_assertion_id = DetectLookaheadAssertion(i);
+      if (look_head_assertion_id == -1) {
+        look_head_assertion_id = DetectInheritedLookaheadAssertion(i);
+      }
       if (look_head_assertion_id != -1) {
         builder_->UpdateLookaheadAssertion(i, look_head_assertion_id);
         builder_->UpdateLookaheadExact(i);
@@ -1025,12 +1028,46 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
     return builder_->AddSequence(rule_lookahead_infos_[rule_id].suffix_after_first_occurrence);
   }
 
+  /*!
+   * \brief The lookahead of a rule that only ever ends one other rule.
+   *
+   * A rule referenced exactly once, as the last element of a sequence of another rule, is followed
+   * by exactly what follows that rule. So it inherits the derived lookahead of the closest rule up
+   * that chain which has one. E.g. a length-capped JSON string compiles into
+   * `s ::= "\"" s_counted` and `s_counted ::= s_repeat{0, n} "\""`: without the inherited
+   * lookahead, every token that closes the string and continues past it is uncertain in the
+   * states of `s_counted` and is replayed on every mask.
+   */
+  int32_t DetectInheritedLookaheadAssertion(int32_t rule_id) {
+    int32_t cur = rule_id;
+    for (int32_t steps = 0; steps < base_grammar_->NumRules(); ++steps) {
+      if (!IsPlainlyReferencedRule(cur)) {
+        return -1;
+      }
+      if (cur != rule_id && CanUseDerivedLookahead(cur)) {
+        return builder_->AddSequence(rule_lookahead_infos_[cur].suffix_after_first_occurrence);
+      }
+      const auto& info = rule_lookahead_infos_[cur];
+      if (info.non_last_occurrence_count != 0 || info.last_occurrence_count != 1 ||
+          info.last_occurrence_parent == cur) {
+        return -1;
+      }
+      cur = info.last_occurrence_parent;
+    }
+    return -1;
+  }
+
  private:
   struct RuleLookaheadInfo {
     bool is_triggered_by_dispatch = false;
     bool appears_as_last_in_other_rule = false;
     int non_last_occurrence_count = 0;
     std::vector<int32_t> suffix_after_first_occurrence;
+    // The occurrences as the last element of a sequence of another rule, and that rule.
+    int last_occurrence_count = 0;
+    int32_t last_occurrence_parent = -1;
+    // Referenced other than by a rule reference in a sequence, e.g. by a repetition.
+    bool has_other_reference = false;
   };
 
   bool CanUseDerivedLookahead(int32_t rule_id) const {
@@ -1039,8 +1076,30 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
            info.non_last_occurrence_count == 1;
   }
 
+  /*!
+   * \brief Whether every reference to the rule is a plain rule reference in a sequence, and the
+   * rule has no rule-level semantics that could end it other than through its body.
+   */
+  bool IsPlainlyReferencedRule(int32_t rule_id) const {
+    const auto& info = rule_lookahead_infos_[rule_id];
+    const auto& rule = base_grammar_->GetRule(rule_id);
+    return rule_id != base_grammar_->GetRootRuleId() && !info.is_triggered_by_dispatch &&
+           !info.has_other_reference && rule.max_tokens < 0 && rule.max_chars < 0 &&
+           !rule.is_lazy && !rule.temperature.has_value() &&
+           base_grammar_->GetSuffixStopInfo(rule_id) == nullptr;
+  }
+
   void BuildRuleLookaheadInfo() {
     rule_lookahead_infos_.assign(base_grammar_->NumRules(), RuleLookaheadInfo{});
+    for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
+      if (const auto* suffix_stop_info = base_grammar_->GetSuffixStopInfo(i)) {
+        for (int32_t ref : {suffix_stop_info->body_rule_id, suffix_stop_info->marker_rule_id}) {
+          if (ref >= 0) {
+            rule_lookahead_infos_[ref].has_other_reference = true;
+          }
+        }
+      }
+    }
     for (int i = 0; i < static_cast<int>(base_grammar_->NumRules()); ++i) {
       auto rule = base_grammar_->GetRule(i);
       auto grammar_expr = base_grammar_->GetGrammarExpr(rule.body_expr_id);
@@ -1071,11 +1130,17 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
         }
         auto last_element = base_grammar_->GetGrammarExpr(sequence_expr.end()[-1]);
         if (last_element.type == GrammarExprType::kRuleRef && i != last_element[0]) {
-          rule_lookahead_infos_[last_element[0]].appears_as_last_in_other_rule = true;
+          auto& info = rule_lookahead_infos_[last_element[0]];
+          info.appears_as_last_in_other_rule = true;
+          ++info.last_occurrence_count;
+          info.last_occurrence_parent = i;
         }
-        for (int j = 0; j < sequence_expr.size() - 1; ++j) {
+        for (int j = 0; j < sequence_expr.size(); ++j) {
           auto element_expr = base_grammar_->GetGrammarExpr(sequence_expr[j]);
-          if (element_expr.type != GrammarExprType::kRuleRef) {
+          if (element_expr.type == GrammarExprType::kRepeat) {
+            rule_lookahead_infos_[element_expr[0]].has_other_reference = true;
+          }
+          if (element_expr.type != GrammarExprType::kRuleRef || j + 1 == sequence_expr.size()) {
             continue;
           }
           auto& info = rule_lookahead_infos_[element_expr[0]];
