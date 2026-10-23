@@ -26,6 +26,9 @@
 
 namespace xgrammar {
 
+class FSMWithStartEnd;
+class EarleyParser;
+
 // ==================== SchemaSpec: Intermediate Representation for JSON Schema ====================
 
 // Forward declaration
@@ -126,6 +129,7 @@ struct EnumSpec {
 
 struct RefSpec {
   std::string uri;
+  std::optional<std::string> default_type;
 
   std::string ToString() const;
 };
@@ -279,7 +283,7 @@ class IndentManager {
 class JSONSchemaConverter {
  public:
   using RefResolver =
-      std::function<SchemaSpecPtr(const std::string& uri, const std::string& rule_name_hint)>;
+      std::function<SchemaSpecPtr(const RefSpec& spec, const std::string& rule_name_hint)>;
 
   JSONSchemaConverter(
       std::optional<int> indent,
@@ -377,11 +381,18 @@ class JSONSchemaConverter {
   );
 
   /*!
-   * \brief Create the key rule of a propertyNames constraint and return its rule id. Converts the
-   * propertyNames schema like any value schema by default; formats whose keys are not JSON strings
-   * override it to constrain the bare key.
+   * \brief Create an additional-key rule constrained by propertyNames. Formats may retain their
+   * default dynamic-key syntax.
    */
-  virtual int32_t CreatePropertyNamesKeyRule(
+  int32_t CreatePropertyNamesKeyRule(
+      const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+  );
+
+  virtual int32_t GeneratePropertyNameString(const StringSpec& spec, const std::string& rule_name);
+  virtual int32_t GeneratePropertyNameConst(const ConstSpec& spec, const std::string& rule_name);
+
+  /*! \brief Create the string-only constraint to intersect with a patternProperties key. */
+  virtual int32_t CreatePropertyNamesConstraintRule(
       const SchemaSpecPtr& property_names, const std::string& rule_name_hint
   );
 
@@ -454,6 +465,16 @@ class JSONSchemaConverter {
       bool close_json_string,
       const std::vector<std::string>& excluded_keys = {}
   );
+  int32_t FSMExpression(
+      const FSMWithStartEnd& fsm,
+      const std::string& rule_name,
+      int32_t ending,
+      bool share_nonliteral_transitions = false
+  );
+  FSMWithStartEnd PropertyNameFSM(int32_t rule_id);
+  int32_t CreateRawPropertyNamesConstraintRule(
+      const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+  );
   bool IsAllowedString(const std::string& text) const;
   bool IsAllowedLiteral(const picojson::value& value, bool raw_string = false) const;
   /*! \brief Whether the JSON literal contains none of excludes_ (see IsAllowedLiteral). */
@@ -483,7 +504,8 @@ class JSONSchemaConverter {
       const std::string& additional_suffix,
       int min_properties,
       int max_properties,
-      const std::optional<int32_t>& additional_property_override = std::nullopt
+      const std::optional<int32_t>& additional_property_override = std::nullopt,
+      EarleyParser* property_name_parser = nullptr
   );
 
   /*! \brief Generate the object rule in "any order" mode: an "item" alternation over all property
@@ -492,6 +514,7 @@ class JSONSchemaConverter {
    */
   int32_t GetAnyOrderRuleForProperties(
       const std::vector<ObjectSpec::Property>& properties,
+      const std::vector<int32_t>& property_patterns,
       const std::unordered_set<std::string>& required,
       const SchemaSpecPtr& additional,
       const std::string& rule_name,
@@ -564,7 +587,7 @@ class JSONSchemaConverter {
   );
 
  protected:
-  // raw_string selects raw XML parameter text instead of JSON string contents.
+  // raw_string selects decoded string contents instead of their JSON-escaped spelling.
   static std::optional<std::string> JSONFormatToRegexPattern(
       const std::string& format, bool raw_string = false
   );
