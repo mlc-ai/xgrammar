@@ -1148,25 +1148,80 @@ def test_cache_disabled_deterministic_byte_path_masks_match_token_oracle(
     "grammar,prefixes,vocabulary",
     [
         (
-            'root ::= literal "!"\n'
+            'root ::= literal | "(" literal ")"\n'
             'literal[capture="literal"] ::= "abcdefgh" | "abcdexyz" | "unrepresented"',
-            ["", "a", "abc", "abcdef"],
-            ["a", "ab", "abc", "abc", "abcdefgh", "abcdefgh!", "abcdefgh?", "bcd", "!"],
+            ["", "a", "abc", "abcdef", "(", "(abc", "(abcdef"],
+            [
+                "a",
+                "ab",
+                "abc",
+                "abc",
+                "abcdefgh",
+                "abcdefgh)",
+                "abcdefgh?",
+                "abcdexyz",
+                "defgh",
+                "defgh)",
+                "defgh?",
+                "dexyz)",
+                "gh)",
+                "bcd",
+                "(",
+                ")",
+            ],
         ),
         (
-            'root ::= literal "!"\n' 'literal[capture="literal"] ::= "éx" | "中y"',
-            ["", b"\xc3", "é", b"\xe4\xb8", "中"],
-            [b"\xc3", b"\xa9", "é", "éx", "éx!", "中", "中y", "中y!", b"\xff"],
+            'root ::= literal | "(" literal ")"\n' 'literal[capture="literal"] ::= "éx" | "中y"',
+            ["", b"\xc3", "é", b"\xe4\xb8", "中", "(", b"(\xc3", b"(\xe4\xb8"],
+            [
+                b"\xc3",
+                b"\xa9",
+                b"\xa9x)",
+                "é",
+                "éx",
+                "éx)",
+                "éx?",
+                b"\xe4\xb8",
+                b"\xad",
+                b"\xady)",
+                "中",
+                "中y",
+                "中y)",
+                "中y?",
+                "(",
+                ")",
+                b"\xff",
+            ],
         ),
         (
-            'root ::= literal "!"\nliteral[capture="literal"] ::= "a"* "bc"',
-            ["", "a", "aa", "aab"],
-            ["a", "aa", "a" * 300, "aabc", "aabc!", "aabc?", "bc", "bc!", "!"],
+            # Keep the cycle in literal's FSM; "a"* creates a helper rule with lookahead.
+            'root ::= literal | "(" literal ")"\n' 'literal[capture="literal"] ::= [a]* "bc"',
+            ["", "a", "aa", "aab", "(", "(aa", "(aab"],
+            [
+                "a",
+                "aa",
+                "a" * 256,
+                "a" * 257,
+                "a" * 300,
+                "a" * 300 + "bc)",
+                "a" * 300 + "bc?",
+                "aabc",
+                "aabc)",
+                "aabc?",
+                "bc",
+                "bc)",
+                "c)",
+                "(",
+                ")",
+            ],
         ),
     ],
     ids=["sparse-vocabulary-and-duplicates", "unsigned-utf8-prefix-ranges", "cyclic-path-limit"],
 )
 def test_deterministic_byte_path_vocabulary_intersection(grammar, prefixes, vocabulary):
+    # An alternative ending in literal prevents an inferred lookahead assertion from bypassing
+    # the direct-mask builder. The parenthesized alternative also tests tokens crossing its end.
+    # The cyclic case includes tokens beyond the builder's 256-byte limit to exercise fallback.
     test_cache_disabled_deterministic_byte_path_masks_match_token_oracle(
         grammar, prefixes, vocabulary
     )
