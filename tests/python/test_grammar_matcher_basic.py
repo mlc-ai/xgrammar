@@ -580,6 +580,49 @@ def test_override_stop_tokens_allowed_when_grammar_complete():
     assert matcher.is_terminated()
 
 
+@pytest.mark.parametrize(
+    "stop_token_ids, override_stop_tokens", [([1], None), ([0], [1])], ids=["default", "override"]
+)
+def test_stop_token_as_grammar_terminal(
+    stop_token_ids: List[int], override_stop_tokens: Optional[List[int]]
+):
+    # <|return|> is both a stop token and a terminal, as in the harmony format. Emitting it ends
+    # generation, so it is allowed only where consuming it completes the grammar.
+    vocab = ["</s>", "<|return|>", "ok", '"']
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=stop_token_ids)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    def allows_stop_token(matcher: xgr.GrammarMatcher) -> bool:
+        matcher.fill_next_token_bitmask(bitmask)
+        return 1 not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= "ok" "<|return|>"', tokenizer_info, override_stop_tokens=override_stop_tokens
+    )
+    assert not allows_stop_token(matcher)
+    assert not matcher.accept_token(1)
+    assert matcher.accept_token(2)
+    assert allows_stop_token(matcher)
+    assert matcher.accept_token(1)
+    assert matcher.is_terminated()
+    matcher.rollback(1)
+    assert not matcher.is_terminated()
+    assert matcher.accept_token(1)
+    assert matcher.is_terminated()
+
+    # Inside a string, the stop token matches as text, but stopping there truncates the output.
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= "\\"" [^"]* "\\""', tokenizer_info, override_stop_tokens=override_stop_tokens
+    )
+    assert matcher.accept_token(3)
+    assert not allows_stop_token(matcher)
+    assert not matcher.accept_token(1)
+    assert matcher.accept_token(3)
+    assert allows_stop_token(matcher)
+    assert matcher.accept_token(1)
+    assert matcher.is_terminated()
+
+
 @pytest.mark.hf_token_required
 def test_fill_next_token_bitmask_errors():
     # llama 3.1 8b
