@@ -623,6 +623,51 @@ def test_stop_token_as_grammar_terminal(
     assert matcher.is_terminated()
 
 
+@pytest.mark.parametrize(
+    "stop_token_ids, override_stop_tokens", [([1], None), ([0], [1])], ids=["default", "override"]
+)
+@pytest.mark.parametrize("stop_terminal", ['"<|return|>"', "Token(1)"], ids=["bytes", "atomic"])
+@pytest.mark.parametrize("tail", ["", "tail"], ids=["closing", "followed-by-tail"])
+def test_stop_token_as_content_without_stop_termination(
+    stop_token_ids: List[int],
+    override_stop_tokens: Optional[List[int]],
+    stop_terminal: str,
+    tail: str,
+):
+    vocab = ["</s>", "<|return|>", "ok", "tail"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=stop_token_ids)
+    grammar = f'root ::= "ok" {stop_terminal}' + (' "tail"' if tail else "")
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        grammar,
+        tokenizer_info,
+        override_stop_tokens=override_stop_tokens,
+        terminate_without_stop_token=True,
+    )
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    assert matcher.accept_token(2)
+    for _ in range(2):
+        matcher.fill_next_token_bitmask(bitmask)
+        assert 1 not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+        assert not matcher.is_completed()
+        assert matcher.accept_token(1)
+        assert matcher.is_completed() == (not tail)
+        assert matcher.is_terminated() == (not tail)
+        matcher.rollback(1)
+        assert not matcher.is_completed()
+        assert not matcher.is_terminated()
+
+    assert matcher.accept_token(1)
+    if tail:
+        assert matcher.accept_token(3)
+    assert matcher.is_completed()
+    assert matcher.is_terminated()
+    # This mode does not enable an extra stop signal outside the grammar.
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 1 in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert not matcher.accept_token(1)
+
+
 @pytest.mark.hf_token_required
 def test_fill_next_token_bitmask_errors():
     # llama 3.1 8b

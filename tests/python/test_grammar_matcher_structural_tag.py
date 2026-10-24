@@ -967,6 +967,44 @@ def test_any_text_budget_cache_and_serialization_roundtrip():
     assert not _budget_accepts(recovered, "<think>", "a", "b", "c", "</", "think>")
 
 
+@pytest.mark.parametrize("override", [False, True], ids=["default", "override"])
+@pytest.mark.parametrize("tail", ["", "tail"], ids=["closing", "followed-by-tail"])
+def test_structural_tag_stop_token_without_stop_termination(override: bool, tail: str):
+    from xgrammar.structural_tag import (
+        AnyTextFormat,
+        StructuralTag,
+        TagFormat,
+        TagsWithSeparatorFormat,
+    )
+
+    # Use the issue's Harmony markers with a small, offline vocabulary.
+    vocab = ["</s>", "<|return|>", "<|channel|>", "final", "<|message|>", "ok", "tail"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[0] if override else [1])
+    tag = StructuralTag(
+        format=TagsWithSeparatorFormat(
+            tags=[
+                TagFormat(
+                    begin="<|channel|>final<|message|>",
+                    content=AnyTextFormat(),
+                    end="<|return|>" + tail,
+                )
+            ],
+            separator="<|start|>assistant",
+        )
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(tag)
+    matcher = xgr.GrammarMatcher(
+        compiled, override_stop_tokens=[1] if override else None, terminate_without_stop_token=True
+    )
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    for token_id in [2, 3, 4, 5, 1] + ([6] if tail else []):
+        matcher.fill_next_token_bitmask(bitmask)
+        assert token_id not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+        assert matcher.accept_token(token_id)
+    assert matcher.is_completed()
+    assert matcher.is_terminated()
+
+
 # A token can be both a stop token and a grammar terminal, e.g. gpt-oss's <|return|> ends
 # generation and also closes harmony's final-message tag. The tests are token-level because
 # accept_string bypasses the stop token handling.

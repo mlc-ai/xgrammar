@@ -584,10 +584,11 @@ class GrammarMatcher::Impl : public EarleyParser {
   bool AcceptStopToken();
 
   /*!
-   * \brief Check whether consuming the stop token as a grammar terminal completes the grammar,
-   * e.g. harmony's <|return|> closing the final message. The parser state is left unchanged.
+   * \brief Check whether a stop token can be consumed as a grammar terminal. Unless termination
+   * without a stop token is enabled, consuming it must complete the grammar. The parser state is
+   * left unchanged.
    */
-  bool CanCompleteWithStopToken(int32_t token_id);
+  bool CanAcceptStopTokenAsTerminal(int32_t token_id);
 
   bool IsStopTokenAccepted() const;
 
@@ -826,15 +827,16 @@ bool GrammarMatcher::Impl::AcceptStopToken() {
   return true;
 }
 
-bool GrammarMatcher::Impl::CanCompleteWithStopToken(int32_t token_id) {
+bool GrammarMatcher::Impl::CanAcceptStopTokenAsTerminal(int32_t token_id) {
   const auto& decoded_vocab = tokenizer_info_.GetDecodedVocab();
-  if (terminate_without_stop_token_ || token_id >= static_cast<int32_t>(decoded_vocab.size())) {
+  if (token_id < 0 || token_id >= static_cast<int32_t>(decoded_vocab.size())) {
     return false;
   }
+  const bool require_completion = !terminate_without_stop_token_;
   if (AdvanceAtomicToken(token_id)) {
-    bool completed = is_completed_.back();
+    bool accepted = !require_completion || is_completed_.back();
     PopLastStates(1);
-    if (completed) {
+    if (accepted) {
       return true;
     }
   }
@@ -844,10 +846,10 @@ bool GrammarMatcher::Impl::CanCompleteWithStopToken(int32_t token_id) {
          Advance(static_cast<uint8_t>(token[num_advanced]))) {
     ++num_advanced;
   }
-  bool completed =
-      num_advanced > 0 && num_advanced == static_cast<int>(token.size()) && is_completed_.back();
+  bool accepted = num_advanced > 0 && num_advanced == static_cast<int>(token.size()) &&
+                  (!require_completion || is_completed_.back());
   PopLastStates(num_advanced);
-  return completed;
+  return accepted;
 }
 
 bool GrammarMatcher::Impl::IsTerminated() const {
@@ -1333,11 +1335,11 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
                        << "\", current state:\n"
                        << states_str;
   }
-  // Handle the stop token. If the grammar cannot terminate yet, the token is still accepted when
-  // it is a terminal that completes the grammar; it is then consumed by the paths below.
+  // Stop tokens can also be grammar terminals. In normal mode they must complete the grammar;
+  // when terminating without a stop token, they are ordinary content and may leave a suffix.
   if (is_stop_token) {
     bool accepted = AcceptStopToken();
-    bool as_terminal = !accepted && CanCompleteWithStopToken(token_id);
+    bool as_terminal = !accepted && CanAcceptStopTokenAsTerminal(token_id);
     if (debug_print) {
       XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: " << (accepted || as_terminal);
     }
@@ -1582,8 +1584,8 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
   }
   record_char_budget_relaxation_ = false;
-  // A stop token consumed as a terminal has completed the grammar and ends generation.
-  stop_token_is_accepted_ = is_stop_token;
+  // In normal mode, a stop token consumed as a terminal completes the grammar and ends generation.
+  stop_token_is_accepted_ = is_stop_token && !terminate_without_stop_token_;
   return FinishAccept(consumed_past_deadline);
 }
 
@@ -2711,10 +2713,11 @@ void GrammarMatcher::Impl::SetTokenBitmask(
     }
   }
   // Overridden stop tokens can occur in the compiler's accepted token set.
-  // Apply their termination policy after constructing either mask representation: a stop token
-  // ends generation, so it is allowed only if the grammar can end before or right after it.
+  // Apply their policy after constructing either mask representation. Normal mode allows them
+  // only before or at completion; without stop-token termination, they only need to match.
   for (int id : stop_token_ids_) {
-    next_token_bitset.Set(id, can_reach_end || CanCompleteWithStopToken(id));
+    bool allowed_as_signal = !terminate_without_stop_token_ && can_reach_end;
+    next_token_bitset.Set(id, allowed_as_signal || CanAcceptStopTokenAsTerminal(id));
   }
 }
 
