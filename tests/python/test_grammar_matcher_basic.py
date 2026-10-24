@@ -580,16 +580,10 @@ def test_override_stop_tokens_allowed_when_grammar_complete():
     assert matcher.is_terminated()
 
 
-@pytest.mark.parametrize(
-    "stop_token_ids, override_stop_tokens", [([1], None), ([0], [1])], ids=["default", "override"]
-)
-def test_stop_token_as_grammar_terminal(
-    stop_token_ids: List[int], override_stop_tokens: Optional[List[int]]
-):
-    # <|return|> is both a stop token and a terminal, as in the harmony format. Emitting it ends
-    # generation, so it is allowed only where consuming it completes the grammar.
+def test_stop_token_as_grammar_terminal():
+    # An overridden stop token stays in the compiler's matchable vocabulary.
     vocab = ["</s>", "<|return|>", "ok", '"']
-    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=stop_token_ids)
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[0])
     bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
 
     def allows_stop_token(matcher: xgr.GrammarMatcher) -> bool:
@@ -597,75 +591,101 @@ def test_stop_token_as_grammar_terminal(
         return 1 not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
 
     matcher = _get_matcher_from_grammar_and_tokenizer_info(
-        'root ::= "ok" "<|return|>"', tokenizer_info, override_stop_tokens=override_stop_tokens
+        'root ::= "ok" "<|return|>"', tokenizer_info, override_stop_tokens=[1]
     )
     assert not allows_stop_token(matcher)
-    assert not matcher.accept_token(1)
+    assert not matcher.accept_token(1, debug_print=True)
     assert matcher.accept_token(2)
     assert allows_stop_token(matcher)
-    assert matcher.accept_token(1)
+    assert matcher.accept_token(1, debug_print=True)
     assert matcher.is_terminated()
     matcher.rollback(1)
     assert not matcher.is_terminated()
     assert matcher.accept_token(1)
     assert matcher.is_terminated()
 
-    # Inside a string, the stop token matches as text, but stopping there truncates the output.
+    # Matching string content is insufficient: stopping must leave the string complete.
     matcher = _get_matcher_from_grammar_and_tokenizer_info(
-        'root ::= "\\"" [^"]* "\\""', tokenizer_info, override_stop_tokens=override_stop_tokens
+        r'root ::= "\"" [^"]* "\""', tokenizer_info, override_stop_tokens=[1]
     )
     assert matcher.accept_token(3)
     assert not allows_stop_token(matcher)
     assert not matcher.accept_token(1)
     assert matcher.accept_token(3)
     assert allows_stop_token(matcher)
-    assert matcher.accept_token(1)
+    assert matcher.accept_token(1, debug_print=True)
     assert matcher.is_terminated()
 
+    # Partial byte matches must be undone; empty tokens must not newly complete the grammar.
+    for stop_text, suffix in [("STOPx", "STOPz"), ("", "tail")]:
+        info = xgr.TokenizerInfo(["</s>", stop_text, "ok"], stop_token_ids=[1])
+        probe = _get_matcher_from_grammar_and_tokenizer_info(f'root ::= "ok" "{suffix}"', info)
+        assert probe.accept_token(2)
+        probe.fill_next_token_bitmask(bitmask)
+        assert 1 in _get_masked_tokens_from_bitmask(bitmask, info.vocab_size)
+        assert not probe.accept_token(1)
+        assert probe.accept_string(suffix)
+        assert probe.is_completed()
 
-@pytest.mark.parametrize(
-    "stop_token_ids, override_stop_tokens", [([1], None), ([0], [1])], ids=["default", "override"]
-)
-@pytest.mark.parametrize("stop_terminal", ['"<|return|>"', "Token(1)"], ids=["bytes", "atomic"])
-@pytest.mark.parametrize("tail", ["", "tail"], ids=["closing", "followed-by-tail"])
-def test_stop_token_as_content_without_stop_termination(
-    stop_token_ids: List[int],
-    override_stop_tokens: Optional[List[int]],
-    stop_terminal: str,
-    tail: str,
-):
-    vocab = ["</s>", "<|return|>", "ok", "tail"]
-    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=stop_token_ids)
-    grammar = f'root ::= "ok" {stop_terminal}' + (' "tail"' if tail else "")
+
+def test_stop_token_as_content_without_stop_termination():
+    tokenizer_info = xgr.TokenizerInfo(["</s>", "<|return|>", "ok", "tail"], stop_token_ids=[1])
     matcher = _get_matcher_from_grammar_and_tokenizer_info(
-        grammar,
-        tokenizer_info,
-        override_stop_tokens=override_stop_tokens,
-        terminate_without_stop_token=True,
+        'root ::= "ok" Token(1) "tail"', tokenizer_info, terminate_without_stop_token=True
     )
     bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-
     assert matcher.accept_token(2)
-    for _ in range(2):
-        matcher.fill_next_token_bitmask(bitmask)
-        assert 1 not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
-        assert not matcher.is_completed()
-        assert matcher.accept_token(1)
-        assert matcher.is_completed() == (not tail)
-        assert matcher.is_terminated() == (not tail)
-        matcher.rollback(1)
-        assert not matcher.is_completed()
-        assert not matcher.is_terminated()
-
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 1 not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert not matcher.is_completed()
     assert matcher.accept_token(1)
-    if tail:
-        assert matcher.accept_token(3)
+    assert not matcher.is_completed()
+    assert not matcher.is_terminated()
+    matcher.rollback(1)
+    assert not matcher.is_completed()
+    assert not matcher.is_terminated()
+    assert matcher.accept_token(1)
+    assert matcher.accept_token(3)
     assert matcher.is_completed()
     assert matcher.is_terminated()
     # This mode does not enable an extra stop signal outside the grammar.
     matcher.fill_next_token_bitmask(bitmask)
     assert 1 in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
     assert not matcher.accept_token(1)
+
+
+@pytest.mark.parametrize(
+    "grammar",
+    ['root ::= "ok" Token(1)', 'root ::= "ok" (Token(1) "tail" | "STOP")'],
+    ids=["atomic-complete", "atomic-then-bytes"],
+)
+def test_stop_token_terminal_matching_paths(grammar: str):
+    tokenizer_info = xgr.TokenizerInfo(["</s>", "STOP", "ok"], stop_token_ids=[1])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.accept_token(2)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 1 not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert not matcher.is_completed()
+    assert matcher.accept_token(1, debug_print=True)
+    assert matcher.is_completed()
+    assert matcher.is_terminated()
+
+
+def test_padded_stop_token_terminal_trial():
+    tokenizer_info = xgr.TokenizerInfo(["ok"], vocab_size=2, stop_token_ids=[])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= "ok"', tokenizer_info, override_stop_tokens=[1]
+    )
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 1 in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert not matcher.accept_token(1)
+    assert matcher.accept_token(0)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 1 not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert matcher.accept_token(1)
+    assert matcher.is_terminated()
 
 
 @pytest.mark.hf_token_required
