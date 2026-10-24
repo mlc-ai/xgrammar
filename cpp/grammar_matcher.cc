@@ -829,7 +829,7 @@ bool GrammarMatcher::Impl::AcceptStopToken() {
 
 bool GrammarMatcher::Impl::CanAcceptStopTokenAsTerminal(int32_t token_id) {
   const auto& decoded_vocab = tokenizer_info_.GetDecodedVocab();
-  if (token_id < 0 || token_id >= static_cast<int32_t>(decoded_vocab.size())) {
+  if (token_id >= static_cast<int32_t>(decoded_vocab.size())) {
     return false;
   }
   const bool require_completion = !terminate_without_stop_token_;
