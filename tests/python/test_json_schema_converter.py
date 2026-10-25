@@ -1,4 +1,5 @@
 import copy
+import itertools
 import json
 import random
 import re
@@ -3689,14 +3690,14 @@ def _strict_order_grammar(schema, style="json"):
     )
 
 
-@pytest.mark.parametrize("style", ["json", "glm_xml"])
+@pytest.mark.parametrize("style", ["json", "glm_xml", "qwen_xml"])
 def test_property_order_cached_policies(style):
     schema = {
         "type": "object",
         "properties": {key: {"type": "integer"} for key in "ab"},
         "additionalProperties": False,
     }
-    vocab = sorted(set('{}":, ab12<>/_rgkeyvalu')) + ["[EOS]"]
+    vocab = sorted(set('{}":, ab12<>/=_rgkeyvalupmt')) + ["[EOS]"]
     info = xgr.TokenizerInfo(vocab, stop_token_ids=len(vocab) - 1)
     compiler = xgr.GrammarCompiler(info)
     for required in [["a", "b"], ["a"], ["b"], ["a", "b"]]:
@@ -3718,7 +3719,12 @@ def test_property_order_cached_policies(style):
                     "{" + ", ".join(f'"{key}": 1' for key in keys) + "}"
                     if style == "json"
                     else "".join(
-                        f"<arg_key>{key}</arg_key><arg_value>1</arg_value>" for key in keys
+                        (
+                            f"<parameter={key}>1</parameter>"
+                            if style == "qwen_xml"
+                            else f"<arg_key>{key}</arg_key><arg_value>1</arg_value>"
+                        )
+                        for key in keys
                     )
                 )
                 expected = (
@@ -4317,3 +4323,37 @@ def test_deeply_nested_json_rejected():
 
 if __name__ == "__main__":
     pytest.main(sys.argv)
+
+
+def test_qwen_unordered_nested_values_and_refs():
+    schema = {
+        "type": "object",
+        "properties": {
+            "path": {"type": "string"},
+            "options": {"$ref": "#/$defs/options"},
+            "filters": {"type": "array", "items": {"$ref": "#/$defs/options"}},
+        },
+        "required": ["path", "options"],
+        "additionalProperties": False,
+        "$defs": {
+            "options": {
+                "type": "object",
+                "properties": {"limit": {"type": "integer"}, "regex": {"type": "boolean"}},
+                "required": ["limit"],
+                "additionalProperties": False,
+            }
+        },
+    }
+    grammar = _strict_order_grammar(schema, "qwen_xml")
+
+    def param(key, value):
+        return f"<parameter={key}>{value}</parameter>"
+
+    path = param("path", "src/東京.py")
+    options = param("options", '{"regex": true, "limit": 2}')
+    filters = param("filters", '[{"regex": false, "limit": 1}, {"limit": 3}]')
+    for parts in itertools.permutations([path, options, filters]):
+        assert _is_grammar_accept_string(grammar, "\n".join(parts))
+    for value in ['{"regex": true}', '{"limit": 1, "limit": 2}', '{"limit": "wrong"}']:
+        assert not _is_grammar_accept_string(grammar, path + param("options", value))
+    assert not _is_grammar_accept_string(grammar, path + options + options)

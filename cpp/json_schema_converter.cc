@@ -5130,8 +5130,9 @@ Grammar JSONSchemaToGrammar(
   any_order = order != PropertyOrder::kSchema;
   bool strict_any_order = order == PropertyOrder::kUnordered;
   XGRAMMAR_CHECK(
-      !strict_any_order || json_format == JSONFormat::kJSON || json_format == JSONFormat::kGlmXML
-  ) << "property_order='unordered' currently supports json and glm_xml styles";
+      !strict_any_order || json_format == JSONFormat::kJSON || json_format == JSONFormat::kGlmXML ||
+      json_format == JSONFormat::kQwenXML
+  ) << "property_order='unordered' currently supports json, glm_xml and qwen_xml styles";
   picojson::value schema_value;
   std::string error = ParseJSON(schema_value, schema);
   XGRAMMAR_CHECK(error.empty()) << "Failed to parse JSON: " << error

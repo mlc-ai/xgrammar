@@ -162,6 +162,11 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
 
   // Register std::optional used in Grammar::FromJSONSchema
   register_optional<int>();
+  enum_<xgrammar::PropertyOrder>("PropertyOrder")
+      .value("kSchema", xgrammar::PropertyOrder::kSchema)
+      .value("kUnordered", xgrammar::PropertyOrder::kUnordered)
+      .value("kUnorderedRelaxed", xgrammar::PropertyOrder::kUnorderedRelaxed);
+  register_optional<xgrammar::PropertyOrder>();
   value_object<std::pair<std::string, std::string>>("StringPair")
       .field("first", &std::pair<std::string, std::string>::first)
       .field("second", &std::pair<std::string, std::string>::second);

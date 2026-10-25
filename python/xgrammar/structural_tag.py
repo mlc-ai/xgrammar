@@ -74,7 +74,7 @@ class JSONSchemaFormat(BaseModel):
 
     - "schema": declared order, required keys and uniqueness enforced.
     - "unordered": arbitrary order, required keys and uniqueness enforced. Supports closed
-      objects in json and glm_xml styles; unconstrained values and open objects are rejected.
+      objects in json, glm_xml and qwen_xml styles; unconstrained values and open objects are rejected.
     - "unordered_relaxed": arbitrary order without required-key or uniqueness enforcement.
 
     None preserves any_order's behavior. Cannot be combined with any_order=True.

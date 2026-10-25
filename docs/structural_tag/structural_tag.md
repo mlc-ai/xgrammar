@@ -244,7 +244,7 @@ The same flag is the `any_order` argument of
 For closed objects, set `property_order="unordered"` in `JSONSchemaFormat`,
 `Grammar.from_json_schema`, or `GrammarCompiler.compile_json_schema`.
 This permits reordered properties while enforcing required keys, unique keys, and
-property-count limits. It supports `json` and `glm_xml` styles and applies to nested
+property-count limits. It supports `json`, `glm_xml` and `qwen_xml` styles and applies to nested
 objects as well. Objects with additional or pattern properties, and unconstrained
 values or containers, are rejected.
 
@@ -254,6 +254,23 @@ schemas raise an error without relaxing validation or falling back to ordered pr
 `property_order="schema"` preserves declared order; `"unordered_relaxed"` preserves the
 legacy `any_order=true` behavior. Omitting `property_order` preserves the boolean option's
 behavior. Specifying both `property_order` and `any_order=true` is an error.
+
+For Qwen3.8's XML tool format, the builtin builder exposes the same opt-in:
+
+```python
+structural_tag = get_model_structural_tag(
+    "qwen_3_coder",
+    tools=tools,
+    tool_choice="required",
+    reasoning="disabled",
+    property_order="unordered",
+)
+```
+
+Declare typed properties and `additionalProperties: false` in each object schema.
+The builtin dispatcher currently exposes this policy only for `qwen_3_5` and
+`qwen_3_coder`. Existing calls keep their ordering policy; this does not enable
+unordered arguments automatically in downstream inference engines.
 
 #### `grammar`
 

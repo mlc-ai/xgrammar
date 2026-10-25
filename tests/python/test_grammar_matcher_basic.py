@@ -1291,3 +1291,91 @@ def test_unordered_atomic_accept_after_byte_path_rejection():
     assert matcher.accept_token(0)
     assert matcher.accept_token(2)
     assert matcher.accept_token(3)
+
+
+def test_unordered_state_lifecycle_matches_replay():
+    """Speculative branches, rollback and reset must leave the same mask as replay."""
+    import random
+
+    grammar = xgr.Grammar.from_ebnf(
+        r"""
+        root ::= "[" obj ("," obj)* "]"
+        obj ::= "{" Unordered(sep, 2, 3, (a, true), (b, true), (c, false)) "}"
+        sep ::= ","
+        a ::= "a:" value
+        b ::= "b:" value
+        c ::= "c:" value
+        value ::= "1" | "[" obj "]"
+        """
+    )
+    vocab = [
+        "[",
+        "{",
+        "a:",
+        "b:",
+        "c:",
+        "1",
+        ",",
+        "}",
+        "]",
+        "a:1",
+        "b:1",
+        "c:1",
+        "a:1,b:1",
+        "}]",
+        "1},",
+        "[EOS]",
+    ]
+    info = xgr.TokenizerInfo(vocab, stop_token_ids=len(vocab) - 1)
+    compiled = xgr.GrammarCompiler(info).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled)
+    history = []
+    rng = random.Random(1002)
+
+    def mask_of(current):
+        mask = xgr.allocate_token_bitmask(1, len(vocab))
+        current.fill_next_token_bitmask(mask)
+        return mask
+
+    for _ in range(500):
+        replay = xgr.GrammarMatcher(compiled)
+        for token in history:
+            assert replay.accept_token(token)
+        assert matcher.is_completed() == replay.is_completed()
+        assert matcher.is_terminated() == replay.is_terminated()
+        if matcher.is_terminated():
+            matcher.reset()
+            history.clear()
+            continue
+        mask = mask_of(matcher)
+        assert any(int(mask[0, 0]) & (1 << i) for i in range(len(vocab)))
+        assert mask.equal(mask_of(replay))
+        action = rng.randrange(5)
+        if action == 0 and history:
+            count = rng.randint(1, min(len(history), 5))
+            matcher.rollback(count)
+            del history[-count:]
+        elif action == 1:
+            branch = matcher.fork()
+            before = mask.clone()
+            for _ in range(4):
+                if branch.is_terminated():
+                    break
+                branch_mask = mask_of(branch)
+                allowed = [i for i in range(len(vocab)) if int(branch_mask[0, 0]) & (1 << i)]
+                if not allowed:
+                    break
+                assert branch.accept_token(rng.choice(allowed))
+            assert before.equal(mask_of(matcher))
+        elif action == 2 and rng.random() < 0.1:
+            matcher.reset()
+            history.clear()
+        else:
+            allowed = [i for i in range(len(vocab)) if int(mask[0, 0]) & (1 << i)]
+            token = (
+                rng.choice(allowed) if allowed and rng.random() < 0.8 else rng.randrange(len(vocab))
+            )
+            expected = bool(int(mask[0, 0]) & (1 << token))
+            assert matcher.accept_token(token) == expected
+            if expected:
+                history.append(token)

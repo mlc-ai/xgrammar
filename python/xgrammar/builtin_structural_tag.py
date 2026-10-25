@@ -22,6 +22,7 @@ from .structural_tag import (
     OptionalFormat,
     OrFormat,
     PlusFormat,
+    PropertyOrder,
     RegexFormat,
     RepeatFormat,
     SequenceFormat,
@@ -32,6 +33,7 @@ from .structural_tag import (
     TokenFormat,
     TokenTriggeredTagsFormat,
     TriggeredTagsFormat,
+    _property_order_value,
 )
 
 # ---------- API Functions ----------
@@ -48,6 +50,7 @@ def get_model_structural_tag(
     max_whitespace_cnt: Optional[int] = None,
     parallel_tool_calls: bool = True,
     token_markers: bool = False,
+    property_order: Optional[PropertyOrder] = None,
 ) -> StructuralTag:
     r"""Get a structural tag for a model's reasoning and tool-call output format.
 
@@ -238,6 +241,12 @@ def get_model_structural_tag(
         token ID. Supported for ``"glm_4_7"``, ``"qwen_3"``,
         ``"qwen_3_5"`` and ``"qwen_3_coder"``. Default: ``False``.
 
+    property_order : Optional[PropertyOrder]
+        Explicit argument ordering policy for Qwen XML formats. ``"unordered"``
+        preserves required keys and uniqueness on closed object schemas. Cannot
+        be combined with ``any_order=True``. Other formats do not yet support
+        this dispatcher option.
+
     Notes
     -----
     If a tool's ``parameters`` field is omitted or ``None``, its generated
@@ -256,6 +265,13 @@ def get_model_structural_tag(
         If tool lists, tool choices, reasoning modes, or required tool availability are invalid,
         or if ``token_markers`` is requested for a model that does not declare its markers.
     """
+
+    if property_order is not None:
+        _property_order_value(property_order)
+        if any_order:
+            raise ValueError("property_order cannot be combined with any_order=True")
+        if model not in ("qwen_3_5", "qwen_3_coder"):
+            raise ValueError("property_order is currently supported only for Qwen XML formats")
 
     func = _structural_tag_registry.get(model)
     if func is None:
@@ -296,6 +312,7 @@ def get_model_structural_tag(
         exclude_special_tokens=exclude_special_tokens,
         max_whitespace_cnt=max_whitespace_cnt,
         parallel_tool_calls=parallel_tool_calls,
+        **({"property_order": property_order} if property_order is not None else {}),
     )
     if token_markers:
         assert markers is not None
@@ -1547,6 +1564,7 @@ def get_qwen_3_5_structural_tag(
     exclude_special_tokens: bool = True,
     max_whitespace_cnt: Optional[int] = None,
     parallel_tool_calls: bool = True,
+    property_order: Optional[PropertyOrder] = None,
     **kwargs: Any,
 ) -> StructuralTag:
     """Get Qwen XML tool-call structural tag format.
@@ -1567,6 +1585,7 @@ def get_qwen_3_5_structural_tag(
 
     - Qwen3.5
     - Qwen3.6
+    - Qwen3.8
     - Qwen3-Coder
     - Qwen3-Coder-Next
 
@@ -1598,6 +1617,7 @@ def get_qwen_3_5_structural_tag(
                         json_schema=parameters,
                         style="qwen_xml",
                         any_order=any_order,
+                        property_order=property_order,
                         max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=TOOL_CALL_END,
@@ -1626,6 +1646,7 @@ def get_qwen_3_5_structural_tag(
                 json_schema=_get_function_parameters(function),
                 style="qwen_xml",
                 any_order=any_order,
+                property_order=property_order,
                 max_whitespace_cnt=max_whitespace_cnt,
             ),
             end=TOOL_CALL_END,
@@ -1644,6 +1665,7 @@ def get_qwen_3_5_structural_tag(
                         json_schema=parameters,
                         style="qwen_xml",
                         any_order=any_order,
+                        property_order=property_order,
                         max_whitespace_cnt=max_whitespace_cnt,
                     ),
                     end=TOOL_CALL_END,
