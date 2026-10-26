@@ -5,7 +5,8 @@ from typing import Dict, List, Tuple
 
 import pytest
 from pydantic import BaseModel, Field
-from tokenizer_utils import load_config, load_tokenizer
+from tokenizer_utils import load_tokenizer
+from transformers import AutoConfig
 
 import xgrammar as xgr
 from xgrammar.testing import (
@@ -495,7 +496,7 @@ def test_mask_generation_format(value: str, format: str):
 def test_implicit_left_recursion_schema():
     model_name = "meta-llama/Llama-3.2-1B-Instruct"
     tokenizer = load_tokenizer(model_name)
-    config = load_config(model_name)
+    config = AutoConfig.from_pretrained(model_name)
 
     json_schema = {
         "$schema": "http://json-schema.org/draft-04/schema#",
@@ -550,7 +551,7 @@ def test_regression_accept_invalid_token():
     reason="Kimi-K2's huggingface remote tokenizer code requires Python >= 3.9",
 )
 def test_regression_accept_kimi_tokenizer_token():
-    config = load_config("moonshotai/Kimi-K2-Thinking", trust_remote_code=True)
+    config = AutoConfig.from_pretrained("moonshotai/Kimi-K2-Thinking", trust_remote_code=True)
     tokenizer = load_tokenizer("moonshotai/Kimi-K2-Thinking", trust_remote_code=True)
     vocab_size = config.vocab_size
     ids = tokenizer.encode(
