@@ -6,7 +6,7 @@
         <link rel="prefetch" href="../../_static/img/logo.png" as="image">
         <link rel="prefetch" href="../../_static/img/logo_dark.svg" as="image">
 
-    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+    <!-- Generated with Sphinx 9.1.1 and Furo 2025.12.19 -->
         <title>xgrammar.compiler - XGrammar 0.2.8</title>
       <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
@@ -404,6 +404,7 @@
         <span class="n">max_threads</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
         <span class="n">cache_enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">cache_limit_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">enable_dynamic_compilation</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">"""Construct the compiler.</span>
 
@@ -421,6 +422,14 @@
 <span class="sd">        cache_limit_bytes : int, default: -1</span>
 <span class="sd">            The maximum memory usage for the cache in the specified unit.</span>
 <span class="sd">            Note that the actual memory usage may slightly exceed this value.</span>
+
+<span class="sd">        enable_dynamic_compilation : bool, default: False</span>
+<span class="sd">            Whether to generate reusable token mask cache entries when they are first needed.</span>
+<span class="sd">            When False, all entries are generated while compiling the grammar.</span>
+<span class="sd">            This reduces upfront work but moves mask construction to first use during decoding.</span>
+<span class="sd">            With a finite cache_limit_bytes, growing compiled grammars are not retained in the</span>
+<span class="sd">            compiler cache; the bounded rule-level cache remains available. Serializing a dynamic</span>
+<span class="sd">            compiled grammar materializes all masks before writing the existing eager format.</span>
 <span class="sd">        """</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tokenizer_info</span><span class="p">,</span> <span class="n">TokenizerInfo</span><span class="p">):</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
@@ -430,7 +439,11 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_init_handle</span><span class="p">(</span>
             <span class="n">_core</span><span class="o">.</span><span class="n">GrammarCompiler</span><span class="p">(</span>
-                <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">_handle</span><span class="p">,</span> <span class="n">max_threads</span><span class="p">,</span> <span class="n">cache_enabled</span><span class="p">,</span> <span class="n">cache_limit_bytes</span>
+                <span class="n">tokenizer_info</span><span class="o">.</span><span class="n">_handle</span><span class="p">,</span>
+                <span class="n">max_threads</span><span class="p">,</span>
+                <span class="n">cache_enabled</span><span class="p">,</span>
+                <span class="n">cache_limit_bytes</span><span class="p">,</span>
+                <span class="n">enable_dynamic_compilation</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="p">)</span></div>
 
