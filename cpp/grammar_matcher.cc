@@ -584,9 +584,8 @@ class GrammarMatcher::Impl : public EarleyParser {
   bool AcceptStopToken();
 
   /*!
-   * \brief Check whether a stop token can be consumed as a grammar terminal. Unless termination
-   * without a stop token is enabled, consuming it must complete the grammar. The parser state is
-   * left unchanged.
+   * \brief Check whether a stop token can be consumed as a grammar terminal and complete the
+   * grammar. The parser state is left unchanged.
    */
   bool CanAcceptStopTokenAsTerminal(int32_t token_id);
 
@@ -832,9 +831,9 @@ bool GrammarMatcher::Impl::CanAcceptStopTokenAsTerminal(int32_t token_id) {
   if (token_id >= static_cast<int32_t>(decoded_vocab.size())) {
     return false;
   }
-  const bool require_completion = !terminate_without_stop_token_;
-  if (AdvanceAtomicToken(token_id)) {
-    bool accepted = !require_completion || is_completed_.back();
+  const bool atomic_success = AdvanceAtomicToken(token_id);
+  if (atomic_success) {
+    bool accepted = is_completed_.back();
     PopLastStates(1);
     if (accepted) {
       return true;
@@ -846,8 +845,18 @@ bool GrammarMatcher::Impl::CanAcceptStopTokenAsTerminal(int32_t token_id) {
          Advance(static_cast<uint8_t>(token[num_advanced]))) {
     ++num_advanced;
   }
-  bool accepted = num_advanced > 0 && num_advanced == static_cast<int>(token.size()) &&
-                  (!require_completion || is_completed_.back());
+  if (!atomic_success && !has_char_budget_rules_ && num_advanced < static_cast<int>(token.size())) {
+    int32_t mid_token_row = FindMidTokenExcludeEdgeRow(num_advanced, token_id);
+    if (mid_token_row > 0) {
+      PopLastStates(num_advanced - mid_token_row);
+      const bool advanced = AdvanceAtomicToken(token_id);
+      const bool accepted = advanced && is_completed_.back();
+      PopLastStates(mid_token_row + static_cast<int>(advanced));
+      return accepted;
+    }
+  }
+  bool accepted =
+      num_advanced > 0 && num_advanced == static_cast<int>(token.size()) && is_completed_.back();
   PopLastStates(num_advanced);
   return accepted;
 }
@@ -1335,8 +1344,8 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
                        << "\", current state:\n"
                        << states_str;
   }
-  // Stop tokens can also be grammar terminals. In normal mode they must complete the grammar;
-  // when terminating without a stop token, they are ordinary content and may leave a suffix.
+  // Stop tokens can also be grammar terminals, but consuming one must complete the grammar
+  // regardless of whether termination without a stop token is enabled.
   if (is_stop_token) {
     bool accepted = AcceptStopToken();
     bool as_terminal = !accepted && CanAcceptStopTokenAsTerminal(token_id);
@@ -1584,8 +1593,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
   }
   record_char_budget_relaxation_ = false;
-  // In normal mode, a stop token consumed as a terminal completes the grammar and ends generation.
-  stop_token_is_accepted_ = is_stop_token && !terminate_without_stop_token_;
+  stop_token_is_accepted_ = is_stop_token;
   return FinishAccept(consumed_past_deadline);
 }
 
@@ -2713,8 +2721,8 @@ void GrammarMatcher::Impl::SetTokenBitmask(
     }
   }
   // Overridden stop tokens can occur in the compiler's accepted token set.
-  // Apply their policy after constructing either mask representation. Normal mode allows them
-  // only before or at completion; without stop-token termination, they only need to match.
+  // Apply their policy after constructing either mask representation: a stop signal is allowed
+  // after completion in normal mode; stop-token content must itself complete the grammar.
   for (int id : stop_token_ids_) {
     bool allowed_as_signal = !terminate_without_stop_token_ && can_reach_end;
     next_token_bitset.Set(id, allowed_as_signal || CanAcceptStopTokenAsTerminal(id));

@@ -967,42 +967,5 @@ def test_any_text_budget_cache_and_serialization_roundtrip():
     assert not _budget_accepts(recovered, "<think>", "a", "b", "c", "</", "think>")
 
 
-def test_structural_tag_stop_token_without_stop_termination():
-    from xgrammar.structural_tag import (
-        AnyTextFormat,
-        StructuralTag,
-        TagFormat,
-        TagsWithSeparatorFormat,
-    )
-
-    # The default stop token closes a Harmony tag only after its required tail is consumed.
-    vocab = ["</s>", "<|return|>", "<|channel|>", "final", "<|message|>", "ok", "tail"]
-    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[1])
-    tag = StructuralTag(
-        format=TagsWithSeparatorFormat(
-            tags=[
-                TagFormat(
-                    begin="<|channel|>final<|message|>",
-                    content=AnyTextFormat(),
-                    end="<|return|>tail",
-                )
-            ],
-            separator="<|start|>assistant",
-        )
-    )
-    compiled = xgr.GrammarCompiler(tokenizer_info).compile_structural_tag(tag)
-    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
-    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
-    for token_id in [2, 3, 4, 5, 1, 6]:
-        matcher.fill_next_token_bitmask(bitmask)
-        assert token_id not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
-        assert matcher.accept_token(token_id)
-        if token_id == 1:
-            assert not matcher.is_completed()
-            assert not matcher.is_terminated()
-    assert matcher.is_completed()
-    assert matcher.is_terminated()
-
-
 if __name__ == "__main__":
     pytest.main(sys.argv)
