@@ -730,6 +730,189 @@ def test_stop_token_atomic_success_blocks_mid_token_fallback():
     assert matcher._debug_print_internal_state() == initial_state
 
 
+@pytest.mark.parametrize("with_mask", [False, True])
+@pytest.mark.parametrize("override_stop", [False, True])
+def test_rejected_incomplete_stop_preserves_state(with_mask, override_stop):
+    info = xgr.TokenizerInfo(
+        ["ab>", "x", "a>", "tail", "<eos>"], stop_token_ids=[4] if override_stop else [0]
+    )
+    grammar = xgr.Grammar.from_ebnf(
+        'root[capture="result"] ::= prefix (limited ">" | "ab>" "tail")\n'
+        'prefix[capture="prefix"] ::= "x"\n'
+        "limited[max_chars=1] ::= [a-z]*"
+    )
+    compiled = xgr.GrammarCompiler(info).compile_grammar(grammar)
+    kwargs = {"override_stop_tokens": [0]} if override_stop else {}
+    matcher = xgr.GrammarMatcher(compiled, **kwargs)
+    assert matcher.accept_token(1)
+    before = matcher._debug_print_internal_state()
+    captures = matcher.get_captures()
+    assert captures == [("prefix", b"x")]
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    if with_mask:
+        for _ in range(3):
+            matcher.fill_next_token_bitmask(bitmask)
+            assert 0 in _get_masked_tokens_from_bitmask(bitmask, info.vocab_size)
+            assert matcher._debug_print_internal_state() == before
+            assert matcher.get_captures() == captures
+    # A valid content path remains incomplete; any competing budget-invalid completion is ignored.
+    assert not matcher.accept_token(0)
+    assert not matcher.is_completed()
+    assert not matcher.is_terminated()
+    assert matcher._debug_print_internal_state() == before
+    assert matcher.get_captures() == captures
+    assert matcher.accept_token(2)
+    assert matcher.is_completed()
+    assert matcher.get_captures() == [("prefix", b"x"), ("result", b"xa>")]
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 0 not in _get_masked_tokens_from_bitmask(bitmask, info.vocab_size)
+    assert matcher.accept_token(0)
+    assert matcher.is_terminated()
+    assert matcher.get_captures() == [("prefix", b"x"), ("result", b"xa>")]
+    matcher.rollback(1)
+    assert matcher.is_completed()
+    assert not matcher.is_terminated()
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+@pytest.mark.parametrize("without_stop", [False, True])
+@pytest.mark.parametrize("prefix", [[], [0], [0, 1]])
+def test_stop_mask_probe_restores_budget_marker_progress(attribute, without_stop, prefix):
+    # Multiple probes can change both the entry row and incremental suffix/stop body progress.
+    # Compare their decisions and subsequent captures with definitive acceptance on an untouched fork.
+    info = xgr.TokenizerInfo(
+        ["a", "b", "ab", "a>!", "aa!", "!", "aX", ">", "<eos>"], stop_token_ids=[3, 4, 5, 6, 8]
+    )
+    grammar = xgr.Grammar.from_lark(
+        f'start[capture="outer"]: reasoning "!"\n'
+        f'reasoning[max_chars=2, capture="inner", {attribute}=">", stop_capture="marker"]: TEXT\n'
+        "TEXT: /(\\n|.)*/",
+        tokenizer_info=info,
+    )
+    compiled = xgr.GrammarCompiler(info, cache_enabled=False).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=without_stop)
+    for token_id in prefix:
+        assert matcher.accept_token(token_id)
+    reference = matcher.fork()
+    before = matcher._debug_print_internal_state()
+    captures = matcher.get_captures()
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    first_mask = None
+    for _ in range(4):
+        matcher.fill_next_token_bitmask(bitmask)
+        if first_mask is None:
+            first_mask = bitmask.clone()
+        else:
+            assert bitmask.equal(first_mask)
+        assert matcher._debug_print_internal_state() == before
+        assert matcher.get_captures() == captures
+    rejected = _get_masked_tokens_from_bitmask(bitmask, info.vocab_size)
+    for token_id in info.stop_token_ids:
+        direct = reference.fork()
+        probed = matcher.fork()
+        oracle = xgr.GrammarMatcher(compiled, override_stop_tokens=[8])
+        for prefix_id in prefix:
+            assert oracle.accept_token(prefix_id)
+        accepted = oracle.accept_token(token_id) and oracle.is_completed()
+        assert direct.accept_token(token_id) == accepted
+        assert (token_id not in rejected) == accepted
+        assert probed.accept_token(token_id) == accepted
+        assert probed._debug_print_internal_state() == direct._debug_print_internal_state()
+        assert probed.get_captures() == direct.get_captures()
+        assert probed.is_completed() == direct.is_completed()
+        assert probed.is_terminated() == direct.is_terminated()
+        if accepted:
+            probed.rollback(1)
+            assert probed._debug_print_internal_state() == before
+            assert probed.get_captures() == captures
+
+
+def test_stop_completion_probe_counts_unicode_characters():
+    info = xgr.TokenizerInfo(["中>", "中文>", "中", ">"], stop_token_ids=[0, 1])
+    grammar = xgr.Grammar.from_ebnf('root ::= value ">"\nvalue[max_chars=1] ::= [一-龥]*')
+    compiled = xgr.GrammarCompiler(info).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled)
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    for _ in range(3):
+        matcher.fill_next_token_bitmask(bitmask)
+        rejected = _get_masked_tokens_from_bitmask(bitmask, info.vocab_size)
+        assert 0 not in rejected and 1 in rejected
+    assert not matcher.accept_token(1)
+    assert matcher.accept_token(0)
+    assert matcher.is_completed()
+
+
+@pytest.mark.parametrize("attribute", ["suffix", "stop"])
+def test_stop_completion_probe_applies_token_boundary_budget_closure(attribute):
+    info = xgr.TokenizerInfo(["a", "a>", "ab>"], stop_token_ids=[0, 1, 2])
+    grammar = xgr.Grammar.from_lark(
+        'start[capture="all"]: body\n'
+        f'body[max_chars=1, capture="body", {attribute}=">"]: /[a-z]*/',
+        tokenizer_info=info,
+    )
+    compiled = xgr.GrammarCompiler(info).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled)
+    direct = matcher.fork()
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    for _ in range(3):
+        matcher.fill_next_token_bitmask(bitmask)
+        assert not matcher.is_completed()
+        assert matcher.get_captures() == []
+        rejected = _get_masked_tokens_from_bitmask(bitmask, info.vocab_size)
+        for token_id in info.stop_token_ids:
+            assert (token_id not in rejected) == direct.fork().accept_token(token_id)
+        assert 0 not in rejected
+    assert matcher.accept_token(0)
+    assert matcher.is_completed()
+    assert matcher.get_captures() == [("body", b"a"), ("all", b"a")]
+
+
+@pytest.mark.parametrize("without_stop", [False, True])
+@pytest.mark.parametrize(
+    "body,stop_text,expected",
+    [
+        ('limited ">"', "a>", True),
+        ('limited ">" | Token(0) "tail"', "ab>", False),
+        ("limited", "abc", True),
+        ("limited", "", True),
+        ('literal ">"', "abc>", True),
+    ],
+    ids=[
+        "valid-bytes",
+        "incomplete-atomic",
+        "indivisible-atomic",
+        "empty-atomic",
+        "required-relaxation",
+    ],
+)
+def test_budgeted_stop_completion_matches_normal_content(without_stop, body, stop_text, expected):
+    info = xgr.TokenizerInfo([stop_text, "tail", "<eos>"], stop_token_ids=[0])
+    if body.startswith("literal"):
+        rule = 'literal[max_chars=1] ::= "abc"'
+    elif body == "limited":
+        rule = "limited[max_chars=1] ::= Token(0)"
+    else:
+        rule = "limited[max_chars=1] ::= [a-z]*"
+    compiled = xgr.GrammarCompiler(info).compile_grammar(
+        xgr.Grammar.from_ebnf(f"root ::= {body}\n{rule}")
+    )
+    # Use the ordinary token path as an independent completion oracle.
+    oracle = xgr.GrammarMatcher(compiled, override_stop_tokens=[2])
+    assert (oracle.accept_token(0) and oracle.is_completed()) == expected
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=without_stop)
+    before = matcher._debug_print_internal_state()
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    for _ in range(3):
+        matcher.fill_next_token_bitmask(bitmask)
+        assert (0 not in _get_masked_tokens_from_bitmask(bitmask, info.vocab_size)) == expected
+        assert matcher._debug_print_internal_state() == before
+    assert matcher.accept_token(0) == expected
+    if expected:
+        assert matcher.is_completed() and matcher.is_terminated()
+        matcher.rollback(1)
+    assert matcher._debug_print_internal_state() == before
+
+
 @pytest.mark.hf_token_required
 def test_fill_next_token_bitmask_errors():
     # llama 3.1 8b
