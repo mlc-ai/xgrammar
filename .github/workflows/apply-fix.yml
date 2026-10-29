@@ -11,36 +11,16 @@ jobs:
       - name: clone-apply-commit-push
         env:
           TOKEN: ${{ github.token }}
+          PATCH_B64: ZGlmZiAtLWdpdCBhL2NwcC9qc29uX3NjaGVtYV9jb252ZXJ0ZXIuY2MgYi9jcHAvanNvbl9zY2hlbWFfY29udmVydGVyLmNjCmluZGV4IDkxODQ5MGIuLjY1MDNkOTUgMTAwNjQ0Ci0tLSBhL2NwcC9qc29uX3NjaGVtYV9jb252ZXJ0ZXIuY2MKKysrIGIvY3BwL2pzb25fc2NoZW1hX2NvbnZlcnRlci5jYwpAQCAtMzM4Miw4ICszMzgyLDEzIEBAIGludDMyX3QgSlNPTlNjaGVtYUNvbnZlcnRlcjo6R2VuZXJhdGVPYmplY3QoCiAgICAgKTsKICAgICBoYXNfY29udGVudCA9IHNwZWMubWF4X3Byb3BlcnRpZXMgIT0gMDsKICAgICBjb3VsZF9iZV9lbXB0eSA9IHNwZWMucmVxdWlyZWQuZW1wdHkoKSAmJiBzcGVjLm1pbl9wcm9wZXJ0aWVzID09IDA7Ci0gIH0gZWxzZSBpZiAoIXNwZWMucGF0dGVybl9wcm9wZXJ0aWVzLmVtcHR5KCkgfHwgc3BlYy5wcm9wZXJ0eV9uYW1lcykgewotICAgIC8vIENhc2UgMWI6IHBhdHRlcm5Qcm9wZXJ0aWVzIG9yIHByb3BlcnR5TmFtZXMgd2l0aG91dCBuYW1lZCBwcm9wZXJ0aWVzCisgIH0gZWxzZSBpZiAoIXNwZWMucGF0dGVybl9wcm9wZXJ0aWVzLmVtcHR5KCkgfHwgKHNwZWMucHJvcGVydHlfbmFtZXMgJiYgYWRkaXRpb25hbF9wcm9wZXJ0eSkpIHsKKyAgICAvLyBDYXNlIDFiOiBwYXR0ZXJuUHJvcGVydGllcyBvciBwcm9wZXJ0eU5hbWVzIHdpdGhvdXQgbmFtZWQgcHJvcGVydGllcy4KKyAgICAvLyBwcm9wZXJ0eU5hbWVzIG9ubHkgY29uc3RyYWlucyB0aGUgbmFtZXMgb2Yga2V5cyB0aGF0IHNvbWV0aGluZyBlbHNlCisgICAgLy8gcGVybWl0cyAocHJvcGVydGllcywgcGF0dGVyblByb3BlcnRpZXMsIG9yIGFuIGFkZGl0aW9uYWwtcHJvcGVydGllcworICAgIC8vIHNjaGVtYSkuIFdoZW4gbm8gYWRkaXRpb25hbCBwcm9wZXJ0eSBpcyBhbGxvd2VkLCBpdCBtdXN0IG5vdCBrZWVwIGEKKyAgICAvLyBwZXJtaXNzaXZlIGFkZGl0aW9uYWwtcHJvcGVydHkgcnVsZTsgZmFsbCB0aHJvdWdoIHRvIHRoZSBlbXB0eS1vYmplY3QKKyAgICAvLyBjYXNlIGluc3RlYWQgKGlzc3VlICM5NjEpLgogICAgIGlmIChzcGVjLm1heF9wcm9wZXJ0aWVzICE9IDApIHsKICAgICAgIGludDMyX3QgYmVnaW5uaW5nX3NlcGFyYXRvciA9IE5leHRTZXBhcmF0b3JFeHByZXNzaW9uKCk7CiAgICAgICBzdGQ6OnZlY3RvcjxpbnQzMl90PiBwcm9wZXJ0eV9jaG9pY2VzOwo=
         run: |
-          cat > /tmp/fix.patch <<'PATCHEOF'
-diff --git a/cpp/json_schema_converter.cc b/cpp/json_schema_converter.cc
-index 918490b..6503d95 100644
---- a/cpp/json_schema_converter.cc
-+++ b/cpp/json_schema_converter.cc
-@@ -3382,8 +3382,13 @@ int32_t JSONSchemaConverter::GenerateObject(
-     );
-     has_content = spec.max_properties != 0;
-     could_be_empty = spec.required.empty() && spec.min_properties == 0;
--  } else if (!spec.pattern_properties.empty() || spec.property_names) {
--    // Case 1b: patternProperties or propertyNames without named properties
-+  } else if (!spec.pattern_properties.empty() || (spec.property_names && additional_property)) {
-+    // Case 1b: patternProperties or propertyNames without named properties.
-+    // propertyNames only constrains the names of keys that something else
-+    // permits (properties, patternProperties, or an additional-properties
-+    // schema). When no additional property is allowed, it must not keep a
-+    // permissive additional-property rule; fall through to the empty-object
-+    // case instead (issue #961).
-     if (spec.max_properties != 0) {
-       int32_t beginning_separator = NextSeparatorExpression();
-       std::vector<int32_t> property_choices;
-PATCHEOF
           set -e
-          git clone --depth 1 --branch fix-property-names-additional "https://x-access-token:${TOKEN}@github.com/liangqianxing/xgrammar.git" repo || { echo "::error::clone failed"; exit 1; }
+          echo "$PATCH_B64" | base64 -d > /tmp/fix.patch
+          git clone --depth 1 --branch fix-property-names-additional "https://x-access-token:${TOKEN}@github.com/liangqianxing/xgrammar.git" repo
           cd repo
-          git apply --verbose /tmp/fix.patch || { echo "::error::apply failed"; exit 1; }
-          grep -n 'property_names && additional_property' cpp/json_schema_converter.cc || { echo "::error::grep failed"; exit 1; }
+          git apply --verbose /tmp/fix.patch
+          grep -n 'property_names && additional_property' cpp/json_schema_converter.cc
           git config user.name "liangqianxing"
           git config user.email "113435208+liangqianxing@users.noreply.github.com"
           git add cpp/json_schema_converter.cc
-          git commit -m "fix(json_schema): propertyNames must not preserve a permissive additional-property rule (fixes #961)" || { echo "::error::commit failed"; exit 1; }
-          git push "https://x-access-token:${TOKEN}@github.com/liangqianxing/xgrammar.git" HEAD:fix-property-names-additional || { echo "::error::push failed"; exit 1; }
+          git commit -m "fix(json_schema): propertyNames must not preserve a permissive additional-property rule (fixes #961)"
+          git push "https://x-access-token:${TOKEN}@github.com/liangqianxing/xgrammar.git" HEAD:fix-property-names-additional
