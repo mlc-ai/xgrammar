@@ -69,6 +69,15 @@ std::vector<TCodepoint> ParseUTF8(const char* utf8, bool perserve_invalid_bytes 
 std::pair<TCodepoint, int32_t> ParseNextUTF8(const char* utf8);
 
 /*!
+ * \brief Find the longest prefix of a byte string that consists of complete, valid UTF-8
+ * characters, as a strict decoder (e.g. Python's bytes.decode("utf-8")) accepts them: no truncated
+ * or overlong sequences, no surrogates, nothing above U+10FFFF.
+ * \param bytes The byte string.
+ * \return The length of that prefix in bytes.
+ */
+size_t ValidUTF8PrefixLength(const std::string& bytes);
+
+/*!
  * \brief Convert a Latin-1 string to a byte sequence.
  * \param latin1 The Latin-1 string.
  * \return The byte sequence.
@@ -213,6 +222,45 @@ inline std::pair<TCodepoint, int32_t> ParseNextUTF8(const char* utf8) {
   }
 
   return {res, num_bytes};
+}
+
+inline size_t ValidUTF8PrefixLength(const std::string& bytes) {
+  size_t pos = 0;
+  while (pos < bytes.size()) {
+    auto first = static_cast<uint8_t>(bytes[pos]);
+    int num_bytes;
+    // The allowed range of the second byte; it excludes overlong forms, surrogates and codepoints
+    // above U+10FFFF. Later continuation bytes are always in [0x80, 0xBF].
+    uint8_t second_min = 0x80, second_max = 0xBF;
+    if (first < 0x80) {
+      num_bytes = 1;
+    } else if (first >= 0xC2 && first <= 0xDF) {
+      num_bytes = 2;
+    } else if (first >= 0xE0 && first <= 0xEF) {
+      num_bytes = 3;
+      if (first == 0xE0) second_min = 0xA0;
+      if (first == 0xED) second_max = 0x9F;
+    } else if (first >= 0xF0 && first <= 0xF4) {
+      num_bytes = 4;
+      if (first == 0xF0) second_min = 0x90;
+      if (first == 0xF4) second_max = 0x8F;
+    } else {
+      break;
+    }
+    if (pos + num_bytes > bytes.size()) break;
+    bool valid = true;
+    for (int i = 1; i < num_bytes; ++i) {
+      auto byte = static_cast<uint8_t>(bytes[pos + i]);
+      uint8_t min = i == 1 ? second_min : 0x80, max = i == 1 ? second_max : 0xBF;
+      if (byte < min || byte > max) {
+        valid = false;
+        break;
+      }
+    }
+    if (!valid) break;
+    pos += num_bytes;
+  }
+  return pos;
 }
 
 inline std::vector<TCodepoint> ParseUTF8(const char* utf8, bool perserve_invalid_bytes) {
