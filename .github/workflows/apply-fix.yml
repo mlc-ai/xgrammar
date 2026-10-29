@@ -13,16 +13,16 @@ jobs:
           ref: fix-property-names-additional
       - name: Diagnose and apply
         run: |
-          set -x
-          git status
-          git remote -v
-          git apply --verbose fix_core.patch
-          echo "apply_exit=$?"
-          git diff --stat
+          out=$(git apply --verbose fix_core.patch 2>&1); a=$?
+          echo "::error::apply_exit=$a out=$out" 
+          if [ $a -ne 0 ]; then exit 1; fi
+          git config user.name "liangqianxing"
+          git config user.email "113435208+liangqianxing@users.noreply.github.com"
           git add cpp/json_schema_converter.cc
-          git commit -m "fix(json_schema): propertyNames must not preserve a permissive additional-property rule (fixes #961)"
-          b=$?; echo "commit_exit=$b"
-          git show --stat HEAD | head -6
-          git push "https://x-access-token:${{ github.token }}@github.com/liangqianxing/xgrammar.git" HEAD:fix-property-names-additional
-          p=$?; echo "push_exit=$p"
-          test $p -eq 0
+          cout=$(git commit -m "fix(json_schema): propertyNames gate fix" 2>&1); c=$?
+          echo "::error::commit_exit=$c out=$cout"
+          if [ $c -ne 0 ]; then exit 1; fi
+          pout=$(git push "https://x-access-token:${{ github.token }}@github.com/liangqianxing/xgrammar.git" HEAD:fix-property-names-additional 2>&1); p=$?
+          echo "::error::push_exit=$p out=$pout"
+          if [ $p -ne 0 ]; then exit 1; fi
+          echo "::notice::ALL_OK"
