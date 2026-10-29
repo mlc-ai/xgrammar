@@ -132,13 +132,18 @@ class AnyTokensFormat(BaseModel):
 
 
 class GrammarFormat(BaseModel):
-    """A format that matches an ebnf grammar."""
+    """A format that matches an ebnf or Lark grammar."""
 
     type: Literal["grammar"] = "grammar"
     """The type of the format."""
 
     grammar: str
-    """The ebnf grammar."""
+    """The grammar, written in `syntax`."""
+
+    syntax: Literal["ebnf", "lark"] = "ebnf"
+    """The syntax of the grammar: \"ebnf\" (the default), or \"lark\" (as accepted by
+    `Grammar.from_lark`; named special tokens are resolved with the tokenizer info the structural
+    tag is compiled with)."""
 
 
 class RegexFormat(BaseModel):

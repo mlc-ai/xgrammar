@@ -117,6 +117,7 @@ picojson::value GrammarFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
   obj["grammar"] = picojson::value(grammar);
+  obj["syntax"] = picojson::value(syntax);
   return picojson::value(std::move(obj));
 }
 
@@ -684,7 +685,15 @@ Result<GrammarFormat, ISTError> StructuralTagParser::ParseGrammarFormat(const pi
       grammar_it->second.get<std::string>().empty()) {
     return ResultErr<ISTError>("Grammar format must have a grammar field with a non-empty string");
   }
-  return ResultOk<GrammarFormat>(grammar_it->second.get<std::string>());
+  std::string syntax = "ebnf";
+  if (auto it = obj.find("syntax"); it != obj.end()) {
+    if (!it->second.is<std::string>() ||
+        (it->second.get<std::string>() != "ebnf" && it->second.get<std::string>() != "lark")) {
+      return ResultErr<ISTError>("Grammar format's syntax must be \"ebnf\" or \"lark\"");
+    }
+    syntax = it->second.get<std::string>();
+  }
+  return ResultOk<GrammarFormat>(grammar_it->second.get<std::string>(), syntax);
 }
 
 Result<RegexFormat, ISTError> StructuralTagParser::ParseRegexFormat(const picojson::object& obj) {
@@ -1832,10 +1841,18 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(RepeatFormat* format) {
 
 class StructuralTagGrammarConverter {
  public:
-  static Result<Grammar, ISTError> Convert(const StructuralTag& structural_tag);
+  /*!
+   * \brief Convert a structural tag to a grammar.
+   * \param tokenizer_info Tokenizer metadata used to resolve named special tokens in Lark
+   * grammar formats.
+   */
+  static Result<Grammar, ISTError> Convert(
+      const StructuralTag& structural_tag, const std::optional<TokenizerInfo>& tokenizer_info
+  );
 
  private:
-  StructuralTagGrammarConverter() = default;
+  explicit StructuralTagGrammarConverter(const std::optional<TokenizerInfo>& tokenizer_info)
+      : tokenizer_info_(tokenizer_info) {}
 
   /*!
    * \brief Visit a Format and return the rule id of the added rule.
@@ -1873,6 +1890,8 @@ class StructuralTagGrammarConverter {
   int BuildBeginExpr(const TagFormat& tag);
   int BuildEndExpr(const TagFormat& tag);
 
+  const std::optional<TokenizerInfo>& tokenizer_info_;
+
   GrammarBuilder grammar_builder_;
 
   /*!
@@ -1889,9 +1908,10 @@ bool StructuralTagGrammarConverter::IsPrefix(
          std::string_view(full_str).substr(0, prefix.size()) == prefix;
 }
 
-Result<Grammar, ISTError> StructuralTagGrammarConverter::Convert(const StructuralTag& structural_tag
+Result<Grammar, ISTError> StructuralTagGrammarConverter::Convert(
+    const StructuralTag& structural_tag, const std::optional<TokenizerInfo>& tokenizer_info
 ) {
-  StructuralTagGrammarConverter converter;
+  StructuralTagGrammarConverter converter(tokenizer_info);
   auto result = converter.Visit(structural_tag.format);
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
@@ -1976,7 +1996,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const GrammarFormat& format) {
-  auto sub_grammar = Grammar::FromEBNF(format.grammar);
+  auto sub_grammar = format.syntax == "lark" ? Grammar::FromLark(format.grammar, tokenizer_info_)
+                                             : Grammar::FromEBNF(format.grammar);
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }
@@ -2537,7 +2558,7 @@ Result<Grammar, StructuralTagError> StructuralTagToGrammar(
     return ResultErr(std::move(err).value());
   }
 
-  auto result = StructuralTagGrammarConverter::Convert(structural_tag);
+  auto result = StructuralTagGrammarConverter::Convert(structural_tag, tokenizer_info);
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
   }
