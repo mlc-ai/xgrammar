@@ -7,21 +7,20 @@ permissions:
 jobs:
   apply:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix-property-names-additional
-      - name: Apply fix with full diagnostics to step summary
+      - name: Apply fix and upload via gh api
         run: |
-          S=$GITHUB_STEP_SUMMARY
-          run(){ echo '$ $1' >> $S; out=$(bash -c "$1" 2>&1); st=$?; printf '<pre>%s\nexit=%d</pre>\n' "$out" $st >> $S; return $st; }
-          {
-            echo '## diag'; id -u; pwd; git config --global --add safe.directory '*' && echo safeDir="done" | tee -a $S
-            run "git apply --verbose fix_core.patch"           || true
-            run "git config user.name liangqianxing"           || true
-            run "git config user.email 113435208+liangqianxing@users.noreply.github.com" || true
-            run "git add cpp/json_schema_converter.cc"         || true
-            run "git commit -m 'fix(json_schema): propertyNames must not preserve a permissive additional-property rule (fixes #961)'" || true
-            run "git push https://x-access-token:\${{ github.token }}@github.com/liangqianxing/xgrammar.git HEAD:fix-property-names-additional" || true
-            run "grep -n 'property_names && additional_property' cpp/json_schema_converter.cc" || true
-          }
+          git config --global --add safe.directory '*'
+          git apply --verbose fix_core.patch
+          git diff --stat
+          B64=$(base64 -w0 cpp/json_schema_converter.cc)
+          SHA=$(curl -s -H "Authorization: token $GH_TOKEN" https://api.github.com/repos/liangqianxing/xgrammar/contents/cpp/json_schema_converter.cc?ref=fix-property-names-additional | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])')
+          curl -s -X PUT -H "Authorization: token $GH_TOKEN" https://api.github.com/repos/liangqianxing/xgrammar/contents/cpp/json_schema_converter.cc -d '{"message":"fix(json_schema): propertyNames must not preserve a permissive additional-property rule (fixes #961)","content":"'"$B64"'","sha":"'"$SHA"'","branch":"fix-property-names-additional"}'
+      - name: Verify remote file
+        run: |
+          curl -s https://raw.githubusercontent.com/liangqianxing/xgrammar/fix-property-names-additional/cpp/json_schema_converter.cc | grep -n 'property_names && additional_property'
