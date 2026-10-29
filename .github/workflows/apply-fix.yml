@@ -1,5 +1,7 @@
 name: apply-converter-fix
-on: workflow_dispatch
+on:
+  push:
+    paths: ['.github/workflows/apply-fix.yml']
 permissions:
   contents: write
 jobs:
