@@ -11,11 +11,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: fix-property-names-additional
-      - name: Apply patch and commit
+      - name: Diagnose and apply
         run: |
-          git config user.name "liangqianxing"
-          git config user.email "113435208+liangqianxing@users.noreply.github.com"
+          set -x
+          git status
+          git remote -v
           git apply --verbose fix_core.patch
+          echo "apply_exit=$?"
+          git diff --stat
           git add cpp/json_schema_converter.cc
           git commit -m "fix(json_schema): propertyNames must not preserve a permissive additional-property rule (fixes #961)"
+          b=$?; echo "commit_exit=$b"
+          git show --stat HEAD | head -6
           git push "https://x-access-token:${{ github.token }}@github.com/liangqianxing/xgrammar.git" HEAD:fix-property-names-additional
+          p=$?; echo "push_exit=$p"
+          test $p -eq 0
