@@ -214,6 +214,32 @@ int32_t GrammarBuilder::AddTokenTagDispatch(
   );
 }
 
+int32_t GrammarBuilder::AddUnordered(
+    int32_t separator_rule,
+    int32_t min_count,
+    int32_t max_count,
+    std::vector<std::pair<int32_t, bool>> entries
+) {
+  XGRAMMAR_CHECK(
+      min_count >= 1 && max_count >= min_count && max_count <= static_cast<int32_t>(entries.size())
+  ) << "Unordered requires 1 <= min_count <= max_count <= number of entries";
+  std::sort(entries.begin(), entries.end());
+  std::vector<int32_t> data{separator_rule, min_count, max_count, 0};
+  int32_t previous = -1;
+  for (const auto& [rule, required] : entries) {
+    XGRAMMAR_CHECK(rule >= 0 && rule != previous && rule != separator_rule)
+        << "Unordered entry rules must be distinct from each other and the separator";
+    previous = rule;
+    data[3] += required;
+    data.push_back(rule);
+    data.push_back(required);
+  }
+  XGRAMMAR_CHECK(data[3] <= max_count) << "Unordered has more required entries than max_count";
+  return AddGrammarExpr(
+      {GrammarExprType::kUnordered, data.data(), static_cast<int32_t>(data.size())}
+  );
+}
+
 int32_t GrammarBuilder::AddRepeat(
     int32_t ref_rule_id, int32_t min_repeat_count, int32_t max_repeat_count
 ) {

@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 #include <xgrammar/xgrammar.h>
 
+#include "earley_parser.h"
 #include "grammar_parser.h"
 #include "support/encoding.h"
 #include "test_utils.h"
+#include "unordered_state.h"
 
 using namespace xgrammar;
 
@@ -482,4 +484,79 @@ TEST(XGrammarLexerTest, LexerErrorCases) {
         "The rule name should be at the beginning of the line"
     );
   }
+}
+
+TEST(UnorderedStateTest, CanonicalSetsAndRollback) {
+  static_assert(sizeof(ParserState) == 10 * sizeof(int32_t));
+  for (int32_t size : {4, 64, 65, 256}) {
+    UnorderedStateArena arena;
+    auto first = arena.Insert(-1, 3, 0, size, 2, true, 1);
+    auto checkpoint = arena.Save();
+    auto forward = arena.Insert(first, 3, size - 1, size, 2, true, 2);
+    auto last = arena.Insert(-1, 3, size - 1, size, 2, true, 2);
+    auto reverse = arena.Insert(last, 3, 0, size, 2, true, 3);
+    EXPECT_EQ(forward, reverse);
+    EXPECT_EQ(arena[forward].remaining_required, 0);
+    EXPECT_EQ(arena[forward].count, 2);
+    EXPECT_TRUE(arena.Contains(forward, 0));
+    EXPECT_TRUE(arena.Contains(forward, size - 1));
+    EXPECT_FALSE(arena.Contains(first, size - 1));
+    auto fork = arena;
+    arena.Restore(checkpoint);
+    EXPECT_EQ(arena.Save(), checkpoint);
+    EXPECT_TRUE(fork.Contains(reverse, size - 1));
+    for (int i = 0; i < 100; ++i) {
+      auto next = arena.Insert(first, 3, size - 1, size, 2, true, 2);
+      EXPECT_EQ(arena[next].count, 2);
+      arena.Rewind(2);
+      EXPECT_EQ(arena.Save(), checkpoint);
+    }
+    arena.Clear();
+    EXPECT_EQ(arena.Save(), 0);
+  }
+}
+
+TEST(UnorderedStateTest, RetainedAtomicStates) {
+  UnorderedStateArena arena;
+  auto checkpoint = arena.Save();
+  {
+    UnorderedStateArena::RetainScope retain(arena);
+    arena.Insert(-1, 2, 1, 65, 1, true, 5);
+    arena.Insert(-1, 2, 64, 65, 1, false, 4);
+    arena.Rewind(4);
+    EXPECT_EQ(arena.Save(), 2);
+  }
+  arena.Rewind(5);
+  EXPECT_EQ(arena.Save(), checkpoint);
+}
+
+TEST(UnorderedStateTest, TokenMasksForkAndRollback) {
+  auto grammar = Grammar::FromEBNF(R"(
+    root ::= Unordered(sep, 2, 2, (a, true), (b, true))
+    sep ::= ""
+    a ::= "a:" (Token(1) | "long-token")
+    b ::= "b"
+  )");
+  TokenizerInfo info(
+      {"a:", "long-token", "b", "[EOS]"}, VocabType::RAW, 4, std::vector<int32_t>{3}
+  );
+  auto compiled = GrammarCompiler(info).CompileGrammar(grammar);
+  GrammarMatcher matcher(compiled);
+  int32_t bits = 0;
+  int64_t shape[] = {1, 1};
+  DLTensor mask{&bits, {kDLCPU, 0}, 2, {kDLInt, 32, 1}, shape, nullptr, 0};
+  ASSERT_TRUE(matcher.AcceptToken(0));
+  for (int i = 0; i < 100; ++i) {
+    ASSERT_TRUE(matcher.AcceptToken(1));
+    matcher.FillNextTokenBitmask(&mask);
+    EXPECT_EQ(bits & 15, 4);
+    auto fork = matcher.Fork();
+    ASSERT_TRUE(fork.AcceptToken(2));
+    ASSERT_TRUE(fork.AcceptToken(3));
+    ASSERT_FALSE(matcher.AcceptToken(0));
+    matcher.Rollback(1);
+  }
+  ASSERT_TRUE(matcher.AcceptToken(1));
+  ASSERT_TRUE(matcher.AcceptToken(2));
+  ASSERT_TRUE(matcher.AcceptToken(3));
 }

@@ -746,3 +746,28 @@ describe("Test json schema E2E", () => {
     tokenizerInfo.dispose();
   })
 });
+
+// Cover both public entry points: the new C++ argument must not break web callers.
+test("strict unordered properties preserve required keys and reject duplicates", async () => {
+  const schema = JSON.stringify({
+    type: "object",
+    properties: { a: { type: "integer" }, b: { type: "integer" } },
+    required: ["a", "b"],
+    additionalProperties: false,
+  });
+  const grammar = await Grammar.fromJSONSchema(
+    schema, false, -1, undefined, true, undefined, false, "unordered");
+  const info = await TokenizerInfo.createTokenizerInfo([]);
+  const compiler = await GrammarCompiler.createGrammarCompiler(info);
+  const compiled = await compiler.compileJSONSchema(
+    schema, false, -1, undefined, true, undefined, false, "unordered");
+  for (const g of [grammar, compiled.grammar()]) {
+    expect(await Testings.isGrammarAcceptString(g, '{"b": 2, "a": 1}')).toBe(true);
+    expect(await Testings.isGrammarAcceptString(g, '{"b": 2, "b": 1}')).toBe(false);
+    expect(await Testings.isGrammarAcceptString(g, '{"b": 2}')).toBe(false);
+    g.dispose();
+  }
+  compiled.dispose();
+  compiler.dispose();
+  info.dispose();
+});
