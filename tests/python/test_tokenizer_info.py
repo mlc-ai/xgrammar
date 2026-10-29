@@ -7,6 +7,7 @@ from tokenizer_utils import load_tokenizer
 from transformers import PreTrainedTokenizerBase
 
 import xgrammar as xgr
+from xgrammar.testing import _get_masked_tokens_from_bitmask
 from xgrammar.tokenizer_info import _BYTE_LEVEL_CHARSET
 
 
@@ -263,6 +264,114 @@ def test_special_token_detection():
     assert set(tokenizer_info.special_token_ids) == expected_special_tokens
 
 
+# A control token whose decoded text is an ordinary string: it lives in the base vocabulary, so
+# IsSpecialToken (which only matches "") cannot detect it, and the grammar would otherwise accept
+# its text as JSON string content.
+CONTROL_TOKEN_VOCAB = ["", "a", "b", "</s>", "<|start|>", '"', "{", "}", ":", ","]
+CONTROL_TOKEN_ID = 4
+
+
+def test_customize_special_token_ids():
+    tokenizer_info = xgr.TokenizerInfo(
+        CONTROL_TOKEN_VOCAB, stop_token_ids=[3], special_token_ids=[CONTROL_TOKEN_ID]
+    )
+    assert set(tokenizer_info.special_token_ids) == {0, CONTROL_TOKEN_ID}
+
+    # A single id is accepted as well, as for stop_token_ids.
+    tokenizer_info = xgr.TokenizerInfo(
+        CONTROL_TOKEN_VOCAB, stop_token_ids=[3], special_token_ids=CONTROL_TOKEN_ID
+    )
+    assert set(tokenizer_info.special_token_ids) == {0, CONTROL_TOKEN_ID}
+
+
+def test_customize_special_token_ids_default_unchanged():
+    # Without special_token_ids, only the empty-string token is special.
+    tokenizer_info = xgr.TokenizerInfo(CONTROL_TOKEN_VOCAB, stop_token_ids=[3])
+    assert set(tokenizer_info.special_token_ids) == {0}
+
+
+def test_customize_special_token_ids_extends_detection():
+    # Declared ids are added to the detected ones: the empty-string token and the padding ids in
+    # [len(vocab), vocab_size) stay special.
+    tokenizer_info = xgr.TokenizerInfo(
+        CONTROL_TOKEN_VOCAB, vocab_size=12, stop_token_ids=[3], special_token_ids=[CONTROL_TOKEN_ID]
+    )
+    assert set(tokenizer_info.special_token_ids) == {0, CONTROL_TOKEN_ID, 10, 11}
+
+
+def test_customize_special_token_ids_stop_tokens_take_precedence():
+    # Stop tokens are matched first, so an id in both lists stays a stop token.
+    tokenizer_info = xgr.TokenizerInfo(
+        CONTROL_TOKEN_VOCAB, stop_token_ids=[3], special_token_ids=[3, CONTROL_TOKEN_ID]
+    )
+    assert tokenizer_info.stop_token_ids == [3]
+    assert set(tokenizer_info.special_token_ids) == {0, CONTROL_TOKEN_ID}
+
+
+def test_customize_special_token_ids_out_of_range():
+    # Ids outside the vocabulary are ignored, as for stop_token_ids: only ids that name a token
+    # in the vocab are bucketed. Deserialization still rejects out-of-range ids.
+    tokenizer_info = xgr.TokenizerInfo(CONTROL_TOKEN_VOCAB, stop_token_ids=[3])
+    out_of_range = xgr.TokenizerInfo(
+        CONTROL_TOKEN_VOCAB, stop_token_ids=[3], special_token_ids=[100]
+    )
+    assert out_of_range.special_token_ids == tokenizer_info.special_token_ids
+
+
+def test_customize_special_token_ids_round_trip():
+    tokenizer_info = xgr.TokenizerInfo(
+        CONTROL_TOKEN_VOCAB, stop_token_ids=[3], special_token_ids=[CONTROL_TOKEN_ID]
+    )
+    recovered = xgr.TokenizerInfo.deserialize_json(tokenizer_info.serialize_json())
+    assert recovered.special_token_ids == tokenizer_info.special_token_ids
+
+
+def test_customize_special_token_ids_masks_control_token():
+    # The grammar must not accept a declared special token as JSON string content.
+    def control_token_allowed_in_string(special_token_ids: Optional[List[int]]) -> bool:
+        tokenizer_info = xgr.TokenizerInfo(
+            CONTROL_TOKEN_VOCAB, stop_token_ids=[3], special_token_ids=special_token_ids
+        )
+        compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_json_schema(
+            '{"type":"object","properties":{"a":{"type":"string"}},"required":["a"]}'
+        )
+        matcher = xgr.GrammarMatcher(compiled)
+        for char in '{"a": "':
+            assert matcher.accept_string(char)
+        bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+        matcher.fill_next_token_bitmask(bitmask)
+        rejected = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size, 0)
+        return CONTROL_TOKEN_ID not in rejected
+
+    assert control_token_allowed_in_string(None) is True
+    assert control_token_allowed_in_string([CONTROL_TOKEN_ID]) is False
+
+
+def test_customize_special_token_ids_matcher_rejects_control_token():
+    # A declared special token is refused by accept_token, as the detected ones are, instead of
+    # being consumed as string content.
+    tokenizer_info = xgr.TokenizerInfo(
+        CONTROL_TOKEN_VOCAB, stop_token_ids=[3], special_token_ids=[CONTROL_TOKEN_ID]
+    )
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_json_schema(
+        '{"type":"object","properties":{"a":{"type":"string"}},"required":["a"]}'
+    )
+    matcher = xgr.GrammarMatcher(compiled)
+    for char in '{"a": "':
+        assert matcher.accept_string(char)
+    assert matcher.accept_token(CONTROL_TOKEN_ID) is False
+
+    # Without the declaration the same token is accepted as string content.
+    tokenizer_info = xgr.TokenizerInfo(CONTROL_TOKEN_VOCAB, stop_token_ids=[3])
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_json_schema(
+        '{"type":"object","properties":{"a":{"type":"string"}},"required":["a"]}'
+    )
+    matcher = xgr.GrammarMatcher(compiled)
+    for char in '{"a": "':
+        assert matcher.accept_string(char)
+    assert matcher.accept_token(CONTROL_TOKEN_ID) is True
+
+
 @pytest.mark.hf_token_required
 @pytest.mark.parametrize(
     "tokenizer_path", ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
@@ -271,6 +380,17 @@ def test_customize_stop_token_ids(tokenizer_path: str):
     tokenizer = load_tokenizer(tokenizer_path)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer, stop_token_ids=[1, 2, 3])
     assert tokenizer_info.stop_token_ids == [1, 2, 3]
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize(
+    "tokenizer_path", ["meta-llama/Llama-2-7b-chat-hf", "meta-llama/Meta-Llama-3-8B-Instruct"]
+)
+def test_customize_special_token_ids_from_huggingface(tokenizer_path: str):
+    tokenizer = load_tokenizer(tokenizer_path)
+    detected = xgr.TokenizerInfo.from_huggingface(tokenizer)
+    declared = xgr.TokenizerInfo.from_huggingface(tokenizer, special_token_ids=[4, 5])
+    assert set(declared.special_token_ids) == set(detected.special_token_ids) | {4, 5}
 
 
 @pytest.mark.hf_token_required
