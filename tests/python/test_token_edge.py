@@ -63,6 +63,14 @@ def test_parse_exclude_token_sorted_deduped():
     assert str(grammar) == expected
 
 
+def test_parse_exclude_token_empty():
+    """ExcludeToken() with no arguments parses to an empty exclude set."""
+    before = "root ::= ExcludeToken()\n"
+    expected = "root ::= ((ExcludeToken()))\n"
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    assert str(grammar) == expected
+
+
 # --- Matcher accept_token tests ---
 
 
@@ -125,6 +133,16 @@ def test_token_or_string():
     assert matcher2.accept_token(3)  # "bb"
     assert matcher2.accept_token(STOP_TOKEN_ID)
     assert matcher2.is_terminated()
+
+
+@pytest.mark.parametrize("token_id", [0, 2, 3, 4])
+def test_exclude_token_empty_accepts_any_token(token_id):
+    """ExcludeToken() with no arguments accepts any single token."""
+    vocab = ["<s>", "</s>", "aa", "bb", "cc"]
+    matcher = _make_matcher(vocab, "root ::= ExcludeToken()\n")
+    assert matcher.accept_token(token_id)
+    assert matcher.accept_token(STOP_TOKEN_ID)
+    assert matcher.is_terminated()
 
 
 # --- Bitmask tests ---
@@ -1212,6 +1230,29 @@ def test_stag_multiple_triggered_tags_rounds():
     _accept_tokens(m, [8])  # world
     assert m.accept_token(STAG_STOP)
     assert m.is_terminated()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        {"type": "any_tokens"},
+        {"type": "any_tokens", "max_tokens": 2},
+        {"type": "exclude_token", "exclude_tokens": []},
+    ],
+)
+def test_stag_empty_exclude_set_reparses(content):
+    """Formats that lower to an empty exclude set compile with the cache on and reparse.
+
+    With the cache enabled, compile_grammar keys on str(grammar) and parses that text again.
+    """
+    grammar = xgr.Grammar.from_structural_tag({"type": "structural_tag", "format": content})
+    assert "ExcludeToken()" in str(grammar)
+
+    ti = xgr.TokenizerInfo(STAG_VOCAB)
+    m = xgr.GrammarMatcher(xgr.GrammarCompiler(ti).compile_grammar(grammar))
+    _accept_and_stop(m, [7])
+
+    assert str(xgr.Grammar.from_ebnf(str(grammar))) == str(grammar)
 
 
 def test_stag_exclude_token_with_string_excludes():
