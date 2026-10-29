@@ -488,6 +488,38 @@ sub_rule ::= "b"
     assert matcher.find_jump_forward_string() == "bb"
 
 
+@pytest.mark.parametrize(
+    "grammar_ebnf, expected",
+    [
+        # Both alternatives start with the byte 0xC3, so only that byte is forced.
+        ('root ::= "é" | "è"', ""),
+        ('root ::= "aé" | "aè"', "a"),
+        ("root ::= [é-ê]", ""),
+        ('root ::= "aé"', "aé"),
+    ],
+)
+def test_get_jump_forward_string_partial_utf8(grammar_ebnf: str, expected: str):
+    tokenizer_info = xgr.TokenizerInfo(["é", "è", "a", "</s>"], stop_token_ids=[3])
+    compiled_grammar = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar_ebnf)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    assert matcher.find_jump_forward_string() == expected
+
+
+def test_get_jump_forward_string_after_split_character():
+    # A byte-level vocabulary in which "é" (C3 A9) is split across two tokens.
+    tokenizer_info = xgr.TokenizerInfo(
+        [b"\xc3", b"\xa9", b"a", b"</s>"], xgr.VocabType.RAW, stop_token_ids=[3]
+    )
+    compiled_grammar = xgr.GrammarCompiler(tokenizer_info).compile_grammar('root ::= "éa"')
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    assert matcher.find_jump_forward_string() == "éa"
+    assert matcher.accept_token(0)
+    # The forced bytes now start inside "é".
+    assert matcher.find_jump_forward_string() == ""
+    assert matcher.accept_token(1)
+    assert matcher.find_jump_forward_string() == "a"
+
+
 def test_vocab_size():
     vocab = [
         # fmt: off
