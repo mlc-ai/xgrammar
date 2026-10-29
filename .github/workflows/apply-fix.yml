@@ -1,5 +1,5 @@
 name: apply-converter-fix
-on: [push, workflow_dispatch]
+on: workflow_dispatch
 permissions:
   contents: write
 jobs:
@@ -9,7 +9,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: fix-property-names-additional
-          token: ${{ github.token }}
       - name: Apply patch and commit
         run: |
           git config user.name "liangqianxing"
@@ -17,4 +16,4 @@ jobs:
           git apply --verbose fix_core.patch
           git add cpp/json_schema_converter.cc
           git commit -m "fix(json_schema): propertyNames must not preserve a permissive additional-property rule (fixes #961)"
-          git push origin fix-property-names-additional
+          git push "https://x-access-token:${{ github.token }}@github.com/liangqianxing/xgrammar.git" HEAD:fix-property-names-additional
