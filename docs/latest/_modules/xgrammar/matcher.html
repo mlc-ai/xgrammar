@@ -727,6 +727,15 @@
 
 <span class="sd">        This method does not change the matcher state.</span>
 
+<span class="sd">        The result contains only complete UTF-8 characters. If the forced bytes stop inside a</span>
+<span class="sd">        multi-byte character (for example, when the grammar allows both "é" and "è", only their</span>
+<span class="sd">        shared first byte is forced) or start inside one (after accepting a token that splits a</span>
+<span class="sd">        character), the result stops before that character. The omitted bytes are still forced</span>
+<span class="sd">        by the grammar, and the forced continuation becomes available again once the model has</span>
+<span class="sd">        produced them. :meth:`find_jump_forward_tokens` returns them as token ids only when the</span>
+<span class="sd">        vocabulary has tokens that cover them exactly and no longer token extends the last one;</span>
+<span class="sd">        for the "é" | "è" example it also returns an empty list.</span>
+
 <span class="sd">        Returns</span>
 <span class="sd">        -------</span>
 <span class="sd">        jump_forward_string : str</span>
