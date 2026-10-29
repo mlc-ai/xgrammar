@@ -382,7 +382,7 @@ int32_t CohereXMLToolCallingConverter::GenerateString(
     }
   }
   if (spec.pattern.has_value()) {
-    return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
+    return XMLPatternString(*spec.pattern, rule_name);
   }
   if (spec.min_length != 0 || spec.max_length != -1) {
     return Repeat(
