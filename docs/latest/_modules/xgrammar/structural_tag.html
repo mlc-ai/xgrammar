@@ -432,13 +432,18 @@
 <div class="viewcode-block" id="GrammarFormat">
 <a class="viewcode-back" href="../../api/python/structural_tag.html#xgrammar.GrammarFormat">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">GrammarFormat</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""A format that matches an ebnf grammar."""</span>
+<span class="w">    </span><span class="sd">"""A format that matches an ebnf or Lark grammar."""</span>
 
     <span class="nb">type</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"grammar"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"grammar"</span>
 <span class="w">    </span><span class="sd">"""The type of the format."""</span>
 
     <span class="n">grammar</span><span class="p">:</span> <span class="nb">str</span>
-<span class="w">    </span><span class="sd">"""The ebnf grammar."""</span></div>
+<span class="w">    </span><span class="sd">"""The grammar, written in `syntax`."""</span>
+
+    <span class="n">syntax</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"ebnf"</span><span class="p">,</span> <span class="s2">"lark"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"ebnf"</span>
+<span class="w">    </span><span class="sd">"""The syntax of the grammar: \"ebnf\" (the default), or \"lark\" (as accepted by</span>
+<span class="sd">    `Grammar.from_lark`; named special tokens are resolved with the tokenizer info the structural</span>
+<span class="sd">    tag is compiled with)."""</span></div>
 
 
 

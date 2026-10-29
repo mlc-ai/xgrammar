@@ -583,7 +583,7 @@ reject non-empty lists.</p>
 </section>
 <section id="grammar">
 <h4><code class="docutils literal notranslate"><span class="pre">grammar</span></code><a class="headerlink" href="#grammar" title="Link to this heading">¶</a></h4>
-<p>Matches text with an EBNF grammar.</p>
+<p>Matches text with an EBNF or Lark grammar.</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
 <thead>
@@ -597,6 +597,10 @@ reject non-empty lists.</p>
 <td><p><code class="docutils literal notranslate"><span class="pre">string</span></code></p></td>
 <td><p>(required)</p></td>
 </tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">syntax</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;ebnf&quot;</span></code> | <code class="docutils literal notranslate"><span class="pre">&quot;lark&quot;</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;ebnf&quot;</span></code></p></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -606,6 +610,17 @@ reject non-empty lists.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"grammar"</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">"grammar"</span><span class="p">:</span><span class="w"> </span><span class="s2">"root ::= (\"yes\" | \"no\")"</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>With <code class="docutils literal notranslate"><span class="pre">&quot;syntax&quot;:</span> <span class="pre">&quot;lark&quot;</span></code>, the grammar is written in the <a class="reference internal" href="../defining_structures/lark_grammar.html"><span class="doc std std-doc">Lark dialect</span></a>
+of <a class="reference internal" href="../api/python/grammar.html#xgrammar.Grammar.from_lark" title="xgrammar.Grammar.from_lark"><span class="xref myst py py-meth"><code class="docutils literal notranslate"><span class="pre">Grammar.from_lark</span></code></span></a> and must define a <code class="docutils literal notranslate"><span class="pre">start</span></code> rule. Named special
+tokens are resolved with the tokenizer info the structural tag is compiled with; <code class="docutils literal notranslate"><span class="pre">&#64;name</span></code> references
+to named grammars are not available.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"grammar"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"grammar"</span><span class="p">:</span><span class="w"> </span><span class="s2">"start: \"yes\" | \"no\""</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"syntax"</span><span class="p">:</span><span class="w"> </span><span class="s2">"lark"</span>
 <span class="p">}</span>
 </pre></div>
 </div>
