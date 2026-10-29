@@ -1134,10 +1134,6 @@ def test_batch_fill_next_token_bitmask_terminated_matcher_raises():
         xgr.BatchGrammarMatcher(2).batch_fill_next_token_bitmask(matchers, bitmask)
 
 
-if __name__ == "__main__":
-    pytest.main(sys.argv)
-
-
 def test_strict_any_order_nested_rollback():
     grammar = xgr.Grammar.from_ebnf(
         r"""
@@ -1293,10 +1289,9 @@ def test_unordered_atomic_accept_after_byte_path_rejection():
     assert matcher.accept_token(3)
 
 
-def test_unordered_state_lifecycle_matches_replay():
+@pytest.mark.parametrize("enable_dynamic_compilation", [False, True])
+def test_unordered_state_lifecycle_matches_replay(enable_dynamic_compilation):
     """Speculative branches, rollback and reset must leave the same mask as replay."""
-    import random
-
     grammar = xgr.Grammar.from_ebnf(
         r"""
         root ::= "[" obj ("," obj)* "]"
@@ -1327,7 +1322,8 @@ def test_unordered_state_lifecycle_matches_replay():
         "[EOS]",
     ]
     info = xgr.TokenizerInfo(vocab, stop_token_ids=len(vocab) - 1)
-    compiled = xgr.GrammarCompiler(info).compile_grammar(grammar)
+    compiler = xgr.GrammarCompiler(info, enable_dynamic_compilation=enable_dynamic_compilation)
+    compiled = compiler.compile_grammar(grammar)
     matcher = xgr.GrammarMatcher(compiled)
     history = []
     rng = random.Random(1002)
@@ -1379,3 +1375,7 @@ def test_unordered_state_lifecycle_matches_replay():
             assert matcher.accept_token(token) == expected
             if expected:
                 history.append(token)
+
+
+if __name__ == "__main__":
+    pytest.main(sys.argv)

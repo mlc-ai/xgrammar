@@ -4321,10 +4321,6 @@ def test_deeply_nested_json_rejected():
             xgr.Grammar.from_json_schema(schema(60))
 
 
-if __name__ == "__main__":
-    pytest.main(sys.argv)
-
-
 def test_qwen_unordered_nested_values_and_refs():
     schema = {
         "type": "object",
@@ -4357,3 +4353,7 @@ def test_qwen_unordered_nested_values_and_refs():
     for value in ['{"regex": true}', '{"limit": 1, "limit": 2}', '{"limit": "wrong"}']:
         assert not _is_grammar_accept_string(grammar, path + param("options", value))
     assert not _is_grammar_accept_string(grammar, path + options + options)
+
+
+if __name__ == "__main__":
+    pytest.main(sys.argv)
