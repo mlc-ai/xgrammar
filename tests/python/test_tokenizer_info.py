@@ -1,3 +1,4 @@
+import json
 import logging
 import sys
 from typing import Dict, List, Optional, Tuple
@@ -7,6 +8,7 @@ from tokenizer_utils import load_tokenizer
 from transformers import PreTrainedTokenizerBase
 
 import xgrammar as xgr
+from xgrammar.testing import _get_masked_tokens_from_bitmask
 from xgrammar.tokenizer_info import _BYTE_LEVEL_CHARSET
 
 
@@ -322,6 +324,45 @@ def test_matcher_accept_padding_token_id():
     compiled = xgr.GrammarCompiler(tokenizer_info).compile_builtin_json_grammar()
     matcher = xgr.GrammarMatcher(compiled)
     assert matcher.accept_token(500) is False
+
+
+@pytest.mark.parametrize(
+    "vocab, grammar, expected_allowed",
+    [
+        # "cab" contains "ab" but does not start with it
+        (["ab", "cab"], 'root ::= "ac" | "cab"', ["cab"]),
+        (["ab", "bab"], 'root ::= "ax" | "bab"', ["bab"]),
+        # "axb" starts with "ax", so it is skipped together with the rejected "ax"
+        (["ax", "axb", "c"], 'root ::= "c"', ["c"]),
+    ],
+)
+def test_trie_subtree_only_contains_prefixed_tokens(
+    vocab: List[str], grammar: str, expected_allowed: List[str]
+):
+    # A token is in the subtree of an earlier token only if it starts with it. A rejected token
+    # must not cause a later token that merely contains it to be rejected too.
+    tokenizer_info = xgr.TokenizerInfo(vocab + ["</s>"], stop_token_ids=[len(vocab)])
+    compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled)
+    token_bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected = set(_get_masked_tokens_from_bitmask(token_bitmask, tokenizer_info.vocab_size))
+    allowed = [vocab[i] for i in range(len(vocab)) if i not in rejected]
+    assert allowed == expected_allowed
+
+
+def test_trie_subtree_nodes_range():
+    vocab = ["a", "ab", "abc", "ba", "bab", "c", "ca", "cab"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    serialized = json.loads(tokenizer_info.serialize_json())
+    sorted_tokens = [token for _, token in serialized["sorted_decoded_vocab"]]
+    subtree_end = serialized["trie_subtree_nodes_range"]
+    for i, token in enumerate(sorted_tokens):
+        # The subtree of a token is exactly the following tokens that start with it.
+        expected_end = i + 1
+        while expected_end < len(sorted_tokens) and sorted_tokens[expected_end].startswith(token):
+            expected_end += 1
+        assert subtree_end[i] == expected_end, token
 
 
 if __name__ == "__main__":
