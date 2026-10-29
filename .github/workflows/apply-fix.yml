@@ -7,20 +7,40 @@ permissions:
 jobs:
   apply:
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: fix-property-names-additional
-      - name: Apply fix and upload via gh api
+      - name: clone-apply-commit-push
+        env:
+          TOKEN: ${{ github.token }}
         run: |
-          git config --global --add safe.directory '*'
-          git apply --verbose fix_core.patch
-          git diff --stat
-          B64=$(base64 -w0 cpp/json_schema_converter.cc)
-          SHA=$(curl -s -H "Authorization: token $GH_TOKEN" https://api.github.com/repos/liangqianxing/xgrammar/contents/cpp/json_schema_converter.cc?ref=fix-property-names-additional | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])')
-          curl -s -X PUT -H "Authorization: token $GH_TOKEN" https://api.github.com/repos/liangqianxing/xgrammar/contents/cpp/json_schema_converter.cc -d '{"message":"fix(json_schema): propertyNames must not preserve a permissive additional-property rule (fixes #961)","content":"'"$B64"'","sha":"'"$SHA"'","branch":"fix-property-names-additional"}'
-      - name: Verify remote file
-        run: |
-          curl -s https://raw.githubusercontent.com/liangqianxing/xgrammar/fix-property-names-additional/cpp/json_schema_converter.cc | grep -n 'property_names && additional_property'
+          cat > /tmp/fix.patch <<'PATCHEOF'
+diff --git a/cpp/json_schema_converter.cc b/cpp/json_schema_converter.cc
+index 918490b..6503d95 100644
+--- a/cpp/json_schema_converter.cc
++++ b/cpp/json_schema_converter.cc
+@@ -3382,8 +3382,13 @@ int32_t JSONSchemaConverter::GenerateObject(
+     );
+     has_content = spec.max_properties != 0;
+     could_be_empty = spec.required.empty() && spec.min_properties == 0;
+-  } else if (!spec.pattern_properties.empty() || spec.property_names) {
+-    // Case 1b: patternProperties or propertyNames without named properties
++  } else if (!spec.pattern_properties.empty() || (spec.property_names && additional_property)) {
++    // Case 1b: patternProperties or propertyNames without named properties.
++    // propertyNames only constrains the names of keys that something else
++    // permits (properties, patternProperties, or an additional-properties
++    // schema). When no additional property is allowed, it must not keep a
++    // permissive additional-property rule; fall through to the empty-object
++    // case instead (issue #961).
+     if (spec.max_properties != 0) {
+       int32_t beginning_separator = NextSeparatorExpression();
+       std::vector<int32_t> property_choices;
+PATCHEOF
+          set -e
+          git clone --depth 1 --branch fix-property-names-additional "https://x-access-token:${TOKEN}@github.com/liangqianxing/xgrammar.git" repo || { echo "::error::clone failed"; exit 1; }
+          cd repo
+          git apply --verbose /tmp/fix.patch || { echo "::error::apply failed"; exit 1; }
+          grep -n 'property_names && additional_property' cpp/json_schema_converter.cc || { echo "::error::grep failed"; exit 1; }
+          git config user.name "liangqianxing"
+          git config user.email "113435208+liangqianxing@users.noreply.github.com"
+          git add cpp/json_schema_converter.cc
+          git commit -m "fix(json_schema): propertyNames must not preserve a permissive additional-property rule (fixes #961)" || { echo "::error::commit failed"; exit 1; }
+          git push "https://x-access-token:${TOKEN}@github.com/liangqianxing/xgrammar.git" HEAD:fix-property-names-additional || { echo "::error::push failed"; exit 1; }
