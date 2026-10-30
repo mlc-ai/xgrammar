@@ -642,7 +642,8 @@ TEST(XGrammarFSMBuilderTest, TestJSONCountedRepeatFiltersDescendantContent) {
         for (int byte = 0; byte <= '\\'; ++byte) {
           if (byte < 0x20 || byte == '"' || byte == '\\') {
             SCOPED_TRACE(byte);
-            for (size_t position : {size_t{0}, test_case.valid.size() / 2, test_case.valid.size() - 1}) {
+            for (size_t position :
+                 {size_t{0}, test_case.valid.size() / 2, test_case.valid.size() - 1}) {
               SCOPED_TRACE(position);
               auto invalid = test_case.valid;
               invalid[position] = static_cast<char>(byte);
