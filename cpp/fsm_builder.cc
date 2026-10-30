@@ -1225,7 +1225,10 @@ size_t SkipCharacterClass(const std::string& regex, size_t pos) {
  * \param rule_hint Name hint for the created subrules.
  */
 Result<RegexIR> ParseRegexToIR(
-    const std::string& regex_with_flags, GrammarBuilder* builder, const std::string& rule_hint
+    const std::string& regex_with_flags,
+    GrammarBuilder* builder,
+    const std::string& rule_hint,
+    bool json_string = false
 ) {
   RegexIR ir;
   std::string regex = regex_with_flags;
@@ -1468,7 +1471,8 @@ Result<RegexIR> ParseRegexToIR(
           lower_bound = 0;
         }
         std::string name_hint = (rule_hint.empty() ? "regex" : rule_hint) + "_repeat";
-        int32_t inner_rule_id = builder->AddRuleWithHint(name_hint, builder->AddRegex(inner_regex));
+        int32_t inner_rule_id =
+            builder->AddRuleWithHint(name_hint, builder->AddRegex(inner_regex, json_string));
         builder->UpdateLookaheadExact(inner_rule_id, true);
         if (upper_bound == RegexIR::kRepeatNoUpperBound) {
           // {n,} == {n}{0,}: a repeat edge for the mandatory part, then a starred rule
@@ -1560,9 +1564,12 @@ Result<RegexIR> ParseRegexToIR(
 }  // namespace
 
 Result<FSMWithStartEnd> RegexFSMBuilder::Build(
-    const std::string& regex, GrammarBuilder* builder, const std::string& rule_hint
+    const std::string& regex,
+    GrammarBuilder* builder,
+    const std::string& rule_hint,
+    bool json_string
 ) {
-  auto ir_result = ParseRegexToIR(regex, builder, rule_hint);
+  auto ir_result = ParseRegexToIR(regex, builder, rule_hint, json_string);
   if (ir_result.IsErr()) {
     return ResultErr(std::move(ir_result).UnwrapErr());
   }
@@ -1584,9 +1591,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::BuildWithForbiddenChars(
     GrammarBuilder* builder,
     const std::string& rule_hint
 ) {
-  // The byte filter cannot constrain referenced subrules. Keep this automaton self-contained
-  // when exclusions are present, using the existing bounded unrolling and state limit.
-  auto build_result = Build(regex, forbidden_chars.none() ? builder : nullptr, rule_hint);
+  auto build_result = Build(regex, builder, rule_hint, true);
   if (build_result.IsErr() || forbidden_chars.none()) {
     return build_result;
   }

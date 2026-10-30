@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "fsm.h"
@@ -463,8 +464,8 @@ TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenChars) {
   EXPECT_TRUE(fsm_wse.AcceptString("你好"));
 }
 
-TEST(XGrammarFSMBuilderTest, TestRegexBuildWithEmptyForbiddenCharsPreservesRepeatAuxData) {
-  const std::bitset<256> forbidden;
+TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenCharsPreservesRepeatAuxData) {
+  const auto& forbidden = GrammarFSMBuilder::JSONStringForbiddenChars();
   GrammarBuilder builder;
 
   auto fsm_wse =
@@ -493,9 +494,8 @@ TEST(XGrammarFSMBuilderTest, TestRegexBuildWithEmptyForbiddenCharsPreservesRepea
 
 TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenCharsPreservesCountedLanguage) {
   const auto& forbidden = GrammarFSMBuilder::JSONStringForbiddenChars();
-  GrammarBuilder builder;
-  auto fsm_wse =
-      RegexFSMBuilder::BuildWithForbiddenChars("[^\\n\\r]{1,129}", forbidden, &builder).Unwrap();
+  // The no-builder path remains self-contained and supports direct FSM matching.
+  auto fsm_wse = RegexFSMBuilder::BuildWithForbiddenChars("[^\\n\\r]{1,129}", forbidden).Unwrap();
 
   EXPECT_TRUE(fsm_wse.AcceptString("a"));
   EXPECT_TRUE(fsm_wse.AcceptString(std::string(129, 'a')));
@@ -504,7 +504,142 @@ TEST(XGrammarFSMBuilderTest, TestRegexBuildWithForbiddenCharsPreservesCountedLan
   for (const auto* input : {"a\n", "a\r", "a\"", "a\\", "a\t", "a\x01"}) {
     EXPECT_FALSE(fsm_wse.AcceptString(input));
   }
-  EXPECT_EQ(builder.NumRules(), 0);
+  // With a builder, retain the counted reference and mark its child for JSON filtering.
+  GrammarBuilder builder;
+  auto counted =
+      RegexFSMBuilder::BuildWithForbiddenChars("[^\\n\\r]{1,129}", forbidden, &builder).Unwrap();
+  ASSERT_EQ(builder.NumRules(), 1);
+  EXPECT_LT(counted.NumStates(), 16);
+  bool found_repeat = false;
+  for (int state = 0; state < counted.NumStates(); ++state) {
+    for (const auto& edge : counted.GetFsm().GetEdges(state)) {
+      if (edge.IsRepeatRef()) {
+        const auto info = counted.GetFsm().GetRepeatEdgeInfo(edge.GetAuxIndex());
+        EXPECT_EQ(info.RuleId(), 0);
+        EXPECT_EQ(info.Lower(), 1);
+        EXPECT_EQ(info.Upper(), 129);
+        found_repeat = true;
+      }
+    }
+  }
+  EXPECT_TRUE(found_repeat);
+  const auto grammar = builder.Get(0);
+  const auto expr = grammar->GetGrammarExpr(grammar->GetRootRule().body_expr_id);
+  EXPECT_EQ(grammar->GetRegexString(expr), "[^\\n\\r]");
+  EXPECT_TRUE(grammar->GetRegexIsJSONString(expr));
+}
+
+TEST(XGrammarFSMBuilderTest, TestJSONCountedRepeatFiltersChildContent) {
+  const std::vector<std::string> vocab = {
+      "\"", "-", " ", "a", "b", "\\", "\t", "\r", "\n", "\x01", "<eos>"
+  };
+  TokenizerInfo tokenizer(vocab, VocabType::RAW, vocab.size(), std::vector<int32_t>{10});
+  GrammarCompiler compiler(tokenizer, 1, /*cache_enabled=*/true);
+  auto compiled =
+      compiler.CompileJSONSchema(R"({"type":"string","pattern":"^- [^\\r\\n]{1,900}$"})");
+  auto accepts = [&](const std::string& text) {
+    GrammarMatcher matcher(compiled, std::nullopt, /*terminate_without_stop_token=*/true);
+    return matcher.AcceptString(text) && matcher.IsTerminated();
+  };
+
+  const auto grammar = compiled.GetGrammar();
+  bool found_repeat = false;
+  for (int state = 0; state < grammar->complete_fsm.NumStates(); ++state) {
+    for (const auto& edge : grammar->complete_fsm.GetEdges(state)) {
+      found_repeat |= edge.IsRepeatRef();
+    }
+  }
+  EXPECT_TRUE(found_repeat);
+  EXPECT_LT(grammar->complete_fsm.NumStates(), 128);
+  EXPECT_TRUE(accepts("\"- a\""));
+  EXPECT_TRUE(accepts("\"- " + std::string(900, 'a') + "\""));
+  EXPECT_FALSE(accepts("\"- \""));
+  EXPECT_FALSE(accepts("\"- " + std::string(901, 'a') + "\""));
+  for (char forbidden : {'"', '\\', '\t', '\r', '\n', '\x01'}) {
+    EXPECT_FALSE(accepts(std::string("\"- a") + forbidden + "b\""));
+  }
+}
+
+TEST(XGrammarFSMBuilderTest, TestJSONCountedRepeatFiltersDescendantContent) {
+  const std::vector<std::string> vocab = {"\"", "a", "b", "c", "d", "x", "<eos>"};
+  TokenizerInfo tokenizer(vocab, VocabType::RAW, vocab.size(), std::vector<int32_t>{6});
+  GrammarCompiler compiler(tokenizer, 1, /*cache_enabled=*/true);
+  for (int depth : {2, 3}) {
+    SCOPED_TRACE(depth);
+    // Each bound exceeds the expansion threshold, forcing a chain of repeat rules.
+    // Distinct delimiters distinguish the nested levels in the sample inputs.
+    const auto regex =
+        depth == 2 ? R"((a[^\r\n]{1,129}b){1,129})" : R"((c(a[^\r\n]{1,129}b){1,129}d){1,129})";
+    // Build the JSON-string regex directly: the schema converter's no-builder
+    // feasibility check expands these nested bounds and falls back to CFG rules.
+    GrammarBuilder builder;
+    int quote = builder.AddByteString("\"");
+    int body = builder.AddRegex(regex, /*json_string=*/true);
+    builder.AddRule("root", builder.AddSequence({quote, body, quote}));
+    auto compiled = compiler.CompileGrammar(builder.Get());
+    auto accepts = [&](const std::string& content) {
+      GrammarMatcher matcher(compiled, std::nullopt, /*terminate_without_stop_token=*/true);
+      return matcher.AcceptString("\"" + content + "\"") && matcher.IsTerminated();
+    };
+
+    const auto grammar = compiled.GetGrammar();
+    // Check the actual reference chain: nested parentheses alone do not guarantee
+    // that filtering is exercised in a grandchild or great-grandchild rule.
+    auto repeat_depth = [&](auto&& self, int rule_id) -> int {
+      const auto& rule_fsm = grammar->per_rule_fsms[rule_id].value().GetFsm();
+      const auto& fsm = rule_fsm.GetFsm();
+      std::vector<bool> visited(fsm.NumStates(), false);
+      std::vector<int> pending = {rule_fsm.GetStart()};
+      int result = 0;
+      while (!pending.empty()) {
+        int state = pending.back();
+        pending.pop_back();
+        if (visited[state]) {
+          continue;
+        }
+        visited[state] = true;
+        for (const auto& edge : fsm.GetEdges(state)) {
+          if (edge.IsRepeatRef()) {
+            int child_id = fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId();
+            int child_depth = 1 + self(self, child_id);
+            if (child_depth > result) {
+              result = child_depth;
+            }
+          }
+          pending.push_back(edge.target);
+        }
+      }
+      return result;
+    };
+    int max_depth = 0;
+    for (int rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
+      if (grammar->per_rule_fsms[rule_id].has_value()) {
+        int rule_depth = repeat_depth(repeat_depth, rule_id);
+        if (rule_depth > max_depth) {
+          max_depth = rule_depth;
+        }
+      }
+    }
+    ASSERT_EQ(max_depth, depth);
+
+    auto wrap = [&](const std::string& inner) -> std::string {
+      return depth == 2 ? "a" + inner + "b" : "ca" + inner + "bd";
+    };
+    EXPECT_TRUE(accepts(wrap("x")));
+    EXPECT_TRUE(accepts(wrap(std::string(129, 'x'))));
+    EXPECT_TRUE(accepts(depth == 2 ? "axbayyb" : "caxbayybdcazbd"));
+    EXPECT_FALSE(accepts(wrap("")));
+    EXPECT_FALSE(accepts(wrap(std::string(130, 'x'))));
+    // Put every JSON-forbidden byte inside the deepest repeated rule. The regex
+    // itself excludes CR/LF; the inherited JSON flag must exclude the rest.
+    const auto& forbidden = GrammarFSMBuilder::JSONStringForbiddenChars();
+    for (int byte = 0; byte < 256; ++byte) {
+      if (forbidden[byte]) {
+        SCOPED_TRACE(byte);
+        EXPECT_FALSE(accepts(wrap(std::string("x") + static_cast<char>(byte) + "x")));
+      }
+    }
+  }
 }
 
 TEST(XGrammarFSMBuilderTest, TestGrammarFSMBuilderRegex) {
