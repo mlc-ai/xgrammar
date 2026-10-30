@@ -5,8 +5,10 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <optional>
+#include <unordered_set>
 #include <vector>
 
 #include "fsm.h"
@@ -561,82 +563,97 @@ TEST(XGrammarFSMBuilderTest, TestJSONCountedRepeatFiltersChildContent) {
 }
 
 TEST(XGrammarFSMBuilderTest, TestJSONCountedRepeatFiltersDescendantContent) {
-  const std::vector<std::string> vocab = {"\"", "a", "b", "c", "d", "x", "<eos>"};
-  TokenizerInfo tokenizer(vocab, VocabType::RAW, vocab.size(), std::vector<int32_t>{6});
-  GrammarCompiler compiler(tokenizer, 1, /*cache_enabled=*/true);
-  for (int depth : {2, 3}) {
-    SCOPED_TRACE(depth);
-    // Each bound exceeds the expansion threshold, forcing a chain of repeat rules.
-    // Distinct delimiters distinguish the nested levels in the sample inputs.
-    const auto regex =
-        depth == 2 ? R"((a[^\r\n]{1,129}b){1,129})" : R"((c(a[^\r\n]{1,129}b){1,129}d){1,129})";
-    // Build the JSON-string regex directly: the schema converter's no-builder
-    // feasibility check expands these nested bounds and falls back to CFG rules.
-    GrammarBuilder builder;
-    int quote = builder.AddByteString("\"");
-    int body = builder.AddRegex(regex, /*json_string=*/true);
-    builder.AddRule("root", builder.AddSequence({quote, body, quote}));
-    auto compiled = compiler.CompileGrammar(builder.Get());
-    auto accepts = [&](const std::string& content) {
-      GrammarMatcher matcher(compiled, std::nullopt, /*terminate_without_stop_token=*/true);
-      return matcher.AcceptString("\"" + content + "\"") && matcher.IsTerminated();
-    };
-
-    const auto grammar = compiled.GetGrammar();
-    // Check the actual reference chain: nested parentheses alone do not guarantee
-    // that filtering is exercised in a grandchild or great-grandchild rule.
-    auto repeat_depth = [&](auto&& self, int rule_id) -> int {
-      const auto& rule_fsm = grammar->per_rule_fsms[rule_id].value().GetFsm();
-      const auto& fsm = rule_fsm.GetFsm();
-      std::vector<bool> visited(fsm.NumStates(), false);
-      std::vector<int> pending = {rule_fsm.GetStart()};
-      int result = 0;
-      while (!pending.empty()) {
-        int state = pending.back();
-        pending.pop_back();
-        if (visited[state]) {
-          continue;
+  // AcceptString consumes raw bytes, so only a stop token is needed in the vocabulary.
+  const std::vector<std::string> vocab = {"<eos>"};
+  TokenizerInfo tokenizer(vocab, VocabType::RAW, vocab.size(), std::vector<int32_t>{0});
+  GrammarCompiler compiler(tokenizer, 1, /*cache_enabled=*/false);
+  struct RepeatCase {
+    const char* regex;
+    std::string valid;
+    bool nullable;
+  };
+  const std::vector<RepeatCase> cases = {
+      {R"(.{1,129})", "xxx", false},
+      {R"([\s\S]{1,129})", "xxx", false},
+      {R"([^q]{1,129})", "xxx", false},
+      {R"((x|.){1,129})", "xxx", false},
+      {R"((.?){1,129})", "xxx", true},
+      // Exercise both the mandatory RepeatRef and the trailing starred RuleRef.
+      {R"(.{129,})", std::string(130, 'x'), false},
+  };
+  for (const auto& test_case : cases) {
+    SCOPED_TRACE(test_case.regex);
+    for (bool json_string : {true, false}) {
+      SCOPED_TRACE(json_string);
+      for (int depth : {2, 3}) {
+        SCOPED_TRACE(depth);
+        // Each bound exceeds the expansion threshold, forcing a chain of repeat rules.
+        // Every case admits all JSON-forbidden bytes before JSON filtering.
+        std::string regex = "(a" + std::string(test_case.regex) + "b){1,129}";
+        if (depth == 3) {
+          regex = "(c" + regex + "d){1,129}";
         }
-        visited[state] = true;
-        for (const auto& edge : fsm.GetEdges(state)) {
-          if (edge.IsRepeatRef()) {
-            int child_id = fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId();
-            int child_depth = 1 + self(self, child_id);
-            if (child_depth > result) {
-              result = child_depth;
+        // Build the JSON-string regex directly: the schema converter's no-builder
+        // feasibility check expands these nested bounds and falls back to CFG rules.
+        GrammarBuilder builder;
+        int quote = builder.AddByteString("\"");
+        int body = builder.AddRegex(regex, json_string);
+        builder.AddRule("root", builder.AddSequence({quote, body, quote}));
+        auto compiled = compiler.CompileGrammar(GrammarNormalizer::Apply(builder.Get()));
+        auto accepts = [&](const std::string& content) {
+          GrammarMatcher matcher(compiled, std::nullopt, /*terminate_without_stop_token=*/true);
+          return matcher.AcceptString("\"" + content + "\"") && matcher.IsTerminated();
+        };
+
+        const auto grammar = compiled.GetGrammar();
+        // Check the actual reference chain: nested parentheses alone do not guarantee
+        // that filtering is exercised in a grandchild or great-grandchild rule.
+        auto repeat_depth = [&](auto&& self, int rule_id) -> int {
+          const auto& rule_fsm = grammar->per_rule_fsms[rule_id].value().GetFsm();
+          const auto& fsm = rule_fsm.GetFsm();
+          std::unordered_set<int> states;
+          rule_fsm.GetReachableStates(&states);
+          int result = 0;
+          for (int state : states) {
+            for (const auto& edge : fsm.GetEdges(state)) {
+              if (edge.IsRepeatRef()) {
+                int child_id = fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId();
+                result = std::max(result, 1 + self(self, child_id));
+              } else if (edge.IsRuleRef()) {
+                result = std::max(result, self(self, edge.GetRefRuleId()));
+              }
             }
           }
-          pending.push_back(edge.target);
-        }
-      }
-      return result;
-    };
-    int max_depth = 0;
-    for (int rule_id = 0; rule_id < grammar->NumRules(); ++rule_id) {
-      if (grammar->per_rule_fsms[rule_id].has_value()) {
-        int rule_depth = repeat_depth(repeat_depth, rule_id);
-        if (rule_depth > max_depth) {
-          max_depth = rule_depth;
-        }
-      }
-    }
-    ASSERT_EQ(max_depth, depth);
+          return result;
+        };
+        ASSERT_EQ(repeat_depth(repeat_depth, grammar->GetRootRuleId()), depth);
 
-    auto wrap = [&](const std::string& inner) -> std::string {
-      return depth == 2 ? "a" + inner + "b" : "ca" + inner + "bd";
-    };
-    EXPECT_TRUE(accepts(wrap("x")));
-    EXPECT_TRUE(accepts(wrap(std::string(129, 'x'))));
-    EXPECT_TRUE(accepts(depth == 2 ? "axbayyb" : "caxbayybdcazbd"));
-    EXPECT_FALSE(accepts(wrap("")));
-    EXPECT_FALSE(accepts(wrap(std::string(130, 'x'))));
-    // Put every JSON-forbidden byte inside the deepest repeated rule. The regex
-    // itself excludes CR/LF; the inherited JSON flag must exclude the rest.
-    const auto& forbidden = GrammarFSMBuilder::JSONStringForbiddenChars();
-    for (int byte = 0; byte < 256; ++byte) {
-      if (forbidden[byte]) {
-        SCOPED_TRACE(byte);
-        EXPECT_FALSE(accepts(wrap(std::string("x") + static_cast<char>(byte) + "x")));
+        auto wrap = [&](const std::string& inner) -> std::string {
+          return depth == 2 ? "a" + inner + "b" : "ca" + inner + "bd";
+        };
+        EXPECT_TRUE(accepts(wrap(test_case.valid)));
+        // Preserve allowed bytes next to the excluded ranges, DEL, and UTF-8.
+        EXPECT_TRUE(accepts(wrap(test_case.valid + " !#[]~\x7f你好")));
+        if (test_case.nullable) {
+          EXPECT_TRUE(accepts(wrap("")));
+        }
+        // Define the expected set independently of the production filter. Replace
+        // a byte so rejection cannot be explained by a different length.
+        for (int byte = 0; byte <= '\\'; ++byte) {
+          if (byte < 0x20 || byte == '"' || byte == '\\') {
+            SCOPED_TRACE(byte);
+            for (size_t position : {size_t{0}, test_case.valid.size() / 2, test_case.valid.size() - 1}) {
+              SCOPED_TRACE(position);
+              auto invalid = test_case.valid;
+              invalid[position] = static_cast<char>(byte);
+              EXPECT_EQ(accepts(wrap(invalid)), !json_string);
+              // A later outer repetition must inherit the same filtering context.
+              if (position == test_case.valid.size() - 1) {
+                EXPECT_EQ(accepts(wrap(test_case.valid) + wrap(invalid)), !json_string);
+              }
+            }
+          }
+        }
       }
     }
   }
