@@ -733,6 +733,11 @@ export class GrammarMatcher {
   /**
    * Find the jump-forward string for jump-forward decoding. This is the longest string that
    * will be valid according to the current syntax.
+   *
+   * The result contains only complete UTF-8 characters. If the forced bytes stop inside a
+   * multi-byte character (for example, when the grammar allows both "é" and "è", only their
+   * shared first byte is forced) or start inside one (after accepting a token that splits a
+   * character), the result stops before that character.
    * @returns {string} The jump-forward string.
    */
   findJumpForwardString(): string {
