@@ -91,7 +91,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-15, macos-15-intel]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-14, macos-15-intel]
         python: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14', '3.14t']
         include:
           # Native Windows ARM64 PyTorch wheels are available for Python 3.11-3.13.
@@ -99,7 +99,7 @@ jobs:
           - {os: windows-11-vs2026-arm, python: '3.12'}
           - {os: windows-11-vs2026-arm, python: '3.13'}
         exclude:
-          - os: macos-15
+          - os: macos-14
             python: '3.14t'
           - os: macos-15-intel
             python: '3.13'
@@ -154,7 +154,7 @@ jobs:
 
       # Test with MLX (which is optional) under macOS arm64
       - name: Install MLX
-        if: matrix.os == 'macos-15' && !endsWith(matrix.python, 't')
+        if: matrix.os == 'macos-14' && !endsWith(matrix.python, 't')
         run: |
           # Keep the transformers bound in sync with pyproject.toml.
           pip install mlx-lm "transformers>=4.38.0"
