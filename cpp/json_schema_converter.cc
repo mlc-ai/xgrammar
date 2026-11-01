@@ -18,6 +18,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <regex>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -1345,6 +1346,57 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
   return ResultOk(std::move(spec));
 }
 
+namespace {
+
+// Count Unicode code points in a UTF-8 string. JSON Schema string lengths are
+// measured in code points, not bytes.
+size_t Utf8CodePointCount(const std::string& s) {
+  size_t count = 0;
+  for (const unsigned char c : s) {
+    // Count bytes that start a code point, i.e. everything except continuation bytes.
+    if ((c & 0xC0) != 0x80) ++count;
+  }
+  return count;
+}
+
+// Statically check a declared property key against the propertyNames schema.
+// Returns true when the key is known to violate the schema. Returns false when the key
+// satisfies it, or when the check is inconclusive (e.g. a reference schema or an
+// unsupported regex feature) - staying conservative preserves the previous behavior in
+// cases that cannot be decided at compile time.
+bool KeyViolatesPropertyNames(const std::string& key, const SchemaSpecPtr& property_names) {
+  if (auto* string_spec = std::get_if<StringSpec>(&property_names->spec)) {
+    auto length = static_cast<int64_t>(Utf8CodePointCount(key));
+    if (length < string_spec->min_length) return true;
+    if (string_spec->max_length != -1 && length > string_spec->max_length) return true;
+    if (string_spec->pattern.has_value()) {
+      try {
+        // JSON Schema patterns are unanchored (ECMA-262): a substring match satisfies
+        // the constraint.
+        std::regex pattern(*string_spec->pattern, std::regex::ECMAScript);
+        if (!std::regex_search(key, pattern)) return true;
+      } catch (const std::regex_error&) {
+        // Unsupported regex feature: skip the static check for this pattern.
+      }
+    }
+    return false;
+  }
+  if (auto* enum_spec = std::get_if<EnumSpec>(&property_names->spec)) {
+    const std::string key_json = picojson::value(key).serialize();
+    for (const auto& value : enum_spec->json_values) {
+      if (value == key_json) return false;
+    }
+    return true;
+  }
+  if (auto* const_spec = std::get_if<ConstSpec>(&property_names->spec)) {
+    return const_spec->json_value != picojson::value(key).serialize();
+  }
+  // Other spec kinds (reference, any, ...) cannot be decided statically here.
+  return false;
+}
+
+}  // namespace
+
 Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object& schema) {
   ObjectSpec spec;
 
@@ -1402,6 +1454,26 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
     auto prop_names_result = Parse(schema.at("propertyNames"), "property_name", "string");
     if (prop_names_result.IsErr()) return ResultErr(std::move(prop_names_result).UnwrapErr());
     spec.property_names = std::move(prop_names_result).Unwrap();
+
+    // propertyNames validates every key of the instance object, including keys declared
+    // in `properties` (JSON Schema draft 2020-12, section 6.5.3). Declared keys are
+    // compile-time string literals, so check them statically: drop an optional key that
+    // violates propertyNames, and report an unsatisfiable schema when a required key
+    // violates it.
+    std::vector<ObjectSpec::Property> kept_properties;
+    kept_properties.reserve(spec.properties.size());
+    for (auto& property : spec.properties) {
+      if (!KeyViolatesPropertyNames(property.name, spec.property_names)) {
+        kept_properties.push_back(std::move(property));
+      } else if (spec.required.count(property.name)) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsatisfiableSchema,
+            "Required property \"" + property.name +
+                "\" violates the propertyNames constraint, so the schema is unsatisfiable"
+        );
+      }
+    }
+    spec.properties = std::move(kept_properties);
   }
 
   spec.allow_additional_properties = !config_.strict_mode;

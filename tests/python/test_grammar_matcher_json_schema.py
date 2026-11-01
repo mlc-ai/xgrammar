@@ -594,6 +594,39 @@ def test_regression_empty_property_key_regex():
     assert _ is not None
 
 
+def test_regression_property_names_applies_to_declared_keys():
+    # propertyNames validates every key of the instance object, including keys declared
+    # in `properties` (JSON Schema draft 2020-12, section 6.5.3).
+    schema = {
+        "type": "object",
+        "properties": {"UPPER": {"type": "integer"}},
+        "propertyNames": {"pattern": "^[a-z]+$"},
+    }
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert not _is_grammar_accept_string(grammar, '{"UPPER": 1}')
+    assert _is_grammar_accept_string(grammar, "{}")
+
+    # A required declared key that violates propertyNames makes the schema unsatisfiable.
+    schema = {
+        "type": "object",
+        "properties": {"toolong": {"type": "integer"}},
+        "propertyNames": {"maxLength": 3},
+        "required": ["toolong"],
+    }
+    with pytest.raises(RuntimeError):
+        xgr.Grammar.from_json_schema(schema)
+
+    # Compliant declared keys keep working.
+    schema = {
+        "type": "object",
+        "properties": {"ok": {"type": "integer"}},
+        "propertyNames": {"maxLength": 3},
+        "required": ["ok"],
+    }
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '{"ok": 1}')
+
+
 def test_json_schema_number_without_constraint():
     schema = {"type": "object", "properties": {"value": {"type": "number"}}, "required": ["value"]}
     grammar = xgr.Grammar.from_json_schema(schema)
