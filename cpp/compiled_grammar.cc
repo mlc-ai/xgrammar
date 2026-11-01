@@ -28,25 +28,6 @@ namespace {
 using ByteSet = std::bitset<256>;
 
 /*!
- * \brief Follow single-element choice/sequence wrappers down to the element that is actually
- * matched; the optimizer may or may not leave those wrappers in place.
- */
-Grammar::Impl::GrammarExpr UnwrapSingleElement(
-    const Grammar& grammar, Grammar::Impl::GrammarExpr expr
-) {
-  using GrammarExprType = Grammar::Impl::GrammarExprType;
-  for (int depth = 0; depth < 4; ++depth) {
-    const bool wrapper =
-        expr.type == GrammarExprType::kChoices || expr.type == GrammarExprType::kSequence;
-    if (!wrapper || expr.size() != 1) {
-      break;
-    }
-    expr = grammar->GetGrammarExpr(expr[0]);
-  }
-  return expr;
-}
-
-/*!
  * \brief The next state after `byte` in an FSM whose outgoing character ranges do not overlap.
  * \return -1 when no edge accepts the byte.
  */
@@ -59,47 +40,54 @@ int NextStateOnByte(const CompactFSM& fsm, int state, uint8_t byte) {
   return -1;
 }
 
-/*!
- * \brief Whether rule `rule_id` matches exactly one codepoint of a character class through a
- * deterministic byte FSM, with no rule-level semantics attached. Sets `first_bytes` to the bytes
- * such a codepoint can start with.
- */
-bool IsPlainCharacterClassRule(const Grammar& grammar, int32_t rule_id, ByteSet* first_bytes) {
-  const auto& rule = grammar->GetRule(rule_id);
-  if (rule_id == grammar->GetRootRuleId() || rule.lookahead_assertion_id != -1 ||
-      rule.max_tokens >= 0 || rule.max_chars >= 0 || !rule.capture_name.empty() || rule.is_lazy ||
-      rule.temperature.has_value() || grammar->GetSuffixStopInfo(rule_id) != nullptr) {
-    return false;
-  }
-  const auto body = UnwrapSingleElement(grammar, grammar->GetGrammarExpr(rule.body_expr_id));
-  const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
-  if (body.type != Grammar::Impl::GrammarExprType::kCharacterClass || !rule_fsm.has_value()) {
-    return false;
-  }
-  const auto& fsm = rule_fsm->GetFsm();
+}  // namespace
+
+std::optional<std::bitset<256>> SingleItemFirstBytes(const CompactFSMWithStartEnd& fsm) {
   if (fsm.IsEndState(fsm.GetStart())) {
-    return false;
+    return std::nullopt;
   }
   std::unordered_set<int> reachable_states;
   fsm.GetReachableStates(&reachable_states);
+  ByteSet first_bytes;
   for (int state : reachable_states) {
     ByteSet seen;
     for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
       if (!edge.IsCharRange() || edge.max > 0xFF || fsm.IsEndState(state)) {
-        return false;
+        return std::nullopt;
       }
       for (int byte = edge.min; byte <= edge.max; ++byte) {
         if (seen[byte]) {
-          return false;
+          return std::nullopt;
         }
         seen.set(byte);
       }
     }
     if (state == fsm.GetStart()) {
-      *first_bytes = seen;
+      first_bytes = seen;
     }
   }
-  return true;
+  return first_bytes;
+}
+
+namespace {
+
+/*!
+ * \brief Whether rule `rule_id` matches one item (SingleItemFirstBytes) with no rule-level
+ * semantics attached. Sets `first_bytes` to the bytes such an item can start with.
+ */
+bool IsSingleItemRule(const Grammar& grammar, int32_t rule_id, ByteSet* first_bytes) {
+  const auto& rule = grammar->GetRule(rule_id);
+  if (rule_id == grammar->GetRootRuleId() || rule.lookahead_assertion_id != -1 ||
+      rule.max_tokens >= 0 || rule.max_chars >= 0 || !rule.capture_name.empty() || rule.is_lazy ||
+      rule.temperature.has_value() || grammar->GetSuffixStopInfo(rule_id) != nullptr ||
+      !grammar->per_rule_fsms[rule_id].has_value()) {
+    return false;
+  }
+  const auto bytes = SingleItemFirstBytes(grammar->per_rule_fsms[rule_id]->GetFsm());
+  if (bytes.has_value()) {
+    *first_bytes = *bytes;
+  }
+  return bytes.has_value();
 }
 
 /*!
@@ -113,9 +101,9 @@ struct RepetitionFollowBytes {
 };
 
 /*!
- * \brief The rules whose start state gets the counted-repetition fast path.
+ * \brief The rules whose states get the counted-repetition fast path.
  *
- * A rule qualifies when it matches one codepoint of a character class (IsPlainCharacterClassRule)
+ * A rule qualifies when it matches one item (IsSingleItemRule)
  * and every reference to it is a repeat edge that is followed, in the referring rule, only by
  * character edges whose bytes no codepoint of the class starts with. Then a token that starts
  * inside the class stays in the repetition up to its first byte outside the class and cannot leave
@@ -135,7 +123,7 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
       return std::vector<std::optional<RepetitionFollowBytes>>(num_rules);
     }
     ByteSet bytes;
-    if (IsPlainCharacterClassRule(grammar, rule_id, &bytes)) {
+    if (IsSingleItemRule(grammar, rule_id, &bytes)) {
       first_bytes[rule_id] = bytes;
     }
   }
@@ -226,7 +214,9 @@ struct RepetitionTokenClass {
 };
 
 /*!
- * \brief Classify `token` in the start state of a counted-repetition body rule whose FSM is `fsm`.
+ * \brief Classify `token` in state `from_state` of a counted-repetition body rule whose FSM is
+ * `fsm`. Inside an item, the item in progress is not counted by the parent yet: finishing it
+ * consumes one repetition.
  *
  * A token stays inside the class until its first byte outside it. It cannot leave earlier because
  * no follow byte starts a codepoint of the class (FindCountedRepetitionBodies), and it cannot
@@ -237,11 +227,12 @@ struct RepetitionTokenClass {
  */
 RepetitionTokenClass ClassifyRepetitionToken(
     const CompactFSMWithStartEnd& fsm,
+    int from_state,
     const RepetitionFollowBytes& follow_bytes,
     const std::string& token
 ) {
   int32_t num_repetitions = 0;
-  int state = fsm.GetStart();
+  int state = from_state;
   for (size_t i = 0; i < token.size(); ++i) {
     const auto byte = static_cast<uint8_t>(token[i]);
     const int next_state = NextStateOnByte(fsm.GetFsm(), state, byte);
@@ -292,7 +283,9 @@ void PopulateRepeatInteriorBitsets(
       continue;
     }
     const auto& fsm = grammar->per_rule_fsms[state.rule_id]->GetFsm();
-    if (state.element_id != fsm.GetStart()) {
+    // Every state of the item, not only its start: a token may end inside an item, e.g. on the
+    // backslash of an escape, and the next mask is filled there.
+    if (fsm.IsEndState(state.element_id)) {
       continue;
     }
     // Bucket the budget-decided tokens by the repetitions they consume, keeping the
@@ -301,7 +294,10 @@ void PopulateRepeatInteriorBitsets(
     std::vector<int32_t> decided_indices;
     for (int32_t index = 0; index < static_cast<int32_t>(sorted_vocab.size()); ++index) {
       const auto token_class = ClassifyRepetitionToken(
-          fsm, *counted_repetition_bodies[state.rule_id], sorted_vocab[index].second
+          fsm,
+          state.element_id,
+          *counted_repetition_bodies[state.rule_id],
+          sorted_vocab[index].second
       );
       if (token_class.kind == RepetitionTokenClass::kBudget) {
         tokens_by_repetitions[token_class.num_repetitions].push_back(index);
@@ -309,9 +305,9 @@ void PopulateRepeatInteriorBitsets(
         mask.repeat_exit_tokens.emplace_back(
             token_class.num_repetitions, sorted_vocab[index].first
         );
-        decided_indices.push_back(index);
-      } else if (token_class.kind == RepetitionTokenClass::kRejected) {
-        decided_indices.push_back(index);
+      }
+      if (token_class.kind != RepetitionTokenClass::kUndecided) {
+        decided_indices.push_back(index);  // in vocabulary order, so already sorted
       }
     }
     if (tokens_by_repetitions.empty() && mask.repeat_exit_tokens.empty()) {
@@ -324,12 +320,10 @@ void PopulateRepeatInteriorBitsets(
                                      : mask.repeat_interior_bitsets.back();
       for (int32_t index : indices) {
         cumulative.Set(sorted_vocab[index].first, true);
-        decided_indices.push_back(index);
       }
       mask.repeat_interior_char_counts.push_back(num_repetitions);
       mask.repeat_interior_bitsets.push_back(std::move(cumulative));
     }
-    std::sort(decided_indices.begin(), decided_indices.end());
 
     // Take the decided tokens out of every static class: the matcher accepts the budget and exit
     // tokens that fit the repetition bounds, and nothing else of them. A kRejected mask would

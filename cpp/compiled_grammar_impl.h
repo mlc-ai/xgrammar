@@ -8,6 +8,7 @@
 
 #include <xgrammar/grammar.h>
 
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -64,14 +65,15 @@ struct AdaptiveTokenMask {
   std::vector<int32_t> uncertain_indices;
 
   /*!
-   * \brief Fast path for the body state of a counted repetition of a single character class.
+   * \brief Fast path for a body state of a counted repetition of a single item (one codepoint of
+   * a character class, or one JSON string character with its escapes).
    *
    * `repeat_interior_bitsets[i]` holds every token whose legality in this state is decided by the
    * repetition budget alone, and that consumes at most `repeat_interior_char_counts[i]`
-   * repetitions; the counts are strictly increasing. Such a token stays inside the class, possibly
-   * ending inside a codepoint. It is legal exactly when the repetition budget left in the parent
-   * state covers it. That budget is not part of the compiled state, so the matcher reads it from
-   * the parse history and picks the matching bitset; the mask itself stays count-independent.
+   * repetitions; the counts are strictly increasing. Such a token stays inside the repetition,
+   * possibly ending inside an item. It is legal exactly when the repetition budget left in the
+   * parent state covers it. That budget is not part of the compiled state, so the matcher reads it
+   * from the parse history and picks the matching bitset; the mask itself stays count-independent.
    *
    * `repeat_exit_tokens` lists (repetitions consumed, token id) for every token that leaves the
    * repetition on its last byte. Such a token is legal exactly when the repetitions it consumes
@@ -186,11 +188,18 @@ class CompiledGrammar::Impl {
 };
 
 /*!
+ * \brief The bytes that can start one item of `fsm` when `fsm` matches exactly one item through
+ * deterministic byte transitions, else nullopt. A byte scan then counts one item at each end state
+ * unambiguously, since an end state has no outgoing edge.
+ */
+std::optional<std::bitset<256>> SingleItemFirstBytes(const CompactFSMWithStartEnd& fsm);
+
+/*!
  * \brief Compute the counted-repetition fast path data for every mask in `cache`.
  *
- * Applies to the start state of a rule that matches one codepoint of a character class, when
- * every reference to the rule is a repeat edge followed only by bytes that no codepoint of the
- * class starts with. For those states, record the tokens decided by the repetition bounds alone,
+ * Applies to every state of a rule that matches one item (SingleItemFirstBytes), when every
+ * reference to the rule is a repeat edge followed only by bytes that no item starts with. For
+ * those states, record the tokens decided by the repetition bounds alone,
  * with the repetitions they consume, and take them out of the mask's own classes so that the
  * matcher can decide them with a bound check.
  */

@@ -12,6 +12,7 @@ at the bound.
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
@@ -403,3 +404,152 @@ def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:
     assert "{0, 3}" not in str(compiled.grammar)
     for consumed in range(4):
         _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
+
+
+# Tokens around JSON escapes inside a length-bounded string (issue #800): whole escapes, a lone
+# backslash, escapes split inside \uXXXX, surrogate halves, and tokens mixing plain characters with
+# an escape or with the closing quote.
+ESCAPE_VOCAB = [b"a", b"aa", b'"', b'a"', b"\\", b"\\n", b"\\n\\n", b'\\"', b"\\\\", b"a\\n"]
+ESCAPE_VOCAB += [b"n", b"na", b"\\u", b"\\u00", b"00", b"00e9", b"e9", b"e9a", b"u00e9"]
+ESCAPE_VOCAB += [b"\\uD83D", b"\\uDE00", b"D83D", b"\\uDE", b"00\\n", b"\\x", b"\\uDE00a"]
+ESCAPE_VOCAB += [b"\xc3\xa9", b"\xc3", b"\xa9", b"\n", b'\\""']
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "string", "maxLength": 3},
+        {"type": "string", "minLength": 2, "maxLength": 4},
+        {"type": "string", "minLength": 2},
+        {"type": "array", "items": {"type": "string", "maxLength": 2}},
+    ],
+)
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "",
+        "a",
+        "aa",
+        "\\",
+        "\\n",
+        "a\\n",
+        "\\u",
+        "\\u00",
+        "\\u00e9",
+        "\\uD83D",
+        "\\uD83D\\",
+        "\\n\\n",
+    ],
+)
+def test_escaped_bounded_string_mask_matches_the_replay(schema: dict[str, object], prefix: str):
+    """The counted fast path covers escapes: the mask agrees with a replay of every token,
+    including after a lone backslash, inside \\uXXXX, between surrogate halves and at the bound."""
+    tokenizer_info = xgr.TokenizerInfo(list(ESCAPE_VOCAB))
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(schema)
+    start = '["' if schema.get("type") == "array" else '"'
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    if not matcher.accept_string(start + prefix):
+        return  # the prefix already exceeds this bound
+    _assert_mask_matches_replay(compiled, tokenizer_info, start + prefix)
+
+
+@pytest.mark.parametrize(
+    ("schema", "accepted", "rejected"),
+    [
+        (
+            {"type": "string", "maxLength": 2},
+            [r'"\n\n"', r'"a\""', r'"\\\\"', r'"éa"', r'"😀a"'],
+            [r'"\n\n\n"', r'"a\"a"', r'"\uD83D"', r'"\uDE00"', r'"\x"'],
+        ),
+        ({"type": "string", "minLength": 3}, [r'"a\nb"', r'"😀ab"'], [r'"😀a"', r'"\n\n"']),
+    ],
+)
+def test_escape_is_one_character_of_the_bound(
+    schema: dict[str, object], accepted: list[str], rejected: list[str]
+) -> None:
+    """An escape, and a surrogate pair spelling one codepoint, count as one character."""
+    vocab = sorted({c for text in accepted + rejected for c in text})
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(schema)
+    for text in accepted + rejected:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert (matcher.accept_string(text) and matcher.is_terminated()) is (text in accepted), text
+
+
+def _synthetic_vocab(size: int, required: list[bytes]) -> list[bytes]:
+    """A deterministic vocabulary shaped like a real one: words with and without a leading space,
+    accented words, punctuation, digits, and tokens carrying escapes or the closing quote."""
+    import random
+
+    rng = random.Random(800)
+    letters = "abcdefghijklmnopqrstuvwxyz"
+    pieces = ["\\n", '\\"', "\\\\", "\\t", "\\u00e9", '"', '",', '"}', ".", ",", ":", "€", "é"]
+    vocab: set[bytes] = {b'"', b"\\", b"{", b"}", *required}
+    while len(vocab) < size:
+        word = "".join(rng.choice(letters) for _ in range(rng.randint(1, 8)))
+        kind = rng.random()
+        if kind < 0.4:
+            token = " " + word
+        elif kind < 0.6:
+            token = word
+        elif kind < 0.8:
+            token = word + rng.choice(pieces)
+        else:
+            token = rng.choice(pieces) + word
+        vocab.add(token.encode())
+    return sorted(vocab)
+
+
+def _mask_seconds_per_token(compiled: xgr.CompiledGrammar, info, token_ids: list[int]) -> float:
+    best = float("inf")
+    for _ in range(3):
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+        start = time.perf_counter()
+        for token_id in token_ids:
+            matcher.fill_next_token_bitmask(bitmask)
+            assert matcher.accept_token(token_id)
+        best = min(best, (time.perf_counter() - start) / len(token_ids))
+    return best
+
+
+@pytest.mark.parametrize("max_length", [200, 8000])
+def test_bounded_string_with_escapes_costs_about_an_unbounded_string(max_length: int) -> None:
+    """Allowing escapes must not push a bounded string off the counted fast path.
+
+    Off it, every repetition becomes a rule the parser enters and leaves byte by byte, most of the
+    vocabulary becomes context-dependent, and filling a mask took seconds per token on a real
+    vocabulary (about 100 000 times an unbounded string). The reference is the unbounded JSON
+    string on the same vocabulary, so the check is relative and machine independent.
+    """
+    # 170 characters of text whose newlines and quotes are escapes, some split after the backslash
+    # the way real tokenizers split them (`.\\` then `n`).
+    body = [b" ab", b"\\n", b' \\"', b"cd", b'\\"', b" \\u00e9", b"\\\\", b" ef", b".\\", b"n"] * 10
+    vocab = _synthetic_vocab(40_000, body)
+    info = xgr.TokenizerInfo(vocab)
+    index = {token: i for i, token in enumerate(vocab)}
+    token_ids = [index[b'"']] + [index[t] for t in body]
+
+    def compile_seconds(schema: dict[str, object]) -> tuple[xgr.CompiledGrammar, float]:
+        best, compiled = float("inf"), None
+        for _ in range(3):
+            compiler = xgr.GrammarCompiler(info, cache_enabled=False)
+            start = time.perf_counter()
+            compiled = compiler.compile_json_schema(schema)
+            best = min(best, time.perf_counter() - start)
+        return compiled, best
+
+    unbounded, unbounded_compile = compile_seconds({"type": "string"})
+    bounded, bounded_compile = compile_seconds({"type": "string", "maxLength": max_length})
+    # The fast path scans the vocabulary from every state of the item: that must stay a fraction
+    # of a compilation, not the minutes an expanded repetition with escapes took.
+    assert bounded_compile <= 5 * unbounded_compile + 20e-3, (
+        f"maxLength={max_length}: compiled in {bounded_compile * 1e3:.1f} ms against "
+        f"{unbounded_compile * 1e3:.1f} ms for an unbounded string"
+    )
+    reference = _mask_seconds_per_token(unbounded, info, token_ids)
+    measured = _mask_seconds_per_token(bounded, info, token_ids)
+    assert measured <= 5 * reference + 50e-6, (
+        f"maxLength={max_length}: {measured * 1e3:.3f} ms/token against "
+        f"{reference * 1e3:.3f} ms/token for an unbounded string"
+    )

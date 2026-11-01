@@ -9,6 +9,7 @@
 #include <iostream>
 #include <utility>
 
+#include "compiled_grammar_impl.h"
 #include "fsm.h"
 #include "fsm_builder.h"
 #include "support/logging.h"
@@ -337,6 +338,49 @@ TEST(XGrammarFSMTest, MergeEquivalentStatesKeepsStartStateSeparate) {
   EXPECT_TRUE(merged.AcceptString("acd"));
   EXPECT_TRUE(merged.AcceptString("xyzcd"));
   EXPECT_FALSE(merged.AcceptString("d"));
+}
+
+TEST(XGrammarFSMTest, SingleItemFirstBytes) {
+  // One JSON string character in miniature: "a", or "\" followed by "n". A scan counts one item
+  // at each end state, so the FSM must be deterministic and its end states terminal.
+  {
+    FSM fsm(3);
+    fsm.AddEdge(0, 2, 'a', 'a');
+    fsm.AddEdge(0, 1, '\\', '\\');
+    fsm.AddEdge(1, 2, 'n', 'n');
+    auto first_bytes = SingleItemFirstBytes(FSMWithStartEnd(fsm, 0, {2}).ToCompact());
+    ASSERT_TRUE(first_bytes.has_value());
+    EXPECT_TRUE((*first_bytes)['a']);
+    EXPECT_TRUE((*first_bytes)['\\']);
+    EXPECT_EQ(first_bytes->count(), 2u);
+  }
+  // Two edges on the same byte: the count of a scan would depend on the branch.
+  {
+    FSM fsm(3);
+    fsm.AddEdge(0, 2, 'a', 'b');
+    fsm.AddEdge(0, 1, 'b', 'c');
+    fsm.AddEdge(1, 2, 'n', 'n');
+    EXPECT_FALSE(SingleItemFirstBytes(FSMWithStartEnd(fsm, 0, {2}).ToCompact()).has_value());
+  }
+  // An end state that continues: "a" and "ab" would both be one item, or "ab" two.
+  {
+    FSM fsm(3);
+    fsm.AddEdge(0, 1, 'a', 'a');
+    fsm.AddEdge(1, 2, 'b', 'b');
+    EXPECT_FALSE(SingleItemFirstBytes(FSMWithStartEnd(fsm, 0, {1, 2}).ToCompact()).has_value());
+  }
+  // The empty string is not an item.
+  {
+    FSM fsm(2);
+    fsm.AddEdge(0, 1, 'a', 'a');
+    EXPECT_FALSE(SingleItemFirstBytes(FSMWithStartEnd(fsm, 0, {0, 1}).ToCompact()).has_value());
+  }
+  // A non-character edge (here a rule reference) has no byte scan.
+  {
+    FSM fsm(2);
+    fsm.AddEdge(0, 1, FSMEdge::EdgeType::kRuleRef, 0);
+    EXPECT_FALSE(SingleItemFirstBytes(FSMWithStartEnd(fsm, 0, {1}).ToCompact()).has_value());
+  }
 }
 
 TEST(XGrammarFSMTest, EfficiencyTest) {
